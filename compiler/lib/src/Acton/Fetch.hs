@@ -17,7 +17,7 @@ import Acton.ZigFetch (fetchZigPackage)
 import qualified Acton.Zon as Zon
 
 import Control.Concurrent.Async (mapConcurrently)
-import Control.Exception (IOException, bracketOnError, try)
+import Control.Exception (IOException, bracketOnError, catch, throwIO, try)
 import Control.Monad
 import Data.Either (lefts)
 import Data.IORef
@@ -223,8 +223,10 @@ zigFetch env source
 
 -- | Copy the Acton package 'name', fetched by hash, from the Zig global
 -- cache into its entry in the dependency cache, unless that entry exists.
--- The global cache holds the package extracted or as an archive. A local
--- dependency and a dependency without a hash are not copied.
+-- The global cache holds the package extracted or as an archive. The entry
+-- is created complete or not at all, so an existing entry holds the whole
+-- package. A local dependency and a dependency without a hash are not
+-- copied.
 copyPackage :: FetchEnv -> String -> BuildSpec.PkgDep -> IO ()
 copyPackage env name dep =
     case (localPath dep, BuildSpec.hash dep) of
@@ -238,9 +240,10 @@ copyPackage env name dep =
             throwProjectError (missingAfterFetch env name h)
           when (C.verbose (options env)) $
             putStrLn ("Copying dependency " ++ name ++ " (" ++ h ++ ") from Zig cache")
-          if extracted
-            then copyTree (cachedPackage env h) dst
-            else extractArchive (cachedArchive env h) dst
+          installDirectory dst $
+            if extracted
+              then copyTree (cachedPackage env h)
+              else extractArchive (cachedArchive env h)
       _ -> return ()
 
 -- | Pre-seed zig's package cache for the transitive dependencies reachable
@@ -311,30 +314,40 @@ missingAfterFetch env name h = "Dependency " ++ name ++ " not present in Zig cac
 report :: FetchEnv -> String -> IO ()
 report env line = unless (C.quiet (options env)) $ putStrLn line
 
--- | Extract the package archive 'archive' into the new directory 'dst',
--- dropping the archive's top directory. The extraction goes to a temporary
--- directory next to 'dst' that is renamed into place, so 'dst' exists only
--- once complete.
-extractArchive :: FilePath -> FilePath -> IO ()
-extractArchive archive dst =
+-- | Create the new directory 'dst' complete or not at all. 'fill' fills a
+-- temporary directory next to 'dst', which is renamed to 'dst' once 'fill'
+-- returns. When 'fill' throws, the temporary directory is removed and 'dst'
+-- is not created. When the rename fails and 'dst' exists, another run
+-- installed 'dst' meanwhile: that 'dst' counts as installed and the
+-- temporary directory is removed.
+installDirectory :: FilePath -> (FilePath -> IO ()) -> IO ()
+installDirectory dst fill =
     bracketOnError (createTempDirectory (takeDirectory dst) ".acton-dep-extract")
                    removeDirectoryRecursive $ \tmp -> do
-      let cmd = proc "tar" ["-xzf", archive, "-C", tmp, "--strip-components", "1"]
-      (code, out, err) <- readCreateProcessWithExitCode cmd ""
-      case code of
-        ExitSuccess -> renameDirectory tmp dst
-        ExitFailure _ ->
-          throwProjectError ("Failed to extract cached dependency archive " ++ archive ++ ":\n" ++ out ++ err)
+      fill tmp
+      renameDirectory tmp dst `catch` \e -> do
+        installed <- doesDirectoryExist dst
+        unless installed $ throwIO (e :: IOException)
+        removeDirectoryRecursive tmp
 
--- | Copy the directory tree 'src' to 'dst'.
+-- | Extract the package archive 'archive' into the directory 'dir',
+-- dropping the archive's top directory.
+extractArchive :: FilePath -> FilePath -> IO ()
+extractArchive archive dir = do
+    let cmd = proc "tar" ["-xzf", archive, "-C", dir, "--strip-components", "1"]
+    (code, out, err) <- readCreateProcessWithExitCode cmd ""
+    case code of
+      ExitSuccess   -> return ()
+      ExitFailure _ -> throwProjectError ("Failed to extract cached dependency archive " ++ archive ++ ":\n" ++ out ++ err)
+
+-- | Copy the entries of the directory 'src' into the existing directory
+-- 'dir'.
 copyTree :: FilePath -> FilePath -> IO ()
-copyTree src dst = do
-    exists <- doesDirectoryExist src
-    unless exists $ throwProjectError ("Source path for copyTree does not exist: " ++ src)
-    createDirectoryIfMissing True dst
+copyTree src dir = do
     entries <- listDirectory src
     forM_ entries $ \e -> do
       let s = src </> e
-          d = dst </> e
+          d = dir </> e
       isDir <- doesDirectoryExist s
-      if isDir then copyTree s d else copyFile s d
+      if isDir then createDirectory d >> copyTree s d
+               else copyFile s d
