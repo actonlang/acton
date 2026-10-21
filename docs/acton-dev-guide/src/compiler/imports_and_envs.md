@@ -99,9 +99,14 @@ Header summary reads are used for cheap decisions:
 - module public and implementation hashes and the stored name count
 - roots, tests, and docstrings
 
-This is the path used by `readModuleTask` and the various cache lookups in
-`Acton.Compile`. Per-name dependency hashes are no longer part of the header
-read; stale checks and DBP selection read exact `name-hash` rows on demand.
+`readModuleTask` uses this read (`reusableHeader`), and so do the CLI's import,
+root and test lookups. The module cache's single lookups read less:
+`lookupModuleHash` reads only the meta row, and `lookupNameHash` one
+`name-hash` row. Stale checks and DBP selection read exact `name-hash` rows on
+demand. `readHeader` reads the same fields as the summary, with every
+`name-hash` row in place of the name count. The module cache's `lookupNameMap`
+uses it, behind the `--verbose` hash-delta line, and `acton test` calls it
+directly.
 
 ### Full `.tydb` reads
 
@@ -144,7 +149,7 @@ Read/decode failure aborts the compilation like any other corrupt interface
 cache error.
 
 Passes that rewrite imported names do not materialize the module either. They
-wrap `moduleLookupHName` with their conversion function (`convertModules`), so
+wrap `moduleLookupName` with their conversion function (`convertModules`), so
 Normalizer, Converter, Deactorizer, CPS, and LambdaLifter convert only names
 that are actually demanded. Generated names map back to their source name
 before lookup when necessary.
@@ -166,7 +171,7 @@ lookup.
 ## How transitive imports become available
 
 The transitive import closure is reconstructed through `Acton.Env.mkEnv`,
-`impModule`, `doImp`, and `subImp`.
+`impModule` and `doImp`.
 
 When a module imports another module:
 

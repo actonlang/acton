@@ -66,15 +66,9 @@ Because we hash pretty-printed source, docstrings currently influence
 `implHash`; we can tighten the normalization later without changing the overall
 model.
 
-Name hashes depend on `NameInfo`. The type checker environment (`teAll`) is
-authoritative for user-facing declarations, but it does not include compiler-
-generated names (for example, protocol lowering emits classes such as
-`MinusD_Number`). The typed AST does include those generated names, so we derive
-their `NameInfo` with `QuickType.envOf`. Conversely, `envOf` omits `Protocol`
-and `Extension` entries because type inference translates them away. To cover
-both, hashing uses the union of `teAll` and `QuickType.envOf` as its name-info
-map, ensuring generated names appear in `.tydb` and still keeping protocol and
-extension hashes intact.
+Name hashes depend on `NameInfo`. The hash pass takes the `NameInfo` of the
+module's names from the interface that `Acton.Types.reconstruct` returns, the
+one stored in `.tydb`.
 
 To detect changes without recompiling, each per-name entry in `.tydb` stores
 dependency snapshots. **pubDeps** is a list of `(QName, pubHash)` for external

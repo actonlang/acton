@@ -1,10 +1,8 @@
 # Passes
 
 The compiler runs a fixed sequence of AST-to-AST transforms before finally
-generating C. The main entry point is `compiler/acton/Main.hs`, which wires
-the stages together via the `compiler/lib` modules listed below. All the real
-logic is contained in these modules and is thus accessible and usable as a
-library.
+generating C. Each stage is implemented in the `compiler/lib` modules listed
+below, so the stages are usable as a library.
 
 The same AST data type is used throughout all compiler passes, making it easy to
 read and understand what each transformation does.
