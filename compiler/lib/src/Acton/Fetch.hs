@@ -45,6 +45,7 @@ fetchDependencies gopts paths depOverrides =
         proxies <- readProxyEnv
         putStr (unlines (proxyEnvReportLines "" proxies))
       home <- getHomeDirectory
+      walkedSet <- newIORef Data.Set.empty
       seededSet <- newIORef Data.Set.empty
       let env = FetchEnv { options     = gopts
                          , overrides   = depOverrides
@@ -52,44 +53,50 @@ fetchDependencies gopts paths depOverrides =
                          , zigExe      = zigExecutable (sysPath paths)
                          , globalCache = zigGlobalCacheDir home
                          , depsCache   = depCacheDir home
+                         , walked      = walkedSet
                          , seeded      = seededSet
                          }
       createDirectoryIfMissing True (globalCache env)
       createDirectoryIfMissing True (depsCache env)
-      void (walkProject env Data.Set.empty (projPath paths) rootSpec)
+      walkProject env (projPath paths) rootSpec
 
 -- | The settings and shared state of one 'fetchDependencies' run.
 data FetchEnv = FetchEnv
   { options     :: C.GlobalOptions
-  , overrides   :: [(String, FilePath)]         -- ^ the --dep overrides, applied to every Build.act
+  , overrides   :: [(String, FilePath)]           -- ^ the --dep overrides, applied to every Build.act
   , pins        :: RootPins
   , zigExe      :: FilePath
-  , globalCache :: FilePath                     -- ^ the Zig global cache, which holds every fetched package
-  , depsCache   :: FilePath                     -- ^ the cache of Acton packages that project discovery reads
-  , seeded      :: IORef (Data.Set.Set String)  -- ^ the zig package directories ("d:") and hashes ("h:") already
-                                                --   seeded, so the transitive seeding walk over build.zig.zon
-                                                --   files ends on cycles and shared dependencies
+  , globalCache :: FilePath                       -- ^ the Zig global cache, which holds every fetched package
+  , depsCache   :: FilePath                       -- ^ the cache of Acton packages that project discovery reads
+  , walked      :: IORef (Data.Set.Set FilePath)  -- ^ the projects the walk reached, so it ends on cycles and
+                                                  --   shared dependencies
+  , seeded      :: IORef (Data.Set.Set Seed)      -- ^ the Zig package directories and hashes already seeded, so
+                                                  --   the transitive seeding walk over build.zig.zon files ends
+                                                  --   on cycles and shared dependencies
   }
 
+-- | A Zig package directory or hash that seeding claims once.
+data Seed = SeedDirectory FilePath | SeedHash String deriving (Eq, Ord)
+
 -- | Fetch the dependencies of the project at 'dir' with spec 'spec', then
--- walk its Acton dependencies, unless 'visited' holds the project. The
--- result is 'visited' with every project the walk reached. Within one
--- project the order is: fetch every direct Acton and Zig package
--- concurrently and fail with all errors; copy the Acton packages into the
--- dependency cache one at a time; seed the transitive Zig packages of the
--- local Zig dependencies; walk the selected Acton dependencies in name
--- order. The copy comes before the walk, because resolving a dependency's
--- subdirectory checks it only when the dependency's cache entry exists.
--- The walk applies root pins and --dep overrides but does not deduplicate
--- by fingerprint, so every version of a package is fetched.
-walkProject :: FetchEnv -> Data.Set.Set FilePath -> FilePath -> BuildSpec.BuildSpec -> IO (Data.Set.Set FilePath)
-walkProject env visited dir spec = do
-    projAbs <- normalizePathSafe dir
-    if Data.Set.member projAbs visited
-      then return visited
-      else do
+-- walk its Acton dependencies, unless the walk reached the project
+-- already. Within one project the order is: fetch every direct Acton and
+-- Zig package concurrently and fail with all errors; copy the Acton
+-- packages into the dependency cache one at a time; seed the transitive
+-- Zig packages of the local Zig dependencies; walk the selected Acton
+-- dependencies in name order. The copy comes before the walk, because
+-- resolving a dependency's subdirectory checks it only when the
+-- dependency's cache entry exists. The walk applies root pins and --dep
+-- overrides but does not deduplicate by fingerprint, so every version of a
+-- package is fetched.
+walkProject :: FetchEnv -> FilePath -> BuildSpec.BuildSpec -> IO ()
+walkProject env dir spec = do
+    -- Every directory the walk visits is absolute and normalised: the root
+    -- as findPaths gives it, and every dependency by resolveDepBase.
+    fresh <- claim (walked env) dir
+    when fresh $ do
         selectedDeps <- forM (M.toList (BuildSpec.concreteDependencies spec)) $ \(name, dep) ->
-          (,) name <$> selectDepAndWarn (options env) (pins env) projAbs name dep
+          (,) name <$> selectDepAndWarn (options env) (pins env) dir name dep
         let zigDeps = M.toList (BuildSpec.zig_dependencies spec)
             fetches = catMaybes $
                  [ dependencyFetch env Package    name (localPath dep)    (BuildSpec.url dep)  (BuildSpec.hash dep)
@@ -113,16 +120,17 @@ walkProject env visited dir spec = do
         -- already fetched above with the direct dependencies (see
         -- seedTransitiveZigDeps for why url packages are not recursed into).
         forM_ zigDeps $ \(_, dep) ->
-          forM_ (localZigPath dep) $ \p -> seedTransitiveZigDeps env (projAbs </> p)
-        foldM (walkDependency env projAbs) (Data.Set.insert projAbs visited) selectedDeps
+          forM_ (localZigPath dep) $ \p -> seedTransitiveZigDeps env (dir </> p)
+        forM_ selectedDeps (walkDependency env dir)
 
--- | Walk the Acton dependency 'name' of the project at 'base', starting
--- from 'visited', in its 'existingDependencyDir'. A dependency fetched by
--- hash whose directory does not exist ends the walk there.
-walkDependency :: FetchEnv -> FilePath -> Data.Set.Set FilePath -> (String, BuildSpec.PkgDep) -> IO (Data.Set.Set FilePath)
-walkDependency env base visited (name, dep) =
+-- | Walk the Acton dependency 'name' of the project at 'base' in its
+-- 'existingDependencyDir'. copyPackage has installed the cache entry of
+-- every dependency fetched by hash, so its directory exists. A missing
+-- local directory is an error.
+walkDependency :: FetchEnv -> FilePath -> (String, BuildSpec.PkgDep) -> IO ()
+walkDependency env base (name, dep) =
     existingDependencyDir base name dep
-      >>= maybe (return visited) (\dir -> loadOverriddenSpec (overrides env) dir >>= walkProject env visited dir)
+      >>= mapM_ (\dir -> loadOverriddenSpec (overrides env) dir >>= walkProject env dir)
 
 -- | The two kinds of dependency a project fetches by url and hash. Both are
 -- fetched into the Zig global cache.
@@ -261,7 +269,7 @@ seedTransitiveZigDeps env = seedDirectory
   where
     seedDirectory dir = do
       dirAbs <- normalizePathSafe dir
-      fresh <- claimSeeded env ("d:" ++ dirAbs)
+      fresh <- claim (seeded env) (SeedDirectory dirAbs)
       when fresh $ do
         let zonPath = dirAbs </> "build.zig.zon"
         parsed <- Zon.readZonDependencies zonPath
@@ -277,7 +285,7 @@ seedTransitiveZigDeps env = seedDirectory
       | Just p <- Zon.zdPath dep, not (null p) = seedDirectory (pkgDir </> p)
       | Just u <- Zon.zdUrl dep
       , Just h <- Zon.zdHash dep               = do
-          fresh <- claimSeeded env ("h:" ++ h)
+          fresh <- claim (seeded env) (SeedHash h)
           when fresh $ do
             cached <- isCached env ZigPackage h
             unless cached $ do
@@ -287,9 +295,9 @@ seedTransitiveZigDeps env = seedDirectory
                 Right _ -> return ()
       | otherwise                              = return ()
 
--- | Record 'key' in the seeded set. True the first time 'key' is recorded.
-claimSeeded :: FetchEnv -> String -> IO Bool
-claimSeeded env key = atomicModifyIORef' (seeded env) $ \s ->
+-- | Record 'key' in the set 'ref'. True the first time 'key' is recorded.
+claim :: Ord a => IORef (Data.Set.Set a) -> a -> IO Bool
+claim ref key = atomicModifyIORef' ref $ \s ->
     if Data.Set.member key s then (s, False) else (Data.Set.insert key s, True)
 
 -- | The extracted package of hash 'h' in the Zig global cache.
