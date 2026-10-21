@@ -906,31 +906,29 @@ memoFound table key load = modifyMVar table $ \known -> case M.lookup key known 
 -- while it exists and lies under the search path; its search order is not
 -- checked again.  A module without a .tydb is forgotten.
 lookupTydbPath :: ModuleCache -> [FilePath] -> A.ModName -> IO (Maybe FilePath)
-lookupTydbPath cache spaths mn = modifyMVar (tydbPathTable cache) $ \m -> do
-  normSearch <- mapM normalizePathSafe spaths
-  let refresh known = do
-        mty <- Acton.Env.findTyFile spaths mn
-        case mty of
-          Just p  -> return (M.insert mn p known, Just p)
-          Nothing -> return (M.delete mn known, Nothing)
-  case M.lookup mn m of
-    Just p -> do
-      pNorm <- normalizePathSafe p
-      exists <- InterfaceFiles.interfaceExists pNorm
-      if exists && any (pNorm `isUnder`) normSearch
-        then return (m, Just pNorm)
-        else refresh m
-    Nothing -> refresh m
+lookupTydbPath cache searchPaths mn = modifyMVar (tydbPathTable cache) $ \known -> do
+  normalizedSearch <- mapM normalizePathSafe searchPaths
+  let refresh = do
+        found <- Acton.Env.findTyFile searchPaths mn
+        return (maybe (M.delete mn known) (\path -> M.insert mn path known) found, found)
+  case M.lookup mn known of
+    Just path -> do
+      normalized <- normalizePathSafe path
+      exists <- InterfaceFiles.interfaceExists normalized
+      if exists && any (normalized `isUnder`) normalizedSearch
+        then return (known, Just normalized)
+        else refresh
+    Nothing -> refresh
 
 -- | Read from a module's .tydb on the search path, when it has one.
 withTydb :: ModuleCache -> [FilePath] -> A.ModName -> (FilePath -> IO (Maybe a)) -> IO (Maybe a)
-withTydb cache spath m readTydb = lookupTydbPath cache spath m >>= maybe (return Nothing) readTydb
+withTydb cache searchPaths m readTydb = lookupTydbPath cache searchPaths m >>= maybe (return Nothing) readTydb
 
 -- | A module's current pub or impl hash, from its .tydb header unless a
 -- finished module or an earlier read remembered it.
 lookupModuleHash :: ModuleCache -> [FilePath] -> HashKind -> A.ModName -> IO (Maybe B.ByteString)
-lookupModuleHash cache spath kind m = memoFound (hashTable kind cache) m $
-    withTydb cache spath m (fmap (fmap pick) . InterfaceFiles.readModuleHashesMaybe)
+lookupModuleHash cache searchPaths kind m = memoFound (hashTable kind cache) m $
+    withTydb cache searchPaths m (fmap (fmap pick) . InterfaceFiles.readModuleHashesMaybe)
   where
     pick (_, pub, impl) = case kind of
       Pub  -> pub
@@ -939,22 +937,20 @@ lookupModuleHash cache spath kind m = memoFound (hashTable kind cache) m $
 -- | A module's complete public name map, from its .tydb header unless a
 -- finished module or an earlier read remembered it.
 lookupNameMap :: ModuleCache -> [FilePath] -> A.ModName -> IO (Maybe (M.Map A.Name InterfaceFiles.NameHashInfo))
-lookupNameMap cache spath m = memoFound (nameMapTable cache) m $
-    withTydb cache spath m (fmap (fmap (publicNameMap . names)) . InterfaceFiles.readHeaderMaybe)
+lookupNameMap cache searchPaths m = memoFound (nameMapTable cache) m $
+    withTydb cache searchPaths m (fmap (fmap (publicNameMap . names)) . InterfaceFiles.readHeaderMaybe)
   where
     names (_, _, _, _, _, _, nameHashes, _, _, _) = nameHashes
 
 -- | One name's hashes: from the module's complete map when there is one,
--- else by a single-name read of its .tydb, whose absence is remembered too.
+-- else by a single-name read of its .tydb, which is remembered whether it
+-- found the name or not: the load answers Just of the read.
 lookupNameHash :: ModuleCache -> [FilePath] -> A.ModName -> A.Name -> IO (Maybe InterfaceFiles.NameHashInfo)
-lookupNameHash cache spath m n = do
+lookupNameHash cache searchPaths m n = do
     complete <- readMVar (nameMapTable cache)
     case M.lookup m complete of
       Just names -> return (M.lookup n names)
-      Nothing    -> modifyMVar (nameReadTable cache) $ \singleReads -> case M.lookup (m, n) singleReads of
-        Just r  -> return (singleReads, r)
-        Nothing -> do r <- withTydb cache spath m (`InterfaceFiles.readNameHashMaybe` n)
-                      return (M.insert (m, n) r singleReads, r)
+      Nothing    -> join <$> memoFound (nameReadTable cache) (m, n) (Just <$> withTydb cache searchPaths m (`InterfaceFiles.readNameHashMaybe` n))
 
 -- | Make a finished module's hashes visible to later lookups.  A result
 -- without name hashes (a module reused from its .tydb) must not enter the
@@ -1042,17 +1038,17 @@ data Provider = Finished ModuleHashes | Outside | Unfinished
 inRunResolver :: ModuleCache -> M.Map TaskKey GlobalTask -> M.Map TaskKey ModuleHashes -> GlobalTask -> Resolver
 inRunResolver cache tasks finished t = Resolver moduleHashOf nameHashOf
   where
-    spath = searchPath (gtPaths t)
+    searchPaths = searchPath (gtPaths t)
     moduleHashOf kind m = case provider m of
       Finished hashes -> return (Just (moduleHash kind hashes))
-      Outside         -> lookupModuleHash cache spath kind m
+      Outside         -> lookupModuleHash cache searchPaths kind m
       Unfinished      -> error ("Internal error: missing " ++ hashKindName kind ++ " hash for dep " ++ modNameToString m)
     nameHashOf m n = case provider m of
       Finished hashes
         | Just i <- M.lookup n (mhNames hashes) -> return (Just i)
-        | discoveredAsCached m                   -> lookupNameHash cache spath m n
+        | discoveredAsCached m                   -> lookupNameHash cache searchPaths m n
         | otherwise                              -> return Nothing
-      Outside    -> lookupNameHash cache spath m n
+      Outside    -> lookupNameHash cache searchPaths m n
       Unfinished -> error ("Internal error: missing name hashes for dep " ++ modNameToString m)
     provider m = case M.lookup m (gtImportProviders t) of
       Nothing -> Outside
@@ -1066,8 +1062,8 @@ inRunResolver cache tasks finished t = Resolver moduleHashOf nameHashOf
 -- | Lookups for a module outside a stage graph: every import is read
 -- through the cache.
 cacheResolver :: ModuleCache -> Paths -> Resolver
-cacheResolver cache paths = Resolver (lookupModuleHash cache spath) (lookupNameHash cache spath)
-  where spath = searchPath paths
+cacheResolver cache paths = Resolver (lookupModuleHash cache searchPaths) (lookupNameHash cache searchPaths)
+  where searchPaths = searchPath paths
 
 -- | A dependency module row: the module's current pub and impl hash.  Both
 -- are looked up.
