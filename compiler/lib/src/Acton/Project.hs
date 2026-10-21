@@ -147,18 +147,18 @@ data Paths = Paths
   , projName   :: String        -- the name in Build.act, empty for a scratch build
   }
 
--- Per-project context used for multi-project orchestration.
--- Identified by projRoot (absolute path). Keeps directories and BuildSpec if present.
-data ProjCtx = ProjCtx {
-                     projRoot    :: FilePath,
-                     projOutDir  :: FilePath,
-                     projTypesDir:: FilePath,
-                     projSrcDir  :: FilePath,
-                     projSysPath :: FilePath,
-                     projSysTypes:: FilePath,
-                     projBuildSpec :: BuildSpec.BuildSpec,
-                     projDeps     :: [(String, FilePath)]          -- resolved dependency roots (abs paths)
-                   } deriving (Show)
+-- | One project of a multi-project build, identified by its absolute root
+-- projRoot: its directories, its Build.act and its dependencies.
+data ProjCtx = ProjCtx
+  { projRoot      :: FilePath
+  , projOutDir    :: FilePath
+  , projTypesDir  :: FilePath
+  , projSrcDir    :: FilePath
+  , projSysPath   :: FilePath
+  , projSysTypes  :: FilePath
+  , projBuildSpec :: BuildSpec.BuildSpec
+  , projDeps      :: [(String, FilePath)]   -- each dependency's name and absolute root
+  } deriving (Show)
 
 -- | The context of the project rooted at 'root' with its sources in 'src',
 -- using the system directory 'sys'. Outputs go to out/ and out/types/ under
@@ -383,12 +383,9 @@ srcBase paths mn        = joinPath (srcDir paths : names)
                             ns -> ns
 
 
--- | Walk upward from a path to find a project root.
--- A project root is identified by Build.act plus a
--- src/ directory; returns Nothing if we reach filesystem root.
-
--- | Check whether a directory is an Acton project root.
--- Requires Build.act and a src/ directory.
+-- | Whether 'path' holds Build.act and a src/ directory. Always False when
+-- ACTON_RUNACTON is set, so that bin/runacton builds every file as a
+-- scratch build.
 isActonProjectRoot :: FilePath -> IO Bool
 isActonProjectRoot path = do
     runacton <- lookupEnv "ACTON_RUNACTON"
@@ -399,6 +396,8 @@ isActonProjectRoot path = do
         hasSrcDir <- doesDirectoryExist (projectSrcDir path)
         return (hasBuildAct && hasSrcDir)
 
+-- | The nearest directory at or above 'path' that is an Acton project root,
+-- Nothing when there is none up to the filesystem root.
 findProjectDir :: FilePath -> IO (Maybe FilePath)
 findProjectDir path = do
     isProjectRoot <- isActonProjectRoot path
