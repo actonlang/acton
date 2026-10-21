@@ -254,13 +254,9 @@ ensureCleanProjectAt proj = do
   removeIfExists (proj </> ".acton.lock")
 
 withBackgroundCompilerLockHeld :: FilePath -> IO a -> IO a
-withBackgroundCompilerLockHeld proj action = do
-  mlock <- Project.tryBackgroundCompilerLock proj
-  case mlock of
-    Nothing ->
-      assertFailure ("failed to acquire .acton.compile.lock in " ++ proj)
-    Just lock ->
-      action `E.finally` Project.releaseBackgroundCompilerLock lock
+withBackgroundCompilerLockHeld proj =
+  Project.withBackgroundCompilerLock proj
+    (assertFailure ("failed to acquire .acton.compile.lock in " ++ proj))
 
 -- | Write a Build.act file with optional path deps.
 writeBuildAct :: FilePath -> String -> [(String, FilePath)] -> IO ()

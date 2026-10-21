@@ -7,6 +7,7 @@ module Acton.Project
   , throwProjectError
   , Paths(..)
   , ProjCtx(..)
+  , mkProjCtx
   , BuildSpecStamp
   , readBuildSpecStamp
   , findPaths
@@ -15,6 +16,9 @@ module Acton.Project
   , collectDepTypePaths
   , depTypePathsFromMap
   , resolveDepBase
+  , depCacheDir
+  , depCacheEntry
+  , zigGlobalCacheDir
   , pathsForModule
   , searchPathForProject
   , systemTypePaths
@@ -32,6 +36,7 @@ module Acton.Project
   , rootBinaryName
   , filterActFile
   , modNameToFilename
+  , dottedModName
   , special_projects
   , addProjPrefix
   , dropProjPrefix
@@ -40,6 +45,7 @@ module Acton.Project
   , backgroundCompilerLockPath
   , tryBackgroundCompilerLock
   , releaseBackgroundCompilerLock
+  , withBackgroundCompilerLock
   , projectLockPath
   , withProjectLockOnWait
   , withProjectLock
@@ -148,6 +154,38 @@ data ProjCtx = ProjCtx {
                      projDeps     :: [(String, FilePath)]          -- resolved dependency roots (abs paths)
                    } deriving (Show)
 
+-- | The context of the project rooted at 'root' with its sources in 'src',
+-- using the system directory 'sys'. Outputs go to out/ and out/types/ under
+-- the root. A discovered project keeps its sources in src/ under the root,
+-- and a scratch build keeps them next to the source file it was given.
+mkProjCtx :: FilePath -> FilePath -> FilePath -> BuildSpec.BuildSpec -> [(String, FilePath)] -> ProjCtx
+mkProjCtx sys root src spec deps =
+    ProjCtx { projRoot      = root
+            , projOutDir    = projectOutDir root
+            , projTypesDir  = projectTypesDir root
+            , projSrcDir    = src
+            , projSysPath   = sys
+            , projSysTypes  = sysTypesDir sys
+            , projBuildSpec = spec
+            , projDeps      = deps
+            }
+
+-- | The output directory of the project rooted at 'root'.
+projectOutDir :: FilePath -> FilePath
+projectOutDir root = joinPath [root, "out"]
+
+-- | The directory of the interface files of the project rooted at 'root'.
+projectTypesDir :: FilePath -> FilePath
+projectTypesDir root = joinPath [projectOutDir root, "types"]
+
+-- | The source directory of the project rooted at 'root'.
+projectSrcDir :: FilePath -> FilePath
+projectSrcDir root = joinPath [root, "src"]
+
+-- | The types directory of the base library in the system directory 'sys'.
+sysTypesDir :: FilePath -> FilePath
+sysTypesDir sys = joinPath [sys, "base", "out", "types"]
+
 systemTypePaths :: FilePath -> FilePath -> [FilePath]
 systemTypePaths sys types =
     [joinPath [sys, "std", "out", "types"], types]
@@ -214,18 +252,7 @@ discoverProjects gopts sysAbs rootProj depOverrides = do
           (deps, fpMap2) <- do
             let depsList = M.toList (BuildSpec.concreteDependencies spec)
             foldM (collectDep pins dirAbs) ([], fpMap1) depsList
-          let outDir   = joinPath [dirAbs, "out"]
-              typesDir = joinPath [outDir, "types"]
-              srcDir'  = joinPath [dirAbs, "src"]
-              ctx = ProjCtx { projRoot = dirAbs
-                            , projOutDir = outDir
-                            , projTypesDir = typesDir
-                            , projSrcDir = srcDir'
-                            , projSysPath = sysAbs
-                            , projSysTypes = joinPath [sysAbs, "base", "out", "types"]
-                            , projBuildSpec = spec
-                            , projDeps = [ (n, p) | (n, p, _) <- reverse deps ]
-                            }
+          let ctx = mkProjCtx sysAbs dirAbs (projectSrcDir dirAbs) spec [ (n, p) | (n, p, _) <- reverse deps ]
               acc' = M.insert dirAbs ctx acc
               seen' = Data.Set.insert dirAbs seen
           foldM (step root seen' pins) (acc', fpMap2) (reverse deps)
@@ -289,8 +316,10 @@ resolveFollows projects = M.traverseWithKey resolveProject projects
                     Nothing -> case lookup name (projDeps ctx) of
                                  Just target -> return target
                                  Nothing -> throwProjectError ("Unresolved dependency '" ++ name ++ "' in " ++ root)
+                    -- A follows reference is written like a module name:
+                    -- the dependency names along the way, joined by dots.
                     Just ref -> do
-                      target <- foldM (resolve ((root, name) : seen)) root (splitRef ref)
+                      target <- foldM (resolve ((root, name) : seen)) root (A.modPath (dottedModName ref))
                                 `catch` \(ProjectError msg) ->
                                   throwProjectError ("Dependency '" ++ name ++ "' follows '" ++ ref
                                                      ++ "' in " ++ root ++ "/Build.act:\n" ++ msg)
@@ -300,10 +329,6 @@ resolveFollows projects = M.traverseWithKey resolveProject projects
                                            ++ "', which resolves to project '" ++ targetName
                                            ++ "'. Use the project name as the dependency name.")
                       return target
-
-    splitRef ref = case break (== '.') ref of
-                     (name, []) -> [name]
-                     (name, _:rest) -> name : splitRef rest
 
 -- Given a FILE and optionally --syspath PATH:
 -- 'sysPath' is the path to the system directory as given by PATH, defaulting to the acton executable directory.
@@ -367,7 +392,7 @@ isActonProjectRoot path = do
       then return False
       else do
         hasBuildAct <- doesFileExist (path </> "Build.act")
-        hasSrcDir <- doesDirectoryExist (path </> "src")
+        hasSrcDir <- doesDirectoryExist (projectSrcDir path)
         return (hasBuildAct && hasSrcDir)
 
 findProjectDir :: FilePath -> IO (Maybe FilePath)
@@ -413,6 +438,16 @@ releaseBackgroundCompilerLock (BackgroundCompilerLock lock lockPath) = do
     handleNotExists :: IOException -> IO ()
     handleNotExists _ = return ()
 
+-- | Run 'action' while holding the long-running compiler lock of a project
+-- root and release the lock afterwards. Run 'busy' instead when another
+-- process holds the lock.
+withBackgroundCompilerLock :: FilePath -> IO a -> IO a -> IO a
+withBackgroundCompilerLock projDir busy action = do
+    mlock <- tryBackgroundCompilerLock projDir
+    case mlock of
+      Nothing   -> busy
+      Just lock -> action `finally` releaseBackgroundCompilerLock lock
+
 -- | Path to the single per-project compiler work lock.
 projectLockPath :: FilePath -> FilePath
 projectLockPath projDir =
@@ -446,10 +481,10 @@ findPaths actFile opts  = do execDir <- takeDirectory <$> getExecutablePath
                              sysPath <- canonicalizePath (if null $ C.syspath opts then execDir ++ "/.." else C.syspath opts)
                              absSrcFile <- canonicalizePath actFile
                              (isTmp, projPath, dirInSrc) <- analyze (takeDirectory absSrcFile) []
-                             let sysTypes = joinPath [sysPath, "base", "out", "types"]
-                                 srcDir  = if isTmp then takeDirectory absSrcFile else joinPath [projPath, "src"]
-                                 projOut = joinPath [projPath, "out"]
-                                 projTypes = joinPath [projOut, "types"]
+                             let sysTypes = sysTypesDir sysPath
+                                 srcDir  = if isTmp then takeDirectory absSrcFile else projectSrcDir projPath
+                                 projOut = projectOutDir projPath
+                                 projTypes = projectTypesDir projPath
                                  binDir  = if isTmp then srcDir else joinPath [projOut, "bin"]
                              -- join the search paths from command line options with the ones found in the deps directory
                              depOverrides <- normalizeDepOverrides projPath (C.dep_overrides opts)
@@ -461,7 +496,18 @@ findPaths actFile opts  = do execDir <- takeDirectory <$> getExecutablePath
                              createDirectoryIfMissing True projOut
                              createDirectoryIfMissing True projTypes
                              createDirectoryIfMissing True (moduleTypesDir projTypes modName)
-                             return $ Paths sPaths sysPath sysTypes projPath projOut projTypes binDir srcDir isTmp modName projName
+                             return Paths { searchPath = sPaths
+                                          , sysPath    = sysPath
+                                          , sysTypes   = sysTypes
+                                          , projPath   = projPath
+                                          , projOut    = projOut
+                                          , projTypes  = projTypes
+                                          , binDir     = binDir
+                                          , srcDir     = srcDir
+                                          , isTmp      = isTmp
+                                          , modName    = modName
+                                          , projName   = projName
+                                          }
   where analyze "/" ds  = do tmp <- canonicalizePath (C.tempdir opts)
                              return (True, tmp, [])
         analyze pre ds  = do isProjectRoot <- isActonProjectRoot pre
@@ -544,10 +590,24 @@ searchPathForProject opts projMap ctx =
     in [projTypesDir ctx] ++ deps ++ (C.searchpath opts) ++ systemTypePaths (projSysPath ctx) (projSysTypes ctx)
 
 -- | Construct a Paths record for a module within a project context.
+-- A module's Paths are never temporary: they have isTmp False, binDir out/bin
+-- under the project root and the project name from the BuildSpec, also in a
+-- scratch build, whose root Paths from 'findPaths' have isTmp True, binDir
+-- equal to the source directory and an empty project name.
 modulePaths :: C.CompileOptions -> M.Map FilePath ProjCtx -> ProjCtx -> A.ModName -> Paths
 modulePaths opts projMap ctx mn =
-    Paths (searchPathForProject opts projMap ctx) (projSysPath ctx) (projSysTypes ctx) (projRoot ctx) (projOutDir ctx) (projTypesDir ctx)
-          (joinPath [projOutDir ctx, "bin"]) (projSrcDir ctx) False mn (BuildSpec.specName (projBuildSpec ctx))
+    Paths { searchPath = searchPathForProject opts projMap ctx
+          , sysPath    = projSysPath ctx
+          , sysTypes   = projSysTypes ctx
+          , projPath   = projRoot ctx
+          , projOut    = projOutDir ctx
+          , projTypes  = projTypesDir ctx
+          , binDir     = joinPath [projOutDir ctx, "bin"]
+          , srcDir     = projSrcDir ctx
+          , isTmp      = False
+          , modName    = mn
+          , projName   = BuildSpec.specName (projBuildSpec ctx)
+          }
 
 -- | Construct the Paths record of a module and create its output directories.
 pathsForModule :: C.CompileOptions -> M.Map FilePath ProjCtx -> ProjCtx -> A.ModName -> IO Paths
@@ -798,7 +858,7 @@ resolveDepBase base name dep =
       _ -> case BuildSpec.hash dep of
              Just h -> do
                home <- getHomeDirectory
-               root <- normalizePathSafe (joinPath [home, ".cache", "acton", "deps", name ++ "-" ++ h])
+               root <- normalizePathSafe (depCacheEntry (depCacheDir home) name h)
                case BuildSpec.subdir dep of
                  Nothing -> return root
                  Just dir -> do
@@ -814,6 +874,21 @@ resolveDepBase base name dep =
                                           ++ "\nExpected Build.act and src/ in the selected directory.")
                    return selected
              Nothing -> throwProjectError ("Dependency " ++ name ++ " has no path or hash")
+
+-- | The directory under the home directory 'home' that holds the Acton
+-- packages fetched by hash, each in its own 'depCacheEntry'.
+depCacheDir :: FilePath -> FilePath
+depCacheDir home = joinPath [home, ".cache", "acton", "deps"]
+
+-- | The directory in the dependency cache 'cache' that holds the package
+-- 'name' fetched with hash 'hash'.
+depCacheEntry :: FilePath -> String -> String -> FilePath
+depCacheEntry cache name hash = joinPath [cache, name ++ "-" ++ hash]
+
+-- | The Zig global cache under the home directory 'home', which holds the
+-- fetched package archives of Acton and Zig dependencies.
+zigGlobalCacheDir :: FilePath -> FilePath
+zigGlobalCacheDir home = joinPath [home, ".cache", "acton", "zig-global-cache"]
 
 -- | Recursively collect out/types paths for all declared dependencies.
 -- Reads Build.act and follows dependency edges.
@@ -842,7 +917,7 @@ collectDepTypePaths projDir overrides = do
                _ -> return (seen, fpMap, acc)
         else do
           (depPath, fpMap') <- canonicalizeDep depAbs fpMap
-          let typesDir = joinPath [depPath, "out", "types"]
+          let typesDir = projectTypesDir depPath
           if Data.Set.member depPath seen
             then return (seen, fpMap', acc)
             else do
@@ -862,6 +937,13 @@ collectDepTypePaths projDir overrides = do
 -- This is used for diagnostics and display output.
 modNameToFilename :: A.ModName -> String
 modNameToFilename mn = joinPath (A.modPath mn) ++ ".act"
+
+-- | The module name written with dots between its names: "a.b" is a.b.
+dottedModName :: String -> A.ModName
+dottedModName = A.modName . names
+  where names s = case break (== '.') s of
+                    (n, [])     -> [n]
+                    (n, _:rest) -> n : names rest
 
 addProjPrefix               :: Paths -> A.ModName -> A.ModName
 addProjPrefix paths mn      = A.modName $ if proj `elem` special_projects then ns else proj : ns

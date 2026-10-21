@@ -26,7 +26,7 @@ import Acton.ArchiveDownload (downloadArchive)
 import Acton.HttpFetch (httpGetBytes, isHttpUrl, newProxyManager)
 import qualified Acton.BuildSpec as BuildSpec
 import qualified Acton.CommandLineParser as C
-import Acton.Project (loadBuildSpec, throwProjectError)
+import Acton.Project (loadBuildSpec, throwProjectError, zigGlobalCacheDir)
 import Acton.ZigFetch (fetchZigPackage)
 
 import Control.Exception (IOException, SomeException, try, displayException, evaluate)
@@ -934,7 +934,7 @@ zigFetchHash zigExe depUrl
 zigFetchLocalHash :: FilePath -> String -> IO (Either String String)
 zigFetchLocalHash zigExe target = do
     home <- getHomeDirectory
-    let globalCache = home </> ".cache" </> "acton" </> "zig-global-cache"
+    let globalCache = zigGlobalCacheDir home
     res <- fetchZigPackage zigExe globalCache target
     return (either (Left . ("Error hashing archive: " ++) . trim) Right res)
 

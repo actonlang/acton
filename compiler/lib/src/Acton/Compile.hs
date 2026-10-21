@@ -658,16 +658,7 @@ buildProjects gopts ctx = withoutTestLibraries <$> projects
     projects
       | isTmp paths = return (M.singleton root scratch)
       | otherwise   = discoverProjects gopts sys root (C.dep_overrides opts)
-    scratch = ProjCtx
-      { projRoot      = root
-      , projOutDir    = projOut paths
-      , projTypesDir  = projTypes paths
-      , projSrcDir    = srcDir paths
-      , projSysPath   = sys
-      , projSysTypes  = joinPath [sys, "base", "out", "types"]
-      , projBuildSpec = scratchBuildSpec root
-      , projDeps      = []
-      }
+    scratch = mkProjCtx sys root (srcDir paths) (scratchBuildSpec root) []
     withoutTestLibraries
       | C.test opts = M.adjust (\p -> p { projBuildSpec = (projBuildSpec p) { BuildSpec.libraries = M.empty } }) root
       | otherwise   = id
@@ -1699,14 +1690,6 @@ libraryBoundary g =
     Data.Set.unions [ Data.Set.filter (importedOutside group) group | group <- graphLibraries g ]
   where importedOutside group = any (`Data.Set.notMember` group) . usersOf (graphImports g)
 
-moduleStringToName :: String -> A.ModName
-moduleStringToName = A.modName . splitMod
-  where
-    splitMod s =
-      case break (== '.') s of
-        (p, []) -> [p]
-        (p, _:rest) -> p : splitMod rest
-
 -- | The modules of each declared build library, for every project's
 -- libraries.  A library module is the task of that name that belongs to the
 -- declaring project.
@@ -1717,7 +1700,7 @@ libraryTaskGroups projMap globalTasks =
     , lib <- M.elems (BuildSpec.libraries (projBuildSpec ctx))
     , let keys = [ gtKey t
                  | modName <- BuildSpec.libModules lib
-                 , t <- M.findWithDefault [] (moduleStringToName (proj ++ "." ++ modName)) tasksByModule
+                 , t <- M.findWithDefault [] (dottedModName (proj ++ "." ++ modName)) tasksByModule
                  , taskInProject ctx t
                  ]
           proj = BuildSpec.specName $ projBuildSpec ctx

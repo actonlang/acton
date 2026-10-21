@@ -506,11 +506,8 @@ projectSourceFiles paths = do
     return (catMaybes (map filterActFile allFiles))
 
 withBackgroundCompilerLockOrExit :: FilePath -> String -> IO a -> IO a
-withBackgroundCompilerLockOrExit projDir msg action = do
-    mlock <- tryBackgroundCompilerLock projDir
-    case mlock of
-      Nothing -> printErrorAndExit msg
-      Just lock -> action `finally` releaseBackgroundCompilerLock lock
+withBackgroundCompilerLockOrExit projDir msg =
+    withBackgroundCompilerLock projDir (printErrorAndExit msg)
 
 withProjectLockNotice :: C.GlobalOptions -> FilePath -> IO a -> IO a
 withProjectLockNotice gopts projDir action =
@@ -2535,7 +2532,7 @@ runZig gopts opts zigExe zigArgs paths wd mProgressUI = do
         return (Just ("ZIG_PROGRESS", envVal), onStart', onStop', False)
     homeDir <- getHomeDirectory
     let zigEnv = [ ("ZIG_LOCAL_CACHE_DIR", joinPath [homeDir, ".cache", "acton", "zig-local-cache"])
-                 , ("ZIG_GLOBAL_CACHE_DIR", joinPath [homeDir, ".cache", "acton", "zig-global-cache"])
+                 , ("ZIG_GLOBAL_CACHE_DIR", zigGlobalCacheDir homeDir)
                  ]
         envWithZigCache = foldr (\(k, v) acc -> (k, v) : filter ((/= k) . fst) acc) env0 zigEnv
         env2 = case envOverride of
@@ -2602,7 +2599,7 @@ genBuildZigFiles spec paths depModuleOpts depPathOverrides = do
     let buildDir = zigBuildDir absSys projAbs
         relSys = relativeViaRoot buildDir absSys
     homeDir <- getHomeDirectory
-    depsRootAbs <- normalizePathSafe (joinPath [homeDir, ".cache", "acton", "deps"])
+    depsRootAbs <- normalizePathSafe (depCacheDir homeDir)
     normalizedSpec <- normalizeSpecPaths proj spec
     let directZigs = [ ZigDepRef depName (rebaseZigDep projAbs proj dep)
                      | (depName, dep) <- M.toList (BuildSpec.zig_dependencies normalizedSpec)
@@ -2843,7 +2840,7 @@ genBuildZigZon template relSys depsRootAbs sysAbs projAbs buildDir fingerprint z
       let rawPath = case BuildSpec.path dep of
                       Just p | not (null p) -> p
                       _ -> case BuildSpec.hash dep of
-                             Just h -> joinPath ([depsRoot, name ++ "-" ++ h] ++ maybeToList (BuildSpec.subdir dep))
+                             Just h -> joinPath (depCacheEntry depsRoot name h : maybeToList (BuildSpec.subdir dep))
                              Nothing -> errorWithoutStackTrace ("Dependency " ++ name ++ " has no path or hash")
           pathAbs = collapseDots $
                       if isAbsolutePath rawPath

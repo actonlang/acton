@@ -10,7 +10,7 @@ import qualified Acton.BuildSpec as BuildSpec
 import qualified Acton.CommandLineParser as C
 import Acton.ArchiveDownload (downloadArchive)
 import Acton.HttpFetch (isHttpUrl, proxyEnvReportLines, readProxyEnv)
-import Acton.Project (Paths(..), applyDepOverrides, loadBuildSpec, normalizePathSafe, rebaseDepPath, resolveDepBase, throwProjectError)
+import Acton.Project (Paths(..), applyDepOverrides, depCacheDir, depCacheEntry, loadBuildSpec, normalizePathSafe, rebaseDepPath, resolveDepBase, throwProjectError, zigGlobalCacheDir)
 import Acton.ZigFetch (fetchZigPackage)
 import qualified Acton.Zon as Zon
 
@@ -42,8 +42,8 @@ fetchDependencies gopts paths depOverrides = do
           putStr (unlines (proxyEnvReportLines "" env))
         home <- getHomeDirectory
         let zigExe      = joinPath [sysPath paths, "zig", "zig"]
-            globalCache = joinPath [home, ".cache", "acton", "zig-global-cache"]
-            depsCache   = joinPath [home, ".cache", "acton", "deps"]
+            globalCache = zigGlobalCacheDir home
+            depsCache   = depCacheDir home
             cacheDir h  = joinPath [globalCache, "p", h]
         createDirectoryIfMissing True globalCache
         createDirectoryIfMissing True depsCache
@@ -152,7 +152,7 @@ fetchDependencies gopts paths depOverrides = do
                Just h -> do
                  let src = cacheDir h
                      srcArchive = cacheArchivePath cacheDir h
-                     dst = joinPath [depsCache, name ++ "-" ++ h]
+                     dst = depCacheEntry depsCache name h
                  exists <- doesDirectoryExist dst
                  unless exists $ do
                    srcOk <- doesDirectoryExist src
