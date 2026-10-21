@@ -23,6 +23,7 @@ module Acton.Hashing
   , mergeSortedDistinct
   , nameInfoHashes
   , nameInfoHashesWithProgress
+  , withEscapeBits
   , nameHashesFromItemsWithProgress
   , pubSigSplitDepsFromNameInfoMapWithProgress
   , implSplitDepsFromItemsWithProgress
@@ -1667,6 +1668,17 @@ nameInfoHashesWithProgress onProgress infos = do
       done <- atomicModifyIORef' doneRef $ \d -> (d + 1, d + 1)
       onProgress done
       pure (n, h)
+
+-- | Fold each top-level function's escape summary into its own public hash,
+-- as SHA256 of the hash, "escape:" and one '1' (may escape) or '0' per
+-- parameter.  Importers check their Hashable.hash implementations against
+-- the summary, so it is part of the function's public interface: a summary
+-- change is a public change for exactly the dependents that use the name.
+withEscapeBits :: InterfaceFiles.EscapeSummaries -> M.Map A.Name B.ByteString -> M.Map A.Name B.ByteString
+withEscapeBits summaries = M.mapWithKey addBits
+  where
+    bits = M.fromList [ (n, B.pack [ if mayEscape then '1' else '0' | (_, mayEscape) <- ps ]) | ([n], ps) <- summaries ]
+    addBits n h = maybe h (\b -> SHA256.hash (h <> B.pack "escape:" <> b)) (M.lookup n bits)
 
 prepareNameHashInputs :: A.ModName
                       -> Env.Env0

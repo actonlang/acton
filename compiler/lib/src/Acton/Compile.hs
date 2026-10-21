@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, FlexibleInstances #-}
+{-# LANGUAGE CPP, FlexibleInstances, ScopedTypeVariables #-}
 {-|
 Overview
 
@@ -153,7 +153,6 @@ module Acton.Compile
   , taskSourceFile
   , hasParseStage
   , quiet
-  , missingIfaceDiagnostics
   , rootEligible
   ) where
 
@@ -198,7 +197,7 @@ import Control.Concurrent.Async
 import Control.Concurrent.MVar
 import Control.Concurrent (forkIO, threadDelay)
 import Control.Concurrent.STM (TChan, TVar, atomically, check, modifyTVar', newTChanIO, newTVarIO, readTChan, readTVar, readTVarIO, writeTChan, writeTVar)
-import Control.DeepSeq (force, rnf)
+import Control.DeepSeq (NFData, force, rnf)
 import Control.Exception (Exception, Handler(..), SomeException, catch, catches, displayException, evaluate, finally, mask_, throwIO, try)
 import Control.Monad
 import Data.Binary (encode)
@@ -903,8 +902,10 @@ tydbOf env                              = tyDbPath (pathsOf env) (nameOf env)
 labelOf                                 :: ModuleEnv -> String
 labelOf env                             = modNameToString (dropProjPrefix (pathsOf env) (nameOf env))
 
--- | What importers read of a finished module.  A module rebuilt from its
--- .tydb offers no name hashes: importers read its names from disk.
+-- | What importers read of a finished module.  The results of the front
+-- passes, of an impl refresh and of a codegen refresh carry its public
+-- names.  A module reused from its .tydb without a refresh, or given the
+-- empty result under --only-build, carries no name hashes of its own.
 data ModuleHashes = ModuleHashes
   { mhPub   :: B.ByteString
   , mhImpl  :: B.ByteString
@@ -928,8 +929,9 @@ data Provider = Finished ModuleHashes | Outside | Unfinished
 -- modules whose front stage finished.  A provider in the run finished before
 -- the module started, and one that did not is an internal error.
 -- __builtin__, modules outside the run and imports without a provider are
--- read through the cache.  A provider rebuilt from its .tydb has no name
--- hashes of its own, so its names are read from disk.
+-- read through the cache.  A provider discovered as a cached TyTask may
+-- have been reused without its name hashes, so a name its hashes lack is
+-- read from its .tydb.
 inRunResolver :: ModuleCache -> M.Map TaskKey GlobalTask -> M.Map TaskKey ModuleHashes -> GlobalTask -> Resolver
 inRunResolver cache tasks finished t = Resolver moduleHashOf nameHashOf
   where
@@ -941,7 +943,7 @@ inRunResolver cache tasks finished t = Resolver moduleHashOf nameHashOf
     nameHashOf m n = case provider m of
       Finished hashes
         | Just i <- M.lookup n (mhNames hashes) -> return (Just i)
-        | rebuiltFromTydb m                      -> lookupNameHash cache spath m n
+        | discoveredAsCached m                   -> lookupNameHash cache spath m n
         | otherwise                              -> return Nothing
       Outside    -> lookupNameHash cache spath m n
       Unfinished -> error ("Internal error: missing name hashes for dep " ++ modNameToString m)
@@ -950,7 +952,7 @@ inRunResolver cache tasks finished t = Resolver moduleHashOf nameHashOf
       Just k | Just hashes <- M.lookup k finished -> Finished hashes
              | isBuiltin k || M.notMember k tasks  -> Outside
              | otherwise                           -> Unfinished
-    rebuiltFromTydb m = case M.lookup m (gtImportProviders t) >>= (`M.lookup` tasks) of
+    discoveredAsCached m = case M.lookup m (gtImportProviders t) >>= (`M.lookup` tasks) of
       Just GlobalTask{ gtTask = TyTask _ } -> True
       _                                    -> False
 
@@ -968,6 +970,114 @@ dependencyModule resolver m = do
     impl <- resolveModule resolver Impl m
     return (InterfaceFiles.DepModuleInfo m <$> pub <*> impl)
 
+nameHash                                :: HashKind -> InterfaceFiles.NameHashInfo -> B.ByteString
+nameHash Pub                            = InterfaceFiles.nhPubHash
+nameHash Impl                           = InterfaceFiles.nhImplHash
+
+-- | The current hash of every external dependency of each owning name, in
+-- their given order, owners without dependencies included.  Otherwise every
+-- unavailable one, owner by owner: a name without hashes, or one without a
+-- hash of this kind, located at the owning name.  Each name is resolved once
+-- per call.
+externalHashes :: Resolver -> HashKind -> M.Map A.Name SrcLoc -> M.Map A.Name [A.QName]
+               -> IO (Either [ModuleError] (M.Map A.Name [(A.QName, B.ByteString)]))
+externalHashes resolver kind locations deps = do
+    lookupName <- memoized (uncurry (resolveName resolver))
+    owners <- forM (M.toList deps) $ \(owner, qns) -> (,) owner <$> mapM (dependency lookupName owner) qns
+    return $ case [ e | (_, results) <- owners, Left e <- results ] of
+      []   -> Right (M.fromDistinctAscList [ (owner, [ d | Right d <- results ]) | (owner, results) <- owners ])
+      errs -> Left errs
+  where
+    dependency lookupName owner qn = case qnameTarget qn of
+      Nothing     -> return (Left (MissingNameHash qn))
+      Just (m, n) -> do
+        found <- lookupName (m, n)
+        return $ case found of
+          Nothing                           -> Left (MissingNameHash (A.GName m n))
+          Just i | B.null (nameHash kind i) -> Left (MissingDependencyHash kind owner (M.findWithDefault NoLoc owner locations) (A.GName m n))
+                 | otherwise                -> Right (A.GName m n, nameHash kind i)
+
+-- | A function that remembers each answer it gave, for as long as it is
+-- kept.  Not for concurrent use.
+memoized :: Ord k => (k -> IO v) -> IO (k -> IO v)
+memoized f = do
+    known <- newIORef M.empty
+    return $ \k -> do
+      remembered <- M.lookup k <$> readIORef known
+      case remembered of
+        Just v  -> return v
+        Nothing -> do v <- f k
+                      modifyIORef' known (M.insert k v)
+                      return v
+
+
+-- Module errors ------------------------------------------------------------------------------------
+
+-- | A module's own failures.  Thrown inside its stage and reported as its
+-- diagnostics at the stage boundary.
+data ModuleError
+  = MissingInterface      A.ModName                         -- an import or dependency module without a readable .tydb
+  | MissingNameHash       A.QName
+  | MissingDependencyHash HashKind A.Name SrcLoc A.QName    -- the kind, the module's name using it, its location, the name
+  | InterfaceWriteFailed  String                            -- the module's own .tydb
+  deriving (Show)
+
+newtype ModuleErrors = ModuleErrors [ModuleError] deriving (Show)
+
+instance Exception ModuleErrors
+
+-- | The diagnostic for a module error, shown with the given source text.  A
+-- missing interface or a failed write names the module's full file, a hash
+-- error its file without the project prefix.  A failed write shows no
+-- source.
+explainError :: ModuleEnv -> String -> ModuleError -> Diagnostic String
+explainError env src err = case err of
+    MissingInterface m                    -> compilationError fullFile  src NoLoc ("Type interface file not found or unreadable for " ++ modNameToString m)
+    InterfaceWriteFailed e                -> compilationError fullFile  ""  NoLoc ("Failed to write .tydb for " ++ modNameToString (nameOf env) ++ ": " ++ e)
+    MissingNameHash qn                    -> compilationError labelFile src NoLoc ("Hash info missing for " ++ prstr qn)
+    MissingDependencyHash kind owner l qn -> compilationError labelFile src l
+                                               (hashKindName kind ++ " hash missing for " ++ prstr qn ++ " (used by " ++ A.nstr owner ++ ")")
+  where
+    fullFile  = modNameToFilename (nameOf env)
+    labelFile = modNameToFilename (dropProjPrefix (pathsOf env) (nameOf env))
+
+compilationError                        :: FilePath -> String -> SrcLoc -> String -> Diagnostic String
+compilationError                        = Diag.actErrToDiagnostic "Compilation error"
+
+moduleFailure                           :: [ModuleError] -> IO a
+moduleFailure                           = throwIO . ModuleErrors
+
+failOnAny                               :: [ModuleError] -> IO ()
+failOnAny errs                          = unless (null errs) (moduleFailure errs)
+
+-- | Resolve every item, and fail the module with one error per item that
+-- does not resolve.
+resolveAll :: (a -> IO (Maybe b)) -> (a -> ModuleError) -> [a] -> IO [b]
+resolveAll resolve problem items = do
+    results <- forM items $ \x -> maybe (Left (problem x)) Right <$> resolve x
+    failOnAny [ e | Left e <- results ]
+    return [ b | Right b <- results ]
+
+-- | The failures that the front passes report as the module's own
+-- diagnostics, with its source text.  Every other exception propagates.
+frontFailures :: ModuleEnv -> String -> [Handler (Either [Diagnostic String] a)]
+frontFailures env src =
+    [ Handler $ \(ModuleErrors errs)               -> failed (map (explainError env src) errs)
+    , Handler $ \(e :: GeneralError)               -> failed (located (generalError e))
+    , Handler $ \(e :: Acton.Env.CompilationError) -> failed (located (Acton.Env.compilationError e))
+    , Handler $ \(Acton.Types.TypeErrors errs)     -> failed (map typed errs)
+    , Handler $ \(e :: Acton.TypeEnv.TypeError)    -> failed [typed e] ]
+  where
+    failed       = return . Left
+    file         = modNameToFilename (dropProjPrefix (pathsOf env) (nameOf env))
+    located errs = [ compilationError file src l msg | (l, msg) <- errs ]
+    typed e      = Acton.TypeEnv.mkErrorDiagnostic file src (Acton.TypeEnv.typeReport e file src)
+
+-- | A module stage outside its front passes: only module errors are its
+-- own, and they are shown without source text.
+moduleBoundary :: ModuleEnv -> IO (Either [Diagnostic String] a) -> IO (Either [Diagnostic String] a)
+moduleBoundary env run = run `catch` \(ModuleErrors errs) -> return (Left (map (explainError env "") errs))
+
 
 -- Handling Acton files -----------------------------------------------------------------------------
 
@@ -976,22 +1086,6 @@ dependencyModule resolver m = do
 errsToDiagnostics :: String -> FilePath -> String -> [(SrcLoc, String)] -> [Diagnostic String]
 errsToDiagnostics errKind filename src errs =
     [ Diag.actErrToDiagnostic errKind filename src loc msg | (loc, msg) <- errs ]
-
--- | Emit diagnostics when a dependency .tydb file is missing or unreadable.
--- Anchors the error to the owning module's filename for consistent reporting.
-missingIfaceDiagnostics :: A.ModName -> String -> A.ModName -> [Diagnostic String]
-missingIfaceDiagnostics ownerMn src missingMn =
-    errsToDiagnostics "Compilation error" (modNameToFilename ownerMn) src
-      [(NoLoc, "Type interface file not found or unreadable for " ++ modNameToString missingMn)]
-
--- | A synchronous .tydb write failure is this module's front failure: the
--- module cannot report complete without committed rows, and shaping it as a
--- diagnostic keeps it on the structured error path (callers expect Left, not
--- an escaped exception -- the task loop's waitAny would rethrow one).
-tydbWriteDiagnostics :: A.ModName -> SomeException -> [Diagnostic String]
-tydbWriteDiagnostics mn err =
-    errsToDiagnostics "Compilation error" (modNameToFilename mn) ""
-      [(NoLoc, "Failed to write .tydb for " ++ modNameToString mn ++ ": " ++ displayException err)]
 
 -- | The name diagnostics give a source file: its path relative to the
 -- current directory, which is read on every call.
@@ -1078,14 +1172,17 @@ frontOutputKindName FrontOutputDoc      = "doc"
 -- | Write a module's .tydb before its front stage reports done, so readers
 -- never wait for a write.  The write is given its progress reporter.  A
 -- stale generation writes nothing and reports nothing.  A failed write, its
--- start event included, is the module's diagnostics.  Asynchronous
--- exceptions are rethrown.
-commitTydb :: BuildEnv -> TaskKey -> ((InterfaceFiles.TyDbWriteProgress -> IO ()) -> IO ()) -> IO (Either [Diagnostic String] ())
-commitTydb build key write = do
+-- start event included, fails the module.  Asynchronous exceptions are
+-- rethrown.
+commitTydb :: ModuleEnv -> ((InterfaceFiles.TyDbWriteProgress -> IO ()) -> IO ()) -> IO ()
+commitTydb env write = do
     result <- trySync $ whenCurrent (buildGeneration build) $ do
                 emit build (OutputStarted key FrontOutputTydb)
                 runOutput build key FrontOutputTydb (write (emit build . OutputProgressed key FrontOutputTydb))
-    return (either (Left . tydbWriteDiagnostics (tkMod key)) Right result)
+    either (\e -> moduleFailure [InterfaceWriteFailed (displayException e)]) return result
+  where
+    build = moduleBuild env
+    key   = keyOf env
 
 -- | Start background outputs.  Starting and recording happen under one
 -- mask, so a cancelled stage cannot leave a write the run does not wait
@@ -1133,9 +1230,9 @@ awaitOutputs build = do
                | otherwise          -> return (Just (OutputFailed key kind (displayException e)))
 
 -- | The module's .tydb copied next to its source, under --tydb.
-tydbCopy                                :: C.CompileOptions -> Paths -> A.ModName -> [(FrontOutputKind, IO ())]
-tydbCopy opts paths mn                  = [ (FrontOutputTydbCopy, InterfaceFiles.copyInterface (tyDbPath paths mn) (srcBase paths mn ++ InterfaceFiles.interfaceExt))
-                                          | C.tydb opts ]
+tydbCopy                                :: ModuleEnv -> [(FrontOutputKind, IO ())]
+tydbCopy env                            = [ (FrontOutputTydbCopy, InterfaceFiles.copyInterface (tydbOf env) (srcBase (pathsOf env) (nameOf env) ++ InterfaceFiles.interfaceExt))
+                                          | C.tydb (moduleOptions env) ]
 
 
 -- Compilation tasks, chasing imported modules, compilation and building executables -----------------
@@ -1236,10 +1333,11 @@ loadBackJob build env key paths opts typed implHash = do
     return BackJob { bjKey = key, bjPaths = paths, bjOpts = opts, bjTypeEnv = Converter.convEnvProtos scope
                    , bjModule = typed, bjSource = Source.ssText snap, bjImplHash = implHash }
 
--- | The back job of a module's typed module as its own .tydb stores it,
--- in the environment of the modules checked before it.
-loadStoredModule :: ModuleEnv -> InterfaceFiles.StoredModule -> B.ByteString -> IO BackJob
-loadStoredModule env module' = loadBackJob (moduleBuild env) (checkedModules env) (keyOf env) (pathsOf env) (moduleOptions env) (InterfaceFiles.storedTyped module')
+-- | The back job of the typed module that a module's own .tydb stores, in
+-- the environment of the modules checked before it, tagged with the given
+-- impl hash.
+storedBackJob :: ModuleEnv -> InterfaceFiles.StoredModule -> B.ByteString -> IO BackJob
+storedBackJob env module' = loadBackJob (moduleBuild env) (checkedModules env) (keyOf env) (pathsOf env) (moduleOptions env) (InterfaceFiles.storedTyped module')
 
 type InterestMap = M.Map A.ModName (Data.Set.Set A.Name)
 
@@ -1320,17 +1418,6 @@ isBuiltin k                             = tkMod k == mBuiltin
 data StageKey = ParseStage TaskKey | FrontStage TaskKey deriving (Eq, Ord, Show)
 
 data StageSuccess = StageParsed CompileTask (Maybe TimeSpec) | StageFronted FrontResult
-
-forceHTEnv :: I.HTEnv -> ()
-forceHTEnv hte                  = HM.foldl' forceNameInfo () hte
-  where forceNameInfo () ni    = ni `seq` ()
-
-forceTypeResult :: I.NModule -> A.Module -> Acton.Env.EnvF x -> [String] -> IO ()
-forceTypeResult nmod tchecked typeEnv tests = do
-  evaluate (rnf nmod)
-  evaluate (rnf tchecked)
-  evaluate (forceHTEnv (Acton.Env.hnames typeEnv))
-  evaluate (rnf tests)
 
 data GlobalTask = GlobalTask
   { gtKey             :: TaskKey
@@ -1837,6 +1924,8 @@ formatCodegenDelta status =
          ++ ", h " ++ short (csH status) ++ " -> " ++ expected
          ++ ", support " ++ short (csSupport status) ++ " -> " ++ expected ++ "}"
 
+-- Front passes -------------------------------------------------------------------------------------
+
 -- | Check one module outside a stage graph (__builtin__, benchmarks): its
 -- imports resolve through the module cache, and it is checked in the given
 -- environment.
@@ -1846,474 +1935,334 @@ checkModule build t opts base = runFrontPasses ModuleEnv
     , moduleResolver = cacheResolver (buildCache build) (gtPaths t), checkedModules = base
     , moduleBlocked = False, moduleForced = False }
 
--- | Run the front passes for a single module.
--- Builds the environment, runs kinds/types, computes per-name src/pub/impl
--- hashes plus module pub/impl hashes, commits the .tydb and starts the doc
--- page and the --tydb copy in the background.
--- Progress and outputs are reported as the task's events.
--- Returns the front result plus a BackJob for later passes when compilation is
--- needed. The background outputs are recorded in the BuildEnv: awaitOutputs
--- waits for them.
+-- | A module after its kinds, types and escape analysis.
+data Checked = Checked
+  { checkedScope     :: Acton.Env.Env0                   -- the environment it was checked in
+  , checkedInterface :: I.NModule
+  , checkedModule    :: A.Module                         -- typed
+  , checkedTypeEnv   :: Acton.Env.Env0                   -- reconstruct's, protocols converted
+  , checkedTests     :: [String]
+  , checkedEscapes   :: InterfaceFiles.EscapeSummaries
+  }
+
+-- | A checked module's hashes, as its .tydb records them.
+data Hashed = Hashed
+  { hashedSource       :: B.ByteString                   -- of the source bytes
+  , hashedPub          :: B.ByteString
+  , hashedImpl         :: B.ByteString
+  , hashedImports      :: [(A.ModName, B.ByteString)]    -- each header import's pub hash
+  , hashedDependencies :: [InterfaceFiles.DepModuleInfo]
+  , hashedNames        :: [InterfaceFiles.NameHashInfo]  -- every name, private ones included
+  , hashedRoots        :: [A.Name]
+  }
+
+-- | What the type checker reports while it runs.
+data TypeObserver = TypeObserver
+  { typeProgress   :: Acton.Types.TypeProgressCallback
+  , typeSignatures :: Maybe Acton.Types.TypeInferredCallback
+  , typeReport     :: IO (Maybe TimeSpec, [TypeStmtTiming], [InferredSignature])  -- when progress first reached its total, statement timings, signatures
+  }
+
+-- | When the last event of one progress stream passed.
+newtype Pacer = Pacer (IORef (Maybe TimeSpec))
+
+-- | Check, hash and commit one parsed module, then start its doc page and
+-- --tydb copy in the background, recorded in the build for awaitOutputs.
+-- Progress and outputs are reported as the module's events.  The module's
+-- own errors become its diagnostics, and every other exception propagates.
 runFrontPasses :: ModuleEnv -> ModuleSource -> A.Module -> IO (Either [Diagnostic String] FrontResult)
 runFrontPasses env source parsed = do
-  createDirectoryIfMissing True (moduleTypesDir (projTypes paths) mn)
-  core
-    `catch` handleGeneral
-    `catch` handleCompilation
-    `catch` handleTypeErrors
-    `catch` handleTypeError
+    createDirectoryIfMissing True (moduleTypesDir (projTypes (pathsOf env)) mn)
+    (Right <$> passes) `catches` frontFailures env (sourceText source)
   where
-    build = moduleBuild env
-    task = moduleTask env
-    opts = moduleOptions env
-    resolver = moduleResolver env
-    srcContent = sourceText source
-    gopts = buildOptions build
-    paths = pathsOf env
-    mn = A.modname parsed
-    filename = modNameToFilename (dropProjPrefix paths mn)
-    prettyAstStyle = style { mode = PageMode, lineLength = 120, ribbonsPerLine = 1.0 }
+    gopts    = buildOptions (moduleBuild env)
+    opts     = moduleOptions env
+    mn       = nameOf env
+    now      = getTime Monotonic
+    astStyle = style { mode = PageMode, lineLength = 120, ribbonsPerLine = 1.0 }
+    passes = do
+      start           <- now
+      dumpWhen opts mn C.parse     "parse"     (Pretty.print parsed)
+      dumpWhen opts mn C.parse_ast "parse-ast" (renderStyle astStyle (ppDoc parsed))
+      observer        <- newTypeObserver env
+      scope           <- Acton.Env.mkEnv (searchPath (pathsOf env)) (checkedModules env) parsed
+      envDone         <- now
+      kinded          <- kindsPass env scope parsed
+      kindsDone       <- now
+      (interface, typed, typeEnv, tests)
+                      <- Acton.Types.reconstruct (Just (typeProgress observer)) (typeSignatures observer) scope kinded (Just (labelOf env))
+      reconstructDone <- now
+      forceTypeResult interface typed typeEnv tests
+      forceDone       <- now
+      escapes         <- escapePass env scope typed
+      escapeDone      <- now
+      let checked = Checked { checkedScope = scope, checkedInterface = interface, checkedModule = typed
+                            , checkedTypeEnv = typeEnv, checkedTests = tests, checkedEscapes = escapes }
+          I.NModule imports iface doc = interface
+      hashed          <- hashPass env source parsed checked
+      hashDone        <- now
+      dumpWhen opts mn C.types "types" (Pretty.print typed)
+      dumpWhen opts mn C.sigs  "sigs"  (Acton.Types.prettySigs scope mn imports iface)
+      dumpsDone       <- now
+      (progressDone, statements, signatures) <- typeReport observer
+      end             <- now
+      -- Once this module reports done, its rows are on disk.  Docs and the
+      -- --tydb copy are never read back within this build, so they are
+      -- written in the background.
+      commitTydb env (writeTydb env source checked hashed)
+      startOutputs (moduleBuild env) (keyOf env) (docOutputs env parsed checked hashed ++ tydbCopy env)
+      let names  = hashedNames hashed
+          -- reconstruct's typeEnv is already protocol-converted.
+          job    = BackJob { bjKey = keyOf env, bjPaths = pathsOf env, bjOpts = opts, bjTypeEnv = typeEnv
+                           , bjModule = typed, bjSource = sourceText source, bjImplHash = hashedImpl hashed }
+          -- ftTypes spans everything from the end of the kinds check to the
+          -- end of the type dumps.
+          timing = FrontTiming
+            { ftEnv               = envDone - start
+            , ftKinds             = kindsDone - envDone
+            , ftTypes             = dumpsDone - kindsDone
+            , ftTypeReconstruct   = reconstructDone - kindsDone
+            , ftTypeAfterProgress = maybe 0 (reconstructDone -) progressDone
+            , ftTypeForce         = forceDone - reconstructDone
+            , ftTypeEscape        = escapeDone - forceDone
+            , ftTypeHash          = hashDone - escapeDone
+            , ftTypeStmtTimings   = statements }
+      return FrontResult
+        { frModuleInfo   = Acton.Env.withEscapeSummaries escapes (Acton.Env.mkModuleInfo mn imports (publicIfaceTE iface) doc)
+        , frHashes       = ModuleHashes { mhPub = hashedPub hashed, mhImpl = hashedImpl hashed, mhNames = publicNameMap names }
+        , frInterest     = interestDeps names
+        , frBack         = maybe (EagerBack job) DeferredBack (deferredJob env (A.hasNotImpl (A.mbody typed)) (hashedImpl hashed) (length names))
+        , frFrontTime    = if quiet gopts opts then Nothing else Just (end - start)
+        , frFrontTiming  = if C.timing gopts then Just timing else Nothing
+        , frInferredSigs = signatures }
 
-    handleGeneral :: GeneralError -> IO (Either [Diagnostic String] FrontResult)
-    handleGeneral err =
-      return $ Left (errsToDiagnostics "Compilation error" filename srcContent (generalError err))
+-- | Evaluate the type check's results here, inside the module's
+-- diagnostics: a lazy type error becomes the module's diagnostic.  The
+-- interface, the typed module and the tests in full, the type environment's
+-- names to weak head normal form.
+forceTypeResult :: I.NModule -> A.Module -> Acton.Env.EnvF x -> [String] -> IO ()
+forceTypeResult interface typed typeEnv tests = do
+    evaluate (rnf interface)
+    evaluate (rnf typed)
+    evaluate (forceHTEnv (Acton.Env.hnames typeEnv))
+    evaluate (rnf tests)
 
-    handleCompilation :: Acton.Env.CompilationError -> IO (Either [Diagnostic String] FrontResult)
-    handleCompilation err =
-      return $ Left (errsToDiagnostics "Compilation error" filename srcContent (Acton.Env.compilationError err))
+forceHTEnv                              :: I.HTEnv -> ()
+forceHTEnv                              = HM.foldl' (\() nameInfo -> nameInfo `seq` ()) ()
 
-    handleTypeError :: Acton.TypeEnv.TypeError -> IO (Either [Diagnostic String] FrontResult)
-    handleTypeError err =
-      return $ Left [Acton.TypeEnv.mkErrorDiagnostic filename srcContent (Acton.TypeEnv.typeReport err filename srcContent)]
+-- | The kinds check, reported as one step: 0/1 before it, 1/1 after.
+kindsPass :: ModuleEnv -> Acton.Env.Env0 -> A.Module -> IO A.Module
+kindsPass env scope parsed = do
+    frontProgress env (FrontPassProgress FrontPassKinds 0 1 Nothing)
+    kinded <- Acton.Kinds.check scope parsed
+    frontProgress env (FrontPassProgress FrontPassKinds 1 1 Nothing)
+    dumpWhen (moduleOptions env) (nameOf env) C.kinds "kinds" (Pretty.print kinded)
+    return kinded
 
-    handleTypeErrors :: Acton.Types.TypeErrors -> IO (Either [Diagnostic String] FrontResult)
-    handleTypeErrors (Acton.Types.TypeErrors errs) =
-      return $ Left [ Acton.TypeEnv.mkErrorDiagnostic filename srcContent (Acton.TypeEnv.typeReport err filename srcContent)
-                    | err <- errs
-                    ]
+-- | Watch Types.reconstruct: its progress as paced FrontPassTypes events,
+-- the first moment progress reached its total, statement timings (with
+-- --timing and --verbose) and inferred signatures (with --timing or
+-- --verbose).  The report gives timings and signatures in emission order.
+newTypeObserver :: ModuleEnv -> IO TypeObserver
+newTypeObserver env = do
+    pacer      <- newPacer
+    reachedRef <- newIORef Nothing
+    activeRef  <- newIORef Nothing
+    timingsRef <- newIORef []
+    sigsRef    <- newIORef []
+    let onProgress total completed current names _weight = do
+          t <- getTime Monotonic
+          when (total > 0 && completed >= total && isNothing current) $ do
+            reached <- readIORef reachedRef
+            when (isNothing reached) (writeIORef reachedRef (Just t))
+          -- A statement's time runs from the event that names it as
+          -- current to the next event.
+          when statementTimings $ do
+            active <- readIORef activeRef
+            forM_ active $ \(activeNames, activeTotal, started) ->
+              modifyIORef' timingsRef (TypeStmtTiming { tstCompleted = completed, tstTotal = activeTotal
+                                                      , tstNames = activeNames, tstTime = t - started } :)
+            writeIORef activeRef ((names, total, t) <$ current)
+          passed <- pace pacer False t completed total
+          forM_ passed $ \done -> frontProgress env (FrontPassProgress FrontPassTypes done total current)
+        onSignature names signature = modifyIORef' sigsRef (InferredSignature names signature :)
+    return TypeObserver
+      { typeProgress   = onProgress
+      , typeSignatures = if C.timing gopts || C.verbose gopts then Just onSignature else Nothing
+      , typeReport     = (,,) <$> readIORef reachedRef <*> (reverse <$> readIORef timingsRef) <*> (reverse <$> readIORef sigsRef) }
+  where
+    gopts            = buildOptions (moduleBuild env)
+    statementTimings = C.timing gopts && C.verbose gopts
 
-    resolveImportHashes :: [A.ModName] -> IO (Either [Diagnostic String] [(A.ModName, B.ByteString)])
-    resolveImportHashes mrefs = do
-      resolved <- forM mrefs $ \mref -> do
-        mh <- resolveModule resolver Pub mref
-        case mh of
-          Just ih -> return (Right (mref, ih))
-          Nothing -> return (Left (missingIfaceDiagnostics mn srcContent mref))
-      let (errs, vals) = partitionEithers resolved
-      if null errs
-        then return (Right vals)
-        else return (Left (concat errs))
+-- | The escape analysis of every function, run to completion here rather
+-- than in whatever later reads a result, such as the interface write: the
+-- analysis evaluates each function's summary in full as part of producing
+-- its list of functions.  The summaries are part of the module's
+-- interface, and every Hashable.hash implementation is checked here before
+-- B_hash may pass it an automatically allocated hasher.  The command line
+-- flag controls only the dump.
+escapePass :: ModuleEnv -> Acton.Env.Env0 -> A.Module -> IO InterfaceFiles.EscapeSummaries
+escapePass env scope typed = do
+    _ <- evaluate (length (Acton.EscapeAnalysis.reportFunctions report))
+    evaluate (rnf summaries)
+    dumpWhen (moduleOptions env) (nameOf env) C.escape_analysis "escape-analysis" (Acton.EscapeAnalysis.renderEscapeReport report)
+    forM_ (Acton.EscapeAnalysis.contractViolation report) $ \(l, message) -> throwIO (Acton.Env.OtherError l message)
+    return summaries
+  where
+    report    = Acton.EscapeAnalysis.analyzeModuleWithImports (importedEscapeSummary scope) typed
+    summaries = Acton.EscapeAnalysis.interfaceSummaries report
 
-    resolveDepModuleHashes :: [A.ModName] -> IO (Either [Diagnostic String] [InterfaceFiles.DepModuleInfo])
-    resolveDepModuleHashes mrefs = do
-      resolved <- forM mrefs $ \mref ->
-        maybe (Left (missingIfaceDiagnostics mn srcContent mref)) Right <$> dependencyModule resolver mref
-      let (errs, vals) = partitionEithers resolved
-      if null errs
-        then return (Right vals)
-        else return (Left (concat errs))
+-- | The escape summary that a module checked in this environment reads for
+-- an imported function, following import aliases.
+importedEscapeSummary :: Acton.Env.Env0 -> A.QName -> Maybe [(A.Name, Acton.EscapeAnalysis.Escape)]
+importedEscapeSummary scope qn = do
+    (m, n)     <- target qn
+    moduleInfo <- Acton.Env.lookupModuleInfo m scope
+    summary    <- Acton.Env.moduleEscapeSummary moduleInfo [n]
+    return [ (p, if mayEscape then Acton.EscapeAnalysis.MayEscape else Acton.EscapeAnalysis.NoEscape) | (p, mayEscape) <- summary ]
+  where
+    target (A.NoQ n) = case Acton.Env.lookupName n scope of
+                         Just (I.NAlias aliased) -> target aliased
+                         _                       -> Nothing
+    target q         = qnameTarget q
 
-    missingNameHashDiagnostics :: A.QName -> [Diagnostic String]
-    missingNameHashDiagnostics qn =
-      errsToDiagnostics "Compilation error" filename srcContent
-        [(NoLoc, "Hash info missing for " ++ prstr qn)]
+-- | Hash a checked module.  Its header imports resolve first, and every
+-- missing one fails the module.  Then come the per-name source, impl and
+-- pub hashes (escape bits folded into pub), the dependencies split into
+-- local and external names, and the modules of the external ones, every
+-- missing one failing the module.  Last come the hashes of the external
+-- names for signatures, pub and impl: all three groups are resolved before
+-- the first failing one fails the module.  Every step is forced here, inside
+-- the module's diagnostics and the hash timing window.  Progress counts the
+-- items of every step: a forced 0 first, at most one event per 50 ms after,
+-- and a forced total last.
+hashPass :: ModuleEnv -> ModuleSource -> A.Module -> Checked -> IO Hashed
+hashPass env source parsed checked = do
+    pacer <- newPacer
+    let report forcedEvent completed = do
+          t <- getTime Monotonic
+          passed <- pace pacer forcedEvent t completed total
+          forM_ passed $ \done -> frontProgress env (FrontPassProgress FrontPassHash done total Nothing)
+        step base done = when ((base + done) `rem` stride == 0) (report False (base + done))
+    _            <- evaluate afterImplDeps
+    report True 0
+    -- Of the raw bytes, so any edit of the source counts as a change.
+    sourceHash   <- forced (SHA256.hash (sourceBytes source))
+    imports      <- resolveAll (\m -> fmap ((,) m) <$> resolveModule resolver Pub m) MissingInterface headerImports
+    srcHashes    <- forced =<< Hashing.nameHashesFromItemsWithProgress (step 0) srcItems
+    implOwn      <- forced =<< Hashing.nameHashesFromItemsWithProgress (step afterSource) implItems
+    keys         <- forced (M.keysSet srcHashes `Data.Set.union` M.keysSet implOwn)
+    selfPub      <- forced =<< Hashing.nameInfoHashesWithProgress (step afterImpl) infos
+    selfPubBits  <- forced (Hashing.withEscapeBits (checkedEscapes checked) selfPub)
+    (sigLocal, sigExternal)   <- forced =<< Hashing.pubSigSplitDepsFromNameInfoMapWithProgress (step afterInfos) mn hashEnv keys infos
+    (implLocal, implExternal) <- forced =<< Hashing.implSplitDepsFromItemsWithProgress (step afterInfoDeps) mn hashEnv keys implItems
+    -- Public dependencies are the signature dependencies and the
+    -- implementation dependencies together.
+    let (pubLocal, pubExternal) = Hashing.mergePubDeps sigLocal sigExternal implLocal implExternal
+        externalModules         = Data.Set.toList (Hashing.externalModules pubExternal `Data.Set.union` Hashing.externalModules implExternal)
+    _            <- forced (pubLocal, pubExternal, externalModules)
+    dependencies <- resolveAll (dependencyModule resolver) MissingInterface externalModules
+    sigGroup     <- externalHashes resolver Pub  locations sigExternal
+    pubGroup     <- externalHashes resolver Pub  locations pubExternal
+    implGroup    <- externalHashes resolver Impl locations implExternal
+    sigResolved  <- either moduleFailure return sigGroup
+    pubResolved  <- either moduleFailure return pubGroup
+    implResolved <- either moduleFailure return implGroup
+    _            <- forced (sigResolved, pubResolved, implResolved)
+    -- The pub and impl hashes are independent, and so are the module hashes
+    -- and the name rows that both use them.
+    (pubHashes, implHashes) <- concurrently (forced (Hashing.computeHashesSortedDeps selfPubBits sigLocal sigResolved))
+                                            (forced (Hashing.computeHashesSortedDeps implOwn implLocal implResolved))
+    ((pub, impl), names)    <- concurrently (forced (Hashing.moduleHashesFromHashMaps (checkedInterface checked) keys pubHashes implHashes))
+                                            (forced (Hashing.assembleNameHashes keys srcHashes pubHashes implHashes implOwn pubLocal implLocal pubResolved implResolved))
+    _            <- forced (sourceHash, pub, impl, sourceMeta source, imports)
+    _            <- forced (names, roots, checkedTests checked, doc)
+    report True total
+    return Hashed { hashedSource = sourceHash, hashedPub = pub, hashedImpl = impl, hashedImports = imports
+                  , hashedDependencies = dependencies, hashedNames = names, hashedRoots = roots }
+  where
+    resolver    = moduleResolver env
+    mn          = nameOf env
+    hashEnv     = setMod mn (checkedScope checked)
+    I.NModule moduleImports iface doc = checkedInterface checked
+    headerImports
+      | mn == mBuiltin = moduleImports
+      | otherwise      = nub (mBuiltin : moduleImports)
+    srcItems    = Hashing.topLevelItems parsed
+    implItems   = Hashing.topLevelItems (checkedModule checked)
+    infos       = M.fromList iface                      -- every local name
+    locations   = nameLocations srcItems `M.union` nameLocations implItems
+    roots       = [ n | (n, i) <- iface, rootEligible i ]
+    -- Progress steps: source items, impl items, interface names (hashes),
+    -- interface names (dependencies), impl items (dependencies), and the
+    -- final step.
+    afterSource   = length srcItems
+    afterImpl     = afterSource + length implItems
+    afterInfos    = afterImpl + M.size infos
+    afterInfoDeps = afterInfos + M.size infos
+    afterImplDeps = afterInfoDeps + length implItems
+    total         = afterImplDeps + 1
+    stride        = max 1 (total `div` 1000)
 
-    missingDepHashDiagnostics :: String -> A.Name -> SrcLoc -> A.QName -> [Diagnostic String]
-    missingDepHashDiagnostics label owner loc qn =
-      errsToDiagnostics "Compilation error" filename srcContent
-        [(loc, label ++ " hash missing for " ++ prstr qn ++ " (used by " ++ A.nstr owner ++ ")")]
+-- | Where each top-level name is defined: at its declaration, else at its
+-- statement.
+nameLocations :: [Hashing.TopLevelItem] -> M.Map A.Name SrcLoc
+nameLocations items = M.fromList [ (n, A.dloc d) | Hashing.TLDecl n d <- items ]
+            `M.union` M.fromList [ (n, A.sloc s) | Hashing.TLStmt n s <- items ]
 
-    resolveDepHashes :: String
-                     -> (InterfaceFiles.NameHashInfo -> B.ByteString)
-                     -> M.Map A.Name [A.QName]
-                     -> M.Map A.Name SrcLoc
-                     -> IO (Either [Diagnostic String] (M.Map A.Name [(A.QName, B.ByteString)]))
-    resolveDepHashes label getHash deps nameLocs = do
-      -- Many owners share the same few external deps; resolve each once.
-      memo <- newIORef HM.empty
-      let resolveMemo m n = do
-            cache <- readIORef memo
-            case HM.lookup (m, n) cache of
-              Just r -> return r
-              Nothing -> do
-                r <- resolveName resolver m n
-                modifyIORef' memo (HM.insert (m, n) r)
-                return r
-          lookupName owner m n = do
-            mInfo <- resolveMemo m n
-            return $ case mInfo of
-              Just info ->
-                let h = getHash info
-                    loc = M.findWithDefault NoLoc owner nameLocs
-                in if B.null h
-                     then Left (missingDepHashDiagnostics label owner loc (A.GName m n))
-                     else Right (Just (A.GName m n, h))
-              Nothing -> Left (missingNameHashDiagnostics (A.GName m n))
-      resolved <- forM (M.toList deps) $ \(owner, qns) -> do
-        resolvedQns <- forM qns $ \qn -> case qnameTarget qn of
-          Just (m, n) -> lookupName owner m n
-          Nothing     -> return (Left (missingNameHashDiagnostics qn))
-        let (errs, vals) = partitionEithers resolvedQns
-        return $ if null errs
-          then Right (owner, catMaybes vals)
-          else Left (concat errs)
-      let (errs, vals) = partitionEithers resolved
-      return $ if null errs then Right (M.fromDistinctAscList vals) else Left (concat errs)
+-- | Write a checked and hashed module's .tydb, reporting its progress.
+writeTydb :: ModuleEnv -> ModuleSource -> Checked -> Hashed -> (InterfaceFiles.TyDbWriteProgress -> IO ()) -> IO ()
+writeTydb env source checked hashed onProgress =
+    InterfaceFiles.writeFileWithProgress onProgress A.version (tydbOf env)
+      (hashedSource hashed) (hashedPub hashed) (hashedImpl hashed) (sourceMeta source) (hashedImports hashed)
+      (hashedDependencies hashed) (hashedNames hashed) (checkedEscapes checked) (hashedRoots hashed) (checkedTests checked)
+      doc (checkedInterface checked) (checkedModule checked)
+  where I.NModule _ _ doc = checkedInterface checked
 
-    emitFrontProgress pass completed total current =
-      emit build $ FrontProgressed task FrontPassProgress
-        { fppPass = pass
-        , fppCompleted = completed
-        , fppTotal = total
-        , fppCurrent = current
-        }
+-- | The module's HTML documentation page, unless the module has too many
+-- names, --skip-build is given or the build is temporary.  The page shows
+-- the public names as --sigs simplifies them, with the docstrings of the
+-- parsed module.
+docOutputs :: ModuleEnv -> A.Module -> Checked -> Hashed -> [(FrontOutputKind, IO ())]
+docOutputs env parsed checked hashed =
+    [ (FrontOutputDoc, writeDoc) | shouldGenerateDocOutput (moduleOptions env) (isTmp paths) (length (hashedNames hashed)) ]
+  where
+    paths       = pathsOf env
+    mn          = nameOf env
+    I.NModule imports iface doc = checkedInterface checked
+    publicIface = publicIfaceTE iface
+    docDir      = joinPath [projPath paths, "out", "doc"]
+    docFile     = case A.modPath mn of
+                    []   -> docDir </> "unnamed" <.> "html"
+                    path -> joinPath (docDir : init path) </> last path <.> "html"
+    moduleTypes = maybe publicIface Acton.Env.modulePublicTEnv (Acton.Env.lookupModuleInfo mn (checkedTypeEnv checked))
+    simplified  = simp (define publicIface (setMod mn (checkedScope checked))) moduleTypes
+    writeDoc    = do
+      createDirectoryIfMissing True (takeDirectory docFile)
+      writeFileUtf8Atomic docFile (DocP.printHtmlDoc (I.NModule imports simplified doc) parsed)
 
-    emitHashProgress completed total current =
-      emitFrontProgress FrontPassHash completed total current
+newPacer                                :: IO Pacer
+newPacer                                = Pacer <$> newIORef Nothing
 
-    frontProgressMinIntervalNanos = 50000000 :: Integer
+-- | Pace one progress stream: an event passes when forced, when it reaches
+-- the total, or when 50 ms have passed since the last one that passed.  The
+-- answer, for an event that passes, is its count clamped to the total.
+-- Events from concurrent threads may both pass: the last time is read and
+-- written separately.
+pace :: Pacer -> Bool -> TimeSpec -> Int -> Int -> IO (Maybe Int)
+pace (Pacer lastPassed) forcedEvent t completed total = do
+    previous <- readIORef lastPassed
+    let done   = min total (max 0 completed)
+        passes = forcedEvent || done >= total || maybe True (\p -> toNanoSecs t - toNanoSecs p >= 50000000) previous
+    when passes (writeIORef lastPassed (Just t))
+    return (if passes then Just done else Nothing)
 
-    timeSpecNanos t =
-      fromIntegral (sec t) * 1000000000 + fromIntegral (nsec t)
+frontProgress                           :: ModuleEnv -> FrontPassProgress -> IO ()
+frontProgress env p                     = emit (moduleBuild env) (FrontProgressed (moduleTask env) p)
 
-    core = do
-      timeStart <- getTime Monotonic
-      dumpWhen opts mn C.parse "parse" (Pretty.print parsed)
-      dumpWhen opts mn C.parse_ast "parse-ast" (renderStyle prettyAstStyle (ppDoc parsed))
-
-      typeStmtTimingsRef <- newIORef ([] :: [TypeStmtTiming])
-      inferredSigsRef <- newIORef ([] :: [InferredSignature])
-      typeActiveRef <- newIORef Nothing
-      typeProgressDoneRef <- newIORef Nothing
-      typeProgressLastRef <- newIORef Nothing
-      hashProgressLastRef <- newIORef Nothing
-      let collectTypeStmtTimings = C.timing gopts && C.verbose gopts
-      let shouldEmitPaced force lastRef now completed total = do
-            mLast <- readIORef lastRef
-            let done = min total (max 0 completed)
-                shouldEmit =
-                  force ||
-                  done >= total ||
-                  maybe True (\lastEmit -> timeSpecNanos now - timeSpecNanos lastEmit >= frontProgressMinIntervalNanos) mLast
-            when shouldEmit $
-              writeIORef lastRef (Just now)
-            pure (shouldEmit, done)
-          emitTypeProgressPaced force now completed total current = do
-            (shouldEmit, done) <- shouldEmitPaced force typeProgressLastRef now completed total
-            when shouldEmit $
-              emitFrontProgress FrontPassTypes done total current
-      let onTypeProgress total completed current names _weight = do
-            now <- getTime Monotonic
-            when (total > 0 && completed >= total && isNothing current) $ do
-              mDone <- readIORef typeProgressDoneRef
-              when (isNothing mDone) $
-                writeIORef typeProgressDoneRef (Just now)
-            when collectTypeStmtTimings $ do
-              mActive <- readIORef typeActiveRef
-              forM_ mActive $ \(bindNames, activeTotal, t0) ->
-                modifyIORef' typeStmtTimingsRef
-                  ( TypeStmtTiming
-                      { tstCompleted = completed
-                      , tstTotal = activeTotal
-                      , tstNames = bindNames
-                      , tstTime = now - t0
-                      }
-                  : )
-              case current of
-                Just _ -> writeIORef typeActiveRef (Just (names, total, now))
-                Nothing -> writeIORef typeActiveRef Nothing
-            emitTypeProgressPaced False now completed total current
-          onInferredSignature names sig =
-            modifyIORef' inferredSigsRef (InferredSignature names sig :)
-          inferredSignatureCb =
-            if C.timing gopts || C.verbose gopts
-              then Just onInferredSignature
-              else Nothing
-          emitHashProgressPaced force completed total current = do
-            now <- getTime Monotonic
-            (shouldEmit, done) <- shouldEmitPaced force hashProgressLastRef now completed total
-            when shouldEmit $
-              emitHashProgress done total current
-
-      scope <- Acton.Env.mkEnv (searchPath paths) (checkedModules env) parsed
-      timeEnv <- getTime Monotonic
-
-      emitFrontProgress FrontPassKinds 0 1 Nothing
-      kchecked <- Acton.Kinds.check scope parsed
-      emitFrontProgress FrontPassKinds 1 1 Nothing
-      dumpWhen opts mn C.kinds "kinds" (Pretty.print kchecked)
-      timeKindsCheck <- getTime Monotonic
-
-      -- Type-check and return both the typed AST and the interface NameInfo.
-      (nmod,tchecked,typeEnv,tests) <- Acton.Types.reconstruct (Just onTypeProgress) inferredSignatureCb scope kchecked (Just (modNameToString (dropProjPrefix paths mn)))
-      timeTypeReconstruct <- getTime Monotonic
-      forceTypeResult nmod tchecked typeEnv tests
-      timeTypeForce <- getTime Monotonic
-      -- Escape summaries are part of the internal compilation interface.  In
-      -- particular, every Hashable.hash implementation is checked here before
-      -- B_hash may pass it an automatically allocated hasher.  The command
-      -- line flag controls only the diagnostic dump.
-      let importedEscapeSummary qn = do
-            (m,n) <- resolveImportedName qn
-            mi <- Acton.Env.lookupModuleInfo m scope
-            stored <- Acton.Env.moduleEscapeSummary mi [n]
-            return [ (pn, if mayEscape then Acton.EscapeAnalysis.MayEscape else Acton.EscapeAnalysis.NoEscape)
-                   | (pn,mayEscape) <- stored ]
-          resolveImportedName (A.NoQ n) =
-            case Acton.Env.lookupName n scope of
-              Just (I.NAlias qn') -> resolveImportedName qn'
-              _ -> Nothing
-          resolveImportedName qn = qnameTarget qn
-          escapeReport = Acton.EscapeAnalysis.analyzeModuleWithImports importedEscapeSummary tchecked
-          escapeSummaries = Acton.EscapeAnalysis.interfaceSummaries escapeReport
-      -- Run the analysis to completion for every function of every module,
-      -- here rather than in whatever later reads a result, such as the
-      -- interface write.  The analysis evaluates each function's summary in
-      -- full as part of producing the list.
-      evaluate (length (Acton.EscapeAnalysis.reportFunctions escapeReport))
-      evaluate (rnf escapeSummaries)
-      dumpWhen opts mn C.escape_analysis "escape-analysis" (Acton.EscapeAnalysis.renderEscapeReport escapeReport)
-      case Acton.EscapeAnalysis.reportContractViolations escapeReport of
-        [] -> return ()
-        ((fid@(Acton.EscapeAnalysis.FunctionId path), parameter):_) ->
-          let directReasons =
-                [ reason
-                | (fid', parameters) <- Acton.EscapeAnalysis.reportFunctions escapeReport
-                , fid' == fid
-                , summary <- parameters
-                , Acton.EscapeAnalysis.parameterName summary == parameter
-                , reason <- Acton.EscapeAnalysis.parameterDirectUses summary
-                ]
-              reasonLoc reason = case reason of
-                Acton.EscapeAnalysis.Returned l -> l
-                Acton.EscapeAnalysis.Stored l -> l
-                Acton.EscapeAnalysis.Raised l -> l
-                Acton.EscapeAnalysis.Yielded l -> l
-                Acton.EscapeAnalysis.Captured l -> l
-                Acton.EscapeAnalysis.Asynchronous l -> l
-                Acton.EscapeAnalysis.ImportedCall l -> l
-                Acton.EscapeAnalysis.UnknownCall l -> l
-                Acton.EscapeAnalysis.UnavailableBody l -> l
-              errorLoc = case [ l | reason <- directReasons, let l = reasonLoc reason, l /= NoLoc ] of
-                l:_ -> l
-                [] -> loc parameter
-          in Acton.Env.err errorLoc $
-            "Hashable.hash implementation " ++ intercalate "." (map A.nstr path) ++
-            " may let its hasher parameter '" ++ A.nstr parameter ++
-            "' escape; Hashable.hash must consume the hasher only during the call"
-      timeTypeEscape <- getTime Monotonic
-      -- Store roots so later builds can discover entry points without reparse.
-      let I.NModule imps fullIface mdoc = nmod
-          publicIface = publicIfaceTE fullIface
-      let roots = [ n | (n,i) <- fullIface, rootEligible i ]
-      -- Extract top-level items from parsed and typed ASTs for per-name hashes.
-      let srcItems = Hashing.topLevelItems parsed
-          implItems = Hashing.topLevelItems tchecked
-          -- NameInfo defines the full local environment for this module.
-          nameInfoMap = M.fromList fullIface
-          nameLocsParsed = M.fromListWith (\a _ -> a)
-            [ (n, A.dloc d) | Hashing.TLDecl n d <- srcItems ] `M.union`
-            M.fromListWith (\a _ -> a)
-            [ (n, A.sloc s) | Hashing.TLStmt n s <- srcItems ]
-          nameLocsTyped = M.fromListWith (\a _ -> a)
-            [ (n, A.dloc d) | Hashing.TLDecl n d <- implItems ] `M.union`
-            M.fromListWith (\a _ -> a)
-            [ (n, A.sloc s) | Hashing.TLStmt n s <- implItems ]
-          nameLocs = M.union nameLocsParsed nameLocsTyped
-          hashEnv = setMod mn scope
-          sourceHashWork = length srcItems
-          implHashWork = length implItems
-          ifaceHashWork = M.size nameInfoMap
-          ifaceDepWork = M.size nameInfoMap
-          implDepWork = length implItems
-          afterSourceHashes = sourceHashWork
-          afterImplHashes = afterSourceHashes + implHashWork
-          afterIfaceHashes = afterImplHashes + ifaceHashWork
-          afterIfaceDeps = afterIfaceHashes + ifaceDepWork
-          afterImplDeps = afterIfaceDeps + implDepWork
-          hashProgressTotal = afterImplDeps + 1
-          hashProgressCheckStride = max 1 (hashProgressTotal `div` 1000)
-          hashProgress base done = do
-            let completed = base + done
-            when (completed `rem` hashProgressCheckStride == 0) $
-              emitHashProgressPaced False completed hashProgressTotal Nothing
-      evaluate (sourceHashWork + implHashWork + ifaceHashWork + ifaceDepWork + implDepWork)
-      emitHashProgressPaced True 0 hashProgressTotal Nothing
-      -- Module-level src hash uses raw bytes so any source edit forces re-parse.
-      let moduleSrcBytesHash = SHA256.hash (sourceBytes source)
-      evaluate (rnf moduleSrcBytesHash)
-      -- Import hashes are recorded in the .tydb header so dep changes can be detected.
-      let hashImps =
-            if mn == mBuiltin
-              then imps
-              else nub (mBuiltin : imps)
-      impsRes <- resolveImportHashes hashImps
-      case impsRes of
-        Left diags -> return (Left diags)
-        Right impsWithHash -> do
-          nameSrcHashes <-
-            Hashing.nameHashesFromItemsWithProgress
-              (hashProgress 0)
-              srcItems
-          evaluate (rnf nameSrcHashes)
-          nameImplHashes <-
-            Hashing.nameHashesFromItemsWithProgress
-              (hashProgress afterSourceHashes)
-              implItems
-          evaluate (rnf nameImplHashes)
-          let nameKeys = M.keysSet nameSrcHashes `Data.Set.union` M.keysSet nameImplHashes
-          evaluate (rnf nameKeys)
-          selfPubHashes <-
-            Hashing.nameInfoHashesWithProgress
-              (hashProgress afterImplHashes)
-              nameInfoMap
-          evaluate (rnf selfPubHashes)
-          -- Importers rely on a top-level function's escape summary when they
-          -- check their own Hashable.hash implementations, so the summary is
-          -- part of that function's public interface.  Folding it into the
-          -- name's public hash turns a summary change into a public delta for
-          -- exactly the dependents that use the name.
-          let escapeBits = M.fromList
-                [ (n, B.pack [ if mayEscape then '1' else '0' | (_, mayEscape) <- ps ])
-                | ([n], ps) <- escapeSummaries ]
-              selfPubHashesEsc = M.mapWithKey
-                (\n h -> maybe h (\bits -> SHA256.hash (h <> B.pack "escape:" <> bits)) (M.lookup n escapeBits))
-                selfPubHashes
-          evaluate (rnf selfPubHashesEsc)
-          -- Split deps into local (same module) vs external (qualified) names.
-          (pubSigLocalDeps, pubSigExtDeps) <-
-            Hashing.pubSigSplitDepsFromNameInfoMapWithProgress
-              (hashProgress afterIfaceHashes)
-              mn hashEnv nameKeys nameInfoMap
-          evaluate (rnf (pubSigLocalDeps, pubSigExtDeps))
-          -- implDeps: term-level deps from typed bodies.
-          (implLocalDeps, implExtDeps) <-
-            Hashing.implSplitDepsFromItemsWithProgress
-              (hashProgress afterIfaceDeps)
-              mn hashEnv nameKeys implItems
-          evaluate (rnf (implLocalDeps, implExtDeps))
-          -- pubDeps include signature deps plus term-level deps for reuse
-          -- in pubHash. Derived names are internal and should never require
-          -- a pub hash.
-          let (pubLocalDeps, pubExtDeps) =
-                Hashing.mergePubDeps pubSigLocalDeps pubSigExtDeps implLocalDeps implExtDeps
-              extMods = Data.Set.toList (Hashing.externalModules pubExtDeps `Data.Set.union` Hashing.externalModules implExtDeps)
-          evaluate (rnf (pubLocalDeps, pubExtDeps, extMods))
-          depModulesRes <- resolveDepModuleHashes extMods
-          case depModulesRes of
-            Left diags -> return (Left diags)
-            Right depModules -> do
-              -- Resolve external deps to their recorded hashes.
-              pubSigExtRes <- resolveDepHashes "pub" InterfaceFiles.nhPubHash pubSigExtDeps nameLocs
-              pubExtRes <- resolveDepHashes "pub" InterfaceFiles.nhPubHash pubExtDeps nameLocs
-              implExtRes <- resolveDepHashes "impl" InterfaceFiles.nhImplHash implExtDeps nameLocs
-              case (pubSigExtRes, pubExtRes, implExtRes) of
-                (Left diags, _, _) -> return (Left diags)
-                (_, Left diags, _) -> return (Left diags)
-                (_, _, Left diags) -> return (Left diags)
-                (Right pubSigExtHashes, Right pubExtHashes, Right implExtHashes) -> do
-                  evaluate (rnf (pubSigExtHashes, pubExtHashes, implExtHashes))
-                  -- The pub and impl passes are independent, and so are the
-                  -- module hashes and the assembly that both use them.
-                  (pubHashes, implHashes) <- concurrently
-                    (evaluate (force (Hashing.computeHashesSortedDeps selfPubHashesEsc pubSigLocalDeps pubSigExtHashes)))
-                    (evaluate (force (Hashing.computeHashesSortedDeps nameImplHashes implLocalDeps implExtHashes)))
-                  let nameHashes0 =
-                        Hashing.assembleNameHashes
-                          nameKeys
-                          nameSrcHashes
-                          pubHashes
-                          implHashes
-                          nameImplHashes
-                          pubLocalDeps
-                          implLocalDeps
-                          pubExtHashes
-                          implExtHashes
-                  ((modulePubHash, moduleImplHash), nameHashes) <- concurrently
-                    (evaluate (force (Hashing.moduleHashesFromHashMaps nmod nameKeys pubHashes implHashes)))
-                    (evaluate (force nameHashes0))
-                  evaluate (rnf (moduleSrcBytesHash, modulePubHash, moduleImplHash, sourceMeta source, impsWithHash))
-                  evaluate (rnf (nameHashes, roots, tests, mdoc))
-                  emitHashProgressPaced True hashProgressTotal hashProgressTotal Nothing
-                  timeTypeHash <- getTime Monotonic
-
-                  dumpWhen opts mn C.types "types" (Pretty.print tchecked)
-                  dumpWhen opts mn C.sigs "sigs" (Acton.Types.prettySigs scope mn imps fullIface)
-                  timeTypeCheck <- getTime Monotonic
-
-                  let writeTyDb onProgress =
-                        InterfaceFiles.writeFileWithProgress
-                          onProgress
-                          A.version
-                          (tyDbPath paths mn)
-                          moduleSrcBytesHash modulePubHash moduleImplHash (sourceMeta source) impsWithHash depModules nameHashes escapeSummaries roots tests mdoc nmod tchecked
-                      writeDoc = do
-                        let docDir = joinPath [projPath paths, "out", "doc"]
-                            modPathList = A.modPath mn
-                            docFile = if null modPathList
-                                      then docDir </> "unnamed" <.> "html"
-                                      else joinPath (docDir : init modPathList) </> last modPathList <.> "html"
-                            docFileDir = takeDirectory docFile
-                            -- Get the type environment for this module
-                            modTypeEnv = case Acton.Env.lookupModuleInfo mn typeEnv of
-                              Just mi -> Acton.Env.modulePublicTEnv mi
-                              Nothing -> publicIface
-                            -- Apply the same simplification as --sigs uses
-                            env1 = define publicIface $ setMod mn scope
-                            simplifiedTypeEnv = simp env1 modTypeEnv
-                        createDirectoryIfMissing True docFileDir
-                        -- Use parsed (original AST) to preserve docstrings
-                        let htmlDoc = DocP.printHtmlDoc (I.NModule imps simplifiedTypeEnv mdoc) parsed
-                        writeFileUtf8Atomic docFile htmlDoc
-                      docOutputs = [ (FrontOutputDoc, writeDoc) | shouldGenerateDocOutput opts (isTmp paths) (length nameHashes) ]
-                  typeStmtTimings <- reverse <$> readIORef typeStmtTimingsRef
-                  typeProgressDone <- readIORef typeProgressDoneRef
-
-                  timeFrontEnd <- getTime Monotonic
-                  inferredSigs <- reverse <$> readIORef inferredSigsRef
-                  let typeAfterProgress =
-                        case typeProgressDone of
-                          Just t -> timeTypeReconstruct - t
-                          Nothing -> timeTypeReconstruct - timeTypeReconstruct
-                  let frontTime = timeFrontEnd - timeStart
-                      frontTimeMaybe = if not (quiet gopts opts)
-                                         then Just frontTime
-                                         else Nothing
-                      frontTimingMaybe =
-                        if C.timing gopts
-                          then Just FrontTiming
-                                 { ftEnv = timeEnv - timeStart
-                                 , ftKinds = timeKindsCheck - timeEnv
-                                 , ftTypes = timeTypeCheck - timeKindsCheck
-                                 , ftTypeReconstruct = timeTypeReconstruct - timeKindsCheck
-                                 , ftTypeAfterProgress = typeAfterProgress
-                                 , ftTypeForce = timeTypeForce - timeTypeReconstruct
-                                 , ftTypeEscape = timeTypeEscape - timeTypeForce
-                                 , ftTypeHash = timeTypeHash - timeTypeEscape
-                                 , ftTypeStmtTimings = typeStmtTimings
-                                 }
-                          else Nothing
-                      key = keyOf env
-                      -- reconstruct's typeEnv is already protocol-converted.
-                      job = BackJob { bjKey = key, bjPaths = paths, bjOpts = opts, bjTypeEnv = typeEnv
-                                    , bjModule = tchecked, bjSource = srcContent, bjImplHash = moduleImplHash }
-                  -- Once this module reports done, its rows are on disk.  A
-                  -- write failure (disk full, permissions) fails this module.
-                  -- Docs and the --tydb copy are never read back within this
-                  -- build, so they are written in the background.
-                  committed <- commitTydb build key writeTyDb
-                  case committed of
-                    Left diags -> return (Left diags)
-                    Right () -> do
-                      startOutputs build key (docOutputs ++ tydbCopy opts paths mn)
-                      return $ Right FrontResult
-                        { frModuleInfo   = Acton.Env.withEscapeSummaries escapeSummaries (Acton.Env.mkModuleInfo mn imps publicIface mdoc)
-                        , frHashes       = ModuleHashes { mhPub = modulePubHash, mhImpl = moduleImplHash, mhNames = publicNameMap nameHashes }
-                        , frInterest     = interestDeps nameHashes
-                        , frBack         = maybe (EagerBack job) DeferredBack (deferredJob env (A.hasNotImpl (A.mbody tchecked)) moduleImplHash (length nameHashes))
-                        , frFrontTime    = frontTimeMaybe
-                        , frFrontTiming  = frontTimingMaybe
-                        , frInferredSigs = inferredSigs }
+-- | A value evaluated in full, here.
+forced                                  :: NFData a => a -> IO a
+forced                                  = evaluate . force
 
 data DbpSelection = DbpSelection
   { dbsModule :: A.Module
@@ -2834,7 +2783,7 @@ compileModules build plan = do
           -- stage's thread: the --tydb copy starts, then the hashes become
           -- visible to reads.
           finishStored fr = do
-            startOutputs build key (tydbCopy optsT paths mn)
+            startOutputs build key (tydbCopy env)
             rememberResult fr
           -- The pub hash a cached module's header recorded.
           headerPubHash = case taskCurrent of
@@ -2848,7 +2797,7 @@ compileModules build plan = do
             finishStored (storedResult (shellModuleInfo shell)
                             ModuleHashes { mhPub = shellPubHash shell, mhImpl = shellImplHash shell, mhNames = M.empty }
                             interest back)
-          missingOwnInterface = return (key, Left (missingIfaceDiagnostics mn "" mn))
+          missingOwnInterface = return (key, Left [explainError env "" (MissingInterface mn)])
 
           missingNameHashDiagnostics qn =
             errsToDiagnostics "Compilation error" (modNameToFilename (dropProjPrefix paths mn)) ""
@@ -2898,8 +2847,7 @@ compileModules build plan = do
               then return (Right changed)
               else do
                 let missingSorted = Data.List.sortOn modNameToString (Data.Set.toList missing)
-                    diags = concatMap (\depMn -> missingIfaceDiagnostics mn "" depMn) missingSorted
-                return (Left diags)
+                return (Left (map (explainError env "" . MissingInterface) missingSorted))
 
           collectDiags results =
             let (errs, vals) = partitionEithers results
@@ -2982,7 +2930,7 @@ compileModules build plan = do
             return resolved
             where
               resolveDepModule depMn =
-                maybe (Left (missingIfaceDiagnostics mn "" depMn)) Right <$> dependencyModule resolver depMn
+                maybe (Left [explainError env "" (MissingInterface depMn)]) Right <$> dependencyModule resolver depMn
 
           nameHashSummary prevMap newMap =
             let oldKeys = Data.Set.fromList (M.keys prevMap)
@@ -3211,8 +3159,9 @@ compileModules build plan = do
                       Right (Recomputed updatedDepModules updatedNameHashes fr) -> do
                         -- The refreshed rows are committed before the module
                         -- reports done.  A write failure is this module's
-                        -- diagnostics, returned and not thrown.
-                        committed <- commitTydb build key (\_ -> InterfaceFiles.updateImplRefresh tyFile (mhImpl (frHashes fr)) updatedDepModules updatedNameHashes)
+                        -- diagnostics.
+                        committed <- moduleBoundary env $ Right <$>
+                          commitTydb env (\_ -> InterfaceFiles.updateImplRefresh tyFile (mhImpl (frHashes fr)) updatedDepModules updatedNameHashes)
                         case committed of
                           Left diags -> return (key, Left diags)
                           Right () -> finishStored fr
@@ -3279,7 +3228,7 @@ compileModules build plan = do
                                     case stored of
                                       Nothing -> return InterfaceGone
                                       Just module' -> do
-                                        job <- loadStoredModule env module' moduleImplHash
+                                        job <- storedBackJob env module' moduleImplHash
                                         -- Forced here, so a corrupt row fails the
                                         -- attempt before anything is written.
                                         evaluate (rnf (InterfaceFiles.storedInterface module'))
@@ -3297,7 +3246,7 @@ compileModules build plan = do
                     case stored of
                       Nothing -> missingOwnInterface
                       Just module' -> do
-                        job <- loadStoredModule env module' (InterfaceFiles.storedImplHash module')
+                        job <- storedBackJob env module' (InterfaceFiles.storedImplHash module')
                         interest <- cachedInterestDeps
                         moduleInfo <- storedModuleInfo tyFile mn module'
                         finishStored (storedResult moduleInfo
