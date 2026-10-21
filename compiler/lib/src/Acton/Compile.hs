@@ -368,15 +368,19 @@ compileFailureMessage (DeferredBackFailed msg)
                                         = msg
 
 
+-- | A back job that threw: its module and the exception's text.
 data BackPassFailure = BackPassFailure
-  { bpfKey :: TaskKey
+  { bpfKey     :: TaskKey
   , bpfMessage :: String
   } deriving (Eq, Show)
 
+-- | The text a user sees for a failed back job.
 backPassFailureMessage :: BackPassFailure -> String
 backPassFailureMessage (BackPassFailure key msg) =
   "Back pass failed for " ++ tkProj key ++ "/" ++ modNameToString (tkMod key) ++ ": " ++ msg
 
+-- | How a back job ended: BackJobOk with its time, Nothing when quiet, and
+-- each pass's time, only with --timing, or BackJobFailed.
 data BackJobResult
   = BackJobOk (Maybe TimeSpec) (Maybe BackTiming)
   | BackJobFailed BackPassFailure
@@ -395,6 +399,7 @@ data BackPass
   | BackPassWrite
   deriving (Eq, Enum, Bounded, Show)
 
+-- | The name timing lines and analytics give a back pass.
 backPassName :: BackPass -> String
 backPassName BackPassNormalize  = "normalize"
 backPassName BackPassDeactorize = "deactorize"
@@ -414,6 +419,7 @@ backPassDump BackPassLLift      = Just (C.llift, "llift")
 backPassDump BackPassBoxing     = Just (C.box,   "box")
 backPassDump _                  = Nothing
 
+-- | A back pass of a running job started, finished, or was skipped.
 data BackPassProgress = BackPassProgress
   { bppPass      :: BackPass
   , bppCompleted :: Int                 -- the pass's index when it starts, index + 1 after
@@ -421,55 +427,75 @@ data BackPassProgress = BackPassProgress
   , bppEvent     :: BackPassEvent
   } deriving (Eq, Show)
 
+-- | A pass started, finished in the given time, or was skipped: the write
+-- of a job that may no longer write, such as one whose generation went
+-- stale.
 data BackPassEvent = BackPassStarted | BackPassFinished TimeSpec | BackPassSkipped
   deriving (Eq, Show)
 
+-- | The front passes that report their progress.
 data FrontPass
   = FrontPassKinds
   | FrontPassTypes
   | FrontPassHash
   deriving (Eq, Show)
 
+-- | A front pass's progress: fppCompleted of fppTotal in the pass's own
+-- units.  The kinds check reports 0 and then 1 of 1, the type check the
+-- names bound by the top-level statements it finished, and hashing its
+-- work items.
 data FrontPassProgress = FrontPassProgress
-  { fppPass :: FrontPass
+  { fppPass      :: FrontPass
   , fppCompleted :: Int
-  , fppTotal :: Int
-  , fppCurrent :: Maybe String
+  , fppTotal     :: Int
+  , fppCurrent   :: Maybe String        -- a description of the statements the type check has in progress, Nothing when there are none
   } deriving (Eq, Show)
 
+-- | The parser's progress: ppCompleted of ppTotal characters of the source
+-- text.
 data ParseProgress = ParseProgress
   { ppCompleted :: Int
-  , ppTotal :: Int
+  , ppTotal     :: Int
   } deriving (Eq, Show)
 
+-- | One step of the type check, collected with --timing and --verbose: the
+-- time from a progress event with statements in progress to the next
+-- event.
 data TypeStmtTiming = TypeStmtTiming
-  { tstCompleted :: Int
-  , tstTotal :: Int
-  , tstNames :: [String]
-  , tstTime :: TimeSpec
+  { tstCompleted :: Int                 -- the type check's progress at the next event
+  , tstTotal     :: Int                 -- its total
+  , tstNames     :: [String]            -- the names the statements in progress bind
+  , tstTime      :: TimeSpec
   } deriving (Eq, Show)
 
+-- | The signature the type checker inferred for the names of a top-level
+-- statement without a complete signature, collected with --timing or
+-- --verbose.
 data InferredSignature = InferredSignature
-  { isigNames :: [String]
+  { isigNames     :: [String]
   , isigSignature :: String
   } deriving (Eq, Show)
 
+-- | A module's front outputs: its .tydb, the --tydb copy next to its source
+-- and its documentation page.
 data FrontOutputKind
   = FrontOutputTydb
   | FrontOutputTydbCopy
   | FrontOutputDoc
   deriving (Eq, Ord, Show)
 
+-- | Where a module's front passes spent their time, collected with
+-- --timing.
 data FrontTiming = FrontTiming
-  { ftEnv :: TimeSpec
-  , ftKinds :: TimeSpec
-  , ftTypes :: TimeSpec
-  , ftTypeReconstruct :: TimeSpec
-  , ftTypeAfterProgress :: TimeSpec
-  , ftTypeForce :: TimeSpec
-  , ftTypeEscape :: TimeSpec
-  , ftTypeHash :: TimeSpec
-  , ftTypeStmtTimings :: [TypeStmtTiming]
+  { ftEnv               :: TimeSpec             -- the parse dumps and building the environment the module is checked in
+  , ftKinds             :: TimeSpec             -- the kinds check and its dump
+  , ftTypes             :: TimeSpec             -- from the end of the kinds check to the end of the type dumps
+  , ftTypeReconstruct   :: TimeSpec             -- the type check
+  , ftTypeAfterProgress :: TimeSpec             -- the type check after its progress first reached its total, 0 when it never did
+  , ftTypeForce         :: TimeSpec             -- forcing the type check's results
+  , ftTypeEscape        :: TimeSpec             -- the escape analysis
+  , ftTypeHash          :: TimeSpec             -- hashing
+  , ftTypeStmtTimings   :: [TypeStmtTiming]     -- with --verbose too
   } deriving (Eq, Show)
 
 -- | Each back pass's time in pass order; the write only when it wrote.
@@ -1470,12 +1496,15 @@ storedBackJob env module' = loadBackJob (moduleBuild env) (checkedModules env) (
 
 type InterestMap = M.Map A.ModName (Data.Set.Set A.Name)
 
+-- | The most names a module can have and still get a documentation page.
 docNameCountThreshold :: Int
 docNameCountThreshold = 10000
 
+-- | Whether a module gets a documentation page: not under --skip-build,
+-- not in a scratch build, and with at most docNameCountThreshold names.
 shouldGenerateDocOutput :: C.CompileOptions -> Bool -> Int -> Bool
-shouldGenerateDocOutput opts tmp nameCount =
-  not (C.skip_build opts) && not tmp && nameCount <= docNameCountThreshold
+shouldGenerateDocOutput opts temporary nameCount =
+  not (C.skip_build opts) && not temporary && nameCount <= docNameCountThreshold
 
 -- | Whether a module's back passes wait for its dependents and generate only
 -- the names they use.  NotImplemented bodies come from a hand-written .ext.c,
@@ -1539,11 +1568,15 @@ data ModuleSource = ModuleSource
   , sourceMeta  :: Maybe InterfaceFiles.SourceFileMeta     -- Nothing for an editor overlay
   }
 
+-- | A module of a build: its project's root directory and its name, which
+-- starts with the project's name except in the special projects.
 data TaskKey = TaskKey { tkProj :: FilePath, tkMod :: A.ModName } deriving (Eq, Ord, Show)
 
 isBuiltin                               :: TaskKey -> Bool
 isBuiltin k                             = tkMod k == mBuiltin
 
+-- | A discovered module: its key, its project's paths, the form discovery
+-- read it in and the in-graph providers of its imports.
 data GlobalTask = GlobalTask
   { gtKey             :: TaskKey
   , gtPaths           :: Paths
@@ -1570,6 +1603,9 @@ importsOf (ParseTask _ imps _)          = imps
 importsOf (ActonTask _ m)               = A.importsOf m
 importsOf (ParseErrorTask _)            = []
 
+-- | The imports discovery checks and resolves: a source's as written, and
+-- a cached header's canonical imports with the module's own project prefix
+-- dropped.
 restoredImportsOf                       :: Paths -> CompileTask -> [A.ModName]
 restoredImportsOf paths (TyTask h)      = map (dropProjPrefix paths . fst) (InterfaceFiles.summaryImports h)
 restoredImportsOf paths task            = importsOf task
@@ -1986,8 +2022,9 @@ adjustImports providers m = m { A.imps = map adjust (A.imps m) }
                                              Just k | tkMod k /= mn -> Just (tkMod k)
                                              _                      -> Nothing
 
--- | Decide whether to suppress per-module timing/log output.
--- We also treat any alternate output mode (parse/sigs/cgen/etc) as quiet.
+-- | Whether a build reports no per-module times: under --quiet and under
+-- every alternative output.  Its modules' times are Nothing, and the CLI
+-- prints no done or timing lines.
 quiet :: C.GlobalOptions -> C.CompileOptions -> Bool
 quiet gopts opts = C.quiet gopts || C.altOutput opts
 
@@ -2507,8 +2544,6 @@ runFrontPasses env source parsed = do
           -- reconstruct's typeEnv is already protocol-converted.
           job    = BackJob { bjKey = keyOf env, bjPaths = pathsOf env, bjOpts = opts, bjTypeEnv = typeEnv
                            , bjModule = typed, bjSource = sourceText source, bjImplHash = hashedImpl hashed }
-          -- ftTypes spans everything from the end of the kinds check to the
-          -- end of the type dumps.
           timing = FrontTiming
             { ftEnv               = envDone - start
             , ftKinds             = kindsDone - envDone
