@@ -1654,15 +1654,18 @@ checkImportDependencies index paths importer = mapM_ check
                            | root <- maybe [] (map snd . projDeps) (M.lookup (projPath paths) projects)
                            , Just ctx <- [M.lookup root projects] ]
 
--- | The in-graph provider of each import, keyed by every spelling the front
--- stage looks an import up by: the import with a declared dependency's
--- ".lib" dropped, and an import of the module's own project with the
--- project's prefix dropped.  A module of the importing project shadows every
--- other provider.  Otherwise the importing project and then its direct
--- dependencies, in dependency order, are searched for the spelling and, when
--- it is a bare declared dependency name, for that dependency's lib module;
--- transitive projects and std are never searched.  When several modules
--- match a spelling, the last one found wins.
+-- | The in-graph provider of each import, keyed by its spellings: the
+-- import itself, or the dependency's name for an import of a declared
+-- dependency's lib module, and, for an import that starts with the
+-- module's project name, the import without that name.  Only spellings
+-- that a module of the build provides are keys, so a lookup by another
+-- name, such as the canonical dep.lib name of a dependency import, misses.
+-- A module of the importing project shadows every other provider.
+-- Otherwise the importing project and then its direct dependencies, in
+-- name order, are searched for the spelling and, when it is a bare
+-- declared dependency name, for that dependency's lib module; transitive
+-- projects and std are never searched.  When several modules match a
+-- spelling, the last one found wins.
 resolveProviders :: ModuleIndex -> Paths -> [A.ModName] -> M.Map A.ModName TaskKey
 resolveProviders index paths imports = M.fromList (concatMap provide spellings)
   where
