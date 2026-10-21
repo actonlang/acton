@@ -1246,10 +1246,9 @@ printSigInterface paths mn mName tyFile = do
     case tyRes of
       Left err ->
         printErrorAndExit ("Could not read type interface for " ++ modNameToString mn ++ ": " ++ show err)
-      Right (ms, nmod) -> do
+      Right (I.NModule imps te _) -> do
         env0 <- Acton.Env.initEnv (sysTypes paths) False
-        let I.NModule imps te _ = nmod
-            envImports = foldr Acton.Env.addImport env0 ms
+        let envImports = foldr Acton.Env.addImport env0 imps
             selected = case mName of
               Nothing -> te
               Just n  -> filter ((== n) . fst) te

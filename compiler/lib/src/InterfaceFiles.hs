@@ -1535,7 +1535,7 @@ readNameHashes f =
 -- | Read a module's interface (imports and name infos) without decoding the
 -- typed statement rows -- for consumers that only need the NModule, an eager
 -- readFile pays for deserializing the entire typed module.
-readModuleIface :: FilePath -> IO ([A.ModName], I.NModule)
+readModuleIface :: FilePath -> IO I.NModule
 readModuleIface f =
     withReadTxn f $ \txn dbi -> do
       validateVersion txn dbi
@@ -1543,8 +1543,7 @@ readModuleIface f =
       (te, _nameHashes) <- readNameEntries txn dbi
       (_, timps, _) <- readModuleHeader txn dbi
       traceTydbRead "iface" f ("names " ++ show (length te))
-      let sourceImps = A.importedModules timps
-      return (sourceImps, I.NModule sourceImps te mdoc)
+      return (I.NModule (A.importedModules timps) te mdoc)
 
 -- Read only cached header fields from .tydb. This avoids decoding the large
 -- NameInfo and typed Module statement sections and is much faster than readFile
