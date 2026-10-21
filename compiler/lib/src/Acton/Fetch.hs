@@ -32,7 +32,8 @@ import System.Process (readCreateProcessWithExitCode, proc)
 
 
 -- | Fetch every dependency reachable from the project of 'paths', with the
--- --dep overrides 'depOverrides' applied to each Build.act. A scratch
+-- --dep overrides 'depOverrides', absolute and normalised as
+-- normalizeDepOverrides gives them, applied to each Build.act. A scratch
 -- project has no dependencies to fetch.
 fetchDependencies :: C.GlobalOptions -> Paths -> [(String, FilePath)] -> IO ()
 fetchDependencies gopts paths depOverrides =

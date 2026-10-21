@@ -506,9 +506,10 @@ loadBuildSpec dir = do
                            ++ "Create Build.act with required name and fingerprint fields.")
 
 -- | Load the Build.act of the project at 'dir' and apply the --dep
--- overrides to its dependencies.
+-- overrides, absolute and normalised as normalizeDepOverrides gives them,
+-- to its dependencies.
 loadOverriddenSpec :: [(String, FilePath)] -> FilePath -> IO BuildSpec.BuildSpec
-loadOverriddenSpec overrides dir = loadBuildSpec dir >>= applyDepOverrides dir overrides
+loadOverriddenSpec overrides dir = loadBuildSpec dir >>= applyDepOverrides overrides
 
 validateBuildSpec :: FilePath -> BuildSpec.BuildSpec -> IO BuildSpec.BuildSpec
 validateBuildSpec sourcePath spec = do
@@ -588,10 +589,11 @@ normalizeDepOverrides :: FilePath -> [(String, FilePath)] -> IO [(String, FilePa
 normalizeDepOverrides base =
     mapM (\(name, path) -> (,) name <$> normalizePathSafe (rebasePath base path))
 
--- | Apply --dep overrides (NAME=PATH) to a BuildSpec.
--- Resolves override paths relative to the given base directory when needed.
-applyDepOverrides :: FilePath -> [(String, FilePath)] -> BuildSpec.BuildSpec -> IO BuildSpec.BuildSpec
-applyDepOverrides base overrides spec = do
+-- | Point each dependency that an override names, unless it follows
+-- another, at the override's path, after checking that the path is an
+-- Acton project root.
+applyDepOverrides :: [(String, FilePath)] -> BuildSpec.BuildSpec -> IO BuildSpec.BuildSpec
+applyDepOverrides overrides spec = do
     deps' <- foldM applyOne (BuildSpec.dependencies spec) overrides
     return spec { BuildSpec.dependencies = deps' }
   where
@@ -600,10 +602,8 @@ applyDepOverrides base overrides spec = do
         Nothing -> return depsMap
         Just dep | isJust (BuildSpec.follows dep) -> return depsMap
         Just dep -> do
-          absP <- normalizePathSafe (rebasePath base depPath)
-          validateDepOverridePath depName absP
-          let dep' = dep { BuildSpec.path = Just absP }
-          return (M.insert depName dep' depsMap)
+          validateDepOverridePath depName depPath
+          return (M.insert depName dep { BuildSpec.path = Just depPath } depsMap)
 
 validateDepOverridePath :: String -> FilePath -> IO ()
 validateDepOverridePath depName depPath = do
@@ -762,6 +762,8 @@ existingDependencyDir base name dep = do
 -- | Discover all projects reachable from a root project.
 -- Follows Build.act dependencies, applies overrides/pins, and
 -- returns a map from project root to ProjCtx while skipping duplicates.
+-- The --dep overrides are absolute and normalised as
+-- normalizeDepOverrides gives them.
 discoverProjects :: C.GlobalOptions -> FilePath -> FilePath -> [(String, FilePath)] -> IO (M.Map FilePath ProjCtx)
 discoverProjects gopts sysAbs rootProj depOverrides = do
     rootAbs <- normalizePathSafe rootProj
