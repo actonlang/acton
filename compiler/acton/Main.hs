@@ -2093,7 +2093,7 @@ runCliPostCompile reporter gopts plan env = do
         rootProj = ccRootProj cctx
         sysAbs = ccSysAbs cctx
         rootModules = cpRootModules plan
-        allowPrune' = cpAllowPrune plan
+        allowPrune = cpAllowPrune plan
         neededTasks = cpNeededTasks plan
         projMap = cpProjMap plan
         proj = projName pathsRoot
@@ -2111,9 +2111,9 @@ runCliPostCompile reporter gopts plan env = do
                           | mn <- rootModules, mn `elem` requestedModules ]
         selectedTasksByProj = M.fromListWith (++) [ (tkProj (gtKey t), [t]) | t <- neededTasks ]
         depModuleOptsByProj = depModuleOptionsByProj selectedTasksByProj projMap
-        rootSelectedModuleEntries = selectedCSourceEntriesForProj rootProj (M.findWithDefault [] rootProj selectedTasksByProj)
-        rootBuildLibraries = explicitBuildLibraries rootSelectedModuleEntries rootSpec
-        rootModuleEntries = excludeLibrarySources rootBuildLibraries rootSelectedModuleEntries
+        selectedModuleSources = selectedCSourceEntriesForProj rootProj (M.findWithDefault [] rootProj selectedTasksByProj)
+        rootBuildLibraries = explicitBuildLibraries selectedModuleSources rootSpec
+        rootModuleSources = excludeLibrarySources rootBuildLibraries selectedModuleSources
         rootDepModuleOpts = M.findWithDefault M.empty rootProj depModuleOptsByProj
         rootDepPathOverrides = projectDepPathOverrides projMap rootProj
 
@@ -2139,15 +2139,13 @@ runCliPostCompile reporter gopts plan env = do
     if C.skip_build opts'
       then
         logLine "  Skipping final build step" >> return True
-      else
-        if C.test opts'
-          then do
-            testBinTasks <- catMaybes <$> mapM (filterMainActor env pathsRoot) preTestBinTasks
-            if C.altOutput opts' then return True else
-              runFinal (compileBins gopts opts' pathsRoot env rootSpec rootModules testBinTasks allowPrune' rootModuleEntries rootBuildLibraries rootDepModuleOpts rootDepPathOverrides (Just (reporterProgressUI reporter)))
-          else do
-            if C.altOutput opts' then return True else
-              runFinal (compileBins gopts opts' pathsRoot env rootSpec rootModules preBinTasks allowPrune' rootModuleEntries rootBuildLibraries rootDepModuleOpts rootDepPathOverrides (Just (reporterProgressUI reporter)))
+      else do
+        binTasks <- if C.test opts'
+                      then catMaybes <$> mapM (filterMainActor env pathsRoot) preTestBinTasks
+                      else return preBinTasks
+        if C.altOutput opts' then return True else
+          runFinal (zigBuild env gopts opts' pathsRoot rootSpec rootModules binTasks allowPrune rootModuleSources rootBuildLibraries rootDepModuleOpts rootDepPathOverrides (Just (reporterProgressUI reporter)))
+
 -- Generate documentation index for a project build by reading module names and
 -- docstrings from cached .tydb headers or source headers.
 generateProjectDocIndex :: Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -> Paths -> [String] -> IO ()
@@ -2277,10 +2275,6 @@ binTaskModule binTask = (isTest binTask, m)
 
 binTaskRoot :: Paths -> BinTask -> FilePath
 binTaskRoot paths = uncurry (rootStubPath paths) . binTaskModule
-
-compileBins:: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> BuildSpec.BuildSpec -> [A.ModName] -> [BinTask] -> Bool -> [FilePath] -> [BuildLibrary] -> M.Map String String -> M.Map String FilePath -> Maybe ProgressUI -> IO Bool
-compileBins gopts opts paths env rootSpec modules binTasks allowPrune rootModules buildLibraries depModuleOpts depPathOverrides mProgressUI =
-    zigBuild env gopts opts paths rootSpec modules binTasks allowPrune rootModules buildLibraries depModuleOpts depPathOverrides mProgressUI
 
 printDiag :: C.GlobalOptions -> Diagnostic String -> IO ()
 printDiag gopts d = do
@@ -2756,14 +2750,14 @@ defCpuFlag = ["-Dcpu=x86_64_v2+aes"]
 
 -- | Run zig build for generated artifacts and prune stale outputs.
 zigBuild :: Acton.Env.Env0 -> C.GlobalOptions -> C.CompileOptions -> Paths -> BuildSpec.BuildSpec -> [A.ModName] -> [BinTask] -> Bool -> [FilePath] -> [BuildLibrary] -> M.Map String String -> M.Map String FilePath -> Maybe ProgressUI -> IO Bool
-zigBuild env gopts opts paths rootSpec modules binTasks allowPrune rootModules buildLibraries depModuleOpts depPathOverrides mProgressUI = do
+zigBuild env gopts opts paths rootSpec rootModules binTasks allowPrune moduleSources buildLibraries depModuleOpts depPathOverrides mProgressUI = do
     prepStart <- getTime Monotonic
     allBinTasks <- mapM (writeRootC env gopts opts paths) binTasks
     let realBinTasks = catMaybes allBinTasks
 
     let pruningAllowed = allowPrune && not (C.only_build opts)
     when pruningAllowed $
-      removeUndeclaredRoots paths modules realBinTasks
+      removeUndeclaredRoots paths rootModules realBinTasks
 
     let no_threads = if isWindowsOS (C.target opts) then True else C.no_threads opts
     projAbs <- normalizePathSafe (projPath paths)
@@ -2791,10 +2785,10 @@ zigBuild env gopts opts paths rootSpec modules binTasks allowPrune rootModules b
                    (_:_)                   -> defCpuFlag
                    []                      -> defCpuFlag
         optArgs = ["-Doptimize=" ++ optimizeModeToZig (C.optimize opts)]
-        rootModulesCsv = intercalate "," rootModules
+        moduleSourcesCsv = intercalate "," moduleSources
         rootStubsCsv = intercalate "," (selectedRootStubEntriesForBins paths realBinTasks)
         buildLibrariesSpec = encodeBuildLibraries buildLibraries
-        moduleArgs = [ "-Dacton_modules=" ++ rootModulesCsv
+        moduleArgs = [ "-Dacton_modules=" ++ moduleSourcesCsv
                      , "-Dacton_root_stubs=" ++ rootStubsCsv
                      , "-Dacton_libraries=" ++ buildLibrariesSpec
                      -- Zig keys the configure cache on -D options and on
