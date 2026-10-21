@@ -160,10 +160,10 @@ Module cache
 The scheduler owns one ModuleCache for its lifetime, and every run shares
 it: the .tydb path, the module hashes and the public name hashes of each
 module that a run read from disk or finished, and the single names it
-read.  It is keyed by module name, so one scheduler builds one source
-tree.  A module that a run finishes replaces its own hashes before it
-reports done, so every later read sees them.  A standalone build has a
-cache of its own.
+read.  It is keyed by module name, so the trees one scheduler builds
+share the entries of every module name they have in common.  A module
+that a run finishes replaces its own hashes before it reports done, so
+every later read sees them.  A standalone build has a cache of its own.
 
 Invariants
 ----------
@@ -673,9 +673,10 @@ currentGeneration sched = do
 -- pool of workers, and every run shares one module cache, so the interface
 -- hashes a run reads from disk or finishes are remembered for the
 -- scheduler's lifetime. The cache is keyed by module name, so it cannot
--- tell two source trees apart, such as two checkouts of different Git
--- revisions. Each independent tree is built by its own scheduler. Within
--- one tree, a module that a run finishes replaces its own entries.
+-- tell two source trees apart. Two trees that hold modules of the same
+-- name, such as two checkouts of one project, need schedulers of their
+-- own. Within one tree, a module that a run finishes replaces its own
+-- entries.
 data CompileScheduler = CompileScheduler
   { schedulerCounter   :: IORef Int                     -- the newest generation
   , schedulerRun       :: MVar (Maybe (Async ()))       -- the newest generation's run

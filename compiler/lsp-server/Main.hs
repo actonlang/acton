@@ -129,7 +129,12 @@ projectWatchersRef :: IORef ProjectWatcherMap
 projectWatchersRef = unsafePerformIO (newIORef HM.empty)
 
 {-# NOINLINE compileScheduler #-}
--- | Shared compile scheduler for LSP events and back jobs.
+-- | Shared compile scheduler for LSP events and back jobs.  One scheduler
+-- builds every project root this server serves: they share one module
+-- cache and one Build.act stamp.  So two checkouts of one project read
+-- each other's remembered hashes, and a fresh plan of one root fetches
+-- the dependencies again and plans in full after a plan of another root
+-- whose Build.act has a different modification time.
 compileScheduler :: Compile.CompileScheduler
 compileScheduler = unsafePerformIO (Compile.newCompileScheduler lspGlobalOpts)
 
