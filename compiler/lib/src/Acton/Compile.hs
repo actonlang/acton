@@ -3250,12 +3250,9 @@ parseStage build opts t = do
       Right (source, m) -> (ActonTask source m, if quiet (buildOptions build) opts then Nothing else Just elapsed)
 
 
--- | Check whether a NameInfo represents a root-eligible actor.
--- Used to decide which roots to include in .tydb headers and root generation.
-rootEligible :: I.NameInfo -> Bool
-rootEligible (I.NAct [] p k _ _) = case (p,k) of
-                                      (A.TNil{}, A.TRow _ _ _ t _ A.TNil{}) ->
-                                        prstr t == "Env" || prstr t == "None" ||
-                                        prstr t == "__builtin__.Env" || prstr t == "__builtin__.None"
-                                      _ -> False
-rootEligible _ = False
+-- | Whether a name is an actor that can be a program's root: one without
+-- type parameters, with an empty positional row and a keyword row of one
+-- parameter, whose type is Env or None.
+rootEligible                                                       :: I.NameInfo -> Bool
+rootEligible (I.NAct [] A.TNil{} (A.TRow _ _ _ t _ A.TNil{}) _ _) = prstr t `elem` ["Env", "None", "__builtin__.Env", "__builtin__.None"]
+rootEligible _                                                     = False
