@@ -110,20 +110,22 @@ prints docs for the requested file.
 
 ## Deferred Back Passes
 
-DBP is selected after type checking, when the full `NameHashInfo` list is
-available. A module becomes a DBP candidate when its top-level name count is at
-least the internal threshold (`1000` today), or when it is forced with
-`--dbp MOD[:name,...]`. The option can be repeated, and explicit seed names are
-unioned per module. DBP is disabled for `__builtin__`, `--only-build`,
-alternate-output modes such as `--cgen`/`--hgen`, and whenever `--no-dbp` is
-set. `--no-dbp` is a hard kill switch: it disables both the name-count
-heuristic and explicit `--dbp` module requests.
+DBP is decided when a module's front stage finishes. Every module's back passes
+are deferred, except those of:
 
-Modules at an explicit `Build.act` library boundary are also excluded from DBP.
-A boundary module is a member of a declared library that is imported by any
-module outside that same library. The library boundary needs the full generated
-C/H surface, so even an explicit `--dbp` request compiles that module normally
-and emits an info message. Internal library modules remain DBP-eligible.
+- `__builtin__`
+- a module with `NotImplemented` bodies, whose code a hand-written `.ext.c`
+  provides
+- a module at a library boundary (below)
+- every module under `--only-build`, under alternate-output modes such as
+  `--cgen`/`--hgen`, or under `--no-dbp`
+
+A module whose back passes are not deferred is generated whole.
+
+A module at a library boundary is a member of a library declared in `Build.act`
+that is imported by any module outside that same library. The library boundary
+needs the full generated C/H surface, so that module is compiled normally.
+Internal library modules remain DBP-eligible.
 
 When a fresh front pass produces a DBP candidate, the scheduler stores a
 `DeferredBackJob` instead of queueing a normal `BackJob`. Cached `TyTask`
@@ -135,19 +137,18 @@ external dependency facts they just computed; cached modules reconstruct the
 same interest set from the `.tydb` dependency rows.
 
 Deferred jobs do not wait for every front pass in the project. Their wait set is
-the reverse dependency closure of the deferred module in the total build graph.
-After each front stage completes, the scheduler flushes any deferred job whose
-wait set is now contained in the completed-front set. If a module in that wait
-set fails front passes, the normal failed-build path prevents the deferred back
-job from running.
+the reverse dependency closure of the deferred module among the modules the run
+compiles. After each front stage completes, the scheduler flushes any deferred
+job whose wait set is now contained in the completed-front set. If a module in
+that wait set fails front passes, the normal failed-build path prevents the
+deferred back job from running.
 
-When a deferred job is ready, DBP first reads the candidate's `.tydb` header.
-It uses the header's `NameHashInfo` list and cached root actor names without
-decoding the typed module. The initial selection seeds are:
+When a deferred job is ready, DBP reads the module's root actor names from its
+`.tydb`, then the `name-hash` rows of the names it selects, one name at a time,
+without decoding the typed module. The selection seeds are:
 
-- explicit `--dbp MOD:name,...` names, when present; otherwise the collected
-  `InterestMap` names for the module
-- cached root actor names from the `.tydb` header
+- the collected `InterestMap` names for the module
+- the module's root actor names
 
 An empty interested-name set is valid; if the module has no root actors, DBP can
 produce an effectively empty module body. DBP maps derived names back to their
@@ -155,9 +156,9 @@ owning top-level name, closes over `nhPubLocalDeps` and `nhImplLocalDeps`, and
 uses exact `readExtensionsByClass` / `readExtensionsByProtocol`
 lookups to keep top-level extension declarations required by selected classes
 or protocols. Selection metadata that cannot map a seed, local dependency, or
-extension back to a top-level name is a compiler error. DBP should not silently
-fall back to full-module compilation except for modules that contain
-`NotImplemented`/native hooks.
+extension back to a top-level name is a compiler error. DBP never falls back to
+full-module compilation: a module that contains `NotImplemented`/native hooks
+is not deferred in the first place.
 
 Pruning happens on the typed module immediately before the normal back-pass
 chain. Selected declarations, signatures, assignments, and compiler-introduced
@@ -165,15 +166,18 @@ chain. Selected declarations, signatures, assignments, and compiler-introduced
 dropped. Other source-level top-level statements are not a fallback case because
 the parser rejects them before type checking.
 
-Before decoding the full typed module, DBP computes a codegen hash from the
-module implementation hash and the sorted selected top-level names. If the
-existing `.c`, `.h` and `.closures.inc` files already carry that hash in their
-generated "Acton impl hash" tag, the deferred job is skipped. Otherwise DBP
-reads the full typed module with `readFile`, prunes it to the selected
-top-level declarations, runs the normal back-pass chain, and writes all three
-files tagged with that DBP codegen hash. A later consumer change that selects a
-different provider name therefore makes the provider's DBP output stale even
-when the provider source did not change.
+Before reading any statement, DBP computes a codegen hash from the module
+implementation hash and the sorted selected top-level names. If the existing
+`.c`, `.h` and `.closures.inc` files already carry that hash in their generated
+"Acton impl hash" tag, the deferred job is skipped. Otherwise DBP reads only the
+statements of the selected names (`readSelectedModule`), prunes them to the
+selected top-level declarations, runs the normal back-pass chain, and writes all
+three files tagged with that DBP codegen hash. A `.tydb` written by the same
+compiler version always has those statement rows, so when they cannot be read
+the file is corrupt, and the build stops with an internal error instead of
+reading the whole module. A later consumer change that selects a different
+provider name makes the provider's DBP output stale even when the provider
+source did not change.
 
 A source change always re-runs front passes for that module. Downstream modules
 compare recorded `pubDeps` against current provider hashes; any delta triggers

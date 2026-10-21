@@ -57,8 +57,9 @@ Back passes (4–9) are:
 The back end consumes the typed module from the front end and emits C, header
 and closure support files (`.c`, `.h`, `.closures.inc`). It does not introduce
 new user errors, so it can run after front completion and even in the
-background. The CLI waits for all back jobs to finish before invoking Zig; the
-LSP enqueues back jobs in the background and does not wait for them or run Zig.
+background. The CLI waits for all back jobs to finish before invoking Zig. The
+LSP server reports its checked modules first, then waits for its back jobs so
+that it can report a back-pass failure, and does not run Zig.
 
 DBP still runs the same back-pass sequence once it is ready. The difference is
 that it may prune the typed module to the selected top-level declarations before

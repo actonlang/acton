@@ -9,9 +9,12 @@ They are related, but they do not participate in the build in the same way.
 
 ## Discovery and fetch
 
-Project discovery in `Acton.Compile` only follows Acton package dependencies.
-Those edges determine the project graph used for module ordering, cache reuse,
-import visibility, and type-check planning.
+Project discovery only follows Acton package dependencies. It lives in
+`Acton.Project`: `discoverProjects` walks the dependencies from the root
+project, reading each `Build.act` with `loadBuildSpec` and applying the `--dep`
+overrides to it (`loadOverriddenSpec`), and `resolveFollows` then binds the
+`follows` declarations. Those edges determine the project graph used for module
+ordering, cache reuse, import visibility, and type-check planning.
 
 Archive dependencies may select a project using `subdir`. Project discovery
 uses the selected directory as the root for the project's configuration,
@@ -32,9 +35,11 @@ before compilation.
 Zig dependencies are not Acton project edges. They do not contribute modules to
 the import graph and they are not used for project discovery.
 
-Fetch still needs them, though. For each reachable Acton project, the fetch
-phase downloads or copies both that project's package dependencies and its zig
-dependencies before later compile planning uses them.
+Fetch still needs them, though. `fetchDependencies` in `Acton.Fetch` walks
+every reachable Acton project and downloads or copies both that project's
+package dependencies and its zig dependencies before later compile planning uses
+them. The walk applies root pins and `--dep` overrides but does not deduplicate
+by fingerprint, so every version of a package is fetched.
 
 ## Acton import prefixes
 
