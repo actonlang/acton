@@ -276,8 +276,7 @@ discoverProjects :: C.GlobalOptions -> FilePath -> FilePath -> [(String, FilePat
 discoverProjects gopts sysAbs rootProj depOverrides = do
     rootAbs <- normalizePathSafe rootProj
     rootSpec <- loadOverriddenSpec depOverrides rootAbs
-    (projects, _) <- go Data.Set.empty M.empty (registerFingerprint rootAbs rootSpec M.empty)
-                        (rootPins rootAbs rootSpec) rootAbs (Just rootSpec)
+    (projects, _) <- go Data.Set.empty M.empty M.empty (rootPins rootAbs rootSpec) rootAbs (Just rootSpec)
     resolveFollows projects
   where
     go seen acc fpMap pins dir mSpec = do
