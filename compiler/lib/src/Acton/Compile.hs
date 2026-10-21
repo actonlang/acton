@@ -1243,7 +1243,7 @@ parseActHeaderSnapshot mn actFile snap = do
     src = Source.ssText snap
     header display = do
       (imps, mdoc) <- Acton.Parser.parseModuleHeader display src
-      return (A.importsOf (A.Module mn imps Nothing []), mdoc)
+      return (A.importedModules imps, mdoc)
 
 -- | Read and parse a source file via SourceProvider (overlay-aware).
 -- Returns both the snapshot and the parsed AST for reuse by callers.

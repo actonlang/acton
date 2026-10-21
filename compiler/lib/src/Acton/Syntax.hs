@@ -925,14 +925,17 @@ instance Read Name where
 
 -- Helpers ------------------
 
-importsOf (Module _ imps _ _)       = impsOf imps
-  where
-    impsOf []                       = []
-    impsOf (Import _ mis : i)       = map mName mis ++ impsOf i
-    impsOf (FromImport _ mn _ : i)  = mn : impsOf i
-    impsOf (FromImportAll _ mn : i) = mn : impsOf i
+-- | The modules a module imports, in order.
+importsOf                           :: Module -> [ModName]
+importsOf                           = importedModules . imps
 
-    mName (ModuleItem qn _)         = qn
+-- | The modules an import list names, in order.
+importedModules                     :: [Import] -> [ModName]
+importedModules                     = concatMap named
+  where
+    named (Import _ moduleItems)    = [ mn | ModuleItem mn _ <- moduleItems ]
+    named (FromImport _ mn _)       = [mn]
+    named (FromImportAll _ mn)      = [mn]
 
 unop op e                           = UnOp l0 op e
 binop e1 op e2                      = BinOp l0 e1 op e2

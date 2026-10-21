@@ -999,9 +999,9 @@ readNameInfoEntriesByNames txn dbi ns =
 readInterfaceDBModuleInfo :: InterfaceDB -> IO ([A.ModName], Maybe String)
 readInterfaceDBModuleInfo db =
     withInterfaceDBReadTxn db $ \txn dbi -> do
-      (tmn, timps, tdoc) <- getValue "module-header" txn dbi keyModuleHeader
+      (_, timps, _) <- readModuleHeader txn dbi
       doc <- getValue "doc" txn dbi keyDoc
-      return (A.importsOf (A.Module tmn timps tdoc []), doc)
+      return (A.importedModules timps, doc)
 
 -- | Read the module's escape summaries.  Every .tydb that passes the
 -- version check has the row.  A missing row reads as no summaries, which
@@ -1085,6 +1085,10 @@ readStmtEntries txn dbi = do
     forM [0 .. count - 1] $ \i ->
       getValue ("stmt " ++ show i) txn dbi (keyStmt i)
 
+-- | The typed module's name, its imports and its docstring.
+readModuleHeader :: LMDB.MDB_txn -> LMDB.MDB_dbi -> IO (A.ModName, [A.Import], Maybe String)
+readModuleHeader txn dbi = getValue "module-header" txn dbi keyModuleHeader
+
 -- | Reconstruct a typed module containing only the statements owned by the
 -- selected names. Returns Nothing when the cache predates statement
 -- ownership, when ownership is missing for a selected name, or when the
@@ -1096,7 +1100,7 @@ readSelectedModule :: FilePath -> [NameHashInfo] -> Set.Set A.Name -> IO (Maybe 
 readSelectedModule f nameHashes selected =
     withReadTxn f $ \txn dbi -> do
       validateVersion txn dbi
-      (tmn, timps, tdoc) <- getValue "module-header" txn dbi keyModuleHeader
+      (tmn, timps, tdoc) <- readModuleHeader txn dbi
       mHasNotImpl <- getMaybeValue "stmt-has-not-impl" txn dbi keyStmtHasNotImpl
       case mHasNotImpl of
         Nothing -> do
@@ -1489,7 +1493,7 @@ readFile f =
       tests <- getValue "tests" txn dbi keyTests
       mdoc <- getValue "doc" txn dbi keyDoc
       (te, nameHashes) <- readNameEntries txn dbi
-      (tmn, timps, tdoc) <- getValue "module-header" txn dbi keyModuleHeader
+      (tmn, timps, tdoc) <- readModuleHeader txn dbi
       stmts <- readStmtEntries txn dbi
       traceTydbRead "all" f ("names " ++ show (length te) ++ " stmts " ++ show (length stmts))
       let tmod = A.Module tmn timps tdoc stmts
@@ -1539,9 +1543,9 @@ readModuleIface f =
       validateVersion txn dbi
       mdoc <- getValue "doc" txn dbi keyDoc
       (te, _nameHashes) <- readNameEntries txn dbi
-      (tmn, timps, tdoc) <- getValue "module-header" txn dbi keyModuleHeader
+      (_, timps, _) <- readModuleHeader txn dbi
       traceTydbRead "iface" f ("names " ++ show (length te))
-      let sourceImps = A.importsOf (A.Module tmn timps tdoc [])
+      let sourceImps = A.importedModules timps
       return (sourceImps, I.NModule sourceImps te mdoc)
 
 -- Read only cached header fields from .tydb. This avoids decoding the large
