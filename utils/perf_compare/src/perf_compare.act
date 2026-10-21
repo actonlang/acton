@@ -504,7 +504,7 @@ actor main(env: Env):
 
     try:
         args = parse_args(["perf-compare"] + env.argv[1:])
-        root = text(env.getenv("ACTON_PERF_REPO"))
+        root = text(env.vars.getenv("ACTON_PERF_REPO"))
         benchmark = args.get_str("project") if "project" in args.options else root + "/test/perf"
         if not benchmark.startswith("/"):
             benchmark = fs.cwd() + "/" + benchmark

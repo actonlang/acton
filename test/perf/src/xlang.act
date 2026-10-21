@@ -671,9 +671,9 @@ actor main(env: Env):
         scale, time_ms = sizes(test)
         time_ms = budget if budget > 0 else time_ms
         if counters == "off":
-            await async env.unsetenv("ACTON_TEST_PERF")
+            await async env.vars.unsetenv("ACTON_TEST_PERF")
         else:
-            await async env.setenv("ACTON_TEST_PERF", "1")
+            await async env.vars.setenv("ACTON_TEST_PERF", "1")
         binary = paths["acton"]
         # The test/perf project directory, as `acton test perf` runs it
         project = "/".join(binary.split("/")[:-3])
@@ -717,8 +717,8 @@ actor main(env: Env):
             perf_cmd = ["perf", "stat", "-x", ",", "-e", "cycles,instructions", "-D", "-1",
                         "--control", "fifo:" + ctl + "," + ack, "-o", perf_csv, "--"] + cmd
             # The ports enable and disable the counters around their samples
-            await async env.setenv("XLANG_PERF_CTL", ctl)
-            await async env.setenv("XLANG_PERF_ACK", ack)
+            await async env.vars.setenv("XLANG_PERF_CTL", ctl)
+            await async env.vars.setenv("XLANG_PERF_ACK", ack)
             run(["mkfifo", ctl, ack], None, fifos_made)
         else:
             perf_csv = ""
@@ -824,8 +824,8 @@ actor main(env: Env):
                         "--name", "ring", "--scale", "1", "--time", "300ms", "--rts-wthreads", "2"], "."))
         builds.append((["go", "build", "-trimpath", "-o", "xlang-go", "."], "xlang/go"))
         builds.append((["cargo", "build", "--release"], "xlang/tokio"))
-        if env.getenv("RUSTFLAGS") is None:
-            await async env.setenv("RUSTFLAGS", "-C target-cpu=" + a.get_str("cpu"))
+        if env.vars.getenv("RUSTFLAGS") is None:
+            await async env.vars.setenv("RUSTFLAGS", "-C target-cpu=" + a.get_str("cpu"))
         next_build(0, "", "")
 
     proc def next_build(code: int, stdout: str, stderr: str) -> None:
