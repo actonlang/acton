@@ -8,11 +8,12 @@ through code generation) as separate jobs.  The project model, Build.act
 and paths live in Acton.Project, dependency fetching in Acton.Fetch and
 graph traversals in Acton.Graph.
 
-Only the front passes report errors to the user, and a module depends on
-another module only through that module's front result.  So a module's
-dependents start as soon as its front stage finishes while its back passes
-run in the background, and the LSP server reports a module as checked
-before its code is generated.
+A back pass finds no error in a module's source.  It fails only on a
+compiler bug or a failed write, which the run reports as a
+BackPassFailure.  A module depends on another module only through that
+module's front result.  So a module's dependents start as soon as its
+front stage finishes while its back passes run in the background, and the
+LSP server reports a module as checked before its code is generated.
 
 A build is fast when it does no work twice.  A module's .tydb records what
 its last compilation used: the hash and the stat of its source, its
@@ -34,14 +35,15 @@ Plan
 prepareCompileContext finds the paths of the file that roots a build and
 makes the --dep overrides absolute.  prepareCompilePlan fetches the
 dependencies on a scheduler's first plan and whenever Build.act changed
-since its previous plan.  It prunes the outputs of deleted sources, so
-that a cached header cannot bring a deleted module back, discovers the
-projects and their modules (buildGlobalTasks) and selects the modules to
-compile (selectPlan): the requested modules with everything they import
-or, for an incremental plan, the modules that the changed files affect.
-A declared build library is compiled whole.  The LSP server plans an edit
-of a project it already discovered by reading the edited module again
-(readModuleTask) and selecting from the modules it keeps.
+since its previous plan.  It discovers the projects (buildProjects) and
+prunes the outputs of their deleted sources, so that a cached header
+cannot bring a deleted module back.  It then discovers their modules
+(buildGlobalTasks) and selects the modules to compile (selectPlan): the
+requested modules with everything they import or, for an incremental
+plan, the modules that the changed files affect.  A declared build
+library is compiled whole.  The LSP server plans an edit of a project it
+already discovered by reading the edited module again (readModuleTask)
+and selecting from the modules it keeps.
 
 Discovery starts from the requested modules, or from every module when the
 selection may need any of them, and goes breadth first.  It reads each
