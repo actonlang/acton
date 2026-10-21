@@ -3346,6 +3346,11 @@ rtsTests =
           (returnCode, cmdOut, cmdErr) <- runThing "" "../../test/rts/print_nul.act"
           assertEqual "print NUL retCode" ExitSuccess returnCode
           assertEqual "print NUL output" "a\0b\nc\0d\0\0\n" cmdOut
+  ,   testCase "stdout_write writes NUL" $ do
+          testBuildThing "" ExitSuccess False "../../test/rts/stdout_write_nul.act"
+          (returnCode, cmdOut, cmdErr) <- runThing "" "../../test/rts/stdout_write_nul.act"
+          assertEqual "stdout_write NUL retCode" ExitSuccess returnCode
+          assertEqual "stdout_write NUL output" "a\0b\n" cmdOut
   ,   testCase "wake workers for timers, calls and bursts" $ do
           testBuildThing "" ExitSuccess False "../../test/rts/wake_stress.act"
           forM_ ["1", "2", "8"] $ \n -> do
