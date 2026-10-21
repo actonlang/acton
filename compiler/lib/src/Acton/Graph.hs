@@ -2,7 +2,7 @@
 -- cycles, and the nodes on paths between two sets of nodes.
 module Acton.Graph
   ( Graph, nodes, graph, depsOf, usersOf
-  , closure, dependents, strictDependents, cycles, pathsTo, affectedBy
+  , preorder, closure, dependents, strictDependents, cycles, pathsTo, affectedBy
   ) where
 
 import qualified Data.Map as M
@@ -30,13 +30,18 @@ depsOf, usersOf                         :: Ord k => Graph k -> k -> [k]
 depsOf g k                              = M.findWithDefault [] k (dependencies g)
 usersOf g k                             = M.findWithDefault [] k (users g)
 
--- | Every node reachable from the start nodes by `next`, start nodes included.
-closure                                 :: Ord k => (k -> [k]) -> [k] -> Set.Set k
-closure next                            = go Set.empty
-  where go seen []                      = seen
+-- | Every node reachable from the start nodes by `next`, start nodes
+-- included, each once, in depth-first preorder.
+preorder                                :: Ord k => (k -> [k]) -> [k] -> [k]
+preorder next                           = go Set.empty
+  where go _ []                         = []
         go seen (k : ks)
           | Set.member k seen           = go seen ks
-          | otherwise                   = go (Set.insert k seen) (next k ++ ks)
+          | otherwise                   = k : go (Set.insert k seen) (next k ++ ks)
+
+-- | Every node reachable from the start nodes by `next`, start nodes included.
+closure                                 :: Ord k => (k -> [k]) -> [k] -> Set.Set k
+closure next                            = Set.fromList . preorder next
 
 -- | The start nodes and everything that depends on them, directly or not.
 dependents                              :: Ord k => Graph k -> [k] -> Set.Set k

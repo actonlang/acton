@@ -1209,6 +1209,10 @@ main = do
         map (Graph.depsOf diamond) [1, 3, 4, 9] `shouldBe` [[2, 3], [4], [], []]
         sort (Graph.usersOf diamond 4) `shouldBe` [2, 3]
         map (Graph.usersOf diamond) [1, 9] `shouldBe` [[], []]
+      it "lists the reachable nodes once each in depth-first preorder" $ do
+        Graph.preorder (Graph.depsOf diamond) [1] `shouldBe` [1, 2, 4, 3]
+        Graph.preorder (Graph.depsOf diamond) [3, 1] `shouldBe` [3, 4, 1, 2]
+        Graph.preorder (Graph.depsOf cyclic) [3] `shouldBe` [3, 4, 2, 5]
       it "closes over a step function, start nodes included" $ do
         Graph.closure (Graph.depsOf diamond) [2] `shouldBe` Set.fromList [2, 4]
         Graph.closure (Graph.depsOf cyclic) [3] `shouldBe` Set.fromList [2, 3, 4, 5]

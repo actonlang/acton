@@ -68,6 +68,7 @@ import qualified Acton.BuildSpec as BuildSpec
 import qualified Acton.CodeGen
 import qualified Acton.CommandLineParser as C
 import qualified Acton.Fingerprint as Fingerprint
+import Acton.Graph (preorder)
 import qualified Acton.Syntax as A
 import Acton.Syntax (modNameToString)
 import qualified InterfaceFiles
@@ -77,7 +78,7 @@ import Control.Exception (Exception, IOException, catch, finally, throwIO, try)
 import Control.Monad
 import Data.Bits (shiftL, shiftR, (.|.))
 import Data.Char (isAlpha, isDigit)
-import Data.List (foldl', intercalate, isPrefixOf)
+import Data.List (intercalate, isPrefixOf)
 import Data.Maybe (isJust)
 import qualified Data.Map as M
 import qualified Data.Set
@@ -845,27 +846,12 @@ collectDepTypePaths projDir overrides = do
               (seenNext, fpMapNext, sub) <- go seen' fpMap' depPath depSpec
               return (seenNext, fpMapNext, acc ++ [typesDir] ++ sub)
 
--- | Collect dependency type directories using an existing ProjCtx map.
--- Traverses dependency edges so downstream lookups can build search paths.
+-- | The types directories of the projects 'root' depends on, directly or
+-- not, each once, in depth-first preorder of projDeps.  Dependencies
+-- missing from the map are skipped.
 depTypePathsFromMap :: M.Map FilePath ProjCtx -> FilePath -> [FilePath]
-depTypePathsFromMap ctxs root = snd (go Data.Set.empty root)
-  where
-    go seen node =
-      case M.lookup node ctxs of
-        Nothing  -> (seen, [])
-        Just ctx ->
-          foldl' step (Data.Set.insert node seen, []) (projDeps ctx)
-
-    step (seen, acc) (_, depRoot) =
-      case M.lookup depRoot ctxs of
-        Nothing -> (Data.Set.insert depRoot seen, acc)
-        Just depCtx ->
-          if Data.Set.member depRoot seen
-            then (seen, acc)
-            else
-              let seen' = Data.Set.insert depRoot seen
-                  (seenNext, sub) = go seen' depRoot
-              in (seenNext, acc ++ [projTypesDir depCtx] ++ sub)
+depTypePathsFromMap ctxs root = [ projTypesDir ctx | dep <- drop 1 (preorder dependencyRoots [root]), Just ctx <- [M.lookup dep ctxs] ]
+  where dependencyRoots project = maybe [] (map snd . projDeps) (M.lookup project ctxs)
 
 
 -- Locks --------------------------------------------------------------------------------------------
