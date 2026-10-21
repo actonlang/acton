@@ -208,9 +208,6 @@ optimizeModeToZig C.ReleaseSafe  = "safe"
 optimizeModeToZig C.ReleaseSmall = "small"
 optimizeModeToZig C.ReleaseFast  = "fast"
 
-zig :: Paths -> FilePath
-zig paths = sysPath paths ++ "/zig/zig"
-
 
 -- Try to acquire a lock, return Nothing if failed, Just (FileLock, FilePath) if succeeded
 tryLock :: FilePath -> IO (Maybe (FileLock, FilePath))
@@ -567,7 +564,7 @@ ignoreNotExists _ = return ()
 actonCacheDir :: IO FilePath
 actonCacheDir = do
     home <- getHomeDirectory
-    let basePath = joinPath [home, ".cache", "acton"]
+    let basePath = actonCacheRoot home
     createDirectoryIfMissing True basePath
     return basePath
 
@@ -2314,7 +2311,7 @@ runZig gopts opts zigExe zigArgs paths wd mProgressUI = do
               takeMVar doneVar
         return (Just ("ZIG_PROGRESS", envVal), onStart', onStop', False)
     homeDir <- getHomeDirectory
-    let zigEnv = [ ("ZIG_LOCAL_CACHE_DIR", joinPath [homeDir, ".cache", "acton", "zig-local-cache"])
+    let zigEnv = [ ("ZIG_LOCAL_CACHE_DIR", zigLocalCacheDir homeDir)
                  , ("ZIG_GLOBAL_CACHE_DIR", zigGlobalCacheDir homeDir)
                  ]
         envWithZigCache = foldr (\(k, v) acc -> (k, v) : filter ((/= k) . fst) acc) env0 zigEnv
@@ -2685,7 +2682,7 @@ zigBuild env gopts opts paths rootSpec rootModules binTasks allowPrune moduleSou
     iff (not (isSysProject sysAbs projAbs)) $
       genBuildZigFiles rootSpec paths depModuleOpts depPathOverrides
 
-    let zigExe = zig paths
+    let zigExe = zigExecutable (sysPath paths)
         buildFile = zigBuildDir sysAbs projAbs </> "build.zig"
         baseArgs = ["build","--build-file", buildFile] ++
                    (if (C.verboseZig gopts) then ["--verbose"] else []) ++

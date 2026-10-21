@@ -12,6 +12,7 @@ module Acton.Project
   , projectSrcDir
   , projectBuildAct
   , systemTypePaths
+  , zigExecutable
   , moduleTypesDir
   , findProjectDir
   , isSpecialProject
@@ -51,9 +52,11 @@ module Acton.Project
   , localZigPath
   , dependencyPathError
   , resolveDepBase
+  , actonCacheRoot
   , depCacheDir
   , depCacheEntry
   , zigGlobalCacheDir
+  , zigLocalCacheDir
   , existingDependencyDir
   , discoverProjects
   , BackgroundCompilerLock
@@ -143,6 +146,10 @@ sysTypesDir sys = projectTypesDir (joinPath [sys, "base"])
 -- library's, then the base library's.
 systemTypePaths :: FilePath -> [FilePath]
 systemTypePaths sys = [projectTypesDir (joinPath [sys, "std"]), sysTypesDir sys]
+
+-- | The zig executable bundled in the system directory 'sys'.
+zigExecutable :: FilePath -> FilePath
+zigExecutable sys = joinPath [sys, "zig", "zig"]
 
 -- | Compute the subdirectory for a module within a types root.
 -- Used when creating directories before writing .tydb files.
@@ -715,10 +722,14 @@ resolveDepBase base name dep =
                    return selected
              Nothing -> throwProjectError ("Dependency " ++ name ++ " has no path or hash")
 
+-- | Acton's cache directory under the home directory 'home'.
+actonCacheRoot :: FilePath -> FilePath
+actonCacheRoot home = joinPath [home, ".cache", "acton"]
+
 -- | The directory under the home directory 'home' that holds the Acton
 -- packages fetched by hash, each in its own 'depCacheEntry'.
 depCacheDir :: FilePath -> FilePath
-depCacheDir home = joinPath [home, ".cache", "acton", "deps"]
+depCacheDir home = joinPath [actonCacheRoot home, "deps"]
 
 -- | The directory in the dependency cache 'cache' that holds the package
 -- 'name' fetched with hash 'hash'.
@@ -728,7 +739,12 @@ depCacheEntry cache name hash = joinPath [cache, name ++ "-" ++ hash]
 -- | The Zig global cache under the home directory 'home', which holds the
 -- fetched package archives of Acton and Zig dependencies.
 zigGlobalCacheDir :: FilePath -> FilePath
-zigGlobalCacheDir home = joinPath [home, ".cache", "acton", "zig-global-cache"]
+zigGlobalCacheDir home = joinPath [actonCacheRoot home, "zig-global-cache"]
+
+-- | The Zig local cache under the home directory 'home', which the zig
+-- builds of every project share.
+zigLocalCacheDir :: FilePath -> FilePath
+zigLocalCacheDir home = joinPath [actonCacheRoot home, "zig-local-cache"]
 
 -- | The directory that 'resolveDepBase' gives the dependency 'name' declared
 -- as 'dep' by the project at 'base', when that directory exists. A missing

@@ -11,7 +11,8 @@ import qualified Acton.CommandLineParser as C
 import Acton.ArchiveDownload (downloadArchive)
 import Acton.HttpFetch (isHttpUrl, proxyEnvReportLines, readProxyEnv)
 import Acton.Project ( Paths(..), RootPins, depCacheDir, depCacheEntry, existingDependencyDir, loadOverriddenSpec, localPath
-                     , localZigPath, normalizePathSafe, rootPins, selectDepAndWarn, throwProjectError, zigGlobalCacheDir )
+                     , localZigPath, normalizePathSafe, rootPins, selectDepAndWarn, throwProjectError, zigExecutable
+                     , zigGlobalCacheDir )
 import Acton.ZigFetch (fetchZigPackage)
 import qualified Acton.Zon as Zon
 
@@ -47,7 +48,7 @@ fetchDependencies gopts paths depOverrides =
       let env = FetchEnv { options     = gopts
                          , overrides   = depOverrides
                          , pins        = rootPins (projPath paths) rootSpec
-                         , zigExe      = joinPath [sysPath paths, "zig", "zig"]
+                         , zigExe      = zigExecutable (sysPath paths)
                          , globalCache = zigGlobalCacheDir home
                          , depsCache   = depCacheDir home
                          , seeded      = seededSet
