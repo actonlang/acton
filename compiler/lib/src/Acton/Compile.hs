@@ -1986,12 +1986,14 @@ adjustImports providers m = m { A.imps = map adjust (A.imps m) }
 quiet :: C.GlobalOptions -> C.CompileOptions -> Bool
 quiet gopts opts = C.quiet gopts || C.altOutput opts
 
--- | Snapshot of expected/recorded impl hashes for generated code.
+-- | The hash a module's generated code should be tagged with, in hex, and
+-- the tags its .c, .h and closure support file carry, Nothing for a file that
+-- cannot be read or is not tagged.
 data CodegenStatus = CodegenStatus
   { csExpected :: String
-  , csC :: Maybe String
-  , csH :: Maybe String
-  , csSupport :: Maybe String
+  , csC        :: Maybe String
+  , csH        :: Maybe String
+  , csSupport  :: Maybe String
   }
 
 -- | A hash in lowercase hex, as generated code is tagged with it.
@@ -2002,36 +2004,20 @@ hashHex                                 = B.unpack . Base16.encode
 shortHash                               :: B.ByteString -> String
 shortHash                               = take 8 . hashHex
 
--- | Parse a tagged hash line from generated output.
-extractCodegenHash :: String -> Maybe String
-extractCodegenHash line = do
-  rest <- Data.List.stripPrefix Acton.CodeGen.implHashTag line
-  let rest' = dropWhile isSpace rest
-      hex = takeWhile isHexDigit rest'
-  if null hex then Nothing else Just hex
-
--- | Read the tagged hash from a generated file, if present.
+-- | The hash tagged into a generated file's first line, when the file can
+-- be read and its first line is tagged.
 readCodegenHash :: FilePath -> IO (Maybe String)
-readCodegenHash path = do
-  exists <- doesFileExist path
-  if not exists
-    then return Nothing
-    else do
-      res <- trySync (withFile path ReadMode hGetLine)
-      case res of
-        Left _ -> return Nothing
-        Right line -> return (extractCodegenHash line)
+readCodegenHash path = either (const Nothing) taggedHash <$> trySync (withFile path ReadMode hGetLine)
+  where taggedHash line = do rest <- Data.List.stripPrefix Acton.CodeGen.implHashTag line
+                             case takeWhile isHexDigit (dropWhile isSpace rest) of
+                               ""  -> Nothing
+                               hex -> Just hex
 
--- | Collect codegen hash status for a module.
+-- | A module's generated code, given the hash it should be tagged with: the
+-- .c is read first, then the .h, then the closure support file.
 codegenStatus :: Paths -> A.ModName -> B.ByteString -> IO CodegenStatus
-codegenStatus paths mn implHash = do
-  let expected = hashHex implHash
-      cFile = outBase paths mn ++ ".c"
-      hFile = outBase paths mn ++ ".h"
-  cHash <- readCodegenHash cFile
-  hHash <- readCodegenHash hFile
-  supportHash <- readCodegenHash (Acton.CodeGen.supportFile (outBase paths mn))
-  return CodegenStatus { csExpected = expected, csC = cHash, csH = hHash, csSupport = supportHash }
+codegenStatus paths mn expected = CodegenStatus (hashHex expected) <$> readCodegenHash (base ++ ".c") <*> readCodegenHash (base ++ ".h") <*> readCodegenHash (Acton.CodeGen.supportFile base)
+  where base = outBase paths mn
 
 -- | Check every generated artifact against the expected impl hash.
 codegenUpToDate :: CodegenStatus -> Bool
