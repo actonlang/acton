@@ -1525,9 +1525,8 @@ compileFilesChanged sp gopts opts srcFiles scope mChangedPaths mWatch = do
                     opts' = ccOpts cctx
                     watchMode = C.watch opts'
                 cliHooks <- initCliCompileHooks progressUI progressState gopts gen plan
-                let clearProgress = whenCurrent gen (cchClearProgress cliHooks)
-                    finalizeCompile onError = do
-                      clearProgress
+                let finalizeCompile onError = do
+                      cleanupProgress
                       onError
                       return True
                     reportCompileError msg =
@@ -1555,7 +1554,7 @@ compileFilesChanged sp gopts opts srcFiles scope mChangedPaths mWatch = do
                         if hadErrors
                           then reportCompileErrors
                           else do
-                            clearProgress
+                            cleanupProgress
                             result <- newIORef False
                             whenCurrent gen $ do
                               success <- runCliPostCompile cliHooks gopts plan env
@@ -1589,7 +1588,6 @@ overlayChangedPaths sp mPaths = do
 data CliCompileHooks = CliCompileHooks
   { cchOnEvent :: BuildEvent -> IO ()
   , cchLogLine :: String -> IO ()
-  , cchClearProgress :: IO ()
   , cchFinalStart :: IO ()
   , cchFinalDone :: Bool -> IO ()
   , cchProgressUI :: ProgressUI
@@ -2092,7 +2090,6 @@ initCliCompileHooks progressUI progressState gopts gen plan = do
     return CliCompileHooks
       { cchOnEvent = onEvent
       , cchLogLine = logLine
-      , cchClearProgress = progressReset progressUI progressState
       , cchFinalStart = onFinalStart
       , cchFinalDone = onFinalDone
       , cchProgressUI = progressUI
