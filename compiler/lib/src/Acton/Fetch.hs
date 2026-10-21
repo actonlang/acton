@@ -99,9 +99,9 @@ walkProject env dir spec = do
           (,) name <$> selectDepAndWarn (options env) (pins env) dir name dep
         let zigDeps = M.toList (BuildSpec.zig_dependencies spec)
             fetches = catMaybes $
-                 [ dependencyFetch env Package    name (localPath dep)    (BuildSpec.url dep)  (BuildSpec.hash dep)
+                 [ dependencyFetch env ActonPackage name (localPath dep)    (BuildSpec.url dep)  (BuildSpec.hash dep)
                  | (name, dep) <- selectedDeps ]
-              ++ [ dependencyFetch env ZigPackage name (localZigPath dep) (BuildSpec.zurl dep) (BuildSpec.zhash dep)
+              ++ [ dependencyFetch env ZigPackage   name (localZigPath dep) (BuildSpec.zurl dep) (BuildSpec.zhash dep)
                  | (name, dep) <- zigDeps ]
         errs <- lefts <$> mapConcurrently id fetches
         unless (null errs) $ throwProjectError (unlines errs)
@@ -134,25 +134,25 @@ walkDependency env base (name, dep) =
 
 -- | The two kinds of dependency a project fetches by url and hash. Both are
 -- fetched into the Zig global cache.
-data PackageKind = Package | ZigPackage
+data PackageKind = ActonPackage | ZigPackage
 
 -- | The kind's name in fetch messages.
 kindName :: PackageKind -> String
-kindName Package    = "pkg"
-kindName ZigPackage = "zig"
+kindName ActonPackage = "pkg"
+kindName ZigPackage   = "zig"
 
 -- | The error for the dependency 'name' that has a url but no hash.
 missingHash :: PackageKind -> String -> String
-missingHash Package    name = "Dependency " ++ name ++ " is missing hash"
-missingHash ZigPackage name = "Zig dependency " ++ name ++ " is missing hash"
+missingHash ActonPackage name = "Dependency " ++ name ++ " is missing hash"
+missingHash ZigPackage   name = "Zig dependency " ++ name ++ " is missing hash"
 
 -- | Whether the Zig global cache holds the package of hash 'h'. A Zig
 -- package counts as cached only as an archive, the form zig's build reads.
 -- An Acton package also counts as cached when it is extracted, because it
 -- is copied into the dependency cache in either form.
 isCached :: FetchEnv -> PackageKind -> String -> IO Bool
-isCached env ZigPackage h = doesFileExist (cachedArchive env h)
-isCached env Package    h = do
+isCached env ZigPackage   h = doesFileExist (cachedArchive env h)
+isCached env ActonPackage h = do
     archived <- doesFileExist (cachedArchive env h)
     if archived then return True else doesDirectoryExist (cachedPackage env h)
 
@@ -162,8 +162,8 @@ isCached env Package    h = do
 -- offline. An extracted Acton package counts as cached, so an Acton package
 -- is always fetched from its 'url'.
 fetchSource :: FetchEnv -> PackageKind -> String -> String -> IO String
-fetchSource _   Package    url _ = return url
-fetchSource env ZigPackage url h = do
+fetchSource _   ActonPackage url _ = return url
+fetchSource env ZigPackage   url h = do
     extracted <- doesDirectoryExist (cachedPackage env h)
     return (if extracted then cachedPackage env h else url)
 
