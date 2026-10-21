@@ -4,24 +4,20 @@
 module Acton.ZigFetch(fetchZigPackage) where
 
 import qualified Acton.Zon as Zon
-import Control.Exception (SomeAsyncException, SomeException, displayException, fromException, throwIO, try)
+import Control.Exception (displayException)
 import System.Directory (createDirectoryIfMissing)
 import System.Environment (getEnvironment)
 import System.Exit (ExitCode(..))
 import System.FilePath ((</>))
 import System.IO.Temp (withSystemTempDirectory)
 import System.Process (CreateProcess(cwd, env), proc, readCreateProcessWithExitCode)
+import Utils (trySync)
 
 -- | Return the fetched package hash. Local package storage is scoped to the
 --   temporary project; only the compressed global cache entry is retained.
 fetchZigPackage :: FilePath -> FilePath -> FilePath -> IO (Either String String)
-fetchZigPackage zigExe globalCache target = do
-    res <- try fetch :: IO (Either SomeException (Either String String))
-    case res of
-      Left err
-        | Just _ <- (fromException err :: Maybe SomeAsyncException) -> throwIO err
-        | otherwise -> return (Left (displayException err))
-      Right result -> return result
+fetchZigPackage zigExe globalCache target =
+    either (Left . displayException) id <$> trySync fetch
   where
     fetch = do
       createDirectoryIfMissing True (globalCache </> "tmp")

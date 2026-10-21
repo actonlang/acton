@@ -218,8 +218,9 @@ trySync m                       = do r <- Control.Exception.try m
                                        Left err | isAsyncException err -> Control.Exception.throwIO err
                                        _ -> return r
 
--- | True for an exception thrown to a thread by another thread, such as a
--- cancel. A handler that catches every exception must rethrow these.
+-- | True when the exception's type is under SomeAsyncException, such as the
+-- AsyncCancelled that cancel throws, ThreadKilled or UserInterrupt. A
+-- handler that catches every exception must rethrow these.
 isAsyncException                :: Control.Exception.SomeException -> Bool
 isAsyncException err            = isJust (Control.Exception.fromException err :: Maybe Control.Exception.SomeAsyncException)
 
