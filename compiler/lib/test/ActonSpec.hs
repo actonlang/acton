@@ -1251,10 +1251,7 @@ main = do
               , providers <- subsequences keys
               , changed <- filter (not . null) (subsequences keys)
               , let isProvider = (`elem` providers)
-                    affected   = Graph.dependents g changed
-                    onPaths    = Graph.pathsTo g isProvider (Set.toList affected)
-                    selected   = Set.unions [affected, onPaths, Graph.dependents g (filter isProvider (Set.toList onPaths))]
-              , selected /= searchedSelection adjacency isProvider changed
+              , Graph.affectedBy g isProvider changed /= searchedSelection adjacency isProvider changed
               ]
         mismatches `shouldBe` []
 

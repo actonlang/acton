@@ -1826,15 +1826,9 @@ selectAffected ctx g blocked files
       sources <- M.fromList <$> forM (graphTasks g) (\t -> (\path -> (path, gtKey t)) <$> normalizePathSafe (taskSourceFile t))
       return $ case mapMaybe (`M.lookup` sources) edited of
         []      -> everything
-        changed -> affectedBy changed
+        changed -> affectedBy (graphImports g) isDbpProvider changed
   where
     everything = M.keysSet (graphIndex g)
-    imports    = graphImports g
-    affectedBy changed = Data.Set.unions [affected, onPaths, dependents imports providers]
-      where affected  = dependents imports changed
-            onPaths   = pathsTo imports isDbpProvider (Data.Set.toList affected)
-            providers = filter isDbpProvider (Data.Set.toList onPaths)
-
     isDbpProvider k =
       case gtTask t of
         TyTask _ -> deferrable (optionsFor ctx k) (Data.Set.member k blocked) False k

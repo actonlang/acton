@@ -2,7 +2,7 @@
 -- cycles, and the nodes on paths between two sets of nodes.
 module Acton.Graph
   ( Graph, nodes, graph, depsOf, usersOf
-  , closure, dependents, strictDependents, cycles, pathsTo
+  , closure, dependents, strictDependents, cycles, pathsTo, affectedBy
   ) where
 
 import qualified Data.Map as M
@@ -54,3 +54,10 @@ cycles g                                = [ ks | CyclicSCC ks <- stronglyConnCom
 -- from a start node, start nodes included, and leading to a target.  Safe on cycles.
 pathsTo                                 :: Ord k => Graph k -> (k -> Bool) -> [k] -> Set.Set k
 pathsTo g isTarget start                = closure (depsOf g) start `Set.intersection` dependents g (filter isTarget (nodes g))
+
+-- | The start nodes and their dependents, the nodes on paths from those to a
+-- target, and the dependents of the targets on those paths.
+affectedBy                              :: Ord k => Graph k -> (k -> Bool) -> [k] -> Set.Set k
+affectedBy g isTarget start             = Set.unions [affected, onPaths, dependents g (filter isTarget (Set.toList onPaths))]
+  where affected                        = dependents g start
+        onPaths                         = pathsTo g isTarget (Set.toList affected)
