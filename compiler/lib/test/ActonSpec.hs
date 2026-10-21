@@ -2994,6 +2994,7 @@ main = do
       testCps env0 ["cps_volatiles"]
       testCps env0 ["cps_optchain"]
       testCps env0 ["cps_nested_try"]
+      testCps env0 ["cps_forwarding"]
 
     describe "Pass 7: Lambda Lifting" $ do
       testLL env0 ["deact"]
@@ -3187,6 +3188,16 @@ main = do
         , "B_SetD_bitsetD_discard"
         ]
       testCodeGenContains env0 "local_shadows_function" ["B_str boom;", "return boom;"]
+      testCodeGenContains env0 "identity_lambda"
+        [ "return x;"
+        , "toB_int("
+        , "toB_float("
+        ]
+      testCodeGenDoesNotContain env0 "identity_lambda"
+        [ "toB_int(((B_int)x)->val)"
+        , "toB_float(((B_float)x)->val)"
+        , "toB_i8(((B_i8)x)->val)"
+        ]
 
     describe "Test run context" $ do
       let legacy = Ae.object

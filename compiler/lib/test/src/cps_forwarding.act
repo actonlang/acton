@@ -1,0 +1,57 @@
+proc def step(value: int) -> int:
+    return value + 1
+
+# A loop exit forwards the latest loop-carried value.
+proc def loop_value(limit: int) -> int:
+    value = 0
+    while value < limit:
+        value = step(value)
+        if value == 3:
+            break
+    return value
+
+# Both branch exits forward their own binding of the same local.
+proc def branch_value(flag: bool) -> int:
+    if flag:
+        value = step(0)
+    else:
+        value = 7
+    return value
+
+# Calls still need a continuation, even when their result is ignored.
+proc def wait_then_return(value: int) -> int:
+    step(value)
+    return value
+
+class Box(object):
+    @property
+    value: int
+    def __init__(self, value: int):
+        self.value = value
+
+# Property reads and calls must remain after the loop.
+proc def property_after_loop(box: Box, limit: int) -> int:
+    value = 0
+    while value < limit:
+        value = step(value)
+    return box.value
+
+def finish(value: int, out: list[int]) -> int:
+    out.append(value)
+    return value
+
+proc def call_after_loop(limit: int, out: list[int]) -> int:
+    value = 0
+    while value < limit:
+        value = step(value)
+    return finish(value, out)
+
+# Returning through a finally clause must retain its cleanup.
+proc def cleanup(limit: int, out: list[int]) -> int:
+    value = 0
+    try:
+        while value < limit:
+            value = step(value)
+        return value
+    finally:
+        out.append(99)

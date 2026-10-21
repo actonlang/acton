@@ -42,7 +42,7 @@ proc def discard_last (C_cont : proc(None) -> $R, f : proc(proc(__builtin__.floa
     if flag:
         return f($SKIPRESc@[__builtin__.float](C_7cont), x)
     else:
-        return $R_CONTc@[None](C_7cont, None)
+        return $R_CONTc@[None](C_cont, None)
 
 proc def discard_live (C_cont : proc(__builtin__.int) -> $R, f : proc(proc(__builtin__.float) -> $R, __builtin__.int) -> $R, x : __builtin__.int, flag : __builtin__.bool) -> $R:
     W_discard_live_4: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
@@ -53,7 +53,7 @@ proc def discard_live (C_cont : proc(__builtin__.int) -> $R, f : proc(proc(__bui
         return f($SKIPRESc@[__builtin__.float](proc lambda (G_skip : None): C_9cont(G_skip, z)), x)
     else:
         z: __builtin__.int = W_discard_live_4.__fromatom__(2)
-        return $R_CONTc@[None](proc lambda (G_skip : None): C_9cont(G_skip, z), None)
+        return $R_CONTc@[__builtin__.int](C_cont, z)
 
 proc def discard_bang (C_cont : proc(None) -> $R, f : ?proc(proc(__builtin__.float) -> $R, __builtin__.int) -> $R, x : __builtin__.int) -> $R:
     V_discard_bang_7: ?proc(proc(__builtin__.float) -> $R, __builtin__.int) -> $R = f
@@ -63,7 +63,7 @@ proc def discard_bang (C_cont : proc(None) -> $R, f : ?proc(proc(__builtin__.flo
         return $CAST@[?proc(proc(__builtin__.float) -> $R, __builtin__.int) -> $R, proc(proc(__builtin__.float) -> $R, __builtin__.int) -> $R](V_discard_bang_7)($SKIPRESc@[__builtin__.float](C_11cont), x)
     else:
         $raiseValueError@[__builtin__.float]("\"Forced unwrapping applied to None\"")
-        return $R_CONTc@[None](C_11cont, None)
+        return $R_CONTc@[None](C_cont, None)
 
 proc def discard_cond (C_cont : proc(None) -> $R, f : proc(proc(__builtin__.float) -> $R, __builtin__.int) -> $R, x : __builtin__.int, flag : __builtin__.bool) -> $R:
     W_discard_cond_9: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
@@ -81,4 +81,4 @@ proc def discard_none (C_cont : proc(None) -> $R, g : proc(proc(None) -> $R, __b
     if flag:
         return g($SKIPRESc@[None](C_15cont), x)
     else:
-        return $R_CONTc@[None](C_15cont, None)
+        return $R_CONTc@[None](C_cont, None)

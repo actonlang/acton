@@ -1,0 +1,105 @@
+proc def step (value : __builtin__.int) -> __builtin__.int:
+    W_step_5: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+    W_step_7: __builtin__.Plus[__builtin__.int] = __builtin__.IntegralD_int()
+    N_tmp: __builtin__.int = W_step_7.__add__(value, W_step_5.__fromatom__(1))
+    return N_tmp
+
+W_loop_value_17: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+W_loop_value_19: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
+
+W_loop_value_9: __builtin__.Ord[__builtin__.int] = __builtin__.OrdD_int()
+
+proc def loop_value (limit : __builtin__.int) -> __builtin__.int:
+    value: __builtin__.int = W_loop_value_17.__fromatom__(0)
+    while True:
+        if W_loop_value_9.__lt__(value, limit):
+            pass
+        else:
+            break
+        value = step(value)
+        if W_loop_value_19.__eq__(value, W_loop_value_17.__fromatom__(3)):
+            break
+    return value
+
+proc def branch_value (flag : __builtin__.bool) -> __builtin__.int:
+    W_branch_value_10: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+    if flag:
+        value: __builtin__.int = step(W_branch_value_10.__fromatom__(0))
+    else:
+        value: __builtin__.int = W_branch_value_10.__fromatom__(7)
+    return value
+
+proc def wait_then_return (value : __builtin__.int) -> __builtin__.int:
+    step(value)
+    return value
+
+class Box (__builtin__.object, __builtin__.value):
+    pure def __get_attr__ (self : Self, name : __builtin__.str) -> ?__builtin__.value:
+        return None
+    pure def G_init (self : Self) -> None:
+        pass
+        return None
+    @property
+    value : __builtin__.int
+    pure def __init__ (self : Self, value : __builtin__.int) -> None:
+        self.value = value
+        return None
+
+W_property_after_loop_4: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+W_property_after_loop_9: __builtin__.Ord[__builtin__.int] = __builtin__.OrdD_int()
+
+proc def property_after_loop (box : Box, limit : __builtin__.int) -> __builtin__.int:
+    value: __builtin__.int = W_property_after_loop_4.__fromatom__(0)
+    while True:
+        if W_property_after_loop_9.__lt__(value, limit):
+            pass
+        else:
+            break
+        value = step(value)
+    return box.value
+
+mut def finish (value : __builtin__.int, out : __builtin__.list[__builtin__.int]) -> __builtin__.int:
+    W_finish_8: __builtin__.Sequence[__builtin__.list[__builtin__.int], __builtin__.int] = __builtin__.SequenceD_list@[__builtin__.int]()
+    W_finish_8.append(out, value)
+    return value
+
+W_call_after_loop_4: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+W_call_after_loop_9: __builtin__.Ord[__builtin__.int] = __builtin__.OrdD_int()
+
+proc def call_after_loop (limit : __builtin__.int, out : __builtin__.list[__builtin__.int]) -> __builtin__.int:
+    value: __builtin__.int = W_call_after_loop_4.__fromatom__(0)
+    while True:
+        if W_call_after_loop_9.__lt__(value, limit):
+            pass
+        else:
+            break
+        value = step(value)
+    N_1tmp: __builtin__.int = finish(value, out)
+    return N_1tmp
+
+W_cleanup_4: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+W_cleanup_9: __builtin__.Ord[__builtin__.int] = __builtin__.OrdD_int()
+
+proc def cleanup (limit : __builtin__.int, out : __builtin__.list[__builtin__.int]) -> __builtin__.int:
+    W_cleanup_24: __builtin__.Sequence[__builtin__.list[__builtin__.int], __builtin__.int] = __builtin__.SequenceD_list@[__builtin__.int]()
+    value: __builtin__.int = W_cleanup_4.__fromatom__(0)
+    if $PUSHF():
+        while True:
+            if W_cleanup_9.__lt__(value, limit):
+                pass
+            else:
+                break
+            value = step(value)
+        $RAISE($RET(value))
+    else:
+        N_2xx: __builtin__.BaseException = $POP()
+        W_cleanup_24.append(out, W_cleanup_4.__fromatom__(99))
+        if isinstance(N_2xx, $RET):
+            N_2xxG_RET: $RET = $CAST@[__builtin__.BaseException, $RET](N_2xx)
+            return $CAST@[__builtin__.value, __builtin__.int](N_2xxG_RET.val)
+        else:
+            $RAISE(N_2xx)

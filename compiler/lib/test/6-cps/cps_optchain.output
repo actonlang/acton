@@ -16,7 +16,7 @@ proc def maybe_log (C_cont : proc(None) -> $R, c : ?Cls) -> $R:
         return $CAST@[?Cls, Cls](V_maybe_log_9).f($SKIPRESc@[None](C_1cont), "\"boom\"")
     else:
         None
-        return $R_CONTc@[None](C_1cont, None)
+        return $R_CONTc@[None](C_cont, None)
 
 # recursive group:
 class Logger ($Actor, __builtin__.value):

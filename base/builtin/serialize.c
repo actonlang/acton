@@ -168,6 +168,41 @@ $WORD $val_deserialize($Serial$state state) {
     return res;
 }
 
+// Shared closure field codecs //////////////////////////////////////////////////////////
+
+void $closure_serialize($WORD self, const struct $ClosureLayout *layout, $Serial$state state) {
+    for (size_t i = 0; i < layout->field_count; i++) {
+        const struct $ClosureField *field = &layout->fields[i];
+        const char *address = (const char *)self + field->offset;
+        $WORD value = NULL;
+        // Narrow captures must not read past their field or the closure object.
+        memcpy(&value, address, field->size);
+        if (field->class_id == $CLOSURE_REF)
+            $step_serialize(value, state);
+        else
+            $val_serialize(field->class_id, &value, state);
+    }
+}
+
+$WORD $closure_deserialize($WORD self, const struct $ClosureLayout *layout, $Serial$state state) {
+    if (!self) {
+        self = acton_malloc(layout->size);
+        (($Serializable)self)->$class = layout->methods;
+        if (!state)
+            return self; // allocation-only phase, also used during recovery
+        // Register before restoring captures: they may lead back to this object.
+        B_dictD_setitem(state->done, (B_Hashable)B_HashableD_intG_witness,
+                       toB_int(state->row_no - 1), self);
+    }
+    for (size_t i = 0; i < layout->field_count; i++) {
+        const struct $ClosureField *field = &layout->fields[i];
+        $WORD value = field->class_id == $CLOSURE_REF
+            ? $step_deserialize(state) : $val_deserialize(state);
+        memcpy((char *)self + field->offset, &value, field->size);
+    }
+    return self;
+}
+
 // Serialization methods ///////////////////////////////////////////////////////////////////////////////
 
 void $write_serialized($ROW row, char *file) {

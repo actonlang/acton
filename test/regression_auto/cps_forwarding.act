@@ -1,0 +1,133 @@
+# Forwarding continuations must preserve loop-carried values, suspension,
+# effects and exception frames. Deep recursion also checks RTS trampolining.
+actor Counter():
+    var value = 0
+    def step() -> int:
+        value += 1
+        return value
+
+proc def walk(source: action() -> int, limit: int, break_at: int) -> int:
+    value = 0
+    while value < limit:
+        value = await async source()
+        if value == break_at:
+            break
+        if value % 2 == 0:
+            continue
+    return value
+
+proc def nested(source: action() -> int) -> int:
+    outer = 0
+    total = 0
+    while outer < 3:
+        inner = 0
+        while inner < 2:
+            total += await async source()
+            inner += 1
+        outer += 1
+    return total
+
+proc def branch(source: action() -> int, flag: bool) -> int:
+    if flag:
+        value = await async source()
+    else:
+        value = 7
+    return value
+
+proc def keep[A](source: action() -> int, token: A) -> A:
+    value = 0
+    while value < 3:
+        value = await async source()
+    return token
+
+class Box(object):
+    @property
+    value: int
+    def __init__(self):
+        self.value = 0
+
+proc def property_after_loop(source: action() -> int, box: Box) -> int:
+    value = 0
+    while value < 3:
+        value = await async source()
+        box.value = value
+    return box.value
+
+def finish(value: int, trail: list[int]) -> int:
+    trail.append(value)
+    return value
+
+proc def call_after_loop(source: action() -> int, trail: list[int]) -> int:
+    value = 0
+    while value < 3:
+        value = await async source()
+    return finish(value, trail)
+
+proc def cleanup(source: action() -> int, trail: list[int]) -> int:
+    value = 0
+    try:
+        while value < 3:
+            value = await async source()
+        return value
+    finally:
+        trail.append(99)
+
+proc def caught(source: action() -> int, trail: list[int]) -> int:
+    value = 0
+    try:
+        while True:
+            value = await async source()
+            if value == 3:
+                raise ValueError("done")
+    except ValueError:
+        trail.append(value)
+    finally:
+        trail.append(99)
+    return value
+
+proc def descend(n: int, source: action() -> int) -> None:
+    done = None
+    if n > 0:
+        await async source()
+        descend(n - 1, source)
+    return done
+
+actor main(env):
+    empty = Counter()
+    assert walk(empty.step, 0, -1) == 0
+    assert await async empty.step() == 1
+    counter = Counter()
+    assert walk(counter.step, 20, 5) == 5
+    assert walk(counter.step, 10, -1) == 10
+    assert await async counter.step() == 11
+    nested_counter = Counter()
+    assert nested(nested_counter.step) == 21
+    branch_counter = Counter()
+    assert branch(branch_counter.step, False) == 7
+    assert branch(branch_counter.step, True) == 1
+    token = [4, 5]
+    kept = keep(branch_counter.step, token)
+    kept.append(6)
+    assert token == [4, 5, 6]
+    assert property_after_loop(branch_counter.step, Box()) == 4
+    trail = []
+    assert call_after_loop(branch_counter.step, trail) == 5
+    assert trail == [5]
+    assert cleanup(branch_counter.step, trail) == 6
+    assert trail == [5, 99]
+    caught_counter = Counter()
+    assert caught(caught_counter.step, trail) == 3
+    assert trail == [5, 99, 3, 99]
+    generic_counter = Counter()
+    assert keep(generic_counter.step, True)
+    answer: int = 42
+    assert keep(generic_counter.step, answer) == 42
+    fraction: float = 1.25
+    assert keep(generic_counter.step, fraction) == 1.25
+    pair = (answer, "token")
+    assert keep(generic_counter.step, pair) == pair
+    deep_counter = Counter()
+    descend(100000, deep_counter.step)
+    assert await async deep_counter.step() == 100001
+    print("CPS forwarding passed")
+    env.exit(0)
