@@ -70,7 +70,6 @@ data ProjectBuildCache = ProjectBuildCache
   { cachedCompileContext :: Compile.CompileContext
   , cachedProjectMap :: M.Map FilePath Project.ProjCtx
   , cachedGlobalTasks :: [Compile.GlobalTask]
-  , cachedImportKeys :: HM.HashMap FilePath String
   }
 
 data PlanOrigin = PlanFromCache | PlanFromDiscovery deriving (Eq, Show)
@@ -262,28 +261,19 @@ loadCompletionStateFor path = do
 
 cacheCompilePlan :: Compile.CompilePlan -> IO ()
 cacheCompilePlan plan = do
-  importKeys <- globalTaskImportKeys (Compile.cpGlobalTasks plan)
   let ctx = Compile.cpContext plan
       rootProj = Compile.ccRootProj ctx
       cache = ProjectBuildCache
         { cachedCompileContext = ctx
         , cachedProjectMap = Compile.cpProjMap plan
         , cachedGlobalTasks = Compile.cpGlobalTasks plan
-        , cachedImportKeys = importKeys
         }
   atomicModifyIORef' projectBuildCachesRef $ \m ->
     (HM.insert rootProj cache m, ())
   ensureProjectWatchers rootProj (M.keys (Compile.cpProjMap plan))
 
-globalTaskImportKeys :: [Compile.GlobalTask] -> IO (HM.HashMap FilePath String)
-globalTaskImportKeys tasks =
-  HM.fromList <$> mapM taskImportKeyEntry tasks
-
-taskImportKeyEntry :: Compile.GlobalTask -> IO (FilePath, String)
-taskImportKeyEntry task = do
-  path <- Project.normalizePathSafe (Compile.taskSourceFile task)
-  return (path, taskImportKey task)
-
+-- | A module's imports as text: an edit that changes them cannot be planned
+-- from the cached project.
 taskImportKey :: Compile.GlobalTask -> String
 taskImportKey task =
   show (Compile.importsOf (Compile.gtTask task))
@@ -365,12 +355,11 @@ compilePlanFromCache ctx request changedPath cache = do
     else return Nothing
   case refreshed of
     Nothing -> return Nothing
-    Just (globalTasks, importKeys) -> do
+    Just globalTasks -> do
       let projects = cachedProjectMap cache
           cache' = cache
             { cachedCompileContext = ctx
             , cachedGlobalTasks = globalTasks
-            , cachedImportKeys = importKeys
             }
       plan <- Compile.selectPlan ctx projects globalTasks request
       atomicModifyIORef' projectBuildCachesRef $ \m ->
@@ -381,7 +370,7 @@ refreshChangedGlobalTask
   :: FilePath
   -> C.CompileOptions
   -> ProjectBuildCache
-  -> IO (Maybe ([Compile.GlobalTask], HM.HashMap FilePath String))
+  -> IO (Maybe [Compile.GlobalTask])
 refreshChangedGlobalTask changedPath opts cache =
   case find isChanged (cachedGlobalTasks cache) of
     Nothing -> return Nothing
@@ -394,17 +383,9 @@ refreshChangedGlobalTask changedPath opts cache =
         (Compile.tkMod (Compile.gtKey old))
         changedPath
       let new = old { Compile.gtTask = newTask }
-          newKey = taskImportKey new
-      case HM.lookup changedPath (cachedImportKeys cache) of
-        Just oldKey | oldKey /= newKey ->
-          return Nothing
-        _ -> do
-          let tasks' =
-                [ if Compile.gtKey t == Compile.gtKey old then new else t
-                | t <- cachedGlobalTasks cache
-                ]
-              importKeys' = HM.insert changedPath newKey (cachedImportKeys cache)
-          return (Just (tasks', importKeys'))
+      if taskImportKey new /= taskImportKey old
+        then return Nothing
+        else return (Just [ if Compile.gtKey t == Compile.gtKey old then new else t | t <- cachedGlobalTasks cache ])
   where
     isChanged t = Compile.taskSourceFile t == changedPath
 
