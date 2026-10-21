@@ -160,7 +160,7 @@ printErrorAndExit msg = do
 -- | Compute the test binary path for a module and target.
 testBinaryPath :: C.CompileOptions -> Paths -> String -> FilePath
 testBinaryPath opts paths modName =
-    let base = rootBinaryName paths True (modNameFromString modName)
+    let base = rootBinaryName paths True (A.dottedModName modName)
         exe = if isWindowsTarget (C.target opts) then base <.> "exe" else base
     in binDir paths </> exe
 
@@ -879,7 +879,7 @@ regexMatches re text = isJust (TDFA.matchOnceText re text)
 -- | Read the discovered tests for a module from its .tydb header.
 listModuleTests :: C.CompileOptions -> Paths -> String -> IO [String]
 listModuleTests _opts paths modName =
-    readModuleTests paths (modNameFromString modName)
+    readModuleTests paths (A.dottedModName modName)
 
 -- | Read tests from a module's .tydb header, returning [] on any error.
 readModuleTests :: Paths -> A.ModName -> IO [String]
@@ -894,14 +894,11 @@ readModuleTests paths mn = do
           Left _ -> return []
           Right header -> return (InterfaceFiles.summaryTests header)
 
-modNameFromString :: String -> A.ModName
-modNameFromString s = A.modName (splitOnChar '.' s)
-
 -- | Render a module name for user-facing output, dropping the project-name
 -- prefix so consumers (the VS Code extension, the --module flag, the on-disk
 -- src/ layout) see the bare module name instead of e.g. "proj.mod".
 displayModName :: Paths -> String -> String
-displayModName paths = modNameToString . dropProjPrefix paths . modNameFromString
+displayModName paths = modNameToString . dropProjPrefix paths . A.dottedModName
 
 splitOnChar :: Char -> String -> [String]
 splitOnChar ch input = case break (== ch) input of
