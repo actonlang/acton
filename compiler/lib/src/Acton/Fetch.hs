@@ -337,8 +337,4 @@ copyTree src dst = do
       let s = src </> e
           d = dst </> e
       isDir <- doesDirectoryExist s
-      if isDir
-        then copyTree s d
-        else do
-          createDirectoryIfMissing True (takeDirectory d)
-          copyFile s d
+      if isDir then copyTree s d else copyFile s d
