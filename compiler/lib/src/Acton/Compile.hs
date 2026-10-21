@@ -315,7 +315,7 @@ import Control.Concurrent.MVar
 import Control.Concurrent (forkIO, threadDelay)
 import Control.Concurrent.STM (TChan, TVar, atomically, check, modifyTVar', newTChanIO, newTVarIO, readTChan, readTVar, readTVarIO, writeTChan, writeTVar)
 import Control.DeepSeq (NFData, force, rnf)
-import Control.Exception (Exception, Handler(..), SomeException, catch, catches, displayException, evaluate, finally, mask_, onException, throwIO, try)
+import Control.Exception (Exception, Handler(..), SomeException, catch, catches, displayException, evaluate, finally, mask_, throwIO, try)
 import Control.Monad
 import Data.Binary (encode)
 import Data.Char (isHexDigit, isSpace)
@@ -435,7 +435,7 @@ data FrontResult = FrontResult
 data CompileFailure
   = ImportCycles [[TaskKey]]                      -- the modules of each import cycle
   | BuiltinFailed                                 -- __builtin__ had errors, already reported as diagnostics
-  | OutputFailed TaskKey FrontOutputKind String   -- the first failed output in awaitOutputs order, with its exception text
+  | OutputFailed TaskKey FrontOutputKind String   -- the first failed output in start order, with its exception text
   | DeferredBackFailed String                     -- the exception text from preparing ready deferred back jobs
   deriving (Eq, Show)
 
@@ -1809,7 +1809,7 @@ moduleBoundary env run = run `catch` \(ModuleErrors errs) -> return (Left (map (
 
 -- Outputs ------------------------------------------------------------------------------------------
 
--- | The background outputs of a run, newest batch first.  Outputs are never
+-- | The background outputs of a run, newest first.  Outputs are never
 -- cancelled: a run waits for every one of them before it ends.
 newtype OutputJobs = OutputJobs (IORef [OutputJob])
 
@@ -1831,27 +1831,22 @@ commitTydb env write = do
     build = moduleBuild env
     key   = keyOf env
 
--- | Start background outputs and record them in the build, a batch in start
--- order.  The batch runs under mask_, so a cancel reaches it only while an
--- OutputStarted report blocks.  When a report throws, by a cancel or by its
--- own failure, the outputs started before it are recorded first, so the run
--- waits for every write it started.  An output of a stale generation is
--- neither started nor recorded.  Each write checks the generation again in
--- its own thread, where only the write itself runs unmasked.
+-- | Start background outputs, each recorded in the build as soon as its
+-- thread exists.  Starting runs under mask_, so a cancel interrupts it only
+-- while an OutputStarted report blocks.  Nothing between creating a thread
+-- and recording it is interruptible, so the run waits for every write it
+-- started.  An output of a stale generation is neither started nor
+-- recorded.  Each write checks the generation again in its own thread,
+-- where only the write itself runs unmasked.
 startOutputs :: BuildEnv -> TaskKey -> [(FrontOutputKind, IO ())] -> IO ()
-startOutputs build key outputs = mask_ (start [] outputs)
+startOutputs build key outputs = mask_ (mapM_ start outputs)
   where
-    OutputJobs ref = buildOutputs build
-    gen            = buildGeneration build
-    record started = atomicModifyIORef' ref (\old -> (reverse started ++ old, ()))
-    start started []                     = record started
-    start started ((kind, write) : rest) = do
-      current <- isCurrent gen
-      if not current
-        then start started rest
-        else do emit build (OutputStarted key kind) `onException` record started
-                thread <- asyncWithUnmask (\unmask -> whenCurrent gen (runOutput build key kind (unmask write)))
-                start (OutputJob key kind thread : started) rest
+    OutputJobs ref      = buildOutputs build
+    gen                 = buildGeneration build
+    start (kind, write) = whenCurrent gen $ do
+      emit build (OutputStarted key kind)
+      thread <- asyncWithUnmask (\unmask -> whenCurrent gen (runOutput build key kind (unmask write)))
+      atomicModifyIORef' ref (\old -> (OutputJob key kind thread : old, ()))
 
 -- | Run a started output and report its end: its time, or Nothing when it
 -- failed.  A failure to report is ignored unless asynchronous.  The
@@ -1863,8 +1858,7 @@ runOutput build key kind write = do
     either throwIO return result
 
 -- | Wait for every output started so far, and return the first failure in
--- recorded order: batches in start order, the last started first within a
--- batch.  An asynchronous exception found in an output is rethrown.
+-- start order.  An asynchronous exception found in an output is rethrown.
 awaitOutputs :: BuildEnv -> IO (Maybe CompileFailure)
 awaitOutputs build = do
     let OutputJobs ref = buildOutputs build
