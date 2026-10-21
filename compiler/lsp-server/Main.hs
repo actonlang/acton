@@ -270,12 +270,6 @@ cacheCompilePlan plan = do
     (HM.insert rootProj cache m, ())
   ensureProjectWatchers rootProj (M.keys (Compile.cpProjMap plan))
 
--- | A module's imports as text: an edit that changes them cannot be planned
--- from the cached project.
-taskImportKey :: Compile.GlobalTask -> String
-taskImportKey task =
-  show (Compile.importsOf (Compile.gtTask task))
-
 invalidateProjectCache :: FilePath -> IO ()
 invalidateProjectCache rootProj = do
   atomicModifyIORef' projectBuildCachesRef $ \m ->
@@ -381,7 +375,7 @@ refreshChangedGlobalTask changedPath opts cache =
         (Compile.tkMod (Compile.gtKey old))
         changedPath
       let new = old { Compile.gtTask = newTask }
-      if taskImportKey new /= taskImportKey old
+      if Compile.importsOf newTask /= Compile.importsOf (Compile.gtTask old)
         then return Nothing
         else return (Just [ if Compile.gtKey t == Compile.gtKey old then new else t | t <- cachedGlobalTasks cache ])
   where
