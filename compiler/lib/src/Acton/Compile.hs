@@ -1969,22 +1969,17 @@ materialize sp opts mn file progress task = case task of
 -- providers.  A plain import keeps its written name as its alias.
 -- Idempotent.
 adjustImports :: M.Map A.ModName TaskKey -> A.Module -> A.Module
-adjustImports providers m = m{ A.imps = imps' }
-  where imps'                        = map adjust (A.imps m)
-        adjust (A.Import l ms)       = A.Import l (map adj ms)
-        adjust (A.FromImport l m i)  = A.FromImport l (adj' m) i
-        adjust (A.FromImportAll l m) = A.FromImportAll l (adj' m)
-        adj mi@(A.ModuleItem m mbn)
-          | Just m' <- adjusted m   = case mbn of
-                                         Nothing -> A.ModuleItem m' (Just m)
-                                         Just n  -> A.ModuleItem m' (Just n)
-          | otherwise               = mi
-        adj' m
-          | Just m' <- adjusted m   = m'
-          | otherwise               = m
-        adjusted m = case M.lookup m providers of
-                        Just tk | tkMod tk /= m -> Just (tkMod tk)
-                        _                       -> Nothing
+adjustImports providers m = m { A.imps = map adjust (A.imps m) }
+  where adjust (A.Import l items)        = A.Import l (map adjustItem items)
+        adjust (A.FromImport l mn names) = A.FromImport l (fromMaybe mn (providerName mn)) names
+        adjust (A.FromImportAll l mn)    = A.FromImportAll l (fromMaybe mn (providerName mn))
+        adjustItem item@(A.ModuleItem mn alias)
+                                         = maybe item (\target -> A.ModuleItem target (Just (fromMaybe mn alias))) (providerName mn)
+        -- The written name, with its locations, stays when the provider has
+        -- the same name.
+        providerName mn                  = case M.lookup mn providers of
+                                             Just k | tkMod k /= mn -> Just (tkMod k)
+                                             _                      -> Nothing
 
 -- | Decide whether to suppress per-module timing/log output.
 -- We also treat any alternate output mode (parse/sigs/cgen/etc) as quiet.
