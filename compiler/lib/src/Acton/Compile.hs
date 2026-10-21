@@ -2990,7 +2990,7 @@ altOutputFor ctx k                      = C.altOutput (optionsFor ctx k) && tkMo
 compileModules :: BuildEnv -> CompilePlan -> IO (Either CompileFailure (Acton.Env.Env0, Bool))
 compileModules build plan = do
     started <- newIORef []
-    ((compileAll started >>= withOutputFailure) `finally` (readIORef started >>= mapM_ cancel))
+    ((compileAll started `finally` (readIORef started >>= mapM_ cancel)) >>= withOutputFailure)
       `finally` void (awaitOutputs build)
   where
     ctx                = cpContext plan
@@ -3026,12 +3026,14 @@ compileModules build plan = do
                      t : _ -> projTypes (gtPaths t)
                      []    -> sysTypes (ccPathsRoot ctx)
 
-    -- A failed output fails a run that otherwise succeeded.
+    -- Every output is awaited once the stages are cancelled, so no output
+    -- starts during the wait.  A failed output fails a run that otherwise
+    -- succeeded.
     withOutputFailure result = do
-      failure <- awaitOutputs build
-      return (case (result, failure) of
-                (Right _, Just f) -> Left f
-                _                 -> result)
+      failed <- awaitOutputs build
+      return (case (result, failed) of
+                (Right _, Just failure) -> Left failure
+                _                       -> result)
 
 -- | __builtin__ defines the environment every other module is checked in,
 -- so it compiles first, in its own environment, with its imports read
