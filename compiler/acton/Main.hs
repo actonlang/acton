@@ -843,16 +843,9 @@ changedModulesFromPaths paths files = do
     return (Data.List.sort (nub mods))
 
 readModuleImports :: Paths -> A.ModName -> IO [A.ModName]
-readModuleImports paths mn = do
-    let tyFile = tyDbPath paths mn
-    exists <- InterfaceFiles.interfaceExists tyFile
-    if not exists
-      then return []
-      else do
-        hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeaderSummary tyFile
-        case hdrE of
-          Left _ -> return []
-          Right header -> return (map fst (InterfaceFiles.summaryImports header))
+readModuleImports paths mn =
+    maybe [] (map fst . InterfaceFiles.summaryImports)
+      <$> InterfaceFiles.tryReadHeaderSummary (tyDbPath paths mn)
 
 dependentTestModulesFromHeaders :: Paths -> [FilePath] -> [String] -> IO [String]
 dependentTestModulesFromHeaders paths srcFiles changedModules = do
@@ -2176,12 +2169,9 @@ removeUndeclaredRoots paths modules bins = do
       files <- filterM doesFileExist . map (binDir paths </>) =<< listDirectory (binDir paths)
       mapM_ removeFile (filter ((`Data.Set.notMember` liveBinaries) . binaryOf . takeFileName) files)
   where
-    headerRoots mn = do
-      hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeaderSummary (tyDbPath paths mn)
-      return $ case hdrE of
-        Right header ->
-          [ (A.nstr n == "test_main", mn) | n <- InterfaceFiles.summaryRoots header ]
-        Left _ -> []
+    headerRoots mn =
+      maybe [] (\header -> [ (A.nstr n == "test_main", mn) | n <- InterfaceFiles.summaryRoots header ])
+        <$> InterfaceFiles.tryReadHeaderSummary (tyDbPath paths mn)
     -- Windows binaries end in .exe, and their debug info in .pdb.
     binaryOf f | takeExtension f `elem` [".exe", ".pdb"] = dropExtension f
                | otherwise = f
@@ -2860,9 +2850,9 @@ filterMainActor env paths binTask = do
     mty <- Acton.Env.findTyFile (searchPath paths) m
     case mty of
       Just ty -> do
-        hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeaderSummary ty
-        case hdrE of
-          Right header | n `elem` InterfaceFiles.summaryRoots header -> return (Just binTask)
+        header <- InterfaceFiles.tryReadHeaderSummary ty
+        case header of
+          Just h | n `elem` InterfaceFiles.summaryRoots h -> return (Just binTask)
           _ -> checkEnv
       Nothing -> checkEnv
 

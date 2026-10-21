@@ -120,6 +120,7 @@ module InterfaceFiles
   , readStmtHasNotImpl
   , readHeader
   , readHeaderSummary
+  , tryReadHeaderSummary
   , readRoots
   , readExtensionsByClass
   , readExtensionsByProtocol
@@ -177,7 +178,7 @@ import qualified Acton.Syntax as A
 import qualified Acton.NameInfo as I
 import Acton.Names (isPublicName)
 import qualified Acton.Names as Names
-import Utils (SrcLoc(NoLoc), chunksOf)
+import Utils (SrcLoc(NoLoc), chunksOf, trySync)
 import Foreign.Ptr (castPtr)
 import Foreign.Storable (peek)
 import GHC.Generics (Generic)
@@ -1587,6 +1588,12 @@ readHeaderSummary f =
         , summaryTests      = tests
         , summaryDoc        = doc
         }
+
+-- | The header summary of a .tydb, or Nothing when the read throws a
+-- synchronous exception, a missing .tydb included. An asynchronous
+-- exception propagates.
+tryReadHeaderSummary :: FilePath -> IO (Maybe HeaderSummary)
+tryReadHeaderSummary f = either (const Nothing) Just <$> trySync (readHeaderSummary f)
 
 readRoots :: FilePath -> IO [A.Name]
 readRoots f =

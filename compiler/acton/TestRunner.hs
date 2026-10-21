@@ -881,18 +881,11 @@ listModuleTests :: C.CompileOptions -> Paths -> String -> IO [String]
 listModuleTests _opts paths modName =
     readModuleTests paths (A.dottedModName modName)
 
--- | Read tests from a module's .tydb header, returning [] on any error.
+-- | Read tests from a module's .tydb header, or [] when the header cannot
+-- be read.
 readModuleTests :: Paths -> A.ModName -> IO [String]
-readModuleTests paths mn = do
-    let tyFile = tyDbPath paths mn
-    exists <- InterfaceFiles.interfaceExists tyFile
-    if not exists
-      then return []
-      else do
-        hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeaderSummary tyFile
-        case hdrE of
-          Left _ -> return []
-          Right header -> return (InterfaceFiles.summaryTests header)
+readModuleTests paths mn =
+    maybe [] InterfaceFiles.summaryTests <$> InterfaceFiles.tryReadHeaderSummary (tyDbPath paths mn)
 
 -- | Render a module name for user-facing output, dropping the project-name
 -- prefix so consumers (the VS Code extension, the --module flag, the on-disk

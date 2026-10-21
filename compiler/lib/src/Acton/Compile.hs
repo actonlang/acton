@@ -1331,9 +1331,7 @@ readModuleTask sp gopts opts paths mn file = do
 -- stat the .tydb itself propagates.
 reusableHeader :: C.CompileOptions -> FilePath -> IO (Maybe (InterfaceFiles.HeaderSummary, Integer))
 reusableHeader opts tydb = do
-    exists <- InterfaceFiles.interfaceExists tydb
-    header <- if exists then either (const Nothing) Just <$> trySync (InterfaceFiles.readHeaderSummary tydb)
-                        else return Nothing
+    header <- InterfaceFiles.tryReadHeaderSummary tydb
     case header of
       Nothing -> return Nothing
       Just h  -> do

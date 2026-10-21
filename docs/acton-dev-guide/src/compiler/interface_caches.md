@@ -18,6 +18,8 @@ read API for imported-module lookup:
 - `readHeaderSummary` reads metadata, imports, the stored name count, roots,
   tests, and docstring; `readHeader` additionally decodes every per-name hash
   record.
+- `tryReadHeaderSummary` gives `Nothing` when `readHeaderSummary` throws a
+  synchronous exception, a missing `.tydb` included. A cancel propagates.
 - `readExtensionsByClass` and `readExtensionsByProtocol` read exact extension
   index entries without decoding `NameInfo` entries or typed
   statements.
