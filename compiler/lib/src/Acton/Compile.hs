@@ -349,12 +349,6 @@ import qualified Data.ByteString.Base16 as Base16
 import qualified Crypto.Hash.SHA256 as SHA256
 
 
-newtype DbpSelectionError = DbpSelectionError String deriving (Show)
-
-instance Exception DbpSelectionError where
-  displayException (DbpSelectionError msg) = msg
-
-
 -- | Why a run could not compile its modules.
 data CompileFailure
   = ImportCycles [[TaskKey]]                      -- the modules of each import cycle
@@ -2795,6 +2789,13 @@ describeDbp label stats upToDate =
 dbpCodegenHash :: B.ByteString -> Data.Set.Set A.Name -> B.ByteString
 dbpCodegenHash moduleImplHash selected =
     SHA256.hash (BL.toStrict (encode ("dbp" :: String, moduleImplHash, map A.nstr (Data.List.sortOn A.nameText (Data.Set.toList selected)))))
+
+-- | A selection of a deferred module's names that found no row for a name,
+-- with the text that names the module and the name.
+newtype DbpSelectionError = DbpSelectionError String deriving (Show)
+
+instance Exception DbpSelectionError where
+  displayException (DbpSelectionError msg) = msg
 
 -- | The rows of the names the seeds need, keyed by name.  Each seed and each
 -- dependency resolves to the name owning its row, through the Derived chain,
