@@ -79,6 +79,7 @@ library:
     - Acton.DocPrinter
     - Acton.Env
     - Acton.EscapeAnalysis
+    - Acton.Fetch
     - Acton.Fingerprint
     - Acton.Graph
     - Acton.Hashing
