@@ -133,9 +133,7 @@ special_projects = ["", "base", "acton_scratch"]
 
 -- | The directories of a project's build.  A project root holds Build.act
 -- and src/.  A scratch build builds a source file outside any project, with
--- the --tempdir directory as its root.  The paths findPaths gives a scratch
--- build are temporary (isTmp), and those projectPaths gives the scratch
--- project are not.
+-- the --tempdir directory as its root.
 data Paths = Paths
   { searchPath :: [FilePath]    -- projTypes, dependency types, --searchpath, then the system types
   , sysPath    :: FilePath      -- --syspath, or the parent of the acton executable's directory
@@ -143,10 +141,10 @@ data Paths = Paths
   , projPath   :: FilePath      -- the project root, or the --tempdir directory of a scratch build
   , projOut    :: FilePath      -- out under projPath
   , projTypes  :: FilePath      -- types under projOut
-  , binDir     :: FilePath      -- bin under projOut, or the source file's directory when isTmp
+  , binDir     :: FilePath      -- bin under projOut, or the source file's directory for a scratch build
   , srcDir     :: FilePath      -- src under projPath, or the source file's directory for a scratch build
-  , isTmp      :: Bool          -- the paths findPaths gives a scratch build
-  , projName   :: String        -- the name in Build.act or of the scratch spec, empty when isTmp
+  , isTmp      :: Bool          -- a scratch build
+  , projName   :: String        -- the name in Build.act, empty for a scratch build
   }
 
 -- Per-project context used for multi-project orchestration.
@@ -595,9 +593,7 @@ interfaceSearchPath opts sys types deps =
 
 -- | The paths of a project of a multi-project build.  The dependencies'
 -- types directories are those depTypePathsFromMap finds in the discovered
--- projects.  The paths are never temporary, also for the project of a
--- scratch build: binDir is out/bin under the root and projName the name of
--- the scratch spec.
+-- projects.
 projectPaths :: C.CompileOptions -> M.Map FilePath ProjCtx -> ProjCtx -> Paths
 projectPaths opts projMap ctx =
     Paths { searchPath = interfaceSearchPath opts (projSysPath ctx) (projTypesDir ctx) (depTypePathsFromMap projMap (projRoot ctx))

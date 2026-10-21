@@ -671,9 +671,12 @@ buildProjects gopts ctx = withoutTestLibraries <$> projects
       | C.test opts = M.adjust (\p -> p { projBuildSpec = (projBuildSpec p) { BuildSpec.libraries = M.empty } }) root
       | otherwise   = id
 
--- | The paths of each project of a build.
+-- | The paths of each project of a build.  The one project of a scratch
+-- build has the paths findPaths gave the file that roots the build.
 buildPaths :: CompileContext -> M.Map FilePath ProjCtx -> M.Map FilePath Paths
-buildPaths ctx projects = M.map (projectPaths (ccOpts ctx) projects) projects
+buildPaths ctx projects
+  | isTmp (ccPathsRoot ctx)     = ccPathsRoot ctx <$ projects
+  | otherwise                   = M.map (projectPaths (ccOpts ctx) projects) projects
 
 -- | Compile a plan as a generation of the scheduler. Its back jobs run on
 -- the scheduler's workers: wait for them with waitBackJobs. Each event is
