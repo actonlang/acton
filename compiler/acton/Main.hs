@@ -529,25 +529,24 @@ withProjectLockForGen :: C.GlobalOptions -> Generation -> FilePath -> IO Bool ->
 withProjectLockForGen gopts gen projDir action =
     ifCurrent gen False (withProjectLockNotice gopts projDir (ifCurrent gen False action))
 
-requireProjectLayout :: Paths -> IO ()
-requireProjectLayout paths = do
-    exists <- doesDirectoryExist (srcDir paths)
-    unless exists $
-      printErrorAndExit "Missing src/ directory"
--- | Strict path resolution: require a project config in the given directory.
--- The paths and the module are those findPaths gives its Build.act.
-loadProjectPathsAt :: FilePath -> C.CompileOptions -> IO (Paths, A.ModName)
-loadProjectPathsAt curDir opts = do
+-- | Require a project in the given directory: exit with an error unless it
+-- holds Build.act and src/, else return the Build.act path.
+requireProjectAt :: FilePath -> IO FilePath
+requireProjectAt curDir = do
     actPath <- requireProjectConfigPath curDir
     let projDir = takeDirectory actPath
     srcExists <- doesDirectoryExist (joinPath [projDir, "src"])
     unless srcExists $
       printErrorAndExit "Missing src/ directory"
-    (paths, mn) <- findPaths actPath opts
-    requireProjectLayout paths
-    return (paths, mn)
+    return actPath
 
-loadProjectPaths :: C.CompileOptions -> IO (Paths, A.ModName)
+-- | Strict path resolution: require a project config in the given directory.
+loadProjectPathsAt :: FilePath -> C.CompileOptions -> IO Paths
+loadProjectPathsAt curDir opts = do
+    actPath <- requireProjectAt curDir
+    fst <$> findPaths actPath opts
+
+loadProjectPaths :: C.CompileOptions -> IO Paths
 loadProjectPaths opts = do
     curDir <- getCurrentDirectory
     loadProjectPathsAt curDir opts
@@ -634,7 +633,7 @@ logProjectBuild gopts progressUI progressState projDir =
 buildProjectOnce :: C.GlobalOptions -> C.CompileOptions -> IO ()
 buildProjectOnce gopts opts = do
                 let sp = Source.diskSourceProvider
-                (paths, _) <- loadProjectPaths opts
+                paths <- loadProjectPaths opts
                 iff (not(C.quiet gopts)) $ do
                   putStrLn("Building project in " ++ projPath paths)
                 let projDir = projPath paths
@@ -677,7 +676,7 @@ runTests gopts cmd = do
           , C.skip_build = mode == TestModeList
           , C.only_build = False
           }
-    (paths, _) <- loadProjectPaths opts
+    paths <- loadProjectPaths opts
     if C.watch opts0
       then case mode of
              TestModeList -> runTestsOnce gopts' opts topts mode paths
@@ -740,7 +739,7 @@ runGitTestComparison gopts opts topts mode paths ref = do
                                    , C.dep_overrides = [(name, rebase path) | (name, path) <- overrides] }
                 studyOpts = topts { C.testCompile = compileOpts, C.testCompare = Nothing }
             withCurrentDirectory project $ do
-              (treePaths, _) <- loadProjectPathsAt project compileOpts
+              treePaths <- loadProjectPathsAt project compileOpts
               modules <- buildTestModules gopts compileOpts treePaths studyOpts
               names <- selectedTestNames compileOpts treePaths studyOpts modules
               return (treePaths, compileOpts, modules, [(modName, name) | (modName, tests) <- names, name <- tests])
@@ -876,7 +875,7 @@ dependentTestModulesFromHeaders paths srcFiles changedModules = do
 watchProjectAt :: C.GlobalOptions -> C.CompileOptions -> FilePath -> IO ()
 watchProjectAt gopts opts projDir = do
                 let sp = Source.diskSourceProvider
-                (paths, _) <- loadProjectPathsAt projDir opts
+                paths <- loadProjectPathsAt projDir opts
                 withBackgroundCompilerLockOrExit (projPath paths)
                   "Another long-running Acton compiler is already running; cannot start watch." $
                   withCompileWatchContext gopts $ \watchCtx -> do
@@ -1098,7 +1097,7 @@ runWatchFile gopts absFile sched runOnce = do
 -- | Fetch dependencies for the current project without compiling.
 fetchCommand :: C.GlobalOptions -> IO ()
 fetchCommand gopts = do
-    (paths, _) <- loadProjectPaths C.defaultCompileOptions
+    paths <- loadProjectPaths C.defaultCompileOptions
     res <- try (fetchDependencies gopts paths []) :: IO (Either ProjectError ())
     case res of
       Left (ProjectError msg) -> printErrorAndExit msg
@@ -1118,12 +1117,12 @@ sigCommand gopts sigOpts = do
           , C.sigs = False
           }
         queryGopts = if C.verbose gopts then gopts else gopts { C.quiet = True }
-    (paths0, _) <- loadProjectPaths opts0
-    depOverrides <- normalizeDepOverrides (projPath paths0) (C.dep_overrides opts0)
-    let opts = opts0 { C.dep_overrides = depOverrides }
-    (paths, buildModule) <- loadProjectPaths opts
-    cctx <- compileContext opts paths buildModule
-    let rootProj = ccRootProj cctx
+    actPath <- requireProjectAt =<< getCurrentDirectory
+    cctx <- prepareCompileContext opts0 [actPath]
+    let opts = ccOpts cctx
+        paths = ccPathsRoot cctx
+        depOverrides = C.dep_overrides opts
+        rootProj = ccRootProj cctx
     withProjectLockNotice queryGopts rootProj $ do
       fetchDependencies queryGopts paths depOverrides
       projMap <- discoverProjects queryGopts (ccSysAbs cctx) rootProj depOverrides
@@ -1154,10 +1153,7 @@ compileSigTarget gopts queryGopts cctx targetCtx mn srcPath = do
     case compileRes of
       Left err -> printErrorAndExit (compileFailureMessage err)
       Right (_, hadErrors) -> when hadErrors System.Exit.exitFailure
-    let targetCtx' = case M.lookup (projRoot targetCtx) (cpProjMap plan) of
-                       Just ctx -> ctx
-                       Nothing  -> targetCtx
-    return (tyDbPath (projectPaths (ccOpts cctx) (cpProjMap plan) targetCtx') mn)
+    return (tyDbPath (projectPaths (ccOpts cctx) (cpProjMap plan) targetCtx) mn)
 
 fixupTarget locals deps paths mn
   | mn `elem` locals            = return $ addProjPrefix paths mn

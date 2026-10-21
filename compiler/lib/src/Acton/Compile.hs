@@ -254,7 +254,6 @@ module Acton.Compile
   , runStandalonePlan
   , CompileContext(..)
   , hasParseStage
-  , compileContext
   , prepareCompileContext
   , Scope(..)
   , PlanRequest(..)
@@ -858,20 +857,11 @@ hasParseStage ctx t                     = case gtTask t of
                                             ParseTask{} -> not (isBuiltin (gtKey t)) && not (C.only_build (optionsFor ctx (gtKey t)))
                                             _           -> False
 
--- | The context of a build rooted at a file whose paths and module are
--- known.  The Build.act stamp is read at the project path as the paths give
--- it.
-compileContext :: C.CompileOptions -> Paths -> A.ModName -> IO CompileContext
-compileContext opts paths mn = do
-    root  <- normalizePathSafe (projPath paths)
-    sys   <- normalizePathSafe (sysPath paths)
-    stamp <- readBuildSpecStamp (projPath paths)
-    return CompileContext { ccOpts = opts, ccPathsRoot = paths, ccRootModule = mn, ccRootProj = root, ccSysAbs = sys, ccBuildStamp = stamp }
-
 -- | The context of a build of the given files, rooted at the first.  The
 -- --dep overrides are made absolute against the first file's project
 -- directory, or the working directory outside a project, before the paths
--- are found, so that the paths and discovery see absolute overrides.
+-- are found, so that the paths and discovery see absolute overrides.  The
+-- Build.act stamp is read at the project path as the paths give it.
 prepareCompileContext :: C.CompileOptions -> [FilePath] -> IO CompileContext
 prepareCompileContext _ []              = throwProjectError "No source files found"
 prepareCompileContext opts (first : _)  = do
@@ -880,7 +870,10 @@ prepareCompileContext opts (first : _)  = do
     overrides   <- normalizeDepOverrides base (C.dep_overrides opts)
     let opts'   = opts { C.dep_overrides = overrides }
     (paths, mn) <- findPaths first opts'
-    compileContext opts' paths mn
+    root        <- normalizePathSafe (projPath paths)
+    sys         <- normalizePathSafe (sysPath paths)
+    stamp       <- readBuildSpecStamp (projPath paths)
+    return CompileContext { ccOpts = opts', ccPathsRoot = paths, ccRootModule = mn, ccRootProj = root, ccSysAbs = sys, ccBuildStamp = stamp }
 
 -- | How much of a project a build asks for.  A whole-project build seeds
 -- discovery with every module and lets the final build prune stale
