@@ -27,6 +27,7 @@ module Acton.Project
   , srcBase
   , outBase
   , tyDbPath
+  , closureSupportPath
   , rootStubPath
   , rootBinaryName
   , isActFile
@@ -71,7 +72,6 @@ module Acton.Project
   ) where
 
 import qualified Acton.BuildSpec as BuildSpec
-import qualified Acton.CodeGen
 import qualified Acton.CommandLineParser as C
 import qualified Acton.Fingerprint as Fingerprint
 import Acton.Graph (preorder)
@@ -338,6 +338,10 @@ outBase paths mn        = joinPath (projTypes paths : A.modPath mn)
 tyDbPath                :: Paths -> A.ModName -> FilePath
 tyDbPath paths mn       = outBase paths mn ++ InterfaceFiles.interfaceExt
 
+-- | The closure support file of a module, next to its .c, which includes it.
+closureSupportPath      :: Paths -> A.ModName -> FilePath
+closureSupportPath paths mn = outBase paths mn ++ ".closures.inc"
+
 -- | Compute the root stub path for a module's root actor, or its test root.
 -- Stubs drop the project prefix since build.zig names binaries after them.
 rootStubPath            :: Paths -> Bool -> A.ModName -> FilePath
@@ -352,7 +356,7 @@ rootBinaryName paths test mn = (if test then ".test_" else "") ++ moduleLabel pa
 moduleOutputs           :: Paths -> A.ModName -> [FilePath]
 moduleOutputs paths mn  = [ outBase paths mn ++ ext | ext <- [InterfaceFiles.interfaceExt, ".c", ".h"] ] ++
                           [ rootStubPath paths test mn | test <- [False, True] ] ++
-                          [ Acton.CodeGen.supportFile (outBase paths mn) ]
+                          [ closureSupportPath paths mn ]
 
 -- | Whether 'file' names an Acton source file.
 isActFile :: FilePath -> Bool

@@ -2896,7 +2896,7 @@ runBackPasses gopts job shouldWrite onProgress = do
       (converted, env3)   <- transform BackPassCPS        fst (Acton.CPS.convert env2 deactorized)
       (lifted, env4)      <- transform BackPassLLift      fst (Acton.LambdaLifter.liftModule env3 converted)
       boxed               <- transform BackPassBoxing     id  (Acton.Boxing.doBoxing env4 lifted)
-      (_, h, c, support)  <- pass BackPassCodeGen             (Acton.CodeGen.generateCode (output == WriteFiles) env4 relSrcBase (bjSource job) (not (C.dbg_no_lines opts)) boxed (Hashing.hashHex (bjCodegenHash job)))
+      (_, h, c, support)  <- pass BackPassCodeGen             (Acton.CodeGen.generateCode supportInclude env4 relSrcBase (bjSource job) (not (C.dbg_no_lines opts)) boxed (Hashing.hashHex (bjCodegenHash job)))
       case output of
         PrintHeader -> pass BackPassRender (render h) >> putStrLn h
         PrintCode   -> pass BackPassRender (render c) >> putStrLn c
@@ -2905,19 +2905,23 @@ runBackPasses gopts job shouldWrite onProgress = do
           pass BackPassRender (render h >> render c >> render support)
           current <- shouldWrite
           if current
-            then pass BackPassWrite (writeFileUtf8Atomic (Acton.CodeGen.supportFile base) support >> writeFileUtf8Atomic (base ++ ".h") h >> writeFileUtf8Atomic (base ++ ".c") c)
+            then pass BackPassWrite (writeFileUtf8Atomic supportPath support >> writeFileUtf8Atomic (base ++ ".h") h >> writeFileUtf8Atomic (base ++ ".c") c)
             else report BackPassWrite (fromEnum BackPassWrite + 1) BackPassSkipped
     timing <- reverse <$> readIORef laps
     return ( reportedTime gopts opts elapsed
            , if C.timing gopts then Just timing else Nothing )
   where
-    opts       = bjOpts job
-    paths      = bjPaths job
-    mn         = tkMod (bjKey job)
-    output     = backOutput opts
-    base       = outBase paths mn
-    relSrcBase = makeRelative (projPath paths) (srcBase paths mn)
-    total      = fromEnum (maxBound :: BackPass) + (if output == WriteFiles then 1 else 0)
+    opts           = bjOpts job
+    paths          = bjPaths job
+    mn             = tkMod (bjKey job)
+    output         = backOutput opts
+    base           = outBase paths mn
+    supportPath    = closureSupportPath paths mn
+    -- A build that writes the generated files puts the closure support in
+    -- a file of its own, which the .c next to it includes by file name.
+    supportInclude = if output == WriteFiles then Just (takeFileName supportPath) else Nothing
+    relSrcBase     = makeRelative (projPath paths) (srcBase paths mn)
+    total          = fromEnum (maxBound :: BackPass) + (if output == WriteFiles then 1 else 0)
 
 
 -- The run ------------------------------------------------------------------------------------------
@@ -3263,7 +3267,7 @@ readCodegenHash path = either (const Nothing) taggedHash <$> trySync (withFile p
 -- | The hash a module's generated code should be tagged with, and the tags
 -- its .c, .h and closure support file carry, read in that order.
 codegenStatus :: Paths -> A.ModName -> B.ByteString -> IO CodegenStatus
-codegenStatus paths mn expected = CodegenStatus (Hashing.hashHex expected) <$> readCodegenHash (base ++ ".c") <*> readCodegenHash (base ++ ".h") <*> readCodegenHash (Acton.CodeGen.supportFile base)
+codegenStatus paths mn expected = CodegenStatus (Hashing.hashHex expected) <$> readCodegenHash (base ++ ".c") <*> readCodegenHash (base ++ ".h") <*> readCodegenHash (closureSupportPath paths mn)
   where base = outBase paths mn
 
 -- | Whether the .c, the .h and the closure support file are all tagged with
