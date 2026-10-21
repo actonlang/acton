@@ -998,7 +998,17 @@ tydbOf env                              = tyDbPath (pathsOf env) (nameOf env)
 
 -- | The module's name without its project prefix, as --verbose lines show it.
 labelOf                                 :: ModuleEnv -> String
-labelOf env                             = modNameToString (dropProjPrefix (pathsOf env) (nameOf env))
+labelOf env                             = moduleLabel (pathsOf env) (nameOf env)
+
+-- | The module's file without its project prefix, as the diagnostics of its
+-- code name it.
+labelFileOf                             :: ModuleEnv -> FilePath
+labelFileOf env                         = modNameToFilename (dropProjPrefix (pathsOf env) (nameOf env))
+
+-- | A module's name without its project prefix, as user-facing lines show
+-- it.
+moduleLabel                             :: Paths -> A.ModName -> String
+moduleLabel paths mn                    = modNameToString (dropProjPrefix paths mn)
 
 -- | What importers read of a finished module.  The results of the front
 -- passes, of an impl refresh and of a codegen refresh carry its public
@@ -1149,7 +1159,7 @@ explainError env src err = case err of
                                                (hashKindName kind ++ " hash missing for " ++ prstr qn ++ " (used by " ++ A.nstr owner ++ ")")
   where
     fullFile  = modNameToFilename (nameOf env)
-    labelFile = modNameToFilename (dropProjPrefix (pathsOf env) (nameOf env))
+    labelFile = labelFileOf env
 
 compilationError                        :: FilePath -> String -> SrcLoc -> String -> Diagnostic String
 compilationError                        = Diag.actErrToDiagnostic "Compilation error"
@@ -1183,7 +1193,7 @@ frontFailures env src =
     , Handler $ \(Acton.Types.TypeErrors errs)     -> return (map typed errs)
     , Handler $ \(e :: Acton.TypeEnv.TypeError)    -> return [typed e] ]
   where
-    file         = modNameToFilename (dropProjPrefix (pathsOf env) (nameOf env))
+    file         = labelFileOf env
     located errs = [ compilationError file src l msg | (l, msg) <- errs ]
     typed e      = Acton.TypeEnv.mkErrorDiagnostic file src (Acton.TypeEnv.typeReport e file src)
 
@@ -2766,7 +2776,7 @@ prepareDeferredBackJob build env interestMap job = do
   where paths = deferredPaths job
         mn    = tkMod (deferredKey job)
         tydb  = tyDbPath paths mn
-        label = modNameToString (dropProjPrefix paths mn)
+        label = moduleLabel paths mn
 
 -- | The name counts of a deferred module's selection.
 data DbpStats = DbpStats
