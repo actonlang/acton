@@ -47,6 +47,7 @@ module Acton.Project
   , normalizeDepOverrides
   , applyDepOverrides
   , normalizePathSafe
+  , isUnder
   , isAbsolutePath
   , collapseDots
   , rebasePath
@@ -537,7 +538,7 @@ pruneMissingChangedModuleOutputs opts projMap changedPaths = do
       exists <- doesFileExist actPath
       unless exists $ forM_ (M.elems projMap) $ \ctx -> do
         srcRoot <- normalizePathSafe (projSrcDir ctx)
-        when (addTrailingPathSeparator srcRoot `Data.List.isPrefixOf` actPath) $ do
+        when (actPath `isUnder` srcRoot) $ do
           mn <- moduleNameFromFile srcRoot (BuildSpec.specName (projBuildSpec ctx)) actPath
           mapM_ removePathForcibly (moduleOutputs (modulePaths opts projMap ctx mn))
 
@@ -689,6 +690,12 @@ normalizePathSafe p = do
     res <- try (canonicalizePath p) :: IO (Either IOException FilePath)
     return $ either (const (normalise p)) id res
 
+-- | Whether a path lies inside a directory, the directory itself excluded.
+-- Both sides are normalised and the directory gets a trailing separator, so
+-- a sibling whose name merely starts with the directory's name is outside.
+isUnder                                 :: FilePath -> FilePath -> Bool
+path `isUnder` dir                      = addTrailingPathSeparator (normalise dir) `isPrefixOf` normalise path
+
 -- | Collapse "." and ".." segments without dropping leading ".." on relative paths.
 -- Example: "a/b/../c/./d" becomes "a/c/d".
 collapseDots :: FilePath -> FilePath
@@ -803,7 +810,7 @@ resolveDepBase base name dep =
                  Nothing -> return root
                  Just dir -> do
                    selected <- normalizePathSafe (root </> dir)
-                   unless (selected == root || addTrailingPathSeparator root `isPrefixOf` selected) $
+                   unless (selected == root || selected `isUnder` root) $
                      throwProjectError ("Dependency " ++ name ++ " subdir " ++ show dir ++ " escapes the archive")
                    cached <- doesDirectoryExist root
                    when cached $ do

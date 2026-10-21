@@ -619,7 +619,7 @@ withCompileWatchContext gopts action = do
       bracket create cleanup action
   where
     create = do
-      maxParallel <- compileMaxParallel gopts
+      maxParallel <- compileParallelism gopts
       CliWatchContext <$> newCompileScheduler gopts maxParallel <*> initProgressUI gopts maxParallel
                       <*> newProgressState
     cleanup ctx = do
@@ -1165,7 +1165,7 @@ compileSigTarget gopts queryGopts opts paths rootProj sysAbs depOverrides target
           , ccOnInfo = \msg -> when (C.verbose gopts) $ putStrLn msg
           , ccOnBackJob = \_ -> return ()
           }
-    compileRes <- compileTasks sp queryGopts opts' (ccPathsRoot cctx') (ccRootProj cctx') (cpNeededTasks plan) (cpDbpBlocked plan) callbacks
+    compileRes <- compileTasks sp queryGopts cctx' (cpNeededTasks plan) (cpDbpBlocked plan) callbacks
     case compileRes of
       Left err -> printErrorAndExit (compileFailureMessage err)
       Right (_, hadErrors) -> when hadErrors System.Exit.exitFailure
@@ -1506,12 +1506,6 @@ compileReplHook gopts opts projDir srcFiles =
 
 -- Compile Acton files ---------------------------------------------------------------------------------------------
 
--- | Compute parallelism for compilation based on jobs or cores.
-compileMaxParallel :: C.GlobalOptions -> IO Int
-compileMaxParallel gopts = do
-    nCaps <- getNumCapabilities
-    return (max 1 (if C.jobs gopts > 0 then C.jobs gopts else nCaps))
-
 -- | Compile a set of files in a single-shot build.
 compileFiles :: Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -> [String] -> Bool -> IO ()
 compileFiles sp gopts opts srcFiles allowPrune =
@@ -1527,7 +1521,7 @@ compileFilesChanged :: Source.SourceProvider
                     -> Maybe (CliWatchContext, Int)
                     -> IO Bool
 compileFilesChanged sp gopts opts srcFiles allowPrune mChangedPaths mWatch = do
-    maxParallel <- compileMaxParallel gopts
+    maxParallel <- compileParallelism gopts
     (progressUI, progressState) <- case mWatch of
       Just (ctx, _) -> return (cwProgressUI ctx, cwProgressState ctx)
       Nothing -> do
@@ -1641,17 +1635,11 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
         rootProj = ccRootProj (cpContext plan)
         rootPaths = ccPathsRoot (cpContext plan)
         optsPlan = ccOpts (cpContext plan)
-        isBuiltinTask t = tkMod (gtKey t) == A.modName ["__builtin__"]
-        parseNeeded t =
-          case gtTask t of
-            ParseTask{} -> not (isBuiltinTask t) && not (C.only_build optsPlan)
-            _ -> False
     sizeEntries <- forM neededTasks $ \t -> do
-      let key = gtKey t
-          path = srcFile (gtPaths t) (tkMod key)
+      let path = taskSourceFile t
       exists <- doesFileExist path
       sz <- if exists then getFileSize path else return 0
-      return (key, sz)
+      return (gtKey t, sz)
     progressRef <- newIORef (0 :: Double)
     marksRef <- newIORef (M.empty :: M.Map TaskKey (Double, Double, Bool))
     -- sizeMap is used for the progress bar indicator to determine how much a
@@ -1680,7 +1668,7 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
         backRatio = 0.3
         totalPhaseWeight =
           sum
-            [ weightFor (gtKey t) * (frontRatio + backRatio + if parseNeeded t then parseRatio else 0)
+            [ weightFor (gtKey t) * (frontRatio + backRatio + if hasParseStage (cpContext plan) t then parseRatio else 0)
             | t <- neededTasks
             ]
         shareForPhase t ratio =
@@ -1689,7 +1677,7 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
             else compilePhaseTotal * weightFor (gtKey t) * ratio / totalPhaseWeight
         shareMap =
           M.fromList
-            [ (gtKey t, (shareForPhase t (if parseNeeded t then parseRatio else 0)
+            [ (gtKey t, (shareForPhase t (if hasParseStage (cpContext plan) t then parseRatio else 0)
                         , shareForPhase t frontRatio
                         , shareForPhase t backRatio))
             | t <- neededTasks

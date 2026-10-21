@@ -21,7 +21,6 @@ import qualified Data.Sequence as Seq
 import qualified Data.Set
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
-import GHC.Conc (getNumCapabilities)
 import System.Directory (doesDirectoryExist)
 import System.FilePath ((</>), takeExtension, takeFileName)
 import qualified System.FSNotify as FS
@@ -136,8 +135,7 @@ projectWatchersRef = unsafePerformIO (newIORef HM.empty)
 -- | Shared compile scheduler for LSP events and back jobs.
 compileScheduler :: Compile.CompileScheduler
 compileScheduler = unsafePerformIO $ do
-  nCaps <- getNumCapabilities
-  let maxParallel = max 1 (if C.jobs lspGlobalOpts > 0 then C.jobs lspGlobalOpts else nCaps)
+  maxParallel <- Compile.compileParallelism lspGlobalOpts
   Compile.newCompileScheduler lspGlobalOpts maxParallel
 
 -- | Global compiler options for the LSP server (quiet, no color).
@@ -225,10 +223,9 @@ releaseBackgroundCompilerLocks = do
 rememberCompletionStates :: Int -> Compile.CompilePlan -> Env.Env0 -> IO ()
 rememberCompletionStates gen plan env = do
   entries <- forM (Compile.cpGlobalTasks plan) $ \t -> do
-    let key = Compile.gtKey t
-        paths = Compile.gtPaths t
-        mn = Compile.tkMod key
-    path <- Project.normalizePathSafe (Project.srcFile paths mn)
+    let paths = Compile.gtPaths t
+        mn = Compile.tkMod (Compile.gtKey t)
+    path <- Project.normalizePathSafe (Compile.taskSourceFile t)
     return (path, CompletionState env (Project.searchPath paths) mn gen)
   atomicModifyIORef' completionStatesRef $ \m ->
     (foldr (uncurry HM.insert) m entries, ())
@@ -287,8 +284,7 @@ globalTaskImportKeys tasks =
 
 taskImportKeyEntry :: Compile.GlobalTask -> IO (FilePath, String)
 taskImportKeyEntry task = do
-  path <- Project.normalizePathSafe $
-    Project.srcFile (Compile.gtPaths task) (Compile.tkMod (Compile.gtKey task))
+  path <- Project.normalizePathSafe (Compile.taskSourceFile task)
   return (path, taskImportKey task)
 
 taskImportKey :: Compile.GlobalTask -> String
@@ -366,12 +362,7 @@ compilePlanFromCache ctx changedPath cache = do
     Just (globalTasks, importKeys) -> do
       let modules = Compile.moduleGraph (cachedProjectMap cache) globalTasks
           dbpBlocked = Compile.libraryBoundaryTasks modules
-      neededTasks <- Compile.selectAffectedTasks
-        (Compile.ccRootProj ctx)
-        (Compile.ccOpts ctx)
-        modules
-        dbpBlocked
-        [changedPath]
+      neededTasks <- Compile.selectAffectedTasks ctx modules dbpBlocked [changedPath]
       let rootProj = Compile.ccRootProj ctx
           rootModules =
             [ Compile.tkMod (Compile.gtKey t)
@@ -426,8 +417,7 @@ refreshChangedGlobalTask changedPath opts cache =
               importKeys' = HM.insert changedPath newKey (cachedImportKeys cache)
           return (Just (tasks', importKeys'))
   where
-    isChanged t =
-      Project.srcFile (Compile.gtPaths t) (Compile.tkMod (Compile.gtKey t)) == changedPath
+    isChanged t = Compile.taskSourceFile t == changedPath
 
 progressToken :: Int -> FilePath -> ProgressToken
 progressToken gen path =
@@ -663,10 +653,9 @@ resolveCompileRoot path opts = do
 runCompilePlanWithHooks :: Int -> FilePath -> FilePath -> Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -> LspProgress -> LspM () Bool
 runCompilePlanWithHooks gen rootProj path sp gopts opts progress = do
   env <- getLspEnv
-  let taskPath t = Project.srcFile (Compile.gtPaths t) (Compile.tkMod (Compile.gtKey t))
-      publishFor t diags =
+  let publishFor t diags =
         runLspT env $ whenCurrentGen gen $
-          publishDiagnosticsFor (taskPath t) diags
+          publishDiagnosticsFor (Compile.taskSourceFile t) diags
       progressFor msg =
         runLspT env $ whenCurrentGen gen $
           progressReportImmediate progress msg Nothing

@@ -57,12 +57,17 @@ generateCode                        :: Bool -> Acton.Env.Env0 -> FilePath -> Str
 generateCode split env srcbase srcText emitLines m hash = return (n,h,c,support)
 
   where n                           = concat (Data.List.intersperse "." (modPath (modname m))) --render $ quotes $ gen env0 (modname m)
-        hashComment                 = text "/* Acton impl hash:" <+> text hash <+> text "*/"
+        hashComment                 = text implHashTag <+> text hash <+> text "*/"
         h                           = render $ hashComment $+$ hModule env0 m
         (cDoc,supportDoc)            = cModuleParts split env0 srcbase srcText emitLines m
         c                           = render $ hashComment $+$ cDoc
         support                     = render $ hashComment $+$ supportDoc
         env0                        = genEnv $ setMod (modname m) env
+
+-- | The first line of a generated .c, .h and closure support file starts with
+-- this tag, followed by the hex impl hash the code was generated for.
+implHashTag                         :: String
+implHashTag                         = "/* Acton impl hash:"
 
 genRoot                            :: Acton.Env.Env0 -> QName -> IO String
 genRoot env0 qn@(GName m n)         = do return $ render (cInclude $+$ cIncludeMods $+$ cInit $+$ cRoot)
