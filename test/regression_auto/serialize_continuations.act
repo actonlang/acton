@@ -1,0 +1,15 @@
+# A message row in the DB holds the message's continuation. The RTS's own
+# continuations must come back from the DB with their own class. A plain $Cont
+# has no __call__, so a restored message that holds one crashes the worker
+# that runs it.
+
+def round_trip_failures() -> list[str]:
+    """RTS continuations that change class in a round trip through the RTS C
+    serializer ($serialize / $deserialize)"""
+    NotImplemented
+
+actor main(env):
+    failures = round_trip_failures()
+    for failure in failures:
+        print(failure)
+    env.exit(1 if len(failures) > 0 else 0)
