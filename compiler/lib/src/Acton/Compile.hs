@@ -129,13 +129,13 @@ Generations
 A CompileScheduler numbers its runs.  acton watch and the LSP server start
 a run for each change with startCompile, the LSP server after a debounce
 delay: the counter moves, the previous run is cancelled and awaited, and
-the new run starts unless a newer one began during the delay.  A one-shot
-build runs as the scheduler's current generation, 0 on a fresh scheduler.
-A run whose generation is no longer current is stale.  A stale run writes
-no front output, queues no back job and reports no event to the handler,
-and its queued back jobs neither write their code nor report their end.
-A new generation cancels the whole previous run, including the stages of
-modules that the change does not affect.
+the new run starts unless startCompile numbered a newer generation during
+the delay.  A one-shot build runs as the scheduler's current generation, 0
+on a fresh scheduler.  A run whose generation is no longer current is
+stale.  A stale run writes no front output, queues no back job and reports
+no event to the handler, and its queued back jobs neither write their code
+nor report their end.  A new generation cancels the whole previous run,
+including the stages of modules that the change does not affect.
 
 Outputs
 -------
@@ -638,10 +638,9 @@ quiet gopts opts = C.quiet gopts || C.altOutput opts
 reportedTime :: C.GlobalOptions -> C.CompileOptions -> TimeSpec -> Maybe TimeSpec
 reportedTime gopts opts time = if quiet gopts opts then Nothing else Just time
 
--- | A compile run's place in its scheduler's sequence of runs. A run is
--- current until a newer one starts. A stale run writes no front output,
--- queues no back job and reports no event to runCompilePlan's handler, and
--- its queued back jobs neither write nor report an end.
+-- | A compile run's place in its scheduler's sequence of runs. It is
+-- current until startCompile numbers a newer generation. What a stale run
+-- skips is stated under Generations in the module header.
 data Generation = Generation
   { generationNumber  :: Int
   , generationCounter :: IORef Int      -- the scheduler's newest generation
@@ -659,8 +658,8 @@ whenCurrent :: Generation -> IO () -> IO ()
 whenCurrent gen = ifCurrent gen ()
 
 -- | The generation a scheduler is at, which a one-shot build runs as. A
--- fresh scheduler is at generation 0, and it stays current until a run is
--- started with startCompile.
+-- fresh scheduler is at generation 0, and it stays current until
+-- startCompile numbers a newer generation.
 currentGeneration :: CompileScheduler -> IO Generation
 currentGeneration sched = do
   number <- readIORef (schedulerCounter sched)
@@ -721,8 +720,8 @@ compileParallelism gopts
 -- new run. The cancel also waits until every running stage of the previous
 -- generation ends, normally at the end of its passes, because stages run
 -- masked (startReady). So startCompile can take as long as the rest of a
--- running type check. After the delay the run starts only if no newer
--- generation began.
+-- running type check. After the delay the run starts only if startCompile
+-- numbered no newer generation in the meantime.
 startCompile :: CompileScheduler -> Int -> (Generation -> IO ()) -> IO Generation
 startCompile sched delay run = do
   number <- atomicModifyIORef' (schedulerCounter sched) (\newest -> (newest + 1, newest + 1))
