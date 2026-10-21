@@ -35,10 +35,11 @@ Call flow:
   - Shared pipeline (acton build, acton watch, LSP):
     1) prepareCompileContext builds the CompileContext of the build, and
        prepareCompilePlan (buildProjects, readModuleTask/buildGlobalTasks,
-       selectPlan and expandLibraries) builds a CompilePlan for the
-       requested subgraph. Parsing is performed through
-       parseActSource/parseActFile so SourceProvider overlays can supply
-       unsaved buffers.
+       selectPlan) builds a CompilePlan for the requested subgraph. The LSP
+       plans an edit of an existing source of a project it has already
+       discovered with readModuleTask of that module and selectPlan. Parsing
+       is performed through parseActSource/parseActFile so SourceProvider
+       overlays can supply unsaved buffers.
     2) runCompilePlan drives compileModules. As each module finishes its front
        passes, its BackReady event enqueues its BackJob into the scheduler's
        BackQueue, so back passes begin as soon as they are ready and can overlap
@@ -145,8 +146,6 @@ module Acton.Compile
   , docIndexEntry
   , buildGlobalTasks
   , importGraph
-  , ModuleGraph
-  , moduleGraph
   , selectPlan
   , docNameCountThreshold
   , shouldGenerateDocOutput
@@ -628,8 +627,7 @@ prepareCompilePlanFromContext sp gopts ctx request = do
       Nothing      -> mapM_ (pruneMissingModuleOutputs opts projects) (M.elems projects)
       Just changed -> pruneMissingChangedModuleOutputs opts projects changed
     tasks    <- buildGlobalTasks sp gopts opts projects (seeds projects)
-    let modules = moduleGraph projects tasks
-    selectPlan ctx projects modules request >>= expandLibraries modules
+    selectPlan ctx projects tasks request
   where
     opts = ccOpts ctx
     -- Discovery starts from the requested files only when the selection
@@ -1605,28 +1603,30 @@ moduleGraph projMap tasks = ModuleGraph
 restrictTasks :: ModuleGraph -> Data.Set.Set TaskKey -> [GlobalTask]
 restrictTasks g keys = [ t | t <- graphTasks g, Data.Set.member (gtKey t) keys ]
 
--- | What a request compiles from a discovered module graph, before library
--- expansion: the requested modules with what they import, or, for an
--- incremental request, the modules its changes affect.  The LSP's cached
--- plan is this selection alone: it neither expands libraries nor prunes
--- outputs.
-selectPlan :: CompileContext -> M.Map FilePath ProjCtx -> ModuleGraph -> PlanRequest -> IO CompilePlan
-selectPlan ctx projects g request = do
+-- | What a request compiles from the discovered modules of its projects:
+-- the requested modules with what they import, or, for an incremental
+-- request, the modules its changes affect, expanded by expandLibraries.
+-- The root modules are the selected root-project modules before that
+-- expansion.
+selectPlan :: CompileContext -> M.Map FilePath ProjCtx -> [GlobalTask] -> PlanRequest -> IO CompilePlan
+selectPlan ctx projects tasks request = do
     selected <- maybe (selectRequested ctx g (requestFiles request)) (selectAffected ctx g blocked) (requestChanged request)
-    let needed = restrictTasks g selected
+    let needed = restrictTasks g (expandLibraries g selected)
     sizes    <- sourceSizes needed
     return CompilePlan
       { cpContext     = ctx
       , cpRequest     = request
       , cpProjMap     = projects
-      , cpGlobalTasks = graphTasks g
+      , cpGlobalTasks = tasks
       , cpNeededTasks = needed
       , cpDbpBlocked  = blocked
-      , cpRootModules = [ tkMod (gtKey t) | t <- needed, tkProj (gtKey t) == ccRootProj ctx ]
+      , cpRootModules = [ tkMod (gtKey t) | t <- restrictTasks g selected, tkProj (gtKey t) == ccRootProj ctx ]
       , cpAllowPrune  = requestScope request == WholeProject && isNothing (requestChanged request)
       , cpSourceSizes = sizes
       }
-  where blocked = libraryBoundary g
+  where
+    g       = moduleGraph projects tasks
+    blocked = libraryBoundary g
 
 -- | The requested modules with everything they import, and __builtin__.  A
 -- file names a module by its source path, else by its module name in the
@@ -1719,22 +1719,17 @@ libraryTaskGroups projMap globalTasks =
 
 -- | Declared build libraries are artifact units: a selected member selects
 -- every module of its library, and the selection is closed under imports,
--- until nothing is added.  The source sizes of added modules are recorded
--- too.
-expandLibraries :: ModuleGraph -> CompilePlan -> IO CompilePlan
-expandLibraries g plan = do
-    added <- sourceSizes [ t | t <- needed, M.notMember (gtKey t) (cpSourceSizes plan) ]
-    return plan { cpNeededTasks = needed, cpSourceSizes = M.union (cpSourceSizes plan) added }
+-- until nothing is added.
+expandLibraries :: ModuleGraph -> Data.Set.Set TaskKey -> Data.Set.Set TaskKey
+expandLibraries g keys
+  | expanded == keys = keys
+  | otherwise        = expandLibraries g expanded
   where
-    needed = restrictTasks g (expand (Data.Set.fromList (map gtKey (cpNeededTasks plan))))
-    expand keys
-      | keys' == keys = keys
-      | otherwise     = expand keys'
-      where keys'     = withLibraries (closure (depsOf (graphImports g)) (Data.Set.toList (withLibraries keys)))
-    withLibraries keys = foldl' addLibrary keys (graphLibraries g)
-    addLibrary keys library
-      | Data.Set.disjoint keys library = keys
-      | otherwise                      = Data.Set.union keys library
+    expanded = withLibraries (closure (depsOf (graphImports g)) (Data.Set.toList (withLibraries keys)))
+    withLibraries selected = foldl' addLibrary selected (graphLibraries g)
+    addLibrary selected library
+      | Data.Set.disjoint selected library = selected
+      | otherwise                          = Data.Set.union selected library
 
 -- | Each module's source size in bytes, 0 when the source is missing: a
 -- module's weight in scheduling and in progress reports.

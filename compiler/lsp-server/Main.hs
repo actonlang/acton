@@ -20,7 +20,7 @@ import Data.Sequence (Seq, ViewL(..), (|>))
 import qualified Data.Sequence as Seq
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
-import System.Directory (doesDirectoryExist)
+import System.Directory (doesDirectoryExist, doesFileExist)
 import System.FilePath ((</>), takeExtension, takeFileName)
 import qualified System.FSNotify as FS
 import System.IO.Unsafe (unsafePerformIO)
@@ -333,7 +333,7 @@ prepareLspCompilePlan sp gopts opts path = do
     case mcache of
       Just cache
         | Compile.ccBuildStamp (cachedCompileContext cache) == Compile.ccBuildStamp ctx -> do
-            mplan <- compilePlanFromCache ctx path' cache
+            mplan <- compilePlanFromCache ctx request path' cache
             case mplan of
               Just plan -> return (PlanFromCache, plan)
               Nothing -> freshPlan ctx
@@ -346,25 +346,33 @@ prepareLspCompilePlan sp gopts opts path = do
         Nothing -> return (Left (displayException err))
     Right plan -> return (Right plan)
   where
+    request = Compile.PlanRequest [path] Compile.SelectedFiles (Just [path])
     freshPlan ctx = do
-      plan <- Compile.prepareCompilePlan sp gopts compileScheduler ctx (Compile.PlanRequest [path] Compile.SelectedFiles (Just [path]))
+      plan <- Compile.prepareCompilePlan sp gopts compileScheduler ctx request
       cacheCompilePlan plan
       return (PlanFromDiscovery, plan)
 
-compilePlanFromCache :: Compile.CompileContext -> FilePath -> ProjectBuildCache -> IO (Maybe Compile.CompilePlan)
-compilePlanFromCache ctx changedPath cache = do
-  refreshed <- refreshChangedGlobalTask changedPath (Compile.ccOpts ctx) cache
+-- | Plan an edit from the cached project: the edited module is read again
+-- and every other module is taken from the cache.  Nothing when the edited
+-- source file no longer exists, when the cache does not hold the module or
+-- when the module's imports changed.  The plan made then prunes the outputs
+-- of a deleted source before it discovers the modules again.
+compilePlanFromCache :: Compile.CompileContext -> Compile.PlanRequest -> FilePath -> ProjectBuildCache -> IO (Maybe Compile.CompilePlan)
+compilePlanFromCache ctx request changedPath cache = do
+  exists <- doesFileExist changedPath
+  refreshed <- if exists
+    then refreshChangedGlobalTask changedPath (Compile.ccOpts ctx) cache
+    else return Nothing
   case refreshed of
     Nothing -> return Nothing
     Just (globalTasks, importKeys) -> do
       let projects = cachedProjectMap cache
-          request = Compile.PlanRequest [changedPath] Compile.SelectedFiles (Just [changedPath])
           cache' = cache
             { cachedCompileContext = ctx
             , cachedGlobalTasks = globalTasks
             , cachedImportKeys = importKeys
             }
-      plan <- Compile.selectPlan ctx projects (Compile.moduleGraph projects globalTasks) request
+      plan <- Compile.selectPlan ctx projects globalTasks request
       atomicModifyIORef' projectBuildCachesRef $ \m ->
         (HM.insert (Compile.ccRootProj ctx) cache' m, ())
       return (Just plan)
