@@ -5,6 +5,7 @@
 module Acton.Project
   ( ProjectError(..)
   , throwProjectError
+  , projectTypesDir
   , systemTypePaths
   , moduleTypesDir
   , findProjectDir
@@ -12,7 +13,6 @@ module Acton.Project
   , scratchBuildSpec
   , Paths(..)
   , ProjCtx(..)
-  , mkProjCtx
   , findPaths
   , projectPaths
   , createProjectDirectories
@@ -200,33 +200,15 @@ data Paths = Paths
   }
 
 -- | One project of a multi-project build, identified by its absolute root
--- projRoot: its directories, its Build.act and its dependencies.
+-- projRoot: its sources, its system directory, its Build.act and its
+-- dependencies.  Its outputs are under projectOutDir projRoot.
 data ProjCtx = ProjCtx
   { projRoot      :: FilePath
-  , projOutDir    :: FilePath
-  , projTypesDir  :: FilePath
-  , projSrcDir    :: FilePath
-  , projSysPath   :: FilePath
-  , projSysTypes  :: FilePath
+  , projSrcDir    :: FilePath               -- src under projRoot, or the source file's directory for a scratch build
+  , projSysPath   :: FilePath               -- the system directory
   , projBuildSpec :: BuildSpec.BuildSpec
   , projDeps      :: [(String, FilePath)]   -- each dependency's name and absolute root
   } deriving (Show)
-
--- | The context of the project rooted at 'root' with its sources in 'src',
--- using the system directory 'sys'. Outputs go to out/ and out/types/ under
--- the root. A discovered project keeps its sources in src/ under the root,
--- and a scratch build keeps them next to the source file it was given.
-mkProjCtx :: FilePath -> FilePath -> FilePath -> BuildSpec.BuildSpec -> [(String, FilePath)] -> ProjCtx
-mkProjCtx sys root src spec deps =
-    ProjCtx { projRoot      = root
-            , projOutDir    = projectOutDir root
-            , projTypesDir  = projectTypesDir root
-            , projSrcDir    = src
-            , projSysPath   = sys
-            , projSysTypes  = sysTypesDir sys
-            , projBuildSpec = spec
-            , projDeps      = deps
-            }
 
 -- | The paths of the project of a source file, and the file's module: its
 -- path under src/ without the extension, prefixed with the project name.  A
@@ -284,17 +266,18 @@ interfaceSearchPath opts sys types deps =
 -- projects.
 projectPaths :: C.CompileOptions -> M.Map FilePath ProjCtx -> ProjCtx -> Paths
 projectPaths opts projMap ctx =
-    Paths { searchPath = interfaceSearchPath opts (projSysPath ctx) (projTypesDir ctx) (depTypePathsFromMap projMap (projRoot ctx))
+    Paths { searchPath = interfaceSearchPath opts (projSysPath ctx) (projectTypesDir root) (depTypePathsFromMap projMap root)
           , sysPath    = projSysPath ctx
-          , sysTypes   = projSysTypes ctx
-          , projPath   = projRoot ctx
-          , projOut    = projOutDir ctx
-          , projTypes  = projTypesDir ctx
-          , binDir     = joinPath [projOutDir ctx, "bin"]
+          , sysTypes   = sysTypesDir (projSysPath ctx)
+          , projPath   = root
+          , projOut    = projectOutDir root
+          , projTypes  = projectTypesDir root
+          , binDir     = joinPath [projectOutDir root, "bin"]
           , srcDir     = projSrcDir ctx
           , isTmp      = False
           , projName   = BuildSpec.specName (projBuildSpec ctx)
           }
+  where root = projRoot ctx
 
 -- | Create a project's binary and types directories, and register its
 -- system type directories with the interface reader.
@@ -426,7 +409,7 @@ enumerateProjectModules ctx = do
 -- resurrect a deleted module.
 pruneMissingModuleOutputs :: ProjCtx -> Paths -> IO ()
 pruneMissingModuleOutputs ctx paths = do
-    let typesRoot = projTypesDir ctx
+    let typesRoot = projTypes paths
     typesExists <- doesDirectoryExist typesRoot
     when typesExists $ do
       mods <- enumerateProjectModules ctx
@@ -761,7 +744,12 @@ discoverProjects gopts sysAbs rootProj depOverrides = do
           spec <- maybe (loadOverriddenSpec depOverrides dirAbs) return mSpec
           let fpMap1 = registerFingerprint dirAbs spec fpMap
           (deps, fpMap2) <- foldM (collectDep pins dirAbs) ([], fpMap1) (M.toList (BuildSpec.concreteDependencies spec))
-          let ctx = mkProjCtx sysAbs dirAbs (projectSrcDir dirAbs) spec [ (n, p) | (n, p, _) <- reverse deps ]
+          let ctx = ProjCtx { projRoot      = dirAbs
+                            , projSrcDir    = projectSrcDir dirAbs
+                            , projSysPath   = sysAbs
+                            , projBuildSpec = spec
+                            , projDeps      = [ (n, p) | (n, p, _) <- reverse deps ]
+                            }
               acc' = M.insert dirAbs ctx acc
               seen' = Data.Set.insert dirAbs seen
           foldM (step seen' pins) (acc', fpMap2) (reverse deps)
@@ -850,7 +838,7 @@ collectDepTypePaths projDir overrides = do
 -- not, each once, in depth-first preorder of projDeps.  Dependencies
 -- missing from the map are skipped.
 depTypePathsFromMap :: M.Map FilePath ProjCtx -> FilePath -> [FilePath]
-depTypePathsFromMap ctxs root = [ projTypesDir ctx | dep <- drop 1 (preorder dependencyRoots [root]), Just ctx <- [M.lookup dep ctxs] ]
+depTypePathsFromMap ctxs root = [ projectTypesDir dep | dep <- drop 1 (preorder dependencyRoots [root]), M.member dep ctxs ]
   where dependencyRoots project = maybe [] (map snd . projDeps) (M.lookup project ctxs)
 
 

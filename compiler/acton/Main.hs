@@ -1216,10 +1216,10 @@ sigProjectSearchOrder projMap rootProj =
 sigTySearchPath :: C.CompileOptions -> Paths -> FilePath -> M.Map FilePath ProjCtx -> [FilePath]
 sigTySearchPath opts paths rootProj projMap =
     case M.lookup rootProj projMap of
-      Just rootCtx -> let ps = [ projTypesDir ctx | root <- sigProjectSearchOrder projMap rootProj
-                                                        , Just ctx <- [M.lookup root projMap] ]
+      Just _       -> let ps = [ projectTypesDir root | root <- sigProjectSearchOrder projMap rootProj
+                                                            , M.member root projMap ]
                               ++ C.searchpath opts ++ systemTypePaths (sysPath paths)
-                      in ps ++ [projTypesDir rootCtx </> projName paths]        -- Add the prefixed type-dir as a last resort in case the source has been deleted
+                      in ps ++ [projectTypesDir rootProj </> projName paths]        -- Add the prefixed type-dir as a last resort in case the source has been deleted
       Nothing      -> searchPath paths
 
 findSigTyFile :: [FilePath] -> A.ModName -> IO (Maybe FilePath)

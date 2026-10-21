@@ -977,7 +977,7 @@ buildProjects gopts ctx = withoutTestLibraries <$> projects
     projects
       | isTmp paths = return (M.singleton root scratch)
       | otherwise   = discoverProjects gopts sys root (C.dep_overrides opts)
-    scratch = mkProjCtx sys root (srcDir paths) (scratchBuildSpec root) []
+    scratch = ProjCtx { projRoot = root, projSrcDir = srcDir paths, projSysPath = sys, projBuildSpec = scratchBuildSpec root, projDeps = [] }
     withoutTestLibraries
       | C.test opts = M.adjust (\p -> p { projBuildSpec = (projBuildSpec p) { BuildSpec.libraries = M.empty } }) root
       | otherwise   = id
