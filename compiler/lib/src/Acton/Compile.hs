@@ -1452,15 +1452,15 @@ parseActFile opts sp mn actFile mOnProgress = do
 -- Module cache -------------------------------------------------------------------------------------
 
 -- | What runs read from .tydb files or finished: each module's .tydb path,
--- pub and impl hash and complete public name map, and single name reads.
--- Every table is read and written under its own lock.  A hash or name
--- table is always locked before the path table, never after.
+-- its pub and impl hashes (read together) and complete public name map,
+-- and single name reads.  Every table is read and written under its own
+-- lock.  A hash or name table is always locked before the path table,
+-- never after.
 data ModuleCache = ModuleCache
-  { tydbPathTable :: MVar (M.Map A.ModName FilePath)                                       -- found paths only
-  , pubHashTable  :: MVar (M.Map A.ModName B.ByteString)                                   -- found answers only
-  , implHashTable :: MVar (M.Map A.ModName B.ByteString)                                   -- found answers only
-  , nameMapTable  :: MVar (M.Map A.ModName (M.Map A.Name InterfaceFiles.NameHashInfo))     -- complete public maps
-  , nameReadTable :: MVar (M.Map (A.ModName, A.Name) (Maybe InterfaceFiles.NameHashInfo))  -- single reads, misses kept
+  { tydbPathTable   :: MVar (M.Map A.ModName FilePath)                                       -- found paths only
+  , moduleHashTable :: MVar (M.Map A.ModName (B.ByteString, B.ByteString))                   -- pub and impl, found answers only
+  , nameMapTable    :: MVar (M.Map A.ModName (M.Map A.Name InterfaceFiles.NameHashInfo))     -- complete public maps
+  , nameReadTable   :: MVar (M.Map (A.ModName, A.Name) (Maybe InterfaceFiles.NameHashInfo))  -- single reads, misses kept
   }
 
 -- | The two hashes of a module or name: its public interface and its
@@ -1471,12 +1471,8 @@ hashKindName                            :: HashKind -> String
 hashKindName Pub                        = "pub"
 hashKindName Impl                       = "impl"
 
-hashTable                               :: HashKind -> ModuleCache -> MVar (M.Map A.ModName B.ByteString)
-hashTable Pub                           = pubHashTable
-hashTable Impl                          = implHashTable
-
 newModuleCache :: IO ModuleCache
-newModuleCache = ModuleCache <$> newMVar M.empty <*> newMVar M.empty <*> newMVar M.empty <*> newMVar M.empty <*> newMVar M.empty
+newModuleCache = ModuleCache <$> newMVar M.empty <*> newMVar M.empty <*> newMVar M.empty <*> newMVar M.empty
 
 -- | Look a key up, loading and remembering it on a miss.  Only found values
 -- are kept, so a miss is loaded again next time.  The table stays locked
@@ -1509,13 +1505,13 @@ lookupTydbPath cache searchPaths mn = modifyMVar (tydbPathTable cache) $ \known 
 withTydb :: ModuleCache -> [FilePath] -> A.ModName -> (FilePath -> IO (Maybe a)) -> IO (Maybe a)
 withTydb cache searchPaths m readTydb = lookupTydbPath cache searchPaths m >>= maybe (return Nothing) readTydb
 
--- | A module's current pub or impl hash, from its .tydb header unless a
--- finished module or an earlier read remembered it.
+-- | A module's current pub or impl hash.  Both come from one read of its
+-- .tydb header, unless a finished module or an earlier read remembered them.
 lookupModuleHash :: ModuleCache -> [FilePath] -> HashKind -> A.ModName -> IO (Maybe B.ByteString)
-lookupModuleHash cache searchPaths kind m = memoFound (hashTable kind cache) m $
-    withTydb cache searchPaths m (fmap (fmap pick) . InterfaceFiles.readModuleHashesMaybe)
+lookupModuleHash cache searchPaths kind m = fmap pick <$> memoFound (moduleHashTable cache) m
+    (withTydb cache searchPaths m (fmap (fmap (\(_, pub, impl) -> (pub, impl))) . InterfaceFiles.readModuleHashesMaybe))
   where
-    pick (_, pub, impl) = case kind of
+    pick (pub, impl) = case kind of
       Pub  -> pub
       Impl -> impl
 
@@ -1542,8 +1538,7 @@ lookupNameHash cache searchPaths m n = do
 -- complete maps: it would hide the single-name reads of its .tydb.
 rememberFront :: ModuleCache -> A.ModName -> FrontResult -> IO ()
 rememberFront cache m fr = do
-    modifyMVar_ (pubHashTable cache)  (return . M.insert m (mhPub hashes))
-    modifyMVar_ (implHashTable cache) (return . M.insert m (mhImpl hashes))
+    modifyMVar_ (moduleHashTable cache) (return . M.insert m (mhPub hashes, mhImpl hashes))
     unless (M.null (mhNames hashes)) $
       modifyMVar_ (nameMapTable cache) (return . M.insert m (mhNames hashes))
   where hashes = frHashes fr
