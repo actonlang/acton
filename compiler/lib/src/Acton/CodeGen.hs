@@ -65,7 +65,7 @@ generateCode split env srcbase srcText emitLines m hash = return (n,h,c,support)
         env0                        = genEnv $ setMod (modname m) env
 
 -- | The first line of a generated .c, .h and closure support file starts with
--- this tag, followed by the hex impl hash the code was generated for.
+-- this tag, followed by the hash that generateCode is given, in hex.
 implHashTag                         :: String
 implHashTag                         = "/* Acton impl hash:"
 

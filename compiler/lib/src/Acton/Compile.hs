@@ -387,13 +387,13 @@ data ModuleSource = ModuleSource
 
 -- | Generating C for one module.
 data BackJob = BackJob
-  { bjKey      :: TaskKey
-  , bjPaths    :: Paths
-  , bjOpts     :: C.CompileOptions
-  , bjTypeEnv  :: Acton.Env.Env0        -- protocols converted
-  , bjModule   :: A.Module              -- typed; only the selected names for a deferred module
-  , bjSource   :: String                -- for #line directives
-  , bjImplHash :: B.ByteString          -- tagged into the first line of each generated file
+  { bjKey         :: TaskKey
+  , bjPaths       :: Paths
+  , bjOpts        :: C.CompileOptions
+  , bjTypeEnv     :: Acton.Env.Env0     -- protocols converted
+  , bjModule      :: A.Module           -- typed; only the selected names for a deferred module
+  , bjSource      :: String             -- for #line directives
+  , bjCodegenHash :: B.ByteString       -- tagged into the first line of each generated file
   }
 
 -- | Back work that waits for every dependent's interest.  It keeps only
@@ -2318,11 +2318,11 @@ storedBackJob env module' = loadBackJob (moduleBuild env) (checkedModules env) (
 -- | A back job for a typed module read back from a .tydb: its source read
 -- again, its environment rebuilt with protocols converted.
 loadBackJob :: BuildEnv -> Acton.Env.Env0 -> TaskKey -> Paths -> C.CompileOptions -> A.Module -> B.ByteString -> IO BackJob
-loadBackJob build env key paths opts typed implHash = do
+loadBackJob build env key paths opts typed codegenHash = do
     snap  <- Source.readSource (buildSources build) (srcFile paths (tkMod key))
     scope <- Acton.Env.mkEnv (searchPath paths) env typed
     return BackJob { bjKey = key, bjPaths = paths, bjOpts = opts, bjTypeEnv = Converter.convEnvProtos scope
-                   , bjModule = typed, bjSource = Source.ssText snap, bjImplHash = implHash }
+                   , bjModule = typed, bjSource = Source.ssText snap, bjCodegenHash = codegenHash }
 
 
 -- Front passes -------------------------------------------------------------------------------------
@@ -2412,7 +2412,7 @@ runFrontPasses env source parsed = do
       let names  = hashedNames hashed
           -- reconstruct's typeEnv is already protocol-converted.
           job    = BackJob { bjKey = keyOf env, bjPaths = pathsOf env, bjOpts = opts, bjTypeEnv = typeEnv
-                           , bjModule = typed, bjSource = sourceText source, bjImplHash = hashedImpl hashed }
+                           , bjModule = typed, bjSource = sourceText source, bjCodegenHash = hashedImpl hashed }
           timing = FrontTiming
             { ftEnv               = envDone - start
             , ftKinds             = kindsDone - envDone
@@ -2915,7 +2915,7 @@ runBackPasses gopts job shouldWrite onProgress = do
       boxed               <- pass BackPassBoxing          (do m <- Acton.Boxing.doBoxing env4 lifted
                                                               dumpPass BackPassBoxing m
                                                               return m)
-      (_, h, c, support)  <- pass BackPassCodeGen         (Acton.CodeGen.generateCode (output == WriteFiles) env4 relSrcBase (bjSource job) (not (C.dbg_no_lines opts)) boxed (Hashing.hashHex (bjImplHash job)))
+      (_, h, c, support)  <- pass BackPassCodeGen         (Acton.CodeGen.generateCode (output == WriteFiles) env4 relSrcBase (bjSource job) (not (C.dbg_no_lines opts)) boxed (Hashing.hashHex (bjCodegenHash job)))
       case output of
         PrintHeader -> pass BackPassRender (render h) >> putStrLn h
         PrintCode   -> pass BackPassRender (render c) >> putStrLn c
@@ -3276,18 +3276,22 @@ readCodegenHash path = either (const Nothing) taggedHash <$> trySync (withFile p
                                ""  -> Nothing
                                hex -> Just hex
 
--- | A module's generated code, given the hash it should be tagged with: the
--- .c is read first, then the .h, then the closure support file.
+-- | The hash a module's generated code should be tagged with, and the tags
+-- its .c, .h and closure support file carry, read in that order.
 codegenStatus :: Paths -> A.ModName -> B.ByteString -> IO CodegenStatus
 codegenStatus paths mn expected = CodegenStatus (Hashing.hashHex expected) <$> readCodegenHash (base ++ ".c") <*> readCodegenHash (base ++ ".h") <*> readCodegenHash (Acton.CodeGen.supportFile base)
   where base = outBase paths mn
 
--- | Check every generated artifact against the expected impl hash.
+-- | Whether the .c, the .h and the closure support file are all tagged with
+-- the expected hash.
 codegenUpToDate :: CodegenStatus -> Bool
 codegenUpToDate status =
   all (== Just (csExpected status)) [csC status,csH status,csSupport status]
 
--- | Format a short delta message for stale codegen.
+-- | The verbose suffix of a module whose generated code is out of date: the
+-- first eight hex digits of each file's tag, or missing, and of the expected
+-- hash.  The .c, the .h and the closure support file share one pair when
+-- they carry the same tag.
 formatCodegenDelta :: CodegenStatus -> String
 formatCodegenDelta status
   | Just _ <- csC status, csC status == csH status, csH status == csSupport status
