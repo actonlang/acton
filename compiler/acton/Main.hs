@@ -517,13 +517,17 @@ withProjectLockNotice gopts projDir action =
       unless (C.quiet gopts) $
         putStrLn ("Waiting for compiler lock in " ++ projDir)
 
+-- | Run the action while the generation is current, else return the stale
+-- value.
+ifCurrent :: Generation -> a -> IO a -> IO a
+ifCurrent gen stale action = isCurrent gen >>= \current -> if current then action else return stale
+
+-- | Run the action under the project lock if the generation is current
+-- both before and after waiting for the lock: the action's result, or
+-- False when the generation went stale first.
 withProjectLockForGen :: C.GlobalOptions -> Generation -> FilePath -> IO Bool -> IO Bool
-withProjectLockForGen gopts gen projDir action = do
-    completed <- newIORef False
-    whenCurrent gen $
-      withProjectLockNotice gopts projDir $
-        whenCurrent gen (action >>= writeIORef completed)
-    readIORef completed
+withProjectLockForGen gopts gen projDir action =
+    ifCurrent gen False (withProjectLockNotice gopts projDir (ifCurrent gen False action))
 
 requireProjectLayout :: Paths -> IO ()
 requireProjectLayout paths = do
@@ -1555,11 +1559,7 @@ compileFilesChanged sp gopts opts srcFiles scope mChangedPaths mWatch = do
                           then reportCompileErrors
                           else do
                             cleanupProgress
-                            result <- newIORef False
-                            whenCurrent gen $ do
-                              success <- runCliPostCompile cliHooks gopts plan env
-                              writeIORef result success
-                            not <$> readIORef result
+                            not <$> ifCurrent gen False (runCliPostCompile cliHooks gopts plan env)
           either reportPlanError runPlan planRes
     runCompile `finally` cleanupProgress
 
