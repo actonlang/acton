@@ -241,6 +241,7 @@ module Acton.Compile
   , Generation
   , generationNumber
   , isCurrent
+  , ifCurrent
   , whenCurrent
   , currentGeneration
   , CompileScheduler
@@ -647,8 +648,13 @@ data Generation = Generation
 isCurrent :: Generation -> IO Bool
 isCurrent gen = (== generationNumber gen) <$> readIORef (generationCounter gen)
 
+-- | The action's result if the generation is current when it starts, else
+-- the given value.  The action is not stopped if the generation goes stale.
+ifCurrent :: Generation -> a -> IO a -> IO a
+ifCurrent gen stale action = isCurrent gen >>= \current -> if current then action else return stale
+
 whenCurrent :: Generation -> IO () -> IO ()
-whenCurrent gen action = isCurrent gen >>= \current -> when current action
+whenCurrent gen = ifCurrent gen ()
 
 -- | The generation a scheduler is at, which a one-shot build runs as. A
 -- fresh scheduler is at generation 0, and it stays current until a run is

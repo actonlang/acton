@@ -517,11 +517,6 @@ withProjectLockNotice gopts projDir action =
       unless (C.quiet gopts) $
         putStrLn ("Waiting for compiler lock in " ++ projDir)
 
--- | Run the action while the generation is current, else return the stale
--- value.
-ifCurrent :: Generation -> a -> IO a -> IO a
-ifCurrent gen stale action = isCurrent gen >>= \current -> if current then action else return stale
-
 -- | Run the action under the project lock if the generation is current
 -- both before and after waiting for the lock: the action's result, or
 -- False when the generation went stale first.
@@ -950,7 +945,7 @@ watchFile gopts opts file = do
         withTempDirOpts opts $ \opts' _ ->
           withCompileWatchContext gopts $ \watchCtx -> do
             let sched = cwScheduler watchCtx
-                runOnce gen mChanged = whenCurrent gen $
+                runOnce gen mChanged =
                   void $ compileFilesChanged sp gopts opts' [absFile] SelectedFiles mChanged (Just (watchCtx, gen))
             runWatchFile gopts absFile sched runOnce
 
