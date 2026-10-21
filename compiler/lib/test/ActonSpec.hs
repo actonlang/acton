@@ -1182,7 +1182,7 @@ main = do
     describe "CompileScheduler" $ do
       it "waits for canceled generation cleanup before launching the replacement" $ do
         let gopts = C.defaultGlobalOptions { C.color = C.Never, C.quiet = True, C.jobs = 1 }
-        sched <- Compile.newCompileScheduler gopts 1
+        sched <- Compile.newCompileScheduler gopts
         oldStarted <- newEmptyMVar
         oldCleanupStarted <- newEmptyMVar
         releaseOldCleanup <- newEmptyMVar

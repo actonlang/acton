@@ -620,10 +620,7 @@ withCompileWatchContext gopts action = do
             (\previous -> void (installHandler sigTERM previous Nothing)) $ \_ ->
       bracket create cleanup action
   where
-    create = do
-      maxParallel <- compileParallelism gopts
-      CliWatchContext <$> newCompileScheduler gopts maxParallel <*> initProgressUI gopts maxParallel
-                      <*> newProgressState
+    create = CliWatchContext <$> newCompileScheduler gopts <*> initProgressUI gopts <*> newProgressState
     cleanup ctx = do
       stopCompile (cwScheduler ctx)
       progressReset (cwProgressUI ctx) (cwProgressState ctx)
@@ -1496,18 +1493,17 @@ compileFilesChanged :: Source.SourceProvider
                     -> Maybe (CliWatchContext, Generation)
                     -> IO Bool
 compileFilesChanged sp gopts opts srcFiles scope mChangedPaths mWatch = do
-    maxParallel <- compileParallelism gopts
     (progressUI, progressState) <- case mWatch of
       Just (ctx, _) -> return (cwProgressUI ctx, cwProgressState ctx)
       Nothing -> do
-        ui <- initProgressUI gopts maxParallel
+        ui <- initProgressUI gopts
         st <- newProgressState
         return (ui, st)
     let logLine = progressLogLine progressUI
     (sched, gen) <- case mWatch of
       Just (ctx, gen) -> return (cwScheduler ctx, gen)
       Nothing -> do
-        sched' <- newCompileScheduler gopts maxParallel
+        sched' <- newCompileScheduler gopts
         gen' <- currentGeneration sched'
         return (sched', gen')
     let cleanupProgress = whenCurrent gen (progressReset progressUI progressState)
@@ -3001,9 +2997,11 @@ data ProgressTask = ProgressTask
   , ptProgress :: Maybe Double
   }
 
--- | Initialize terminal progress UI state and enablement.
-initProgressUI :: C.GlobalOptions -> Int -> IO ProgressUI
-initProgressUI gopts maxLines = do
+-- | Initialize terminal progress UI state and enablement.  It shows at most
+-- compileParallelism gopts live lines.
+initProgressUI :: C.GlobalOptions -> IO ProgressUI
+initProgressUI gopts = do
+    maxLines <- compileParallelism gopts
     tty <- hIsTerminalDevice stdout
     let widthAware = (tty || C.tty gopts) && not (C.quiet gopts)
         enabled = widthAware && not (C.noProgress gopts)
@@ -3019,7 +3017,7 @@ initProgressUI gopts maxLines = do
     return ProgressUI
       { puEnabled = enabled
       , puWidthAware = widthAware
-      , puMaxLines = max 1 maxLines
+      , puMaxLines = maxLines
       , puLinesRef = linesRef
       , puVisibleRef = visibleRef
       , puSpinnerRef = spinnerRef

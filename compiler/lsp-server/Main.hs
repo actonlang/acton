@@ -131,9 +131,7 @@ projectWatchersRef = unsafePerformIO (newIORef HM.empty)
 {-# NOINLINE compileScheduler #-}
 -- | Shared compile scheduler for LSP events and back jobs.
 compileScheduler :: Compile.CompileScheduler
-compileScheduler = unsafePerformIO $ do
-  maxParallel <- Compile.compileParallelism lspGlobalOpts
-  Compile.newCompileScheduler lspGlobalOpts maxParallel
+compileScheduler = unsafePerformIO (Compile.newCompileScheduler lspGlobalOpts)
 
 -- | Global compiler options for the LSP server (quiet, no color).
 lspGlobalOpts :: C.GlobalOptions

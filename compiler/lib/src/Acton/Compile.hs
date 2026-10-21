@@ -592,14 +592,15 @@ data BackQueue = BackQueue
 data QueuedJob = QueuedJob Generation (BuildEvent -> IO ()) BackJob
 
 -- | Create a scheduler at generation 0 with an empty module cache. Its back
--- passes run on the given number of workers (at least one) with the given
+-- passes run on one worker per compileParallelism gopts, with the given
 -- global options, which decide whether back passes report their time and
 -- timing.
-newCompileScheduler :: C.GlobalOptions -> Int -> IO CompileScheduler
-newCompileScheduler gopts workers = do
+newCompileScheduler :: C.GlobalOptions -> IO CompileScheduler
+newCompileScheduler gopts = do
+  workers <- compileParallelism gopts
   counter <- newIORef 0
   queue <- BackQueue <$> newTChanIO <*> newTVarIO M.empty <*> newTVarIO M.empty
-  replicateM_ (max 1 workers) (forkIO (backWorker gopts queue))
+  replicateM_ workers (forkIO (backWorker gopts queue))
   CompileScheduler counter <$> newMVar Nothing <*> pure queue <*> newIORef Nothing <*> newModuleCache
 
 -- | How many modules compile at once: --jobs when given, else one per

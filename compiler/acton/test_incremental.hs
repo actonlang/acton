@@ -2017,7 +2017,7 @@ p35_changed_path_keeps_unaffected_provider =
     writeFileUtf8 actA "aaa = 2\n"
     actAAbs <- canonicalizePath actA
     actMainAbs <- canonicalizePath actMain
-    sched <- Compile.newCompileScheduler quietGlobalOptions 1
+    sched <- Compile.newCompileScheduler quietGlobalOptions
     plan <- planBuild quietGlobalOptions sched opts (Compile.PlanRequest [actMainAbs] Compile.SelectedFiles (Just [actAAbs]))
     bTask <- case find (\t -> Compile.tkMod (Compile.gtKey t) == A.modName ["incremental_cases","b"]) (Compile.cpNeededTasks plan) of
       Just t -> pure t
@@ -2075,7 +2075,7 @@ p35_dbp_changed_path_includes_provider =
       ]
     actAAbs <- canonicalizePath actA
     actMainAbs <- canonicalizePath actMain
-    sched <- Compile.newCompileScheduler quietGlobalOptions 1
+    sched <- Compile.newCompileScheduler quietGlobalOptions
     plan <- planBuild quietGlobalOptions sched opts (Compile.PlanRequest [actMainAbs] Compile.SelectedFiles (Just [actAAbs]))
     let selectedMods = [ Compile.tkMod (Compile.gtKey t) | t <- Compile.cpNeededTasks plan ]
     assertBool "expected changed-path plan to include DBP provider"
@@ -2979,7 +2979,7 @@ p56_changed_path_prunes_removed_module =
     assertArtifactsExist (rootMain : supportMain : outsA)
     actAAbs <- canonicalizePath actA
     actMainAbs <- canonicalizePath actMain
-    sched <- Compile.newCompileScheduler quietGlobalOptions 1
+    sched <- Compile.newCompileScheduler quietGlobalOptions
     -- The first plan records the build spec, so the next plan follows the
     -- changed paths, as in watch mode and the LSP server.
     _ <- planBuild quietGlobalOptions sched opts (Compile.PlanRequest [actMainAbs] Compile.SelectedFiles (Just []))
@@ -3107,7 +3107,7 @@ recordCompileEvents = do
     proj <- canonicalizePath tmp
     createDirectoryIfMissing True (proj </> "src")
     writeBuildAct proj eventsProjName []
-    sched <- Compile.newCompileScheduler eventsGlobalOptions 1
+    sched <- Compile.newCompileScheduler eventsGlobalOptions
     eventLog <- EventLog <$> newIORef [] <*> newIORef [] <*> newIORef []
     let options = C.defaultCompileOptions
           { C.syspath = distDir
