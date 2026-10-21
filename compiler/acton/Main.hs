@@ -1528,7 +1528,7 @@ compileFilesChanged sp gopts opts srcFiles scope mChangedPaths mWatch = do
                 let cctx = cpContext plan
                     opts' = ccOpts cctx
                     watchMode = C.watch opts'
-                cliHooks <- initCliCompileHooks progressUI progressState gopts gen plan
+                reporter <- newCliReporter progressUI progressState gopts gen plan
                 let finalizeCompile onError = do
                       cleanupProgress
                       onError
@@ -1542,7 +1542,7 @@ compileFilesChanged sp gopts opts srcFiles scope mChangedPaths mWatch = do
                       finalizeCompile $
                         unless watchMode System.Exit.exitFailure
                 compileStart <- getTime Monotonic
-                compileRes <- runCompilePlan sp gopts sched gen plan (cchOnEvent cliHooks)
+                compileRes <- runCompilePlan sp gopts sched gen plan (reportEvent reporter)
                 backFailure <- case compileRes of
                   Right _ -> waitBackJobs sched gen
                   Left _ -> return Nothing
@@ -1559,7 +1559,7 @@ compileFilesChanged sp gopts opts srcFiles scope mChangedPaths mWatch = do
                           then reportCompileErrors
                           else do
                             cleanupProgress
-                            not <$> ifCurrent gen False (runCliPostCompile cliHooks gopts plan env)
+                            not <$> ifCurrent gen False (runCliPostCompile reporter gopts plan env)
           either reportPlanError runPlan planRes
     runCompile `finally` cleanupProgress
 
@@ -1585,23 +1585,25 @@ overlayChangedPaths sp mPaths = do
         Right snap ->
           return (Just (normalise path, snap { Source.ssIsOverlay = True }))
 
-data CliCompileHooks = CliCompileHooks
-  { cchOnEvent :: BuildEvent -> IO ()
-  , cchLogLine :: String -> IO ()
-  , cchFinalStart :: IO ()
-  , cchFinalDone :: Bool -> IO ()
-  , cchProgressUI :: ProgressUI
+-- | How the CLI reports one build: its events, its log lines and the final
+-- step, on the progress UI.
+data CliReporter = CliReporter
+  { reportEvent        :: BuildEvent -> IO ()
+  , reportLine         :: String -> IO ()
+  , startFinal         :: IO ()
+  , finishFinal        :: Bool -> IO ()       -- whether the final step succeeded
+  , reporterProgressUI :: ProgressUI
   }
 
 -- | Build the compile event handler and state for CLI progress and
 -- completion logs.
-initCliCompileHooks :: ProgressUI
-                    -> ProgressState
-                    -> C.GlobalOptions
-                    -> Generation
-                    -> CompilePlan
-                    -> IO CliCompileHooks
-initCliCompileHooks progressUI progressState gopts gen plan = do
+newCliReporter :: ProgressUI
+               -> ProgressState
+               -> C.GlobalOptions
+               -> Generation
+               -> CompilePlan
+               -> IO CliReporter
+newCliReporter progressUI progressState gopts gen plan = do
     let neededTasks = cpNeededTasks plan
         rootProj = ccRootProj (cpContext plan)
         rootPaths = ccPathsRoot (cpContext plan)
@@ -2074,23 +2076,23 @@ initCliCompileHooks progressUI progressState gopts gen plan = do
               forM_ mElapsed $ \tFinal ->
                 when showDoneLines $
                   logRendered (\cols -> finalDoneLine cols tFinal)
-    return CliCompileHooks
-      { cchOnEvent = onEvent
-      , cchLogLine = logLine
-      , cchFinalStart = onFinalStart
-      , cchFinalDone = onFinalDone
-      , cchProgressUI = progressUI
+    return CliReporter
+      { reportEvent = onEvent
+      , reportLine = logLine
+      , startFinal = onFinalStart
+      , finishFinal = onFinalDone
+      , reporterProgressUI = progressUI
       }
 
 -- | Run CLI-only post-compile steps.
-runCliPostCompile :: CliCompileHooks
+runCliPostCompile :: CliReporter
                   -> C.GlobalOptions
                   -> CompilePlan
                   -> Acton.Env.Env0
                   -> IO Bool
-runCliPostCompile cliHooks gopts plan env = do
+runCliPostCompile reporter gopts plan env = do
     prepStart <- getTime Monotonic
-    let logLine = cchLogLine cliHooks
+    let logLine = reportLine reporter
     let cctx = cpContext plan
         opts' = ccOpts cctx
         pathsRoot = ccPathsRoot cctx
@@ -2136,9 +2138,9 @@ runCliPostCompile cliHooks gopts plan env = do
         genBuildZigFiles (projBuildSpec pctx) depPaths depOpts depPathOverrides
     logTiming gopts opts' logLine "dependency build preparation" prepStart
     let runFinal action = do
-          cchFinalStart cliHooks
-          success <- action `onException` cchFinalDone cliHooks False
-          cchFinalDone cliHooks success
+          startFinal reporter
+          success <- action `onException` finishFinal reporter False
+          finishFinal reporter success
           return success
     if C.skip_build opts'
       then
@@ -2148,10 +2150,10 @@ runCliPostCompile cliHooks gopts plan env = do
           then do
             testBinTasks <- catMaybes <$> mapM (filterMainActor env pathsRoot) preTestBinTasks
             if C.altOutput opts' then return True else
-              runFinal (compileBins gopts opts' pathsRoot env rootSpec rootModules testBinTasks allowPrune' rootModuleEntries rootBuildLibraries rootDepModuleOpts rootDepPathOverrides (Just (cchProgressUI cliHooks)))
+              runFinal (compileBins gopts opts' pathsRoot env rootSpec rootModules testBinTasks allowPrune' rootModuleEntries rootBuildLibraries rootDepModuleOpts rootDepPathOverrides (Just (reporterProgressUI reporter)))
           else do
             if C.altOutput opts' then return True else
-              runFinal (compileBins gopts opts' pathsRoot env rootSpec rootModules preBinTasks allowPrune' rootModuleEntries rootBuildLibraries rootDepModuleOpts rootDepPathOverrides (Just (cchProgressUI cliHooks)))
+              runFinal (compileBins gopts opts' pathsRoot env rootSpec rootModules preBinTasks allowPrune' rootModuleEntries rootBuildLibraries rootDepModuleOpts rootDepPathOverrides (Just (reporterProgressUI reporter)))
 -- Generate documentation index for a project build by reading module names and
 -- docstrings from cached .tydb headers or source headers.
 generateProjectDocIndex :: Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -> Paths -> [String] -> IO ()

@@ -617,7 +617,7 @@ runCompile gen path = do
         if lockOk
           then do
             progressReportImmediate progress "Running Acton front passes" Nothing
-            ok <- runCompilePlanWithHooks gen rootProj path sp gopts opts progress
+            ok <- planAndCompile gen rootProj path sp gopts opts progress
             if ok
               then finish "Acton ready"
               else finish "Acton failed"
@@ -639,8 +639,8 @@ resolveCompileRoot path opts = do
       Project.normalizePathSafe (Project.projPath paths)
 
 -- | Prepare and run a compile while holding the per-run project work lock.
-runCompilePlanWithHooks :: Compile.Generation -> FilePath -> FilePath -> Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -> LspProgress -> LspM () Bool
-runCompilePlanWithHooks gen rootProj path sp gopts opts progress = do
+planAndCompile :: Compile.Generation -> FilePath -> FilePath -> Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -> LspProgress -> LspM () Bool
+planAndCompile gen rootProj path sp gopts opts progress = do
   env <- getLspEnv
   -- runCompilePlan calls onEvent only while gen is current, so publishFor
   -- and progressForQueued, which only onEvent uses, do not check it.
