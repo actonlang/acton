@@ -1492,18 +1492,12 @@ scanTopLevelChunks src start emit
              }
 
 parseTopLevelChunk :: String -> String -> TopLevelChunk -> IO (Either Control.Exception.SomeException [S.Stmt])
-parseTopLevelChunk fileName fileContent chunk = do
-  parsed <- trySync $
-    Control.Exception.evaluate $
-      runParser (St.evalStateT (top_chunk_input fileName chunk) initState) fileName fileContent
+parseTopLevelChunk fileName fileContent chunk = trySync $ do
+  parsed <- Control.Exception.evaluate $
+    runParser (St.evalStateT (top_chunk_input fileName chunk) initState) fileName fileContent
   case parsed of
-    Left err -> return (Left err)
-    Right (Left bundle) -> return (Left (Control.Exception.toException bundle))
-    Right (Right stmts) -> do
-      forced <- trySync (Control.Exception.evaluate (rnf stmts))
-      case forced of
-        Left err -> return (Left err)
-        Right () -> return (Right stmts)
+    Left bundle -> Control.Exception.throwIO bundle
+    Right stmts -> stmts <$ Control.Exception.evaluate (rnf stmts)
 
 data ChunkProgressEvent = ChunkProgressDone Int | ChunkProgressStop
 
