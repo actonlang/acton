@@ -348,6 +348,11 @@ data TaskKey = TaskKey { tkProj :: FilePath, tkMod :: A.ModName } deriving (Eq, 
 isBuiltin                               :: TaskKey -> Bool
 isBuiltin k                             = tkMod k == mBuiltin
 
+-- | A module as failure messages name it: its project's root directory, a
+-- slash, and its dotted name.
+taskKeyText                             :: TaskKey -> String
+taskKeyText k                           = tkProj k ++ "/" ++ modNameToString (tkMod k)
+
 -- | A discovered module: its key, its project's paths, the form discovery
 -- read it in and the in-graph providers of its imports.
 data GlobalTask = GlobalTask
@@ -443,8 +448,7 @@ compileFailureMessage                   :: CompileFailure -> String
 compileFailureMessage (ImportCycles cs) = "Cyclic imports: " ++ concat [ '\n' : concat [ tkProj k ++ ":" ++ modNameToString (tkMod k) ++ " " | k <- c ] | c <- cs ]
 compileFailureMessage BuiltinFailed     = "Builtin compilation failed"
 compileFailureMessage (OutputFailed k kind msg)
-                                        = "Front output job failed for " ++ tkProj k ++ "/" ++ modNameToString (tkMod k)
-                                          ++ " (" ++ frontOutputKindName kind ++ "): " ++ msg
+                                        = "Front output job failed for " ++ taskKeyText k ++ " (" ++ frontOutputKindName kind ++ "): " ++ msg
 compileFailureMessage (DeferredBackFailed msg)
                                         = msg
 
@@ -457,7 +461,7 @@ data BackPassFailure = BackPassFailure
 -- | The text a user sees for a failed back job.
 backPassFailureMessage :: BackPassFailure -> String
 backPassFailureMessage (BackPassFailure key msg) =
-  "Back pass failed for " ++ tkProj key ++ "/" ++ modNameToString (tkMod key) ++ ": " ++ msg
+  "Back pass failed for " ++ taskKeyText key ++ ": " ++ msg
 
 -- | How a back job ended: BackJobOk with its time, Nothing when quiet, and
 -- each pass's time, only with --timing, or BackJobFailed.
