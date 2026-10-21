@@ -1534,7 +1534,7 @@ p27_overlay_source_provider = testCase "27-overlay snapshots drive readModuleTas
   paths <- Project.findPaths actAAbs C.defaultCompileOptions
   taskSame <- Compile.readModuleTask spSame quietGlobalOptions C.defaultCompileOptions paths actAAbs
   case taskSame of
-    Compile.TyTask{} -> pure ()
+    Compile.TyTask _ -> pure ()
     _ -> assertFailure "expected TyTask when overlay matches header"
   let textDiff = "\"\"\"Overlay doc\"\"\"\naaa = 2\n"
       bytesDiff = TE.encodeUtf8 (T.pack textDiff)
@@ -1546,13 +1546,13 @@ p27_overlay_source_provider = testCase "27-overlay snapshots drive readModuleTas
       spDiff = disk { Source.spReadOverlay = \path -> return (if path == actAAbs then Just snapDiff else Nothing) }
   taskDiff <- Compile.readModuleTask spDiff quietGlobalOptions C.defaultCompileOptions paths actAAbs
   case taskDiff of
-    Compile.ParseTask{ Compile.src = srcText, Compile.srcBytes = srcBytes } -> do
-      srcText @?= textDiff
-      srcBytes @?= bytesDiff
+    Compile.ParseTask source _ doc -> do
+      Compile.sourceText source @?= textDiff
+      Compile.sourceBytes source @?= bytesDiff
+      doc @?= Just "Overlay doc"
     _ -> assertFailure "expected ParseTask when overlay differs from header"
-  docDiff <- Compile.readModuleDoc spDiff quietGlobalOptions C.defaultCompileOptions paths actAAbs
-  case docDiff of
-    Just (mn, Just doc) -> do
+  case Compile.docIndexEntry C.defaultCompileOptions paths taskDiff of
+    Just (mn, Just doc, _) -> do
       mn @?= A.modName ["incremental_cases", "a"]
       doc @?= "Overlay doc"
     _ -> assertFailure "expected module doc from overlay header"
@@ -2023,7 +2023,7 @@ p35_changed_path_keeps_unaffected_provider =
       [actMainAbs]
       False
       (Just [actAAbs])
-    bTask <- case find (\t -> Compile.name (Compile.gtTask t) == A.modName ["incremental_cases","b"]) (Compile.cpNeededTasks plan) of
+    bTask <- case find (\t -> Compile.tkMod (Compile.gtKey t) == A.modName ["incremental_cases","b"]) (Compile.cpNeededTasks plan) of
       Just t -> pure t
       Nothing -> assertFailure "expected b in changed-path compile plan" >> fail "missing b task"
     let bProviders = Compile.gtImportProviders bTask
@@ -2088,7 +2088,7 @@ p35_dbp_changed_path_includes_provider =
       [actMainAbs]
       False
       (Just [actAAbs])
-    let selectedMods = [ Compile.name (Compile.gtTask t) | t <- Compile.cpNeededTasks plan ]
+    let selectedMods = [ Compile.tkMod (Compile.gtKey t) | t <- Compile.cpNeededTasks plan ]
     assertBool "expected changed-path plan to include DBP provider"
       (A.modName ["incremental_cases","provider"] `elem` selectedMods)
     assertBool "expected unchanged sibling consumer to register DBP interest"

@@ -373,8 +373,8 @@ compilePlanFromCache ctx changedPath cache = do
         dbpBlocked
         [changedPath]
       let rootProj = Compile.ccRootProj ctx
-          rootTasks =
-            [ Compile.gtTask t
+          rootModules =
+            [ Compile.tkMod (Compile.gtKey t)
             | t <- neededTasks
             , Compile.tkProj (Compile.gtKey t) == rootProj
             ]
@@ -392,7 +392,7 @@ compilePlanFromCache ctx changedPath cache = do
         , Compile.cpGlobalTasks = globalTasks
         , Compile.cpNeededTasks = neededTasks
         , Compile.cpDbpBlocked = dbpBlocked
-        , Compile.cpRootTasks = rootTasks
+        , Compile.cpRootModules = rootModules
         , Compile.cpIncremental = True
         , Compile.cpAllowPrune = False
         , Compile.cpSrcFiles = [changedPath]

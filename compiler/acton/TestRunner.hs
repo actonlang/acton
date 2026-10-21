@@ -233,9 +233,9 @@ selectTestSources gopts opts paths topts files = do
           else do
             task <- readModuleTask sp gopts opts paths { modName = mn } file
             case task of
-              TyTask{ tyTests = names } | matches names -> return True
-              ParseTask{ src = source } -> fromSource mn matches file source
-              ParseErrorTask{} -> return True
+              TyTask h | matches (InterfaceFiles.summaryTests h) -> return True
+              ParseTask source _ _ -> fromSource mn matches file (sourceText source)
+              ParseErrorTask _ -> return True
               _ -> Source.spReadFile sp file >>= fromSource mn matches file . Source.ssText
     fromSource mn matches file source = do
       parsed <- parseActSource opts mn file source Nothing

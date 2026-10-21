@@ -85,6 +85,7 @@ module Acton.Compile
   ( TaskKey(..)
   , GlobalTask(..)
   , CompileTask(..)
+  , ModuleSource(..)
   , BackJob(..)
   , DeferredBackJob(..)
   , FrontResult(..)
@@ -132,8 +133,7 @@ module Acton.Compile
   , parseActSource
   , parseActFile
   , readModuleTask
-  , readModuleDoc
-  , readModuleDocIndexEntry
+  , docIndexEntry
   , buildGlobalTasks
   , importGraph
   , ModuleGraph
@@ -599,7 +599,7 @@ data CompilePlan = CompilePlan
   , cpGlobalTasks :: [GlobalTask]
   , cpNeededTasks :: [GlobalTask]
   , cpDbpBlocked :: Data.Set.Set TaskKey
-  , cpRootTasks :: [CompileTask]
+  , cpRootModules :: [A.ModName]                  -- selected root-project modules, before library expansion
   , cpIncremental :: Bool
   , cpAllowPrune :: Bool
   , cpSrcFiles :: [FilePath]
@@ -654,14 +654,14 @@ prepareCompilePlanFromContext sp gopts ctx srcFiles allowPrune mChangedPaths = d
     Nothing -> selectNeededTasks pathsRoot rootProj modules srcFiles
     Just changed -> selectAffectedTasks rootProj opts' modules dbpBlocked changed
   let neededTasks = expandBuildLibraryTasks modules neededTasks0
-      rootTasks = [ gtTask t | t <- neededTasks0, tkProj (gtKey t) == rootProj ]
+      rootModules = [ tkMod (gtKey t) | t <- neededTasks0, tkProj (gtKey t) == rootProj ]
   return CompilePlan
     { cpContext = ctx
     , cpProjMap = projMap
     , cpGlobalTasks = globalTasks
     , cpNeededTasks = neededTasks
     , cpDbpBlocked = dbpBlocked
-    , cpRootTasks = rootTasks
+    , cpRootModules = rootModules
     , cpIncremental = incremental
     , cpAllowPrune = allowPrune'
     , cpSrcFiles = srcFiles
@@ -1316,30 +1316,21 @@ waitFrontOutputJobFailures jobs = do
   failures <- mapM frontOutputFailure jobs
   return (listToMaybe (catMaybes failures))
 
-data CompileTask        = ParseTask { name :: A.ModName, src :: String, srcBytes :: B.ByteString, sourceMeta :: Maybe InterfaceFiles.SourceFileMeta, parseImports :: [A.ModName] }
-                        | ActonTask { name :: A.ModName, src :: String, srcBytes :: B.ByteString, sourceMeta :: Maybe InterfaceFiles.SourceFileMeta, atree:: A.Module }
-                        | TyTask    { name :: A.ModName
-                                    , tyHash :: B.ByteString               -- raw source bytes hash
-                                    , tyPubHash :: B.ByteString          -- module public hash
-                                    , tyImplHash :: B.ByteString         -- module impl hash
-                                    , tyImports :: [(A.ModName, B.ByteString)] -- imports with pub hash used
-                                    , tyDepModules :: [InterfaceFiles.DepModuleInfo]
-                                    , tyNameHashes :: [InterfaceFiles.NameHashInfo]
-                                    , tyNameCount :: Int
-                                    , tyRoots :: [A.Name]
-                                    , tyTests :: [String]
-                                    , tyDoc :: Maybe String
-                                    , iface :: I.NModule
-                                    , typed :: A.Module
-                                    }
-                        | ParseErrorTask { name :: A.ModName, parseDiagnostics :: [Diagnostic String] }
+-- | A module as discovery found it.
+data CompileTask
+  = TyTask         InterfaceFiles.HeaderSummary              -- a .tydb header trusted while the source is unchanged
+  | ParseTask      ModuleSource [A.ModName] (Maybe String)   -- header imports and docstring
+  | ActonTask      ModuleSource A.Module                     -- parsed; imports as written until the front stage adjusts them
+  | ParseErrorTask [Diagnostic String]
 
-instance Show CompileTask where
-  show ParseTask{ name = mn } = "ParseTask " ++ modNameToString mn
-  show ActonTask{ name = mn } = "ActonTask " ++ modNameToString mn
-  show TyTask{ name = mn } = "TyTask " ++ modNameToString mn
-  show ParseErrorTask{ name = mn, parseDiagnostics = ds } =
-    "ParseErrorTask " ++ modNameToString mn ++ " (" ++ show (length ds) ++ " diagnostics)"
+-- | The text and bytes of one read of a module's source (two handles for a
+-- disk read): the text is parsed, the bytes are hashed, and the stat is
+-- recorded in its .tydb.
+data ModuleSource = ModuleSource
+  { sourceText  :: String
+  , sourceBytes :: B.ByteString
+  , sourceMeta  :: Maybe InterfaceFiles.SourceFileMeta     -- Nothing for an editor overlay
+  }
 
 data TaskKey = TaskKey { tkProj :: FilePath, tkMod :: A.ModName } deriving (Eq, Ord, Show)
 
@@ -1365,17 +1356,17 @@ data GlobalTask = GlobalTask
   , gtImportProviders :: M.Map A.ModName TaskKey   -- resolved in-graph providers (if any) for imports
   }
 
--- | Extract imported module names from a CompileTask.
--- TyTask uses header imports, ActonTask uses the parsed AST, and parse errors
--- yield no imports.
-importsOf :: CompileTask -> [A.ModName]
-importsOf (ParseTask _ _ _ _ imps) = imps
-importsOf (ActonTask _ _ _ _ m) = A.importsOf m
-importsOf (TyTask { tyImports = ms }) = map fst ms
-importsOf (ParseErrorTask _ _) = []
+-- | The modules a task imports: a cached header's imports are canonical, a
+-- source's as written.
+importsOf                               :: CompileTask -> [A.ModName]
+importsOf (TyTask h)                    = map fst (InterfaceFiles.summaryImports h)
+importsOf (ParseTask _ imps _)          = imps
+importsOf (ActonTask _ m)               = A.importsOf m
+importsOf (ParseErrorTask _)            = []
 
-restoredImportsOf paths TyTask{ tyImports = ms } = map (dropProjPrefix paths . fst) ms
-restoredImportsOf paths task = importsOf task
+restoredImportsOf                       :: Paths -> CompileTask -> [A.ModName]
+restoredImportsOf paths (TyTask h)      = map (dropProjPrefix paths . fst) (InterfaceFiles.summaryImports h)
+restoredImportsOf paths task            = importsOf task
 
 checkImportPrefixes key proj modSets imps
   | proj `elem` special_projects
@@ -1482,8 +1473,8 @@ buildGlobalTasks sp gopts opts projMap mSeeds = do
               -- as dep.lib. If that namespace has become local, recover the
               -- source spelling before resolving it and rebuild its interface.
               task <- case task0 of
-                        TyTask{} | any (overlapsLocal paths modSets) (importsOf task0) ->
-                          materializeTask opts sp (tkMod k) actFile M.empty Nothing task0
+                        TyTask _ | any (overlapsLocal paths modSets) (importsOf task0) ->
+                          either ParseErrorTask (uncurry ActonTask) <$> materialize sp opts (tkMod k) actFile Nothing task0
                         _ -> return task0
               let order = M.findWithDefault [tkProj k] (tkProj k) orderCache
                   deps = M.findWithDefault Data.Set.empty (tkProj k) allDeps
@@ -1600,8 +1591,9 @@ selectAffectedTasks rootProj opts g dbpBlocked changedFiles
 
     isDbpProvider k =
       case gtTask t of
-        TyTask{ tyImplHash = implHash, tyNameCount = nameCount } ->
-          isJust (dbpDeferredBackJob (Data.Set.member k dbpBlocked) False (optsFor k) (gtPaths t) k implHash nameCount)
+        TyTask h ->
+          isJust (dbpDeferredBackJob (Data.Set.member k dbpBlocked) False (optsFor k) (gtPaths t) k
+                                     (InterfaceFiles.summaryImplHash h) (InterfaceFiles.summaryNameCount h))
         _ -> False
       where t = graphIndex g M.! k
 
@@ -1669,261 +1661,115 @@ expandBuildLibraryTasks g selectedTasks =
           | Data.Set.null (Data.Set.intersection acc group) = acc
           | otherwise = Data.Set.union acc group
 
-data ModuleHead
-  = TyHead
-      { mhName       :: A.ModName
-      , mhSrcHash    :: B.ByteString
-      , mhPubHash    :: B.ByteString
-      , mhImplHash   :: B.ByteString
-      , mhTyImports  :: [(A.ModName, B.ByteString)]
-      , mhDepModules :: [InterfaceFiles.DepModuleInfo]
-      , mhNameHashes :: [InterfaceFiles.NameHashInfo]
-      , mhNameCount  :: Int
-      , mhRoots      :: [A.Name]
-      , mhTests      :: [String]
-      , mhDoc        :: Maybe String
-      }
-  | SrcHead
-      { mhName       :: A.ModName
-      , mhSrc        :: String
-      , mhBytes      :: B.ByteString
-      , mhSourceMeta :: Maybe InterfaceFiles.SourceFileMeta
-      , mhSrcImports :: [A.ModName]
-      , mhDoc        :: Maybe String
-      }
-  | HeadError
-      { mhName        :: A.ModName
-      , mhDiagnostics :: [Diagnostic String]
-      }
-
--- | Read the cheap module header used by discovery and doc indexing.
--- Reuse a valid .tydb header when possible; otherwise read the source snapshot
--- and parse only the module docstring plus imports.
-readModuleHeader :: Source.SourceProvider
-                 -> C.GlobalOptions
-                 -> C.CompileOptions
-                 -> Paths
-                 -> String
-                 -> IO ModuleHead
-readModuleHeader sp gopts opts paths actFile = do
-    let mn      = modName paths
-        tyFile  = tyDbPath paths mn
-    tyExists <- InterfaceFiles.interfaceExists tyFile
-    if not tyExists
-      then readSourceHead mn
-      else do
-        -- .tydb exists: read the cached header and validate it against compiler
-        -- compatibility plus source metadata/content as needed.
-        hdrE <- trySync (InterfaceFiles.readHeaderSummary tyFile)
-        case hdrE of
-          Left _ -> readSourceHead mn
-          Right header -> do
-            tyMTimeNs <- InterfaceFiles.interfaceModifiedTimeNs tyFile
-            newCompiler <- compilerNewerThan tyMTimeNs
-            mOverlay <- Source.spReadOverlay sp actFile
-            case mOverlay of
-              Just snap ->
-                if newCompiler
-                  then sourceHeadFromSnapshot mn snap
-                  else verifyOrParse mn snap header Nothing
-              Nothing -> do
-                if newCompiler
-                  then readSourceHead mn
-                  else do
-                    currentSourceMeta <- readSourceFileMeta actFile
-                    if canReuseHeader (InterfaceFiles.summarySourceMeta header) currentSourceMeta tyMTimeNs
-                      then return (mkTyHead mn header)
-                      else do
-                        snap <- Source.spReadFile sp actFile
-                        verifyOrParse mn snap header (Just currentSourceMeta)
+-- | A module in the cheapest form discovery can use.  Its .tydb header is
+-- reused when the compiler binary is not newer than the .tydb and the source
+-- is unchanged: by recorded stat with the source older than the .tydb, else by
+-- content hash (then the recorded stat is refreshed in place).  An editor
+-- overlay is compared by content only.  Otherwise only the source header is
+-- parsed.  Reading can write: the stat refresh.
+readModuleTask :: Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -> Paths -> FilePath -> IO CompileTask
+readModuleTask sp gopts opts paths file = do
+    reusable <- reusableHeader opts tydb
+    case reusable of
+      Nothing               -> fromSource =<< Source.readSource sp file
+      Just (header, tydbNs) -> do
+        overlay <- Source.spReadOverlay sp file
+        case overlay of
+          Just snap -> verify header snap Nothing
+          Nothing   -> do
+            meta <- readSourceFileMeta file
+            if InterfaceFiles.summarySourceMeta header == Just meta && InterfaceFiles.sfmMTimeNs meta < tydbNs
+              then return (TyTask header)
+              else Source.spReadFile sp file >>= \snap -> verify header snap (Just meta)
   where
-    mkTyHead mn header =
-      TyHead
-        { mhName       = mn
-        , mhSrcHash    = InterfaceFiles.summarySourceHash header
-        , mhPubHash    = InterfaceFiles.summaryPubHash header
-        , mhImplHash   = InterfaceFiles.summaryImplHash header
-        , mhTyImports  = InterfaceFiles.summaryImports header
-        , mhDepModules = InterfaceFiles.summaryDepModules header
-        , mhNameHashes = []
-        , mhNameCount  = InterfaceFiles.summaryNameCount header
-        , mhRoots      = InterfaceFiles.summaryRoots header
-        , mhTests      = InterfaceFiles.summaryTests header
-        , mhDoc        = InterfaceFiles.summaryDoc header
-        }
+    mn   = modName paths
+    tydb = tyDbPath paths mn
 
-    metadataMatches cached current =
-      case cached of
-        Nothing -> False
-        Just meta -> meta == current
+    fromSource snap = do
+      parsed <- parseActHeaderSnapshot mn file snap
+      case parsed of
+        Left diags        -> return (ParseErrorTask diags)
+        Right (imps, doc) -> (\source -> ParseTask source imps doc) <$> moduleSource file snap
 
-    canReuseHeader cached current tyMTimeNs =
-      metadataMatches cached current
-      && InterfaceFiles.sfmMTimeNs current < tyMTimeNs
-
-    readSourceHead mn = do
-      snap <- Source.readSource sp actFile
-      sourceHeadFromSnapshot mn snap
-
-    sourceHeadFromSnapshot mn snap = do
-      headerRes <- parseActHeaderSnapshot mn actFile snap
-      case headerRes of
-        Left diags -> return $ HeadError mn diags
-        Right (imps, mdoc) -> do
-          mSourceMeta <- snapshotSourceMeta snap
-          return $ SrcHead mn (Source.ssText snap) (Source.ssBytes snap) mSourceMeta imps mdoc
-
-    snapshotSourceMeta snap
-      | Source.ssIsOverlay snap = return Nothing
-      | otherwise = Just <$> readSourceFileMeta actFile
-
-    compilerNewerThan tyMTimeNs
-      | C.ignore_compiler_version opts = return False
-      | otherwise = do
-          exePathE <- trySync getExecutablePath
-          case exePathE of
-            Left _ -> return False
-            Right exePath -> do
-              exeStatusE <- trySync (getFileStatus exePath)
-              case exeStatusE of
-                Left _ -> return False
-                Right exeStatus -> return (InterfaceFiles.posixNanoseconds (modificationTimeHiRes exeStatus) > tyMTimeNs)
-
-    -- Surgical single-row update: a full readFile+writeFile here would re-derive
-    -- the dependency index rows from the stripped per-name hashes and silently
-    -- lose their users and hashes (degrading later per-name change detection),
-    -- besides rewriting a possibly multi-GB file for a pure mtime drift.
-    refreshCachedSourceMeta currentSourceMeta = do
-      let tyFilePath = tyDbPath paths (modName paths)
-      void (trySync (InterfaceFiles.updateSourceMeta tyFilePath currentSourceMeta))
-
-    verifyOrParse mn snap header currentSourceMeta = do
-      let curHash = SHA256.hash (Source.ssBytes snap)
-          storedHash = InterfaceFiles.summarySourceHash header
-          short8 bs = take 8 (B.unpack $ Base16.encode bs)
-          same = curHash == storedHash
+    -- The stat refresh updates one row, failures ignored.  Rewriting the
+    -- whole .tydb would re-derive its dependency rows from the stored
+    -- per-name hashes, whose external dependencies are stripped, and so lose
+    -- their users and hashes.
+    verify header snap meta = do
+      let hash = SHA256.hash (Source.ssBytes snap)
+          same = hash == InterfaceFiles.summarySourceHash header
       when (C.verbose gopts && Source.ssIsOverlay snap) $ do
-        actTime <- Source.spGetModTime sp actFile
-        tyTime <- InterfaceFiles.interfaceModifiedTime (tyDbPath paths mn)
-        let len = B.length (Source.ssBytes snap)
+        actTime <- Source.spGetModTime sp file
+        tyTime  <- InterfaceFiles.interfaceModifiedTime tydb
         putStrLn ("[debug] readModuleHeader " ++ modNameToString mn
                   ++ " act=" ++ show actTime
                   ++ " ty=" ++ show tyTime
-                  ++ " hash=" ++ short8 curHash
-                  ++ " header=" ++ short8 storedHash
-                  ++ " len=" ++ show len
+                  ++ " hash=" ++ short8 hash
+                  ++ " header=" ++ short8 (InterfaceFiles.summarySourceHash header)
+                  ++ " len=" ++ show (B.length (Source.ssBytes snap))
                   ++ if same then " (match)" else " (diff)")
-      if same
-        then do
-          when (currentSourceMeta /= Nothing && currentSourceMeta /= InterfaceFiles.summarySourceMeta header) $
-            refreshCachedSourceMeta currentSourceMeta
-          return (mkTyHead mn header)
-        else sourceHeadFromSnapshot mn snap
+      if not same then fromSource snap else do
+        when (isJust meta && meta /= InterfaceFiles.summarySourceMeta header) $
+          void (trySync (InterfaceFiles.updateSourceMeta tydb meta))
+        return (TyTask header)
 
--- | Prepare a task for dependency graph construction.
--- The full source parse is deferred for modules whose .tydb header cannot be
--- reused, but discovery still gets accurate imports from the source header.
-readModuleTask :: Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -> Paths -> String -> IO CompileTask
-readModuleTask sp gopts opts paths actFile = do
-  h <- readModuleHeader sp gopts opts paths actFile
-  return $ case h of
-    TyHead{ mhName = mn
-          , mhSrcHash = srcHash
-          , mhPubHash = pubHash
-          , mhImplHash = implHash
-          , mhTyImports = imps
-          , mhDepModules = depModules
-          , mhNameHashes = nameHashes
-          , mhNameCount = nameCount
-          , mhRoots = roots
-          , mhTests = tests
-          , mhDoc = mdoc
-          } ->
-      let nmodStub = I.NModule [] [] mdoc
-          tmodStub = A.Module mn [] mdoc []
-      in TyTask { name      = mn
-                , tyHash     = srcHash
-                , tyPubHash  = pubHash
-                , tyImplHash = implHash
-                , tyImports  = imps
-                , tyDepModules = depModules
-                , tyNameHashes = nameHashes
-                , tyNameCount = nameCount
-                , tyRoots   = roots
-                , tyTests   = tests
-                , tyDoc     = mdoc
-                , iface     = nmodStub
-                , typed     = tmodStub }
-    SrcHead{ mhName = mn
-           , mhSrc = srcContent
-           , mhBytes = bytes
-           , mhSourceMeta = mSourceMeta
-           , mhSrcImports = imps
-           } ->
-      ParseTask mn srcContent bytes mSourceMeta imps
-    HeadError{ mhName = mn, mhDiagnostics = diags } ->
-      ParseErrorTask mn diags
+    short8 bs = take 8 (B.unpack (Base16.encode bs))
 
-readModuleDoc :: Source.SourceProvider
-              -> C.GlobalOptions
-              -> C.CompileOptions
-              -> Paths
-              -> String
-              -> IO (Maybe (A.ModName, Maybe String))
-readModuleDoc sp gopts opts paths actFile = do
-  h <- readModuleHeader sp gopts opts paths actFile
-  return $ case h of
-    TyHead{ mhName = mn, mhDoc = mdoc } -> Just (mn, mdoc)
-    SrcHead{ mhName = mn, mhDoc = mdoc } -> Just (mn, mdoc)
-    HeadError{} -> Nothing
+-- | The .tydb header and the .tydb's modification time, unless the .tydb is
+-- missing, its header unreadable or the compiler binary newer.  A failure to
+-- stat the .tydb itself propagates.
+reusableHeader :: C.CompileOptions -> FilePath -> IO (Maybe (InterfaceFiles.HeaderSummary, Integer))
+reusableHeader opts tydb = do
+    exists <- InterfaceFiles.interfaceExists tydb
+    header <- if exists then either (const Nothing) Just <$> trySync (InterfaceFiles.readHeaderSummary tydb)
+                        else return Nothing
+    case header of
+      Nothing -> return Nothing
+      Just h  -> do
+        tydbNs <- InterfaceFiles.interfaceModifiedTimeNs tydb
+        newer  <- compilerNewerThan opts tydbNs
+        return (if newer then Nothing else Just (h, tydbNs))
 
-readModuleDocIndexEntry :: Source.SourceProvider
-                        -> C.GlobalOptions
-                        -> C.CompileOptions
-                        -> Paths
-                        -> String
-                        -> IO (Maybe (A.ModName, Maybe String, Bool))
-readModuleDocIndexEntry sp gopts opts paths actFile = do
-  h <- readModuleHeader sp gopts opts paths actFile
-  return $ case h of
-    TyHead{ mhName = mn, mhNameCount = nameCount, mhDoc = mdoc } ->
-      Just (mn, mdoc, shouldGenerateDocOutput opts (isTmp paths) nameCount)
-    SrcHead{ mhName = mn, mhDoc = mdoc } -> Just (mn, mdoc, True)
-    HeadError{} -> Nothing
+-- | Whether the running compiler binary was modified after a time, in POSIX
+-- nanoseconds.  Checked on every call.  A failure to find or stat the binary
+-- counts as not newer.
+compilerNewerThan :: C.CompileOptions -> Integer -> IO Bool
+compilerNewerThan opts ns
+  | C.ignore_compiler_version opts      = return False
+  | otherwise                           = do
+      status <- trySync (getExecutablePath >>= getFileStatus)
+      return (either (const False) (\st -> InterfaceFiles.posixNanoseconds (modificationTimeHiRes st) > ns) status)
 
--- | Materialize a source-backed task into a fully parsed ActonTask.
--- ParseTask reuses the snapshot captured during graph discovery; TyTask reparses
--- from the current source file because the cached header was deemed stale.
-materializeTask :: C.CompileOptions
-                -> Source.SourceProvider
-                -> A.ModName
-                -> FilePath
-                -> M.Map A.ModName TaskKey
-                -> Maybe (ParseProgress -> IO ())
-                -> CompileTask
-                -> IO CompileTask
-materializeTask opts sp mn actFile providers mOnProgress task =
-  case task of
-    ActonTask{} -> return task
-    ParseErrorTask{} -> return task
-    ParseTask{ src = srcContent, srcBytes = bytes, sourceMeta = mSourceMeta } -> do
-      emod <- parseStoredSource mn actFile srcContent
-      case emod of
-        Left diags -> return $ ParseErrorTask mn diags
-        Right m -> return $ ActonTask mn srcContent bytes mSourceMeta (adjustImports providers m)
-    TyTask{} -> do
-      parsedRes <- parseActFile opts sp mn actFile mOnProgress
-      case parsedRes of
-        Left diags -> return (ParseErrorTask mn diags)
-        Right (snap, m) -> do
-          mSourceMeta <- if Source.ssIsOverlay snap then return Nothing else Just <$> readSourceFileMeta actFile
-          return $ ActonTask mn (Source.ssText snap) (Source.ssBytes snap) mSourceMeta (adjustImports providers m)
-  where
-    parseStoredSource mn' file srcContent = do
-      cwd <- getCurrentDirectory
-      let displayFile = makeRelative cwd file
-      parseActSource opts mn' displayFile srcContent mOnProgress
+-- | A module source from a snapshot: an overlay records no stat.
+moduleSource :: FilePath -> Source.SourceSnapshot -> IO ModuleSource
+moduleSource file snap = ModuleSource (Source.ssText snap) (Source.ssBytes snap) <$> meta
+  where meta | Source.ssIsOverlay snap  = return Nothing
+             | otherwise                = Just <$> readSourceFileMeta file
 
+-- | A module's documentation index entry: its name, its docstring and
+-- whether it gets doc output.
+docIndexEntry                           :: C.CompileOptions -> Paths -> CompileTask -> Maybe (A.ModName, Maybe String, Bool)
+docIndexEntry opts paths (TyTask h)     = Just (modName paths, InterfaceFiles.summaryDoc h,
+                                                shouldGenerateDocOutput opts (isTmp paths) (InterfaceFiles.summaryNameCount h))
+docIndexEntry _ paths (ParseTask _ _ d) = Just (modName paths, d, True)
+docIndexEntry _ _ _                     = Nothing
+
+-- | The parsed source of a module.  A ParseTask parses the text read at
+-- discovery, whose hash decided it; a TyTask reads its source again
+-- (overlay-aware).  Imports stay as written: the front stage adjusts them.
+materialize :: Source.SourceProvider -> C.CompileOptions -> A.ModName -> FilePath -> Maybe (ParseProgress -> IO ())
+            -> CompileTask -> IO (Either [Diagnostic String] (ModuleSource, A.Module))
+materialize sp opts mn file progress task = case task of
+    ActonTask source m   -> return (Right (source, m))
+    ParseErrorTask diags -> return (Left diags)
+    ParseTask source _ _ -> do cwd <- getCurrentDirectory
+                               fmap ((,) source) <$> parseActSource opts mn (makeRelative cwd file) (sourceText source) progress
+    TyTask _             -> do parsed <- parseActFile opts sp mn file progress
+                               forM parsed $ \(snap, m) -> (\source -> (source, m)) <$> moduleSource file snap
+
+-- | A parsed module whose imports name the modules of their in-graph
+-- providers.  A plain import keeps its written name as its alias.
+-- Idempotent.
 adjustImports :: M.Map A.ModName TaskKey -> A.Module -> A.Module
 adjustImports providers m = m{ A.imps = imps' }
   where imps'                        = map adjust (A.imps m)
@@ -2940,7 +2786,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
       baseEnv <- Acton.Env.initEnvWithEscapeSummaries True builtinPath False
 
       costMap <- fmap M.fromList $ forM nonBuiltinTasks $ \t -> do
-                    let mn = name (gtTask t)
+                    let mn = tkMod (gtKey t)
                         pth = gtPaths t
                         fp  = srcFile pth mn
                     ok <- doesFileExist fp
@@ -3025,24 +2871,20 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
     compileBuiltin :: IORef [FrontOutputJob] -> GlobalTask -> IO (Either CompileFailure ())
     compileBuiltin frontOutputRef t = do
       let bPaths = gtPaths t
-          mn = name (gtTask t)
+          mn = tkMod (gtKey t)
           optsBuiltin = optsFor (gtKey t)
           actFile = srcFile bPaths mn
           forceAlt = C.altOutput optsBuiltin && mn == rootAlt
-      if C.only_build optsBuiltin
-        then return (Right ())
-        else do
-          t' <- case gtTask t of
-            TyTask{} | forceAlt -> materializeTask optsBuiltin sp mn actFile M.empty Nothing (gtTask t)
-            ParseTask{} -> materializeTask optsBuiltin sp mn actFile M.empty Nothing (gtTask t)
-            _ -> return (gtTask t)
-          case t' of
-            ParseErrorTask{ parseDiagnostics = diags } -> do
+      case gtTask t of
+        _ | C.only_build optsBuiltin -> return (Right ())
+        TyTask _ | not forceAlt -> return (Right ())
+        task -> do
+          parsed <- materialize sp optsBuiltin mn actFile Nothing task
+          case parsed of
+            Left diags -> do
               ccOnDiagnostics callbacks t optsBuiltin diags
               return (Left BuiltinFailed)
-            TyTask{} -> return (Right ())
-            ParseTask{} -> error ("Internal error: unmaterialized ParseTask " ++ modNameToString mn)
-            ActonTask{ src = srcContent, srcBytes = srcBytes, sourceMeta = mSourceMeta, atree = m } -> do
+            Right (source, m) -> do
               ccOnFrontStart callbacks t optsBuiltin
               builtinEnv0 <- Acton.Env.initEnv (projTypes bPaths) True
               res <- runFrontPasses
@@ -3052,9 +2894,9 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                 bPaths
                 builtinEnv0
                 m
-                srcContent
-                srcBytes
-                mSourceMeta
+                (sourceText source)
+                (sourceBytes source)
+                (sourceMeta source)
                 (getPubHashCached bPaths)
                 (getImplHashCached bPaths)
                 (getNameHashCached bPaths)
@@ -3097,7 +2939,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
              Nothing -> error ("Internal error: missing task for key " ++ show key)
       let taskCurrent = M.findWithDefault (gtTask t) key parsedTasks
           paths = gtPaths t
-          mn    = name (gtTask t)
+          mn    = tkMod key
           optsT = optsFor key
           providers = gtImportProviders t
           actFile = srcFile paths mn
@@ -3209,7 +3051,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
               Nothing -> getNameHashCached paths m n
           providerIsCachedTy depKey =
             case M.lookup depKey taskMap of
-              Just GlobalTask{ gtTask = TyTask{} } -> True
+              Just GlobalTask{ gtTask = TyTask _ } -> True
               _ -> False
 
           missingNameHashDiagnostics qn =
@@ -3292,7 +3134,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
             return (Data.Set.unions depSets)
 
           cachedInterestDeps = case taskCurrent of
-            TyTask{ tyDepModules = depModules } -> interestDepsFromDepRows depModules
+            TyTask h -> interestDepsFromDepRows (InterfaceFiles.summaryDepModules h)
             _ -> return Data.Set.empty
 
           -- Restore BOTH the pub and the impl per-name external deps from the
@@ -3500,20 +3342,16 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                     return (pubDeltas, implDeltas, pubMissing, qn : implMissing, pubUsers, M.insert qn (InterfaceFiles.duImplUsers users) implUsers, rowMissingMods)
 
       case taskCurrent of
-        ParseErrorTask{ parseDiagnostics = diags } -> return (key, Left diags)
+        ParseErrorTask diags -> return (key, Left diags)
         _ | C.only_build optsT -> do
               ifaceRes <- case taskCurrent of
-                            TyTask{ tyPubHash = h } -> readIfaceFromTy paths mn "" (Just h)
-                            ParseTask{ src = srcContent } -> readIfaceFromTy paths mn srcContent Nothing
-                            ActonTask{ src = srcContent } -> readIfaceFromTy paths mn srcContent Nothing
+                            TyTask h -> readIfaceFromTy paths mn "" (Just (InterfaceFiles.summaryPubHash h))
+                            ParseTask source _ _ -> readIfaceFromTy paths mn (sourceText source) Nothing
+                            ActonTask source _ -> readIfaceFromTy paths mn (sourceText source) Nothing
               case ifaceRes of
                 Right (imps, ifaceTE, mdoc, ih, implH, mModuleInfo) -> do
-                  let cachedFullNameHashes = case taskCurrent of
-                        TyTask{ tyNameHashes = nhs } -> nhs
-                        _ -> []
-                      cachedNameHashes = publicNameHashes cachedFullNameHashes
                   interestDeps <- cachedInterestDeps
-                  let fr = (mkFrontResult imps ifaceTE mdoc ih implH cachedNameHashes cachedFullNameHashes Nothing Nothing)
+                  let fr = (mkFrontResult imps ifaceTE mdoc ih implH [] [] Nothing Nothing)
                              { frModuleInfo = mModuleInfo
                              , frInterestDeps = interestDeps
                              }
@@ -3528,12 +3366,12 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
           -- passes). Unchanged import pub hashes let us skip checking public
           -- name deps from those modules.
           needByDepsRes <- case taskCurrent of
-            TyTask{ tyImports = imps, tyDepModules = depModules } -> do
-              importHashRes <- checkImportHashes imps
+            TyTask h -> do
+              importHashRes <- checkImportHashes (InterfaceFiles.summaryImports h)
               case importHashRes of
                 Left diags -> return (Left diags)
                 Right _ -> do
-                  (changedPubMods, changedImplMods) <- checkDepModuleRows depModules
+                  (changedPubMods, changedImplMods) <- checkDepModuleRows (InterfaceFiles.summaryDepModules h)
                   if Data.Set.null changedPubMods && Data.Set.null changedImplMods
                     then return (Right ([], [], [], [], M.empty, M.empty, Data.Set.empty))
                     else Right <$> checkDepNameRows changedPubMods changedImplMods
@@ -3553,12 +3391,13 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                   -- Front passes run on source or API changes, or when forced.
                   needFront = needBySource || needByPub || needByMissing || forceAlt || forceAlways
                   mModuleImplHash = case taskCurrent of
-                    TyTask{ tyImplHash = implHash } -> Just implHash
+                    TyTask h -> Just (InterfaceFiles.summaryImplHash h)
                     _ -> Nothing
               cachedDeferredBackJob <- case taskCurrent of
-                    TyTask{ tyImplHash = implHash, tyNameCount = nameCount } -> do
+                    TyTask h -> do
                       hasNotImpl <- InterfaceFiles.readStmtHasNotImpl tyFile
-                      return (dbpDeferredBackJob (isDbpBlocked key) hasNotImpl optsT paths key implHash nameCount)
+                      return (dbpDeferredBackJob (isDbpBlocked key) hasNotImpl optsT paths key
+                                                 (InterfaceFiles.summaryImplHash h) (InterfaceFiles.summaryNameCount h))
                     _ -> return Nothing
               let isCachedDbp =
                     case cachedDeferredBackJob of
@@ -3571,9 +3410,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
               let needByCodegen = maybe False (not . codegenUpToDate) mCodegenStatus
               let runFront = do
                     prevNameHashes <- if C.verbose gopts
-                      then case taskCurrent of
-                        TyTask{ tyNameHashes = nhs } | not (null nhs) -> return (Just (nameHashMapFromList (publicNameHashes nhs)))
-                        _ -> getNameHashMapCached paths mn
+                      then getNameHashMapCached paths mn
                       else return Nothing
                     when (C.verbose gopts) $ do
                       if needBySource
@@ -3597,12 +3434,10 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                                   | depMn <- Data.List.sortOn modNameToString (Data.Set.toList rowMissingMods)
                                   ]
                             ccOnInfo callbacks ("  Stale " ++ modNameToString (dropProjPrefix paths mn) ++ ": missing dep hashes in " ++ Data.List.intercalate ", " (pubMissingItems ++ implMissingItems ++ rowMissingItems))
-                    t' <- case taskCurrent of
-                            ActonTask{} -> return taskCurrent
-                            _ -> materializeTask optsT sp mn actFile providers Nothing taskCurrent
-                    case t' of
-                      ParseErrorTask{ parseDiagnostics = diags } -> return (key, Left diags)
-                      ActonTask{ src = srcContent, srcBytes = srcBytes, sourceMeta = mSourceMeta, atree = m } -> do
+                    parsed <- materialize sp optsT mn actFile Nothing taskCurrent
+                    case parsed of
+                      Left diags -> return (key, Left diags)
+                      Right (source, m) -> do
                         res <- runFrontPasses
                           gopts
                           optsT
@@ -3610,9 +3445,9 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                           paths
                           envSnap
                           (adjustImports providers m)
-                          srcContent
-                          srcBytes
-                          mSourceMeta
+                          (sourceText source)
+                          (sourceBytes source)
+                          (sourceMeta source)
                           resolveImportHash
                           resolveImportImplHash
                           resolveNameHash'
@@ -3630,8 +3465,6 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                                 forM_ (nameHashSummary prevMap (frNameHashes fr)) $ \summary ->
                                   ccOnInfo callbacks ("  Hash deltas " ++ modNameToString (dropProjPrefix paths mn) ++ ": " ++ summary)
                             cacheFrontResult fr
-                      ParseTask{} -> error ("Internal error: unmaterialized ParseTask " ++ modNameToString mn)
-                      _ -> error ("Internal error: unexpected task " ++ show t')
                   -- Only the attempt falls back to the front passes, and only
                   -- for a synchronous exception or an unresolved hash.  The
                   -- write comes after every read, so a fallback never runs on
@@ -3684,7 +3517,9 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                   -- included, and every forcing happen here, before the write.
                   recomputeImpl =
                     case taskCurrent of
-                      TyTask{ tyDepModules = depModules, tyPubHash = storedPubHash } -> do
+                      TyTask h -> do
+                        let depModules    = InterfaceFiles.summaryDepModules h
+                            storedPubHash = InterfaceFiles.summaryPubHash h
                         -- The task header carries only the name COUNT (selective
                         -- reads); the refresh needs the module's own hash rows.
                         storedNameHashes <- InterfaceFiles.readNameHashes tyFile
@@ -3780,17 +3615,13 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                     when (C.verbose gopts) $
                       ccOnInfo callbacks ("  Fresh " ++ modNameToString (dropProjPrefix paths mn) ++ ": using cached .tydb")
                     ifaceRes <- case taskCurrent of
-                                  TyTask{ tyPubHash = h } -> readIfaceFromTy paths mn "" (Just h)
+                                  TyTask h -> readIfaceFromTy paths mn "" (Just (InterfaceFiles.summaryPubHash h))
                                   _ -> readIfaceFromTy paths mn "" Nothing
                     case ifaceRes of
                       Left diags -> return (key, Left diags)
                       Right (imps, ifaceTE, mdoc, ih, implH, mModuleInfo) -> do
-                        let cachedFullNameHashes = case taskCurrent of
-                              TyTask{ tyNameHashes = nhs } -> nhs
-                              _ -> []
-                            cachedNameHashes = publicNameHashes cachedFullNameHashes
                         interestDeps <- cachedInterestDeps
-                        let fr = (mkFrontResult imps ifaceTE mdoc ih implH cachedNameHashes cachedFullNameHashes Nothing cachedDeferredBackJob)
+                        let fr = (mkFrontResult imps ifaceTE mdoc ih implH [] [] Nothing cachedDeferredBackJob)
                                    { frModuleInfo = mModuleInfo
                                    , frInterestDeps = interestDeps
                                    }
@@ -3820,21 +3651,20 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
              Just x -> return x
              Nothing -> error ("Internal error: missing task for key " ++ show key)
       let optsT = optsFor key
-          mn = name (gtTask t)
+          mn = tkMod key
           actFile = srcFile (gtPaths t) mn
           onProgress p = ccOnParseProgress callbacks t optsT p
-          providers = gtImportProviders t
       timeStart <- getTime Monotonic
-      -- A parse stage exists only for a ParseTask, which materializes into an
-      -- ActonTask or a ParseErrorTask.
-      parsed <- materializeTask optsT sp mn actFile providers (Just onProgress) (gtTask t)
+      -- A parse stage exists only for a ParseTask.  A parse error becomes a
+      -- ParseErrorTask, which the module's front stage reports.
+      parsed <- materialize sp optsT mn actFile (Just onProgress) (gtTask t)
       case parsed of
-        ActonTask{ atree = m } -> do
+        Right (source, m) -> do
           _ <- evaluate (rnf m)
           timeEnd <- getTime Monotonic
           let parseTime = if not (quiet gopts optsT) then Just (timeEnd - timeStart) else Nothing
-          return (ParseStage key, Right (StageParsed parsed parseTime))
-        _ -> return (ParseStage key, Right (StageParsed parsed Nothing))
+          return (ParseStage key, Right (StageParsed (ActonTask source m) parseTime))
+        Left diags -> return (ParseStage key, Right (StageParsed (ParseErrorTask diags) Nothing))
 
     runFrontStage :: Acton.Env.Env0
                   -> IORef [FrontOutputJob]

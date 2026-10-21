@@ -2157,7 +2157,7 @@ runCliPostCompile cliHooks gopts plan env = do
         pathsRoot = ccPathsRoot cctx
         rootProj = ccRootProj cctx
         sysAbs = ccSysAbs cctx
-        rootTasks = cpRootTasks plan
+        rootModules = cpRootModules plan
         allowPrune' = cpAllowPrune plan
         globalTasks = cpGlobalTasks plan
         neededTasks = cpNeededTasks plan
@@ -2171,11 +2171,11 @@ runCliPostCompile cliHooks gopts plan env = do
         guessMod  = if length rootParts == 1 then modName pathsRoot else A.modName rootMod
         binTask   = BinTask (A.GName guessMod (A.name $ last rootParts)) False
         preBinTasks
-          | null (C.root opts') = map (\t -> BinTask (A.GName (name t) (A.name "main")) False) rootTasks
+          | null (C.root opts') = map (\mn -> BinTask (A.GName mn (A.name "main")) False) rootModules
           | otherwise        = [binTask]
     requestedModules <- mapM (moduleNameFromFile (srcDir pathsRoot) proj) (cpSrcFiles plan)
-    let preTestBinTasks = [ BinTask (A.GName (name t) (A.name "test_main")) True
-                          | t <- rootTasks, name t `elem` requestedModules ]
+    let preTestBinTasks = [ BinTask (A.GName mn (A.name "test_main")) True
+                          | mn <- rootModules, mn `elem` requestedModules ]
         selectedTasksByProj = selectedTasksWithProvidersByProj globalTasks neededTasks
         depModuleOptsByProj = depModuleOptionsByProj selectedTasksByProj projMap
         rootSelectedModuleEntries = selectedCSourceEntriesForProj rootProj (M.findWithDefault [] rootProj selectedTasksByProj)
@@ -2210,10 +2210,10 @@ runCliPostCompile cliHooks gopts plan env = do
           then do
             testBinTasks <- catMaybes <$> mapM (filterMainActor env pathsRoot) preTestBinTasks
             if C.altOutput opts' then return True else
-              runFinal (compileBins gopts opts' pathsRoot env rootSpec rootTasks testBinTasks allowPrune' rootModuleEntries rootBuildLibraries rootDepModuleOpts rootDepPathOverrides (Just (cchProgressUI cliHooks)))
+              runFinal (compileBins gopts opts' pathsRoot env rootSpec rootModules testBinTasks allowPrune' rootModuleEntries rootBuildLibraries rootDepModuleOpts rootDepPathOverrides (Just (cchProgressUI cliHooks)))
           else do
             if C.altOutput opts' then return True else
-              runFinal (compileBins gopts opts' pathsRoot env rootSpec rootTasks preBinTasks allowPrune' rootModuleEntries rootBuildLibraries rootDepModuleOpts rootDepPathOverrides (Just (cchProgressUI cliHooks)))
+              runFinal (compileBins gopts opts' pathsRoot env rootSpec rootModules preBinTasks allowPrune' rootModuleEntries rootBuildLibraries rootDepModuleOpts rootDepPathOverrides (Just (cchProgressUI cliHooks)))
 -- Generate documentation index for a project build by reading module names and
 -- docstrings from cached .tydb headers or source headers.
 generateProjectDocIndex :: Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -> Paths -> [String] -> IO ()
@@ -2223,14 +2223,14 @@ generateProjectDocIndex sp gopts opts paths srcFiles = do
         createDirectoryIfMissing True docDir
         entries <- catMaybes <$> forM srcFiles (\f -> do
                      p <- findPaths f opts
-                     readModuleDocIndexEntry sp gopts opts p f)
+                     docIndexEntry opts p <$> readModuleTask sp gopts opts p f)
         DocP.generateDocIndex docDir entries
 
 -- | Relative C source paths for selected tasks in one project.
 selectedCSourceEntriesForProj :: FilePath -> [GlobalTask] -> [FilePath]
 selectedCSourceEntriesForProj proj tasks =
     nub
-      [ collapseDots (makeRelativeOrAbsolute proj (outBase (gtPaths t) (name (gtTask t)) ++ ".c"))
+      [ collapseDots (makeRelativeOrAbsolute proj (outBase (gtPaths t) (tkMod (gtKey t)) ++ ".c"))
       | t <- tasks
       ]
 
@@ -2310,13 +2310,13 @@ projectDepPathOverrides projMap rootProj = snd (go Data.Set.empty rootProj M.emp
 -- so a module that loses its root actor loses its stub and its binary in
 -- out/bin, while those of other build modes stay (e.g. the .root.c during
 -- `acton test`). Roots built in this run stay too.
-removeUndeclaredRoots :: Paths -> [CompileTask] -> [BinTask] -> IO ()
-removeUndeclaredRoots paths tasks bins = do
-    declared <- concat <$> mapM headerRoots tasks
+removeUndeclaredRoots :: Paths -> [A.ModName] -> [BinTask] -> IO ()
+removeUndeclaredRoots paths modules bins = do
+    declared <- concat <$> mapM headerRoots modules
     let live f = Data.Set.fromList [ f test mn | (test, mn) <- declared ++ map binTaskModule bins ]
         liveStubs = live (rootStubPath paths)
         liveBinaries = live (rootBinaryName paths)
-        stubs = [ rootStubPath paths test (name t) | t <- tasks, test <- [False, True] ]
+        stubs = [ rootStubPath paths test mn | mn <- modules, test <- [False, True] ]
     mapM_ removePathForcibly (filter (`Data.Set.notMember` liveStubs) stubs)
     -- A scratch build's binDir is the source directory, so leave it alone.
     binDirExists <- doesDirectoryExist (binDir paths)
@@ -2324,11 +2324,11 @@ removeUndeclaredRoots paths tasks bins = do
       files <- filterM doesFileExist . map (binDir paths </>) =<< listDirectory (binDir paths)
       mapM_ removeFile (filter ((`Data.Set.notMember` liveBinaries) . binaryOf . takeFileName) files)
   where
-    headerRoots t = do
-      hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeaderSummary (tyDbPath paths (name t))
+    headerRoots mn = do
+      hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeaderSummary (tyDbPath paths mn)
       return $ case hdrE of
         Right header ->
-          [ (A.nstr n == "test_main", name t) | n <- InterfaceFiles.summaryRoots header ]
+          [ (A.nstr n == "test_main", mn) | n <- InterfaceFiles.summaryRoots header ]
         Left _ -> []
     -- Windows binaries end in .exe, and their debug info in .pdb.
     binaryOf f | takeExtension f `elem` [".exe", ".pdb"] = dropExtension f
@@ -2380,9 +2380,8 @@ Terminology
 - ParseTask: a source-backed module whose imports are known but whose full AST
   has not been materialized yet
 - ActonTask: a fully parsed source module ready for front passes
-- TyTask: a module loaded from the cached .tydb file on disk. Note how there are
-  two variants, a stubbed TyTask where only header fields are loaded and the
-  full TyTask where all module content is available.
+- TyTask: a module whose cached .tydb header is trusted; only the header fields
+  are loaded.
 
 High-level Steps
 1) Discover and read tasks using header-first strategy (readModuleTask)
@@ -2440,9 +2439,9 @@ High-level Steps
 ================================================================================
 -}
 
-compileBins:: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> BuildSpec.BuildSpec -> [CompileTask] -> [BinTask] -> Bool -> [FilePath] -> [BuildLibrary] -> M.Map String String -> M.Map String FilePath -> Maybe ProgressUI -> IO Bool
-compileBins gopts opts paths env rootSpec tasks binTasks allowPrune rootModules buildLibraries depModuleOpts depPathOverrides mProgressUI =
-    zigBuild env gopts opts paths rootSpec tasks binTasks allowPrune rootModules buildLibraries depModuleOpts depPathOverrides mProgressUI
+compileBins:: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> BuildSpec.BuildSpec -> [A.ModName] -> [BinTask] -> Bool -> [FilePath] -> [BuildLibrary] -> M.Map String String -> M.Map String FilePath -> Maybe ProgressUI -> IO Bool
+compileBins gopts opts paths env rootSpec modules binTasks allowPrune rootModules buildLibraries depModuleOpts depPathOverrides mProgressUI =
+    zigBuild env gopts opts paths rootSpec modules binTasks allowPrune rootModules buildLibraries depModuleOpts depPathOverrides mProgressUI
 
 printDiag :: C.GlobalOptions -> C.CompileOptions -> Diagnostic String -> IO ()
 printDiag gopts opts d = do
@@ -2457,8 +2456,8 @@ printDiagnostics gopts opts diags =
     mapM_ (printDiag gopts opts) diags
 
 -- | Generate a root actor C file when a root is still declared.
-writeRootC :: Acton.Env.Env0 -> C.GlobalOptions -> C.CompileOptions -> Paths -> [CompileTask] -> BinTask -> IO (Maybe BinTask)
-writeRootC env gopts opts paths tasks binTask = do
+writeRootC :: Acton.Env.Env0 -> C.GlobalOptions -> C.CompileOptions -> Paths -> BinTask -> IO (Maybe BinTask)
+writeRootC env gopts opts paths binTask = do
     let qn@(A.GName mn n) = rootActor binTask
         rootFile = binTaskRoot paths binTask
     -- In --only-build mode, reuse existing root stubs; generate only if missing.
@@ -2917,15 +2916,15 @@ defCpuFlag = ["-Dcpu=x86_64_v2+aes"]
 #endif
 
 -- | Run zig build for generated artifacts and prune stale outputs.
-zigBuild :: Acton.Env.Env0 -> C.GlobalOptions -> C.CompileOptions -> Paths -> BuildSpec.BuildSpec -> [CompileTask] -> [BinTask] -> Bool -> [FilePath] -> [BuildLibrary] -> M.Map String String -> M.Map String FilePath -> Maybe ProgressUI -> IO Bool
-zigBuild env gopts opts paths rootSpec tasks binTasks allowPrune rootModules buildLibraries depModuleOpts depPathOverrides mProgressUI = do
+zigBuild :: Acton.Env.Env0 -> C.GlobalOptions -> C.CompileOptions -> Paths -> BuildSpec.BuildSpec -> [A.ModName] -> [BinTask] -> Bool -> [FilePath] -> [BuildLibrary] -> M.Map String String -> M.Map String FilePath -> Maybe ProgressUI -> IO Bool
+zigBuild env gopts opts paths rootSpec modules binTasks allowPrune rootModules buildLibraries depModuleOpts depPathOverrides mProgressUI = do
     prepStart <- getTime Monotonic
-    allBinTasks <- mapM (writeRootC env gopts opts paths tasks) binTasks
+    allBinTasks <- mapM (writeRootC env gopts opts paths) binTasks
     let realBinTasks = catMaybes allBinTasks
 
     let pruningAllowed = allowPrune && not (C.only_build opts)
     when pruningAllowed $
-      removeUndeclaredRoots paths tasks realBinTasks
+      removeUndeclaredRoots paths modules realBinTasks
 
     let no_threads = if isWindowsOS (C.target opts) then True else C.no_threads opts
     projAbs <- normalizePathSafe (projPath paths)
