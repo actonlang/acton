@@ -79,6 +79,7 @@ data CustomParseError = TypeVariableNameError String  -- Name that looks like ty
                       | IncompleteUnicodeEscape Int Int  -- expected, found
                       | InvalidUnicodeEscape String  -- the code point, as U+XXXX
                       | NonAsciiInBytesLiteral
+                      | InvalidUtf8InStrLiteral
                       | UnknownEscapeSequence
                       -- General fallback
                       | OtherError String
@@ -115,6 +116,7 @@ instance ShowErrorComponent CustomParseError where
     "Incomplete universal character name (" ++ show expected ++ " hex digits needed)"
   showErrorComponent (InvalidUnicodeEscape cp) = cp ++ " is not a valid Unicode character"
   showErrorComponent NonAsciiInBytesLiteral = "Only ASCII chars allowed in bytes literal"
+  showErrorComponent InvalidUtf8InStrLiteral = "str literal is not valid UTF-8"
   showErrorComponent UnknownEscapeSequence = "unknown escape sequence in string/bytes literal"
   -- General fallback
   showErrorComponent (OtherError msg) = msg
@@ -534,11 +536,25 @@ strings :: Parser S.Expr
 strings = addLoc $
        bytesLiteral
        <|>
-       rawStringLiteral
+       utf8StrLiteral rawStringLiteral
        <|>
-       fstringLiteral  -- Explicit f"..." syntax, with interpolation
+       utf8StrLiteral fstringLiteral  -- Explicit f"..." syntax, with interpolation
        <|>
-       stringLiteral -- "" strings - all strings support interpolation
+       utf8StrLiteral stringLiteral -- "" strings - all strings support interpolation
+
+-- | A str literal, whose text must be valid UTF-8. \xHH and octal escapes write
+-- single bytes (see literalBytes), so their bytes together must form valid
+-- UTF-8 characters, also across adjacent literals, which are joined first.
+utf8StrLiteral :: Parser S.Expr -> Parser S.Expr
+utf8StrLiteral p = do
+    (loc, e) <- withLoc p
+    case text e of
+      Just ss | Just bs <- concat <$> mapM S.literalBytes ss, Nothing <- S.utf8Chars bs
+        -> parseException loc InvalidUtf8InStrLiteral
+      _ -> return e
+  where text (S.Strings _ ss)                     = Just ss
+        text (S.BinOp _ (S.Strings _ ss) S.Mod _) = Just ss
+        text _                                    = Nothing
 
 -- We use this `some` construct because Acton allows multiple adjacent strings
 -- to be effectively concatenated together without specifying any explicit

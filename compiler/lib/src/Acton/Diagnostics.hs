@@ -91,6 +91,9 @@ customParseErrorToDiagnostic (InvalidUnicodeEscape cp)          = ("Invalid univ
                                                                    Note "Valid code points are U+0000 to U+10FFFF, excluding the surrogates U+D800 to U+DFFF"])
 customParseErrorToDiagnostic NonAsciiInBytesLiteral             = ("Only ASCII characters allowed in bytes literal",
                                                                   [Hint "Use escape sequences for non-ASCII values"])
+customParseErrorToDiagnostic InvalidUtf8InStrLiteral            = ("Invalid UTF-8 in str literal",
+                                                                  [Note "\\x and octal escapes in a str literal write single bytes, which must form valid UTF-8",
+                                                                   Hint "Write the character, or use \\u or \\U, e.g. \\u00ff; use a bytes literal for other bytes"])
 customParseErrorToDiagnostic UnknownEscapeSequence              = ("Unknown escape sequence",
                                                                   [Note "Valid escape sequences: \\\\, \\\", \\', \\n, \\r, \\t, \\a, \\b, \\f, \\v, \\xHH, \\ooo, \\uHHHH, \\UHHHHHHHH"])
 customParseErrorToDiagnostic (OtherError msg)                  = (msg,

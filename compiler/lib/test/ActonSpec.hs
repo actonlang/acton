@@ -2113,6 +2113,16 @@ main = do
           testParseError "octal_invalid_char" "\"\\12G\""
           testParseError "octal_out_of_range_in_fstring" "f\"value: {x} \\777\""
 
+        describe "str literal UTF-8 errors" $ do
+          testParseError "str_invalid_utf8_byte" "\"\\xff\""
+          testParseError "str_invalid_utf8_truncated" "\"\\xc3\""
+          testParseError "str_invalid_utf8_surrogate" "\"\\355\\240\\200\""
+          testParseError "str_invalid_utf8_in_fstring" "f\"{x}\\xff\""
+          -- Adjacent literals are joined before the check, and bytes
+          -- literals hold any bytes
+          testParseError "str_utf8_across_literals" "\"\\xc3\" \"\\xa9\""
+          testParseError "bytes_not_utf8" "b\"\\xff\""
+
         describe "Unknown escape sequences" $ do
           testParseError "unknown_escape_p" "\"\\p\""
           testParseError "unknown_escape_z" "\"\\z\""
@@ -3241,6 +3251,14 @@ main = do
         [ "toB_int(((B_int)x)->val)"
         , "toB_float(((B_float)x)->val)"
         , "toB_i8(((B_i8)x)->val)"
+        ]
+      -- A str literal carries the character count the compiler decoded, so the
+      -- runtime neither checks nor counts it
+      testCodeGenContains env0 "str_literal_chars"
+        [ "actStrFromLiteral(\"abc\", 3, 3)"
+        , "actStrFromLiteral(\"\\303\\251\", 2, 1)"
+        , "actStrFromLiteral(\"\\346\\227\\245\\346\\234\\254\", 6, 2)"
+        , "actStrFromLiteral(\"a\\000b\", 3, 3)"
         ]
 
     describe "Test run context" $ do

@@ -1,0 +1,2 @@
+def literals() -> list[str]:
+    return ["abc", "é", "\u65e5\u672c", "\xc3\xa9", "\xc3" "\xa9", "a\x00b"]

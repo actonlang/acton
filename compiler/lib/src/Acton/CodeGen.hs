@@ -641,7 +641,7 @@ primToBigInt                        = name "toB_bigint"
 primToBigInt2                       = name "toB_bigint2"
 primToFloat                         = name "to$float"
 primToStr                           = name "actStrFromCString"
-primToStrLen                        = name "actStrFromCStringLength"
+primStrLiteral                      = name "actStrFromLiteral"
 primToBytearray                     = name "to$bytearray"
 primToBytes                         = name "actBytesFromCStringLengthNoCopy"
 primFORMATLen                       = gPrim "FORMAT_len"
@@ -2569,8 +2569,11 @@ instance Gen Expr where
     gen env (Bool _ True)           = gen env qnTrue
     gen env (Bool _ False)          = gen env qnFalse
     gen env (None _)                = gen env qnNone
-    gen env e@Strings{}             = gen env primToStrLen <> parens (cLiteral bs <> comma <+> pretty (length bs))
+    gen env e@Strings{}             = gen env primStrLiteral <> parens (cLiteral bs <> comma <+> pretty (length bs) <> comma <+> pretty nchars)
       where bs                      = literalTokenBytes (sval e)
+            -- The parser checks literals from source; this catches a literal
+            -- built by a later pass
+            nchars                  = fromMaybe (error ("CodeGen: str literal is not valid UTF-8: " ++ show (sval e))) (utf8Chars bs)
     gen env e@BStrings{}            = gen env primToBytes <> parens (cLiteral bs <> comma <+> pretty (length bs))
       where bs                      = literalTokenBytes (sval e)
     gen env (Call l  (TApp _ e@(Var _ mk) _) p@(PosArg w (PosArg (Set _ es) PosNil)) KwdNil)

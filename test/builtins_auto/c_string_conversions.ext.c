@@ -16,6 +16,10 @@ bool c_string_conversionsQ_check_strings() {
     B_str bounded = actStrFromCStringLength(text, 5);
     CHECK(bounded->str == (unsigned char *)text);
     CHECK(bounded->nbytes == 5 && bounded->nchars == 4);
+    // A literal shares its storage and takes the counts it is given
+    B_str literal = actStrFromLiteral(text, 5, 4);
+    CHECK(literal->str == (unsigned char *)text);
+    CHECK(literal->nbytes == 5 && literal->nchars == 4);
     CHECK(to_str_noc(text)->str == (unsigned char *)text);
 
     char *managed = acton_malloc_atomic(7);
@@ -44,6 +48,7 @@ bool c_string_conversionsQ_check_strings() {
     CHECK(empty->nbytes == 0 && empty->nchars == 0 && empty->str[0] == 0);
     CHECK(empty == actStrFromCStringCopy(""));
     CHECK(empty == actStrFromCStringLength("", 0));
+    CHECK(empty == actStrFromLiteral("", 0, 0));
     CHECK(empty == actStrFromCStringLengthCopy(text, 0));
     static char legacy_empty[] = "";
     CHECK(to_str_noc(legacy_empty)->str == (unsigned char *)legacy_empty);
@@ -57,6 +62,7 @@ bool c_string_conversionsQ_check_strings() {
         CHECK(character->nbytes == 1 && character->nchars == 1);
         CHECK(character->str[0] == code && character->str[1] == 0);
         CHECK(character == actStrFromCStringLengthCopy(one, 1));
+        CHECK(character == actStrFromLiteral(one, 1, 1));
         CHECK(character == to_str_len(one, 1));
         CHECK(to_str_noc(one)->str == (unsigned char *)one);
         if (code != 0) {
