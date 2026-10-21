@@ -72,6 +72,65 @@ runtime counters to establish actual construction frequency and heap cost.
 Boxing's unused-binding removal matters: an improvement in the typed count can
 have no runtime effect if boxing already removes those constructions.
 
+## Module-wide description graph
+
+Stage 3 adds `Acton.WitnessRegistry`, currently built only by `--witness-stats`.
+It describes existing constructions; it does not rewrite the module or move
+allocations. Normal builds do not run the registry traversal.
+
+Each recipe records its selected implementation, canonical dependency IDs,
+captured bindings and dependency lifetime. Explicit constructor type arguments
+are retained, with type variables identified by their binding rather than
+spelling. Witness aliases and projections become graph references. Witness
+assignment roots retain their original type, execution scope and source
+location; constructor sites and witness-variable uses are recorded separately.
+Recipe IDs are internal to one registry build, not persistent interface IDs.
+
+| Lifetime | Meaning |
+| --- | --- |
+| `closed` | No runtime-value or type-parameter captures were found |
+| `parameter_dependent` | Depends on generic witness/type parameters, possibly captured from an outer declaration |
+| `local_dependent` | Depends on a local value or a binding conservatively invalidated at a control-flow join |
+| `unknown` | Contains an unresolved dependency or an unsupported computation |
+
+Closed and parameter-dependent descriptions are interned using structural
+fingerprints followed by exact expression/implementation comparison. Two
+parameters with the same name in different functions have different binding
+identities. An inner function can retain the identity of a captured outer
+parameter. Reassignment and type shadowing receive fresh identities. Local and
+unknown recipes are not merged or inserted into the canonicalization index.
+
+The graph follows source order. Forward witness dependencies and cycles remain
+unknown;
+branches and exception/loop joins conservatively invalidate affected aliases.
+It does not perform dominance, interprocedural argument propagation or field
+analysis. For example, a witness loaded from an instance field can remain
+unknown even when a human can identify the dictionary stored there. A witness
+constructor inside a lambda starts a new execution context for loop counts.
+
+Version 1 statistics now optionally include a `registry` object:
+
+| Field | Meaning |
+| --- | --- |
+| `recipe_nodes`, `dependency_edges` | All description nodes, including projections and parameter roots, and direct dependency edges |
+| `binding_roots`, `uses`, `scopes` | Recorded witness assignments, witness-variable references and execution contexts |
+| `constructor_recipes`, `constructor_sites` | Canonical constructor descriptions and original construction sites, respectively |
+| `constructor_recipes_by_lifetime`, `constructor_sites_by_lifetime` | Those counts split by dependency lifetime |
+| `nonstatic_sites_by_lifetime`, `nonstatic_recipes_by_lifetime` | Construction sites outside existing static-witness rules, and their distinct descriptions |
+| `nonstatic_loop_sites_by_lifetime` | Nonstatic construction sites within loops in their execution context |
+| `nonstatic_closed_constructors` | Closed, nonstatic sites grouped by selected implementation |
+
+The summarizer accepts older records without `registry` and displays lifetime
+counts when present. Counts of distinct descriptions are summed per module;
+there is no cross-module canonicalization.
+
+A shared description is not a shared allocation. In particular, `closed` does
+not establish that eager module initialization is legal, that a binding
+already dominates a use, or that its initialization/serialization dependencies
+are ready. Even a parameter-dependent description captured by two functions
+still needs a placement decision. Allocation movement, singleton initialization
+and integration with escape analysis remain subsequent work.
+
 ## Repeatable performance cases
 
 `test/perf/src/witnesses.act` contains concrete and generic nested-list equality

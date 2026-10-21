@@ -113,9 +113,8 @@ statistics traversal itself is opt-in and included in the timings above.
 normalization, collisions, type/default equality, scope shadowing, safe outer
 reuse, branch separation and a 4,000-recipe stress case. The three changed
 `lines` snapshots remove two duplicate optional-int witnesses and redirect their
-uses. Both new performance cases passed as native Acton tests. The broad native
-suite was not run after its execution request was rejected by the app
-(`rejected by user`).
+uses. Both new performance cases passed as native Acton tests. The broad native suite was not run at that stage. Broader native verification
+was subsequently authorized and is recorded with stage 3 below.
 
 The measurements justify continuing to a module-wide description graph, while
 keeping runtime-dependent witness parameters explicit. First classify the
@@ -124,3 +123,83 @@ distinguished from generic activation-dependent ones. That graph could then
 serve escape analysis as well as sharing. Dominance placement, loop-invariant
 movement and closed singleton pooling remain later steps; the current change
 preserves witness construction and serialization conventions.
+
+
+## Stage 3: module-wide descriptions
+
+The 2026-10-21 survey uses the same 175 source files, checked against the saved
+source hashes. Its baseline includes stages 1–2 on main `e871f7b0`, and its
+comparison adds the diagnostic registry. Thus these measurements isolate the
+registry; they do not repeat the earlier local-sharing optimization comparison.
+The work was subsequently rebased onto main `46e1ccaf`, including the merged
+builtin iterator optimization. Final verification on that base is recorded
+below. Detailed counts, source hashes, compiler binary hashes and resource
+samples are in [the stage 3 data](witness_registry_measurements.json).
+
+After boxing, the remaining nonstatic construction sites classify as follows:
+
+| Corpus | Modules | Closed sites | Parameter-dependent sites | Local sites | Unknown sites | Distinct closed descriptions |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| base | 27 | 56 | 11 | 0 | 0 | 30 |
+| acton-yang | 35 | 925 | 53 | 0 | 5 | 190 |
+| StratoWeave | 95 | 1,194 | 13 | 0 | 0 | 381 |
+| eq_list_dict | 1 | 16 | 0 | 0 | 0 | 14 |
+| witness_workload | 1 | 2 | 0 | 0 | 0 | 2 |
+
+The main opportunities are now concrete: `yang.gdata` has 441 closed sites with
+42 descriptions, `yang.schema` 230 with 49, and `stratoweave.ttt` 185 with 35.
+The five unknown sites are in `yang.adata`, which includes dictionaries obtained
+from generic instance fields. These remain conservative rather than being
+promoted through field analysis. After boxing, acton-yang has two nonstatic
+sites syntactically inside loops
+and StratoWeave has five. Loop counts are not execution frequencies: a function
+containing a site can also be called repeatedly from a loop.
+
+These numbers support investigating closed witness sharing across functions.
+They do not predict allocation savings: description count is neither the number
+of runtime constructor calls nor a proof of legal placement. Generic parameters
+introduced by lifting are classified by their actual local bindings, without
+propagating the arguments supplied at their call sites.
+
+Every existing statistics field agrees between the two compilers, at all three
+stages. All 350 generated C/header files agree after excluding implementation
+hash comments and source-path `#line` directives. The native `eq_list_dict`
+outputs agree. The million-call witness workload returns `True`, allocates
+64.20–64.23 MB in both versions across three runs, and still makes exactly
+2,000,000 instrumented `B_EqD_listG_new` calls. This is expected: stage 3 describes
+constructions and changes no allocation policy.
+
+Resource measurements again use three sequential, alternating, four-job,
+compile-only runs with statistics enabled. The cached base repeats contain 26
+modules; the initial fresh-copy count above contains all 27. Medians are:
+
+| Corpus | Wall seconds, baseline → registry | User seconds, baseline → registry | Peak RSS MiB, baseline → registry |
+| --- | ---: | ---: | ---: |
+| base | 1.09 → 1.09 | 2.52 → 2.55 | 800 → 803 |
+| acton-yang | 11.36 → 11.50 | 20.39 → 20.76 | 1,058 → 1,195 |
+| StratoWeave | 19.68 → 19.50 | 68.59 → 68.34 | 1,470 → 1,426 |
+
+Wall-time differences are small. Peak memory varies, including an increase for
+acton-yang in these samples; there is no claim that diagnostics are free or
+reduce memory. The graph is constructed only with `--witness-stats`, so normal
+builds do not pay for this analysis.
+
+On main `46e1ccaf`, `make` and all 729 library tests pass. All 525 own-module
+statistics records (175 modules at three stages) agree with the pre-rebase
+survey, including the registry summaries. The broader native selection passes
+all 267 tests: Builtins auto, Core language, Regression auto, Regression
+segfaults, Examples and compiler tests, using two test jobs. This includes
+release CPS forwarding, release iterator lifetimes, witness imports and generic
+regressions. It is not the entire native suite: cross-compilation, stdlib,
+RTS/backend and benchmark groups were not included.
+
+The native run initially hit a full disk. Removing the rebuildable Zig local
+cache, including its stale manifests, freed about 48 GB; the complete clean-cache
+retry passed. This cleanup happened after the paired measurements above.
+
+The next optimization stage should consume these descriptions to choose legal
+sharing locations. Before promoting closed recipes, it must establish the
+initialization and serialization policy and account for dependency order.
+Generic recipes need scope/dominance placement; equal spelling of witness
+parameters is insufficient. The graph can later support escape analysis, but
+this stage does not replace that pass's witness resolution.
