@@ -166,21 +166,16 @@ buildOutFile = do
 
 -- | Check whether build output reports typechecking for a module.
 typechecked :: T.Text -> T.Text -> Bool
-typechecked out modName =
-  any (\line -> isTypecheckLine line && matchesModule line modName) (T.lines out)
-  where
-    isTypecheckLine line =
-      "Finished type check of" `T.isInfixOf` line ||
-      "Type check done" `T.isInfixOf` line
+typechecked = doneReported "Type check done"
 
 -- | Check whether build output reports compilation for a module.
 compiled :: T.Text -> T.Text -> Bool
-compiled out modName =
-  any (\line -> isCompiledLine line && matchesModule line modName) (T.lines out)
-  where
-    isCompiledLine line =
-      "Finished compilation of" `T.isInfixOf` line ||
-      "Compilation done" `T.isInfixOf` line
+compiled = doneReported "Compilation done"
+
+-- | Whether a line of the output reports the given done status for the module.
+doneReported :: T.Text -> T.Text -> T.Text -> Bool
+doneReported status out modName =
+  any (\line -> status `T.isInfixOf` line && matchesModule line modName) (T.lines out)
 
 -- | Check whether build output reports a module as fresh (hash matched, so the
 -- cached .tydb is reused and nothing is rebuilt).

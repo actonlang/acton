@@ -187,9 +187,12 @@ compare recorded `pubDeps` against current provider hashes; any delta triggers
 re-typechecking. Separately, `implDeps` changes cause back passes and tests to
 rerun even when public hashes are stable. Missing or stale `.c`, `.h` or
 `.closures.inc` outputs also force back passes so codegen can recover. To see
-the decisions, run `acton build --verbose`; it prints stale reasons and
-per-name hash deltas. The snippets below abbreviate hashes to 8 hex digits for
-readability.
+the decisions, run `acton build --verbose`. It prints why a module is stale or
+fresh, how the public name hashes of a module that ran its front passes changed
+(`Hash deltas`), and the selection of each deferred back job (`DBP`), with every
+hash shortened to its first 8 hex digits. The transcripts below come from a
+project named `proj` with the modules `a` and `b`. They show only those lines:
+the progress, timing and dependency lines are left out.
 
 **Implementation-only change.** Before:
 
@@ -219,15 +222,17 @@ but they do rerun back passes:
 
 ```text
 $ acton build --verbose
-Building project in /path/proj
-Resolving dependencies (fetching if missing)...
   Stale a: source changed
-  Hash deltas a: ~foo{src 12fa0b1c -> 3e3485be, impl 4bf97616 -> f736da16}
-   Finished type check of     /path/proj/a      0.004 s
-  Stale b: impl changes in a.foo 4bf97616 -> f736da16 (used by bar)
-   Finished compilation of    /path/proj/a      0.002 s
-   Finished compilation of    /path/proj/b      0.003 s
+  Hash deltas a: ~foo{src 0282e373 -> 57c201c1, impl 9bf0a12c -> 6db1246d}
+  Stale b: impl changes in proj.a.foo 9bf0a12c → 6db1246d (used by bar)
+  DBP a: total names 1, interested names 1, root names 0, selected closure 1, generated code out of date
+  DBP b: total names 1, interested names 0, root names 0, selected closure 0, generated code out of date
 ```
+
+`b` computes its impl hashes again from its stored rows. Both deferred back
+jobs find their generated code out of date, because their codegen hashes cover
+their modules' impl hashes. The job of `a` selects `foo`, the one name `b`
+uses. `b` has neither dependents nor root actors, so its job selects no names.
 
 **Public signature change.** Before:
 
@@ -243,49 +248,54 @@ def bar() -> int:
     return a.foo(1)
 ```
 
-After changing the signature of `foo`:
+After changing the signature of `foo`, with `b.act` unchanged:
 
 ```acton
 # a.act
-def foo(x: int) -> float:
-    return float(x)
-
-# b.act
-import a
-
-def bar() -> float:
-    return a.foo(1)
+def foo(x: int, y: int = 1) -> int:
+    return x + y
 ```
 
 Here `pubHash(foo)` changes, so `modulePubHash(a)` changes and any dependent
-that recorded `a.foo` in `pubDeps` must re-typecheck:
+that recorded `a.foo` in `pubDeps` must re-typecheck. The call `a.foo(1)` in
+`b` still type-checks:
 
 ```text
 $ acton build --verbose
-Building project in /path/proj
-Resolving dependencies (fetching if missing)...
   Stale a: source changed
-  Hash deltas a: ~foo{src 2f1a8c9b -> 3a7bb6e1, pub 91c2efb8 -> 5e7d9b02, impl 11c0aa34 -> 6b3e42f1}
-   Finished type check of     /path/proj/a      0.004 s
-  Stale b: pub changes in a.foo 91c2efb8 -> 5e7d9b02 (used by bar)
-   Finished type check of     /path/proj/b      0.005 s
-   Finished compilation of    /path/proj/a      0.002 s
-   Finished compilation of    /path/proj/b      0.003 s
+  Hash deltas a: ~foo{src 0282e373 -> 1970c99d, pub 806d27dd -> 8059e53d, impl 9bf0a12c -> 25383777}
+  Stale b: pub changes in proj.a.foo 806d27dd → 8059e53d (used by bar)
+  Hash deltas b: ~bar{impl 228413ba -> a779705a}
+  DBP a: total names 1, interested names 1, root names 0, selected closure 1, generated code out of date
+  DBP b: total names 1, interested names 0, root names 0, selected closure 0, generated code out of date
 ```
+
+The impl hash of `bar` covers the impl hash of `foo`, so it changes too. Its
+pub hash stays the same, because the signature of `bar` uses no name of `a`.
 
 **Codegen-only staleness.** If generated output is missing or mismatched, we
 rerun back passes even when hashes are unchanged. For example, deleting the
-outputs forces codegen to refresh. This build uses `--no-dbp`. With DBP, the
-default, the deferred back job reports `DBP b: ..., generated code out of date`
-instead:
+generated files of `b` makes its deferred back job generate them again:
+
+```text
+$ rm out/types/proj/b.c out/types/proj/b.h out/types/proj/b.closures.inc
+$ acton build --verbose
+  Fresh a: using cached .tydb
+  Fresh b: using cached .tydb
+  DBP a: total names 1, interested names 1, root names 0, selected closure 1, generated code up to date
+  DBP b: total names 1, interested names 0, root names 0, selected closure 0, generated code out of date
+```
+
+A module whose code is generated whole, for example every module under
+`--no-dbp`, compares the tags of its `.c`, `.h` and `.closures.inc` with its
+impl hash in its front stage and reports a mismatch as a stale reason. After a
+`--no-dbp` build, the same deletion shows:
 
 ```text
 $ rm out/types/proj/b.c out/types/proj/b.h out/types/proj/b.closures.inc
 $ acton build --verbose --no-dbp
-Building project in /path/proj
-Resolving dependencies (fetching if missing)...
-  Stale b: generated code out of date {impl c missing -> 7aa13f90, h missing -> 7aa13f90, support missing -> 7aa13f90}
-   Finished compilation of    /path/proj/b      0.003 s
+  Fresh a: using cached .tydb
+  Stale b: generated code out of date {impl c missing -> 176042b0, h missing -> 176042b0, support missing -> 176042b0}
 ```
 
 **Non-propagating change.** Adding an unused import changes the module source
