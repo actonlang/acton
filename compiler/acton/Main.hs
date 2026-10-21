@@ -495,7 +495,7 @@ buildFiles gopts opts files =
             let sp = Source.diskSourceProvider
                 runBuild opts' =
                   withProjectLockNotice gopts proj $
-                    compileFiles sp gopts opts' absFiles False
+                    compileFiles sp gopts opts' absFiles SelectedFiles
             runBuild opts
           _ -> mapM_ (runFile gopts opts) files
 
@@ -641,7 +641,7 @@ buildProjectOnce gopts opts = do
                 let projDir = projPath paths
                     runBuild opts' = withProjectLockNotice gopts projDir $ do
                       srcFiles <- projectSourceFiles paths
-                      compileFiles sp gopts opts' srcFiles True
+                      compileFiles sp gopts opts' srcFiles WholeProject
                       generateProjectDocIndex sp gopts opts' paths srcFiles
                 runBuild opts
 
@@ -714,8 +714,14 @@ buildTestModules gopts opts paths topts = do
     srcFiles <- projectSourceFiles paths
     selected <- selectTestSources gopts opts paths topts srcFiles
     unless (null selected) $
-      compileFiles Source.diskSourceProvider gopts opts selected (selected == srcFiles)
+      compileFiles Source.diskSourceProvider gopts opts selected (testBuildScope srcFiles selected)
     mapM (fmap modNameToString . moduleNameFromFile (srcDir paths) (projName paths)) selected
+
+-- | A test build that selects every project source builds the whole project.
+testBuildScope :: [FilePath] -> [FilePath] -> Scope
+testBuildScope srcFiles selected
+  | selected == srcFiles = WholeProject
+  | otherwise            = SelectedFiles
 
 -- Build both revisions before timing. Each mode then owns its sampling policy.
 runGitTestComparison :: C.GlobalOptions -> C.CompileOptions -> C.TestOptions -> TestMode -> Paths -> String -> IO Int
@@ -801,7 +807,7 @@ runTestsWatch gopts opts topts mode paths = do
                 -- Link the complete selected closure; cached modules still skip
                 -- unchanged compiler passes.
                 hadErrors <- if null selected then return False else
-                  compileFilesChanged sp gopts opts selected (selected == srcFiles) Nothing (Just (watchCtx, gen))
+                  compileFilesChanged sp gopts opts selected (testBuildScope srcFiles selected) Nothing (Just (watchCtx, gen))
                 unless hadErrors $ whenCurrent gen $ do
                   selectStart <- getTime Monotonic
                   testModules <- mapM (fmap modNameToString . moduleNameFromFile (srcDir paths) (projName paths)) selected
@@ -883,7 +889,7 @@ watchProjectAt gopts opts projDir = do
                           withProjectLockForGen gopts gen (projPath paths) $ do
                             logProjectBuild gopts progressUI progressState (projPath paths)
                             srcFiles <- projectSourceFiles paths
-                            hadErrors <- compileFilesChanged sp gopts opts srcFiles True mChanged (Just (watchCtx, gen))
+                            hadErrors <- compileFilesChanged sp gopts opts srcFiles WholeProject mChanged (Just (watchCtx, gen))
                             when (not hadErrors && isNothing mChanged) $
                               generateProjectDocIndex sp gopts opts paths srcFiles
                             return (not hadErrors)
@@ -920,7 +926,7 @@ buildFileOnce gopts opts file = do
           putStrLn("Building file " ++ file ++ " in project " ++ relProj)
         let runBuild opts' =
               withProjectLockNotice gopts proj $
-                compileFiles sp gopts opts' [file] False
+                compileFiles sp gopts opts' [file] SelectedFiles
         runBuild opts
       Nothing -> do
         -- Not in a project, use scratch directory for compilation unless
@@ -933,7 +939,7 @@ buildFileOnce gopts opts file = do
                 putStrLn("Building file " ++ file ++ " using temporary scratch directory" ++ scratch_dir)
               else
                 putStrLn("Building file " ++ file ++ " using temporary directory " ++ C.tempdir opts')
-          compileFiles sp gopts opts' [file] False
+          compileFiles sp gopts opts' [file] SelectedFiles
 
 -- | Watch a single file and rebuild on changes.
 watchFile :: C.GlobalOptions -> C.CompileOptions -> FilePath -> IO ()
@@ -948,7 +954,7 @@ watchFile gopts opts file = do
           withCompileWatchContext gopts $ \watchCtx -> do
             let sched = cwScheduler watchCtx
                 runOnce gen mChanged = whenCurrent gen $
-                  void $ compileFilesChanged sp gopts opts' [absFile] False mChanged (Just (watchCtx, gen))
+                  void $ compileFilesChanged sp gopts opts' [absFile] SelectedFiles mChanged (Just (watchCtx, gen))
             runWatchFile gopts absFile sched runOnce
 
 data WatchTrigger = WatchFull | WatchIncremental FilePath deriving (Eq, Show)
@@ -1118,15 +1124,15 @@ sigCommand gopts sigOpts = do
     depOverrides <- normalizeDepOverrides (projPath paths0) (C.dep_overrides opts0)
     let opts = opts0 { C.dep_overrides = depOverrides }
     paths <- loadProjectPaths opts
-    rootProj <- normalizePathSafe (projPath paths)
-    sysAbs <- normalizePathSafe (sysPath paths)
+    cctx <- compileContext opts paths
+    let rootProj = ccRootProj cctx
     withProjectLockNotice queryGopts rootProj $ do
       fetchDependencies queryGopts paths depOverrides
-      projMap <- discoverProjects queryGopts sysAbs rootProj depOverrides
+      projMap <- discoverProjects queryGopts (ccSysAbs cctx) rootProj depOverrides
       target <- resolveSigTarget opts paths rootProj projMap (C.sigTarget sigOpts)
       tyFile <- case target of
         SigSourceTarget ctx mn _ srcPath ->
-          compileSigTarget gopts queryGopts opts paths rootProj sysAbs depOverrides ctx mn srcPath
+          compileSigTarget gopts queryGopts cctx ctx mn srcPath
         SigTyTarget _ _ tyPath ->
           return tyPath
       case target of
@@ -1135,29 +1141,15 @@ sigCommand gopts sigOpts = do
 
 compileSigTarget :: C.GlobalOptions
                  -> C.GlobalOptions
-                 -> C.CompileOptions
-                 -> Paths
-                 -> FilePath
-                 -> FilePath
-                 -> [(String, FilePath)]
+                 -> CompileContext
                  -> ProjCtx
                  -> A.ModName
                  -> FilePath
                  -> IO FilePath
-compileSigTarget gopts queryGopts opts paths rootProj sysAbs depOverrides targetCtx mn srcPath = do
-    buildStamp <- readBuildSpecStamp (projPath paths)
+compileSigTarget gopts queryGopts cctx targetCtx mn srcPath = do
     let sp = Source.diskSourceProvider
-        cctx = CompileContext
-          { ccOpts = opts
-          , ccDepOverrides = depOverrides
-          , ccPathsRoot = paths
-          , ccRootProj = rootProj
-          , ccSysAbs = sysAbs
-          , ccBuildStamp = buildStamp
-          }
-    plan <- prepareCompilePlanFromContext sp queryGopts cctx [srcPath] False Nothing
-    let opts' = ccOpts (cpContext plan)
-        onEvent (Diagnostics _ diags) = printDiagnostics gopts diags
+    plan <- prepareCompilePlanFromContext sp queryGopts cctx (PlanRequest [srcPath] SelectedFiles Nothing)
+    let onEvent (Diagnostics _ diags) = printDiagnostics gopts diags
         onEvent (Info msg)            = putStrLn msg      -- Info lines arrive only under --verbose
         onEvent _                     = return ()
     compileRes <- runStandalonePlan sp queryGopts plan onEvent
@@ -1167,7 +1159,7 @@ compileSigTarget gopts queryGopts opts paths rootProj sysAbs depOverrides target
     let targetCtx' = case M.lookup (projRoot targetCtx) (cpProjMap plan) of
                        Just ctx -> ctx
                        Nothing  -> targetCtx
-    targetPaths <- pathsForModule opts' (cpProjMap plan) targetCtx' mn
+    targetPaths <- pathsForModule (ccOpts cctx) (cpProjMap plan) targetCtx' mn
     return (tyDbPath targetPaths mn)
 
 fixupTarget locals deps paths mn
@@ -1497,25 +1489,25 @@ printDocs gopts opts = do
 compileReplHook :: C.GlobalOptions -> C.CompileOptions -> FilePath -> [FilePath] -> IO Bool
 compileReplHook gopts opts projDir srcFiles =
     withProjectLockNotice gopts projDir $
-      compileFilesChanged Source.diskSourceProvider gopts opts srcFiles False Nothing Nothing
+      compileFilesChanged Source.diskSourceProvider gopts opts srcFiles SelectedFiles Nothing Nothing
 
 -- Compile Acton files ---------------------------------------------------------------------------------------------
 
 -- | Compile a set of files in a single-shot build.
-compileFiles :: Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -> [String] -> Bool -> IO ()
-compileFiles sp gopts opts srcFiles allowPrune =
-    void $ compileFilesChanged sp gopts opts srcFiles allowPrune Nothing Nothing
+compileFiles :: Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -> [String] -> Scope -> IO ()
+compileFiles sp gopts opts srcFiles scope =
+    void $ compileFilesChanged sp gopts opts srcFiles scope Nothing Nothing
 
 -- | Compile with optional change set, wiring progress UI and back jobs.
 compileFilesChanged :: Source.SourceProvider
                     -> C.GlobalOptions
                     -> C.CompileOptions
                     -> [String]
-                    -> Bool
+                    -> Scope
                     -> Maybe [FilePath]
                     -> Maybe (CliWatchContext, Generation)
                     -> IO Bool
-compileFilesChanged sp gopts opts srcFiles allowPrune mChangedPaths mWatch = do
+compileFilesChanged sp gopts opts srcFiles scope mChangedPaths mWatch = do
     maxParallel <- compileParallelism gopts
     (progressUI, progressState) <- case mWatch of
       Just (ctx, _) -> return (cwProgressUI ctx, cwProgressState ctx)
@@ -1536,7 +1528,8 @@ compileFilesChanged sp gopts opts srcFiles allowPrune mChangedPaths mWatch = do
           sp' <- overlayChangedPaths sp mChangedPaths
           planStart <- getTime Monotonic
           planRes <- try $
-            prepareCompilePlan sp' gopts sched opts srcFiles allowPrune mChangedPaths
+            prepareCompileContext opts srcFiles >>= \ctx ->
+              prepareCompilePlan sp' gopts sched ctx (PlanRequest srcFiles scope mChangedPaths)
           logTiming gopts opts logLine "compile planning" planStart
           let reportPlanError (ProjectError msg) = do
                 if C.watch opts
@@ -1631,11 +1624,6 @@ initCliCompileHooks progressUI progressState gopts gen plan = do
         rootProj = ccRootProj (cpContext plan)
         rootPaths = ccPathsRoot (cpContext plan)
         optsPlan = ccOpts (cpContext plan)
-    sizeEntries <- forM neededTasks $ \t -> do
-      let path = taskSourceFile t
-      exists <- doesFileExist path
-      sz <- if exists then getFileSize path else return 0
-      return (gtKey t, sz)
     progressRef <- newIORef (0 :: Double)
     marksRef <- newIORef (M.empty :: M.Map TaskKey (Double, Double, Bool))
     -- sizeMap is used for the progress bar indicator to determine how much a
@@ -1646,8 +1634,8 @@ initCliCompileHooks progressUI progressState gopts gen plan = do
     -- back passes, we also compute a share for each task that determines how
     -- much of the total progress it should contribute to, which is used to give
     -- a more accurate progress indication during the compile.
-    let sizeMap = M.fromList sizeEntries
-        totalSize = sum (map snd sizeEntries)
+    let sizeMap = cpSourceSizes plan
+        totalSize = sum (M.elems sizeMap)
         useEqual = totalSize <= 0
         totalWeight :: Double
         totalWeight =
@@ -2156,7 +2144,7 @@ runCliPostCompile cliHooks gopts plan env = do
         preBinTasks
           | null (C.root opts') = map (\mn -> BinTask (A.GName mn (A.name "main")) False) rootModules
           | otherwise        = [binTask]
-    requestedModules <- mapM (moduleNameFromFile (srcDir pathsRoot) proj) (cpSrcFiles plan)
+    requestedModules <- mapM (moduleNameFromFile (srcDir pathsRoot) proj) (requestFiles (cpRequest plan))
     let preTestBinTasks = [ BinTask (A.GName mn (A.name "test_main")) True
                           | mn <- rootModules, mn `elem` requestedModules ]
         selectedTasksByProj = selectedTasksWithProvidersByProj globalTasks neededTasks

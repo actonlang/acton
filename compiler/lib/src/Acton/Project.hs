@@ -7,7 +7,7 @@ module Acton.Project
   , throwProjectError
   , Paths(..)
   , ProjCtx(..)
-  , BuildSpecStamp(..)
+  , BuildSpecStamp
   , readBuildSpecStamp
   , findPaths
   , findProjectDir
@@ -90,23 +90,16 @@ instance Exception ProjectError
 throwProjectError :: String -> IO a
 throwProjectError msg = throwIO (ProjectError msg)
 
-data BuildSpecStamp = BuildSpecStamp
-  { bssBuildAct :: Maybe UTCTime
-  } deriving (Eq, Show)
+-- | A project's Build.act as of a moment: its modification time, Nothing
+-- when the project has no Build.act.  Two equal stamps mean Build.act did
+-- not change in between.
+newtype BuildSpecStamp = BuildSpecStamp (Maybe UTCTime) deriving (Eq)
 
 readBuildSpecStamp :: FilePath -> IO BuildSpecStamp
 readBuildSpecStamp projDir = do
-  buildAct <- stampFor "Build.act"
-  return BuildSpecStamp
-    { bssBuildAct = buildAct
-    }
-  where
-    stampFor name = do
-      let path = projDir </> name
-      exists <- doesFileExist path
-      if exists
-        then Just <$> getModificationTime path
-        else return Nothing
+    exists <- doesFileExist buildAct
+    BuildSpecStamp <$> if exists then Just <$> getModificationTime buildAct else return Nothing
+  where buildAct = projDir </> "Build.act"
 
 -- | Compute the subdirectory for a module within a types root.
 -- Used when creating directories before writing .tydb files.

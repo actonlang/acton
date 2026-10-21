@@ -33,9 +33,10 @@ BuildEvent values.
 
 Call flow:
   - Shared pipeline (acton build, acton watch, LSP):
-    1) prepareCompilePlan (via prepareCompileContext, readModuleTask/
-       buildGlobalTasks, and selectNeededTasks/selectAffectedTasks) builds a
-       CompilePlan for the requested subgraph. Parsing is performed through
+    1) prepareCompileContext builds the CompileContext of the build, and
+       prepareCompilePlan (buildProjects, readModuleTask/buildGlobalTasks,
+       selectPlan and expandLibraries) builds a CompilePlan for the
+       requested subgraph. Parsing is performed through
        parseActSource/parseActFile so SourceProvider overlays can supply
        unsaved buffers.
     2) runCompilePlan drives compileModules. As each module finishes its front
@@ -120,6 +121,9 @@ module Acton.Compile
   , checkBuildSpecChange
   , CompileContext(..)
   , prepareCompileContext
+  , compileContext
+  , Scope(..)
+  , PlanRequest(..)
   , CompilePlan(..)
   , prepareCompilePlan
   , prepareCompilePlanFromContext
@@ -143,9 +147,7 @@ module Acton.Compile
   , importGraph
   , ModuleGraph
   , moduleGraph
-  , selectNeededTasks
-  , selectAffectedTasks
-  , libraryBoundaryTasks
+  , selectPlan
   , docNameCountThreshold
   , shouldGenerateDocOutput
   , runBackPasses
@@ -205,7 +207,7 @@ import Data.Char (isHexDigit, isSpace)
 import Data.List (foldl', nub, partition)
 import qualified Data.List
 import Data.IORef
-import Data.Maybe (catMaybes, isJust, isNothing, listToMaybe, mapMaybe)
+import Data.Maybe (catMaybes, fromMaybe, isJust, isNothing, listToMaybe, mapMaybe)
 import qualified Data.HashMap.Strict as HM
 import qualified Data.Map as M
 import Data.Ord (Down(..))
@@ -542,13 +544,13 @@ waitBackJobs sched gen = atomically $ do
     queue  = schedulerBackQueue sched
     number = generationNumber gen
 
+-- | What every plan of a build shares.
 data CompileContext = CompileContext
-  { ccOpts :: C.CompileOptions
-  , ccDepOverrides :: [(String, FilePath)]
-  , ccPathsRoot :: Paths
-  , ccRootProj :: FilePath
-  , ccSysAbs :: FilePath
-  , ccBuildStamp :: BuildSpecStamp
+  { ccOpts       :: C.CompileOptions     -- --dep overrides made absolute
+  , ccPathsRoot  :: Paths                -- the paths of the file that roots the build
+  , ccRootProj   :: FilePath             -- the root project's directory, normalized
+  , ccSysAbs     :: FilePath             -- the system directory, normalized
+  , ccBuildStamp :: BuildSpecStamp       -- the root project's Build.act when the context was made
   }
 
 -- | A module's options: dependency projects build neither their tests nor a
@@ -558,118 +560,117 @@ optionsFor ctx k
   | tkProj k == ccRootProj ctx          = ccOpts ctx
   | otherwise                           = (ccOpts ctx) { C.skip_build = True, C.test = False }
 
+-- | The context of a build rooted at a file whose paths are known.  The
+-- Build.act stamp is read at the project path as the paths give it.
+compileContext :: C.CompileOptions -> Paths -> IO CompileContext
+compileContext opts paths = do
+    root  <- normalizePathSafe (projPath paths)
+    sys   <- normalizePathSafe (sysPath paths)
+    stamp <- readBuildSpecStamp (projPath paths)
+    return CompileContext { ccOpts = opts, ccPathsRoot = paths, ccRootProj = root, ccSysAbs = sys, ccBuildStamp = stamp }
+
+-- | The context of a build of the given files, rooted at the first.  The
+-- --dep overrides are made absolute against the first file's project
+-- directory, or the working directory outside a project, before the paths
+-- are found, so that the paths and discovery see absolute overrides.
 prepareCompileContext :: C.CompileOptions -> [FilePath] -> IO CompileContext
-prepareCompileContext opts srcFiles = do
-  when (null srcFiles) $
-    throwProjectError "No source files found"
-  cwd <- getCurrentDirectory
-  maybeRoot <- findProjectDir (takeDirectory (head srcFiles))
-  let baseForOverrides = maybe cwd id maybeRoot
-  depOverrides <- normalizeDepOverrides baseForOverrides (C.dep_overrides opts)
-  let opts' = opts { C.dep_overrides = depOverrides }
-  pathsRoot <- findPaths (head srcFiles) opts'
-  rootProj <- normalizePathSafe (projPath pathsRoot)
-  sysAbs <- normalizePathSafe (sysPath pathsRoot)
-  buildStamp <- readBuildSpecStamp (projPath pathsRoot)
-  return CompileContext
-    { ccOpts = opts'
-    , ccDepOverrides = depOverrides
-    , ccPathsRoot = pathsRoot
-    , ccRootProj = rootProj
-    , ccSysAbs = sysAbs
-    , ccBuildStamp = buildStamp
-    }
+prepareCompileContext _ []              = throwProjectError "No source files found"
+prepareCompileContext opts (first : _)  = do
+    cwd       <- getCurrentDirectory
+    base      <- fromMaybe cwd <$> findProjectDir (takeDirectory first)
+    overrides <- normalizeDepOverrides base (C.dep_overrides opts)
+    let opts' = opts { C.dep_overrides = overrides }
+    paths     <- findPaths first opts'
+    compileContext opts' paths
 
--- | Prepare a compile plan, refreshing dependencies if the build spec changed.
-prepareCompilePlan :: Source.SourceProvider
-                   -> C.GlobalOptions
-                   -> CompileScheduler
-                   -> C.CompileOptions
-                   -> [FilePath]
-                   -> Bool
-                   -> Maybe [FilePath]
-                   -> IO CompilePlan
-prepareCompilePlan sp gopts sched opts srcFiles allowPrune mChangedPaths = do
-  ctx <- prepareCompileContext opts srcFiles
-  specChanged <- checkBuildSpecChange sched (ccBuildStamp ctx)
-  when specChanged $
-    fetchDependencies gopts (ccPathsRoot ctx) (ccDepOverrides ctx)
-  let mChanged = if specChanged then Nothing else mChangedPaths
-  prepareCompilePlanFromContext sp gopts ctx srcFiles allowPrune mChanged
+-- | How much of a project a build asks for.  A whole-project build seeds
+-- discovery with every module and lets the final build prune stale
+-- outputs.
+data Scope = SelectedFiles | WholeProject deriving (Eq)
 
-data CompilePlan = CompilePlan
-  { cpContext :: CompileContext
-  , cpProjMap :: M.Map FilePath ProjCtx
-  , cpGlobalTasks :: [GlobalTask]
-  , cpNeededTasks :: [GlobalTask]
-  , cpDbpBlocked :: Data.Set.Set TaskKey
-  , cpRootModules :: [A.ModName]                  -- selected root-project modules, before library expansion
-  , cpIncremental :: Bool
-  , cpAllowPrune :: Bool
-  , cpSrcFiles :: [FilePath]
+-- | What a build asks for.
+data PlanRequest = PlanRequest
+  { requestFiles   :: [FilePath]          -- named by the user or the editor
+  , requestScope   :: Scope
+  , requestChanged :: Maybe [FilePath]    -- changed since the previous plan: an incremental plan
   }
 
-prepareCompilePlanFromContext :: Source.SourceProvider
-                              -> C.GlobalOptions
-                              -> CompileContext
-                              -> [FilePath]
-                              -> Bool
-                              -> Maybe [FilePath]
-                              -> IO CompilePlan
-prepareCompilePlanFromContext sp gopts ctx srcFiles allowPrune mChangedPaths = do
-  let opts' = ccOpts ctx
-      depOverrides = ccDepOverrides ctx
-      pathsRoot = ccPathsRoot ctx
-      rootProj = ccRootProj ctx
-      sysAbs = ccSysAbs ctx
-      incremental = isJust mChangedPaths
-      allowPrune' = allowPrune && not incremental
-  projMap0 <- if isTmp pathsRoot
-    then do
-      let ctx' = ProjCtx
-            { projRoot = rootProj
-            , projOutDir = projOut pathsRoot
-            , projTypesDir = projTypes pathsRoot
-            , projSrcDir = srcDir pathsRoot
-            , projSysPath = sysAbs
-            , projSysTypes = joinPath [sysAbs, "base", "out", "types"]
-            , projBuildSpec = scratchBuildSpec rootProj
-            , projDeps = []
-            }
-      return (M.singleton rootProj ctx')
-    else discoverProjects gopts sysAbs rootProj depOverrides
-  -- Test selection follows imports, not production library membership.
-  -- Library groups must not pull unrelated test modules into compilation.
-  let projMap = if C.test opts'
-                  then M.adjust (\pctx -> pctx { projBuildSpec = (projBuildSpec pctx) { BuildSpec.libraries = M.empty } }) rootProj projMap0
-                  else projMap0
-  -- Keep generated module artifacts in sync with source removals.
-  -- For full builds, scan and prune all orphan outputs.
-  -- For incremental builds, prune only modules whose changed .act paths are now missing.
-  if incremental
-    then maybe (return ()) (pruneMissingChangedModuleOutputs opts' projMap) mChangedPaths
-    else mapM_ (pruneMissingModuleOutputs opts' projMap) (M.elems projMap)
-  let hasBuildLibraries = any (not . M.null . BuildSpec.libraries . projBuildSpec) (M.elems projMap)
-  globalTasks <- buildGlobalTasks sp gopts opts' projMap
-    (if incremental || allowPrune || hasBuildLibraries then Nothing else Just srcFiles)
-  let modules = moduleGraph projMap globalTasks
-      dbpBlocked = libraryBoundaryTasks modules
-  neededTasks0 <- case mChangedPaths of
-    Nothing -> selectNeededTasks pathsRoot rootProj modules srcFiles
-    Just changed -> selectAffectedTasks ctx modules dbpBlocked changed
-  let neededTasks = expandBuildLibraryTasks modules neededTasks0
-      rootModules = [ tkMod (gtKey t) | t <- neededTasks0, tkProj (gtKey t) == rootProj ]
-  return CompilePlan
-    { cpContext = ctx
-    , cpProjMap = projMap
-    , cpGlobalTasks = globalTasks
-    , cpNeededTasks = neededTasks
-    , cpDbpBlocked = dbpBlocked
-    , cpRootModules = rootModules
-    , cpIncremental = incremental
-    , cpAllowPrune = allowPrune'
-    , cpSrcFiles = srcFiles
-    }
+data CompilePlan = CompilePlan
+  { cpContext     :: CompileContext
+  , cpRequest     :: PlanRequest              -- as planned: a Build.act change drops requestChanged
+  , cpProjMap     :: M.Map FilePath ProjCtx
+  , cpGlobalTasks :: [GlobalTask]             -- every discovered module, in discovery order
+  , cpNeededTasks :: [GlobalTask]             -- the modules to compile, in discovery order
+  , cpDbpBlocked  :: Data.Set.Set TaskKey     -- library members used from outside their library
+  , cpRootModules :: [A.ModName]              -- selected root-project modules, before library expansion
+  , cpAllowPrune  :: Bool                     -- a whole-project, non-incremental plan
+  , cpSourceSizes :: M.Map TaskKey Integer    -- each needed module's source size, 0 when missing
+  }
+
+-- | Plan a build.  A scheduler's first plan, and any plan after Build.act
+-- changed, fetches dependencies and plans in full: the request's changed
+-- paths are dropped.  The stamp is recorded before fetching.
+prepareCompilePlan :: Source.SourceProvider -> C.GlobalOptions -> CompileScheduler -> CompileContext -> PlanRequest -> IO CompilePlan
+prepareCompilePlan sp gopts sched ctx request = do
+    specChanged <- checkBuildSpecChange sched (ccBuildStamp ctx)
+    when specChanged $
+      fetchDependencies gopts (ccPathsRoot ctx) (C.dep_overrides (ccOpts ctx))
+    prepareCompilePlanFromContext sp gopts ctx (if specChanged then request { requestChanged = Nothing } else request)
+
+-- | Plan a build whose dependencies are in place.  Orphan outputs are pruned
+-- before discovery, so that a cached header cannot resurrect a deleted
+-- module: in every project for a full plan, and for an incremental plan
+-- only those of changed sources that no longer exist.
+prepareCompilePlanFromContext :: Source.SourceProvider -> C.GlobalOptions -> CompileContext -> PlanRequest -> IO CompilePlan
+prepareCompilePlanFromContext sp gopts ctx request = do
+    projects <- buildProjects gopts ctx
+    case requestChanged request of
+      Nothing      -> mapM_ (pruneMissingModuleOutputs opts projects) (M.elems projects)
+      Just changed -> pruneMissingChangedModuleOutputs opts projects changed
+    tasks    <- buildGlobalTasks sp gopts opts projects (seeds projects)
+    let modules = moduleGraph projects tasks
+    selectPlan ctx projects modules request >>= expandLibraries modules
+  where
+    opts = ccOpts ctx
+    -- Discovery starts from the requested files only when the selection
+    -- needs no other module: an incremental plan looks for dependents, a
+    -- whole-project plan compiles every module, and library expansion and
+    -- library boundaries need the whole graph.
+    seeds projects
+      | isJust (requestChanged request)           = Nothing
+      | requestScope request == WholeProject      = Nothing
+      | any declaresLibraries (M.elems projects)  = Nothing
+      | otherwise                                 = Just (requestFiles request)
+    declaresLibraries = not . M.null . BuildSpec.libraries . projBuildSpec
+
+-- | The projects of a build: one scratch project without dependencies for a
+-- temporary build, else the root project and every project it depends on.
+-- Tests are selected by their imports, so under --test the root project
+-- declares no build libraries, whose members would pull unrelated test
+-- modules into the build.
+buildProjects :: C.GlobalOptions -> CompileContext -> IO (M.Map FilePath ProjCtx)
+buildProjects gopts ctx = withoutTestLibraries <$> projects
+  where
+    opts  = ccOpts ctx
+    paths = ccPathsRoot ctx
+    root  = ccRootProj ctx
+    sys   = ccSysAbs ctx
+    projects
+      | isTmp paths = return (M.singleton root scratch)
+      | otherwise   = discoverProjects gopts sys root (C.dep_overrides opts)
+    scratch = ProjCtx
+      { projRoot      = root
+      , projOutDir    = projOut paths
+      , projTypesDir  = projTypes paths
+      , projSrcDir    = srcDir paths
+      , projSysPath   = sys
+      , projSysTypes  = joinPath [sys, "base", "out", "types"]
+      , projBuildSpec = scratchBuildSpec root
+      , projDeps      = []
+      }
+    withoutTestLibraries
+      | C.test opts = M.adjust (\p -> p { projBuildSpec = (projBuildSpec p) { BuildSpec.libraries = M.empty } }) root
+      | otherwise   = id
 
 -- | Compile a plan as a generation of the scheduler. Its back jobs run on
 -- the scheduler's workers: wait for them with waitBackJobs. Each event is
@@ -1613,57 +1614,71 @@ moduleGraph projMap tasks = ModuleGraph
 restrictTasks :: ModuleGraph -> Data.Set.Set TaskKey -> [GlobalTask]
 restrictTasks g keys = [ t | t <- graphTasks g, Data.Set.member (gtKey t) keys ]
 
--- | Select the subgraph needed for a given build request.
--- Maps file paths to TaskKeys, adds __builtin__, and computes the reachable
--- dependency closure.
-selectNeededTasks :: Paths -> FilePath -> ModuleGraph -> [FilePath] -> IO [GlobalTask]
-selectNeededTasks pathsRoot rootProj g srcFiles = do
-    requestedKeys <- catMaybes <$> mapM lookupTaskKey srcFiles
-    let wantedNames   = map takeFileName srcFiles
-        requestedKeys' = if null requestedKeys
-                           then [ gtKey t
-                                | t <- graphTasks g
-                                , takeFileName (taskSourceFile t) `elem` wantedNames
-                                ]
-                           else requestedKeys
-        builtinKeys = [ gtKey t | t <- graphTasks g, isBuiltin (gtKey t) ]
-        startKeys   = if null requestedKeys' then map gtKey (graphTasks g) else requestedKeys' ++ builtinKeys
-    return (restrictTasks g (closure (depsOf (graphImports g)) startKeys))
-  where
-    lookupTaskKey f = do
-      absF <- canonicalizePath f
-      let byPath = listToMaybe [ gtKey t | t <- graphTasks g, taskSourceFile t == absF ]
-      case byPath of
-        Just k -> return (Just k)
-        Nothing -> do
-          mn <- moduleNameFromFile (srcDir pathsRoot) (projName pathsRoot) absF
-          return $ listToMaybe [ gtKey t
-                               | t <- graphTasks g
-                               , tkProj (gtKey t) == rootProj
-                               , tkMod (gtKey t) == mn
-                               ]
+-- | What a request compiles from a discovered module graph, before library
+-- expansion: the requested modules with what they import, or, for an
+-- incremental request, the modules its changes affect.  The LSP's cached
+-- plan is this selection alone: it neither expands libraries nor prunes
+-- outputs.
+selectPlan :: CompileContext -> M.Map FilePath ProjCtx -> ModuleGraph -> PlanRequest -> IO CompilePlan
+selectPlan ctx projects g request = do
+    selected <- maybe (selectRequested ctx g (requestFiles request)) (selectAffected ctx g blocked) (requestChanged request)
+    let needed = restrictTasks g selected
+    sizes    <- sourceSizes needed
+    return CompilePlan
+      { cpContext     = ctx
+      , cpRequest     = request
+      , cpProjMap     = projects
+      , cpGlobalTasks = graphTasks g
+      , cpNeededTasks = needed
+      , cpDbpBlocked  = blocked
+      , cpRootModules = [ tkMod (gtKey t) | t <- needed, tkProj (gtKey t) == ccRootProj ctx ]
+      , cpAllowPrune  = requestScope request == WholeProject && isNothing (requestChanged request)
+      , cpSourceSizes = sizes
+      }
+  where blocked = libraryBoundary g
 
--- | Select the modules an edit of the changed files affects: every dependent
--- of a changed module, every module on a dependency path from those to a DBP
+-- | The requested modules with everything they import, and __builtin__.  A
+-- file names a module by its source path, else by its module name in the
+-- root project.  When no file names a module that way, every module whose
+-- source has a requested file name is requested, in any project.  When
+-- nothing is requested, every module is selected.
+selectRequested :: CompileContext -> ModuleGraph -> [FilePath] -> IO (Data.Set.Set TaskKey)
+selectRequested ctx g files = do
+    named <- catMaybes <$> mapM lookupTaskKey files
+    let requested = if null named then byFileName else named
+        start     = if null requested then map gtKey (graphTasks g) else requested ++ builtinKeys
+    return (closure (depsOf (graphImports g)) start)
+  where
+    paths       = ccPathsRoot ctx
+    byFileName  = [ gtKey t | t <- graphTasks g, takeFileName (taskSourceFile t) `elem` map takeFileName files ]
+    builtinKeys = [ gtKey t | t <- graphTasks g, isBuiltin (gtKey t) ]
+    lookupTaskKey file = do
+      absolute <- canonicalizePath file
+      case [ gtKey t | t <- graphTasks g, taskSourceFile t == absolute ] of
+        k : _ -> return (Just k)
+        []    -> do mn <- moduleNameFromFile (srcDir paths) (projName paths) absolute
+                    return (listToMaybe [ gtKey t | t <- graphTasks g, tkProj (gtKey t) == ccRootProj ctx, tkMod (gtKey t) == mn ])
+
+-- | The modules an edit of the changed files affects: every dependent of a
+-- changed module, every module on a dependency path from those to a DBP
 -- provider, and every dependent of the providers on those paths, because
 -- every consumer of a deferred provider can contribute selected-name
--- interest.  Changes that match no module select everything.  Safe on import
--- cycles, which the run reports later.  The tasks keep their full provider
--- maps, so unchanged imports still resolve through cached interfaces.
-selectAffectedTasks :: CompileContext -> ModuleGraph -> Data.Set.Set TaskKey -> [FilePath] -> IO [GlobalTask]
-selectAffectedTasks ctx g dbpBlocked changedFiles
-  | null changedFiles = return (graphTasks g)
-  | otherwise = do
-      absChanged <- mapM normalizePathSafe changedFiles
-      taskPaths <- forM (graphTasks g) $ \t -> do
-        p <- normalizePathSafe (taskSourceFile t)
-        return (p, gtKey t)
-      let pathIndex = M.fromList taskPaths
-      return $ case mapMaybe (`M.lookup` pathIndex) absChanged of
-        []      -> graphTasks g
-        changed -> restrictTasks g (affectedBy changed)
+-- interest.  Changes that match no module select everything.  Safe on
+-- import cycles, which the run reports later.  The selected tasks keep
+-- their full provider maps, so unchanged imports still resolve through
+-- cached interfaces.
+selectAffected :: CompileContext -> ModuleGraph -> Data.Set.Set TaskKey -> [FilePath] -> IO (Data.Set.Set TaskKey)
+selectAffected ctx g blocked files
+  | null files = return everything
+  | otherwise  = do
+      edited  <- mapM normalizePathSafe files
+      sources <- M.fromList <$> forM (graphTasks g) (\t -> (\path -> (path, gtKey t)) <$> normalizePathSafe (taskSourceFile t))
+      return $ case mapMaybe (`M.lookup` sources) edited of
+        []      -> everything
+        changed -> affectedBy changed
   where
-    imports = graphImports g
+    everything = M.keysSet (graphIndex g)
+    imports    = graphImports g
     affectedBy changed = Data.Set.unions [affected, onPaths, dependents imports providers]
       where affected  = dependents imports changed
             onPaths   = pathsTo imports isDbpProvider (Data.Set.toList affected)
@@ -1671,7 +1686,7 @@ selectAffectedTasks ctx g dbpBlocked changedFiles
 
     isDbpProvider k =
       case gtTask t of
-        TyTask _ -> deferrable (optionsFor ctx k) (Data.Set.member k dbpBlocked) False k
+        TyTask _ -> deferrable (optionsFor ctx k) (Data.Set.member k blocked) False k
         _        -> False
       where t = graphIndex g M.! k
 
@@ -1679,8 +1694,8 @@ selectAffectedTasks ctx g dbpBlocked changedFiles
 -- an explicit library boundary must keep its full generated surface.  A
 -- member is at the boundary when a module outside its library imports it, so
 -- members nobody imports stay DBP-eligible.
-libraryBoundaryTasks :: ModuleGraph -> Data.Set.Set TaskKey
-libraryBoundaryTasks g =
+libraryBoundary :: ModuleGraph -> Data.Set.Set TaskKey
+libraryBoundary g =
     Data.Set.unions [ Data.Set.filter (importedOutside group) group | group <- graphLibraries g ]
   where importedOutside group = any (`Data.Set.notMember` group) . usersOf (graphImports g)
 
@@ -1719,22 +1734,31 @@ libraryTaskGroups projMap globalTasks =
 
     srcUnderProject ctx t = addTrailingPathSeparator (projSrcDir ctx) `isPrefixOf` taskSourceFile t
 
--- | Declared build libraries are artifact units: selecting any member selects
--- every module in that library, plus their dependencies.
-expandBuildLibraryTasks :: ModuleGraph -> [GlobalTask] -> [GlobalTask]
-expandBuildLibraryTasks g selectedTasks =
-    restrictTasks g (close (Data.Set.fromList (map gtKey selectedTasks)))
+-- | Declared build libraries are artifact units: a selected member selects
+-- every module of its library, and the selection is closed under imports,
+-- until nothing is added.  The source sizes of added modules are recorded
+-- too.
+expandLibraries :: ModuleGraph -> CompilePlan -> IO CompilePlan
+expandLibraries g plan = do
+    added <- sourceSizes [ t | t <- needed, M.notMember (gtKey t) (cpSourceSizes plan) ]
+    return plan { cpNeededTasks = needed, cpSourceSizes = M.union (cpSourceSizes plan) added }
   where
-    close keys =
-      let keys' = addLibraries (closure (depsOf (graphImports g)) (Data.Set.toList (addLibraries keys)))
-      in if keys' == keys then keys else close keys'
+    needed = restrictTasks g (expand (Data.Set.fromList (map gtKey (cpNeededTasks plan))))
+    expand keys
+      | keys' == keys = keys
+      | otherwise     = expand keys'
+      where keys'     = withLibraries (closure (depsOf (graphImports g)) (Data.Set.toList (withLibraries keys)))
+    withLibraries keys = foldl' addLibrary keys (graphLibraries g)
+    addLibrary keys library
+      | Data.Set.disjoint keys library = keys
+      | otherwise                      = Data.Set.union keys library
 
-    addLibraries keys =
-      foldl' add keys (graphLibraries g)
-      where
-        add acc group
-          | Data.Set.null (Data.Set.intersection acc group) = acc
-          | otherwise = Data.Set.union acc group
+-- | Each module's source size in bytes, 0 when the source is missing: a
+-- module's weight in scheduling and in progress reports.
+sourceSizes :: [GlobalTask] -> IO (M.Map TaskKey Integer)
+sourceSizes tasks = M.fromList <$> forM tasks (\t -> (,) (gtKey t) <$> sourceSize (taskSourceFile t))
+  where sourceSize file = do exists <- doesFileExist file
+                             if exists then getFileSize file else return 0
 
 -- | A module in the cheapest form discovery can use.  Its .tydb header is
 -- reused when the compiler binary is not newer than the .tydb and the source
@@ -2913,16 +2937,15 @@ compileModules build plan = do
 
     -- The base environment reads __builtin__'s .tydb, committed by now.
     stages started = do
-      base  <- Acton.Env.initEnvWithEscapeSummaries True builtinTypes False
-      sizes <- M.fromList <$> mapM sourceSize others
-      jobs  <- compileParallelism (buildOptions build)
+      base <- Acton.Env.initEnvWithEscapeSummaries True builtinTypes False
+      jobs <- compileParallelism (buildOptions build)
       let run = Run { runBuild       = build
                     , runContext     = ctx
                     , runTasks       = M.fromList [ (gtKey t, t) | t <- cpNeededTasks plan ]
                     , runModuleGraph = modules
                     , runStageGraph  = stageGraph ctx others modules
                     , runBlocked     = cpDbpBlocked plan
-                    , runWeights     = criticalWeights modules sizes
+                    , runWeights     = criticalWeights modules (cpSourceSizes plan)
                     , runJobs        = jobs
                     , runStarted     = started }
       coordinate run (initialState run base)
@@ -2930,12 +2953,6 @@ compileModules build plan = do
     builtinTypes = case builtins of
                      t : _ -> projTypes (gtPaths t)
                      []    -> sysTypes (ccPathsRoot ctx)
-
-    sourceSize t = do
-      let file = taskSourceFile t
-      exists <- doesFileExist file
-      size   <- if exists then getFileSize file else return 0
-      return (gtKey t, size)
 
     -- A failed output fails a run that otherwise succeeded.
     withOutputFailure result = do

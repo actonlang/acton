@@ -79,6 +79,13 @@ actonCmd args = actonExe ++ " " ++ args ++ " --jobs 1"
 quietGlobalOptions :: C.GlobalOptions
 quietGlobalOptions = C.defaultGlobalOptions { C.color = C.Never, C.quiet = True, C.jobs = 1 }
 
+-- | Plan a build of the requested files on a scheduler, as acton build and
+-- watch mode do.
+planBuild :: C.GlobalOptions -> Compile.CompileScheduler -> C.CompileOptions -> Compile.PlanRequest -> IO Compile.CompilePlan
+planBuild gopts sched opts request = do
+  ctx <- Compile.prepareCompileContext opts (Compile.requestFiles request)
+  Compile.prepareCompilePlan Source.diskSourceProvider gopts sched ctx request
+
 -- Utils ----------------------------------------------------------------------
 
 -- | Atomically write UTF-8 text to a file.
@@ -2015,14 +2022,7 @@ p35_changed_path_keeps_unaffected_provider =
     actAAbs <- canonicalizePath actA
     actMainAbs <- canonicalizePath actMain
     sched <- Compile.newCompileScheduler quietGlobalOptions 1
-    plan <- Compile.prepareCompilePlan
-      Source.diskSourceProvider
-      quietGlobalOptions
-      sched
-      opts
-      [actMainAbs]
-      False
-      (Just [actAAbs])
+    plan <- planBuild quietGlobalOptions sched opts (Compile.PlanRequest [actMainAbs] Compile.SelectedFiles (Just [actAAbs]))
     bTask <- case find (\t -> Compile.tkMod (Compile.gtKey t) == A.modName ["incremental_cases","b"]) (Compile.cpNeededTasks plan) of
       Just t -> pure t
       Nothing -> assertFailure "expected b in changed-path compile plan" >> fail "missing b task"
@@ -2080,14 +2080,7 @@ p35_dbp_changed_path_includes_provider =
     actAAbs <- canonicalizePath actA
     actMainAbs <- canonicalizePath actMain
     sched <- Compile.newCompileScheduler quietGlobalOptions 1
-    plan <- Compile.prepareCompilePlan
-      Source.diskSourceProvider
-      quietGlobalOptions
-      sched
-      opts
-      [actMainAbs]
-      False
-      (Just [actAAbs])
+    plan <- planBuild quietGlobalOptions sched opts (Compile.PlanRequest [actMainAbs] Compile.SelectedFiles (Just [actAAbs]))
     let selectedMods = [ Compile.tkMod (Compile.gtKey t) | t <- Compile.cpNeededTasks plan ]
     assertBool "expected changed-path plan to include DBP provider"
       (A.modName ["incremental_cases","provider"] `elem` selectedMods)
@@ -2993,10 +2986,10 @@ p56_changed_path_prunes_removed_module =
     sched <- Compile.newCompileScheduler quietGlobalOptions 1
     -- The first plan records the build spec, so the next plan follows the
     -- changed paths, as in watch mode and the LSP server.
-    _ <- Compile.prepareCompilePlan Source.diskSourceProvider quietGlobalOptions sched opts [actMainAbs] False (Just [])
+    _ <- planBuild quietGlobalOptions sched opts (Compile.PlanRequest [actMainAbs] Compile.SelectedFiles (Just []))
     removeFile actA
-    plan <- Compile.prepareCompilePlan Source.diskSourceProvider quietGlobalOptions sched opts [actMainAbs] False (Just [actAAbs])
-    assertBool "expected a changed-path plan" (Compile.cpIncremental plan)
+    plan <- planBuild quietGlobalOptions sched opts (Compile.PlanRequest [actMainAbs] Compile.SelectedFiles (Just [actAAbs]))
+    assertBool "expected a changed-path plan" (isJust (Compile.requestChanged (Compile.cpRequest plan)))
     assertArtifactsGone outsA
     assertArtifactsExist [rootMain, supportMain]
 
@@ -3175,7 +3168,7 @@ buildRecordingEvents :: Compile.CompileScheduler -> EventLog -> FilePath -> C.Co
 buildRecordingEvents sched eventLog proj opts = do
   names <- sort . map dropExtension . filter ((== ".act") . takeExtension) <$> listDirectory (proj </> "src")
   let srcFiles = map (sourcePath proj) names
-  plan <- Compile.prepareCompilePlan Source.diskSourceProvider eventsGlobalOptions sched opts srcFiles True Nothing
+  plan <- planBuild eventsGlobalOptions sched opts (Compile.PlanRequest srcFiles Compile.WholeProject Nothing)
   gen <- Compile.currentGeneration sched
   res <- Compile.runCompilePlan Source.diskSourceProvider eventsGlobalOptions sched gen plan (recordEvent eventLog)
   backFailure <- Compile.waitBackJobs sched gen

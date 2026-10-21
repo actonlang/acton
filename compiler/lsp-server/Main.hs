@@ -18,7 +18,6 @@ import qualified Data.Map.Strict as M
 import Data.Maybe (fromMaybe, listToMaybe)
 import Data.Sequence (Seq, ViewL(..), (|>))
 import qualified Data.Sequence as Seq
-import qualified Data.Set
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import System.Directory (doesDirectoryExist)
@@ -71,7 +70,6 @@ data ProjectBuildCache = ProjectBuildCache
   { cachedCompileContext :: Compile.CompileContext
   , cachedProjectMap :: M.Map FilePath Project.ProjCtx
   , cachedGlobalTasks :: [Compile.GlobalTask]
-  , cachedDbpBlocked :: Data.Set.Set Compile.TaskKey
   , cachedImportKeys :: HM.HashMap FilePath String
   }
 
@@ -271,7 +269,6 @@ cacheCompilePlan plan = do
         { cachedCompileContext = ctx
         , cachedProjectMap = Compile.cpProjMap plan
         , cachedGlobalTasks = Compile.cpGlobalTasks plan
-        , cachedDbpBlocked = Compile.cpDbpBlocked plan
         , cachedImportKeys = importKeys
         }
   atomicModifyIORef' projectBuildCachesRef $ \m ->
@@ -339,8 +336,8 @@ prepareLspCompilePlan sp gopts opts path = do
             mplan <- compilePlanFromCache ctx path' cache
             case mplan of
               Just plan -> return (PlanFromCache, plan)
-              Nothing -> freshPlan
-      _ -> freshPlan
+              Nothing -> freshPlan ctx
+      _ -> freshPlan ctx
     ) :: IO (Either SomeException (PlanOrigin, Compile.CompilePlan)))
   case planE of
     Left err ->
@@ -349,8 +346,8 @@ prepareLspCompilePlan sp gopts opts path = do
         Nothing -> return (Left (displayException err))
     Right plan -> return (Right plan)
   where
-    freshPlan = do
-      plan <- Compile.prepareCompilePlan sp gopts compileScheduler opts [path] False (Just [path])
+    freshPlan ctx = do
+      plan <- Compile.prepareCompilePlan sp gopts compileScheduler ctx (Compile.PlanRequest [path] Compile.SelectedFiles (Just [path]))
       cacheCompilePlan plan
       return (PlanFromDiscovery, plan)
 
@@ -360,34 +357,17 @@ compilePlanFromCache ctx changedPath cache = do
   case refreshed of
     Nothing -> return Nothing
     Just (globalTasks, importKeys) -> do
-      let modules = Compile.moduleGraph (cachedProjectMap cache) globalTasks
-          dbpBlocked = Compile.libraryBoundaryTasks modules
-      neededTasks <- Compile.selectAffectedTasks ctx modules dbpBlocked [changedPath]
-      let rootProj = Compile.ccRootProj ctx
-          rootModules =
-            [ Compile.tkMod (Compile.gtKey t)
-            | t <- neededTasks
-            , Compile.tkProj (Compile.gtKey t) == rootProj
-            ]
+      let projects = cachedProjectMap cache
+          request = Compile.PlanRequest [changedPath] Compile.SelectedFiles (Just [changedPath])
           cache' = cache
             { cachedCompileContext = ctx
             , cachedGlobalTasks = globalTasks
-            , cachedDbpBlocked = dbpBlocked
             , cachedImportKeys = importKeys
             }
+      plan <- Compile.selectPlan ctx projects (Compile.moduleGraph projects globalTasks) request
       atomicModifyIORef' projectBuildCachesRef $ \m ->
-        (HM.insert rootProj cache' m, ())
-      return $ Just Compile.CompilePlan
-        { Compile.cpContext = ctx
-        , Compile.cpProjMap = cachedProjectMap cache
-        , Compile.cpGlobalTasks = globalTasks
-        , Compile.cpNeededTasks = neededTasks
-        , Compile.cpDbpBlocked = dbpBlocked
-        , Compile.cpRootModules = rootModules
-        , Compile.cpIncremental = True
-        , Compile.cpAllowPrune = False
-        , Compile.cpSrcFiles = [changedPath]
-        }
+        (HM.insert (Compile.ccRootProj ctx) cache' m, ())
+      return (Just plan)
 
 refreshChangedGlobalTask
   :: FilePath
