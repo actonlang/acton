@@ -5,7 +5,12 @@
 module Acton.Project
   ( ProjectError(..)
   , throwProjectError
+  , projectOutDir
   , projectTypesDir
+  , projectBinDir
+  , projectDocDir
+  , projectSrcDir
+  , projectBuildAct
   , systemTypePaths
   , moduleTypesDir
   , findProjectDir
@@ -114,9 +119,21 @@ projectOutDir root = joinPath [root, "out"]
 projectTypesDir :: FilePath -> FilePath
 projectTypesDir root = joinPath [projectOutDir root, "types"]
 
+-- | The directory of the executables of the project rooted at 'root'.
+projectBinDir :: FilePath -> FilePath
+projectBinDir root = joinPath [projectOutDir root, "bin"]
+
+-- | The directory of the generated documentation of the project rooted at 'root'.
+projectDocDir :: FilePath -> FilePath
+projectDocDir root = joinPath [projectOutDir root, "doc"]
+
 -- | The source directory of the project rooted at 'root'.
 projectSrcDir :: FilePath -> FilePath
 projectSrcDir root = joinPath [root, "src"]
+
+-- | The Build.act of the project rooted at 'root'.
+projectBuildAct :: FilePath -> FilePath
+projectBuildAct root = joinPath [root, "Build.act"]
 
 -- | The types directory of the base library in the system directory 'sys'.
 sysTypesDir :: FilePath -> FilePath
@@ -142,7 +159,7 @@ isActonProjectRoot path = do
     if isJust runacton
       then return False
       else do
-        hasBuildAct <- doesFileExist (path </> "Build.act")
+        hasBuildAct <- doesFileExist (projectBuildAct path)
         hasSrcDir <- doesDirectoryExist (projectSrcDir path)
         return (hasBuildAct && hasSrcDir)
 
@@ -234,7 +251,7 @@ findPaths actFile opts  = do execDir <- takeDirectory <$> getExecutablePath
                                                , projPath   = projPath
                                                , projOut    = projOut
                                                , projTypes  = projectTypesDir projPath
-                                               , binDir     = if isTmp then srcDir else joinPath [projOut, "bin"]
+                                               , binDir     = if isTmp then srcDir else projectBinDir projPath
                                                , srcDir     = srcDir
                                                , isTmp      = isTmp
                                                , projName   = projName
@@ -272,7 +289,7 @@ projectPaths opts projMap ctx =
           , projPath   = root
           , projOut    = projectOutDir root
           , projTypes  = projectTypesDir root
-          , binDir     = joinPath [projectOutDir root, "bin"]
+          , binDir     = projectBinDir root
           , srcDir     = projSrcDir ctx
           , isTmp      = False
           , projName   = BuildSpec.specName (projBuildSpec ctx)
@@ -444,13 +461,13 @@ readBuildSpecStamp :: FilePath -> IO BuildSpecStamp
 readBuildSpecStamp projDir = do
     exists <- doesFileExist buildAct
     BuildSpecStamp <$> if exists then Just <$> getModificationTime buildAct else return Nothing
-  where buildAct = projDir </> "Build.act"
+  where buildAct = projectBuildAct projDir
 
 -- | Load a BuildSpec from Build.act.
 -- Throws ProjectError on parse or validation failure.
 loadBuildSpec :: FilePath -> IO BuildSpec.BuildSpec
 loadBuildSpec dir = do
-    let actPath = joinPath [dir, "Build.act"]
+    let actPath = projectBuildAct dir
     actExists <- doesFileExist actPath
     if actExists
       then do

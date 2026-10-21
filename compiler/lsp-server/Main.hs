@@ -296,7 +296,7 @@ ensureProjectWatchers rootProj roots =
 watchProjectShape :: FilePath -> FilePath -> IO ()
 watchProjectShape rootProj watchedRoot =
   FS.withManager $ \mgr -> do
-    let srcRoot = watchedRoot </> "src"
+    let srcRoot = Project.projectSrcDir watchedRoot
         invalidate _ = invalidateProjectCache rootProj
         isActEvent ev = Project.isActFile (FS.eventPath ev)
         isBuildActEvent ev = takeFileName (FS.eventPath ev) == "Build.act"

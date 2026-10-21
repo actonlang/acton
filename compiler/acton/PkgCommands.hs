@@ -26,7 +26,7 @@ import Acton.ArchiveDownload (downloadArchive)
 import Acton.HttpFetch (httpGetBytes, isHttpUrl, newProxyManager)
 import qualified Acton.BuildSpec as BuildSpec
 import qualified Acton.CommandLineParser as C
-import Acton.Project (loadBuildSpec, throwProjectError, zigGlobalCacheDir)
+import Acton.Project (loadBuildSpec, projectBinDir, throwProjectError, zigGlobalCacheDir)
 import Acton.ZigFetch (fetchZigPackage)
 
 import Control.Exception (IOException, SomeException, try, displayException, evaluate)
@@ -372,7 +372,7 @@ githubCloneUrl = takeWhile (/= '#')
 
 discoverBuiltBinaries :: FilePath -> IO [(FilePath, String, Permissions)]
 discoverBuiltBinaries sourceDir = do
-    let binDir = sourceDir </> "out" </> "bin"
+    let binDir = projectBinDir sourceDir
     exists <- doesDirectoryExist binDir
     unless exists $
       throwProjectError ("ERROR: Build produced no out/bin directory in " ++ sourceDir)

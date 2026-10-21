@@ -262,7 +262,7 @@ emptyTestCache ctx = TestCache
 
 -- | Resolve the on-disk test cache path for a project.
 testCachePath :: Project.Paths -> FilePath
-testCachePath paths = Project.projPath paths </> "out" </> "test" </> "cache.json"
+testCachePath paths = Project.projOut paths </> "test" </> "cache.json"
 
 -- | Read the cache file, returning an empty cache on error/mismatch.
 readTestCache :: FilePath -> TestRunContext -> IO TestCache

@@ -2631,7 +2631,7 @@ docOutputs env parsed checked hashed =
     mn          = nameOf env
     I.NModule imports iface doc = checkedInterface checked
     publicIface = Acton.Env.publicTEnv iface
-    docDir      = joinPath [projPath paths, "out", "doc"]
+    docDir      = projectDocDir (projPath paths)
     docFile     = case A.modPath mn of
                     []   -> docDir </> "unnamed" <.> "html"
                     path -> joinPath (docDir : init path) </> last path <.> "html"

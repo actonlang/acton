@@ -408,8 +408,8 @@ createProject name = do
         printErrorAndExit ("Unable to create project " ++ name ++ ", directory already exists.")
     fp <- generateFingerprint name
     let projDir = joinPath [curDir, name]
-        srcRoot = joinPath [projDir, "src"]
-        buildActPath = joinPath [projDir, "Build.act"]
+        srcRoot = projectSrcDir projDir
+        buildActPath = projectBuildAct projDir
         buildSpec = BuildSpec.BuildSpec
           { BuildSpec.specName = name
           , BuildSpec.specDescription = Nothing
@@ -530,7 +530,7 @@ requireProjectAt :: FilePath -> IO FilePath
 requireProjectAt curDir = do
     actPath <- requireProjectConfigPath curDir
     let projDir = takeDirectory actPath
-    srcExists <- doesDirectoryExist (joinPath [projDir, "src"])
+    srcExists <- doesDirectoryExist (projectSrcDir projDir)
     unless srcExists $
       printErrorAndExit "Missing src/ directory"
     return actPath
@@ -549,7 +549,7 @@ loadProjectPaths opts = do
 requireProjectConfigPath :: FilePath -> IO FilePath
 requireProjectConfigPath curDir = do
     let candidates =
-          [ joinPath [curDir, "Build.act"]
+          [ projectBuildAct curDir
           ]
     mpath <- firstExisting candidates
     case mpath of
@@ -738,7 +738,7 @@ runGitTestComparison gopts opts topts mode paths ref = do
               modules <- buildTestModules gopts compileOpts treePaths studyOpts
               names <- selectedTestNames compileOpts treePaths studyOpts modules
               return (treePaths, compileOpts, modules, [(modName, name) | (modName, tests) <- names, name <- tests])
-      valid <- (&&) <$> doesFileExist (oldProject </> "Build.act") <*> doesDirectoryExist (oldProject </> "src")
+      valid <- (&&) <$> doesFileExist (projectBuildAct oldProject) <*> doesDirectoryExist (projectSrcDir oldProject)
       unless valid $ printErrorAndExit ("The Git snapshot has no Acton project at " ++ makeRelative root (projPath paths))
       announce ("Preparing Git baseline " ++ show ref)
       (oldPaths, oldOpts, oldModules, oldTests) <-
@@ -2072,7 +2072,7 @@ runCliPostCompile reporter gopts plan env = do
 generateProjectDocIndex :: Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -> Paths -> [String] -> IO ()
 generateProjectDocIndex sp gopts opts paths srcFiles = do
     unless (C.skip_build opts || C.only_build opts || isTmp paths) $ do
-        let docDir = joinPath [projPath paths, "out", "doc"]
+        let docDir = projectDocDir (projPath paths)
         createDirectoryIfMissing True docDir
         entries <- catMaybes <$> forM srcFiles (\f -> do
                      (p, mn) <- findPaths f opts
@@ -2362,7 +2362,7 @@ isSysProject sysAbs projAbs =
 zigBuildDir :: FilePath -> FilePath -> FilePath
 zigBuildDir sysAbs projAbs
   | isSysProject sysAbs projAbs = projAbs
-  | otherwise                   = joinPath [projAbs, "out", "zig"]
+  | otherwise                   = projectOutDir projAbs </> "zig"
 
 -- Render build.zig and build.zig.zon from templates and BuildSpec.
 -- Dependency paths come from the selected, deduplicated project graph.
@@ -2727,7 +2727,7 @@ zigBuild env gopts opts paths rootSpec rootModules binTasks allowPrune moduleSou
       then do
         let baseName   = uncurry (rootBinaryName paths) (binTaskModule (head binTasks))
             exeName    = if isWindowsOS (C.target opts) then baseName ++ ".exe" else baseName
-            srcBinFile = joinPath [ projOut paths, "bin", exeName ]
+            srcBinFile = projectBinDir (projPath paths) </> exeName
             dstBinFile = joinPath [ binDir paths, exeName ]
         copyFile srcBinFile dstBinFile
       else return ()
