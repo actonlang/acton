@@ -23,8 +23,8 @@ read API for imported-module lookup:
   statements.
 - `readFile` reconstructs the full cached payload: imports, `NameInfo`, typed
   module, metadata, module hashes, per-name hashes, roots, tests, and docstring.
-- `readHeaderMaybe`, `readHeaderSummaryMaybe`, and `readFileMaybe` turn
-  missing, corrupt, unreadable, or version-mismatched caches into cache misses.
+- `readHeaderMaybe` and `readFileMaybe` turn missing, corrupt, unreadable, or
+  version-mismatched caches into cache misses.
 - `openInterfaceDB` validates a `.tydb` for selective reads on the shared
   per-path environment; `openInterfaceDBMaybe` is its cache-miss form.
 - `readInterfaceDBModuleInfo` reads only import/doc metadata.

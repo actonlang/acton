@@ -125,7 +125,6 @@ module InterfaceFiles
   , readExtensionsByProtocol
   , readFileMaybe
   , readHeaderMaybe
-  , readHeaderSummaryMaybe
   , openInterfaceDB
   , openInterfaceDBMaybe
   , readInterfaceDBModuleInfo
@@ -267,11 +266,11 @@ data TyDbWriteProgress = TyDbWriteProgress
   , tyDbWriteProgressRatio :: Double
   } deriving (Show, Eq)
 
--- | A whole .tydb as readFile decodes it: the module-level keys described
--- at the top of this module, every name and the typed module.
+-- | The module-level keys, every name's interface and own hashes, and the
+-- typed module of a .tydb, as readFile decodes them.  The escape summaries
+-- and the dependency rows are not part of it.
 data StoredModule = StoredModule
-  { storedSourceImports :: [A.ModName]                    -- the typed module's imports
-  , storedInterface     :: I.NModule                      -- those imports, every NameInfo in TEnv order, the docstring
+  { storedInterface     :: I.NModule                      -- the typed module's imports, every NameInfo in TEnv order, and the docstring
   , storedTyped         :: A.Module
   , storedSourceMeta    :: Maybe SourceFileMeta
   , storedSourceHash    :: BS.ByteString
@@ -1499,8 +1498,7 @@ readFile f =
       let tmod = A.Module tmn timps tdoc stmts
           sourceImps = A.importsOf tmod
       return StoredModule
-        { storedSourceImports = sourceImps
-        , storedInterface     = I.NModule sourceImps te mdoc
+        { storedInterface     = I.NModule sourceImps te mdoc
         , storedTyped         = tmod
         , storedSourceMeta    = sourceMeta
         , storedSourceHash    = moduleSrcBytesHash
@@ -1656,9 +1654,6 @@ readFileMaybe = readTyMaybe readFile
 
 readHeaderMaybe :: FilePath -> IO (Maybe TyHeader)
 readHeaderMaybe = readTyMaybe readHeader
-
-readHeaderSummaryMaybe :: FilePath -> IO (Maybe HeaderSummary)
-readHeaderSummaryMaybe = readTyMaybe readHeaderSummary
 
 readTyMaybe :: (FilePath -> IO a) -> FilePath -> IO (Maybe a)
 readTyMaybe readTy f = (Just <$> readTy f) `E.catch` tyCacheMiss
