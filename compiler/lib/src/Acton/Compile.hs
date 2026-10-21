@@ -2172,7 +2172,7 @@ missingImports env header = do
 managedTypeDirs :: C.CompileOptions -> Paths -> IO [FilePath]
 managedTypeDirs opts paths = do
     user   <- normalized (C.searchpath opts)
-    system <- normalized (systemTypePaths (sysPath paths) (sysTypes paths))
+    system <- normalized (systemTypePaths (sysPath paths))
     search <- mapM normalizePathSafe (searchPath paths)
     return [ dir | dir <- search, Data.Set.notMember (normalise dir) system, Data.Set.notMember (normalise dir) user ]
   where normalized dirs = Data.Set.fromList . map normalise <$> mapM normalizePathSafe dirs

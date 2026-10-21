@@ -190,11 +190,12 @@ projectSrcDir root = joinPath [root, "src"]
 
 -- | The types directory of the base library in the system directory 'sys'.
 sysTypesDir :: FilePath -> FilePath
-sysTypesDir sys = joinPath [sys, "base", "out", "types"]
+sysTypesDir sys = projectTypesDir (joinPath [sys, "base"])
 
-systemTypePaths :: FilePath -> FilePath -> [FilePath]
-systemTypePaths sys types =
-    [joinPath [sys, "std", "out", "types"], types]
+-- | The interface directories of the system directory 'sys': the standard
+-- library's, then the base library's.
+systemTypePaths :: FilePath -> [FilePath]
+systemTypePaths sys = [projectTypesDir (joinPath [sys, "std"]), sysTypesDir sys]
 
 type FingerprintMap = M.Map String FilePath
 
@@ -586,7 +587,7 @@ pruneMissingChangedModuleOutputs projects changedPaths = do
 -- dependencies', those in the --searchpath directories, then the system's.
 interfaceSearchPath :: C.CompileOptions -> FilePath -> FilePath -> [FilePath] -> [FilePath]
 interfaceSearchPath opts sys types deps =
-    [types] ++ deps ++ C.searchpath opts ++ systemTypePaths sys (sysTypesDir sys)
+    [types] ++ deps ++ C.searchpath opts ++ systemTypePaths sys
 
 -- | The paths of a project of a multi-project build.  The dependencies'
 -- types directories are those depTypePathsFromMap finds in the discovered
@@ -609,7 +610,7 @@ projectPaths opts projMap ctx =
 -- system type directories with the interface reader.
 createProjectDirectories :: Paths -> IO ()
 createProjectDirectories paths = do
-    InterfaceFiles.registerSystemTypeRoots (systemTypePaths (sysPath paths) (sysTypes paths))
+    InterfaceFiles.registerSystemTypeRoots (systemTypePaths (sysPath paths))
     createDirectoryIfMissing True (binDir paths)
     createDirectoryIfMissing True (projTypes paths)
 
