@@ -2677,18 +2677,12 @@ frontProgress env p                     = emit (moduleBuild env) (FrontProgresse
 forced                                  :: NFData a => a -> IO a
 forced                                  = evaluate . force
 
--- | Debug helper for pass dumps.
--- Prints a header and footer around the given text so pass output is easy to
--- spot in verbose logs.
-dump :: A.ModName -> String -> String -> IO ()
-dump mn h txt =
-  putStrLn ("\n\n== " ++ h ++ ": " ++ modNameToString mn ++ " ================================\n" ++ txt
-            ++ '\n' : replicate (38 + length h + length (modNameToString mn)) '=' ++ "\n")
-
--- | Dump a module's text when the options ask for it.  The text is built
--- only then.
+-- | Print a module's dump when its flag is set: a header that names the
+-- dump and the module, the text, and a rule as wide as the header.  The
+-- text is built only then.
 dumpWhen                                :: C.CompileOptions -> A.ModName -> (C.CompileOptions -> Bool) -> String -> String -> IO ()
-dumpWhen opts mn flag label text        = when (flag opts) (dump mn label text)
+dumpWhen opts mn flag label text        = when (flag opts) $ putStrLn ("\n\n" ++ header ++ "\n" ++ text ++ "\n" ++ replicate (length header) '=' ++ "\n")
+  where header                          = "== " ++ label ++ ": " ++ modNameToString mn ++ " " ++ replicate 32 '='
 
 
 -- Deferred back jobs -------------------------------------------------------------------------------
@@ -2895,27 +2889,22 @@ runBackPasses gopts job shouldWrite onProgress = do
           modifyIORef' laps ((p, elapsed) :)
           return result
 
-        dumpPass :: BackPass -> A.Module -> IO ()
-        dumpPass p m = forM_ (backPassDump p) $ \(flag, label) -> dumpWhen opts mn flag label (Pretty.print m)
-
-        transform :: BackPass -> IO (A.Module, Acton.Env.Env0) -> IO (A.Module, Acton.Env.Env0)
-        transform p work = pass p $ do
-          result@(m, _) <- work
-          dumpPass p m
+        transform :: BackPass -> (a -> A.Module) -> IO a -> IO a
+        transform p moduleOf work = pass p $ do
+          result <- work
+          forM_ (backPassDump p) $ \(flag, label) -> dumpWhen opts mn flag label (Pretty.print (moduleOf result))
           return result
 
         render :: String -> IO ()
         render text = evaluate (rnf text)
 
     ((), elapsed) <- timed $ do
-      (normalized, env1)  <- transform BackPassNormalize  (Acton.Normalizer.normalize (bjTypeEnv job) (bjModule job))
-      (deactorized, env2) <- transform BackPassDeactorize (Acton.Deactorizer.deactorize env1 normalized)
-      (converted, env3)   <- transform BackPassCPS        (Acton.CPS.convert env2 deactorized)
-      (lifted, env4)      <- transform BackPassLLift      (Acton.LambdaLifter.liftModule env3 converted)
-      boxed               <- pass BackPassBoxing          (do m <- Acton.Boxing.doBoxing env4 lifted
-                                                              dumpPass BackPassBoxing m
-                                                              return m)
-      (_, h, c, support)  <- pass BackPassCodeGen         (Acton.CodeGen.generateCode (output == WriteFiles) env4 relSrcBase (bjSource job) (not (C.dbg_no_lines opts)) boxed (Hashing.hashHex (bjCodegenHash job)))
+      (normalized, env1)  <- transform BackPassNormalize  fst (Acton.Normalizer.normalize (bjTypeEnv job) (bjModule job))
+      (deactorized, env2) <- transform BackPassDeactorize fst (Acton.Deactorizer.deactorize env1 normalized)
+      (converted, env3)   <- transform BackPassCPS        fst (Acton.CPS.convert env2 deactorized)
+      (lifted, env4)      <- transform BackPassLLift      fst (Acton.LambdaLifter.liftModule env3 converted)
+      boxed               <- transform BackPassBoxing     id  (Acton.Boxing.doBoxing env4 lifted)
+      (_, h, c, support)  <- pass BackPassCodeGen             (Acton.CodeGen.generateCode (output == WriteFiles) env4 relSrcBase (bjSource job) (not (C.dbg_no_lines opts)) boxed (Hashing.hashHex (bjCodegenHash job)))
       case output of
         PrintHeader -> pass BackPassRender (render h) >> putStrLn h
         PrintCode   -> pass BackPassRender (render c) >> putStrLn c
