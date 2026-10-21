@@ -2940,7 +2940,7 @@ data Run = Run
   , runBlocked     :: Data.Set.Set TaskKey                              -- library boundaries: their back passes are not deferred
   , runWeights     :: M.Map TaskKey Integer                             -- critical weights
   , runJobs        :: Int                                               -- the most stages running at once
-  , runStarted     :: IORef [Async StageOutcome]                        -- what the exit cancels: the running stages as of the last start
+  , runStarted     :: IORef [Async StageOutcome]                        -- what the exit cancels: the running stages, recorded as each one starts
   }
 
 -- | The coordinator's state between two stage completions.
@@ -3107,20 +3107,25 @@ coordinate run state0 = do
 -- | Start ready stages up to the parallelism, which parse and front stages
 -- share: front stages first, then the heaviest chain, and equal ones in
 -- their ready order (a stable sort).  Each start is reported before its
--- thread exists.  coordinate runs this masked, so every started stage is
--- recorded in runStarted before an exception can arrive.  Stage threads
+-- thread exists, and each thread is recorded in runStarted as soon as it
+-- exists.  coordinate runs this masked, and nothing between creating a
+-- thread and recording it is interruptible, so an exception can arrive only
+-- while every started stage is recorded: reporting a start runs the
+-- caller's handler, which may block interruptibly or throw.  Stage threads
 -- inherit the mask and run masked-interruptible: a cancel reaches them only
 -- at interruptible points such as blocking I/O.
 startReady :: Run -> BuildState -> IO BuildState
-startReady run state = do
-    started <- forM now $ \stage -> do
-      emit (runBuild run) (stageStarted stage)
-      thread <- async (runStage stage)
-      return (thread, stage)
-    let running = started ++ runningStages state
-    writeIORef (runStarted run) (map fst running)
-    return state { readyStages = later, runningStages = running }
+startReady run state = startRest [] now
   where
+    -- Record the running stages, then start the next stage of the batch.
+    startRest started stages    = do
+      let running = started ++ runningStages state
+      writeIORef (runStarted run) (map fst running)
+      case stages of
+        []           -> return state { readyStages = later, runningStages = running }
+        stage : rest -> do emit (runBuild run) (stageStarted stage)
+                           thread <- async (runStage stage)
+                           startRest (started ++ [(thread, stage)]) rest
     (now, later)                = splitAt (runJobs run - length (runningStages state)) (Data.List.sortOn (Down . priority) (readyStages state))
     priority (FrontStage k)     = (1 :: Int, weight k)
     priority (ParseStage k)     = (0, weight k)
