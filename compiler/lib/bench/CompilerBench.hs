@@ -140,6 +140,9 @@ benchOpts typesPath skipBuild =
       { C.ignore_compiler_version = True
       , C.skip_build = skipBuild
       , C.syspath = sysRootFromTypesPath typesPath
+      -- A benchmark checks one module alone, with no dependents to gather
+      -- names for it, so its back job is whole.
+      , C.no_dbp = True
       }
 
 nameHashMapFromHeader :: [InterfaceFiles.NameHashInfo] -> Map.Map Syntax.Name InterfaceFiles.NameHashInfo
