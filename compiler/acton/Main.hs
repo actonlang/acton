@@ -1410,7 +1410,7 @@ printDocs gopts opts = do
             env0 <- Acton.Env.initEnv (sysTypes paths) False
             env <- Acton.Env.mkEnv (searchPath paths) env0 parsed
             kchecked <- Acton.Kinds.check env parsed
-            (nmod, _, env', _) <- Acton.Types.reconstruct Nothing Nothing env kchecked (Just (modNameToString (dropProjPrefix paths modname)))
+            (nmod, _, env', _) <- Acton.Types.reconstruct Nothing Nothing env kchecked (Just (moduleLabel paths modname))
             let I.NModule _ tenv mdoc = nmod
 
             -- 1. If format is explicitly set (via -t, --html, --markdown), use it
@@ -1663,7 +1663,6 @@ newCliReporter progressUI progressState gopts gen plan = do
           progressWithLog progressUI (printDiagnostics gopts diags)
         termProgress = puTermProgress progressUI
         termEnabled = termProgressEnabled termProgress
-        modLabel mn = modNameToString (dropProjPrefix rootPaths mn)
         timeSep = "    "
         parseDoneStatus = "Parse done"
         frontDoneStatus = "Type check done"
@@ -1696,7 +1695,7 @@ newCliReporter progressUI progressState gopts gen plan = do
           let rootDeps = maybe [] projDeps (M.lookup rootProj projMap)
               otherDeps = concatMap projDeps (M.elems projMap)
           in M.fromListWith (\_ old -> old) [ (p, n) | (n, p) <- rootDeps ++ otherDeps ]
-        labelWidth = maximum (0 : [ length (modLabel (tkMod (gtKey t))) | t <- neededTasks ])
+        labelWidth = maximum (0 : [ length (moduleLabel rootPaths (tkMod (gtKey t))) | t <- neededTasks ])
         statusWidth = 68
         nameWidth = labelWidth + 2 + statusWidth
         timePadWidth = nameWidth + length timeSep
@@ -1802,26 +1801,26 @@ newCliReporter progressUI progressState gopts gen plan = do
           staticStatusRenderer finalDoneStatus "Final"
         parseDoneLine width mn t =
           if puWidthAware progressUI
-            then doneStatusLine width (modLabel mn) parseDoneRenderer "Parsed" (Just t)
-            else plainDoneTimedLine (modLabel mn) parseDoneStatus t
+            then doneStatusLine width (moduleLabel rootPaths mn) parseDoneRenderer "Parsed" (Just t)
+            else plainDoneTimedLine (moduleLabel rootPaths mn) parseDoneStatus t
         frontDoneLine width mn t =
           if puWidthAware progressUI
-            then doneStatusLine width (modLabel mn) frontDoneRenderer "Typed" (Just t)
-            else plainDoneTimedLine (modLabel mn) frontDoneStatus t
+            then doneStatusLine width (moduleLabel rootPaths mn) frontDoneRenderer "Typed" (Just t)
+            else plainDoneTimedLine (moduleLabel rootPaths mn) frontDoneStatus t
         backDoneLine width mn mt =
           if puWidthAware progressUI
             then
               case mt of
-                Just t -> doneStatusLine width (modLabel mn) backDoneRenderer "Built" (Just t)
-                Nothing -> doneStatusLine width (modLabel mn) backDoneRenderer "Built" Nothing
+                Just t -> doneStatusLine width (moduleLabel rootPaths mn) backDoneRenderer "Built" (Just t)
+                Nothing -> doneStatusLine width (moduleLabel rootPaths mn) backDoneRenderer "Built" Nothing
             else
               case mt of
-                Just t -> plainDoneTimedLine (modLabel mn) backDoneStatus t
-                Nothing -> plainDoneLine (modLabel mn) backDoneStatus
+                Just t -> plainDoneTimedLine (moduleLabel rootPaths mn) backDoneStatus t
+                Nothing -> plainDoneLine (moduleLabel rootPaths mn) backDoneStatus
         backFailLine width mn msg =
           if puWidthAware progressUI
-            then doneStatusLine width (modLabel mn) (backFailRenderer msg) "Failed" Nothing
-            else plainDoneLine (modLabel mn) (backFailStatus msg)
+            then doneStatusLine width (moduleLabel rootPaths mn) (backFailRenderer msg) "Failed" Nothing
+            else plainDoneLine (moduleLabel rootPaths mn) (backFailStatus msg)
         finalDoneLine width t =
           if puWidthAware progressUI
             then doneStatusLine width "" finalDoneRenderer "Final" (Just t)
@@ -1832,11 +1831,10 @@ newCliReporter progressUI progressState gopts gen plan = do
               short = frontOutputShortStatus kind
               renderer = staticStatusRenderer status short
           in if puWidthAware progressUI
-               then doneStatusLine width (modLabel mn) renderer short (Just t)
-               else plainDoneTimedLine (modLabel mn) status t
+               then doneStatusLine width (moduleLabel rootPaths mn) renderer short (Just t)
+               else plainDoneTimedLine (moduleLabel rootPaths mn) status t
         renderProjectLine mn statusRender width =
-          let modLbl = modLabel mn
-          in fitBuildLineLayout width labelWidth statusWidth False modLbl statusRender
+          fitBuildLineLayout width labelWidth statusWidth False (moduleLabel rootPaths mn) statusRender
         parseActiveLine mn =
           renderProjectLine mn (staticStatusRenderer "Parsing" "Parse")
         parseProgressLine mn p =
@@ -1928,7 +1926,7 @@ newCliReporter progressUI progressState gopts gen plan = do
         backProgressRatio p =
           fromIntegral (bppCompleted p) / fromIntegral (bppTotal p)
         backPassDoneLine mn pass =
-          "Back " ++ backPassName pass ++ " done: " ++ modLabel mn
+          "Back " ++ backPassName pass ++ " done: " ++ moduleLabel rootPaths mn
         finalKey = ProgressTaskKey (TaskKey rootProj (A.modName ["__final__"]))
         -- A progress row: started with its line and ratio, updated, and
         -- ended, which gives its elapsed time.

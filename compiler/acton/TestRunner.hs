@@ -898,7 +898,7 @@ readModuleTests paths mn = do
 -- prefix so consumers (the VS Code extension, the --module flag, the on-disk
 -- src/ layout) see the bare module name instead of e.g. "proj.mod".
 displayModName :: Paths -> String -> String
-displayModName paths = modNameToString . dropProjPrefix paths . A.dottedModName
+displayModName paths = moduleLabel paths . A.dottedModName
 
 splitOnChar :: Char -> String -> [String]
 splitOnChar ch input = case break (== ch) input of

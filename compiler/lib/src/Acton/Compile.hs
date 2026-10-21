@@ -1026,11 +1026,6 @@ labelOf env                             = moduleLabel (pathsOf env) (nameOf env)
 labelFileOf                             :: ModuleEnv -> FilePath
 labelFileOf env                         = modNameToFilename (dropProjPrefix (pathsOf env) (nameOf env))
 
--- | A module's name without its project prefix, as user-facing lines show
--- it.
-moduleLabel                             :: Paths -> A.ModName -> String
-moduleLabel paths mn                    = modNameToString (dropProjPrefix paths mn)
-
 -- | What importers read of a finished module.  The results of the front
 -- passes, of an impl refresh and of a codegen refresh carry its public
 -- names.  A module reused from its .tydb without a refresh, or given the

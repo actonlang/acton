@@ -46,6 +46,7 @@ module Acton.Project
   , isSpecialProject
   , addProjPrefix
   , dropProjPrefix
+  , moduleLabel
   , dropProjPrefixOrLib
   , BackgroundCompilerLock
   , backgroundCompilerLockPath
@@ -366,7 +367,7 @@ rootStubPath paths test mn = outBase paths (dropProjPrefix paths mn) ++ (if test
 -- | Name of the binary in out/bin that build.zig builds from a root stub: the
 -- stub's module path joined with dots, with .test_ in front for a test root.
 rootBinaryName          :: Paths -> Bool -> A.ModName -> String
-rootBinaryName paths test mn = (if test then ".test_" else "") ++ modNameToString (dropProjPrefix paths mn)
+rootBinaryName paths test mn = (if test then ".test_" else "") ++ moduleLabel paths mn
 
 -- | All files generated for a module.
 moduleOutputs           :: Paths -> A.ModName -> [FilePath]
@@ -969,6 +970,11 @@ dropProjPrefix              :: Paths -> A.ModName -> A.ModName
 dropProjPrefix paths mn     = case A.modPath mn of
                                 n:ns | n == projName paths -> A.modName ns
                                 ns                         -> A.modName ns
+
+-- | A module's name without its project's name in front, as user-facing
+-- lines show it.
+moduleLabel                 :: Paths -> A.ModName -> String
+moduleLabel paths mn        = modNameToString (dropProjPrefix paths mn)
 
 dropProjPrefixOrLib         :: Paths -> A.ModName -> A.ModName
 dropProjPrefixOrLib paths mn
