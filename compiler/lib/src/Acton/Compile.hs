@@ -2216,6 +2216,8 @@ dependencyChanges env header = do
 -- change says only that, and a forced module says nothing.  Deltas come
 -- newest first, the reverse of the order they were found in.  Missing items
 -- come pub, then impl, each sorted by name, then the modules without rows.
+-- A module's dependency rows hold each name once, so no two missing items
+-- of one kind have the same name.
 describe :: ModuleEnv -> Action -> [String]
 describe env action = case action of
     RunFront SourceChanged          -> [ stale "source changed" ]
@@ -2233,7 +2235,7 @@ describe env action = case action of
     missing cs                      = intercalate ", " $
                                            [ hashKindName kind ++ " " ++ prstr qn ++ usedBy users
                                            | kind <- [Pub, Impl]
-                                           , (qn, users) <- Data.List.sortOn (Hashing.qnameKey . fst) [ (qn, users) | Missing k qn users <- reverse cs, k == kind ] ]
+                                           , (qn, users) <- Data.List.sortOn (Hashing.qnameKey . fst) [ (qn, users) | Missing k qn users <- cs, k == kind ] ]
                                         ++ [ "rows " ++ modNameToString m | RowsMissing m <- cs ]
     usedBy users                    = case map A.nstr (Data.List.sortOn A.nameText (Data.Set.toList (Data.Set.fromList users))) of
                                         []    -> ""
