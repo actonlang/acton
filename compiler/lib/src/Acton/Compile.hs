@@ -1088,19 +1088,14 @@ libraryTaskGroups projMap discovered =
   where
     libraryKey ctx name = TaskKey (projRoot ctx) (A.dottedModName (BuildSpec.specName (projBuildSpec ctx) ++ "." ++ name))
 
--- | Declared build libraries are artifact units: a selected member selects
--- every module of its library, and the selection is closed under imports,
--- until nothing is added.
+-- | Declared build libraries are artifact units: the selection grows to the
+-- least superset of the keys that is closed under imports and in which a
+-- selected member of a library selects every module of that library.
 expandLibraries :: ModuleGraph -> Data.Set.Set TaskKey -> Data.Set.Set TaskKey
-expandLibraries g keys
-  | expanded == keys = keys
-  | otherwise        = expandLibraries g expanded
+expandLibraries g = closure next . Data.Set.toList
   where
-    expanded = withLibraries (closure (depsOf (graphImports g)) (Data.Set.toList (withLibraries keys)))
-    withLibraries selected = foldl' addLibrary selected (graphLibraries g)
-    addLibrary selected library
-      | Data.Set.disjoint selected library = selected
-      | otherwise                          = Data.Set.union selected library
+    next k = depsOf (graphImports g) k
+             ++ [ member | library <- graphLibraries g, Data.Set.member k library, member <- Data.Set.toList library ]
 
 -- | Each module's source size in bytes, 0 when the source is missing: a
 -- module's weight in scheduling and in progress reports.
