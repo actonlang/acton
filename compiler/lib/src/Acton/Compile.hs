@@ -202,8 +202,7 @@ import Control.Exception (Exception, Handler(..), SomeException, catch, catches,
 import Control.Monad
 import Data.Binary (encode)
 import Data.Char (isHexDigit, isSpace)
-import Data.Either (partitionEithers)
-import Data.List (foldl', intercalate, nub, partition)
+import Data.List (foldl', nub, partition)
 import qualified Data.List
 import Data.IORef
 import Data.Maybe (catMaybes, isJust, isNothing, listToMaybe, mapMaybe)
@@ -973,6 +972,18 @@ dependencyModule resolver m = do
 nameHash                                :: HashKind -> InterfaceFiles.NameHashInfo -> B.ByteString
 nameHash Pub                            = InterfaceFiles.nhPubHash
 nameHash Impl                           = InterfaceFiles.nhImplHash
+
+depModuleHash                           :: HashKind -> InterfaceFiles.DepModuleInfo -> B.ByteString
+depModuleHash Pub                       = InterfaceFiles.dmiPubHash
+depModuleHash Impl                      = InterfaceFiles.dmiImplHash
+
+depNameHash                             :: HashKind -> InterfaceFiles.DepNameInfo -> B.ByteString
+depNameHash Pub                         = InterfaceFiles.dniPubHash
+depNameHash Impl                        = InterfaceFiles.dniImplHash
+
+depUsers                                :: HashKind -> InterfaceFiles.DepUsers -> [A.Name]
+depUsers Pub                            = InterfaceFiles.duPubUsers
+depUsers Impl                           = InterfaceFiles.duImplUsers
 
 -- | The current hash of every external dependency of each owning name, in
 -- their given order, owners without dependencies included.  Otherwise every
@@ -1924,6 +1935,373 @@ formatCodegenDelta status =
          ++ ", h " ++ short (csH status) ++ " -> " ++ expected
          ++ ", support " ++ short (csSupport status) ++ " -> " ++ expected ++ "}"
 
+
+-- The module stage ---------------------------------------------------------------------------------
+
+-- | A dependency a cached module recorded that is not as recorded now.
+data DepChange
+  = Changed     HashKind A.QName B.ByteString B.ByteString [A.Name]   -- the recorded hash, the current one, the module's names using it
+  | Missing     HashKind A.QName [A.Name]                            -- no current hash, or an empty one; the module's names using it
+  | RowsMissing A.ModName                                            -- a changed dependency module without name rows
+
+-- | Why a module runs its front passes.
+data Reason = SourceChanged | DependencyChanges [DepChange] | Forced | ImplRefreshFailed
+
+-- | How a module's front stage brings it up to date, in priority order.
+data Action
+  = RunFront       Reason
+  | RefreshImpl    InterfaceFiles.HeaderSummary [DepChange]
+  | RefreshCodegen InterfaceFiles.HeaderSummary CodegenStatus
+  | Reuse          InterfaceFiles.HeaderSummary (Maybe DeferredBackJob)
+
+-- | A module's front stage: its parse errors, what --only-build trusts, or
+-- the action its state calls for.  Its module errors become its
+-- diagnostics, and every other exception propagates.
+frontStage :: ModuleEnv -> IO (Either [Diagnostic String] FrontResult)
+frontStage env = moduleBoundary env $ case moduleCurrent env of
+    ParseErrorTask diags                    -> return (Left diags)
+    task | C.only_build (moduleOptions env) -> Right <$> onlyBuild env task
+    TyTask header                           -> assess env header >>= act env
+    _                                       -> act env (RunFront SourceChanged)
+
+-- | What a cached module needs.  An import without an interface fails it
+-- at once.  Then its dependency rows are compared with the current hashes
+-- and its NotImplemented flag is read.  Its generated code is checked only
+-- when nothing else needs doing, its code is generated whole and the build
+-- has no alternative output.
+assess :: ModuleEnv -> InterfaceFiles.HeaderSummary -> IO Action
+assess env header = do
+    failOnAny . map MissingInterface =<< missingImports env header
+    changes    <- dependencyChanges env header
+    hasNotImpl <- InterfaceFiles.readStmtHasNotImpl (tydbOf env)
+    let deferred = deferredJob env hasNotImpl (InterfaceFiles.summaryImplHash header) (InterfaceFiles.summaryNameCount header)
+    case dependencyAction env header changes of
+      Just action -> return action
+      Nothing
+        | C.altOutput (moduleOptions env) || isJust deferred -> return (Reuse header deferred)
+        | otherwise -> do
+            status <- codegenStatus (pathsOf env) (nameOf env) (InterfaceFiles.summaryImplHash header)
+            return (if codegenUpToDate status then Reuse header deferred else RefreshCodegen header status)
+
+-- | The action a cached module's dependency changes call for, if any.  A
+-- changed pub hash or a missing hash runs the front passes, and so does a
+-- forced module.  A changed impl hash refreshes the impl hashes.
+dependencyAction                        :: ModuleEnv -> InterfaceFiles.HeaderSummary -> [DepChange] -> Maybe Action
+dependencyAction env header changes
+  | any needsFront changes              = Just (RunFront (DependencyChanges changes))
+  | moduleForced env                    = Just (RunFront Forced)
+  | any (changedIn Impl) changes        = Just (RefreshImpl header changes)
+  | otherwise                           = Nothing
+
+-- | A change the front passes must see: any change but a changed impl hash.
+needsFront                              :: DepChange -> Bool
+needsFront (Changed kind _ _ _ _)       = kind == Pub
+needsFront _                            = True
+
+changedIn                               :: HashKind -> DepChange -> Bool
+changedIn kind (Changed k _ _ _ _)      = k == kind
+changedIn _    _                        = False
+
+isMissing                               :: DepChange -> Bool
+isMissing Changed{}                     = False
+isMissing _                             = True
+
+-- | The imports a cached module's header records whose interface is gone,
+-- sorted by name: no current pub hash, no provider under the header's
+-- name, and a .tydb that is missing or lies in a managed dependency types
+-- directory.  Any other unresolved import is left to the dependency rows.
+missingImports :: ModuleEnv -> InterfaceFiles.HeaderSummary -> IO [A.ModName]
+missingImports env header = do
+    managed <- managedTypeDirs (moduleOptions env) (pathsOf env)
+    gone    <- filterM (isGone managed) (map fst (InterfaceFiles.summaryImports header))
+    return (Data.List.sortOn modNameToString (Data.Set.toList (Data.Set.fromList gone)))
+  where
+    isGone managed m = do
+      current <- resolveModule (moduleResolver env) Pub m
+      if isJust current || M.member m (gtImportProviders (moduleTask env))
+        then return False
+        else do found <- lookupTydbPath (buildCache (moduleBuild env)) (searchPath (pathsOf env)) m
+                case found of
+                  Nothing   -> return True
+                  Just tydb -> (\path -> any (path `isUnder`) managed) <$> normalizePathSafe tydb
+
+-- | The search path's managed dependency types directories, normalized: its
+-- entries except the system types and the user's --searchpath.
+managedTypeDirs :: C.CompileOptions -> Paths -> IO [FilePath]
+managedTypeDirs opts paths = do
+    user   <- normalized (C.searchpath opts)
+    system <- normalized (systemTypePaths (sysPath paths) (sysTypes paths))
+    search <- mapM normalizePathSafe (searchPath paths)
+    return [ dir | dir <- search, Data.Set.notMember (normalise dir) system, Data.Set.notMember (normalise dir) user ]
+  where normalized dirs = Data.Set.fromList . map normalise <$> mapM normalizePathSafe dirs
+
+-- | How a cached module's recorded dependencies differ from now.  A
+-- dependency module whose module hash changed is compared name by name for
+-- each changed kind.  One that cannot be resolved counts as changed in
+-- both: a stale row may name a removed provider, and only its name rows
+-- tell.  Modules come sorted by name, rows in stored order, pub before
+-- impl.  Every row of such a module is resolved.  A row without a stored
+-- hash of a kind is not compared for it, and an empty current hash is
+-- missing.  Users are read only for a changed or missing row.
+dependencyChanges :: ModuleEnv -> InterfaceFiles.HeaderSummary -> IO [DepChange]
+dependencyChanges env header = do
+    compared <- forM (InterfaceFiles.summaryDepModules header) $ \recorded ->
+                  (,) recorded <$> dependencyModule resolver (InterfaceFiles.dmiModule recorded)
+    let changedModules = [ (kind, Data.Set.fromList [ InterfaceFiles.dmiModule recorded
+                                                     | (recorded, current) <- compared
+                                                     , maybe True (\now -> depModuleHash kind now /= depModuleHash kind recorded) current ])
+                         | kind <- [Pub, Impl] ]
+        kindsOf m      = [ kind | (kind, modules) <- changedModules, Data.Set.member m modules ]
+    concat <$> mapM (\m -> moduleChanges m (kindsOf m))
+                    (Data.List.sortOn modNameToString (Data.Set.toList (Data.Set.unions (map snd changedModules))))
+  where
+    resolver = moduleResolver env
+    tydb     = tydbOf env
+    moduleChanges m kinds = do
+      rows <- InterfaceFiles.readDepNames tydb m
+      if null rows then return [RowsMissing m] else concat <$> mapM (rowChanges m kinds) rows
+    rowChanges m kinds row = do
+      current <- resolveName resolver m (InterfaceFiles.dniName row)
+      catMaybes <$> sequence [ compareRow m row current kind | kind <- kinds, not (B.null (depNameHash kind row)) ]
+    compareRow m row current kind = case mfilter (not . B.null) (nameHash kind <$> current) of
+        Just now | now == recorded -> return Nothing
+        Just now                   -> Just . Changed kind qn recorded now <$> users
+        Nothing                    -> Just . Missing kind qn <$> users
+      where recorded = depNameHash kind row
+            n        = InterfaceFiles.dniName row
+            qn       = A.GName m n
+            users    = depUsers kind <$> InterfaceFiles.readDepUsers tydb m n
+
+-- | The --verbose lines of an action.  Tests match this text.  A source
+-- change says only that, and a forced module says nothing.  Deltas come
+-- newest first, the reverse of the order they were found in.  Missing items
+-- come pub, then impl, each sorted by name, then the modules without rows.
+describe :: ModuleEnv -> Action -> [String]
+describe env action = case action of
+    RunFront SourceChanged          -> [ stale "source changed" ]
+    RunFront (DependencyChanges cs) -> [ stale ("pub changes in " ++ deltas Pub cs)      | any (changedIn Pub) cs ]
+                                    ++ [ stale ("missing dep hashes in " ++ missing cs) | any isMissing cs ]
+    RunFront Forced                 -> []
+    RunFront ImplRefreshFailed      -> [ stale "impl refresh encountered unresolved dep hashes; rerunning front passes" ]
+    RefreshImpl _ cs                -> [ stale ("impl changes in " ++ deltas Impl cs) ]
+    RefreshCodegen _ status         -> [ stale ("generated code out of date" ++ formatCodegenDelta status) ]
+    Reuse _ _                       -> [ "  Fresh " ++ labelOf env ++ ": using cached .tydb" ]
+  where
+    stale reason                    = "  Stale " ++ labelOf env ++ ": " ++ reason
+    deltas kind cs                  = intercalate ", " [ prstr qn ++ " " ++ shortHash old ++ " → " ++ shortHash new ++ usedBy users
+                                                       | Changed k qn old new users <- reverse cs, k == kind ]
+    missing cs                      = intercalate ", " $
+                                           [ hashKindName kind ++ " " ++ prstr qn ++ usedBy users
+                                           | kind <- [Pub, Impl]
+                                           , (qn, users) <- Data.List.sortOn (Hashing.qnameKey . fst) [ (qn, users) | Missing k qn users <- reverse cs, k == kind ] ]
+                                        ++ [ "rows " ++ modNameToString m | RowsMissing m <- cs ]
+    usedBy users                    = case map A.nstr (Data.List.sortOn A.nameText (Data.Set.toList (Data.Set.fromList users))) of
+                                        []    -> ""
+                                        names -> " (used by " ++ intercalate ", " names ++ ")"
+
+-- | Report an action under --verbose, then perform it.
+act :: ModuleEnv -> Action -> IO (Either [Diagnostic String] FrontResult)
+act env action = do
+    mapM_ (info (moduleBuild env)) (describe env action)
+    perform env action
+
+perform                                 :: ModuleEnv -> Action -> IO (Either [Diagnostic String] FrontResult)
+perform env (RunFront _)                = compileModule env
+perform env (RefreshImpl header _)      = refreshImpl env header
+perform env (RefreshCodegen header _)   = Right <$> refreshCodegen env header
+perform env (Reuse header deferred)     = Right <$> reuse env header deferred
+
+-- | Check a module from source: parse it unless its parse stage did, run
+-- its front passes with its imports renamed to their providers, and under
+-- --verbose report how its public name hashes changed.  Its hashes become
+-- visible to reads before it reports.
+compileModule :: ModuleEnv -> IO (Either [Diagnostic String] FrontResult)
+compileModule env = do
+    previous <- if C.verbose (buildOptions build) then lookupNameMap (buildCache build) (searchPath (pathsOf env)) (nameOf env) else return Nothing
+    parsed   <- materialize (buildSources build) (moduleOptions env) (nameOf env) (taskSourceFile (moduleTask env)) Nothing (moduleCurrent env)
+    case parsed of
+      Left diags        -> return (Left diags)
+      Right (source, m) -> do
+        result <- runFrontPasses env source (adjustImports (gtImportProviders (moduleTask env)) m)
+        forM_ result $ \fr -> do
+          forM_ (previous >>= \old -> nameHashSummary old (mhNames (frHashes fr))) $ \summary ->
+            info build ("  Hash deltas " ++ labelOf env ++ ": " ++ summary)
+          rememberFront (buildCache build) (nameOf env) fr
+        return result
+  where build = moduleBuild env
+
+-- | How a module's public name hashes changed, if they did: the added, the
+-- removed and the changed names, each group sorted by name.
+nameHashSummary :: M.Map A.Name InterfaceFiles.NameHashInfo -> M.Map A.Name InterfaceFiles.NameHashInfo -> Maybe String
+nameHashSummary old new
+  | null items                          = Nothing
+  | otherwise                           = Just (intercalate ", " items)
+  where
+    items   = [ "+" ++ A.nstr n | n <- byName (M.keys (M.difference new old)) ]
+           ++ [ "-" ++ A.nstr n | n <- byName (M.keys (M.difference old new)) ]
+           ++ mapMaybe changes (byName (M.keys (M.intersection old new)))
+    byName  = Data.List.sortOn A.nameText
+    changes n = case mapMaybe (field (old M.! n) (new M.! n)) [ ("src", InterfaceFiles.nhSrcHash), ("pub", InterfaceFiles.nhPubHash), ("impl", InterfaceFiles.nhImplHash) ] of
+                  []     -> Nothing
+                  fields -> Just ("~" ++ A.nstr n ++ "{" ++ intercalate ", " fields ++ "}")
+    field before after (label, hashOf)
+      | hashOf before == hashOf after   = Nothing
+      | otherwise                       = Just (label ++ " " ++ shortHash (hashOf before) ++ " -> " ++ shortHash (hashOf after))
+
+-- | New impl hashes from the stored rows, when only providers'
+-- implementations changed.  Only the attempt falls back to the front
+-- passes, for a synchronous exception or an unresolved hash.  The write
+-- comes after every read, so a fallback never runs on top of a committed
+-- refresh.  A failed write and a missing own interface fail the module.
+refreshImpl :: ModuleEnv -> InterfaceFiles.HeaderSummary -> IO (Either [Diagnostic String] FrontResult)
+refreshImpl env header = do
+    attempt <- trySync (recomputeImpl env header)
+    case attempt of
+      Right (Recomputed dependencies names fr) -> do
+        commitTydb env (\_ -> InterfaceFiles.updateImplRefresh (tydbOf env) (mhImpl (frHashes fr)) dependencies names)
+        Right <$> finishStored env fr
+      Right InterfaceGone -> moduleFailure [MissingInterface (nameOf env)]
+      _                   -> act env (RunFront ImplRefreshFailed)
+
+-- | A cached module's impl hashes computed again from its stored rows: the
+-- own impl-hash components and local dependencies from its name rows, the
+-- names of its external dependencies from its dependency rows, and their
+-- current hashes from the resolver.  Its source is unchanged, so nothing is
+-- parsed or checked.  The typed module is read only for an eager back job,
+-- whose input it is.  Every read and every forcing happens here, before
+-- anything is written.  An unavailable input is an outcome, never a module
+-- error.
+recomputeImpl :: ModuleEnv -> InterfaceFiles.HeaderSummary -> IO Recomputation
+recomputeImpl env header = do
+    stored     <- InterfaceFiles.readNameHashes tydb
+    hasNotImpl <- InterfaceFiles.readStmtHasNotImpl tydb
+    restored   <- restoreExternalDeps tydb (InterfaceFiles.summaryDepModules header) stored
+    -- Only names with an impl item are refreshed: exactly the names the
+    -- front passes gave an own impl-hash component.  The impl hash of a
+    -- name with only a signature does not depend on other modules.
+    let refreshable = [ nh | nh <- restored, not (B.null (InterfaceFiles.nhOwnImplHash nh)) ]
+        byName f    = M.fromList [ (InterfaceFiles.nhName nh, f nh) | nh <- refreshable ]
+    external <- externalHashes resolver Impl M.empty (byName (map fst . InterfaceFiles.nhImplDeps))
+    case external of
+      Left _       -> return Unresolved
+      Right hashes -> do
+        let names    = Hashing.refreshImplHashes restored (byName InterfaceFiles.nhOwnImplHash) (byName InterfaceFiles.nhImplLocalDeps) hashes
+            implHash = Hashing.moduleImplHashFromNameHashes names
+            interest = interestDeps names
+        resolved <- mapM (dependencyModule resolver) (Data.List.sortOn modNameToString (Data.Set.toList (Data.Set.map fst interest)))
+        case sequence resolved of
+          Nothing           -> return Unresolved
+          Just dependencies -> do
+            evaluate (rnf (implHash, dependencies, names))
+            let result moduleInfo pub back = Recomputed dependencies names
+                                               (storedResult moduleInfo ModuleHashes { mhPub = pub, mhImpl = implHash, mhNames = publicNameMap names } interest back)
+            case deferredJob env hasNotImpl implHash (length names) of
+              Just job -> maybe InterfaceGone (\shell -> result (shellModuleInfo shell) (shellPubHash shell) (DeferredBack job))
+                            <$> readInterfaceShell env (Just (InterfaceFiles.summaryPubHash header))
+              Nothing  -> do
+                full <- InterfaceFiles.readFileMaybe tydb
+                case full of
+                  Nothing      -> return InterfaceGone
+                  Just module' -> do
+                    job <- storedBackJob env module' implHash
+                    -- Forced here, so a corrupt row fails the attempt before
+                    -- anything is written.
+                    evaluate (rnf (InterfaceFiles.storedInterface module'))
+                    evaluate (rnf (InterfaceFiles.storedTyped module'))
+                    moduleInfo <- storedModuleInfo tydb (nameOf env) module'
+                    return (result moduleInfo (InterfaceFiles.storedPubHash module') (EagerBack job))
+  where
+    resolver = moduleResolver env
+    tydb     = tydbOf env
+
+-- | A module's stored name rows with their external dependencies restored
+-- from its dependency rows, which the .tydb strips from the name rows.
+-- Both kinds are restored: an impl refresh writes the dependency rows again
+-- from these names, and without the impl users every per-name impl change
+-- of the module's dependencies would be lost.  Each list is sorted by name,
+-- as the front passes store it and the hash combinators require, and a row
+-- without a stored hash of a kind is left out of that kind.
+restoreExternalDeps :: FilePath -> [InterfaceFiles.DepModuleInfo] -> [InterfaceFiles.NameHashInfo] -> IO [InterfaceFiles.NameHashInfo]
+restoreExternalDeps tydb dependencies names = do
+    (pubByOwner, implByOwner) <- foldM addModule (M.empty, M.empty) dependencies
+    return [ nh { InterfaceFiles.nhPubDeps  = sorted pubByOwner nh
+                , InterfaceFiles.nhImplDeps = sorted implByOwner nh }
+           | nh <- names ]
+  where
+    sorted byOwner nh = Data.List.sortOn fst (M.findWithDefault [] (InterfaceFiles.nhName nh) byOwner)
+    addModule byOwner dependency = do
+      let m = InterfaceFiles.dmiModule dependency
+      rows <- InterfaceFiles.readDepNames tydb m
+      foldM (addRow m) byOwner rows
+    addRow m (pubByOwner, implByOwner) row = do
+      users <- InterfaceFiles.readDepUsers tydb m (InterfaceFiles.dniName row)
+      let add kind byOwner
+            | B.null (depNameHash kind row) = byOwner
+            | otherwise                     = foldl' (\acc user -> M.insertWith (++) user [(A.GName m (InterfaceFiles.dniName row), depNameHash kind row)] acc)
+                                                     byOwner (depUsers kind users)
+      return (add Pub pubByOwner, add Impl implByOwner)
+
+-- | Generate a cached module's code again from its stored typed module.
+-- Assess sends only a module whose code is generated whole, so its back
+-- job is eager.
+refreshCodegen :: ModuleEnv -> InterfaceFiles.HeaderSummary -> IO FrontResult
+refreshCodegen env header = do
+    module'    <- InterfaceFiles.readFileMaybe tydb >>= maybe (moduleFailure [MissingInterface (nameOf env)]) return
+    job        <- storedBackJob env module' (InterfaceFiles.storedImplHash module')
+    interest   <- storedInterest tydb (InterfaceFiles.summaryDepModules header)
+    moduleInfo <- storedModuleInfo tydb (nameOf env) module'
+    finishStored env (storedResult moduleInfo
+                        ModuleHashes { mhPub   = InterfaceFiles.storedPubHash module'
+                                     , mhImpl  = InterfaceFiles.storedImplHash module'
+                                     , mhNames = publicNameMap (InterfaceFiles.storedNames module') }
+                        interest (EagerBack job))
+  where tydb = tydbOf env
+
+-- | Use a cached module's .tydb as it is.
+reuse :: ModuleEnv -> InterfaceFiles.HeaderSummary -> Maybe DeferredBackJob -> IO FrontResult
+reuse env header deferred = do
+    shell <- readInterfaceShell env (Just (InterfaceFiles.summaryPubHash header))
+               >>= maybe (moduleFailure [MissingInterface (nameOf env)]) return
+    shellResult env (InterfaceFiles.summaryDepModules header) (maybe NoBack DeferredBack deferred) shell
+
+-- | --only-build trusts the stored interfaces.  A module without a readable
+-- .tydb gets an empty interface and publishes nothing.
+onlyBuild :: ModuleEnv -> CompileTask -> IO FrontResult
+onlyBuild env task = do
+    shell <- readInterfaceShell env (InterfaceFiles.summaryPubHash <$> header)
+    maybe (return (emptyResult env)) (shellResult env (maybe [] InterfaceFiles.summaryDepModules header) NoBack) shell
+  where header = case task of
+                   TyTask h -> Just h
+                   _        -> Nothing
+
+-- | A result from a module's interface shell.  Its interest comes from the
+-- given dependency rows: the per-name rows on disk carry no external
+-- dependencies.
+shellResult :: ModuleEnv -> [InterfaceFiles.DepModuleInfo] -> BackPlan -> InterfaceShell -> IO FrontResult
+shellResult env dependencies back shell = do
+    interest <- storedInterest (tydbOf env) dependencies
+    finishStored env (storedResult (shellModuleInfo shell)
+                        ModuleHashes { mhPub = shellPubHash shell, mhImpl = shellImplHash shell, mhNames = M.empty }
+                        interest back)
+
+-- | The last steps of a result rebuilt from the .tydb, in the stage's
+-- thread: the --tydb copy starts, then the hashes become visible to reads.
+finishStored :: ModuleEnv -> FrontResult -> IO FrontResult
+finishStored env fr = do
+    startOutputs (moduleBuild env) (keyOf env) (tydbCopy env)
+    rememberFront (buildCache (moduleBuild env)) (nameOf env) fr
+    return fr
+
+-- | The other modules' names that a cached module's code uses, from its
+-- dependency rows.
+storedInterest :: FilePath -> [InterfaceFiles.DepModuleInfo] -> IO (Data.Set.Set (A.ModName, A.Name))
+storedInterest tydb dependencies = Data.Set.unions <$> mapM rows dependencies
+  where rows dependency = do
+          let m = InterfaceFiles.dmiModule dependency
+          names <- InterfaceFiles.readDepNames tydb m
+          return (Data.Set.fromList [ (m, InterfaceFiles.dniName row) | row <- names ])
+
+
 -- Front passes -------------------------------------------------------------------------------------
 
 -- | Check one module outside a stage graph (__builtin__, benchmarks): its
@@ -2747,523 +3125,6 @@ compileModules build plan = do
                         _             -> return ()
                       return (Right ())
 
-    -- One module ---------------------------------------------------------
-    doOne :: Acton.Env.Env0
-          -> M.Map TaskKey ModuleHashes
-          -> M.Map TaskKey CompileTask
-          -> TaskKey
-          -> IO (TaskKey, Either [Diagnostic String] FrontResult)
-    doOne envSnap finished parsedTasks key = do
-      t <- case M.lookup key taskMap of
-             Just x -> return x
-             Nothing -> error ("Internal error: missing task for key " ++ show key)
-      let optsT = optionsFor ctx key
-          env = ModuleEnv
-            { moduleBuild    = build
-            , moduleTask     = t
-            , moduleCurrent  = M.findWithDefault (gtTask t) key parsedTasks
-            , moduleOptions  = optsT
-            , moduleResolver = inRunResolver cache taskMap finished t
-            , checkedModules = envSnap
-            , moduleBlocked  = Data.Set.member key dbpBlocked
-            , moduleForced   = (C.altOutput optsT && tkMod key == rootAlt) || C.alwaysbuild optsT
-            }
-          taskCurrent = moduleCurrent env
-          paths = pathsOf env
-          mn    = nameOf env
-          resolver = moduleResolver env
-          providers = gtImportProviders t
-          actFile = taskSourceFile t
-          tyFile = tydbOf env
-          -- The module succeeded: its hashes become visible to reads.
-          rememberResult fr = do
-            rememberFront cache mn fr
-            return (key, Right fr)
-          -- The last steps of a result rebuilt from the .tydb, in the
-          -- stage's thread: the --tydb copy starts, then the hashes become
-          -- visible to reads.
-          finishStored fr = do
-            startOutputs build key (tydbCopy env)
-            rememberResult fr
-          -- The pub hash a cached module's header recorded.
-          headerPubHash = case taskCurrent of
-            TyTask h -> Just (InterfaceFiles.summaryPubHash h)
-            _        -> Nothing
-          -- A result from the interface shell.  Its interest comes from the
-          -- dependency rows: the per-name rows on disk carry no external
-          -- dependencies.
-          shellResult back shell = do
-            interest <- cachedInterestDeps
-            finishStored (storedResult (shellModuleInfo shell)
-                            ModuleHashes { mhPub = shellPubHash shell, mhImpl = shellImplHash shell, mhNames = M.empty }
-                            interest back)
-          missingOwnInterface = return (key, Left [explainError env "" (MissingInterface mn)])
-
-          missingNameHashDiagnostics qn =
-            errsToDiagnostics "Compilation error" (modNameToFilename (dropProjPrefix paths mn)) ""
-              [(NoLoc, "Hash info missing for " ++ prstr qn)]
-
-          missingDepHashDiagnostics label qn users =
-            errsToDiagnostics "Compilation error" (modNameToFilename (dropProjPrefix paths mn)) ""
-              [(NoLoc, label ++ " hash missing for " ++ prstr qn ++ users)]
-
-          checkImportHashes imps = do
-            userSearchAbs <- mapM normalizePathSafe (C.searchpath optsT)
-            systemTypesAbs <- mapM normalizePathSafe (systemTypePaths (sysPath paths) (sysTypes paths))
-            searchAbs <- mapM normalizePathSafe (searchPath paths)
-            let userSearchSet = Data.Set.fromList (map normalise userSearchAbs)
-                systemTypeSet = Data.Set.fromList (map normalise systemTypesAbs)
-                managedTypeDirs =
-                  [ p
-                  | p <- searchAbs
-                  , let pNorm = normalise p
-                  , Data.Set.notMember pNorm systemTypeSet
-                  , Data.Set.notMember pNorm userSearchSet
-                  ]
-                isManagedTyPath path = any (path `isUnder`) managedTypeDirs
-            (missing, changed) <- foldM
-              (\(missingAcc, changedAcc) (depMn, depHash) -> do
-                 mh <- resolveModule resolver Pub depMn
-                 case mh of
-                   Just currentHash
-                     | currentHash == depHash -> return (missingAcc, changedAcc)
-                     | otherwise -> return (missingAcc, Data.Set.insert depMn changedAcc)
-                   Nothing ->
-                     if M.member depMn providers
-                       then return (missingAcc, Data.Set.insert depMn changedAcc)
-                       else do
-                         mTy <- lookupTydbPath cache (searchPath paths) depMn
-                         case mTy of
-                           Nothing -> return (Data.Set.insert depMn missingAcc, changedAcc)
-                           Just tyPath -> do
-                             tyAbs <- normalizePathSafe tyPath
-                             if isManagedTyPath tyAbs
-                               then return (Data.Set.insert depMn missingAcc, changedAcc)
-                               else return (missingAcc, Data.Set.insert depMn changedAcc)
-              )
-              (Data.Set.empty, Data.Set.empty)
-              imps
-            if Data.Set.null missing
-              then return (Right changed)
-              else do
-                let missingSorted = Data.List.sortOn modNameToString (Data.Set.toList missing)
-                return (Left (map (explainError env "" . MissingInterface) missingSorted))
-
-          collectDiags results =
-            let (errs, vals) = partitionEithers results
-            in if null errs
-                 then Right vals
-                 else Left (concat errs)
-          traverseDiags f items = collectDiags <$> mapM f items
-
-          fmtUsers users qn =
-            case M.lookup qn users of
-              Nothing -> ""
-              Just ns ->
-                let uniq = Data.Set.toList (Data.Set.fromList ns)
-                    names = map A.nstr (Data.List.sortOn A.nameText uniq)
-                in if null names
-                     then ""
-                     else " (used by " ++ intercalate ", " names ++ ")"
-
-          interestDepsFromDepRows depModules = do
-            depSets <- forM depModules $ \depInfo -> do
-              let depMn = InterfaceFiles.dmiModule depInfo
-              depNames <- InterfaceFiles.readDepNames tyFile depMn
-              return (Data.Set.fromList [ (depMn, InterfaceFiles.dniName depName) | depName <- depNames ])
-            return (Data.Set.unions depSets)
-
-          cachedInterestDeps = case taskCurrent of
-            TyTask h -> interestDepsFromDepRows (InterfaceFiles.summaryDepModules h)
-            _ -> return Data.Set.empty
-
-          -- Restore BOTH the pub and the impl per-name external deps from the
-          -- module-level dep rows (the per-name rows on disk are stripped, see
-          -- InterfaceFiles.stripExternalDeps). The impl half matters: a header
-          -- rewrite (impl-hash refresh) re-derives the dep rows from these name
-          -- hashes, and losing the impl users would erase the per-name impl
-          -- change tracking for every dependency of this module.
-          restorePubDepsFromRows depModules nameHashes = do
-            (pubByOwner, implByOwner) <- foldM addModule (M.empty, M.empty) depModules
-            -- Canonical order: the hash combinators (computeHashesSortedDeps)
-            -- require dep lists sorted by name, exactly as the front pass
-            -- stores them -- row iteration order must not leak into hashes.
-            return
-              [ nh { InterfaceFiles.nhPubDeps = Data.List.sortOn fst (M.findWithDefault [] (InterfaceFiles.nhName nh) pubByOwner)
-                   , InterfaceFiles.nhImplDeps = Data.List.sortOn fst (M.findWithDefault [] (InterfaceFiles.nhName nh) implByOwner)
-                   }
-              | nh <- nameHashes
-              ]
-            where
-              addModule acc depInfo = do
-                let depMn = InterfaceFiles.dmiModule depInfo
-                depNames <- InterfaceFiles.readDepNames tyFile depMn
-                foldM (addName depMn) acc depNames
-
-              addName depMn (pubAcc, implAcc) depInfo = do
-                users <- InterfaceFiles.readDepUsers tyFile depMn (InterfaceFiles.dniName depInfo)
-                let mkDep h =
-                      ( A.GName depMn (InterfaceFiles.dniName depInfo)
-                      , h
-                      )
-                    addUser dep m user =
-                      M.insertWith (++) user [dep] m
-                    pubAcc'
-                      | B.null (InterfaceFiles.dniPubHash depInfo) = pubAcc
-                      | otherwise = foldl' (addUser (mkDep (InterfaceFiles.dniPubHash depInfo))) pubAcc (InterfaceFiles.duPubUsers users)
-                    implAcc'
-                      | B.null (InterfaceFiles.dniImplHash depInfo) = implAcc
-                      | otherwise = foldl' (addUser (mkDep (InterfaceFiles.dniImplHash depInfo))) implAcc (InterfaceFiles.duImplUsers users)
-                return (pubAcc', implAcc')
-
-          depModulesFromNameHashes nameHashes = do
-            let depMods =
-                  Data.List.sortOn modNameToString $
-                  Data.Set.toList $
-                  Data.Set.fromList
-                    [ depMn
-                    | nh <- nameHashes
-                    , (qn, _) <- InterfaceFiles.nhPubDeps nh ++ InterfaceFiles.nhImplDeps nh
-                    , Just (depMn, _) <- [qnameTarget qn]
-                    ]
-            resolved <- traverseDiags resolveDepModule depMods
-            return resolved
-            where
-              resolveDepModule depMn =
-                maybe (Left [explainError env "" (MissingInterface depMn)]) Right <$> dependencyModule resolver depMn
-
-          nameHashSummary prevMap newMap =
-            let oldKeys = Data.Set.fromList (M.keys prevMap)
-                newKeys = Data.Set.fromList (M.keys newMap)
-                added = Data.Set.toList (Data.Set.difference newKeys oldKeys)
-                removed = Data.Set.toList (Data.Set.difference oldKeys newKeys)
-                shared = Data.Set.toList (Data.Set.intersection oldKeys newKeys)
-                fieldChange label getHash old new
-                  | getHash old == getHash new = Nothing
-                  | otherwise = Just (label ++ " " ++ shortHash (getHash old) ++ " -> " ++ shortHash (getHash new))
-                changesFor n =
-                  let oldInfo = prevMap M.! n
-                      newInfo = newMap M.! n
-                      fields = catMaybes
-                        [ fieldChange "src" InterfaceFiles.nhSrcHash oldInfo newInfo
-                        , fieldChange "pub" InterfaceFiles.nhPubHash oldInfo newInfo
-                        , fieldChange "impl" InterfaceFiles.nhImplHash oldInfo newInfo
-                        ]
-                  in if null fields
-                       then Nothing
-                       else Just ("~" ++ A.nstr n ++ "{" ++ intercalate ", " fields ++ "}")
-                addedItems = [ "+" ++ A.nstr n | n <- Data.List.sortOn A.nameText added ]
-                removedItems = [ "-" ++ A.nstr n | n <- Data.List.sortOn A.nameText removed ]
-                changedItems = mapMaybe changesFor (Data.List.sortOn A.nameText shared)
-                items = addedItems ++ removedItems ++ changedItems
-            in if null items then Nothing else Just (intercalate ", " items)
-
-          resolveNameHashInfo m n = do
-            mInfo <- resolveName resolver m n
-            return $ case mInfo of
-              Just info -> Right info
-              Nothing -> Left (missingNameHashDiagnostics (A.GName m n))
-
-          resolveQNameHash label getHash users qn =
-            case qnameTarget qn of
-              Just (m, n) -> resolveNameHashInfo m n >>= \res ->
-                return $ case res of
-                  Left diags -> Left diags
-                  Right info ->
-                    let h = getHash info
-                    in if B.null h
-                         then Left (missingDepHashDiagnostics label (A.GName m n) users)
-                         else Right h
-              Nothing -> return (Left (missingNameHashDiagnostics qn))
-
-          resolveDepHashes label getHash deps = do
-            resolved <- traverseDiags (\(n, qns) -> do
-              let users = " (used by " ++ A.nstr n ++ ")"
-              resolvedQns <- traverseDiags (\qn -> do
-                currE <- resolveQNameHash label getHash users qn
-                return (fmap (\curr -> (qn, curr)) currE)) qns
-              return (fmap (\vals -> (n, vals)) resolvedQns)) (M.toList deps)
-            return (fmap M.fromList resolved)
-
-          checkDepModuleRows depModules = do
-            rows <- mapM checkOne depModules
-            return (foldRows rows)
-            where
-              checkOne depInfo = do
-                let depMn = InterfaceFiles.dmiModule depInfo
-                current <- dependencyModule resolver depMn
-                return $ case current of
-                  Just currentInfo ->
-                    ( depMn
-                    , InterfaceFiles.dmiPubHash currentInfo /= InterfaceFiles.dmiPubHash depInfo
-                    , InterfaceFiles.dmiImplHash currentInfo /= InterfaceFiles.dmiImplHash depInfo
-                    )
-                  Nothing ->
-                    -- Stale dep rows may mention a removed transitive provider;
-                    -- the per-name rows decide whether any used name is affected.
-                    (depMn, True, True)
-
-              foldRows rows =
-                ( Data.Set.fromList [ depMn | (depMn, pubChanged, _implChanged) <- rows, pubChanged ]
-                , Data.Set.fromList [ depMn | (depMn, _pubChanged, implChanged) <- rows, implChanged ]
-                )
-
-          checkDepNameRows changedPubMods changedImplMods = do
-            let changedMods =
-                  Data.List.sortOn modNameToString $
-                  Data.Set.toList (Data.Set.union changedPubMods changedImplMods)
-            foldM checkDepModule ([], [], [], [], M.empty, M.empty, Data.Set.empty) changedMods
-            where
-              checkDepModule acc depMn = do
-                depNames <- InterfaceFiles.readDepNames tyFile depMn
-                if null depNames
-                  then return (noteMissingRows depMn acc)
-                  else foldM (checkName depMn) acc depNames
-
-              noteMissingRows depMn (pubDeltas, implDeltas, pubMissing, implMissing, pubUsers, implUsers, rowMissingMods) =
-                (pubDeltas, implDeltas, pubMissing, implMissing, pubUsers, implUsers, Data.Set.insert depMn rowMissingMods)
-
-              checkName depMn acc depInfo = do
-                let depName = InterfaceFiles.dniName depInfo
-                    qn = A.GName depMn depName
-                    current getHash info =
-                      let h = getHash info
-                      in if B.null h then Nothing else Just h
-                    checkPub = Data.Set.member depMn changedPubMods && not (B.null (InterfaceFiles.dniPubHash depInfo))
-                    checkImpl = Data.Set.member depMn changedImplMods && not (B.null (InterfaceFiles.dniImplHash depInfo))
-                mInfo <- resolveName resolver depMn depName
-                acc1 <- if checkPub
-                          then addPub depMn depName qn (InterfaceFiles.dniPubHash depInfo) (mInfo >>= current InterfaceFiles.nhPubHash) acc
-                          else return acc
-                if checkImpl
-                  then addImpl depMn depName qn (InterfaceFiles.dniImplHash depInfo) (mInfo >>= current InterfaceFiles.nhImplHash) acc1
-                  else return acc1
-
-              addPub depMn depName qn old mNew acc@(pubDeltas, implDeltas, pubMissing, implMissing, pubUsers, implUsers, rowMissingMods) =
-                case mNew of
-                  Just new | new == old -> return acc
-                  Just new -> do
-                    users <- InterfaceFiles.readDepUsers tyFile depMn depName
-                    return ((qn, old, new) : pubDeltas, implDeltas, pubMissing, implMissing, M.insert qn (InterfaceFiles.duPubUsers users) pubUsers, implUsers, rowMissingMods)
-                  Nothing -> do
-                    users <- InterfaceFiles.readDepUsers tyFile depMn depName
-                    return (pubDeltas, implDeltas, qn : pubMissing, implMissing, M.insert qn (InterfaceFiles.duPubUsers users) pubUsers, implUsers, rowMissingMods)
-
-              addImpl depMn depName qn old mNew acc@(pubDeltas, implDeltas, pubMissing, implMissing, pubUsers, implUsers, rowMissingMods) =
-                case mNew of
-                  Just new | new == old -> return acc
-                  Just new -> do
-                    users <- InterfaceFiles.readDepUsers tyFile depMn depName
-                    return (pubDeltas, (qn, old, new) : implDeltas, pubMissing, implMissing, pubUsers, M.insert qn (InterfaceFiles.duImplUsers users) implUsers, rowMissingMods)
-                  Nothing -> do
-                    users <- InterfaceFiles.readDepUsers tyFile depMn depName
-                    return (pubDeltas, implDeltas, pubMissing, qn : implMissing, pubUsers, M.insert qn (InterfaceFiles.duImplUsers users) implUsers, rowMissingMods)
-
-      case taskCurrent of
-        ParseErrorTask diags -> return (key, Left diags)
-        _ | C.only_build optsT -> do
-              shell <- readInterfaceShell env headerPubHash
-              maybe (return (key, Right (emptyResult env))) (shellResult NoBack) shell
-        _ -> do
-          -- For cached .tydb tasks, compare recorded dep hashes against current deps.
-          -- This is the up-to-date check that decides if we can skip work. If
-          -- any implDeps have changed we need to rerun our back passes and if
-          -- any pubDeps have changed we need to rerun front passes (and back
-          -- passes). Unchanged import pub hashes let us skip checking public
-          -- name deps from those modules.
-          needByDepsRes <- case taskCurrent of
-            TyTask h -> do
-              importHashRes <- checkImportHashes (InterfaceFiles.summaryImports h)
-              case importHashRes of
-                Left diags -> return (Left diags)
-                Right _ -> do
-                  (changedPubMods, changedImplMods) <- checkDepModuleRows (InterfaceFiles.summaryDepModules h)
-                  if Data.Set.null changedPubMods && Data.Set.null changedImplMods
-                    then return (Right ([], [], [], [], M.empty, M.empty, Data.Set.empty))
-                    else Right <$> checkDepNameRows changedPubMods changedImplMods
-            -- Source tasks always run front passes, so deps are irrelevant.
-            _ -> return (Right ([], [], [], [], M.empty, M.empty, Data.Set.empty))
-
-          case needByDepsRes of
-            Left diags -> return (key, Left diags)
-            Right (pubDeltas, implDeltas, pubMissing, implMissing, pubUsers, implUsers, rowMissingMods) -> do
-              let needBySource = case taskCurrent of { ParseTask{} -> True; ActonTask{} -> True; _ -> False }
-                  -- Public deltas require front passes; impl deltas only need back jobs.
-                  needByPub = not (null pubDeltas)
-                  needByMissing = not (null pubMissing) || not (null implMissing) || not (Data.Set.null rowMissingMods)
-                  needByImpl = not (null implDeltas)
-                  -- Front passes run on source or API changes, or when forced.
-                  needFront = needBySource || needByPub || needByMissing || moduleForced env
-                  mModuleImplHash = case taskCurrent of
-                    TyTask h -> Just (InterfaceFiles.summaryImplHash h)
-                    _ -> Nothing
-              cachedDeferredBackJob <- case taskCurrent of
-                    TyTask h -> do
-                      hasNotImpl <- InterfaceFiles.readStmtHasNotImpl tyFile
-                      return (deferredJob env hasNotImpl (InterfaceFiles.summaryImplHash h) (InterfaceFiles.summaryNameCount h))
-                    _ -> return Nothing
-              let isCachedDbp = isJust cachedDeferredBackJob
-              let canCheckCodegen = not needFront && not needByImpl && not (C.altOutput optsT) && not isCachedDbp
-              mCodegenStatus <- case mModuleImplHash of
-                Just implHash | canCheckCodegen -> Just <$> codegenStatus paths mn implHash
-                _ -> return Nothing
-              let needByCodegen = maybe False (not . codegenUpToDate) mCodegenStatus
-              let runFront = do
-                    prevNameHashes <- if C.verbose gopts
-                      then lookupNameMap cache (searchPath paths) mn
-                      else return Nothing
-                    if needBySource
-                      then info build ("  Stale " ++ labelOf env ++ ": source changed")
-                      else do
-                        when needByPub $ do
-                          let fmtDelta (qn, old, new) = prstr qn ++ " " ++ shortHash old ++ " → " ++ shortHash new ++ fmtUsers pubUsers qn
-                          info build ("  Stale " ++ labelOf env ++ ": pub changes in " ++ Data.List.intercalate ", " (map fmtDelta pubDeltas))
-                        when needByMissing $ do
-                          let fmtMissing users qn = prstr qn ++ fmtUsers users qn
-                              pubMissingItems =
-                                [ "pub " ++ fmtMissing pubUsers qn
-                                | qn <- Data.List.sortOn Hashing.qnameKey pubMissing
-                                ]
-                              implMissingItems =
-                                [ "impl " ++ fmtMissing implUsers qn
-                                | qn <- Data.List.sortOn Hashing.qnameKey implMissing
-                                ]
-                              rowMissingItems =
-                                [ "rows " ++ modNameToString depMn
-                                | depMn <- Data.List.sortOn modNameToString (Data.Set.toList rowMissingMods)
-                                ]
-                          info build ("  Stale " ++ labelOf env ++ ": missing dep hashes in " ++ Data.List.intercalate ", " (pubMissingItems ++ implMissingItems ++ rowMissingItems))
-                    parsed <- materialize sp optsT mn actFile Nothing taskCurrent
-                    case parsed of
-                      Left diags -> return (key, Left diags)
-                      Right (source, m) -> do
-                        res <- runFrontPasses env source (adjustImports providers m)
-                        case res of
-                          Left diags -> return (key, Left diags)
-                          Right fr -> do
-                            -- prevNameHashes is Nothing unless --verbose.
-                            forM_ prevNameHashes $ \prevMap ->
-                              forM_ (nameHashSummary prevMap (mhNames (frHashes fr))) $ \summary ->
-                                info build ("  Hash deltas " ++ labelOf env ++ ": " ++ summary)
-                            rememberResult fr
-                  -- Only the attempt falls back to the front passes, and only
-                  -- for a synchronous exception or an unresolved hash.  The
-                  -- write comes after every read, so a fallback never runs on
-                  -- top of a committed refresh.  A failed write and a missing
-                  -- own interface fail the module instead.
-                  runImplRefresh = do
-                    let fmtDelta (qn, old, new) = prstr qn ++ " " ++ shortHash old ++ " → " ++ shortHash new ++ fmtUsers implUsers qn
-                    info build ("  Stale " ++ labelOf env ++ ": impl changes in " ++ Data.List.intercalate ", " (map fmtDelta implDeltas))
-                    attempt <- trySync recomputeImpl
-                    case attempt of
-                      Right (Recomputed updatedDepModules updatedNameHashes fr) -> do
-                        -- The refreshed rows are committed before the module
-                        -- reports done.  A write failure is this module's
-                        -- diagnostics.
-                        committed <- moduleBoundary env $ Right <$>
-                          commitTydb env (\_ -> InterfaceFiles.updateImplRefresh tyFile (mhImpl (frHashes fr)) updatedDepModules updatedNameHashes)
-                        case committed of
-                          Left diags -> return (key, Left diags)
-                          Right () -> finishStored fr
-                      Right InterfaceGone -> missingOwnInterface
-                      _ -> do
-                        info build ("  Stale " ++ labelOf env ++ ": impl refresh encountered unresolved dep hashes; rerunning front passes")
-                        runFront
-                  -- The refresh is pure row math: every input is already stored.
-                  -- Own impl-hash components (nhOwnImplHash) and local deps come
-                  -- from the per-name rows, the external dep NAMES from the dep
-                  -- index rows (only their hashes changed -- the module's source
-                  -- is unchanged), and the new dep hashes are resolved fresh.
-                  -- No re-read of the typed module, no re-parse, no dep re-walk;
-                  -- the .tydb is updated surgically. The typed module is read
-                  -- only when the refresh must feed an EAGER back job -- then it
-                  -- is the compilation input.  Every read, the escape summaries
-                  -- included, and every forcing happen here, before the write.
-                  recomputeImpl =
-                    case taskCurrent of
-                      TyTask h -> do
-                        let depModules    = InterfaceFiles.summaryDepModules h
-                            storedPubHash = InterfaceFiles.summaryPubHash h
-                        -- The task header carries only the name COUNT (selective
-                        -- reads); the refresh needs the module's own hash rows.
-                        storedNameHashes <- InterfaceFiles.readNameHashes tyFile
-                        moduleHasNotImpl <- InterfaceFiles.readStmtHasNotImpl tyFile
-                        restored <- restorePubDepsFromRows depModules storedNameHashes
-                        -- Only names with an impl item participate in the refresh --
-                        -- exactly the names the front pass gave a (non-empty) own
-                        -- impl-hash component. A signature-only name's impl hash is
-                        -- invariant under dependency changes.
-                        let refreshables =
-                              [ nh | nh <- restored
-                                   , not (B.null (InterfaceFiles.nhOwnImplHash nh)) ]
-                            ownImplHashes = M.fromList
-                              [ (InterfaceFiles.nhName nh, InterfaceFiles.nhOwnImplHash nh) | nh <- refreshables ]
-                            implLocalDeps = M.fromList
-                              [ (InterfaceFiles.nhName nh, InterfaceFiles.nhImplLocalDeps nh) | nh <- refreshables ]
-                            implExtDeps = M.fromList
-                              [ (InterfaceFiles.nhName nh, map fst (InterfaceFiles.nhImplDeps nh)) | nh <- refreshables ]
-                        implExtRes <- resolveDepHashes "impl" InterfaceFiles.nhImplHash implExtDeps
-                        case implExtRes of
-                          Left _ -> return Unresolved
-                          Right implExtHashes -> do
-                            let updatedNameHashes =
-                                  Hashing.refreshImplHashes restored ownImplHashes implLocalDeps implExtHashes
-                                moduleImplHash = Hashing.moduleImplHashFromNameHashes updatedNameHashes
-                            depModulesRes <- depModulesFromNameHashes updatedNameHashes
-                            case depModulesRes of
-                              Left _ -> return Unresolved
-                              Right updatedDepModules -> do
-                                evaluate (rnf (moduleImplHash, updatedDepModules, updatedNameHashes))
-                                let hashes pub = ModuleHashes { mhPub = pub, mhImpl = moduleImplHash, mhNames = publicNameMap updatedNameHashes }
-                                    interest   = interestDeps updatedNameHashes
-                                case deferredJob env moduleHasNotImpl moduleImplHash (length updatedNameHashes) of
-                                  Just job -> do
-                                    shell <- readInterfaceShell env (Just storedPubHash)
-                                    return $ case shell of
-                                      Nothing -> InterfaceGone
-                                      Just s  -> Recomputed updatedDepModules updatedNameHashes
-                                                   (storedResult (shellModuleInfo s) (hashes (shellPubHash s)) interest (DeferredBack job))
-                                  Nothing -> do
-                                    stored <- InterfaceFiles.readFileMaybe tyFile
-                                    case stored of
-                                      Nothing -> return InterfaceGone
-                                      Just module' -> do
-                                        job <- storedBackJob env module' moduleImplHash
-                                        -- Forced here, so a corrupt row fails the
-                                        -- attempt before anything is written.
-                                        evaluate (rnf (InterfaceFiles.storedInterface module'))
-                                        evaluate (rnf (InterfaceFiles.storedTyped module'))
-                                        moduleInfo <- storedModuleInfo tyFile mn module'
-                                        return (Recomputed updatedDepModules updatedNameHashes
-                                                  (storedResult moduleInfo (hashes (InterfaceFiles.storedPubHash module')) interest (EagerBack job)))
-                      _ -> return Unresolved
-                  -- The codegen check skips a module whose back passes can
-                  -- wait, judged by the NotImplemented flag stored with its
-                  -- typed module, so this job is always eager.
-                  runCodegenRefresh = do
-                    info build ("  Stale " ++ labelOf env ++ ": generated code out of date" ++ maybe "" formatCodegenDelta mCodegenStatus)
-                    stored <- InterfaceFiles.readFileMaybe tyFile
-                    case stored of
-                      Nothing -> missingOwnInterface
-                      Just module' -> do
-                        job <- storedBackJob env module' (InterfaceFiles.storedImplHash module')
-                        interest <- cachedInterestDeps
-                        moduleInfo <- storedModuleInfo tyFile mn module'
-                        finishStored (storedResult moduleInfo
-                                        ModuleHashes { mhPub   = InterfaceFiles.storedPubHash module'
-                                                     , mhImpl  = InterfaceFiles.storedImplHash module'
-                                                     , mhNames = publicNameMap (InterfaceFiles.storedNames module') }
-                                        interest (EagerBack job))
-                  runReuse = do
-                    info build ("  Fresh " ++ labelOf env ++ ": using cached .tydb")
-                    shell <- readInterfaceShell env headerPubHash
-                    maybe missingOwnInterface (shellResult (maybe NoBack DeferredBack cachedDeferredBackJob)) shell
-              case () of
-                _ | needFront -> runFront
-                _ | needByImpl -> runImplRefresh
-                _ | needByCodegen -> runCodegenRefresh
-                _ -> runReuse
-
     stageTaskKey :: StageKey -> TaskKey
     stageTaskKey sk =
       case sk of
@@ -3304,8 +3165,21 @@ compileModules build plan = do
                   -> TaskKey
                   -> IO (StageKey, Either [Diagnostic String] StageSuccess)
     runFrontStage envSnap finished parsedTasks key = do
-      (doneKey, outcome) <- doOne envSnap finished parsedTasks key
-      return (FrontStage doneKey, fmap StageFronted outcome)
+      t <- case M.lookup key taskMap of
+             Just x -> return x
+             Nothing -> error ("Internal error: missing task for key " ++ show key)
+      let opts = optionsFor ctx key
+      outcome <- frontStage ModuleEnv
+        { moduleBuild    = build
+        , moduleTask     = t
+        , moduleCurrent  = M.findWithDefault (gtTask t) key parsedTasks
+        , moduleOptions  = opts
+        , moduleResolver = inRunResolver cache taskMap finished t
+        , checkedModules = envSnap
+        , moduleBlocked  = Data.Set.member key dbpBlocked
+        , moduleForced   = (C.altOutput opts && tkMod key == rootAlt) || C.alwaysbuild opts
+        }
+      return (FrontStage key, fmap StageFronted outcome)
 
     scheduleMore :: Int -> [StageKey]
                  -> [(Async (StageKey, Either [Diagnostic String] StageSuccess), StageKey)]
