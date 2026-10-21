@@ -2638,79 +2638,55 @@ frontProgress env p                     = emit (moduleBuild env) (FrontProgresse
 forced                                  :: NFData a => a -> IO a
 forced                                  = evaluate . force
 
-data DbpSelection = DbpSelection
-  { dbsModule :: A.Module
-  , dbsSelectedCount :: Int
-  , dbsFallbackReason :: Maybe String
+-- | The back job of a deferred module, once every module depending on it has
+-- finished its front passes, so the interest in its names is complete.  The
+-- selected names are the module's roots and every name other modules use,
+-- closed over local dependencies and extensions.  Their codegen hash is
+-- compared with the tags of the generated files before any statement is
+-- read, and the job is Nothing when the generated code is up to date.
+prepareDeferredBackJob :: BuildEnv -> Acton.Env.Env0 -> InterestMap -> DeferredBackJob -> IO (Maybe BackJob)
+prepareDeferredBackJob build env interestMap job = do
+    roots    <- Data.Set.fromList <$> InterfaceFiles.readRoots tydb
+    let interested = M.findWithDefault Data.Set.empty mn interestMap
+    selected <- selectedRows tydb label (Data.Set.union interested roots)
+    let names       = M.keysSet selected
+        codegenHash = dbpCodegenHash (deferredImplHash job) names
+        stats       = DbpStats { totalNames      = deferredNameCount job
+                               , interestedNames = Data.Set.size interested
+                               , rootNames       = Data.Set.size roots
+                               , selectedClosure = Data.Set.size names }
+    status   <- codegenStatus paths mn codegenHash
+    if codegenUpToDate status
+      then Nothing <$ info build (describeDbp label stats True)
+      else do
+        -- Same-version .tydb files always carry statement indices, so a
+        -- failed selective read means a corrupt or hand-doctored file.  A
+        -- whole-module read would mask that, and read gigabytes doing it.
+        typed <- InterfaceFiles.readSelectedModule tydb (M.elems selected) names
+                   >>= maybe (error ("Internal error: missing statement rows in " ++ tydb)) return
+        back  <- loadBackJob build env (deferredKey job) paths (deferredOptions job) (pruneModule names typed) codegenHash
+        info build (describeDbp label stats False)
+        return (Just back)
+  where paths = deferredPaths job
+        mn    = tkMod (deferredKey job)
+        tydb  = tyDbPath paths mn
+        label = modNameToString (dropProjPrefix paths mn)
+
+-- | The name counts of a deferred module's selection.
+data DbpStats = DbpStats
+  { totalNames      :: Int              -- every name of the module
+  , interestedNames :: Int              -- the names other modules use
+  , rootNames       :: Int              -- the module's roots
+  , selectedClosure :: Int              -- the interested and root names, closed over local dependencies and extensions
   }
 
-data DbpNameSelection = DbpNameSelection
-  { dnsSelectedNames :: Data.Set.Set A.Name
-  , dnsNameHashes :: [InterfaceFiles.NameHashInfo]
-  }
-
-prepareDeferredBackJob :: BuildEnv
-                       -> Acton.Env.Env0
-                       -> InterestMap
-                       -> DeferredBackJob
-                       -> IO (Maybe BackJob)
-prepareDeferredBackJob build envAcc interestMap deferred = do
-  let paths = deferredPaths deferred
-      mn = tkMod (deferredKey deferred)
-      tyFile = tyDbPath paths mn
-      actFile = srcFile paths mn
-  roots <- InterfaceFiles.readRoots tyFile
-  let interested = M.findWithDefault Data.Set.empty mn interestMap
-      rootSeeds = Data.Set.fromList roots
-      selectedSeeds = Data.Set.union interested rootSeeds
-      totalNames = deferredNameCount deferred
-  nameSelection <- selectDbpNames paths mn tyFile selectedSeeds
-  let codegenHash = dbpCodegenHash (deferredImplHash deferred) (dnsSelectedNames nameSelection)
-  codegen <- codegenStatus paths mn codegenHash
-  if codegenUpToDate codegen
-    then do
-      logDbpSelection build mn deferred totalNames (Data.Set.size interested) (Data.Set.size rootSeeds) (Data.Set.size (dnsSelectedNames nameSelection)) Nothing "generated code up to date"
-      return Nothing
-    else do
-      selectedTmod <- InterfaceFiles.readSelectedModule tyFile (dnsNameHashes nameSelection) (dnsSelectedNames nameSelection)
-      -- Same-version .tydb files always carry statement indices, so a failed
-      -- selective read means a corrupt or hand-doctored file -- an eager
-      -- whole-module fallback would mask that (and read gigabytes doing it).
-      selection <- case selectedTmod of
-        Just tmod -> return $ selectDbpModule totalNames nameSelection tmod
-        Nothing -> error ("Internal error: missing statement rows in " ++ tyFile)
-      snap <- Source.readSource (buildSources build) actFile
-      env1 <- Acton.Env.mkEnv (searchPath paths) envAcc (dbsModule selection)
-      logDbpSelection build mn deferred totalNames (Data.Set.size interested) (Data.Set.size rootSeeds) (dbsSelectedCount selection) (dbsFallbackReason selection) "generated code out of date"
-      return $ Just BackJob
-        { bjKey = deferredKey deferred
-        , bjPaths = paths
-        , bjOpts = deferredOptions deferred
-        , bjTypeEnv = Converter.convEnvProtos env1
-        , bjModule = dbsModule selection
-        , bjSource = Source.ssText snap
-        , bjImplHash = codegenHash
-        }
-
-logDbpSelection :: BuildEnv
-                -> A.ModName
-                -> DeferredBackJob
-                -> Int
-                -> Int
-                -> Int
-                -> Int
-                -> Maybe String
-                -> String
-                -> IO ()
-logDbpSelection build mn deferred totalNames interestedCount rootCount selectedCount fallbackReason codegenReason =
-  info build $
-    "  DBP " ++ modNameToString (dropProjPrefix (deferredPaths deferred) mn)
-    ++ ": total names " ++ show totalNames
-    ++ ", interested names " ++ show interestedCount
-    ++ ", root names " ++ show rootCount
-    ++ ", selected closure " ++ show selectedCount
-    ++ maybe "" (\reason -> ", fallback: " ++ reason) fallbackReason
-    ++ ", " ++ codegenReason
+-- | The verbose line of a deferred module, given whether its generated code
+-- is up to date.
+describeDbp :: String -> DbpStats -> Bool -> String
+describeDbp label stats upToDate =
+    "  DBP " ++ label ++ ": total names " ++ show (totalNames stats) ++ ", interested names " ++ show (interestedNames stats)
+    ++ ", root names " ++ show (rootNames stats) ++ ", selected closure " ++ show (selectedClosure stats)
+    ++ ", " ++ (if upToDate then "generated code up to date" else "generated code out of date")
 
 dbpCodegenHash :: B.ByteString -> Data.Set.Set A.Name -> B.ByteString
 dbpCodegenHash moduleImplHash selected =
@@ -2721,99 +2697,43 @@ dbpCodegenHash moduleImplHash selected =
       | n <- Data.List.sortOn A.nameText (Data.Set.toList selected)
       ]
 
-selectDbpNames :: Paths
-               -> A.ModName
-               -> FilePath
-               -> Data.Set.Set A.Name
-               -> IO DbpNameSelection
-selectDbpNames paths mn tyFile seeds
-  | Data.Set.null seeds =
-      return DbpNameSelection
-        { dnsSelectedNames = Data.Set.empty
-        , dnsNameHashes = []
-        }
-  | otherwise = do
-      roots <- traverse (dbpReadOwningName paths mn tyFile) (Data.Set.toList seeds)
-      selected <- dbpNameHashClosure paths mn tyFile M.empty roots
-      return DbpNameSelection
-        { dnsSelectedNames = Data.Set.fromList (M.keys selected)
-        , dnsNameHashes = M.elems selected
-        }
-
-dbpSelectionError :: Paths -> A.ModName -> String -> IO a
-dbpSelectionError paths mn reason =
-  throwIO (DbpSelectionError ("DBP selection failed for " ++ modNameToString (dropProjPrefix paths mn) ++ ": " ++ reason))
-
-selectDbpModule :: Int
-                -> DbpNameSelection
-                -> A.Module
-                -> DbpSelection
-selectDbpModule totalNames nameSelection tmod@(A.Module loc imps mdoc suite)
-  | A.hasNotImpl suite = fallback "module contains NotImplemented/native extension hooks"
-  | otherwise =
-      let selected = dnsSelectedNames nameSelection
-          suite' = mapMaybe (dbpPruneTopStmt selected) suite
-      in DbpSelection
-           { dbsModule = A.Module loc imps mdoc suite'
-           , dbsSelectedCount = Data.Set.size selected
-           , dbsFallbackReason = Nothing
-           }
+-- | The rows of the names the seeds need, keyed by name.  Each seed and each
+-- dependency resolves to the name owning its row, through the Derived chain.
+-- The search is depth first: a name's local dependencies and extensions, in
+-- name order, are visited before the names still waiting.  A missing row or
+-- owner fails the selection with a DbpSelectionError naming the module by
+-- its label.
+selectedRows :: FilePath -> String -> Data.Set.Set A.Name -> IO (M.Map A.Name InterfaceFiles.NameHashInfo)
+selectedRows tydb label seeds = traverse owner (Data.Set.toList seeds) >>= close M.empty
   where
-    fallback reason =
-      DbpSelection
-        { dbsModule = tmod
-        , dbsSelectedCount = totalNames
-        , dbsFallbackReason = Just reason
-        }
-
-dbpReadNameHash :: Paths -> A.ModName -> FilePath -> A.Name -> IO InterfaceFiles.NameHashInfo
-dbpReadNameHash paths mn tyFile n = do
-  mnh <- InterfaceFiles.readNameHashMaybe tyFile n
-  case mnh of
-    Just nh -> return nh
-    Nothing -> dbpSelectionError paths mn ("hash info missing for " ++ A.nstr n)
-
-dbpReadOwningName :: Paths -> A.ModName -> FilePath -> A.Name -> IO A.Name
-dbpReadOwningName paths mn tyFile n = do
-  mnh <- InterfaceFiles.readNameHashMaybe tyFile n
-  case mnh of
-    Just _ -> return n
-    Nothing ->
+    close selected []   = return selected
+    close selected (n:ns)
+      | M.member n selected = close selected ns
+      | otherwise = do
+          row           <- InterfaceFiles.readNameHashMaybe tydb n >>= maybe (failure ("hash info missing for " ++ A.nstr n)) return
+          localDeps     <- traverse owner (InterfaceFiles.nhPubLocalDeps row ++ InterfaceFiles.nhImplLocalDeps row)
+          extensions    <- unionNames <$> InterfaceFiles.readExtensionsByClass tydb n <*> InterfaceFiles.readExtensionsByProtocol tydb n
+          extensionDeps <- traverse owner extensions
+          let selected' = M.insert n row selected
+          close selected' (filter (`M.notMember` selected') (unionNames localDeps extensionDeps) ++ ns)
+    owner n = do
+      row <- InterfaceFiles.readNameHashMaybe tydb n
       case n of
-        A.Derived base _ -> dbpReadOwningName paths mn tyFile base
-        _ | Names.isWitness n -> dbpSelectionError paths mn ("unresolved witness owner for " ++ A.nstr n)
-        _ -> dbpSelectionError paths mn ("no top-level owner for " ++ A.nstr n)
-
-dbpNameHashClosure :: Paths
-                   -> A.ModName
-                   -> FilePath
-                   -> M.Map A.Name InterfaceFiles.NameHashInfo
-                   -> [A.Name]
-                   -> IO (M.Map A.Name InterfaceFiles.NameHashInfo)
-dbpNameHashClosure _ _ _ selected [] = return selected
-dbpNameHashClosure paths mn tyFile selected (n:ns)
-  | M.member n selected = dbpNameHashClosure paths mn tyFile selected ns
-  | otherwise = do
-      nh <- dbpReadNameHash paths mn tyFile n
-      localDeps <- traverse (dbpReadOwningName paths mn tyFile)
-                     (InterfaceFiles.nhPubLocalDeps nh ++ InterfaceFiles.nhImplLocalDeps nh)
-      exts <- dbpExtensionsForName tyFile n
-      extDeps <- traverse (dbpReadOwningName paths mn tyFile) exts
-      let deps = unionNames localDeps extDeps
-          selected' = M.insert n nh selected
-          new = filter (`M.notMember` selected') deps
-      dbpNameHashClosure paths mn tyFile selected' (new ++ ns)
-  where
+        _ | isJust row          -> return n
+        A.Derived base _        -> owner base
+        _ | Names.isWitness n   -> failure ("unresolved witness owner for " ++ A.nstr n)
+          | otherwise           -> failure ("no top-level owner for " ++ A.nstr n)
     unionNames xs ys = Data.List.sortOn A.nameText (Data.List.nub (xs ++ ys))
+    failure :: String -> IO a
+    failure reason = throwIO (DbpSelectionError ("DBP selection failed for " ++ label ++ ": " ++ reason))
 
-dbpExtensionsForName :: FilePath -> A.Name -> IO [A.Name]
-dbpExtensionsForName tyFile n = do
-  byClass <- InterfaceFiles.readExtensionsByClass tyFile n
-  byProtocol <- InterfaceFiles.readExtensionsByProtocol tyFile n
-  return (Data.List.sortOn A.nameText (Data.List.nub (byClass ++ byProtocol)))
+-- | A typed module with only the top-level statements that bind a selected
+-- name.
+pruneModule :: Data.Set.Set A.Name -> A.Module -> A.Module
+pruneModule selected (A.Module loc imps mdoc suite) = A.Module loc imps mdoc (mapMaybe (pruneTopStmt selected) suite)
 
-dbpPruneTopStmt :: Data.Set.Set A.Name -> A.Stmt -> Maybe A.Stmt
-dbpPruneTopStmt selected stmt =
+pruneTopStmt :: Data.Set.Set A.Name -> A.Stmt -> Maybe A.Stmt
+pruneTopStmt selected stmt =
   case stmt of
     A.Decl l ds ->
       case filter (\d -> Data.Set.member (Names.dname' d) selected) ds of
