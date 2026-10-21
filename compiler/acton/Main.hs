@@ -503,7 +503,7 @@ buildFiles gopts opts files =
 projectSourceFiles :: Paths -> IO [FilePath]
 projectSourceFiles paths = do
     allFiles <- getFilesRecursive (srcDir paths)
-    return (catMaybes (map filterActFile allFiles))
+    return (filter isActFile allFiles)
 
 withBackgroundCompilerLockOrExit :: FilePath -> String -> IO a -> IO a
 withBackgroundCompilerLockOrExit projDir msg =

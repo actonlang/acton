@@ -40,7 +40,7 @@ module Acton.Project
   , tyDbPath
   , rootStubPath
   , rootBinaryName
-  , filterActFile
+  , isActFile
   , modNameToFilename
   , isSpecialProject
   , addProjPrefix
@@ -117,13 +117,9 @@ moduleTypesDir :: FilePath -> A.ModName -> FilePath
 moduleTypesDir path mn =
   joinPath [path, joinPath $ init $ A.modPath mn]
 
--- | Keep only .act files when scanning directories.
--- Returns Just the file path for Acton sources and Nothing otherwise.
-filterActFile :: FilePath -> Maybe FilePath
-filterActFile file =
-    case takeExtension file of
-        ".act" -> Just file
-        _ -> Nothing
+-- | Whether 'file' names an Acton source file.
+isActFile :: FilePath -> Bool
+isActFile file = takeExtension file == ".act"
 
 -- | Whether the modules of the project named 'proj' go without the
 -- project's name in front: the base library, and a scratch build.  A
@@ -542,7 +538,7 @@ enumerateProjectModules ctx = do
       then return []
       else do
         files <- getFilesRecursive (projSrcDir ctx)
-        let actFiles = filter (\f -> takeExtension f == ".act") files
+        let actFiles = filter isActFile files
             proj = BuildSpec.specName $ projBuildSpec ctx
             rootName = head . splitDirectories . makeRelative (projSrcDir ctx) . dropExtension
             depNames = map fst $ projDeps ctx
@@ -576,7 +572,7 @@ pruneMissingModuleOutputs ctx paths = do
 pruneMissingChangedModuleOutputs :: [(ProjCtx, Paths)] -> [FilePath] -> IO ()
 pruneMissingChangedModuleOutputs projects changedPaths = do
     absChanged <- mapM normalizePathSafe changedPaths
-    forM_ (filter ((== ".act") . takeExtension) absChanged) $ \actPath -> do
+    forM_ (filter isActFile absChanged) $ \actPath -> do
       exists <- doesFileExist actPath
       unless exists $ forM_ projects $ \(ctx, paths) -> do
         srcRoot <- normalizePathSafe (projSrcDir ctx)
