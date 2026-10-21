@@ -163,8 +163,9 @@ it: the .tydb path, the module hashes and the public name hashes of each
 module that a run read from disk or finished, and the single names it
 read.  It is keyed by module name, so the trees one scheduler builds
 share the entries of every module name they have in common.  A module
-that a run finishes replaces its own hashes before it reports done, so
-every later read sees them.  A standalone build has a cache of its own.
+that a run finishes replaces its own module hashes, and its name map when
+its result carries its names, before it reports done, so every later read
+sees them.  A standalone build has a cache of its own.
 
 Invariants
 ----------
@@ -420,12 +421,14 @@ data BackPlan = NoBack | EagerBack BackJob | DeferredBack DeferredBackJob
 
 -- | What importers read of a finished module.  The results of the front
 -- passes, of an impl refresh and of a codegen refresh carry its public
--- names.  A module reused from its .tydb without a refresh, or given the
--- empty result under --only-build, carries no name hashes of its own.
+-- names, an empty map for a module without public names.  A module reused
+-- from its .tydb without a refresh, or given the empty result under
+-- --only-build, carries Nothing, and its names are read through the
+-- module cache.
 data ModuleHashes = ModuleHashes
   { mhPub   :: B.ByteString
   , mhImpl  :: B.ByteString
-  , mhNames :: M.Map A.Name InterfaceFiles.NameHashInfo   -- public names
+  , mhNames :: Maybe (M.Map A.Name InterfaceFiles.NameHashInfo)   -- public names
   }
 
 -- | A module whose front stage succeeded.
@@ -676,7 +679,8 @@ currentGeneration sched = do
 -- tell two source trees apart. Two trees that hold modules of the same
 -- name, such as two checkouts of one project, need schedulers of their
 -- own. Within one tree, a module that a run finishes replaces its own
--- entries.
+-- module hashes, and its name map whenever its result carries its names,
+-- an empty map included.
 data CompileScheduler = CompileScheduler
   { schedulerCounter   :: IORef Int                     -- the newest generation
   , schedulerRun       :: MVar (Maybe (Async ()))       -- the newest generation's run
@@ -1550,13 +1554,18 @@ lookupNameHash cache searchPaths m n = do
       Nothing    -> join <$> memoFound (nameReadTable cache) (m, n) (Just <$> withTydb cache searchPaths m (`InterfaceFiles.readNameHashMaybe` n))
 
 -- | Make a finished module's hashes visible to later lookups.  A result
--- without name hashes (a module reused from its .tydb) must not enter the
--- complete maps: it would hide the single-name reads of its .tydb.
+-- that carries its names makes them the module's complete map, an empty
+-- one included, which shadows earlier single-name reads.  A result without
+-- names leaves the name tables as they are.  The map is built before it
+-- enters the cache, by the thread that finishes the module, so the cache
+-- holds nothing of the result it was made from (of a codegen refresh, the
+-- whole stored .tydb).
 rememberFront :: ModuleCache -> A.ModName -> FrontResult -> IO ()
 rememberFront cache m fr = do
     modifyMVar_ (moduleHashTable cache) (return . M.insert m (mhPub hashes, mhImpl hashes))
-    unless (M.null (mhNames hashes)) $
-      modifyMVar_ (nameMapTable cache) (return . M.insert m (mhNames hashes))
+    forM_ (mhNames hashes) $ \names -> do
+      built <- evaluate names
+      modifyMVar_ (nameMapTable cache) (return . M.insert m built)
   where hashes = frHashes fr
 
 -- | The hashes of a module's public names, by name.
@@ -1616,9 +1625,8 @@ data Provider = Finished ModuleHashes | Outside | Unfinished
 -- modules whose front stage finished.  A provider in the run finished before
 -- the module started, and one that did not is an internal error.
 -- __builtin__, modules outside the run and imports without a provider are
--- read through the cache.  A provider discovered as a cached TyTask may
--- have been reused without its name hashes, so a name its hashes lack is
--- read from its .tydb.
+-- read through the cache.  A finished provider without names has them read
+-- through the cache.
 inRunResolver :: ModuleCache -> M.Map TaskKey GlobalTask -> M.Map TaskKey ModuleHashes -> GlobalTask -> Resolver
 inRunResolver cache tasks finished t = Resolver moduleHashOf nameHashOf
   where
@@ -1628,20 +1636,14 @@ inRunResolver cache tasks finished t = Resolver moduleHashOf nameHashOf
       Outside         -> lookupModuleHash cache searchPaths kind m
       Unfinished      -> error ("Internal error: missing " ++ hashKindName kind ++ " hash for dep " ++ modNameToString m)
     nameHashOf m n = case provider m of
-      Finished hashes
-        | Just i <- M.lookup n (mhNames hashes) -> return (Just i)
-        | discoveredAsCached m                   -> lookupNameHash cache searchPaths m n
-        | otherwise                              -> return Nothing
-      Outside    -> lookupNameHash cache searchPaths m n
-      Unfinished -> error ("Internal error: missing name hashes for dep " ++ modNameToString m)
+      Finished hashes -> maybe (lookupNameHash cache searchPaths m n) (return . M.lookup n) (mhNames hashes)
+      Outside         -> lookupNameHash cache searchPaths m n
+      Unfinished      -> error ("Internal error: missing name hashes for dep " ++ modNameToString m)
     provider m = case M.lookup m (gtImportProviders t) of
       Nothing -> Outside
       Just k | Just hashes <- M.lookup k finished -> Finished hashes
              | isBuiltin k || M.notMember k tasks  -> Outside
              | otherwise                           -> Unfinished
-    discoveredAsCached m = case M.lookup m (gtImportProviders t) >>= (`M.lookup` tasks) of
-      Just GlobalTask{ gtTask = TyTask _ } -> True
-      _                                    -> False
 
 -- | Lookups for a module outside a stage graph: every import is read
 -- through the cache.
@@ -2068,7 +2070,7 @@ compileModule env = do
       Right (source, m) -> do
         result <- runFrontPasses env source (adjustImports (gtImportProviders (moduleTask env)) m)
         forM_ result $ \fr -> do
-          forM_ (previous >>= \old -> nameHashSummary old (mhNames (frHashes fr))) $ \summary ->
+          forM_ (previous >>= \old -> mhNames (frHashes fr) >>= nameHashSummary old) $ \summary ->
             info build ("  Hash deltas " ++ labelOf env ++ ": " ++ summary)
           rememberFront (buildCache build) (nameOf env) fr
         return result
@@ -2143,7 +2145,7 @@ recomputeImpl env header hasNotImpl = do
           Just dependencies -> do
             evaluate (rnf (implHash, dependencies, names))
             let result moduleInfo pub back = Recomputed dependencies names
-                                               (storedResult moduleInfo ModuleHashes { mhPub = pub, mhImpl = implHash, mhNames = publicNameMap names } interest back)
+                                               (storedResult moduleInfo ModuleHashes { mhPub = pub, mhImpl = implHash, mhNames = Just (publicNameMap names) } interest back)
             case deferredJob env hasNotImpl implHash (length names) of
               Just job -> maybe InterfaceGone (\shell -> result (shellModuleInfo shell) (shellPubHash shell) (DeferredBack job))
                             <$> readInterfaceShell env (Just (InterfaceFiles.summaryPubHash header))
@@ -2202,7 +2204,7 @@ refreshCodegen env header = do
     finishStored env (storedResult moduleInfo
                         ModuleHashes { mhPub   = InterfaceFiles.storedPubHash module'
                                      , mhImpl  = InterfaceFiles.storedImplHash module'
-                                     , mhNames = publicNameMap (InterfaceFiles.storedNames module') }
+                                     , mhNames = Just (publicNameMap (InterfaceFiles.storedNames module')) }
                         interest (EagerBack job))
   where tydb = tydbOf env
 
@@ -2230,7 +2232,7 @@ shellResult :: ModuleEnv -> [InterfaceFiles.DepModuleInfo] -> BackPlan -> Interf
 shellResult env dependencies back shell = do
     interest <- storedInterest (tydbOf env) dependencies
     finishStored env (storedResult (shellModuleInfo shell)
-                        ModuleHashes { mhPub = shellPubHash shell, mhImpl = shellImplHash shell, mhNames = M.empty }
+                        ModuleHashes { mhPub = shellPubHash shell, mhImpl = shellImplHash shell, mhNames = Nothing }
                         interest back)
 
 -- | The last steps of a result rebuilt from the .tydb, in the stage's
@@ -2265,7 +2267,7 @@ interfaceModuleInfo mn (I.NModule imports iface doc) summaries =
 -- | The result of a module without a readable .tydb under --only-build: an
 -- empty interface, no hashes, no back work.
 emptyResult                             :: ModuleEnv -> FrontResult
-emptyResult env                         = storedResult (Acton.Env.mkModuleInfo (nameOf env) [] [] Nothing) (ModuleHashes B.empty B.empty M.empty) Data.Set.empty NoBack
+emptyResult env                         = storedResult (Acton.Env.mkModuleInfo (nameOf env) [] [] Nothing) (ModuleHashes B.empty B.empty Nothing) Data.Set.empty NoBack
 
 -- | The interface of a module read back whole from its .tydb, with the
 -- escape summaries stored there.  Modules checked later in the same build
@@ -2416,7 +2418,7 @@ runFrontPasses env source parsed = do
             , ftTypeStmtTimings   = statements }
       return FrontResult
         { frModuleInfo   = interfaceModuleInfo mn interface escapes
-        , frHashes       = ModuleHashes { mhPub = hashedPub hashed, mhImpl = hashedImpl hashed, mhNames = publicNameMap names }
+        , frHashes       = ModuleHashes { mhPub = hashedPub hashed, mhImpl = hashedImpl hashed, mhNames = Just (publicNameMap names) }
         , frInterest     = interestDeps names
         , frBack         = maybe (EagerBack job) DeferredBack (deferredJob env (A.hasNotImpl (A.mbody typed)) (hashedImpl hashed) (length names))
         , frFrontTime    = reportedTime gopts opts (end - start)

@@ -752,7 +752,7 @@ runCompilerFront buildFront runBack typesPath sourcePath = do
             Right fr -> return fr
     if runBack then return () else awaitOutputs
     let info = Compile.frModuleInfo fr
-    E.evaluate (length (Env.modulePublicNames info) + length (Env.moduleImports info) + Map.size (Compile.mhNames (Compile.frHashes fr)))
+    E.evaluate (length (Env.modulePublicNames info) + length (Env.moduleImports info) + maybe 0 Map.size (Compile.mhNames (Compile.frHashes fr)))
     t2 <- getCurrentTime
     s2 <- getStats statsEnabled
     elapsed "front" t1 t2
