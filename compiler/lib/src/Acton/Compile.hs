@@ -128,14 +128,15 @@ Generations
 
 A CompileScheduler numbers its runs.  acton watch and the LSP server start
 a run for each change with startCompile, the LSP server after a debounce
-delay: the counter moves, the previous run is cancelled and awaited, and
-the new run starts unless startCompile numbered a newer generation during
-the delay.  A one-shot build runs as the scheduler's current generation, 0
-on a fresh scheduler.  A run whose generation is no longer current is
-stale.  A stale run writes no front output, queues no back job and reports
-no event to the handler, and its queued back jobs neither write their code
-nor report their end.  A new generation cancels the whole previous run,
-including the stages of modules that the change does not affect.
+delay.  One caller at a time, the counter moves, the previous run is
+cancelled and awaited, and the new run starts unless startCompile
+numbered a newer generation during the delay.  A one-shot build runs as
+the scheduler's current generation, 0 on a fresh scheduler.  A run whose
+generation is no longer current is stale.  A stale run writes no front
+output, queues no back job and reports no event to the handler, and its
+queued back jobs neither write their code nor report their end.  A new
+generation cancels the whole previous run, including the stages of
+modules that the change does not affect.
 
 Outputs
 -------
@@ -713,9 +714,12 @@ compileParallelism gopts
   | C.jobs gopts > 0                    = return (C.jobs gopts)
   | otherwise                           = max 1 <$> getNumCapabilities
 
--- | Start a generation and return it. The counter moves first, so the
--- running generation's writes see themselves stale at once. The previous
--- run is then cancelled under the MVar, and cancel waits for its finalizer,
+-- | Start a generation and return it. Under the MVar the counter moves
+-- first, so the running generation's writes see themselves stale at once,
+-- and generations are numbered in the order callers take the MVar, so the
+-- newest generation is the one whose run starts. The counter moves
+-- atomically all the same, because isCurrent reads it without the MVar.
+-- The previous run is then cancelled, and cancel waits for its finalizer,
 -- which waits for its background outputs, so stale writes never overlap the
 -- new run. The cancel also waits until every running stage of the previous
 -- generation ends, normally at the end of its passes, because stages run
@@ -723,14 +727,13 @@ compileParallelism gopts
 -- running type check. After the delay the run starts only if startCompile
 -- numbered no newer generation in the meantime.
 startCompile :: CompileScheduler -> Int -> (Generation -> IO ()) -> IO Generation
-startCompile sched delay run = do
+startCompile sched delay run = modifyMVar (schedulerRun sched) $ \previous -> do
   number <- atomicModifyIORef' (schedulerCounter sched) (\newest -> (newest + 1, newest + 1))
   let gen = Generation number (schedulerCounter sched)
-  modifyMVar_ (schedulerRun sched) $ \previous -> do
-    mapM_ cancel previous
-    Just <$> async (do when (delay > 0) (threadDelay delay)
-                       whenCurrent gen (run gen))
-  return gen
+  mapM_ cancel previous
+  thread <- async (do when (delay > 0) (threadDelay delay)
+                      whenCurrent gen (run gen))
+  return (Just thread, gen)
 
 -- | Cancel the newest generation's run and wait for its finalizer.
 stopCompile :: CompileScheduler -> IO ()
