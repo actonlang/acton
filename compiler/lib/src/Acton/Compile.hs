@@ -1631,7 +1631,7 @@ overlapsLocal index paths mn            = case A.modPath mn of
 -- | Imports name the modules of their own project without the project's
 -- prefix.
 checkImportPrefixes                     :: ModuleIndex -> Paths -> [A.ModName] -> Either String ()
-checkImportPrefixes index paths imports = unless (projName paths `elem` special_projects || null prefixed) $
+checkImportPrefixes index paths imports = unless (isSpecialProject (projName paths) || null prefixed) $
                                             Left ("Do not use prefix '" ++ projName paths ++ "' when referring to modules in that project (" ++ prstrs prefixed ++ ")")
   where prefixed                        = filter (declares index (projPath paths)) imports
 
@@ -1675,9 +1675,9 @@ resolveProviders index paths imports = M.fromList (concatMap provide spellings)
       | declares index (projPath paths) local
                   = [ (mn, TaskKey (projPath paths) local) ]
       | otherwise = [ (mn, TaskKey p name) | p <- searchOrder, name <- [mn, addLib mn], declares index p name ]
-      where local = if projName paths `elem` special_projects     -- in a special project, the spelling itself, locations included
+      where local = if isSpecialProject (projName paths)     -- in a special project, the spelling itself, locations included
                       then mn
-                      else A.modName (projName paths : A.modPath mn)
+                      else addProjPrefix paths mn
     addLib mn     = case A.modPath mn of
                       [n] | n `elem` dependencies       -> A.modName [n, "lib"]
                       _                                 -> mn

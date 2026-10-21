@@ -2122,8 +2122,7 @@ runCliPostCompile cliHooks gopts plan env = do
                   Just ctx -> return (projBuildSpec ctx)
                   Nothing -> throwProjectError ("Missing root project context for " ++ rootProj)
     let rootParts = splitOn "." (C.root opts')
-        rootMod   = if proj `elem` special_projects then init rootParts else proj : init rootParts
-        guessMod  = if length rootParts == 1 then ccRootModule cctx else A.modName rootMod
+        guessMod  = if length rootParts == 1 then ccRootModule cctx else addProjPrefix pathsRoot (A.modName (init rootParts))
         binTask   = BinTask (A.GName guessMod (A.name $ last rootParts)) False
         preBinTasks
           | null (C.root opts') = map (\mn -> BinTask (A.GName mn (A.name "main")) False) rootModules

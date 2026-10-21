@@ -42,7 +42,7 @@ module Acton.Project
   , rootBinaryName
   , filterActFile
   , modNameToFilename
-  , special_projects
+  , isSpecialProject
   , addProjPrefix
   , dropProjPrefix
   , dropProjPrefixOrLib
@@ -125,8 +125,12 @@ filterActFile file =
         ".act" -> Just file
         _ -> Nothing
 
-special_projects :: [String]
-special_projects = ["", "base", "acton_scratch"]
+-- | Whether the modules of the project named 'proj' go without the
+-- project's name in front: the base library, and a scratch build.  A
+-- scratch build has no Build.act.  Its Paths have an empty project name,
+-- and the BuildSpec that scratchBuildSpec gives it is named acton_scratch.
+isSpecialProject :: String -> Bool
+isSpecialProject proj = proj `elem` ["", "base", "acton_scratch"]
 
 
 -- Paths handling -------------------------------------------------------------------------------------
@@ -377,10 +381,7 @@ moduleOutputs paths mn  = [ outBase paths mn ++ ext | ext <- [InterfaceFiles.int
 -- | Compute the module path without extension under the project's src dir.
 -- Used to derive the .act path or related per-module files.
 srcBase                 :: Paths -> A.ModName -> FilePath
-srcBase paths mn        = joinPath (srcDir paths : names)
-  where names           = case A.modPath mn of
-                            n:ns | n == projName paths -> ns
-                            ns -> ns
+srcBase paths mn        = joinPath (srcDir paths : A.modPath (dropProjPrefix paths mn))
 
 
 -- | Whether 'path' holds Build.act and a src/ directory. Always False when
@@ -521,15 +522,16 @@ findPaths actFile opts  = do execDir <- takeDirectory <$> getExecutablePath
 
 -- Module helpers for multi-project builds ---------------------------------------------------------
 
--- | Derive a module name from a file path under a project's src root.
--- The result uses path segments and strips the .act extension.
+-- | The module of the source file 'actFile' in the source directory
+-- 'srcRoot' of the project named 'proj': the file's path under 'srcRoot'
+-- without the extension, as 'projectModName' names it.
 moduleNameFromFile :: FilePath -> String -> FilePath -> IO A.ModName
-moduleNameFromFile srcBase proj actFile = do
-    base <- normalizePathSafe srcBase
+moduleNameFromFile srcRoot proj actFile = do
+    base <- normalizePathSafe srcRoot
     file <- normalizePathSafe actFile
     let rel = dropExtension (makeRelative base file)
         names = splitDirectories rel
-    return (A.modName $ if proj `elem` special_projects then names else proj:names)
+    return (projectModName proj names)
 
 -- | Enumerate all .act files in a project and pair them with module names.
 -- Used to seed the project module index for graph construction.
@@ -948,14 +950,24 @@ collectDepTypePaths projDir overrides = do
 modNameToFilename :: A.ModName -> String
 modNameToFilename mn = joinPath (A.modPath mn) ++ ".act"
 
-addProjPrefix               :: Paths -> A.ModName -> A.ModName
-addProjPrefix paths mn      = A.modName $ if proj `elem` special_projects then ns else proj : ns
-  where proj                = projName paths
-        ns                  = A.modPath mn
+-- | The module of the path 'ns' in the project named 'proj': the path with
+-- the project's name in front, except in a special project.
+projectModName              :: String -> [String] -> A.ModName
+projectModName proj ns
+  | isSpecialProject proj   = A.modName ns
+  | otherwise               = A.modName (proj : ns)
 
+-- | The name 'mn' with its project's name in front, except in a special
+-- project.
+addProjPrefix               :: Paths -> A.ModName -> A.ModName
+addProjPrefix paths mn      = projectModName (projName paths) (A.modPath mn)
+
+-- | The name 'mn' without its project's name in front, when it starts with
+-- that name.
 dropProjPrefix              :: Paths -> A.ModName -> A.ModName
-dropProjPrefix paths mn     = A.modName $ if n == projName paths then ns else n:ns
-  where n:ns                = A.modPath mn
+dropProjPrefix paths mn     = case A.modPath mn of
+                                n:ns | n == projName paths -> A.modName ns
+                                ns                         -> A.modName ns
 
 dropProjPrefixOrLib         :: Paths -> A.ModName -> A.ModName
 dropProjPrefixOrLib paths mn
