@@ -624,10 +624,13 @@ info                                    :: BuildEnv -> String -> IO ()
 info build line                         = when (C.verbose (buildOptions build)) (emit build (Info line))
 
 -- | Whether a build reports no per-module times: under --quiet and under
--- every alternative output.  Its modules' times are Nothing, and the CLI
--- prints no done or timing lines.
+-- every alternative output.  The CLI then prints no done or timing lines.
 quiet :: C.GlobalOptions -> C.CompileOptions -> Bool
 quiet gopts opts = C.quiet gopts || C.altOutput opts
+
+-- | A module's time as its build reports it: Nothing when the build is quiet.
+reportedTime :: C.GlobalOptions -> C.CompileOptions -> TimeSpec -> Maybe TimeSpec
+reportedTime gopts opts time = if quiet gopts opts then Nothing else Just time
 
 -- | A compile run's place in its scheduler's sequence of runs. A run is
 -- current until a newer one starts. A stale run writes no front output,
@@ -1957,6 +1960,10 @@ isMissing _                             = True
 sortedModules                           :: Data.Set.Set A.ModName -> [A.ModName]
 sortedModules                           = Data.List.sortOn modNameToString . Data.Set.toList
 
+-- | Names, each once, sorted by their text.
+sortedNames                             :: Data.Set.Set A.Name -> [A.Name]
+sortedNames                             = Data.List.sortOn A.nameText . Data.Set.toList
+
 -- | The imports a cached module's header records whose interface is gone,
 -- sorted by name: no current pub hash, no provider under the header's
 -- name, and a .tydb that is missing or lies in a managed types directory.
@@ -2049,7 +2056,7 @@ describe env action = case action of
                                            | kind <- [Pub, Impl]
                                            , (qn, users) <- Data.List.sortOn (Hashing.qnameKey . fst) [ (qn, users) | Missing k qn users <- cs, k == kind ] ]
                                         ++ [ "rows " ++ modNameToString m | RowsMissing m <- cs ]
-    usedBy users                    = case map A.nstr (Data.List.sortOn A.nameText (Data.Set.toList (Data.Set.fromList users))) of
+    usedBy users                    = case map A.nstr (sortedNames (Data.Set.fromList users)) of
                                         []    -> ""
                                         names -> " (used by " ++ intercalate ", " names ++ ")"
 
@@ -2091,10 +2098,9 @@ nameHashSummary old new
   | null items                          = Nothing
   | otherwise                           = Just (intercalate ", " items)
   where
-    items   = [ "+" ++ A.nstr n | n <- byName (M.keys (M.difference new old)) ]
-           ++ [ "-" ++ A.nstr n | n <- byName (M.keys (M.difference old new)) ]
-           ++ mapMaybe changes (byName (M.keys (M.intersection old new)))
-    byName  = Data.List.sortOn A.nameText
+    items   = [ "+" ++ A.nstr n | n <- sortedNames (M.keysSet (M.difference new old)) ]
+           ++ [ "-" ++ A.nstr n | n <- sortedNames (M.keysSet (M.difference old new)) ]
+           ++ mapMaybe changes (sortedNames (M.keysSet (M.intersection old new)))
     changes n = case mapMaybe (field (old M.! n) (new M.! n)) [ ("src", InterfaceFiles.nhSrcHash), ("pub", InterfaceFiles.nhPubHash), ("impl", InterfaceFiles.nhImplHash) ] of
                   []     -> Nothing
                   fields -> Just ("~" ++ A.nstr n ++ "{" ++ intercalate ", " fields ++ "}")
@@ -2430,7 +2436,7 @@ runFrontPasses env source parsed = do
         , frHashes       = ModuleHashes { mhPub = hashedPub hashed, mhImpl = hashedImpl hashed, mhNames = publicNameMap names }
         , frInterest     = interestDeps names
         , frBack         = maybe (EagerBack job) DeferredBack (deferredJob env (A.hasNotImpl (A.mbody typed)) (hashedImpl hashed) (length names))
-        , frFrontTime    = if quiet gopts opts then Nothing else Just (end - start)
+        , frFrontTime    = reportedTime gopts opts (end - start)
         , frFrontTiming  = if C.timing gopts then Just timing else Nothing
         , frInferredSigs = signatures }
 
@@ -2784,7 +2790,7 @@ describeDbp label stats upToDate =
 -- with the module's impl hash and with the set of selected names.
 dbpCodegenHash :: B.ByteString -> Data.Set.Set A.Name -> B.ByteString
 dbpCodegenHash moduleImplHash selected =
-    SHA256.hash (BL.toStrict (encode ("dbp" :: String, moduleImplHash, map A.nstr (Data.List.sortOn A.nameText (Data.Set.toList selected)))))
+    SHA256.hash (BL.toStrict (encode ("dbp" :: String, moduleImplHash, map A.nstr (sortedNames selected))))
 
 -- | A selection of a deferred module's names that found no row for a name,
 -- with the text that names the module and the name.
@@ -2917,7 +2923,7 @@ runBackPasses gopts job shouldWrite onProgress = do
             then pass BackPassWrite (writeFileUtf8Atomic (Acton.CodeGen.supportFile base) support >> writeFileUtf8Atomic (base ++ ".h") h >> writeFileUtf8Atomic (base ++ ".c") c)
             else report BackPassWrite (fromEnum BackPassWrite + 1) BackPassSkipped
     timing <- reverse <$> readIORef laps
-    return ( if quiet gopts opts then Nothing else Just elapsed
+    return ( reportedTime gopts opts elapsed
            , if C.timing gopts then Just timing else Nothing )
   where
     opts       = bjOpts job
@@ -3242,7 +3248,7 @@ parseStage build opts t = do
       return result
     return $ case parsed of
       Left diags        -> (ParseErrorTask diags, Nothing)
-      Right (source, m) -> (ActonTask source m, if quiet (buildOptions build) opts then Nothing else Just elapsed)
+      Right (source, m) -> (ActonTask source m, reportedTime (buildOptions build) opts elapsed)
 
 
 -- Codegen status -----------------------------------------------------------------------------------
