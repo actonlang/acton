@@ -1149,7 +1149,7 @@ compileSigTarget :: C.GlobalOptions
                  -> IO FilePath
 compileSigTarget gopts queryGopts cctx targetCtx mn srcPath = do
     let sp = Source.diskSourceProvider
-    plan <- prepareCompilePlanFromContext sp queryGopts cctx (PlanRequest [srcPath] SelectedFiles Nothing)
+    plan <- planFetched sp queryGopts cctx (PlanRequest [srcPath] SelectedFiles Nothing)
     let onEvent (Diagnostics _ diags) = printDiagnostics gopts diags
         onEvent (Info msg)            = putStrLn msg      -- Info lines arrive only under --verbose
         onEvent _                     = return ()

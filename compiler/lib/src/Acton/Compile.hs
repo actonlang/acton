@@ -248,7 +248,7 @@ module Acton.Compile
   , PlanRequest(..)
   , CompilePlan(..)
   , prepareCompilePlan
-  , prepareCompilePlanFromContext
+  , planFetched
   , runCompilePlan
   , runStandalonePlan
   , BuildEnv
@@ -755,14 +755,14 @@ prepareCompilePlan sp gopts sched ctx request = do
     specChanged <- checkBuildSpecChange sched (ccBuildStamp ctx)
     when specChanged $
       fetchDependencies gopts (ccPathsRoot ctx) (C.dep_overrides (ccOpts ctx))
-    prepareCompilePlanFromContext sp gopts ctx (if specChanged then request { requestChanged = Nothing } else request)
+    planFetched sp gopts ctx (if specChanged then request { requestChanged = Nothing } else request)
 
 -- | Plan a build whose dependencies are in place.  Orphan outputs are pruned
 -- before discovery, so that a cached header cannot resurrect a deleted
 -- module: in every project for a full plan, and for an incremental plan
 -- only those of changed sources that no longer exist.
-prepareCompilePlanFromContext :: Source.SourceProvider -> C.GlobalOptions -> CompileContext -> PlanRequest -> IO CompilePlan
-prepareCompilePlanFromContext sp gopts ctx request = do
+planFetched :: Source.SourceProvider -> C.GlobalOptions -> CompileContext -> PlanRequest -> IO CompilePlan
+planFetched sp gopts ctx request = do
     projects <- buildProjects gopts ctx
     let paths     = buildPaths ctx projects
         withPaths = M.elems (M.intersectionWith (,) projects paths)
