@@ -2975,7 +2975,7 @@ data BuildState = BuildState
   , accumulatedEnv    :: Acton.Env.Env0                                 -- __builtin__ and every module whose front stage succeeded
   , interest          :: InterestMap                                    -- the names finished modules use, by the module defining them
   , deferredBacks     :: M.Map TaskKey (DeferredBackJob, Data.Set.Set TaskKey)  -- with the dependents it waits for
-  , hadErrors         :: Bool
+  , hadErrors         :: Bool                                           -- a front stage failed; implied by any deferred back job still waiting at the end
   }
 
 taskOf                                  :: Run -> TaskKey -> GlobalTask
@@ -3100,13 +3100,12 @@ initialState run base = BuildState
 
 -- | Start ready stages, fold each completion into the state, repeat.  The
 -- run finishes when no stage is pending.  When nothing runs and nothing is
--- ready but stages are still pending, the run is stuck: it ends with errors
--- and prepares no deferred back job.
+-- ready but stages are still pending, the run is stuck: it ends with errors.
 coordinate :: Run -> BuildState -> IO (Either CompileFailure (Acton.Env.Env0, Bool))
 coordinate run state0 = do
     state <- mask_ (startReady run state0)
     case (runningStages state, readyStages state) of
-      ([], []) | Data.Set.null (pendingStages state) -> finishRun run state
+      ([], []) | Data.Set.null (pendingStages state) -> return (Right (accumulatedEnv state, hadErrors state))
                | otherwise                           -> return (Right (accumulatedEnv state, True))
       _ -> do
         (done, outcome) <- waitAny (map fst (runningStages state))
@@ -3224,12 +3223,6 @@ flushDeferred run state = do
       back <- prepareDeferredBackJob (runBuild run) (accumulatedEnv state) (interest state) job
       when (isNothing back) $ emit (runBuild run) (BackSkipped (deferredKey job))
       return back
-
--- | The run's environment, and whether it had errors.  Deferred jobs still
--- waiting at the end belong to modules with a failed dependent: the run has
--- errors.
-finishRun :: Run -> BuildState -> IO (Either CompileFailure (Acton.Env.Env0, Bool))
-finishRun run state = fmap (\s -> (accumulatedEnv s, hadErrors s || not (M.null (deferredBacks s)))) <$> flushDeferred run state
 
 -- | A front stage's view of the run, taken from the state it starts in: its
 -- providers finished before it became ready, so that state holds
