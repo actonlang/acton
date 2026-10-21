@@ -2121,8 +2121,8 @@ sortedModules                           = Data.List.sortOn modNameToString . Dat
 
 -- | The imports a cached module's header records whose interface is gone,
 -- sorted by name: no current pub hash, no provider under the header's
--- name, and a .tydb that is missing or lies in a managed dependency types
--- directory.  Any other unresolved import is left to the dependency rows.
+-- name, and a .tydb that is missing or lies in a managed types directory.
+-- Any other unresolved import is left to the dependency rows.
 missingImports :: ModuleEnv -> InterfaceFiles.HeaderSummary -> IO [A.ModName]
 missingImports env header = do
     managed <- managedTypeDirs (moduleOptions env) (pathsOf env)
@@ -2138,8 +2138,9 @@ missingImports env header = do
                   Nothing   -> return True
                   Just tydb -> (\path -> any (path `isUnder`) managed) <$> normalizePathSafe tydb
 
--- | The search path's managed dependency types directories, normalized: its
--- entries except the system types and the user's --searchpath.
+-- | The search path's managed types directories, normalized: its entries
+-- except the system types and the user's --searchpath, which leaves the
+-- project's own types directory and its dependencies'.
 managedTypeDirs :: C.CompileOptions -> Paths -> IO [FilePath]
 managedTypeDirs opts paths = do
     user   <- normalized (C.searchpath opts)
