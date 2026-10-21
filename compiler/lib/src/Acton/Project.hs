@@ -387,12 +387,13 @@ dropProjPrefix paths mn     = case A.modPath mn of
 moduleLabel                 :: Paths -> A.ModName -> String
 moduleLabel paths mn        = modNameToString (dropProjPrefix paths mn)
 
+-- | A module's name as acton sig prints it: a dependency's lib module D.lib
+-- as D, and any other name as dropProjPrefix gives it, without the name of
+-- the project of 'paths' in front when it starts with that name.
 dropProjPrefixOrLib         :: Paths -> A.ModName -> A.ModName
-dropProjPrefixOrLib paths mn
-  | n == projName paths     = A.modName ns
-  | ns == ["lib"]           = A.modName [n]
-  | otherwise               = A.modName (n:ns)
-  where n:ns                = A.modPath mn
+dropProjPrefixOrLib paths mn = case A.modPath mn of
+                                 [dep, "lib"] | dep /= projName paths -> A.modName [dep]
+                                 _                                    -> dropProjPrefix paths mn
 
 -- | The module of the source file 'actFile' in the source directory
 -- 'srcRoot' of the project named 'proj': the file's path under 'srcRoot'
