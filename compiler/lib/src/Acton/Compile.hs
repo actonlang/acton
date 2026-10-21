@@ -209,6 +209,7 @@ import Data.Maybe (catMaybes, isJust, isNothing, listToMaybe, mapMaybe)
 import qualified Data.HashMap.Strict as HM
 import qualified Data.Map as M
 import Data.Ord (Down(..))
+import qualified Data.Sequence as Seq
 import qualified Data.Set
 import Error.Diagnose (Diagnostic)
 import GHC.Conc (getNumCapabilities)
@@ -1456,136 +1457,135 @@ restoredImportsOf                       :: Paths -> CompileTask -> [A.ModName]
 restoredImportsOf paths (TyTask h)      = map (dropProjPrefix paths . fst) (InterfaceFiles.summaryImports h)
 restoredImportsOf paths task            = importsOf task
 
-checkImportPrefixes key proj modSets imps
-  | proj `elem` special_projects
-                        = return ()
-  | not $ null prefixed = throwProjectError ("Do not use prefix '" ++ proj ++ "' when referring to modules in that project (" ++ prstrs prefixed ++ ")")
-  | otherwise           = return ()
-  where p0              = tkProj key
-        Just mods0      = M.lookup p0 modSets
-        prefixed        = [ mn | mn <- imps, Data.Set.member mn mods0 ]
+-- | The declared modules of a plan's projects, which discovery reads and
+-- resolves imports against.
+data ModuleIndex = ModuleIndex
+  { indexProjects :: M.Map FilePath ProjCtx     -- every project, by its root
+  , indexSources  :: M.Map TaskKey FilePath     -- every declared module and its source file
+  }
+
+-- | Whether a project declares a module.
+declares                                :: ModuleIndex -> FilePath -> A.ModName -> Bool
+declares index project mn               = M.member (TaskKey project mn) (indexSources index)
+
+-- | Whether a cached canonical import names a namespace that the module's
+-- own project now declares: the import itself, or, for a dependency's lib
+-- module, the dependency's bare name.
+overlapsLocal                           :: ModuleIndex -> Paths -> A.ModName -> Bool
+overlapsLocal index paths mn            = case A.modPath mn of
+                                            n:ns | n /= projName paths
+                                              -> any (declares index (projPath paths))
+                                                     (addProjPrefix paths mn : [ addProjPrefix paths (A.modName [n]) | ns == ["lib"] ])
+                                            _ -> False
+
+-- | Imports name the modules of their own project without the project's
+-- prefix.
+checkImportPrefixes                     :: ModuleIndex -> Paths -> [A.ModName] -> Either String ()
+checkImportPrefixes index paths imports = unless (projName paths `elem` special_projects || null prefixed) $
+                                            Left ("Do not use prefix '" ++ projName paths ++ "' when referring to modules in that project (" ++ prstrs prefixed ++ ")")
+  where prefixed                        = filter (declares index (projPath paths)) imports
 
 -- | Source imports may name only local modules or directly declared projects.
 -- Transitive interfaces remain available for types mentioned by imported APIs.
-checkImportDependencies :: Paths -> M.Map FilePath ProjCtx -> M.Map FilePath (Data.Set.Set A.ModName) -> [A.ModName] -> IO ()
-checkImportDependencies paths projects modSets imps =
-    forM_ imps $ \mn ->
-      case A.modPath mn of
+-- The first offending import is reported.
+checkImportDependencies :: ModuleIndex -> Paths -> [A.ModName] -> Either String ()
+checkImportDependencies index paths = mapM_ check
+  where
+    check mn = case A.modPath mn of
         n:_ | Data.Set.member n projectNames
             , n `notElem` directNames
-            , not (Data.Set.member (addProjPrefix paths mn) localMods) ->
-          throwProjectError ("Dependency '" ++ n ++ "' imported by " ++ srcFile paths (modName paths)
-                             ++ " is not declared in " ++ projPath paths ++ "/Build.act.\n"
-                             ++ "Add a direct dependency, using follows to share another dependency's selection.")
-        _ -> return ()
-  where
+            , not (declares index (projPath paths) (addProjPrefix paths mn)) ->
+          Left ("Dependency '" ++ n ++ "' imported by " ++ srcFile paths (modName paths)
+                ++ " is not declared in " ++ projPath paths ++ "/Build.act.\n"
+                ++ "Add a direct dependency, using follows to share another dependency's selection.")
+        _ -> Right ()
+    projects     = indexProjects index
     projectNames = Data.Set.fromList [ BuildSpec.specName (projBuildSpec ctx) | ctx <- M.elems projects ]
-    directNames = "std" : [ BuildSpec.specName (projBuildSpec ctx)
-                          | root <- maybe [] (map snd . projDeps) (M.lookup (projPath paths) projects)
-                          , Just ctx <- [M.lookup root projects] ]
-    localMods = M.findWithDefault Data.Set.empty (projPath paths) modSets
+    directNames  = "std" : [ BuildSpec.specName (projBuildSpec ctx)
+                           | root <- maybe [] (map snd . projDeps) (M.lookup (projPath paths) projects)
+                           , Just ctx <- [M.lookup root projects] ]
 
--- | Resolve imports to in-graph providers using project search order.
--- This chooses the first project in the search order that declares the module,
--- producing TaskKeys for dependency edges.
-resolveProviders :: TaskKey -> String -> [FilePath] -> M.Map FilePath (Data.Set.Set A.ModName) -> Data.Set.Set ProjName -> [A.ModName] -> M.Map A.ModName TaskKey
-resolveProviders key proj order modSets deps imps =
-    M.fromList $ concat $ map findProvider imps'
-  where imps'           = [ A.modName ns | mn <- imps, let n:ns = A.modPath mn, n == proj ] ++ map dropLib imps
-        p0              = tkProj key
-        Just mods0      = M.lookup p0 modSets
-        findProvider mn
-          | Data.Set.member mn0 mods0
-                        = [ (mn, TaskKey p0 mn0) ]
-          | otherwise   = [ (mn, TaskKey p mn') | p <- order, mn' <- [mn,addLib mn], maybe False (Data.Set.member mn') (M.lookup p modSets) ]
-          where mn0     = if proj `elem` special_projects then mn else A.modName (proj : A.modPath mn)
-        addLib mn       = case A.modPath mn of
-                            [n] | Data.Set.member n deps -> A.modName [n, "lib"]
-                            _ -> mn
-        dropLib mn      = case A.modPath mn of
-                            [n,"lib"] | Data.Set.member n deps -> A.modName [n]
-                            _ -> mn
+-- | The in-graph provider of each import, keyed by every spelling the front
+-- stage looks an import up by: the import with a declared dependency's
+-- ".lib" dropped, and an import of the module's own project with the
+-- project's prefix dropped.  A module of the importing project shadows every
+-- other provider.  Otherwise the importing project and then its direct
+-- dependencies, in dependency order, are searched for the spelling and, when
+-- it is a bare declared dependency name, for that dependency's lib module;
+-- transitive projects and std are never searched.  When several modules
+-- match a spelling, the last one found wins.
+resolveProviders :: ModuleIndex -> Paths -> [A.ModName] -> M.Map A.ModName TaskKey
+resolveProviders index paths imports = M.fromList (concatMap provide spellings)
+  where
+    project       = indexProjects index M.! projPath paths
+    dependencies  = map fst (projDeps project)
+    searchOrder   = projRoot project : map snd (projDeps project)
+    spellings     = [ A.modName ns | n:ns <- map A.modPath imports, n == projName paths ] ++ map dropLib imports
+    provide mn
+      | declares index (projPath paths) local
+                  = [ (mn, TaskKey (projPath paths) local) ]
+      | otherwise = [ (mn, TaskKey p name) | p <- searchOrder, name <- [mn, addLib mn], declares index p name ]
+      where local = if projName paths `elem` special_projects     -- in a special project, the spelling itself, locations included
+                      then mn
+                      else A.modName (projName paths : A.modPath mn)
+    addLib mn     = case A.modPath mn of
+                      [n] | n `elem` dependencies       -> A.modName [n, "lib"]
+                      _                                 -> mn
+    dropLib mn    = case A.modPath mn of
+                      [n, "lib"] | n `elem` dependencies -> A.modName [n]
+                      _                                  -> mn
 
-type ProjDir = FilePath
-type ActFile = FilePath
-type ProjName = String
-
--- | Build GlobalTasks for all discovered projects.
--- Crawls project sources, resolves provider edges, and optionally limits the
--- seed set to specific files to keep the DAG small for incremental builds.
+-- | The modules a build reaches, in the order discovery first reaches them:
+-- breadth first, first in first out, from the seeds.  The seeds are the
+-- modules of the given source files, or, when no file is given or none is a
+-- declared module, every declared module in project order and then
+-- enumeration order.  Each module is read in the cheapest form it can be
+-- used in, its imports are checked against the import policy, and the
+-- modules that provide them are queued.  Output directories are created for
+-- every discovered module.
 buildGlobalTasks :: Source.SourceProvider
                  -> C.GlobalOptions
                  -> C.CompileOptions
                  -> M.Map FilePath ProjCtx
-                 -> Maybe [String]                  -- optional seed source files; Nothing = all modules
+                 -> Maybe [FilePath]                -- seed source files; Nothing seeds every module
                  -> IO [GlobalTask]
-buildGlobalTasks sp gopts opts projMap mSeeds = do
-    -- perProj :: [(ProjCtx, (ActFile,A.ModName))]
-    perProj <- forM (M.elems projMap) $ \ctx -> do
-                  mods <- enumerateProjectModules ctx
-                  return (ctx, mods)
-    let -- Declared modules mapped to their source files (per project)
-        modMaps :: M.Map ProjDir (M.Map A.ModName ActFile)
-        modMaps = M.fromList [ (projRoot ctx, M.fromList [ (mn, actFile) | (actFile, mn) <- mods ]) | (ctx, mods) <- perProj ]
-        -- Declared modules (per project)
-        modSets :: M.Map ProjDir (Data.Set.Set A.ModName)
-        modSets = M.map (Data.Set.fromList . M.keys) modMaps
-        -- Project dependencies, in their BuildSpec order (per project)
-        allDeps :: M.Map ProjDir (Data.Set.Set ProjName)
-        allDeps = M.fromList [ (projRoot ctx, Data.Set.fromList (map fst $ projDeps ctx)) | (ctx,_) <- perProj ]
-        orderCache :: M.Map ProjDir [ProjDir]
-        orderCache = M.fromList [ (projRoot ctx, projRoot ctx : map snd (projDeps ctx)) | (ctx, _) <- perProj ]
-        -- Declared modules in all reachable projects (paired with their project paths)
-        allKeys = [ TaskKey (projRoot ctx) mn | (ctx, mods) <- perProj, (_, mn) <- mods ]
-    seedKeys <- case mSeeds of
-                  Nothing -> return allKeys
-                  Just files -> do
-                    absFiles <- mapM canonicalizePath files
-                    let pathIndex = M.fromList [ (actFile, TaskKey (projRoot ctx) mn) | (ctx, mods) <- perProj, (actFile, mn) <- mods ]
-                        found = mapMaybe (`M.lookup` pathIndex) absFiles
-                    return (if null found then allKeys else found)
-    tasks <- go modMaps modSets allDeps orderCache Data.Set.empty seedKeys []
-    return (reverse tasks)
+buildGlobalTasks sp gopts opts projects seedFiles = do
+    modules <- concat <$> mapM projectModules (M.elems projects)
+    seeds   <- maybe (return []) (mapM canonicalizePath) seedFiles
+    let index    = ModuleIndex { indexProjects = projects, indexSources = M.fromList modules }
+        bySource = M.fromList [ (file, key) | (key, file) <- modules ]
+        start    = case mapMaybe (`M.lookup` bySource) seeds of
+                     []   -> map fst modules
+                     keys -> keys
+    visit index Data.Set.empty (Seq.fromList start) []
   where
-    go modMaps modSets allDeps orderCache seen [] acc = return acc
-    go modMaps modSets allDeps orderCache seen (k:qs) acc
-      | Data.Set.member k seen = go modMaps modSets allDeps orderCache seen qs acc
-      | otherwise =
-          case M.lookup (tkProj k) modMaps >>= M.lookup (tkMod k) of
-            Nothing -> go modMaps modSets allDeps orderCache (Data.Set.insert k seen) qs acc
-            Just actFile -> do
-              let ctx = projMap M.! tkProj k
-              paths <- pathsForModule opts projMap ctx (tkMod k)
-              task0 <- readModuleTask sp gopts opts paths actFile
-              -- Cached imports have canonical names: bare dep imports are stored
-              -- as dep.lib. If that namespace has become local, recover the
-              -- source spelling before resolving it and rebuild its interface.
-              task <- case task0 of
-                        TyTask _ | any (overlapsLocal paths modSets) (importsOf task0) ->
-                          either ParseErrorTask (uncurry ActonTask) <$> materialize sp opts (tkMod k) actFile Nothing task0
-                        _ -> return task0
-              let order = M.findWithDefault [tkProj k] (tkProj k) orderCache
-                  deps = M.findWithDefault Data.Set.empty (tkProj k) allDeps
-                  imps = restoredImportsOf paths task
-              checkImportPrefixes k (projName paths) modSets imps
-              checkImportDependencies paths projMap modSets imps
-              let providers = resolveProviders k (projName paths) order modSets deps imps
-                  newKeys = M.elems providers
-                  acc' = GlobalTask { gtKey = k
-                                    , gtPaths = paths
-                                    , gtTask = task
-                                    , gtImportProviders = providers
-                                    } : acc
-              go modMaps modSets allDeps orderCache (Data.Set.insert k seen) (qs ++ newKeys) acc'
+    projectModules ctx = map (\(file, mn) -> (TaskKey (projRoot ctx) mn, file)) <$> enumerateProjectModules ctx
 
+    -- Every queued module is a declared one: seeds come from the index and
+    -- resolveProviders yields declared modules only.
+    visit index seen queue tasks = case queue of
+        Seq.Empty                       -> return (reverse tasks)
+        key Seq.:<| rest
+          | Data.Set.member key seen    -> visit index seen rest tasks
+          | otherwise                   -> do task <- discover index key
+                                              let providers = Seq.fromList (M.elems (gtImportProviders task))
+                                              visit index (Data.Set.insert key seen) (rest Seq.>< providers) (task : tasks)
 
-    overlapsLocal paths modSets mn =
-      case A.modPath mn of
-        n:ns | n /= projName paths ->
-          any (`Data.Set.member` localMods)
-              (addProjPrefix paths mn : [ addProjPrefix paths (A.modName [n]) | ns == ["lib"] ])
-        _ -> False
-      where localMods = M.findWithDefault Data.Set.empty (projPath paths) modSets
+    discover index key = do
+        paths      <- pathsForModule opts projects (projects M.! tkProj key) (tkMod key)
+        discovered <- readModuleTask sp gopts opts paths file
+        -- A cached header stores canonical imports, which spell a bare
+        -- dependency import as dep.lib.  When such a namespace has become
+        -- local, the source is parsed again, so that its spelling resolves to
+        -- the local module and its interface is rebuilt.
+        task       <- case discovered of
+                        TyTask _ | any (overlapsLocal index paths) (importsOf discovered)
+                          -> either ParseErrorTask (uncurry ActonTask) <$> materialize sp opts (tkMod key) file Nothing discovered
+                        _ -> return discovered
+        let imports = restoredImportsOf paths task
+        either throwProjectError return (checkImportPrefixes index paths imports >> checkImportDependencies index paths imports)
+        return GlobalTask { gtKey = key, gtPaths = paths, gtTask = task, gtImportProviders = resolveProviders index paths imports }
+      where file = indexSources index M.! key
 
 
 -- | The import graph of the tasks: each task's edges go to its import
