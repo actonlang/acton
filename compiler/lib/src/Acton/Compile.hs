@@ -1170,6 +1170,10 @@ moduleFailure                           = throwIO . ModuleErrors
 failOnAny                               :: [ModuleError] -> IO ()
 failOnAny errs                          = unless (null errs) (moduleFailure errs)
 
+-- | Fail a module whose own .tydb cannot be read.
+missingOwnInterface                     :: ModuleEnv -> IO a
+missingOwnInterface env                 = moduleFailure [MissingInterface (nameOf env)]
+
 -- | Resolve every item, and fail the module with one error per item that
 -- does not resolve.
 resolveAll :: (a -> IO (Maybe b)) -> (a -> ModuleError) -> [a] -> IO [b]
@@ -2111,6 +2115,10 @@ isMissing                               :: DepChange -> Bool
 isMissing Changed{}                     = False
 isMissing _                             = True
 
+-- | Module names, each once, sorted by their dotted text.
+sortedModules                           :: Data.Set.Set A.ModName -> [A.ModName]
+sortedModules                           = Data.List.sortOn modNameToString . Data.Set.toList
+
 -- | The imports a cached module's header records whose interface is gone,
 -- sorted by name: no current pub hash, no provider under the header's
 -- name, and a .tydb that is missing or lies in a managed dependency types
@@ -2119,7 +2127,7 @@ missingImports :: ModuleEnv -> InterfaceFiles.HeaderSummary -> IO [A.ModName]
 missingImports env header = do
     managed <- managedTypeDirs (moduleOptions env) (pathsOf env)
     gone    <- filterM (isGone managed) (map fst (InterfaceFiles.summaryImports header))
-    return (Data.List.sortOn modNameToString (Data.Set.toList (Data.Set.fromList gone)))
+    return (sortedModules (Data.Set.fromList gone))
   where
     isGone managed m = do
       current <- resolveModule (moduleResolver env) Pub m
@@ -2158,7 +2166,7 @@ dependencyChanges env header = do
                          | kind <- [Pub, Impl] ]
         kindsOf m      = [ kind | (kind, modules) <- changedModules, Data.Set.member m modules ]
     concat <$> mapM (\m -> moduleChanges m (kindsOf m))
-                    (Data.List.sortOn modNameToString (Data.Set.toList (Data.Set.unions (map snd changedModules))))
+                    (sortedModules (Data.Set.unions (map snd changedModules)))
   where
     resolver = moduleResolver env
     tydb     = tydbOf env
@@ -2265,7 +2273,7 @@ refreshImpl env header hasNotImpl = do
       Right (Recomputed dependencies names fr) -> do
         commitTydb env (\_ -> InterfaceFiles.updateImplRefresh (tydbOf env) (mhImpl (frHashes fr)) dependencies names)
         Right <$> finishStored env fr
-      Right InterfaceGone -> moduleFailure [MissingInterface (nameOf env)]
+      Right InterfaceGone -> missingOwnInterface env
       _                   -> act env (RunFront ImplRefreshFailed)
 
 -- | A cached module's impl hashes computed again from its stored rows: the
@@ -2293,7 +2301,7 @@ recomputeImpl env header hasNotImpl = do
         let names    = Hashing.refreshImplHashes restored (byName InterfaceFiles.nhOwnImplHash) (byName InterfaceFiles.nhImplLocalDeps) hashes
             implHash = Hashing.moduleImplHashFromNameHashes names
             interest = interestDeps names
-        resolved <- mapM (dependencyModule resolver) (Data.List.sortOn modNameToString (Data.Set.toList (Data.Set.map fst interest)))
+        resolved <- mapM (dependencyModule resolver) (sortedModules (Data.Set.map fst interest))
         case sequence resolved of
           Nothing           -> return Unresolved
           Just dependencies -> do
@@ -2351,7 +2359,7 @@ restoreExternalDeps tydb dependencies names = do
 -- job is eager.
 refreshCodegen :: ModuleEnv -> InterfaceFiles.HeaderSummary -> IO FrontResult
 refreshCodegen env header = do
-    module'    <- InterfaceFiles.readFileMaybe tydb >>= maybe (moduleFailure [MissingInterface (nameOf env)]) return
+    module'    <- InterfaceFiles.readFileMaybe tydb >>= maybe (missingOwnInterface env) return
     job        <- storedBackJob env module' (InterfaceFiles.storedImplHash module')
     interest   <- storedInterest tydb (InterfaceFiles.summaryDepModules header)
     moduleInfo <- storedModuleInfo tydb (nameOf env) module'
@@ -2366,7 +2374,7 @@ refreshCodegen env header = do
 reuse :: ModuleEnv -> InterfaceFiles.HeaderSummary -> Maybe DeferredBackJob -> IO FrontResult
 reuse env header deferred = do
     shell <- readInterfaceShell env (Just (InterfaceFiles.summaryPubHash header))
-               >>= maybe (moduleFailure [MissingInterface (nameOf env)]) return
+               >>= maybe (missingOwnInterface env) return
     shellResult env (InterfaceFiles.summaryDepModules header) (maybe NoBack DeferredBack deferred) shell
 
 -- | --only-build trusts the stored interfaces.  A module without a readable
