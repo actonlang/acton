@@ -161,13 +161,6 @@ resolveNameHashMap paths mn = do
           Just (_, _, _, _, _, _, nameHashes, _, _, _) -> Just (nameHashMapFromHeader nameHashes)
           Nothing -> Nothing
 
-resolveNameHash :: Project.Paths -> Syntax.ModName -> Syntax.Name -> IO (Maybe InterfaceFiles.NameHashInfo)
-resolveNameHash paths mn n = do
-    mty <- Env.findTyFile (Project.searchPath paths) mn
-    case mty of
-      Nothing -> return Nothing
-      Just ty -> InterfaceFiles.readNameHashMaybe ty n
-
 resolveDepHashMap :: String
                   -> (InterfaceFiles.NameHashInfo -> B.ByteString)
                   -> Map.Map Syntax.ModName (Map.Map Syntax.Name InterfaceFiles.NameHashInfo)
@@ -757,22 +750,11 @@ runCompilerFront buildFront runBack typesPath sourcePath = do
     printStatsMaybe "parse_stats" s0 s1
 
     build <- Compile.standaloneBuild Source.diskSourceProvider benchGopts (\_ -> return ())
-    let task = Compile.GlobalTask (Compile.TaskKey (Project.projPath paths) modName) paths (Compile.ParseTask (Compile.ModuleSource src srcBytes Nothing) [] Nothing) Map.empty
+    let source = Compile.ModuleSource src srcBytes Nothing
+        task = Compile.GlobalTask (Compile.TaskKey (Project.projPath paths) modName) paths (Compile.ParseTask source [] Nothing) Map.empty
         -- A failed background output fails the benchmark.
         awaitOutputs = Compile.awaitOutputs build >>= mapM_ (ioError . userError . Compile.compileFailureMessage)
-    res <- Compile.runFrontPasses
-      build
-      task
-      opts
-      False
-      env0
-      parsed
-      src
-      srcBytes
-      Nothing
-      (Compile.lookupModuleHash Compile.moduleCache (Project.searchPath paths) Compile.Pub)
-      (Compile.lookupModuleHash Compile.moduleCache (Project.searchPath paths) Compile.Impl)
-      (resolveNameHash paths)
+    res <- Compile.checkModule build task opts env0 source parsed
     fr <- case res of
             Left diags -> error ("front pass failed with " ++ show (length diags) ++ " diagnostics")
             Right fr -> return fr
