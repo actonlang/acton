@@ -867,15 +867,16 @@ dumpWhen opts mn flag label text        = when (flag opts) (dump mn label text)
 
 -- Module cache -------------------------------------------------------------------------------------
 
--- | Interface hashes read from .tydb files, keyed by module name.  Every
--- table is read and written under its own lock.  A hash or name table is
--- always locked before the path table, never after.
+-- | What runs read from .tydb files or finished: each module's .tydb path,
+-- pub and impl hash and complete public name map, and single name reads.
+-- Every table is read and written under its own lock.  A hash or name
+-- table is always locked before the path table, never after.
 data ModuleCache = ModuleCache
-  { tydbPathTable :: MVar (M.Map A.ModName FilePath)
-  , pubHashTable  :: MVar (M.Map A.ModName B.ByteString)                                      -- found answers only
-  , implHashTable :: MVar (M.Map A.ModName B.ByteString)                                      -- found answers only
-  , nameMapTable  :: MVar (M.Map A.ModName (M.Map A.Name InterfaceFiles.NameHashInfo))         -- complete public maps
-  , nameReadTable :: MVar (M.Map (A.ModName, A.Name) (Maybe InterfaceFiles.NameHashInfo))      -- single reads, misses kept
+  { tydbPathTable :: MVar (M.Map A.ModName FilePath)                                       -- found paths only
+  , pubHashTable  :: MVar (M.Map A.ModName B.ByteString)                                   -- found answers only
+  , implHashTable :: MVar (M.Map A.ModName B.ByteString)                                   -- found answers only
+  , nameMapTable  :: MVar (M.Map A.ModName (M.Map A.Name InterfaceFiles.NameHashInfo))     -- complete public maps
+  , nameReadTable :: MVar (M.Map (A.ModName, A.Name) (Maybe InterfaceFiles.NameHashInfo))  -- single reads, misses kept
   }
 
 -- | The two hashes of a module or name: its public interface and its
