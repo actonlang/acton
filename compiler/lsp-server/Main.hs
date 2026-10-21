@@ -653,14 +653,17 @@ resolveCompileRoot path opts = do
 runCompilePlanWithHooks :: Compile.Generation -> FilePath -> FilePath -> Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -> LspProgress -> LspM () Bool
 runCompilePlanWithHooks gen rootProj path sp gopts opts progress = do
   env <- getLspEnv
+  -- runCompilePlan calls onEvent only while gen is current, so publishFor
+  -- and progressForQueued, which only onEvent uses, do not check it.
+  -- progressFor also reports the plan and completion state, so it does.
   let publishFor t diags =
-        runLspT env $ whenCurrentGen gen $
+        runLspT env $
           publishDiagnosticsFor (Compile.taskSourceFile t) diags
       progressFor msg =
         runLspT env $ whenCurrentGen gen $
           progressReportImmediate progress msg Nothing
       progressForQueued msg =
-        runLspT env $ whenCurrentGen gen $
+        runLspT env $
           progressReportQueued progress msg
       onEvent event = case event of
         Compile.Diagnostics t diags ->

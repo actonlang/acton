@@ -48,10 +48,11 @@ Call flow:
        caller already has a BackJob to run.
   - Triggering:
     - acton build runs the pipeline once for the requested files/project.
-    - acton watch and LSP call startCompile on each event; callers can gate
-      output with generation checks (e.g. whenCurrent). BackQueue ignores
-      back jobs for stale generations, and front-output jobs are skipped for
-      stale generations before writing.
+    - acton watch and LSP call startCompile on each event. runCompilePlan
+      hands an event to the caller's handler only if the run's generation is
+      current when the event is reported. BackQueue ignores back jobs for
+      stale generations, and front-output jobs are skipped for stale
+      generations before writing.
     - Callers may supply a delay (debounce) before startCompile runs (LSP uses
       debounceMicros on change events; acton watch uses 0).
   - Finalization:
@@ -72,9 +73,9 @@ State and orchestration:
     overlay-aware SourceProvider on top of disk reads. acton watch reads
     directly from disk.
   - Each event bumps the generation via startCompile; callers may pass a delay
-    (LSP uses debounceMicros, acton watch uses 0). Back jobs and front-output
-    writes are filtered by generation; front-pass diagnostics should be gated
-    by the caller if needed.
+    (LSP uses debounceMicros, acton watch uses 0). Back jobs, front-output
+    writes and the events a handler sees are filtered by generation. Effects
+    a caller performs outside its event handler are gated by the caller.
   - CLI builds share the same pipeline and enqueue back jobs as soon as front
     passes finish, overlapping work without needing a watch event source.
 
@@ -424,9 +425,9 @@ checkBuildSpecChange sched stamp =
     in (Just stamp, changed)
 
 -- | A compile run's place in its scheduler's sequence of runs. A run is
--- current until a newer one starts. A stale run writes no front output and
--- queues no back job, and its queued back jobs neither write nor report an
--- end.
+-- current until a newer one starts. A stale run writes no front output,
+-- queues no back job and reports no event to runCompilePlan's handler, and
+-- its queued back jobs neither write nor report an end.
 data Generation = Generation
   { generationNumber  :: Int
   , generationCounter :: IORef Int      -- the scheduler's newest generation
@@ -686,8 +687,10 @@ prepareCompilePlanFromContext sp gopts ctx srcFiles allowPrune mChangedPaths = d
 
 -- | Compile a plan as a generation of the scheduler. Its back jobs run on
 -- the scheduler's workers: wait for them with waitBackJobs. Each event is
--- recorded for analytics first, a BackReady event then queues its job, and
--- the handler sees the event last.
+-- recorded for analytics first, whatever the generation. A BackReady event
+-- then queues its job, which enqueueBack refuses for a stale generation.
+-- The handler sees the event last, and only if the generation is current
+-- at that moment, so a handler needs no generation check of its own.
 runCompilePlan :: Source.SourceProvider
                -> C.GlobalOptions
                -> CompileScheduler
@@ -701,7 +704,7 @@ runCompilePlan sp gopts sched gen plan onEvent = withAnalytics $ \analytics -> d
         case event of
           BackReady job -> enqueueBack (schedulerBackQueue sched) gen events job
           _             -> return ()
-        onEvent event
+        whenCurrent gen (onEvent event)
   compileModules (BuildEnv sp gopts gen events moduleCache) plan
 
 -- | The services of a run outside any scheduler: a generation that stays

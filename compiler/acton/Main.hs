@@ -1678,17 +1678,21 @@ initCliCompileHooks progressUI progressState gopts gen plan = do
                         , shareForPhase t backRatio))
             | t <- neededTasks
             ]
-    let gate = whenCurrent gen
-        logLine msg = gate $ do
+    -- runCompilePlan calls onEvent only while gen is current, so the event
+    -- arms and the helpers only they use do not check the generation.
+    -- logLine, logRendered and withTerm are also called outside onEvent (by
+    -- the final step, by runCliPostCompile and by the initial setPercent),
+    -- so they check it themselves.
+    let logLine msg = whenCurrent gen $ do
           progressLogLine progressUI msg
-        logRendered render = gate $ do
+        logRendered render = whenCurrent gen $ do
           if puWidthAware progressUI
             then do
               (_, cols) <- termSizeRead (puTermSize progressUI)
               progressLogLine progressUI (render (safeLiveWidth cols))
             else progressLogLine progressUI (render plainLogWidth)
         logDiagnostics diags =
-          gate (progressWithLog progressUI (printDiagnostics gopts diags))
+          progressWithLog progressUI (printDiagnostics gopts diags)
         termProgress = puTermProgress progressUI
         termEnabled = termProgressEnabled termProgress
         modLabel mn = modNameToString (dropProjPrefix rootPaths mn)
@@ -1960,14 +1964,14 @@ initCliCompileHooks progressUI progressState gopts gen plan = do
         finalKey = ProgressTaskKey (TaskKey rootProj (A.modName ["__final__"]))
         taskProgressKey = ProgressTaskKey
         frontOutputTaskKey = ProgressFrontOutputKey
-        withTerm action = when termEnabled $ gate (withProgressLock progressUI action)
+        withTerm action = when termEnabled $ whenCurrent gen (withProgressLock progressUI action)
         setPercent pct = withTerm (termProgressPercent termProgress pct)
         addProgress delta =
           when (termEnabled && delta > 0) $ do
             new <- atomicModifyIORef' progressRef (\x -> let x' = min compilePhaseTotal (x + delta) in (x', x'))
             setPercent (floor new)
         shareFor key = M.findWithDefault (0, 0, 0) key shareMap
-        creditParseTo key parseFrac = gate $ do
+        creditParseTo key parseFrac = do
           let (parseShare, _, _) = shareFor key
           delta <- atomicModifyIORef' marksRef $ \m ->
             let (parseDoneFrac, frontDoneFrac, backDone) = M.findWithDefault (0, 0, False) key m
@@ -1975,7 +1979,7 @@ initCliCompileHooks progressUI progressState gopts gen plan = do
                 deltaFrac = max 0 (parseDoneFrac' - parseDoneFrac)
             in (M.insert key (parseDoneFrac', frontDoneFrac, backDone) m, parseShare * deltaFrac)
           addProgress delta
-        creditFrontTo key frontFrac = gate $ do
+        creditFrontTo key frontFrac = do
           let (_, frontShare, _) = shareFor key
           delta <- atomicModifyIORef' marksRef $ \m ->
             let (parseDoneFrac, frontDoneFrac, backDone) = M.findWithDefault (0, 0, False) key m
@@ -1987,7 +1991,7 @@ initCliCompileHooks progressUI progressState gopts gen plan = do
         creditParseProgress key p = creditParseTo key (parseProgressRatio p)
         creditFront key = creditFrontTo key 1
         creditFrontProgress key p = creditFrontTo key (frontPassFraction p)
-        creditBack key = gate $ do
+        creditBack key = do
           let (_, _, backShare) = shareFor key
           delta <- atomicModifyIORef' marksRef $ \m ->
             let (parseDoneFrac, frontDoneFrac, backDone) = M.findWithDefault (0, 0, False) key m
@@ -1998,20 +2002,20 @@ initCliCompileHooks progressUI progressState gopts gen plan = do
     setPercent 0
     let onEvent event = case event of
           Diagnostics t diags -> do
-            gate (void $ progressDoneTask progressUI progressState (taskProgressKey (gtKey t)))
+            void (progressDoneTask progressUI progressState (taskProgressKey (gtKey t)))
             logDiagnostics diags
           ParseStarted t ->
             let key = gtKey t
                 mn = tkMod key
-            in gate (progressStartTask progressUI progressState (taskProgressKey key) (parseActiveLine mn) (Just 0))
+            in progressStartTask progressUI progressState (taskProgressKey key) (parseActiveLine mn) (Just 0)
           ParseProgressed t p ->
             let key = gtKey t
                 mn = tkMod key
             in do
-              gate (progressUpdateTask progressUI progressState (taskProgressKey key) (parseProgressLine mn p) (Just (parseProgressRatio p)))
+              progressUpdateTask progressUI progressState (taskProgressKey key) (parseProgressLine mn p) (Just (parseProgressRatio p))
               creditParseProgress key p
           ParseFinished t mtime -> do
-            gate (void $ progressDoneTask progressUI progressState (taskProgressKey (gtKey t)))
+            void (progressDoneTask progressUI progressState (taskProgressKey (gtKey t)))
             creditParse (gtKey t)
             when (not (quiet gopts optsPlan)) $
               forM_ mtime $ \tParse -> do
@@ -2020,15 +2024,15 @@ initCliCompileHooks progressUI progressState gopts gen plan = do
           FrontStarted t ->
             let key = gtKey t
                 mn = tkMod key
-            in gate (progressStartTask progressUI progressState (taskProgressKey key) (frontInitialLine mn) (Just 0))
+            in progressStartTask progressUI progressState (taskProgressKey key) (frontInitialLine mn) (Just 0)
           FrontProgressed t p ->
             let key = gtKey t
                 mn = tkMod key
             in do
-              gate (progressUpdateTask progressUI progressState (taskProgressKey key) (frontProgressLine mn p) (Just (frontPassFraction p)))
+              progressUpdateTask progressUI progressState (taskProgressKey key) (frontProgressLine mn p) (Just (frontPassFraction p))
               creditFrontProgress key p
           FrontFinished t result -> do
-            gate (void $ progressDoneTask progressUI progressState (taskProgressKey (gtKey t)))
+            void (progressDoneTask progressUI progressState (taskProgressKey (gtKey t)))
             creditFront (gtKey t)
             forM_ result $ \fr -> do
               forM_ (frFrontTime fr) $ \tFront -> do
@@ -2064,24 +2068,24 @@ initCliCompileHooks progressUI progressState gopts gen plan = do
                 (Nothing, Nothing) -> creditBack (gtKey t)
                 _ -> return ()
           OutputStarted key kind ->
-            gate (progressStartTask progressUI progressState (frontOutputTaskKey key kind)
-                    (frontOutputActiveLine key kind) (frontOutputInitialProgress kind))
+            progressStartTask progressUI progressState (frontOutputTaskKey key kind)
+              (frontOutputActiveLine key kind) (frontOutputInitialProgress kind)
           OutputProgressed key kind p ->
-            gate (progressUpdateTask progressUI progressState (frontOutputTaskKey key kind)
-                    (frontOutputProgressLine key kind p) (Just (clamp01 (fopRatio p))))
+            progressUpdateTask progressUI progressState (frontOutputTaskKey key kind)
+              (frontOutputProgressLine key kind p) (Just (clamp01 (fopRatio p)))
           OutputFinished key kind melapsed -> do
-            gate (void $ progressDoneTask progressUI progressState (frontOutputTaskKey key kind))
+            void (progressDoneTask progressUI progressState (frontOutputTaskKey key kind))
             when (not (quiet gopts optsPlan)) $
               forM_ melapsed $ \elapsed ->
                 logRendered (\cols -> frontOutputDoneLine cols key kind elapsed)
           BackReady _ -> return ()
           BackSkipped key -> creditBack key
           BackStarted job ->
-            gate (progressStartTask progressUI progressState (taskProgressKey (bjKey job)) (backActiveLine (tkMod (bjKey job))) (Just 0))
+            progressStartTask progressUI progressState (taskProgressKey (bjKey job)) (backActiveLine (tkMod (bjKey job))) (Just 0)
           BackProgressed job p -> do
             let mn = tkMod (bjKey job)
-            gate (progressUpdateTask progressUI progressState (taskProgressKey (bjKey job))
-                    (backProgressLine mn p) (Just (backProgressRatio p)))
+            progressUpdateTask progressUI progressState (taskProgressKey (bjKey job))
+              (backProgressLine mn p) (Just (backProgressRatio p))
             when (not (quiet gopts optsPlan) && (C.timing gopts || C.verbose gopts)) $
               case bppEvent p of
                 BackPassFinished elapsed ->
@@ -2090,7 +2094,7 @@ initCliCompileHooks progressUI progressState gopts gen plan = do
                       (backPassDoneLine mn (bppPass p)) elapsed)
                 _ -> return ()
           BackFinished job result -> do
-            gate (void $ progressDoneTask progressUI progressState (taskProgressKey (bjKey job)))
+            void (progressDoneTask progressUI progressState (taskProgressKey (bjKey job)))
             creditBack (bjKey job)
             when (not (quiet gopts optsPlan)) $
               case result of
@@ -2103,7 +2107,7 @@ initCliCompileHooks progressUI progressState gopts gen plan = do
                   logRendered (\cols -> backFailLine cols (tkMod (bjKey job)) (bpfMessage failure))
           Info msg -> logLine msg
         onFinalStart = do
-          gate (progressStartTask progressUI progressState finalKey finalActiveLine Nothing)
+          whenCurrent gen (progressStartTask progressUI progressState finalKey finalActiveLine Nothing)
           setPercent 85
         onFinalDone success =
           whenCurrent gen $ do
