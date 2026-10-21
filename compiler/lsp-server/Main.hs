@@ -471,17 +471,14 @@ finishProgressOnce finished progress msg = do
     liftIO $ killThread (lspProgressWorker progress)
     progressEnd progress msg
 
-moduleLabel :: Compile.GlobalTask -> String
-moduleLabel task = S.modNameToString (Compile.tkMod (Compile.gtKey task))
-
-backJobLabel :: Compile.BackJob -> String
-backJobLabel job =
-  S.modNameToString (Compile.tkMod (Compile.bjKey job))
+-- | The key's full module name, its project's name in front included.
+keyModuleName :: Compile.TaskKey -> String
+keyModuleName = S.modNameToString . Compile.tkMod
 
 frontProgressMessage :: Compile.GlobalTask -> Compile.FrontPassProgress -> T.Text
 frontProgressMessage task p =
   T.pack $
-    passName (Compile.fppPass p) ++ " " ++ moduleLabel task ++ current
+    passName (Compile.fppPass p) ++ " " ++ keyModuleName (Compile.gtKey task) ++ current
   where
     current =
       case Compile.fppCurrent p of
@@ -495,14 +492,14 @@ backProgressMessage :: Compile.BackJob -> Compile.BackJobResult -> T.Text
 backProgressMessage job result =
   T.pack $
     case result of
-      Compile.BackJobOk{} -> "Generated " ++ backJobLabel job
-      Compile.BackJobFailed{} -> "Codegen failed for " ++ backJobLabel job
+      Compile.BackJobOk{} -> "Generated " ++ keyModuleName (Compile.bjKey job)
+      Compile.BackJobFailed{} -> "Codegen failed for " ++ keyModuleName (Compile.bjKey job)
 
 backPassProgressMessage :: Compile.BackJob -> Compile.BackPassProgress -> Maybe T.Text
 backPassProgressMessage job p
   | Compile.bppEvent p == Compile.BackPassStarted =
       Just $
-        T.pack ("Generating " ++ backJobLabel job ++ " (" ++ Compile.backPassName (Compile.bppPass p) ++ ")")
+        T.pack ("Generating " ++ keyModuleName (Compile.bjKey job) ++ " (" ++ Compile.backPassName (Compile.bppPass p) ++ ")")
   | otherwise = Nothing
 
 warnBackgroundCompilerLocked :: FilePath -> LspM () ()
@@ -637,19 +634,19 @@ planAndCompile gen rootProj path sp gopts opts progress = do
         Compile.Diagnostics t diags ->
           publishFor t (lspDiagnosticsFrom diags)
         Compile.ParseStarted t ->
-          progressForQueued (T.pack ("Parsing " ++ moduleLabel t))
+          progressForQueued (T.pack ("Parsing " ++ keyModuleName (Compile.gtKey t)))
         Compile.ParseFinished t _ ->
-          progressForQueued (T.pack ("Parsed " ++ moduleLabel t))
+          progressForQueued (T.pack ("Parsed " ++ keyModuleName (Compile.gtKey t)))
         -- Reported at once, which also drops the queued messages.
         Compile.FrontStarted t ->
-          progressFor (T.pack ("Checking " ++ moduleLabel t))
+          progressFor (T.pack ("Checking " ++ keyModuleName (Compile.gtKey t)))
         Compile.FrontProgressed t p ->
           progressForQueued (frontProgressMessage t p)
         Compile.FrontFinished t (Just _) ->
           publishFor t [] >>
-          progressForQueued (T.pack ("Checked " ++ moduleLabel t))
+          progressForQueued (T.pack ("Checked " ++ keyModuleName (Compile.gtKey t)))
         Compile.BackStarted job ->
-          progressForQueued (T.pack ("Generating " ++ backJobLabel job))
+          progressForQueued (T.pack ("Generating " ++ keyModuleName (Compile.bjKey job)))
         Compile.BackProgressed job p ->
           forM_ (backPassProgressMessage job p) progressForQueued
         Compile.BackFinished job result ->
