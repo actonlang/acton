@@ -102,12 +102,14 @@ import System.Random (randomRIO)
 
 -- Errors -------------------------------------------------------------------------------------------
 
+-- | An error that stops the command or request that raises it, with the
+-- message to show the user, such as a bad Build.act or a missing
+-- dependency.
 newtype ProjectError = ProjectError String deriving (Show)
 
 instance Exception ProjectError
 
--- | Raise a ProjectError for library callers.
--- Used by project discovery and path helpers to stop on unrecoverable errors.
+-- | Throw a ProjectError with the message 'msg'.
 throwProjectError :: String -> IO a
 throwProjectError msg = throwIO (ProjectError msg)
 
@@ -681,7 +683,9 @@ localPath dep = mfilter (not . null) (BuildSpec.path dep)
 localZigPath :: BuildSpec.ZigDep -> Maybe FilePath
 localZigPath dep = mfilter (not . null) (BuildSpec.zpath dep)
 
--- | Keep a concrete source path relative to the project that declares it.
+-- | The declaration 'dep' of the project at 'base' with its local path, if
+-- it has one, joined onto 'base' and normalised.  An absolute local path
+-- is only normalised.
 rebaseDepPath :: FilePath -> BuildSpec.PkgDep -> BuildSpec.PkgDep
 rebaseDepPath base dep =
     case localPath dep of
@@ -840,8 +844,12 @@ resolveFollows projects = M.traverseWithKey resolveProject projects
                                            ++ "'. Use the project name as the dependency name.")
                       return target
 
--- | Recursively collect out/types paths for all declared dependencies.
--- Reads Build.act and follows dependency edges.
+-- | The name of the project at 'projDir' and the types directories of the
+-- projects it depends on, directly or not, read from their Build.act files
+-- with the --dep overrides: each project once, deduplicated by
+-- fingerprint, in depth-first preorder.  Root pins are not applied.  A
+-- dependency fetched by hash that is not fetched yet is skipped with its
+-- dependencies, and a missing local dependency is an error.
 collectDepTypePaths :: FilePath -> [(String, FilePath)] -> IO (String,[FilePath])
 collectDepTypePaths projDir overrides = do
   root <- normalizePathSafe projDir
