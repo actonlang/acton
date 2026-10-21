@@ -32,6 +32,8 @@ import           Data.Time.Clock.POSIX  (posixSecondsToUTCTime)
 import           System.Directory       (setModificationTime)
 import qualified Control.Exception as E
 import           Control.Concurrent     (threadDelay)
+import           Error.Diagnose (TabSize(..), WithUnicode(..), prettyDiagnostic)
+import           Prettyprinter (unAnnotate)
 
 import           Test.Tasty
 import           Test.Tasty.Runners (NumThreads(..))
@@ -79,12 +81,45 @@ actonCmd args = actonExe ++ " " ++ args ++ " --jobs 1"
 quietGlobalOptions :: C.GlobalOptions
 quietGlobalOptions = C.defaultGlobalOptions { C.color = C.Never, C.quiet = True, C.jobs = 1 }
 
+-- | The compile options of a full build a test runs in process. The build
+-- reads the system types of the dist tree that holds the suite's acton
+-- binary. The modification time of the test binary must not decide reuse,
+-- so the build ignores the compiler version.
+inProcessCompileOptions :: IO C.CompileOptions
+inProcessCompileOptions = do
+  distDir <- distPath
+  return C.defaultCompileOptions { C.syspath = distDir, C.ignore_compiler_version = True }
+
 -- | Plan a build of the requested files on a scheduler, as acton build and
 -- watch mode do.
 planBuild :: C.GlobalOptions -> Compile.CompileScheduler -> C.CompileOptions -> Compile.PlanRequest -> IO Compile.CompilePlan
 planBuild gopts sched opts request = do
   ctx <- Compile.prepareCompileContext opts (Compile.requestFiles request)
   Compile.prepareCompilePlan Source.diskSourceProvider gopts sched ctx request
+
+-- | Plan and run one full build of every module of the project on a
+-- scheduler, as `acton build` does, with the given global options and event
+-- handler, then wait for its back jobs. Returns the result line.
+buildOnScheduler :: C.GlobalOptions -> (Compile.BuildEvent -> IO ()) -> Compile.CompileScheduler -> FilePath -> C.CompileOptions -> IO String
+buildOnScheduler gopts onEvent sched proj opts = do
+  names <- sort . map dropExtension . filter Project.isActFile <$> listDirectory (proj </> "src")
+  let srcFiles = map (sourcePath proj) names
+  plan <- planBuild gopts sched opts (Compile.PlanRequest srcFiles Compile.WholeProject Nothing)
+  gen <- Compile.currentGeneration sched
+  res <- Compile.runCompilePlan Source.diskSourceProvider gopts sched gen plan onEvent
+  backFailure <- Compile.waitBackJobs sched gen
+  return (buildResult res backFailure)
+
+-- | How a build ended, in one line.
+buildResult :: Either Compile.CompileFailure (a, Bool) -> Maybe Compile.BackPassFailure -> String
+buildResult res backFailure =
+  case (res, backFailure) of
+    (Left failure, _)           -> "result failed: " ++ oneLine (Compile.compileFailureMessage failure)
+    (Right _, Just failure)     -> "result failed: " ++ oneLine (Compile.backPassFailureMessage failure)
+    (Right (_, True), Nothing)  -> "result errors"
+    (Right (_, False), Nothing) -> "result ok"
+  where
+    oneLine = unwords . words
 
 -- Utils ----------------------------------------------------------------------
 
@@ -2113,6 +2148,79 @@ p36_removed_dep_name_triggers_front_refresh =
     assertBool "did not expect internal hash-missing diagnostic"
       (not (T.isInfixOf "Hash info missing for libfoo.lib.foo" out2))
 
+-- | Module a with one public name, the function x, and module b that calls
+-- it. x is a function because a module-level variable also gives its
+-- module a public name of its own (W_x_3 for x = 1), so a would not end up
+-- without public names.
+writeOnePublicNameFixture :: IO ()
+writeOnePublicNameFixture = do
+  ensureCasesProject
+  writeFileUtf8 (casesSrcDir </> "a.act") $ T.unlines
+    [ "def x() -> int:"
+    , "    return 1"
+    ]
+  writeFileUtf8 (casesSrcDir </> "b.act") $ T.unlines
+    [ "import a"
+    , ""
+    , "def fb() -> int:"
+    , "    return a.x()"
+    ]
+
+-- | Rename a's only public name to a private one, which leaves a without
+-- public names and b with a use of a name a no longer exports.
+makeOnlyPublicNamePrivate :: IO ()
+makeOnlyPublicNamePrivate =
+  writeFileUtf8 (casesSrcDir </> "a.act") $ T.unlines
+    [ "def _x() -> int:"
+    , "    return 1"
+    ]
+
+p36b_private_name_rechecks_dependent :: TestTree
+p36b_private_name_rechecks_dependent =
+  testCase "36b-name made private rechecks its dependent" $ do
+    let modB = modLabel casesProjDir "b"
+    writeOnePublicNameFixture
+    res1 <- runActonIn casesProjDir ["build", "--color", "never", "--skip-build"]
+    assertExitSuccess "initial build" res1
+    makeOnlyPublicNamePrivate
+    -- --verbose reads a's name map from its old .tydb before a is checked
+    -- again, to report a's hash deltas.
+    res2@(_ec2, out2) <- runActonIn casesProjDir ["build", "--color", "never", "--verbose", "--skip-build"]
+    assertExitFailure "rebuild after making a.x private" 1 res2
+    assertBool ("expected b to find a.x missing\n" ++ T.unpack out2)
+      (T.isInfixOf "missing dep hashes in pub incremental_cases.a.x" out2)
+    assertBool ("did not expect b to reuse its .tydb\n" ++ T.unpack out2)
+      (not (fresh out2 modB))
+    assertBool ("expected b's type error\n" ++ T.unpack out2)
+      (T.isInfixOf "Module a does not export x" out2)
+
+p36c_private_name_rechecks_dependent_on_one_scheduler :: TestTree
+p36c_private_name_rechecks_dependent_on_one_scheduler =
+  testCase "36c-name made private rechecks its dependent on one scheduler" $ do
+    writeOnePublicNameFixture
+    proj <- canonicalizePath casesProjDir
+    opts <- inProcessCompileOptions
+    -- The diagnostics b reports, rendered. A build that ends ok reports
+    -- none, so after the second build these are that build's.
+    reportedByB <- newIORef []
+    let onEvent (Compile.Diagnostics t diags)
+          | Compile.tkMod (Compile.gtKey t) == A.modName ["incremental_cases", "b"] =
+              mapM_ (logLine reportedByB . renderDiagnostic) diags
+        onEvent _ = return ()
+        renderDiagnostic d = show (unAnnotate (prettyDiagnostic WithoutUnicode (TabSize 4) d))
+    -- The first build checks a and leaves a's name map in the scheduler's
+    -- module cache, where the second build finds it.
+    sched <- Compile.newCompileScheduler quietGlobalOptions
+    let build = buildOnScheduler quietGlobalOptions onEvent sched proj opts
+    first <- build
+    assertEqual "first build" "result ok" first
+    makeOnlyPublicNamePrivate
+    second <- build
+    diagnostics <- takeLines reportedByB
+    assertEqual ("second build\n" ++ unlines diagnostics) "result errors" second
+    assertBool ("expected b's type error\n" ++ unlines diagnostics)
+      (any ("Module a does not export x" `isInfixOf`) diagnostics)
+
 p37_impl_refresh_missing_dep_hashes_reruns_front :: TestTree
 p37_impl_refresh_missing_dep_hashes_reruns_front =
   testCase "37-missing dep rows rerun front passes" $ do
@@ -3124,26 +3232,19 @@ eventsProjName :: String
 eventsProjName = "events"
 
 -- | Run every scenario in order on a fresh project in a new temporary
--- directory, with one scheduler for the whole series. The builds read the
--- system types of the dist tree that holds the suite's acton binary. The
--- modification time of the test binary must not decide reuse, so the builds
--- ignore the compiler version.
+-- directory, with one scheduler for the whole series.
 recordCompileEvents :: IO [String]
 recordCompileEvents = do
-  distDir <- distPath
+  options <- inProcessCompileOptions
   withSystemTempDirectory "compile-events" $ \tmp -> do
     proj <- canonicalizePath tmp
     createDirectoryIfMissing True (proj </> "src")
     writeBuildAct proj eventsProjName []
     sched <- Compile.newCompileScheduler eventsGlobalOptions
     eventLog <- EventLog <$> newIORef [] <*> newIORef [] <*> newIORef []
-    let options = C.defaultCompileOptions
-          { C.syspath = distDir
-          , C.ignore_compiler_version = True
-          }
-        runScenario (title, edit, adjust) = do
+    let runScenario (title, edit, adjust) = do
           edit proj
-          result <- buildRecordingEvents sched eventLog proj (adjust options)
+          result <- buildOnScheduler eventsGlobalOptions (recordEvent eventLog) sched proj (adjust options)
           stage <- takeLines (stageLines eventLog)
           outputs <- takeLines (outputLines eventLog)
           back <- takeLines (backLines eventLog)
@@ -3185,29 +3286,6 @@ eventsGlobalOptions =
     , C.verbose = True
     , C.jobs = 1
     }
-
--- | Plan and run one full build of every module of the project, as
--- `acton build` does, then wait for its back jobs. Returns the result line.
-buildRecordingEvents :: Compile.CompileScheduler -> EventLog -> FilePath -> C.CompileOptions -> IO String
-buildRecordingEvents sched eventLog proj opts = do
-  names <- sort . map dropExtension . filter Project.isActFile <$> listDirectory (proj </> "src")
-  let srcFiles = map (sourcePath proj) names
-  plan <- planBuild eventsGlobalOptions sched opts (Compile.PlanRequest srcFiles Compile.WholeProject Nothing)
-  gen <- Compile.currentGeneration sched
-  res <- Compile.runCompilePlan Source.diskSourceProvider eventsGlobalOptions sched gen plan (recordEvent eventLog)
-  backFailure <- Compile.waitBackJobs sched gen
-  return (buildResult res backFailure)
-
--- | The last line of a scenario: how its build ended.
-buildResult :: Either Compile.CompileFailure (a, Bool) -> Maybe Compile.BackPassFailure -> String
-buildResult res backFailure =
-  case (res, backFailure) of
-    (Left failure, _)           -> "result failed: " ++ oneLine (Compile.compileFailureMessage failure)
-    (Right _, Just failure)     -> "result failed: " ++ oneLine (Compile.backPassFailureMessage failure)
-    (Right (_, True), Nothing)  -> "result errors"
-    (Right (_, False), Nothing) -> "result ok"
-  where
-    oneLine = unwords . words
 
 -- | Record one line per event that compileEventsGolden pins, in the part of
 -- the log the event belongs to. A finished front stage records its done
@@ -3410,6 +3488,8 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
       , p35_changed_path_keeps_unaffected_provider
       , p35_dbp_changed_path_includes_provider
       , p36_removed_dep_name_triggers_front_refresh
+      , p36b_private_name_rechecks_dependent
+      , p36c_private_name_rechecks_dependent_on_one_scheduler
       , p37_impl_refresh_missing_dep_hashes_reruns_front
       , p38_project_lock_blocks_build
       , p39_background_lock_does_not_block_build
