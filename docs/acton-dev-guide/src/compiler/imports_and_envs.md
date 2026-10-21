@@ -28,8 +28,8 @@ for later compilation work.
 ### Shared module cache
 
 During a compile run, the scheduler keeps an accumulated environment snapshot of
-finished modules. In `Acton.Compile.compileTasks`, each completed module extends
-that snapshot with:
+finished modules. In `Acton.Compile.compileModules`, each completed module
+extends that snapshot with:
 
 ```haskell
 Acton.Env.addModuleInfo (tkMod keyDone) (frontResultModuleInfo (tkMod keyDone) fr) envAcc

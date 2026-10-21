@@ -662,28 +662,28 @@ runCompilePlanWithHooks gen rootProj path sp gopts opts progress = do
       progressForQueued msg =
         runLspT env $ whenCurrentGen gen $
           progressReportQueued progress msg
-      hooks = Compile.defaultCompileHooks
-        { Compile.chOnDiagnostics = \t _ diags ->
-            publishFor t (lspDiagnosticsFrom diags)
-        , Compile.chOnParseStart = \t ->
-            progressForQueued (T.pack ("Parsing " ++ moduleLabel t))
-        , Compile.chOnParseDone = \t _ ->
-            progressForQueued (T.pack ("Parsed " ++ moduleLabel t))
-        , Compile.chOnFrontStart = \t ->
-            progressFor (T.pack ("Checking " ++ moduleLabel t))
-        , Compile.chOnFrontProgress = \t p ->
-            progressForQueued (frontProgressMessage t p)
-        , Compile.chOnFrontResult = \t _ ->
-            publishFor t [] >>
-            progressForQueued (T.pack ("Checked " ++ moduleLabel t))
-        , Compile.chOnBackStart = \job ->
-            progressForQueued (T.pack ("Generating " ++ backJobLabel job))
-        , Compile.chOnBackProgress = \job p ->
-            forM_ (backPassProgressMessage job p) progressForQueued
-        , Compile.chOnBackDone = \job result ->
-            progressForQueued (backProgressMessage job result)
-        , Compile.chOnInfo = \_ -> return ()
-        }
+      onEvent event = case event of
+        Compile.Diagnostics t diags ->
+          publishFor t (lspDiagnosticsFrom diags)
+        Compile.ParseStarted t ->
+          progressForQueued (T.pack ("Parsing " ++ moduleLabel t))
+        Compile.ParseFinished t _ ->
+          progressForQueued (T.pack ("Parsed " ++ moduleLabel t))
+        -- Reported at once, which also drops the queued messages.
+        Compile.FrontStarted t ->
+          progressFor (T.pack ("Checking " ++ moduleLabel t))
+        Compile.FrontProgressed t p ->
+          progressForQueued (frontProgressMessage t p)
+        Compile.FrontFinished t (Just _) ->
+          publishFor t [] >>
+          progressForQueued (T.pack ("Checked " ++ moduleLabel t))
+        Compile.BackStarted job ->
+          progressForQueued (T.pack ("Generating " ++ backJobLabel job))
+        Compile.BackProgressed job p ->
+          forM_ (backPassProgressMessage job p) progressForQueued
+        Compile.BackFinished job result ->
+          progressForQueued (backProgressMessage job result)
+        _ -> return ()
   progressReportImmediate progress "Preparing Acton project" Nothing
   compileRes <- liftIO $
     Project.withProjectLock rootProj $
@@ -698,7 +698,7 @@ runCompilePlanWithHooks gen rootProj path sp gopts opts progress = do
               case origin of
                 PlanFromCache -> "Acton cached project ready"
                 PlanFromDiscovery -> "Acton compile plan ready"
-            runRes <- Compile.runCompilePlan sp gopts plan compileScheduler gen hooks
+            runRes <- Compile.runCompilePlan sp gopts compileScheduler gen plan onEvent
             case runRes of
               Left err ->
                 return (Left (Compile.compileFailureMessage err))

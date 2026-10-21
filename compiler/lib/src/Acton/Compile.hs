@@ -28,7 +28,8 @@ after the front passes are done while the back passes can be run asynchronously
 in the background. This maximizes responsiveness of the LSP server.
 
 The CLI/LSP layers handle progress UI, file watching, and event sources; this
-module focuses on deterministic compilation and structured callbacks.
+module focuses on deterministic compilation and reports what it does as
+BuildEvent values.
 
 Call flow:
   - Shared pipeline (acton build, acton watch, LSP):
@@ -37,9 +38,8 @@ Call flow:
        CompilePlan for the requested subgraph. Parsing is performed through
        parseActSource/parseActFile so SourceProvider overlays can supply
        unsaved buffers.
-    2) runCompilePlan drives compileTasks. As each module finishes its front
-       passes, the CompileHooks callbacks (for example chOnFrontResult)
-       enqueue a BackJob into the scheduler's
+    2) runCompilePlan drives compileModules. As each module finishes its front
+       passes, its BackReady event enqueues its BackJob into the scheduler's
        BackQueue, so back passes begin as soon as they are ready and can overlap
        remaining front passes.
     3) Callers either wait for waitBackJobs (CLI builds) or let back jobs run
@@ -105,8 +105,7 @@ module Acton.Compile
   , FrontPass(..)
   , FrontPassProgress(..)
   , ParseProgress(..)
-  , CompileCallbacks(..)
-  , defaultCompileCallbacks
+  , BuildEvent(..)
   , CompileScheduler
   , newCompileScheduler
   , compileParallelism
@@ -124,9 +123,10 @@ module Acton.Compile
   , CompilePlan(..)
   , prepareCompilePlan
   , prepareCompilePlanFromContext
-  , CompileHooks(..)
-  , defaultCompileHooks
   , runCompilePlan
+  , runStandalonePlan
+  , BuildEnv
+  , standaloneBuild
   , CompileFailure(..)
   , compileFailureMessage
   , BackPassFailure(..)
@@ -144,7 +144,6 @@ module Acton.Compile
   , selectNeededTasks
   , selectAffectedTasks
   , libraryBoundaryTasks
-  , compileTasks
   , runFrontPasses
   , docNameCountThreshold
   , shouldGenerateDocOutput
@@ -377,51 +376,46 @@ data FrontTiming = FrontTiming
 -- | Each back pass's time in pass order; the write only when it wrote.
 type BackTiming = [(BackPass, TimeSpec)]
 
+-- | What a compile run reports.  A module whose source is parsed in a stage
+-- of its own reports ParseStarted, ParseProgressed and ParseFinished.  Each
+-- module then reports FrontStarted, FrontProgressed and FrontFinished,
+-- followed by Diagnostics when it failed or BackReady when its back job is
+-- eager.  A deferred back job reports BackReady or BackSkipped once every
+-- module depending on it finished its front stage.  A module depending on a
+-- failed module reports nothing after that failure.  __builtin__ reports
+-- nothing when its cached interface is used, and a parse error of it is a
+-- Diagnostics event alone.  Progress, Output, Info and the events of a
+-- running back job arrive on any thread.
+data BuildEvent
+  = ParseStarted     GlobalTask
+  | ParseProgressed  GlobalTask ParseProgress
+  | ParseFinished    GlobalTask (Maybe TimeSpec)                -- Nothing when quiet or the parse failed
+  | FrontStarted     GlobalTask
+  | FrontProgressed  GlobalTask FrontPassProgress
+  | FrontFinished    GlobalTask (Maybe FrontResult)             -- the result when the module succeeded
+  | Diagnostics      GlobalTask [Diagnostic String]
+  | OutputStarted    TaskKey FrontOutputKind
+  | OutputProgressed TaskKey FrontOutputKind FrontOutputProgress
+  | OutputFinished   TaskKey FrontOutputKind (Maybe TimeSpec)   -- Nothing when the write failed
+  | BackReady        BackJob                                    -- routed to the back queue by runCompilePlan
+  | BackSkipped      TaskKey                                    -- a deferred module whose generated code is current
+  | BackStarted      BackJob
+  | BackProgressed   BackJob BackPassProgress
+  | BackFinished     BackJob BackJobResult
+  | Info             String                                     -- a --verbose line; tests match its text
 
-data CompileCallbacks = CompileCallbacks
-  { ccOnDiagnostics :: GlobalTask -> C.CompileOptions -> [Diagnostic String] -> IO ()
-  , ccOnParseStart :: GlobalTask -> C.CompileOptions -> IO ()
-  , ccOnParseProgress :: GlobalTask -> C.CompileOptions -> ParseProgress -> IO ()
-  , ccOnParseDone :: GlobalTask -> C.CompileOptions -> Maybe TimeSpec -> IO ()
-  , ccOnFrontResult :: GlobalTask -> C.CompileOptions -> FrontResult -> IO ()
-  , ccOnFrontStart :: GlobalTask -> C.CompileOptions -> IO ()
-  , ccOnFrontDone :: GlobalTask -> C.CompileOptions -> IO ()
-  , ccOnFrontProgress :: GlobalTask -> C.CompileOptions -> FrontPassProgress -> IO ()
-  , ccOnFrontOutputStart :: TaskKey -> FrontOutputKind -> IO ()
-  , ccOnFrontOutputProgress :: TaskKey -> FrontOutputKind -> FrontOutputProgress -> IO ()
-  , ccOnFrontOutputDone :: TaskKey -> FrontOutputKind -> Maybe TimeSpec -> IO ()
-  , ccShouldWriteFrontOutput :: IO Bool
-  , ccOnBackJob :: BackJob -> IO ()
-  , ccOnBackSkipped :: TaskKey -> IO ()
-  , ccOnInfo :: String -> IO ()
+-- | One compile run's services.  Read-only.
+data BuildEnv = BuildEnv
+  { buildSources    :: Source.SourceProvider
+  , buildOptions    :: C.GlobalOptions
+  , buildGeneration :: Generation                       -- front outputs are written only while it is current
+  , emit            :: BuildEvent -> IO ()
+  , buildCache      :: ModuleCache
   }
 
--- | Default no-op callbacks for the compilation pipeline.
--- Callers can start from this and override only the events they care about.
-defaultCompileCallbacks :: CompileCallbacks
-defaultCompileCallbacks = CompileCallbacks
-  { ccOnDiagnostics = \_ _ _ -> return ()
-  , ccOnParseStart = \_ _ -> return ()
-  , ccOnParseProgress = \_ _ _ -> return ()
-  , ccOnParseDone = \_ _ _ -> return ()
-  , ccOnFrontResult = \_ _ _ -> return ()
-  , ccOnFrontStart = \_ _ -> return ()
-  , ccOnFrontDone = \_ _ -> return ()
-  , ccOnFrontProgress = \_ _ _ -> return ()
-  , ccOnFrontOutputStart = \_ _ -> return ()
-  , ccOnFrontOutputProgress = \_ _ _ -> return ()
-  , ccOnFrontOutputDone = \_ _ _ -> return ()
-  , ccShouldWriteFrontOutput = return True
-  , ccOnBackJob = \_ -> return ()
-  , ccOnBackSkipped = \_ -> return ()
-  , ccOnInfo = \_ -> return ()
-  }
-
-data BackJobCallbacks = BackJobCallbacks
-  { bjcOnStart :: BackJob -> IO ()
-  , bjcOnProgress :: BackJob -> BackPassProgress -> IO ()
-  , bjcOnDone :: BackJob -> BackJobResult -> IO ()
-  }
+-- | Report a line that only --verbose shows.
+info                                    :: BuildEnv -> String -> IO ()
+info build line                         = when (C.verbose (buildOptions build)) (emit build (Info line))
 
 checkBuildSpecChange :: CompileScheduler -> BuildSpecStamp -> IO Bool
 checkBuildSpecChange sched stamp =
@@ -468,7 +462,8 @@ data BackQueue = BackQueue
   , firstFailures :: TVar (M.Map Int BackPassFailure)   -- per generation: the first failure
   }
 
-data QueuedJob = QueuedJob Generation BackJobCallbacks BackJob
+-- | A back job with its generation and the sink its events go to.
+data QueuedJob = QueuedJob Generation (BuildEvent -> IO ()) BackJob
 
 -- | Create a scheduler at generation 0. Its back passes run on the given
 -- number of workers (at least one) with the given global options, which
@@ -509,35 +504,36 @@ stopCompile sched = modifyMVar_ (schedulerRun sched) (\running -> Nothing <$ map
 -- | Queue a back job of a current generation. A stale generation's job is
 -- dropped. The pending count rises in the transaction that queues the job,
 -- so waitBackJobs never sees zero while a job of its generation is queued.
-enqueueBack :: BackQueue -> Generation -> BackJobCallbacks -> BackJob -> IO ()
-enqueueBack queue gen callbacks job = whenCurrent gen $ atomically $ do
+enqueueBack :: BackQueue -> Generation -> (BuildEvent -> IO ()) -> BackJob -> IO ()
+enqueueBack queue gen events job = whenCurrent gen $ atomically $ do
   modifyTVar' (pendingCounts queue) (M.insertWith (+) (generationNumber gen) 1)
-  writeTChan (queuedJobs queue) (QueuedJob gen callbacks job)
+  writeTChan (queuedJobs queue) (QueuedJob gen events job)
 
 -- | Run queued back jobs, one at a time. A job runs only while its
 -- generation is current and has no failure yet. The write gate is asked
 -- right before the generated files are written. The end is reported, and a
 -- failure recorded, only while the generation is current, so a job that
 -- goes stale while it runs reports its start but no end. The first failure
--- of a generation is kept. The progress callback runs inside the try, so an
--- exception from progress reporting fails the job. The start and end
--- callbacks run outside it, so an exception from them ends the worker. The
--- pending count falls after every job, whether it ran or was dropped.
+-- of a generation is kept. Progress is reported inside the try, so an
+-- exception from reporting progress fails the job. The start and the end
+-- are reported outside it, so an exception from reporting them ends the
+-- worker. The pending count falls after every job, whether it ran or was
+-- dropped.
 backWorker :: C.GlobalOptions -> BackQueue -> IO ()
 backWorker gopts queue = forever $ do
-  QueuedJob gen callbacks job <- atomically (readTChan (queuedJobs queue))
+  QueuedJob gen events job <- atomically (readTChan (queuedJobs queue))
   current <- isCurrent gen
   failed <- M.member (generationNumber gen) <$> readTVarIO (firstFailures queue)
   when (current && not failed) $ do
-    bjcOnStart callbacks job
-    result <- try (runBackPasses gopts job (isCurrent gen) (bjcOnProgress callbacks job))
+    events (BackStarted job)
+    result <- try (runBackPasses gopts job (isCurrent gen) (events . BackProgressed job))
                 :: IO (Either SomeException (Maybe TimeSpec, Maybe BackTiming))
     whenCurrent gen $ case result of
       Left err -> do
         let failure = BackPassFailure (bjKey job) (displayException err)
         atomically (modifyTVar' (firstFailures queue) (M.insertWith (\_ first -> first) (generationNumber gen) failure))
-        bjcOnDone callbacks job (BackJobFailed failure)
-      Right (time, timing) -> bjcOnDone callbacks job (BackJobOk time timing)
+        events (BackFinished job (BackJobFailed failure))
+      Right (time, timing) -> events (BackFinished job (BackJobOk time timing))
   atomically (modifyTVar' (pendingCounts queue) (M.update decrement (generationNumber gen)))
   where
     decrement count = if count <= 1 then Nothing else Just (count - 1)
@@ -688,102 +684,54 @@ prepareCompilePlanFromContext sp gopts ctx srcFiles allowPrune mChangedPaths = d
     , cpSrcFiles = srcFiles
     }
 
-data CompileHooks = CompileHooks
-  { chOnDiagnostics :: GlobalTask -> C.CompileOptions -> [Diagnostic String] -> IO ()
-  , chOnParseStart :: GlobalTask -> IO ()
-  , chOnParseProgress :: GlobalTask -> ParseProgress -> IO ()
-  , chOnParseDone :: GlobalTask -> Maybe TimeSpec -> IO ()
-  , chOnFrontStart :: GlobalTask -> IO ()
-  , chOnFrontDone :: GlobalTask -> IO ()
-  , chOnFrontProgress :: GlobalTask -> FrontPassProgress -> IO ()
-  , chOnFrontResult :: GlobalTask -> FrontResult -> IO ()
-  , chOnFrontOutputStart :: TaskKey -> FrontOutputKind -> IO ()
-  , chOnFrontOutputProgress :: TaskKey -> FrontOutputKind -> FrontOutputProgress -> IO ()
-  , chOnFrontOutputDone :: TaskKey -> FrontOutputKind -> Maybe TimeSpec -> IO ()
-  , chOnBackQueued :: TaskKey -> IO ()
-  , chOnBackSkipped :: TaskKey -> IO ()
-  , chOnBackStart :: BackJob -> IO ()
-  , chOnBackProgress :: BackJob -> BackPassProgress -> IO ()
-  , chOnBackDone :: BackJob -> BackJobResult -> IO ()
-  , chOnInfo :: String -> IO ()
-  }
-
-defaultCompileHooks :: CompileHooks
-defaultCompileHooks =
-  CompileHooks
-    { chOnDiagnostics = \_ _ _ -> return ()
-    , chOnParseStart = \_ -> return ()
-    , chOnParseProgress = \_ _ -> return ()
-    , chOnParseDone = \_ _ -> return ()
-    , chOnFrontStart = \_ -> return ()
-    , chOnFrontDone = \_ -> return ()
-    , chOnFrontProgress = \_ _ -> return ()
-    , chOnFrontResult = \_ _ -> return ()
-    , chOnFrontOutputStart = \_ _ -> return ()
-    , chOnFrontOutputProgress = \_ _ _ -> return ()
-    , chOnFrontOutputDone = \_ _ _ -> return ()
-    , chOnBackQueued = \_ -> return ()
-    , chOnBackSkipped = \_ -> return ()
-    , chOnBackStart = \_ -> return ()
-    , chOnBackProgress = \_ _ -> return ()
-    , chOnBackDone = \_ _ -> return ()
-    , chOnInfo = \_ -> return ()
-    }
-
+-- | Compile a plan as a generation of the scheduler. Its back jobs run on
+-- the scheduler's workers: wait for them with waitBackJobs. Each event is
+-- recorded for analytics first, a BackReady event then queues its job, and
+-- the handler sees the event last.
 runCompilePlan :: Source.SourceProvider
                -> C.GlobalOptions
-               -> CompilePlan
                -> CompileScheduler
                -> Generation
-               -> CompileHooks
+               -> CompilePlan
+               -> (BuildEvent -> IO ())
                -> IO (Either CompileFailure (Acton.Env.Env0, Bool))
-runCompilePlan sp gopts plan sched gen hooks0 = withAnalytics $ \ana -> do
-  let hooks = instrumentHooksForAnalytics ana hooks0
-      backCallbacks = BackJobCallbacks
-        { bjcOnStart = chOnBackStart hooks
-        , bjcOnProgress = chOnBackProgress hooks
-        , bjcOnDone = chOnBackDone hooks
-        }
-      callbacks = defaultCompileCallbacks
-        { ccOnDiagnostics = \t optsT diags -> chOnDiagnostics hooks t optsT diags
-        , ccOnParseStart = \t _ -> chOnParseStart hooks t
-        , ccOnParseProgress = \t _ p -> chOnParseProgress hooks t p
-        , ccOnParseDone = \t _ mtime -> chOnParseDone hooks t mtime
-        , ccOnFrontResult = \t _ fr -> chOnFrontResult hooks t fr
-        , ccOnFrontStart = \t _ -> chOnFrontStart hooks t
-        , ccOnFrontDone = \t _ -> chOnFrontDone hooks t
-        , ccOnFrontProgress = \t _ p -> chOnFrontProgress hooks t p
-        , ccOnFrontOutputStart = chOnFrontOutputStart hooks
-        , ccOnFrontOutputProgress = chOnFrontOutputProgress hooks
-        , ccOnFrontOutputDone = chOnFrontOutputDone hooks
-        , ccShouldWriteFrontOutput = isCurrent gen
-        , ccOnBackJob = \job -> do
-            enqueueBack (schedulerBackQueue sched) gen backCallbacks job
-            chOnBackQueued hooks (bjKey job)
-        , ccOnBackSkipped = chOnBackSkipped hooks
-        , ccOnInfo = chOnInfo hooks
-        }
-  compileTasks sp gopts moduleCache (cpContext plan) (cpNeededTasks plan) (cpDbpBlocked plan) callbacks
+runCompilePlan sp gopts sched gen plan onEvent = withAnalytics $ \analytics -> do
+  let events event = do
+        recordAnalytics analytics event
+        case event of
+          BackReady job -> enqueueBack (schedulerBackQueue sched) gen events job
+          _             -> return ()
+        onEvent event
+  compileModules (BuildEnv sp gopts gen events moduleCache) plan
 
--- | Tap the generic progress hooks to feed the analytics sampler. Each pass
--- already reports through these callbacks, so a single wrapper covers parse,
--- type check and the back passes without touching any individual pass.
-instrumentHooksForAnalytics :: Analytics -> CompileHooks -> CompileHooks
-instrumentHooksForAnalytics ana hooks = hooks
-  { chOnParseDone = \t mtime -> do
-      recordParseDone ana (taskMod t)
-      chOnParseDone hooks t mtime
-  , chOnFrontProgress = \t p -> do
-      when (fppPass p == FrontPassTypes) $
-        recordType ana (taskMod t) (fppCompleted p) (fppTotal p)
-      chOnFrontProgress hooks t p
-  , chOnBackProgress = \job p -> do
-      case bppEvent p of
-        BackPassFinished _ -> recordBackPass ana (modNameToString (tkMod (bjKey job))) (backPassName (bppPass p))
-        _                  -> return ()
-      chOnBackProgress hooks job p
-  }
-  where taskMod t   = modNameToString (tkMod (gtKey t))
+-- | The services of a run outside any scheduler: a generation that stays
+-- current, the process-wide module cache, and no back queue, so BackReady
+-- reaches only the handler.
+standaloneBuild :: Source.SourceProvider -> C.GlobalOptions -> (BuildEvent -> IO ()) -> IO BuildEnv
+standaloneBuild sp gopts onEvent = do
+  counter <- newIORef 0
+  return (BuildEnv sp gopts (Generation 0 counter) onEvent moduleCache)
+
+-- | Compile a plan outside any scheduler, as acton sig does. Analytics do
+-- not sample it.
+runStandalonePlan :: Source.SourceProvider
+                  -> C.GlobalOptions
+                  -> CompilePlan
+                  -> (BuildEvent -> IO ())
+                  -> IO (Either CompileFailure (Acton.Env.Env0, Bool))
+runStandalonePlan sp gopts plan onEvent = do
+  build <- standaloneBuild sp gopts onEvent
+  compileModules build plan
+
+-- | Feed the analytics sampler: finished parses, type-check progress and
+-- finished back passes.
+recordAnalytics                                 :: Analytics -> BuildEvent -> IO ()
+recordAnalytics analytics (ParseFinished t _)   = recordParseDone analytics (modNameToString (tkMod (gtKey t)))
+recordAnalytics analytics (FrontProgressed t p)
+  | fppPass p == FrontPassTypes                 = recordType analytics (modNameToString (tkMod (gtKey t))) (fppCompleted p) (fppTotal p)
+recordAnalytics analytics (BackProgressed job p)
+  | BackPassFinished _ <- bppEvent p            = recordBackPass analytics (modNameToString (tkMod (bjKey job))) (backPassName (bppPass p))
+recordAnalytics _ _                             = return ()
 
 -- | Debug helper for pass dumps.
 -- Prints a header and footer around the given text so pass output is easy to
@@ -1142,21 +1090,15 @@ addInterestDeps deps im =
     im
     (Data.Set.toList deps)
 
-startFrontOutputJob :: (TaskKey -> FrontOutputKind -> IO ())
-                    -> (TaskKey -> FrontOutputKind -> Maybe TimeSpec -> IO ())
-                    -> IO Bool
-                    -> TaskKey
-                    -> FrontOutputKind
-                    -> IO ()
-                    -> IO FrontOutputJob
-startFrontOutputJob onStart onDone shouldWrite key kind action = do
-  current <- shouldWrite
+startFrontOutputJob :: BuildEnv -> TaskKey -> FrontOutputKind -> IO () -> IO FrontOutputJob
+startFrontOutputJob build key kind action = do
+  current <- isCurrent (buildGeneration build)
   a <-
     if current
       then do
-        onStart key kind
+        emit build (OutputStarted key kind)
         asyncWithUnmask $ \unmask ->
-          runFrontOutputAction onDone shouldWrite key kind (unmask action)
+          runFrontOutputAction build key kind (unmask action)
       else async (return ())
   return FrontOutputJob
     { fojKey = key
@@ -1168,39 +1110,22 @@ startFrontOutputJob onStart onDone shouldWrite key kind action = do
 -- module reporting its front as complete IMPLIES its rows are on disk --
 -- readers never wait for, or race, a write. Same start/done reporting and
 -- skip-write gating as the background jobs; a failure propagates like any
--- other front error (and no longer only when someone waits on a job).
-runFrontOutputSync :: (TaskKey -> FrontOutputKind -> IO ())
-                   -> (TaskKey -> FrontOutputKind -> Maybe TimeSpec -> IO ())
-                   -> IO Bool
-                   -> TaskKey
-                   -> FrontOutputKind
-                   -> IO ()
-                   -> IO ()
-runFrontOutputSync onStart onDone shouldWrite key kind action = do
-  current <- shouldWrite
-  when current $ do
-    onStart key kind
-    runStartedFrontOutputAction onDone key kind action
+-- other front error.
+runFrontOutputSync :: BuildEnv -> TaskKey -> FrontOutputKind -> IO () -> IO ()
+runFrontOutputSync build key kind action =
+  whenCurrent (buildGeneration build) $ do
+    emit build (OutputStarted key kind)
+    runStartedFrontOutputAction build key kind action
 
-runFrontOutputAction :: (TaskKey -> FrontOutputKind -> Maybe TimeSpec -> IO ())
-                     -> IO Bool
-                     -> TaskKey
-                     -> FrontOutputKind
-                     -> IO ()
-                     -> IO ()
-runFrontOutputAction onDone shouldWrite key kind action = do
-  current <- shouldWrite
-  when current $
-    runStartedFrontOutputAction onDone key kind action
+runFrontOutputAction :: BuildEnv -> TaskKey -> FrontOutputKind -> IO () -> IO ()
+runFrontOutputAction build key kind action =
+  whenCurrent (buildGeneration build) $
+    runStartedFrontOutputAction build key kind action
 
-runStartedFrontOutputAction :: (TaskKey -> FrontOutputKind -> Maybe TimeSpec -> IO ())
-                            -> TaskKey
-                            -> FrontOutputKind
-                            -> IO ()
-                            -> IO ()
-runStartedFrontOutputAction onDone key kind action = do
+runStartedFrontOutputAction :: BuildEnv -> TaskKey -> FrontOutputKind -> IO () -> IO ()
+runStartedFrontOutputAction build key kind action = do
   (res, elapsed) <- timed (try action :: IO (Either SomeException ()))
-  onDone key kind (either (const Nothing) (const (Just elapsed)) res) `catch` ignoreProgressException
+  emit build (OutputFinished key kind (either (const Nothing) (const (Just elapsed)) res)) `catch` ignoreProgressException
   either throwIO return res
   where
     ignoreProgressException :: SomeException -> IO ()
@@ -1833,14 +1758,15 @@ formatCodegenDelta status =
 -- | Run the front passes for a single module.
 -- Builds the environment, runs kinds/types, computes per-name src/pub/impl
 -- hashes plus module pub/impl hashes, and starts the post-front output jobs.
+-- Progress and outputs are reported as the task's events.
 -- Returns the front result plus a BackJob for later passes when compilation is
 -- needed. Callers must wait for frOutputJobs before treating the compile as
 -- finished.
 
-runFrontPasses :: C.GlobalOptions
+runFrontPasses :: BuildEnv
+               -> GlobalTask
                -> C.CompileOptions
                -> Bool
-               -> Paths
                -> Acton.Env.Env0
                -> A.Module
                -> String
@@ -1849,14 +1775,9 @@ runFrontPasses :: C.GlobalOptions
                -> (A.ModName -> IO (Maybe B.ByteString))
                -> (A.ModName -> IO (Maybe B.ByteString))
                -> (A.ModName -> A.Name -> IO (Maybe InterfaceFiles.NameHashInfo))
-               -> (FrontPassProgress -> IO ())
-               -> (TaskKey -> FrontOutputKind -> IO ())
-               -> (TaskKey -> FrontOutputKind -> FrontOutputProgress -> IO ())
-               -> (TaskKey -> FrontOutputKind -> Maybe TimeSpec -> IO ())
-               -> IO Bool
                -> ([FrontOutputJob] -> IO ())
                -> IO (Either [Diagnostic String] FrontResult)
-runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourceMeta resolveImportHash resolveImportImplHash resolveNameHash onFrontProgress onFrontOutputStart onFrontOutputProgress onFrontOutputDone shouldWriteFrontOutput recordFrontOutputJobs = do
+runFrontPasses build task opts dbpBlocked env0 parsed srcContent srcBytes sourceMeta resolveImportHash resolveImportImplHash resolveNameHash recordFrontOutputJobs = do
   createDirectoryIfMissing True (moduleTypesDir (projTypes paths) mn)
   core
     `catch` handleGeneral
@@ -1864,6 +1785,8 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
     `catch` handleTypeErrors
     `catch` handleTypeError
   where
+    gopts = buildOptions build
+    paths = gtPaths task
     mn = A.modname parsed
     filename = modNameToFilename (dropProjPrefix paths mn)
     prettyAstStyle = style { mode = PageMode, lineLength = 120, ribbonsPerLine = 1.0 }
@@ -1964,7 +1887,7 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
       return $ if null errs then Right (M.fromDistinctAscList vals) else Left (concat errs)
 
     emitFrontProgress pass completed total current =
-      onFrontProgress FrontPassProgress
+      emit build $ FrontProgressed task FrontPassProgress
         { fppPass = pass
         , fppCompleted = completed
         , fppTotal = total
@@ -2246,7 +2169,7 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
 
                   let writeTyDb outputKey = do
                         InterfaceFiles.writeFileWithProgress
-                          (\p -> onFrontOutputProgress outputKey FrontOutputTydb (frontOutputTyDbProgress p))
+                          (emit build . OutputProgressed outputKey FrontOutputTydb . frontOutputTyDbProgress)
                           A.version
                           (tyDbPath paths mn)
                           moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta impsWithHash depModules nameHashes escapeSummaries roots tests mdoc nmod tchecked
@@ -2320,13 +2243,13 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                     -- module's front on the structured diagnostics path.
                     -- Docs and the interface copy are never read back within
                     -- this build, so they stay in the background.
-                    writeRes <- trySync (runFrontOutputSync onFrontOutputStart onFrontOutputDone shouldWriteFrontOutput key FrontOutputTydb (writeTyDb key))
+                    writeRes <- trySync (runFrontOutputSync build key FrontOutputTydb (writeTyDb key))
                     case writeRes of
                       Left err -> return (Left (tydbWriteDiagnostics mn err))
                       Right () -> do
                         outputJobs <- mask_ $ do
                           let startOutput =
-                                startFrontOutputJob onFrontOutputStart onFrontOutputDone shouldWriteFrontOutput key
+                                startFrontOutputJob build key
                           docJobs <-
                             forM docOutputActions $ uncurry startOutput
                           tyJobs <-
@@ -2364,14 +2287,12 @@ data DbpNameSelection = DbpNameSelection
   , dnsNameHashes :: [InterfaceFiles.NameHashInfo]
   }
 
-prepareDeferredBackJob :: Source.SourceProvider
-                       -> C.GlobalOptions
-                       -> CompileCallbacks
+prepareDeferredBackJob :: BuildEnv
                        -> Acton.Env.Env0
                        -> InterestMap
                        -> DeferredBackJob
                        -> IO (Maybe BackJob)
-prepareDeferredBackJob sp gopts callbacks envAcc interestMap deferred = do
+prepareDeferredBackJob build envAcc interestMap deferred = do
   let paths = deferredPaths deferred
       mn = tkMod (deferredKey deferred)
       tyFile = tyDbPath paths mn
@@ -2386,7 +2307,7 @@ prepareDeferredBackJob sp gopts callbacks envAcc interestMap deferred = do
   codegen <- codegenStatus paths mn codegenHash
   if codegenUpToDate codegen
     then do
-      logDbpSelection gopts callbacks mn deferred totalNames (Data.Set.size interested) (Data.Set.size rootSeeds) (Data.Set.size (dnsSelectedNames nameSelection)) Nothing "generated code up to date"
+      logDbpSelection build mn deferred totalNames (Data.Set.size interested) (Data.Set.size rootSeeds) (Data.Set.size (dnsSelectedNames nameSelection)) Nothing "generated code up to date"
       return Nothing
     else do
       selectedTmod <- InterfaceFiles.readSelectedModule tyFile (dnsNameHashes nameSelection) (dnsSelectedNames nameSelection)
@@ -2396,9 +2317,9 @@ prepareDeferredBackJob sp gopts callbacks envAcc interestMap deferred = do
       selection <- case selectedTmod of
         Just tmod -> return $ selectDbpModule totalNames nameSelection tmod
         Nothing -> error ("Internal error: missing statement rows in " ++ tyFile)
-      snap <- Source.readSource sp actFile
+      snap <- Source.readSource (buildSources build) actFile
       env1 <- Acton.Env.mkEnv (searchPath paths) envAcc (dbsModule selection)
-      logDbpSelection gopts callbacks mn deferred totalNames (Data.Set.size interested) (Data.Set.size rootSeeds) (dbsSelectedCount selection) (dbsFallbackReason selection) "generated code out of date"
+      logDbpSelection build mn deferred totalNames (Data.Set.size interested) (Data.Set.size rootSeeds) (dbsSelectedCount selection) (dbsFallbackReason selection) "generated code out of date"
       return $ Just BackJob
         { bjKey = deferredKey deferred
         , bjPaths = paths
@@ -2409,8 +2330,7 @@ prepareDeferredBackJob sp gopts callbacks envAcc interestMap deferred = do
         , bjImplHash = codegenHash
         }
 
-logDbpSelection :: C.GlobalOptions
-                -> CompileCallbacks
+logDbpSelection :: BuildEnv
                 -> A.ModName
                 -> DeferredBackJob
                 -> Int
@@ -2420,16 +2340,15 @@ logDbpSelection :: C.GlobalOptions
                 -> Maybe String
                 -> String
                 -> IO ()
-logDbpSelection gopts callbacks mn deferred totalNames interestedCount rootCount selectedCount fallbackReason codegenReason =
-  when (C.verbose gopts) $
-    ccOnInfo callbacks $
-      "  DBP " ++ modNameToString (dropProjPrefix (deferredPaths deferred) mn)
-      ++ ": total names " ++ show totalNames
-      ++ ", interested names " ++ show interestedCount
-      ++ ", root names " ++ show rootCount
-      ++ ", selected closure " ++ show selectedCount
-      ++ maybe "" (\reason -> ", fallback: " ++ reason) fallbackReason
-      ++ ", " ++ codegenReason
+logDbpSelection build mn deferred totalNames interestedCount rootCount selectedCount fallbackReason codegenReason =
+  info build $
+    "  DBP " ++ modNameToString (dropProjPrefix (deferredPaths deferred) mn)
+    ++ ": total names " ++ show totalNames
+    ++ ", interested names " ++ show interestedCount
+    ++ ", root names " ++ show rootCount
+    ++ ", selected closure " ++ show selectedCount
+    ++ maybe "" (\reason -> ", fallback: " ++ reason) fallbackReason
+    ++ ", " ++ codegenReason
 
 dbpCodegenHash :: B.ByteString -> Data.Set.Set A.Name -> B.ByteString
 dbpCodegenHash moduleImplHash selected =
@@ -2645,9 +2564,9 @@ criticalWeights                         :: Graph TaskKey -> M.Map TaskKey Intege
 criticalWeights g sizes                 = weights
   where weights                         = M.fromList [ (k, M.findWithDefault 0 k sizes + maximum (0 : map (weights M.!) (usersOf g k))) | k <- nodes g ]
 
--- | Compile a set of GlobalTasks using a parallel, dependency-aware scheduler.
--- This drives front passes, emits diagnostics via callbacks, and collects
--- back-pass jobs for later execution.
+-- | Compile a plan's needed tasks using a parallel, dependency-aware
+-- scheduler. This drives front passes and reports diagnostics, progress and
+-- ready back-pass jobs as events of the BuildEnv.
 --
 -- Total build graph scheduler: this compiles all tasks across all projects,
 -- i.e. dependencies of the main project are also compiled here, as well as
@@ -2695,15 +2614,8 @@ criticalWeights g sizes                 = weights
 --     updates indegrees/ready sets. Dependents receive public hashes via pubMap.
 --   - Each module is compiled with optionsFor: dependency projects skip their
 --     tests and final binary while the root keeps the user's options.
-compileTasks :: Source.SourceProvider
-             -> C.GlobalOptions
-             -> ModuleCache
-             -> CompileContext
-             -> [GlobalTask]
-             -> Data.Set.Set TaskKey
-             -> CompileCallbacks
-             -> IO (Either CompileFailure (Acton.Env.Env0, Bool))
-compileTasks sp gopts cache ctx tasks dbpBlocked callbacks = do
+compileModules :: BuildEnv -> CompilePlan -> IO (Either CompileFailure (Acton.Env.Env0, Bool))
+compileModules build plan = do
     runningRef <- newIORef []
     frontOutputRef <- newIORef []
     let cancelRunning = readIORef runningRef >>= mapM_ cancel
@@ -2747,6 +2659,13 @@ compileTasks sp gopts cache ctx tasks dbpBlocked callbacks = do
       loop frontOutputRef runningRef stageInitialReady [] M.empty M.empty M.empty M.empty M.empty Data.Set.empty M.empty stageIndeg stagePending0 baseEnv False maxParallel cwMap
 
     -- Basic maps/sets ----------------------------------------------------
+    sp         = buildSources build
+    gopts      = buildOptions build
+    cache      = buildCache build
+    ctx        = cpContext plan
+    tasks      = cpNeededTasks plan
+    dbpBlocked = cpDbpBlocked plan
+
     taskMap = M.fromList [ (gtKey t, t) | t <- tasks ]
     isDbpBlocked k = Data.Set.member k dbpBlocked
     builtinOrder = [ t | t <- tasks, isBuiltin (gtKey t) ]
@@ -2789,15 +2708,15 @@ compileTasks sp gopts cache ctx tasks dbpBlocked callbacks = do
               deferredBacks
       prepared <- trySync $
         forM (M.elems ready) $ \(deferred, _waitSet) -> do
-          mJob <- prepareDeferredBackJob sp gopts callbacks envAcc interestMap deferred
+          mJob <- prepareDeferredBackJob build envAcc interestMap deferred
           case mJob of
-            Nothing -> ccOnBackSkipped callbacks (deferredKey deferred)
+            Nothing -> emit build (BackSkipped (deferredKey deferred))
             Just _ -> return ()
           return mJob
       case prepared of
         Left err -> return (Left (DeferredBackFailed (displayException err)))
         Right jobs -> do
-          mapM_ (ccOnBackJob callbacks) (catMaybes jobs)
+          mapM_ (emit build . BackReady) (catMaybes jobs)
           return (Right waiting)
 
     -- TODO: can we reintegrate this into the normal loop to avoid duplication?
@@ -2820,16 +2739,16 @@ compileTasks sp gopts cache ctx tasks dbpBlocked callbacks = do
           parsed <- materialize sp optsBuiltin mn actFile Nothing task
           case parsed of
             Left diags -> do
-              ccOnDiagnostics callbacks t optsBuiltin diags
+              emit build (Diagnostics t diags)
               return (Left BuiltinFailed)
             Right (source, m) -> do
-              ccOnFrontStart callbacks t optsBuiltin
+              emit build (FrontStarted t)
               builtinEnv0 <- Acton.Env.initEnv (projTypes bPaths) True
               res <- runFrontPasses
-                gopts
+                build
+                t
                 optsBuiltin
                 False
-                bPaths
                 builtinEnv0
                 m
                 (sourceText source)
@@ -2838,26 +2757,20 @@ compileTasks sp gopts cache ctx tasks dbpBlocked callbacks = do
                 (lookupModuleHash cache (searchPath bPaths) Pub)
                 (lookupModuleHash cache (searchPath bPaths) Impl)
                 (lookupNameHash cache (searchPath bPaths))
-                (\p -> ccOnFrontProgress callbacks t optsBuiltin p)
-                (ccOnFrontOutputStart callbacks)
-                (ccOnFrontOutputProgress callbacks)
-                (ccOnFrontOutputDone callbacks)
-                (ccShouldWriteFrontOutput callbacks)
                 (rememberFrontOutputJobList frontOutputRef)
               case res of
                 Left diags -> do
-                  ccOnFrontDone callbacks t optsBuiltin
-                  ccOnDiagnostics callbacks t optsBuiltin diags
+                  emit build (FrontFinished t Nothing)
+                  emit build (Diagnostics t diags)
                   return (Left BuiltinFailed)
                 Right fr -> do
                   outputFailure <- waitFrontOutputJobsRef frontOutputRef
                   case outputFailure of
                     Just err -> return (Left err)
                     Nothing -> do
-                      ccOnFrontDone callbacks t optsBuiltin
-                      ccOnFrontResult callbacks t optsBuiltin fr
+                      emit build (FrontFinished t (Just fr))
                       rememberFront cache mn fr
-                      forM_ (frBackJob fr) $ ccOnBackJob callbacks
+                      forM_ (frBackJob fr) (emit build . BackReady)
                       return (Right ())
 
     -- One module ---------------------------------------------------------
@@ -2919,11 +2832,7 @@ compileTasks sp gopts cache ctx tasks dbpBlocked callbacks = do
             | not (null (frOutputJobs fr)) = return fr
             | B.null (frPubHash fr) = return fr
             | otherwise = mask_ $ do
-                job <- startFrontOutputJob (ccOnFrontOutputStart callbacks)
-                                           (ccOnFrontOutputDone callbacks)
-                                           (ccShouldWriteFrontOutput callbacks)
-                                           (TaskKey (projPath paths) mn)
-                                           FrontOutputTydbCopy $
+                job <- startFrontOutputJob build (TaskKey (projPath paths) mn) FrontOutputTydbCopy $
                   copyTydbInterface optsT paths mn
                 rememberFrontOutputJobList frontOutputRef [job]
                 return fr{ frOutputJobs = [job] }
@@ -3330,37 +3239,36 @@ compileTasks sp gopts cache ctx tasks dbpBlocked callbacks = do
                     prevNameHashes <- if C.verbose gopts
                       then lookupNameMap cache (searchPath paths) mn
                       else return Nothing
-                    when (C.verbose gopts) $ do
-                      if needBySource
-                        then ccOnInfo callbacks ("  Stale " ++ modNameToString (dropProjPrefix paths mn) ++ ": source changed")
-                        else do
-                          when needByPub $ do
-                            let fmtDelta (qn, old, new) = prstr qn ++ " " ++ shortHash old ++ " → " ++ shortHash new ++ fmtUsers pubUsers qn
-                            ccOnInfo callbacks ("  Stale " ++ modNameToString (dropProjPrefix paths mn) ++ ": pub changes in " ++ Data.List.intercalate ", " (map fmtDelta pubDeltas))
-                          when needByMissing $ do
-                            let fmtMissing users qn = prstr qn ++ fmtUsers users qn
-                                pubMissingItems =
-                                  [ "pub " ++ fmtMissing pubUsers qn
-                                  | qn <- Data.List.sortOn Hashing.qnameKey pubMissing
-                                  ]
-                                implMissingItems =
-                                  [ "impl " ++ fmtMissing implUsers qn
-                                  | qn <- Data.List.sortOn Hashing.qnameKey implMissing
-                                  ]
-                                rowMissingItems =
-                                  [ "rows " ++ modNameToString depMn
-                                  | depMn <- Data.List.sortOn modNameToString (Data.Set.toList rowMissingMods)
-                                  ]
-                            ccOnInfo callbacks ("  Stale " ++ modNameToString (dropProjPrefix paths mn) ++ ": missing dep hashes in " ++ Data.List.intercalate ", " (pubMissingItems ++ implMissingItems ++ rowMissingItems))
+                    if needBySource
+                      then info build ("  Stale " ++ modNameToString (dropProjPrefix paths mn) ++ ": source changed")
+                      else do
+                        when needByPub $ do
+                          let fmtDelta (qn, old, new) = prstr qn ++ " " ++ shortHash old ++ " → " ++ shortHash new ++ fmtUsers pubUsers qn
+                          info build ("  Stale " ++ modNameToString (dropProjPrefix paths mn) ++ ": pub changes in " ++ Data.List.intercalate ", " (map fmtDelta pubDeltas))
+                        when needByMissing $ do
+                          let fmtMissing users qn = prstr qn ++ fmtUsers users qn
+                              pubMissingItems =
+                                [ "pub " ++ fmtMissing pubUsers qn
+                                | qn <- Data.List.sortOn Hashing.qnameKey pubMissing
+                                ]
+                              implMissingItems =
+                                [ "impl " ++ fmtMissing implUsers qn
+                                | qn <- Data.List.sortOn Hashing.qnameKey implMissing
+                                ]
+                              rowMissingItems =
+                                [ "rows " ++ modNameToString depMn
+                                | depMn <- Data.List.sortOn modNameToString (Data.Set.toList rowMissingMods)
+                                ]
+                          info build ("  Stale " ++ modNameToString (dropProjPrefix paths mn) ++ ": missing dep hashes in " ++ Data.List.intercalate ", " (pubMissingItems ++ implMissingItems ++ rowMissingItems))
                     parsed <- materialize sp optsT mn actFile Nothing taskCurrent
                     case parsed of
                       Left diags -> return (key, Left diags)
                       Right (source, m) -> do
                         res <- runFrontPasses
-                          gopts
+                          build
+                          t
                           optsT
                           (isDbpBlocked key)
-                          paths
                           envSnap
                           (adjustImports providers m)
                           (sourceText source)
@@ -3369,19 +3277,14 @@ compileTasks sp gopts cache ctx tasks dbpBlocked callbacks = do
                           resolveImportHash
                           resolveImportImplHash
                           resolveNameHash'
-                          (\p -> ccOnFrontProgress callbacks t optsT p)
-                          (ccOnFrontOutputStart callbacks)
-                          (ccOnFrontOutputProgress callbacks)
-                          (ccOnFrontOutputDone callbacks)
-                          (ccShouldWriteFrontOutput callbacks)
                           (rememberFrontOutputJobList frontOutputRef)
                         case res of
                           Left diags -> return (key, Left diags)
                           Right fr -> do
-                            when (C.verbose gopts) $
-                              forM_ prevNameHashes $ \prevMap ->
-                                forM_ (nameHashSummary prevMap (frNameHashes fr)) $ \summary ->
-                                  ccOnInfo callbacks ("  Hash deltas " ++ modNameToString (dropProjPrefix paths mn) ++ ": " ++ summary)
+                            -- prevNameHashes is Nothing unless --verbose.
+                            forM_ prevNameHashes $ \prevMap ->
+                              forM_ (nameHashSummary prevMap (frNameHashes fr)) $ \summary ->
+                                info build ("  Hash deltas " ++ modNameToString (dropProjPrefix paths mn) ++ ": " ++ summary)
                             cacheFrontResult fr
                   -- Only the attempt falls back to the front passes, and only
                   -- for a synchronous exception or an unresolved hash.  The
@@ -3389,38 +3292,27 @@ compileTasks sp gopts cache ctx tasks dbpBlocked callbacks = do
                   -- top of a committed refresh.  A failed write and a missing
                   -- own interface fail the module instead.
                   runImplRefresh = do
-                    when (C.verbose gopts) $ do
-                      let fmtDelta (qn, old, new) = prstr qn ++ " " ++ shortHash old ++ " → " ++ shortHash new ++ fmtUsers implUsers qn
-                      ccOnInfo callbacks ("  Stale " ++ modNameToString (dropProjPrefix paths mn) ++ ": impl changes in " ++ Data.List.intercalate ", " (map fmtDelta implDeltas))
+                    let fmtDelta (qn, old, new) = prstr qn ++ " " ++ shortHash old ++ " → " ++ shortHash new ++ fmtUsers implUsers qn
+                    info build ("  Stale " ++ modNameToString (dropProjPrefix paths mn) ++ ": impl changes in " ++ Data.List.intercalate ", " (map fmtDelta implDeltas))
                     attempt <- trySync recomputeImpl
                     case attempt of
                       Right (Recomputed updatedDepModules updatedNameHashes fr) -> do
                         -- Synchronous, like the full write: completion implies
                         -- the refreshed rows are committed.  A write failure is
                         -- this module's diagnostics, returned and not thrown.
-                        written <- trySync (runFrontOutputSync (ccOnFrontOutputStart callbacks)
-                                                               (ccOnFrontOutputDone callbacks)
-                                                               (ccShouldWriteFrontOutput callbacks)
-                                                               outputKey
-                                                               FrontOutputTydb $
+                        written <- trySync (runFrontOutputSync build outputKey FrontOutputTydb $
                                               InterfaceFiles.updateImplRefresh tyFile (frImplHash fr) updatedDepModules updatedNameHashes)
                         case written of
                           Left err -> return (key, Left (tydbWriteDiagnostics mn err))
                           Right () -> mask_ $ do
                             outputJobs <- if C.tydb optsT
-                                            then (:[]) <$> startFrontOutputJob (ccOnFrontOutputStart callbacks)
-                                                                               (ccOnFrontOutputDone callbacks)
-                                                                               (ccShouldWriteFrontOutput callbacks)
-                                                                               outputKey
-                                                                               FrontOutputTydbCopy
-                                                                               (copyTydbInterface optsT paths mn)
+                                            then (:[]) <$> startFrontOutputJob build outputKey FrontOutputTydbCopy (copyTydbInterface optsT paths mn)
                                             else return []
                             rememberFrontOutputJobList frontOutputRef outputJobs
                             cacheFrontResult fr{ frOutputJobs = outputJobs }
                       Right InterfaceGone -> return (key, Left (missingIfaceDiagnostics mn "" mn))
                       _ -> do
-                        when (C.verbose gopts) $
-                          ccOnInfo callbacks ("  Stale " ++ modNameToString (dropProjPrefix paths mn) ++ ": impl refresh encountered unresolved dep hashes; rerunning front passes")
+                        info build ("  Stale " ++ modNameToString (dropProjPrefix paths mn) ++ ": impl refresh encountered unresolved dep hashes; rerunning front passes")
                         runFront
                     where outputKey = TaskKey (projPath paths) mn
                   -- The refresh is pure row math: every input is already stored.
@@ -3500,9 +3392,7 @@ compileTasks sp gopts cache ctx tasks dbpBlocked callbacks = do
                                         return (Recomputed updatedDepModules updatedNameHashes fr)
                       _ -> return Unresolved
                   runCodegenRefresh = do
-                    when (C.verbose gopts) $ do
-                      let suffix = maybe "" formatCodegenDelta mCodegenStatus
-                      ccOnInfo callbacks ("  Stale " ++ modNameToString (dropProjPrefix paths mn) ++ ": generated code out of date" ++ suffix)
+                    info build ("  Stale " ++ modNameToString (dropProjPrefix paths mn) ++ ": generated code out of date" ++ maybe "" formatCodegenDelta mCodegenStatus)
                     tyRes <- readTyFile
                     case tyRes of
                       Left diags -> return (key, Left diags)
@@ -3530,8 +3420,7 @@ compileTasks sp gopts cache ctx tasks dbpBlocked callbacks = do
                                    }
                         cacheFrontResult fr
                   runReuse = do
-                    when (C.verbose gopts) $
-                      ccOnInfo callbacks ("  Fresh " ++ modNameToString (dropProjPrefix paths mn) ++ ": using cached .tydb")
+                    info build ("  Fresh " ++ modNameToString (dropProjPrefix paths mn) ++ ": using cached .tydb")
                     ifaceRes <- case taskCurrent of
                                   TyTask h -> readIfaceFromTy paths mn "" (Just (InterfaceFiles.summaryPubHash h))
                                   _ -> readIfaceFromTy paths mn "" Nothing
@@ -3571,7 +3460,7 @@ compileTasks sp gopts cache ctx tasks dbpBlocked callbacks = do
       let optsT = optionsFor ctx key
           mn = tkMod key
           actFile = taskSourceFile t
-          onProgress p = ccOnParseProgress callbacks t optsT p
+          onProgress = emit build . ParseProgressed t
       timeStart <- getTime Monotonic
       -- A parse stage exists only for a ParseTask.  A parse error becomes a
       -- ParseErrorTask, which the module's front stage reports.
@@ -3614,11 +3503,11 @@ compileTasks sp gopts cache ctx tasks dbpBlocked callbacks = do
                 case sk of
                   FrontStage key ->
                     case M.lookup key taskMap of
-                      Just t -> ccOnFrontStart callbacks t (optionsFor ctx key)
+                      Just t -> emit build (FrontStarted t)
                       Nothing -> return ()
                   ParseStage key ->
                     case M.lookup key taskMap of
-                      Just t -> ccOnParseStart callbacks t (optionsFor ctx key)
+                      Just t -> emit build (ParseStarted t)
                       Nothing -> return ()
                 a <- async $
                   case sk of
@@ -3666,13 +3555,12 @@ compileTasks sp gopts cache ctx tasks dbpBlocked callbacks = do
           writeIORef runningRef (map fst running2)
           let keyDone = stageTaskKey stageDone
               tDone = taskMap M.! keyDone
-              optsDone = optionsFor ctx keyDone
           case outcome of
             -- Only a front stage fails: a parse stage reports a parse error as
             -- a ParseErrorTask, which its front stage turns into diagnostics.
             Left diags -> do
-              ccOnFrontDone callbacks tDone optsDone
-              ccOnDiagnostics callbacks tDone optsDone diags
+              emit build (FrontFinished tDone Nothing)
+              emit build (Diagnostics tDone diags)
               let blockedMods = strictDependents modules keyDone
                   blockedStages =
                     Data.Set.fromList $
@@ -3698,13 +3586,12 @@ compileTasks sp gopts cache ctx tasks dbpBlocked callbacks = do
                   rdy2 = rdy1 ++ newlyReady
               case success of
                 StageParsed parsed mParseTime -> do
-                  ccOnParseDone callbacks tDone optsDone mParseTime
+                  emit build (ParseFinished tDone mParseTime)
                   let parsedTasks2 = M.insert keyDone parsed parsedTasks
                   loop frontOutputRef runningRef rdy2 running2 res implRes nameRes parsedTasks2 interestMap frontDone deferredBacks ind2 pend2 envAcc hadErrors maxPar cw
                 StageFronted fr -> do
-                  ccOnFrontDone callbacks tDone optsDone
-                  ccOnFrontResult callbacks tDone optsDone fr
-                  forM_ (frBackJob fr) $ ccOnBackJob callbacks
+                  emit build (FrontFinished tDone (Just fr))
+                  forM_ (frBackJob fr) (emit build . BackReady)
                   let res2  = M.insert keyDone (frPubHash fr) res
                       implRes2 = M.insert keyDone (frImplHash fr) implRes
                       nameRes2 = M.insert keyDone (nameHashMapFromList (frNameHashes fr)) nameRes

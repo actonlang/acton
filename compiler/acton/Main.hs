@@ -1156,14 +1156,11 @@ compileSigTarget gopts queryGopts opts paths rootProj sysAbs depOverrides target
           , ccBuildStamp = buildStamp
           }
     plan <- prepareCompilePlanFromContext sp queryGopts cctx [srcPath] False Nothing
-    let cctx' = cpContext plan
-        opts' = ccOpts cctx'
-        callbacks = defaultCompileCallbacks
-          { ccOnDiagnostics = \_ optsT diags -> printDiagnostics gopts optsT diags
-          , ccOnInfo = \msg -> when (C.verbose gopts) $ putStrLn msg
-          , ccOnBackJob = \_ -> return ()
-          }
-    compileRes <- compileTasks sp queryGopts moduleCache cctx' (cpNeededTasks plan) (cpDbpBlocked plan) callbacks
+    let opts' = ccOpts (cpContext plan)
+        onEvent (Diagnostics _ diags) = printDiagnostics gopts diags
+        onEvent (Info msg)            = putStrLn msg      -- Info lines arrive only under --verbose
+        onEvent _                     = return ()
+    compileRes <- runStandalonePlan sp queryGopts plan onEvent
     case compileRes of
       Left err -> printErrorAndExit (compileFailureMessage err)
       Right (_, hadErrors) -> when hadErrors System.Exit.exitFailure
@@ -1428,7 +1425,7 @@ printDocs gopts opts = do
             parsedRes <- parseActFile C.defaultCompileOptions Source.diskSourceProvider modname filename Nothing
             (_snap, parsed) <- case parsedRes of
               Left diags -> do
-                printDiagnostics gopts C.defaultCompileOptions diags
+                printDiagnostics gopts diags
                 System.Exit.exitFailure
               Right res -> return res
 
@@ -1565,7 +1562,7 @@ compileFilesChanged sp gopts opts srcFiles allowPrune mChangedPaths mWatch = do
                       finalizeCompile $
                         unless watchMode System.Exit.exitFailure
                 compileStart <- getTime Monotonic
-                compileRes <- runCompilePlan sp gopts plan sched gen (cchHooks cliHooks)
+                compileRes <- runCompilePlan sp gopts sched gen plan (cchOnEvent cliHooks)
                 backFailure <- case compileRes of
                   Right _ -> waitBackJobs sched gen
                   Left _ -> return Nothing
@@ -1613,7 +1610,7 @@ overlayChangedPaths sp mPaths = do
           return (Just (normalise path, snap { Source.ssIsOverlay = True }))
 
 data CliCompileHooks = CliCompileHooks
-  { cchHooks :: CompileHooks
+  { cchOnEvent :: BuildEvent -> IO ()
   , cchLogLine :: String -> IO ()
   , cchClearProgress :: IO ()
   , cchFinalStart :: IO ()
@@ -1621,7 +1618,8 @@ data CliCompileHooks = CliCompileHooks
   , cchProgressUI :: ProgressUI
   }
 
--- | Build compile hooks and state for CLI progress and completion logs.
+-- | Build the compile event handler and state for CLI progress and
+-- completion logs.
 initCliCompileHooks :: ProgressUI
                     -> ProgressState
                     -> C.GlobalOptions
@@ -1689,8 +1687,8 @@ initCliCompileHooks progressUI progressState gopts gen plan = do
               (_, cols) <- termSizeRead (puTermSize progressUI)
               progressLogLine progressUI (render (safeLiveWidth cols))
             else progressLogLine progressUI (render plainLogWidth)
-        logDiagnostics optsT diags =
-          gate (progressWithLog progressUI (printDiagnostics gopts optsT diags))
+        logDiagnostics diags =
+          gate (progressWithLog progressUI (printDiagnostics gopts diags))
         termProgress = puTermProgress progressUI
         termEnabled = termProgressEnabled termProgress
         modLabel mn = modNameToString (dropProjPrefix rootPaths mn)
@@ -1998,53 +1996,41 @@ initCliCompileHooks progressUI progressState gopts gen plan = do
                  else (M.insert key (parseDoneFrac, frontDoneFrac, True) m, backShare)
           addProgress delta
     setPercent 0
-    let onBackStart job =
-          gate (progressStartTask progressUI progressState (taskProgressKey (bjKey job)) (backActiveLine (tkMod (bjKey job))) (Just 0))
-        onBackProgress job p = do
-          let mn = tkMod (bjKey job)
-          gate (progressUpdateTask progressUI progressState (taskProgressKey (bjKey job))
-                  (backProgressLine mn p) (Just (backProgressRatio p)))
-          when (not (quiet gopts optsPlan) && (C.timing gopts || C.verbose gopts)) $
-            case bppEvent p of
-              BackPassFinished elapsed ->
-                logRendered (\cols ->
-                  detailTimedLine cols detailStmtIndentWide detailStmtIndentNarrow
-                    (backPassDoneLine mn (bppPass p)) elapsed)
-              _ -> return ()
-        onBackDone job result = do
-          gate (void $ progressDoneTask progressUI progressState (taskProgressKey (bjKey job)))
-          creditBack (bjKey job)
-          when (not (quiet gopts optsPlan)) $
-            case result of
-              BackJobOk mtime mtiming -> do
-                logRendered (\cols -> backDoneLine cols (tkMod (bjKey job)) mtime)
-                when (C.timing gopts) $
-                  forM_ mtiming $ \timing ->
-                    logRendered (\cols -> detailLine cols detailStmtIndentWide detailStmtIndentNarrow (backTimingLine timing))
-              BackJobFailed failure ->
-                logRendered (\cols -> backFailLine cols (tkMod (bjKey job)) (bpfMessage failure))
-        hooks = defaultCompileHooks
-          { chOnDiagnostics = \t optsT diags -> do
-              gate (void $ progressDoneTask progressUI progressState (taskProgressKey (gtKey t)))
-              logDiagnostics optsT diags
-          , chOnParseStart = \t ->
-              let key = gtKey t
-                  mn = tkMod key
-              in gate (progressStartTask progressUI progressState (taskProgressKey key) (parseActiveLine mn) (Just 0))
-          , chOnParseProgress = \t p ->
-              let key = gtKey t
-                  mn = tkMod key
-              in do
-                gate (progressUpdateTask progressUI progressState (taskProgressKey key) (parseProgressLine mn p) (Just (parseProgressRatio p)))
-                creditParseProgress key p
-          , chOnParseDone = \t mtime -> do
-              gate (void $ progressDoneTask progressUI progressState (taskProgressKey (gtKey t)))
-              creditParse (gtKey t)
-              when (not (quiet gopts optsPlan)) $
-                forM_ mtime $ \tParse -> do
-                  let mn = tkMod (gtKey t)
-                  logRendered (\cols -> parseDoneLine cols mn tParse)
-          , chOnFrontResult = \t fr -> do
+    let onEvent event = case event of
+          Diagnostics t diags -> do
+            gate (void $ progressDoneTask progressUI progressState (taskProgressKey (gtKey t)))
+            logDiagnostics diags
+          ParseStarted t ->
+            let key = gtKey t
+                mn = tkMod key
+            in gate (progressStartTask progressUI progressState (taskProgressKey key) (parseActiveLine mn) (Just 0))
+          ParseProgressed t p ->
+            let key = gtKey t
+                mn = tkMod key
+            in do
+              gate (progressUpdateTask progressUI progressState (taskProgressKey key) (parseProgressLine mn p) (Just (parseProgressRatio p)))
+              creditParseProgress key p
+          ParseFinished t mtime -> do
+            gate (void $ progressDoneTask progressUI progressState (taskProgressKey (gtKey t)))
+            creditParse (gtKey t)
+            when (not (quiet gopts optsPlan)) $
+              forM_ mtime $ \tParse -> do
+                let mn = tkMod (gtKey t)
+                logRendered (\cols -> parseDoneLine cols mn tParse)
+          FrontStarted t ->
+            let key = gtKey t
+                mn = tkMod key
+            in gate (progressStartTask progressUI progressState (taskProgressKey key) (frontInitialLine mn) (Just 0))
+          FrontProgressed t p ->
+            let key = gtKey t
+                mn = tkMod key
+            in do
+              gate (progressUpdateTask progressUI progressState (taskProgressKey key) (frontProgressLine mn p) (Just (frontPassFraction p)))
+              creditFrontProgress key p
+          FrontFinished t result -> do
+            gate (void $ progressDoneTask progressUI progressState (taskProgressKey (gtKey t)))
+            creditFront (gtKey t)
+            forM_ result $ \fr -> do
               forM_ (frFrontTime fr) $ \tFront -> do
                 let mn = tkMod (gtKey t)
                     -- Render the whole front-result block (the module's "Type
@@ -2077,36 +2063,45 @@ initCliCompileHooks progressUI progressState gopts gen plan = do
               case (frBackJob fr, frDeferredBackJob fr) of
                 (Nothing, Nothing) -> creditBack (gtKey t)
                 _ -> return ()
-          , chOnFrontStart = \t ->
-              let key = gtKey t
-                  mn = tkMod key
-              in gate (progressStartTask progressUI progressState (taskProgressKey key) (frontInitialLine mn) (Just 0))
-          , chOnFrontProgress = \t p ->
-              let key = gtKey t
-                  mn = tkMod key
-              in do
-                gate (progressUpdateTask progressUI progressState (taskProgressKey key) (frontProgressLine mn p) (Just (frontPassFraction p)))
-                creditFrontProgress key p
-          , chOnFrontDone = \t -> do
-              gate (void $ progressDoneTask progressUI progressState (taskProgressKey (gtKey t)))
-              creditFront (gtKey t)
-          , chOnFrontOutputStart = \key kind ->
-              gate (progressStartTask progressUI progressState (frontOutputTaskKey key kind)
-                      (frontOutputActiveLine key kind) (frontOutputInitialProgress kind))
-          , chOnFrontOutputProgress = \key kind p ->
-              gate (progressUpdateTask progressUI progressState (frontOutputTaskKey key kind)
-                      (frontOutputProgressLine key kind p) (Just (clamp01 (fopRatio p))))
-          , chOnFrontOutputDone = \key kind melapsed -> do
-              gate (void $ progressDoneTask progressUI progressState (frontOutputTaskKey key kind))
-              when (not (quiet gopts optsPlan)) $
-                forM_ melapsed $ \elapsed ->
-                  logRendered (\cols -> frontOutputDoneLine cols key kind elapsed)
-          , chOnBackSkipped = creditBack
-          , chOnBackStart = onBackStart
-          , chOnBackProgress = onBackProgress
-          , chOnBackDone = onBackDone
-          , chOnInfo = logLine
-          }
+          OutputStarted key kind ->
+            gate (progressStartTask progressUI progressState (frontOutputTaskKey key kind)
+                    (frontOutputActiveLine key kind) (frontOutputInitialProgress kind))
+          OutputProgressed key kind p ->
+            gate (progressUpdateTask progressUI progressState (frontOutputTaskKey key kind)
+                    (frontOutputProgressLine key kind p) (Just (clamp01 (fopRatio p))))
+          OutputFinished key kind melapsed -> do
+            gate (void $ progressDoneTask progressUI progressState (frontOutputTaskKey key kind))
+            when (not (quiet gopts optsPlan)) $
+              forM_ melapsed $ \elapsed ->
+                logRendered (\cols -> frontOutputDoneLine cols key kind elapsed)
+          BackReady _ -> return ()
+          BackSkipped key -> creditBack key
+          BackStarted job ->
+            gate (progressStartTask progressUI progressState (taskProgressKey (bjKey job)) (backActiveLine (tkMod (bjKey job))) (Just 0))
+          BackProgressed job p -> do
+            let mn = tkMod (bjKey job)
+            gate (progressUpdateTask progressUI progressState (taskProgressKey (bjKey job))
+                    (backProgressLine mn p) (Just (backProgressRatio p)))
+            when (not (quiet gopts optsPlan) && (C.timing gopts || C.verbose gopts)) $
+              case bppEvent p of
+                BackPassFinished elapsed ->
+                  logRendered (\cols ->
+                    detailTimedLine cols detailStmtIndentWide detailStmtIndentNarrow
+                      (backPassDoneLine mn (bppPass p)) elapsed)
+                _ -> return ()
+          BackFinished job result -> do
+            gate (void $ progressDoneTask progressUI progressState (taskProgressKey (bjKey job)))
+            creditBack (bjKey job)
+            when (not (quiet gopts optsPlan)) $
+              case result of
+                BackJobOk mtime mtiming -> do
+                  logRendered (\cols -> backDoneLine cols (tkMod (bjKey job)) mtime)
+                  when (C.timing gopts) $
+                    forM_ mtiming $ \timing ->
+                      logRendered (\cols -> detailLine cols detailStmtIndentWide detailStmtIndentNarrow (backTimingLine timing))
+                BackJobFailed failure ->
+                  logRendered (\cols -> backFailLine cols (tkMod (bjKey job)) (bpfMessage failure))
+          Info msg -> logLine msg
         onFinalStart = do
           gate (progressStartTask progressUI progressState finalKey finalActiveLine Nothing)
           setPercent 85
@@ -2119,7 +2114,7 @@ initCliCompileHooks progressUI progressState gopts gen plan = do
                 when (not (quiet gopts optsPlan)) $
                   logRendered (\cols -> finalDoneLine cols tFinal)
     return CliCompileHooks
-      { cchHooks = hooks
+      { cchOnEvent = onEvent
       , cchLogLine = logLine
       , cchClearProgress = progressReset progressUI progressState
       , cchFinalStart = onFinalStart
@@ -2398,7 +2393,7 @@ High-level Steps
      headers to avoid parsing; we parse only when a .tydb is missing/unreadable.
 
 3) Compile and build
-   - compileTasks builds a stage graph and prefers front work over parse work:
+   - compileModules builds a stage graph and prefers front work over parse work:
      - ParseTask stages have no dependencies and can run opportunistically.
      - Front stages depend on the module's parse stage (if any) plus provider
        front stages.
@@ -2427,17 +2422,17 @@ compileBins:: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> 
 compileBins gopts opts paths env rootSpec modules binTasks allowPrune rootModules buildLibraries depModuleOpts depPathOverrides mProgressUI =
     zigBuild env gopts opts paths rootSpec modules binTasks allowPrune rootModules buildLibraries depModuleOpts depPathOverrides mProgressUI
 
-printDiag :: C.GlobalOptions -> C.CompileOptions -> Diagnostic String -> IO ()
-printDiag gopts opts d = do
+printDiag :: C.GlobalOptions -> Diagnostic String -> IO ()
+printDiag gopts d = do
     -- TODO: change to print to stderr! current tests presume stdout so we print to stdout for now..
     shouldColor <- useColor gopts
     if shouldColor
       then printDiagnostic stdout WithUnicode (TabSize 4) defaultStyle d
       else hPutDoc stdout $ unAnnotate (prettyDiagnostic WithoutUnicode (TabSize 4) d)
 
-printDiagnostics :: C.GlobalOptions -> C.CompileOptions -> [Diagnostic String] -> IO ()
-printDiagnostics gopts opts diags =
-    mapM_ (printDiag gopts opts) diags
+printDiagnostics :: C.GlobalOptions -> [Diagnostic String] -> IO ()
+printDiagnostics gopts diags =
+    mapM_ (printDiag gopts) diags
 
 -- | Generate a root actor C file when a root is still declared.
 writeRootC :: Acton.Env.Env0 -> C.GlobalOptions -> C.CompileOptions -> Paths -> BinTask -> IO (Maybe BinTask)

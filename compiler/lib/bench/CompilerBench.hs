@@ -6,6 +6,7 @@ import qualified Acton.Kinds as Kinds
 import qualified Acton.NameInfo as NameInfo
 import qualified Acton.Parser as Parser
 import qualified Acton.Project as Project
+import qualified Acton.SourceProvider as Source
 import qualified Acton.Syntax as Syntax
 import qualified Acton.Types as Types
 
@@ -755,11 +756,13 @@ runCompilerFront buildFront runBack typesPath sourcePath = do
     elapsed "parse" t0 t1
     printStatsMaybe "parse_stats" s0 s1
 
+    build <- Compile.standaloneBuild Source.diskSourceProvider benchGopts (\_ -> return ())
+    let task = Compile.GlobalTask (Compile.TaskKey (Project.projPath paths) modName) paths (Compile.ParseTask (Compile.ModuleSource src srcBytes Nothing) [] Nothing) Map.empty
     res <- Compile.runFrontPasses
-      benchGopts
+      build
+      task
       opts
       False
-      paths
       env0
       parsed
       src
@@ -768,11 +771,6 @@ runCompilerFront buildFront runBack typesPath sourcePath = do
       (Compile.lookupModuleHash Compile.moduleCache (Project.searchPath paths) Compile.Pub)
       (Compile.lookupModuleHash Compile.moduleCache (Project.searchPath paths) Compile.Impl)
       (resolveNameHash paths)
-      (\_ -> return ())
-      (\_ _ -> return ())
-      (\_ _ _ -> return ())
-      (\_ _ _ -> return ())
-      (return True)
       (\_ -> return ())
     fr <- case res of
             Left diags -> error ("front pass failed with " ++ show (length diags) ++ " diagnostics")

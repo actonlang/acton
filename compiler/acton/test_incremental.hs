@@ -3177,7 +3177,7 @@ buildRecordingEvents sched eventLog proj opts = do
   let srcFiles = map (sourcePath proj) names
   plan <- Compile.prepareCompilePlan Source.diskSourceProvider eventsGlobalOptions sched opts srcFiles True Nothing
   gen <- Compile.currentGeneration sched
-  res <- Compile.runCompilePlan Source.diskSourceProvider eventsGlobalOptions plan sched gen (eventHooks eventLog)
+  res <- Compile.runCompilePlan Source.diskSourceProvider eventsGlobalOptions sched gen plan (recordEvent eventLog)
   backFailure <- Compile.waitBackJobs sched gen
   return (buildResult res backFailure)
 
@@ -3192,26 +3192,29 @@ buildResult res backFailure =
   where
     oneLine = unwords . words
 
--- | Hooks that record one line per event that compileEventsGolden pins, in
--- the part of the log the event belongs to.
-eventHooks :: EventLog -> Compile.CompileHooks
-eventHooks eventLog =
-  Compile.defaultCompileHooks
-    { Compile.chOnParseStart       = \t -> stage ("parse-start " ++ taskName t)
-    , Compile.chOnParseDone        = \t _ -> stage ("parse-done " ++ taskName t)
-    , Compile.chOnFrontStart       = \t -> stage ("front-start " ++ taskName t)
-    , Compile.chOnFrontDone        = \t -> stage ("front-done " ++ taskName t)
-    , Compile.chOnFrontResult      = \t fr -> stage ("front-result " ++ taskName t ++ " " ++ backPlanKind fr)
-    , Compile.chOnDiagnostics      = \t _ diags -> stage ("diagnostics " ++ taskName t ++ " " ++ show (length diags))
-    , Compile.chOnBackQueued       = \key -> stage ("back-queued " ++ keyName key)
-    , Compile.chOnBackSkipped      = \key -> stage ("back-skipped " ++ keyName key)
-    , Compile.chOnFrontOutputStart = \key kind -> stage (outputLine "output-start" key kind)
-    , Compile.chOnFrontOutputDone  = \key kind time -> outputDone kind (outputLine "output-done" key kind ++ " " ++ maybe "failed" (const "ok") time)
-    , Compile.chOnBackStart        = \job -> back ("back-start " ++ jobName job)
-    , Compile.chOnBackProgress     = \job progress -> back ("back-pass " ++ jobName job ++ " " ++ backPassLine progress)
-    , Compile.chOnBackDone         = \job result -> back ("back-done " ++ jobName job ++ " " ++ backJobOutcome result)
-    , Compile.chOnInfo             = \msg -> stage ("info " ++ msg)
-    }
+-- | Record one line per event that compileEventsGolden pins, in the part of
+-- the log the event belongs to. A finished front stage records its done
+-- line, then its result line when it succeeded.
+recordEvent :: EventLog -> Compile.BuildEvent -> IO ()
+recordEvent eventLog event =
+  case event of
+    Compile.ParseStarted t               -> stage ("parse-start " ++ taskName t)
+    Compile.ParseFinished t _            -> stage ("parse-done " ++ taskName t)
+    Compile.FrontStarted t               -> stage ("front-start " ++ taskName t)
+    Compile.FrontFinished t result       -> do stage ("front-done " ++ taskName t)
+                                               forM_ result $ \fr -> stage ("front-result " ++ taskName t ++ " " ++ backPlanKind fr)
+    Compile.Diagnostics t diags          -> stage ("diagnostics " ++ taskName t ++ " " ++ show (length diags))
+    Compile.BackReady job                -> stage ("back-queued " ++ jobName job)
+    Compile.BackSkipped key              -> stage ("back-skipped " ++ keyName key)
+    Compile.OutputStarted key kind       -> stage (outputLine "output-start" key kind)
+    Compile.OutputFinished key kind time -> outputDone kind (outputLine "output-done" key kind ++ " " ++ maybe "failed" (const "ok") time)
+    Compile.BackStarted job              -> back ("back-start " ++ jobName job)
+    Compile.BackProgressed job progress  -> back ("back-pass " ++ jobName job ++ " " ++ backPassLine progress)
+    Compile.BackFinished job result      -> back ("back-done " ++ jobName job ++ " " ++ backJobOutcome result)
+    Compile.Info msg                     -> stage ("info " ++ msg)
+    Compile.ParseProgressed _ _          -> return ()
+    Compile.FrontProgressed _ _          -> return ()
+    Compile.OutputProgressed _ _ _       -> return ()
   where
     stage      = logLine (stageLines eventLog)
     background = logLine (outputLines eventLog)
