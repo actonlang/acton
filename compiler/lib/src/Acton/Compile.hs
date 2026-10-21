@@ -985,10 +985,11 @@ data ModuleGraph = ModuleGraph
 moduleGraph :: M.Map FilePath ProjCtx -> [GlobalTask] -> ModuleGraph
 moduleGraph projMap tasks = ModuleGraph
     { graphTasks     = tasks
-    , graphIndex     = M.fromList [ (gtKey t, t) | t <- tasks ]
+    , graphIndex     = index
     , graphImports   = importGraph tasks
-    , graphLibraries = libraryTaskGroups projMap tasks
+    , graphLibraries = libraryTaskGroups projMap (M.keysSet index)
     }
+  where index = M.fromList [ (gtKey t, t) | t <- tasks ]
 
 -- | The graph's tasks whose keys are in the set, in discovery order.
 restrictTasks :: ModuleGraph -> Data.Set.Set TaskKey -> [GlobalTask]
@@ -1075,32 +1076,17 @@ libraryBoundary g =
     Data.Set.unions [ Data.Set.filter (importedOutside group) group | group <- graphLibraries g ]
   where importedOutside group = any (`Data.Set.notMember` group) . usersOf (graphImports g)
 
--- | The modules of each declared build library, for every project's
--- libraries.  A library module is the task of that name that belongs to the
--- declaring project.
-libraryTaskGroups :: M.Map FilePath ProjCtx -> [GlobalTask] -> [Data.Set.Set TaskKey]
-libraryTaskGroups projMap globalTasks =
-    [ Data.Set.fromList keys
+-- | The modules of each declared build library: the discovered modules of
+-- the declaring project that the library names.  A named module that
+-- discovery did not reach is left out, so every key has a task.
+libraryTaskGroups :: M.Map FilePath ProjCtx -> Data.Set.Set TaskKey -> [Data.Set.Set TaskKey]
+libraryTaskGroups projMap discovered =
+    [ Data.Set.intersection discovered (Data.Set.fromList (map (libraryKey ctx) (BuildSpec.libModules lib)))
     | ctx <- M.elems projMap
     , lib <- M.elems (BuildSpec.libraries (projBuildSpec ctx))
-    , let keys = [ gtKey t
-                 | modName <- BuildSpec.libModules lib
-                 , t <- M.findWithDefault [] (A.dottedModName (proj ++ "." ++ modName)) tasksByModule
-                 , taskInProject ctx t
-                 ]
-          proj = BuildSpec.specName $ projBuildSpec ctx
-    , not (null keys)
     ]
   where
-    tasksByModule = M.fromListWith (flip (++)) [ (tkMod (gtKey t), [t]) | t <- globalTasks ]
-
-    taskInProject ctx t =
-      tkProj (gtKey t) == projRoot ctx
-        || projPath (gtPaths t) == projRoot ctx
-        || projTypes (gtPaths t) == projTypesDir ctx
-        || srcUnderProject ctx t
-
-    srcUnderProject ctx t = addTrailingPathSeparator (projSrcDir ctx) `isPrefixOf` taskSourceFile t
+    libraryKey ctx name = TaskKey (projRoot ctx) (A.dottedModName (BuildSpec.specName (projBuildSpec ctx) ++ "." ++ name))
 
 -- | Declared build libraries are artifact units: a selected member selects
 -- every module of its library, and the selection is closed under imports,
