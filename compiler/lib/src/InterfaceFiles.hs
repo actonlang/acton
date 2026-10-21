@@ -1088,8 +1088,10 @@ readStmtEntries txn dbi = do
 -- | Reconstruct a typed module containing only the statements owned by the
 -- selected names. Returns Nothing when the cache predates statement
 -- ownership, when ownership is missing for a selected name, or when the
--- module contains NotImplemented hooks (whose native-extension pairing needs
--- the whole module); callers then fall back to a full read.
+-- module contains NotImplemented hooks, whose native-extension pairing needs
+-- the whole module.  The compiler defers the back passes of no module with
+-- NotImplemented hooks, and a .tydb of its own version always records
+-- statement ownership, so its caller treats Nothing as a corrupt .tydb.
 readSelectedModule :: FilePath -> [NameHashInfo] -> Set.Set A.Name -> IO (Maybe A.Module)
 readSelectedModule f nameHashes selected =
     withReadTxn f $ \txn dbi -> do

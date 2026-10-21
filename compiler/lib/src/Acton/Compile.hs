@@ -1,90 +1,210 @@
 {-# LANGUAGE CPP, FlexibleInstances, ScopedTypeVariables #-}
 {-|
-Overview
+The compilation pipeline that the acton CLI and the LSP server share.  It
+plans which modules a build compiles, runs their front passes (parse,
+kinds, types, escape analysis, hashing), which write the .tydb interface
+files and report diagnostics, and runs their back passes (normalizer
+through code generation) as separate jobs.  The project model, Build.act
+and paths live in Acton.Project, dependency fetching in Acton.Fetch and
+graph traversals in Acton.Graph.
 
-This module implements the shared Acton compilation pipeline that both the
-acton CLI and the LSP server drive. It builds a dependency graph across
-projects, runs the front passes (parse, kinds, types) to produce .tydb interface
-files and diagnostics, and then emits the back passes (normalizer through
-codegen) as separate jobs.
+Only the front passes report errors to the user, and a module depends on
+another module only through that module's front result.  So a module's
+dependents start as soon as its front stage finishes while its back passes
+run in the background, and the LSP server reports a module as checked
+before its code is generated.
 
-The design is intentionally incremental and event-friendly. While the compiler
-scheduler is running and actively compiling modules, we can receive a new event
-about a modified module, cancel running tasks and restart compilation of that
-module from that point. This is used by watch mode and LSP where updates to
-files or in-editor buffers trigger recompilation. Dependencies are considered so
-that updates to a module only cause the affected part of the subgraph, i.e. the
-modified module and downstream dependencies to be recompiled. Cached .tydb headers
-are reused when public module interfaces are unchanged. Per-name pub/impl hashes
-stored in the header drive front-pass vs back-pass decisions, and moduleImplHash
-is embedded in generated .c/.h to detect stale codegen. Inter-module
-dependencies only depend on the front passes completion, which is why they are
-separated from back jobs. As soon as the front passes of a module have
-completed, dependent modules can start compilation while the back pass job is
-scheduled in the background. This maximizes parallelism. It is only the front
-passes that can generate user facing errors, which means that the LSP server can
-return with feedback to the user (module type checked successfully) immediately
-after the front passes are done while the back passes can be run asynchronously
-in the background. This maximizes responsiveness of the LSP server.
+A build is fast when it does no work twice.  A module's .tydb records what
+its last compilation used: the hash and the stat of its source, its
+public interface hash (pub) and implementation hash (impl), the pub and
+impl hash of each of its names with the names they depend on, and, for
+every module it depends on, that module's hashes and the hashes and users
+of the names it uses.  A name's pub hash covers its signature without
+docstrings, its escape summary and the pub hashes of the names its
+signature uses.  Its impl hash covers its implementation and the impl
+hashes of the names it uses.  Acton.Hashing defines both.  The first line
+of a module's generated .c, .h and closure support file is tagged with its
+impl hash, or, for a deferred back job, with a hash of its impl hash and
+its selected names.  The test result cache keys each test on its name's
+impl hash.
 
-The CLI/LSP layers handle progress UI, file watching, and event sources; this
-module focuses on deterministic compilation and reports what it does as
-BuildEvent values.
+Plan
+----
 
-Call flow:
-  - Shared pipeline (acton build, acton watch, LSP):
-    1) prepareCompileContext builds the CompileContext of the build, and
-       prepareCompilePlan (buildProjects, readModuleTask/buildGlobalTasks,
-       selectPlan) builds a CompilePlan for the requested subgraph. The LSP
-       plans an edit of an existing source of a project it has already
-       discovered with readModuleTask of that module and selectPlan. Parsing
-       is performed through parseActSource/parseActFile so SourceProvider
-       overlays can supply unsaved buffers.
-    2) runCompilePlan drives compileModules. As each module finishes its front
-       passes, its BackReady event enqueues its BackJob into the scheduler's
-       BackQueue, so back passes begin as soon as they are ready and can overlap
-       remaining front passes.
-    3) Callers either wait for waitBackJobs (CLI builds) or let back jobs run
-       in the background. CLI builds wait before invoking Zig.
-    4) runBackPasses can be used for standalone back-pass execution when a
-       caller already has a BackJob to run.
-  - Triggering:
-    - acton build runs the pipeline once for the requested files/project.
-    - acton watch and LSP call startCompile on each event. runCompilePlan
-      hands an event to the caller's handler only if the run's generation is
-      current when the event is reported. BackQueue ignores back jobs for
-      stale generations, and front-output jobs are skipped for stale
-      generations before writing.
-    - Callers may supply a delay (debounce) before startCompile runs (LSP uses
-      debounceMicros on change events; acton watch uses 0).
-  - Finalization:
-    - CLI waits on waitBackJobs before running Zig build
-    - LSP does not implicitly run the Zig build, it is only run explicitly when
-      the user asks to build / run a module
+prepareCompileContext finds the paths of the file that roots a build and
+makes the --dep overrides absolute.  prepareCompilePlan fetches the
+dependencies on a scheduler's first plan and whenever Build.act changed
+since its previous plan.  It prunes the outputs of deleted sources, so
+that a cached header cannot bring a deleted module back, discovers the
+projects and their modules (buildGlobalTasks) and selects the modules to
+compile (selectPlan): the requested modules with everything they import
+or, for an incremental plan, the modules that the changed files affect.
+A declared build library is compiled whole.  The LSP server plans an edit
+of a project it already discovered by reading the edited module again
+(readModuleTask) and selecting from the modules it keeps.
 
-State and orchestration:
-  - Acton.Compile holds no state of its own; all orchestration state is
-    owned by the caller.
-  - Callers allocate and hold a CompileScheduler from this module. The
-    scheduler encapsulates mutable state (generation id, cancelable async
-    handle, build-spec stamp, a shared back-queue, and the ModuleCache of
-    .tydb paths, module hashes and name hashes that speeds up .tydb lookups
-    for its runs); callers pass it into startCompile, runCompilePlan and
-    waitBackJobs rather than mutating it directly. A run outside any
-    scheduler (standaloneBuild) has a ModuleCache of its own.
-  - LSP additionally keeps overlaysRef for in-memory buffers and builds an
-    overlay-aware SourceProvider on top of disk reads. acton watch reads
-    directly from disk.
-  - Each event bumps the generation via startCompile; callers may pass a delay
-    (LSP uses debounceMicros, acton watch uses 0). Back jobs, front-output
-    writes and the events a handler sees are filtered by generation. Effects
-    a caller performs outside its event handler are gated by the caller.
-  - CLI builds share the same pipeline and enqueue back jobs as soon as front
-    passes finish, overlapping work without needing a watch event source.
+Discovery starts from the requested modules, or from every module when the
+selection may need any of them, and goes breadth first.  It reads each
+module in the cheapest form a build can use (readModuleTask), checks its
+imports against the import policy and queues the modules that provide
+them.  A discovered module is a CompileTask:
 
-TODO:
-  - Make generation invalidation more precise so unrelated in-flight modules
-    (e.g. long-running B) are not discarded when A changes.
+  TyTask          its .tydb header, trusted while its source is unchanged
+  ParseTask       its source, with only the import header parsed
+  ActonTask       its parsed source
+  ParseErrorTask  the diagnostics of a source that does not parse
+
+A header can be trusted when the .tydb exists, its header reads and the
+compiler binary is not newer than the .tydb (--ignore-compiler-version
+skips that check).  It is trusted without reading the source when the
+source's stat (device, inode, size, mtime, ctime) equals the recorded one
+and its mtime is strictly older than the .tydb's.  Strictly, because on a
+file system with coarse timestamps a changed source and the .tydb written
+from its previous version can show the same time.  Otherwise it is
+trusted when the content hash of the source equals the recorded one, and
+the recorded stat is then refreshed in place.  An editor overlay is
+compared by content hash only.  A module whose header is not trusted is
+read from its source.
+
+Run
+---
+
+runCompilePlan compiles a plan as one generation of a CompileScheduler.
+compileModules rejects import cycles, compiles __builtin__, whose
+interface is the base environment of every other module, and then runs a
+stage graph over the import graph: a parse stage for each other
+ParseTask, and a front stage for every module, which starts after its
+parse stage and its providers' front stages.  Up to the build's
+parallelism (--jobs, else one per capability) stages run at once: front
+stages first, then the stage with the heaviest chain of dependents by
+source size.  When a front stage fails, every module depending on it is
+dropped.  The run returns the environment of the checked modules, which
+the LSP server completes names from, and whether any module failed.  An
+import cycle, a failure of __builtin__, a failed output and a failed
+preparation of a deferred back job fail the run itself (CompileFailure).
+
+A module's front stage decides what the module needs (assess), reports why
+under --verbose (describe) and does it (perform).  A source that changed
+runs the front passes (compileModule).  A TyTask is checked in this order:
+
+  1. An import whose interface is gone fails the module.
+  2. Its dependency rows are compared with the current hashes.  A changed
+     pub hash, a missing hash or a changed module without name rows runs
+     the front passes, and so does a forced module: the requested module
+     under alternative output, or any module under --always-build.
+  3. A changed impl hash alone computes the impl hashes again from the
+     stored rows (refreshImpl), or runs the front passes when a hash it
+     needs is unavailable.
+  4. A module whose code is generated whole, in a build without
+     alternative output, compares the tags of its .c, .h and closure
+     support file with its impl hash, and generates its code again from
+     the stored typed module when they differ (refreshCodegen).
+  5. Otherwise the .tydb is used as it is (reuse).
+
+Under --only-build, every module's stored interface is trusted and no
+front pass runs.
+
+A front result carries the module's back work.  An eager BackJob is queued
+as soon as the front stage finishes.  A deferred back job (DBP) generates
+only the module's roots and the names that other modules use, so it waits
+for the modules depending on it.  A module's back passes are deferred
+unless --no-dbp, --only-build or alternative output is given, the module
+is __builtin__, a module outside its build library imports it, or it has
+NotImplemented bodies, whose code a hand-written .ext.c provides.
+
+Events
+------
+
+A run reports everything it does as BuildEvents through one sink, the emit
+field of its BuildEnv.  runCompilePlan's sink records analytics, queues
+the job of a BackReady event on the scheduler's back queue, and then calls
+the caller's handler while the run's generation is current.  BuildEvent
+states the order of a module's events.
+
+Generations
+-----------
+
+A CompileScheduler numbers its runs.  acton watch and the LSP server start
+a run for each change with startCompile, the LSP server after a debounce
+delay: the counter moves, the previous run is cancelled and awaited, and
+the new run starts unless a newer one began during the delay.  A one-shot
+build runs as the scheduler's current generation, 0 on a fresh scheduler.
+A run whose generation is no longer current is stale.  A stale run writes
+no front output, queues no back job and reports no event to the handler,
+and its queued back jobs neither write their code nor report their end.
+A new generation cancels the whole previous run, including the stages of
+modules that the change does not affect.
+
+Outputs
+-------
+
+A module's .tydb is written in its front stage (commitTydb).  Its
+documentation page and its --tydb copy are written in the background
+(startOutputs), and the run waits for them (awaitOutputs).
+
+Back queue
+----------
+
+The scheduler's workers run the back jobs of every generation, one job at
+a time each.  waitBackJobs waits for a generation's jobs, or returns its
+first failure.  The CLI waits before its Zig build.  The LSP server
+reports completion first and waits after.  A run outside any scheduler
+(runStandalonePlan for acton sig, standaloneBuild for the benchmarks) has
+no back queue: its BackReady events reach only its handler.
+
+Module cache
+------------
+
+The scheduler owns one ModuleCache for its lifetime, and every run shares
+it: the .tydb path, the module hashes and the public name hashes of each
+module that a run read from disk or finished, and the single names it
+read.  It is keyed by module name, so one scheduler builds one source
+tree.  A module that a run finishes replaces its own hashes before it
+reports done, so every later read sees them.  A standalone build has a
+cache of its own.
+
+Invariants
+----------
+
+The .tydb commit is synchronous.  A module's .tydb is on disk before its
+front stage reports done, so its readers never wait for a write: the base
+environment reads __builtin__'s, a deferred back job selects its module's
+statements from it, the caller reads roots and tests from it after the
+run, and later plans trust its header.  A stale generation writes nothing
+and still returns the module's result.  A failed write fails the module
+with a diagnostic.  An impl refresh reads everything before it writes, so
+its fallback to the front passes never runs on top of a committed
+refresh.
+
+Outputs are awaited and never cancelled.  Whatever ends a run,
+compileModules first cancels the running stages and then waits for every
+background output that any stage started.  A stage starts and records its
+outputs under one mask, so a cancelled stage cannot leave a write that the
+run does not wait for.  startCompile's cancel waits for this, so a stale
+write never overlaps the next generation.  A failed output fails a run
+that otherwise succeeded.
+
+Deferred jobs wait for their dependents.  A deferred back job is prepared
+only when every module that depends on its module, directly or not, has
+finished its front stage in the run.  Only then is the interest in its
+names complete, and the interest decides the selected names and the
+codegen hash.  When a dependent fails, the job never becomes due, and the
+run ends with errors.
+
+A front stage reads a snapshot.  Its ModuleEnv is the coordinator's state
+when the stage starts: the hashes of the finished modules, the environment
+of the checked modules and its parse stage's result.  That state holds
+everything the stage reads from the run, because the stage became ready
+only after each of its providers' front stages completed, and the
+coordinator folds a completion into its state before it starts the next
+stages.  Modules outside the run are read through the module cache.
+
+Handlers need no generation check, and helpers outside them do.
+runCompilePlan calls the handler only while the run's generation is
+current, so the handler and the helpers that only it calls do not check
+the generation.  A helper that the caller also calls outside the handler,
+before or after the run, checks the generation itself (whenCurrent), and
+so does the work the caller does after the run, such as its Zig build.
 -}
 module Acton.Compile
   ( TaskKey(..)
