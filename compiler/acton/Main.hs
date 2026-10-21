@@ -1720,8 +1720,8 @@ initCliCompileHooks progressUI progressState gopts gen plan = do
         frontOutputProgressShortStatus kind p =
           case kind of
             FrontOutputTydb
-              | "Preparing" `isPrefixOf` fopLabel p -> "Prep .tydb"
-              | "Writing" `isPrefixOf` fopLabel p -> "Write .tydb"
+              | "Preparing" `isPrefixOf` InterfaceFiles.tyDbWriteProgressLabel p -> "Prep .tydb"
+              | "Writing" `isPrefixOf` InterfaceFiles.tyDbWriteProgressLabel p -> "Write .tydb"
             _ -> frontOutputShortStatus kind
         projMap = cpProjMap plan
         depNameMap =
@@ -1880,7 +1880,7 @@ initCliCompileHooks progressUI progressState gopts gen plan = do
             (staticStatusRenderer (frontOutputActiveStatus kind) (frontOutputShortStatus kind))
         frontOutputProgressLine key kind p =
           renderProjectLine (tkMod key)
-            (staticStatusRenderer (fopLabel p) (frontOutputProgressShortStatus kind p))
+            (staticStatusRenderer (InterfaceFiles.tyDbWriteProgressLabel p) (frontOutputProgressShortStatus kind p))
         frontOutputInitialProgress kind =
           case kind of
             FrontOutputTydb -> Just 0
@@ -2072,7 +2072,7 @@ initCliCompileHooks progressUI progressState gopts gen plan = do
               (frontOutputActiveLine key kind) (frontOutputInitialProgress kind)
           OutputProgressed key kind p ->
             progressUpdateTask progressUI progressState (frontOutputTaskKey key kind)
-              (frontOutputProgressLine key kind p) (Just (clamp01 (fopRatio p)))
+              (frontOutputProgressLine key kind p) (Just (clamp01 (InterfaceFiles.tyDbWriteProgressRatio p)))
           OutputFinished key kind melapsed -> do
             void (progressDoneTask progressUI progressState (frontOutputTaskKey key kind))
             when (not (quiet gopts optsPlan)) $

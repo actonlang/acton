@@ -758,6 +758,8 @@ runCompilerFront buildFront runBack typesPath sourcePath = do
 
     build <- Compile.standaloneBuild Source.diskSourceProvider benchGopts (\_ -> return ())
     let task = Compile.GlobalTask (Compile.TaskKey (Project.projPath paths) modName) paths (Compile.ParseTask (Compile.ModuleSource src srcBytes Nothing) [] Nothing) Map.empty
+        -- A failed background output fails the benchmark.
+        awaitOutputs = Compile.awaitOutputs build >>= mapM_ (ioError . userError . Compile.compileFailureMessage)
     res <- Compile.runFrontPasses
       build
       task
@@ -771,11 +773,10 @@ runCompilerFront buildFront runBack typesPath sourcePath = do
       (Compile.lookupModuleHash Compile.moduleCache (Project.searchPath paths) Compile.Pub)
       (Compile.lookupModuleHash Compile.moduleCache (Project.searchPath paths) Compile.Impl)
       (resolveNameHash paths)
-      (\_ -> return ())
     fr <- case res of
             Left diags -> error ("front pass failed with " ++ show (length diags) ++ " diagnostics")
             Right fr -> return fr
-    if runBack then return () else Compile.waitFrontOutputJobs fr
+    if runBack then return () else awaitOutputs
     E.evaluate (length (Compile.frIfaceTE fr) + length (Compile.frImps fr) + length (Compile.frNameHashes fr))
     t2 <- getCurrentTime
     s2 <- getStats statsEnabled
@@ -794,9 +795,9 @@ runCompilerFront buildFront runBack typesPath sourcePath = do
             elapsed "back" t3 t4
             printStatsMaybe "back_stats" s3 s4
             forM_ mtiming printBackTiming)
-          `E.finally` Compile.waitFrontOutputJobs fr
+          `E.finally` awaitOutputs
       (True, Nothing) -> do
-        Compile.waitFrontOutputJobs fr
+        awaitOutputs
         error "front pass did not return a back job"
       (False, _) -> return ()
 

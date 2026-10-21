@@ -92,9 +92,6 @@ module Acton.Compile
   , DeferredBackJob(..)
   , FrontResult(..)
   , FrontOutputKind(..)
-  , FrontOutputProgress(..)
-  , FrontOutputJob
-  , waitFrontOutputJobs
   , FrontTiming(..)
   , TypeStmtTiming(..)
   , InferredSignature(..)
@@ -128,6 +125,7 @@ module Acton.Compile
   , runStandalonePlan
   , BuildEnv
   , standaloneBuild
+  , awaitOutputs
   , CompileFailure(..)
   , compileFailureMessage
   , BackPassFailure(..)
@@ -240,17 +238,12 @@ newtype DbpSelectionError = DbpSelectionError String deriving (Show)
 instance Exception DbpSelectionError where
   displayException (DbpSelectionError msg) = msg
 
-newtype FrontOutputError = FrontOutputError String deriving (Show)
-
-instance Exception FrontOutputError where
-  displayException (FrontOutputError msg) = msg
-
 
 -- | Why a run could not compile its modules.
 data CompileFailure
   = ImportCycles [[TaskKey]]                      -- the modules of each import cycle
   | BuiltinFailed                                 -- __builtin__ had errors, already reported as diagnostics
-  | OutputFailed TaskKey FrontOutputKind String   -- the first failed output job in start order, with its exception text
+  | OutputFailed TaskKey FrontOutputKind String   -- the first failed output in awaitOutputs order, with its exception text
   | DeferredBackFailed String                     -- the exception text from preparing ready deferred back jobs
   deriving (Eq, Show)
 
@@ -357,11 +350,6 @@ data FrontOutputKind
   | FrontOutputDoc
   deriving (Eq, Ord, Show)
 
-data FrontOutputProgress = FrontOutputProgress
-  { fopLabel :: String
-  , fopRatio :: Double
-  } deriving (Eq, Show)
-
 data FrontTiming = FrontTiming
   { ftEnv :: TimeSpec
   , ftKinds :: TimeSpec
@@ -396,7 +384,7 @@ data BuildEvent
   | FrontFinished    GlobalTask (Maybe FrontResult)             -- the result when the module succeeded
   | Diagnostics      GlobalTask [Diagnostic String]
   | OutputStarted    TaskKey FrontOutputKind
-  | OutputProgressed TaskKey FrontOutputKind FrontOutputProgress
+  | OutputProgressed TaskKey FrontOutputKind InterfaceFiles.TyDbWriteProgress
   | OutputFinished   TaskKey FrontOutputKind (Maybe TimeSpec)   -- Nothing when the write failed
   | BackReady        BackJob                                    -- routed to the back queue by runCompilePlan
   | BackSkipped      TaskKey                                    -- a deferred module whose generated code is current
@@ -412,6 +400,7 @@ data BuildEnv = BuildEnv
   , buildGeneration :: Generation                       -- front outputs are written only while it is current
   , emit            :: BuildEvent -> IO ()
   , buildCache      :: ModuleCache
+  , buildOutputs    :: OutputJobs                       -- the background outputs started so far
   }
 
 -- | Report a line that only --verbose shows.
@@ -486,8 +475,8 @@ compileParallelism gopts
 -- | Start a generation and return it. The counter moves first, so the
 -- running generation's writes see themselves stale at once. The previous
 -- run is then cancelled under the MVar, and cancel waits for its finalizer,
--- which drains its front-output jobs, so stale writes never overlap the new
--- run. After the delay the run starts only if no newer generation began.
+-- which waits for its background outputs, so stale writes never overlap the
+-- new run. After the delay the run starts only if no newer generation began.
 startCompile :: CompileScheduler -> Int -> (Generation -> IO ()) -> IO Generation
 startCompile sched delay run = do
   number <- atomicModifyIORef' (schedulerCounter sched) (\newest -> (newest + 1, newest + 1))
@@ -705,15 +694,18 @@ runCompilePlan sp gopts sched gen plan onEvent = withAnalytics $ \analytics -> d
           BackReady job -> enqueueBack (schedulerBackQueue sched) gen events job
           _             -> return ()
         whenCurrent gen (onEvent event)
-  compileModules (BuildEnv sp gopts gen events moduleCache) plan
+  outputs <- OutputJobs <$> newIORef []
+  compileModules (BuildEnv sp gopts gen events moduleCache outputs) plan
 
 -- | The services of a run outside any scheduler: a generation that stays
--- current, the process-wide module cache, and no back queue, so BackReady
--- reaches only the handler.
+-- current, the process-wide module cache, no back queue, so BackReady
+-- reaches only the handler, and a record of its own background outputs,
+-- which awaitOutputs waits for.
 standaloneBuild :: Source.SourceProvider -> C.GlobalOptions -> (BuildEvent -> IO ()) -> IO BuildEnv
 standaloneBuild sp gopts onEvent = do
   counter <- newIORef 0
-  return (BuildEnv sp gopts (Generation 0 counter) onEvent moduleCache)
+  outputs <- OutputJobs <$> newIORef []
+  return (BuildEnv sp gopts (Generation 0 counter) onEvent moduleCache outputs)
 
 -- | Compile a plan outside any scheduler, as acton sig does. Analytics do
 -- not sample it.
@@ -969,6 +961,83 @@ readSourceFileMeta path = do
     }
 
 
+-- Outputs ------------------------------------------------------------------------------------------
+
+-- | The background outputs of a run, newest batch first.  Outputs are never
+-- cancelled: a run waits for every one of them before it ends.
+newtype OutputJobs = OutputJobs (IORef [OutputJob])
+
+-- | One background output: the module it belongs to, its kind and its thread.
+data OutputJob = OutputJob TaskKey FrontOutputKind (Async ())
+
+frontOutputKindName                     :: FrontOutputKind -> String
+frontOutputKindName FrontOutputTydb     = "tydb"
+frontOutputKindName FrontOutputTydbCopy = "tydb-copy"
+frontOutputKindName FrontOutputDoc      = "doc"
+
+-- | Write a module's .tydb before its front stage reports done, so readers
+-- never wait for a write.  The write is given its progress reporter.  A
+-- stale generation writes nothing and reports nothing.  A failed write, its
+-- start event included, is the module's diagnostics.  Asynchronous
+-- exceptions are rethrown.
+commitTydb :: BuildEnv -> TaskKey -> ((InterfaceFiles.TyDbWriteProgress -> IO ()) -> IO ()) -> IO (Either [Diagnostic String] ())
+commitTydb build key write = do
+    result <- trySync $ whenCurrent (buildGeneration build) $ do
+                emit build (OutputStarted key FrontOutputTydb)
+                runOutput build key FrontOutputTydb (write (emit build . OutputProgressed key FrontOutputTydb))
+    return (either (Left . tydbWriteDiagnostics (tkMod key)) Right result)
+
+-- | Start background outputs.  Starting and recording happen under one
+-- mask, so a cancelled stage cannot leave a write the run does not wait
+-- for.  A stale generation starts and records nothing.  Each write checks
+-- the generation again in its own thread, where only the write itself runs
+-- unmasked.
+startOutputs :: BuildEnv -> TaskKey -> [(FrontOutputKind, IO ())] -> IO ()
+startOutputs build key outputs = mask_ $ do
+    jobs <- catMaybes <$> mapM start outputs
+    atomicModifyIORef' ref (\old -> (jobs ++ old, ()))
+  where
+    OutputJobs ref = buildOutputs build
+    gen            = buildGeneration build
+    start (kind, write) = do
+      current <- isCurrent gen
+      if not current
+        then return Nothing
+        else do emit build (OutputStarted key kind)
+                thread <- asyncWithUnmask (\unmask -> whenCurrent gen (runOutput build key kind (unmask write)))
+                return (Just (OutputJob key kind thread))
+
+-- | Run a started output and report its end: its time, or Nothing when it
+-- failed.  A failure to report is ignored unless asynchronous.  The
+-- output's own failure is rethrown after the report.
+runOutput :: BuildEnv -> TaskKey -> FrontOutputKind -> IO () -> IO ()
+runOutput build key kind write = do
+    (result, elapsed) <- timed (try write :: IO (Either SomeException ()))
+    void (trySync (emit build (OutputFinished key kind (either (const Nothing) (const (Just elapsed)) result))))
+    either throwIO return result
+
+-- | Wait for every output started so far, and return the first failure in
+-- recorded order: batches in start order, the last started first within a
+-- batch.  An asynchronous exception found in an output is rethrown.
+awaitOutputs :: BuildEnv -> IO (Maybe CompileFailure)
+awaitOutputs build = do
+    let OutputJobs ref = buildOutputs build
+    jobs <- reverse <$> readIORef ref
+    listToMaybe . catMaybes <$> mapM failure jobs
+  where
+    failure (OutputJob key kind thread) = do
+      result <- waitCatch thread
+      case result of
+        Right ()                    -> return Nothing
+        Left e | isAsyncException e -> throwIO e
+               | otherwise          -> return (Just (OutputFailed key kind (displayException e)))
+
+-- | The module's .tydb copied next to its source, under --tydb.
+tydbCopy                                :: C.CompileOptions -> Paths -> A.ModName -> [(FrontOutputKind, IO ())]
+tydbCopy opts paths mn                  = [ (FrontOutputTydbCopy, InterfaceFiles.copyInterface (tyDbPath paths mn) (srcBase paths mn ++ InterfaceFiles.interfaceExt))
+                                          | C.tydb opts ]
+
+
 -- Compilation tasks, chasing imported modules, compilation and building executables -----------------
 
 -- | Generating C for one module.
@@ -992,12 +1061,6 @@ data DeferredBackJob = DeferredBackJob
   , deferredNameCount :: Int
   }
 
-data FrontOutputJob = FrontOutputJob
-  { fojKey   :: TaskKey
-  , fojKind  :: FrontOutputKind
-  , fojAsync :: Async ()
-  }
-
 data FrontResult = FrontResult
   { frIfaceTE  :: [(A.Name, I.NameInfo)]
   , frImps     :: [A.ModName]
@@ -1012,7 +1075,6 @@ data FrontResult = FrontResult
   , frInferredSigs :: [InferredSignature]
   , frBackJob  :: Maybe BackJob
   , frDeferredBackJob :: Maybe DeferredBackJob
-  , frOutputJobs :: [FrontOutputJob]
   }
 
 frontResultModuleInfo :: A.ModName -> FrontResult -> Acton.Env.ModuleInfo
@@ -1092,110 +1154,6 @@ addInterestDeps deps im =
     (\acc (mn, n) -> M.insertWith Data.Set.union mn (Data.Set.singleton n) acc)
     im
     (Data.Set.toList deps)
-
-startFrontOutputJob :: BuildEnv -> TaskKey -> FrontOutputKind -> IO () -> IO FrontOutputJob
-startFrontOutputJob build key kind action = do
-  current <- isCurrent (buildGeneration build)
-  a <-
-    if current
-      then do
-        emit build (OutputStarted key kind)
-        asyncWithUnmask $ \unmask ->
-          runFrontOutputAction build key kind (unmask action)
-      else async (return ())
-  return FrontOutputJob
-    { fojKey = key
-    , fojKind = kind
-    , fojAsync = a
-    }
-
--- Run a front output SYNCHRONOUSLY: used for the .tydb commit, so that a
--- module reporting its front as complete IMPLIES its rows are on disk --
--- readers never wait for, or race, a write. Same start/done reporting and
--- skip-write gating as the background jobs; a failure propagates like any
--- other front error.
-runFrontOutputSync :: BuildEnv -> TaskKey -> FrontOutputKind -> IO () -> IO ()
-runFrontOutputSync build key kind action =
-  whenCurrent (buildGeneration build) $ do
-    emit build (OutputStarted key kind)
-    runStartedFrontOutputAction build key kind action
-
-runFrontOutputAction :: BuildEnv -> TaskKey -> FrontOutputKind -> IO () -> IO ()
-runFrontOutputAction build key kind action =
-  whenCurrent (buildGeneration build) $
-    runStartedFrontOutputAction build key kind action
-
-runStartedFrontOutputAction :: BuildEnv -> TaskKey -> FrontOutputKind -> IO () -> IO ()
-runStartedFrontOutputAction build key kind action = do
-  (res, elapsed) <- timed (try action :: IO (Either SomeException ()))
-  emit build (OutputFinished key kind (either (const Nothing) (const (Just elapsed)) res)) `catch` ignoreProgressException
-  either throwIO return res
-  where
-    ignoreProgressException :: SomeException -> IO ()
-    ignoreProgressException err = when (isAsyncException err) (throwIO err)
-
-frontOutputKindName :: FrontOutputKind -> String
-frontOutputKindName FrontOutputTydb     = "tydb"
-frontOutputKindName FrontOutputTydbCopy = "tydb-copy"
-frontOutputKindName FrontOutputDoc      = "doc"
-
-frontOutputTyDbProgress :: InterfaceFiles.TyDbWriteProgress -> FrontOutputProgress
-frontOutputTyDbProgress p =
-  FrontOutputProgress
-    { fopLabel = InterfaceFiles.tyDbWriteProgressLabel p
-    , fopRatio = InterfaceFiles.tyDbWriteProgressRatio p
-    }
-
-copyTydbInterface :: C.CompileOptions -> Paths -> A.ModName -> IO ()
-copyTydbInterface opts paths mn =
-  when (C.tydb opts) $
-    InterfaceFiles.copyInterface tySrc tyDst
-  where
-    tySrc = tyDbPath paths mn
-    tyDst = srcBase paths mn ++ InterfaceFiles.interfaceExt
-
-waitFrontOutputJobs :: FrontResult -> IO ()
-waitFrontOutputJobs fr =
-  waitFrontOutputJobList (frOutputJobs fr)
-
-waitFrontOutputJobList :: [FrontOutputJob] -> IO ()
-waitFrontOutputJobList jobs = do
-  failure <- waitFrontOutputJobFailures jobs
-  maybe (return ()) throwFrontOutputFailure failure
-
-throwFrontOutputFailure :: CompileFailure -> IO a
-throwFrontOutputFailure failure =
-  throwIO (FrontOutputError (compileFailureMessage failure))
-
-frontOutputException :: FrontOutputJob -> IO (Maybe SomeException)
-frontOutputException job = do
-  res <- waitCatch (fojAsync job)
-  case res of
-    Right () -> return Nothing
-    Left err -> return (Just err)
-
-frontOutputFailure :: FrontOutputJob -> IO (Maybe CompileFailure)
-frontOutputFailure job = do
-  mErr <- frontOutputException job
-  case mErr of
-    Nothing -> return Nothing
-    Just err
-      | isAsyncException err -> throwIO err
-      | otherwise -> return (Just (OutputFailed (fojKey job) (fojKind job) (displayException err)))
-
-rememberFrontOutputJobList :: IORef [FrontOutputJob] -> [FrontOutputJob] -> IO ()
-rememberFrontOutputJobList ref jobs =
-  atomicModifyIORef' ref $ \old -> (jobs ++ old, ())
-
-waitFrontOutputJobsRef :: IORef [FrontOutputJob] -> IO (Maybe CompileFailure)
-waitFrontOutputJobsRef ref = do
-  jobs <- reverse <$> readIORef ref
-  waitFrontOutputJobFailures jobs
-
-waitFrontOutputJobFailures :: [FrontOutputJob] -> IO (Maybe CompileFailure)
-waitFrontOutputJobFailures jobs = do
-  failures <- mapM frontOutputFailure jobs
-  return (listToMaybe (catMaybes failures))
 
 -- | A module as discovery found it.
 data CompileTask
@@ -1760,11 +1718,12 @@ formatCodegenDelta status =
 
 -- | Run the front passes for a single module.
 -- Builds the environment, runs kinds/types, computes per-name src/pub/impl
--- hashes plus module pub/impl hashes, and starts the post-front output jobs.
+-- hashes plus module pub/impl hashes, commits the .tydb and starts the doc
+-- page and the --tydb copy in the background.
 -- Progress and outputs are reported as the task's events.
 -- Returns the front result plus a BackJob for later passes when compilation is
--- needed. Callers must wait for frOutputJobs before treating the compile as
--- finished.
+-- needed. The background outputs are recorded in the BuildEnv: awaitOutputs
+-- waits for them.
 
 runFrontPasses :: BuildEnv
                -> GlobalTask
@@ -1778,9 +1737,8 @@ runFrontPasses :: BuildEnv
                -> (A.ModName -> IO (Maybe B.ByteString))
                -> (A.ModName -> IO (Maybe B.ByteString))
                -> (A.ModName -> A.Name -> IO (Maybe InterfaceFiles.NameHashInfo))
-               -> ([FrontOutputJob] -> IO ())
                -> IO (Either [Diagnostic String] FrontResult)
-runFrontPasses build task opts dbpBlocked env0 parsed srcContent srcBytes sourceMeta resolveImportHash resolveImportImplHash resolveNameHash recordFrontOutputJobs = do
+runFrontPasses build task opts dbpBlocked env0 parsed srcContent srcBytes sourceMeta resolveImportHash resolveImportImplHash resolveNameHash = do
   createDirectoryIfMissing True (moduleTypesDir (projTypes paths) mn)
   core
     `catch` handleGeneral
@@ -2170,9 +2128,9 @@ runFrontPasses build task opts dbpBlocked env0 parsed srcContent srcBytes source
                   dumpWhen opts mn C.sigs "sigs" (Acton.Types.prettySigs env mn imps fullIface)
                   timeTypeCheck <- getTime Monotonic
 
-                  let writeTyDb outputKey = do
+                  let writeTyDb onProgress =
                         InterfaceFiles.writeFileWithProgress
-                          (emit build . OutputProgressed outputKey FrontOutputTydb . frontOutputTyDbProgress)
+                          onProgress
                           A.version
                           (tyDbPath paths mn)
                           moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta impsWithHash depModules nameHashes escapeSummaries roots tests mdoc nmod tchecked
@@ -2194,10 +2152,7 @@ runFrontPasses build task opts dbpBlocked env0 parsed srcContent srcBytes source
                         -- Use parsed (original AST) to preserve docstrings
                         let htmlDoc = DocP.printHtmlDoc (I.NModule imps simplifiedTypeEnv mdoc) parsed
                         writeFileUtf8Atomic docFile htmlDoc
-                      docOutputActions =
-                        if shouldGenerateDocOutput opts (isTmp paths) (length nameHashes)
-                          then [(FrontOutputDoc, writeDoc)]
-                          else []
+                      docOutputs = [ (FrontOutputDoc, writeDoc) | shouldGenerateDocOutput opts (isTmp paths) (length nameHashes) ]
                   typeStmtTimings <- reverse <$> readIORef typeStmtTimingsRef
                   typeProgressDone <- readIORef typeProgressDoneRef
 
@@ -2239,45 +2194,30 @@ runFrontPasses build task opts dbpBlocked env0 parsed srcContent srcBytes source
                                          , bjSource = srcContent
                                          , bjImplHash = moduleImplHash
                                          }
-                  do
-                    -- The .tydb commit is synchronous with front completion:
-                    -- once this module reports done, its rows are on disk.
-                    -- A write failure (disk full, permissions) fails THIS
-                    -- module's front on the structured diagnostics path.
-                    -- Docs and the interface copy are never read back within
-                    -- this build, so they stay in the background.
-                    writeRes <- trySync (runFrontOutputSync build key FrontOutputTydb (writeTyDb key))
-                    case writeRes of
-                      Left err -> return (Left (tydbWriteDiagnostics mn err))
-                      Right () -> do
-                        outputJobs <- mask_ $ do
-                          let startOutput =
-                                startFrontOutputJob build key
-                          docJobs <-
-                            forM docOutputActions $ uncurry startOutput
-                          tyJobs <-
-                            if C.tydb opts
-                              then (:[]) <$> startOutput FrontOutputTydbCopy (copyTydbInterface opts paths mn)
-                              else return []
-                          let jobs = docJobs ++ tyJobs
-                          recordFrontOutputJobs jobs
-                          return jobs
-                        return $ Right FrontResult { frIfaceTE = publicIface
-                                                   , frImps = imps
-                                                   , frDoc = mdoc
-                                                   , frModuleInfo = Just $ Acton.Env.withEscapeSummaries escapeSummaries $
-                                                              Acton.Env.mkModuleInfo mn imps publicIface mdoc
-                                                   , frPubHash = modulePubHash
-                                                   , frImplHash = moduleImplHash
-                                                   , frNameHashes = publicNameHashes nameHashes
-                                                   , frInterestDeps = interestDepsFromNameHashes nameHashes
-                                                   , frFrontTime = frontTimeMaybe
-                                                   , frFrontTiming = frontTimingMaybe
-                                                   , frInferredSigs = inferredSigs
-                                                   , frBackJob = backJob
-                                                   , frDeferredBackJob = deferredBackJob
-                                                   , frOutputJobs = outputJobs
-                                                   }
+                  -- Once this module reports done, its rows are on disk.  A
+                  -- write failure (disk full, permissions) fails this module.
+                  -- Docs and the --tydb copy are never read back within this
+                  -- build, so they are written in the background.
+                  committed <- commitTydb build key writeTyDb
+                  case committed of
+                    Left diags -> return (Left diags)
+                    Right () -> do
+                      startOutputs build key (docOutputs ++ tydbCopy opts paths mn)
+                      return $ Right FrontResult { frIfaceTE = publicIface
+                                                 , frImps = imps
+                                                 , frDoc = mdoc
+                                                 , frModuleInfo = Just $ Acton.Env.withEscapeSummaries escapeSummaries $
+                                                            Acton.Env.mkModuleInfo mn imps publicIface mdoc
+                                                 , frPubHash = modulePubHash
+                                                 , frImplHash = moduleImplHash
+                                                 , frNameHashes = publicNameHashes nameHashes
+                                                 , frInterestDeps = interestDepsFromNameHashes nameHashes
+                                                 , frFrontTime = frontTimeMaybe
+                                                 , frFrontTiming = frontTimingMaybe
+                                                 , frInferredSigs = inferredSigs
+                                                 , frBackJob = backJob
+                                                 , frDeferredBackJob = deferredBackJob
+                                                 }
 
 data DbpSelection = DbpSelection
   { dbsModule :: A.Module
@@ -2620,18 +2560,13 @@ criticalWeights g sizes                 = weights
 compileModules :: BuildEnv -> CompilePlan -> IO (Either CompileFailure (Acton.Env.Env0, Bool))
 compileModules build plan = do
     runningRef <- newIORef []
-    frontOutputRef <- newIORef []
     let cancelRunning = readIORef runningRef >>= mapM_ cancel
-        waitFrontOutputsOnExit =
-          void (trySync (waitFrontOutputJobsRef frontOutputRef))
-        finishWithFrontOutputs res = do
-          outputFailure <- waitFrontOutputJobsRef frontOutputRef
-          case res of
-            Left err -> return (Left err)
-            Right ok ->
-              case outputFailure of
-                Just err -> return (Left err)
-                Nothing -> return (Right ok)
+        -- A failed output fails a run that otherwise succeeded.
+        withOutputFailure res = do
+          failure <- awaitOutputs build
+          return (case (res, failure) of
+                    (Right _, Just f) -> Left f
+                    _                 -> res)
     let compileMain = do
           -- Reject cycles
           if not (null importCycles)
@@ -2640,14 +2575,17 @@ compileModules build plan = do
               -- Compile __builtin__ first if present anywhere in the graph
               case builtinOrder of
                 [t] -> do
-                  res <- compileBuiltin frontOutputRef t
+                  res <- compileBuiltin t
                   case res of
                     Left err -> return (Left err)
-                    Right () -> continue frontOutputRef runningRef
-                _ -> continue frontOutputRef runningRef
-    ((compileMain >>= finishWithFrontOutputs) `finally` cancelRunning) `finally` waitFrontOutputsOnExit
+                    Right () -> continue runningRef
+                _ -> continue runningRef
+    -- Whatever ends the run, running stages are cancelled first and every
+    -- output is awaited after: outputs are never cancelled, and startCompile
+    -- waits for this before it starts the next generation.
+    ((compileMain >>= withOutputFailure) `finally` cancelRunning) `finally` void (awaitOutputs build)
   where
-    continue frontOutputRef runningRef = do
+    continue runningRef = do
       baseEnv <- Acton.Env.initEnvWithEscapeSummaries True builtinPath False
 
       costMap <- fmap M.fromList $ forM nonBuiltinTasks $ \t -> do
@@ -2659,7 +2597,7 @@ compileModules build plan = do
 
       maxParallel <- compileParallelism gopts
 
-      loop frontOutputRef runningRef stageInitialReady [] M.empty M.empty M.empty M.empty M.empty Data.Set.empty M.empty stageIndeg stagePending0 baseEnv False maxParallel cwMap
+      loop runningRef stageInitialReady [] M.empty M.empty M.empty M.empty M.empty Data.Set.empty M.empty stageIndeg stagePending0 baseEnv False maxParallel cwMap
 
     -- Basic maps/sets ----------------------------------------------------
     sp         = buildSources build
@@ -2728,8 +2666,8 @@ compileModules build plan = do
     -- many other changes so at the time it was easier to separate builtin
     -- compilation but perhaps we can find a way to merge it back in to one
     -- general loop.
-    compileBuiltin :: IORef [FrontOutputJob] -> GlobalTask -> IO (Either CompileFailure ())
-    compileBuiltin frontOutputRef t = do
+    compileBuiltin :: GlobalTask -> IO (Either CompileFailure ())
+    compileBuiltin t = do
       let bPaths = gtPaths t
           mn = tkMod (gtKey t)
           optsBuiltin = optionsFor ctx (gtKey t)
@@ -2760,14 +2698,13 @@ compileModules build plan = do
                 (lookupModuleHash cache (searchPath bPaths) Pub)
                 (lookupModuleHash cache (searchPath bPaths) Impl)
                 (lookupNameHash cache (searchPath bPaths))
-                (rememberFrontOutputJobList frontOutputRef)
               case res of
                 Left diags -> do
                   emit build (FrontFinished t Nothing)
                   emit build (Diagnostics t diags)
                   return (Left BuiltinFailed)
                 Right fr -> do
-                  outputFailure <- waitFrontOutputJobsRef frontOutputRef
+                  outputFailure <- awaitOutputs build
                   case outputFailure of
                     Just err -> return (Left err)
                     Nothing -> do
@@ -2778,14 +2715,13 @@ compileModules build plan = do
 
     -- One module ---------------------------------------------------------
     doOne :: Acton.Env.Env0
-          -> IORef [FrontOutputJob]
           -> M.Map TaskKey B.ByteString
           -> M.Map TaskKey B.ByteString
           -> M.Map TaskKey (M.Map A.Name InterfaceFiles.NameHashInfo)
           -> M.Map TaskKey CompileTask
           -> TaskKey
           -> IO (TaskKey, Either [Diagnostic String] FrontResult)
-    doOne envSnap frontOutputRef pubMap implMap nameMap parsedTasks key = do
+    doOne envSnap pubMap implMap nameMap parsedTasks key = do
       t <- case M.lookup key taskMap of
              Just x -> return x
              Nothing -> error ("Internal error: missing task for key " ++ show key)
@@ -2811,7 +2747,6 @@ compileModules build plan = do
               , frInferredSigs = []
               , frBackJob = backJob
               , frDeferredBackJob = deferredBackJob
-              , frOutputJobs = []
               }
           emptyFrontResult =
             FrontResult
@@ -2828,21 +2763,17 @@ compileModules build plan = do
               , frInferredSigs = []
               , frBackJob = Nothing
               , frDeferredBackJob = Nothing
-              , frOutputJobs = []
               }
-          addCachedTyOutputJob fr
-            | not (C.tydb optsT) = return fr
-            | not (null (frOutputJobs fr)) = return fr
-            | B.null (frPubHash fr) = return fr
-            | otherwise = mask_ $ do
-                job <- startFrontOutputJob build (TaskKey (projPath paths) mn) FrontOutputTydbCopy $
-                  copyTydbInterface optsT paths mn
-                rememberFrontOutputJobList frontOutputRef [job]
-                return fr{ frOutputJobs = [job] }
-          cacheFrontResult fr0 = do
-            fr <- addCachedTyOutputJob fr0
+          -- The module succeeded: its hashes become visible to reads.
+          rememberResult fr = do
             rememberFront cache mn fr
             return (key, Right fr)
+          -- The last steps of a result rebuilt from the .tydb, in the
+          -- stage's thread: the --tydb copy starts, then the hashes become
+          -- visible to reads.
+          finishStored fr = do
+            startOutputs build key (tydbCopy optsT paths mn)
+            rememberResult fr
           readTyFile = do
             tyRes <- InterfaceFiles.readFileMaybe tyFile
             case tyRes of
@@ -3185,7 +3116,7 @@ compileModules build plan = do
                              { frModuleInfo = mModuleInfo
                              , frInterestDeps = interestDeps
                              }
-                  cacheFrontResult fr
+                  finishStored fr
                 Left _ ->
                   return (key, Right emptyFrontResult)
         _ -> do
@@ -3280,7 +3211,6 @@ compileModules build plan = do
                           resolveImportHash
                           resolveImportImplHash
                           resolveNameHash'
-                          (rememberFrontOutputJobList frontOutputRef)
                         case res of
                           Left diags -> return (key, Left diags)
                           Right fr -> do
@@ -3288,7 +3218,7 @@ compileModules build plan = do
                             forM_ prevNameHashes $ \prevMap ->
                               forM_ (nameHashSummary prevMap (frNameHashes fr)) $ \summary ->
                                 info build ("  Hash deltas " ++ modNameToString (dropProjPrefix paths mn) ++ ": " ++ summary)
-                            cacheFrontResult fr
+                            rememberResult fr
                   -- Only the attempt falls back to the front passes, and only
                   -- for a synchronous exception or an unresolved hash.  The
                   -- write comes after every read, so a fallback never runs on
@@ -3300,24 +3230,17 @@ compileModules build plan = do
                     attempt <- trySync recomputeImpl
                     case attempt of
                       Right (Recomputed updatedDepModules updatedNameHashes fr) -> do
-                        -- Synchronous, like the full write: completion implies
-                        -- the refreshed rows are committed.  A write failure is
-                        -- this module's diagnostics, returned and not thrown.
-                        written <- trySync (runFrontOutputSync build outputKey FrontOutputTydb $
-                                              InterfaceFiles.updateImplRefresh tyFile (frImplHash fr) updatedDepModules updatedNameHashes)
-                        case written of
-                          Left err -> return (key, Left (tydbWriteDiagnostics mn err))
-                          Right () -> mask_ $ do
-                            outputJobs <- if C.tydb optsT
-                                            then (:[]) <$> startFrontOutputJob build outputKey FrontOutputTydbCopy (copyTydbInterface optsT paths mn)
-                                            else return []
-                            rememberFrontOutputJobList frontOutputRef outputJobs
-                            cacheFrontResult fr{ frOutputJobs = outputJobs }
+                        -- The refreshed rows are committed before the module
+                        -- reports done.  A write failure is this module's
+                        -- diagnostics, returned and not thrown.
+                        committed <- commitTydb build key (\_ -> InterfaceFiles.updateImplRefresh tyFile (frImplHash fr) updatedDepModules updatedNameHashes)
+                        case committed of
+                          Left diags -> return (key, Left diags)
+                          Right () -> finishStored fr
                       Right InterfaceGone -> return (key, Left (missingIfaceDiagnostics mn "" mn))
                       _ -> do
                         info build ("  Stale " ++ modNameToString (dropProjPrefix paths mn) ++ ": impl refresh encountered unresolved dep hashes; rerunning front passes")
                         runFront
-                    where outputKey = TaskKey (projPath paths) mn
                   -- The refresh is pure row math: every input is already stored.
                   -- Own impl-hash components (nhOwnImplHash) and local deps come
                   -- from the per-name rows, the external dep NAMES from the dep
@@ -3421,7 +3344,7 @@ compileModules build plan = do
                                    { frInterestDeps = interestDeps
                                    , frModuleInfo = Just moduleInfo
                                    }
-                        cacheFrontResult fr
+                        finishStored fr
                   runReuse = do
                     info build ("  Fresh " ++ modNameToString (dropProjPrefix paths mn) ++ ": using cached .tydb")
                     ifaceRes <- case taskCurrent of
@@ -3435,7 +3358,7 @@ compileModules build plan = do
                                    { frModuleInfo = mModuleInfo
                                    , frInterestDeps = interestDeps
                                    }
-                        cacheFrontResult fr
+                        finishStored fr
               case () of
                 _ | needFront -> runFront
                 _ | needByImpl -> runImplRefresh
@@ -3477,20 +3400,18 @@ compileModules build plan = do
         Left diags -> return (ParseStage key, Right (StageParsed (ParseErrorTask diags) Nothing))
 
     runFrontStage :: Acton.Env.Env0
-                  -> IORef [FrontOutputJob]
                   -> M.Map TaskKey B.ByteString
                   -> M.Map TaskKey B.ByteString
                   -> M.Map TaskKey (M.Map A.Name InterfaceFiles.NameHashInfo)
                   -> M.Map TaskKey CompileTask
                   -> TaskKey
                   -> IO (StageKey, Either [Diagnostic String] StageSuccess)
-    runFrontStage envSnap frontOutputRef res implRes nameRes parsedTasks key = do
-      (doneKey, outcome) <- doOne envSnap frontOutputRef res implRes nameRes parsedTasks key
+    runFrontStage envSnap res implRes nameRes parsedTasks key = do
+      (doneKey, outcome) <- doOne envSnap res implRes nameRes parsedTasks key
       return (FrontStage doneKey, fmap StageFronted outcome)
 
     scheduleMore :: Int -> [StageKey]
                  -> [(Async (StageKey, Either [Diagnostic String] StageSuccess), StageKey)]
-                 -> IORef [FrontOutputJob]
                  -> M.Map TaskKey B.ByteString
                  -> M.Map TaskKey B.ByteString
                  -> M.Map TaskKey (M.Map A.Name InterfaceFiles.NameHashInfo)
@@ -3499,7 +3420,7 @@ compileModules build plan = do
                  -> M.Map TaskKey Integer
                  -> IO ([StageKey]
                        , [(Async (StageKey, Either [Diagnostic String] StageSuccess), StageKey)])
-    scheduleMore k rdy running frontOutputRef res implRes nameRes parsedTasks envSnap cw = do
+    scheduleMore k rdy running res implRes nameRes parsedTasks envSnap cw = do
       let rdySorted = Data.List.sortOn (Down . stagePriority cw) rdy
           (toStart, rdy') = splitAt k rdySorted
       new <- forM toStart $ \sk -> do
@@ -3515,12 +3436,11 @@ compileModules build plan = do
                 a <- async $
                   case sk of
                     ParseStage key -> runParseStage key
-                    FrontStage key -> runFrontStage envSnap frontOutputRef res implRes nameRes parsedTasks key
+                    FrontStage key -> runFrontStage envSnap res implRes nameRes parsedTasks key
                 return (a, sk)
       return (rdy', new ++ running)
 
-    loop :: IORef [FrontOutputJob]
-         -> IORef [Async (StageKey, Either [Diagnostic String] StageSuccess)]
+    loop :: IORef [Async (StageKey, Either [Diagnostic String] StageSuccess)]
          -> [StageKey]
          -> [(Async (StageKey, Either [Diagnostic String] StageSuccess), StageKey)]
          -> M.Map TaskKey B.ByteString
@@ -3537,9 +3457,9 @@ compileModules build plan = do
          -> Int
          -> M.Map TaskKey Integer
          -> IO (Either CompileFailure (Acton.Env.Env0, Bool))
-    loop frontOutputRef runningRef rdy running res implRes nameRes parsedTasks interestMap frontDone deferredBacks ind pend envAcc hadErrors maxPar cw = do
+    loop runningRef rdy running res implRes nameRes parsedTasks interestMap frontDone deferredBacks ind pend envAcc hadErrors maxPar cw = do
       (rdy1, running1) <- mask_ $ do
-        res@(rdy1', running1') <- scheduleMore (maxPar - length running) rdy running frontOutputRef res implRes nameRes parsedTasks envAcc cw
+        res@(rdy1', running1') <- scheduleMore (maxPar - length running) rdy running res implRes nameRes parsedTasks envAcc cw
         writeIORef runningRef (map fst running1')
         return res
       if null running1 && null rdy1
@@ -3576,7 +3496,7 @@ compileModules build plan = do
                   rdy2 = filter (`Data.Set.notMember` blockedStages) rdy1
                   dropKeys = keyDone : Data.Set.toList blockedMods
                   parsedTasks2 = foldl' (flip M.delete) parsedTasks dropKeys
-              loop frontOutputRef runningRef rdy2 running3 res implRes nameRes parsedTasks2 interestMap frontDone deferredBacks ind pend2 envAcc True maxPar cw
+              loop runningRef rdy2 running3 res implRes nameRes parsedTasks2 interestMap frontDone deferredBacks ind pend2 envAcc True maxPar cw
             Right success -> do
               let pend2 = Data.Set.delete stageDone pend
                   ind2  = foldl' (\m d -> M.adjust (\x -> x-1) d m) ind (usersOf stages stageDone)
@@ -3591,7 +3511,7 @@ compileModules build plan = do
                 StageParsed parsed mParseTime -> do
                   emit build (ParseFinished tDone mParseTime)
                   let parsedTasks2 = M.insert keyDone parsed parsedTasks
-                  loop frontOutputRef runningRef rdy2 running2 res implRes nameRes parsedTasks2 interestMap frontDone deferredBacks ind2 pend2 envAcc hadErrors maxPar cw
+                  loop runningRef rdy2 running2 res implRes nameRes parsedTasks2 interestMap frontDone deferredBacks ind2 pend2 envAcc hadErrors maxPar cw
                 StageFronted fr -> do
                   emit build (FrontFinished tDone (Just fr))
                   forM_ (frBackJob fr) (emit build . BackReady)
@@ -3610,7 +3530,7 @@ compileModules build plan = do
                   case flushRes of
                     Left err -> return (Left err)
                     Right deferredBacks2 ->
-                      loop frontOutputRef runningRef rdy2 running2 res2 implRes2 nameRes2 parsedTasks2 interestMap2 frontDone2 deferredBacks2 ind2 pend2 envAcc' hadErrors maxPar cw
+                      loop runningRef rdy2 running2 res2 implRes2 nameRes2 parsedTasks2 interestMap2 frontDone2 deferredBacks2 ind2 pend2 envAcc' hadErrors maxPar cw
 
 
 -- | Check whether a NameInfo represents a root-eligible actor.
