@@ -3071,10 +3071,11 @@ stageGraph ctx tasks modules = graph $
 
 -- | Source size plus the heaviest chain of modules waiting for the module.
 -- The map is defined in terms of itself: sound because the graph is acyclic
--- (checked before) and Data.Map is the lazy one.
+-- (checked before) and Data.Map is the lazy one.  The sizes have a key for
+-- every node.
 criticalWeights                         :: Graph TaskKey -> M.Map TaskKey Integer -> M.Map TaskKey Integer
 criticalWeights g sizes                 = weights
-  where weights                         = M.fromList [ (k, M.findWithDefault 0 k sizes + maximum (0 : map (weights M.!) (usersOf g k))) | k <- nodes g ]
+  where weights                         = M.fromList [ (k, sizes M.! k + maximum (0 : map (weights M.!) (usersOf g k))) | k <- nodes g ]
 
 -- | Before any stage starts: the stages without prerequisites are ready, in
 -- stage order.

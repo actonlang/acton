@@ -1625,7 +1625,7 @@ newCliReporter progressUI progressState gopts gen plan = do
         weightFor key =
           if useEqual
             then 1 / totalWeight
-            else fromIntegral (M.findWithDefault 0 key sizeMap) / totalWeight
+            else fromIntegral (sizeMap M.! key) / totalWeight
         compilePhaseTotal = 85.0
         parseRatio = 0.1
         frontRatio = 0.6
