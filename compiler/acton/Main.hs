@@ -1587,6 +1587,9 @@ data CliReporter = CliReporter
   , reporterProgressUI :: ProgressUI
   }
 
+-- | The phases of a module that the CLI's progress percentage credits.
+data ProgressPhase = ParsePhase | FrontPhase | BackPhase deriving (Eq, Ord)
+
 -- | Build the compile event handler and state for CLI progress and
 -- completion logs.
 newCliReporter :: ProgressUI
@@ -1601,7 +1604,7 @@ newCliReporter progressUI progressState gopts gen plan = do
         rootPaths = ccPathsRoot (cpContext plan)
         optsPlan = ccOpts (cpContext plan)
     progressRef <- newIORef (0 :: Double)
-    marksRef <- newIORef (M.empty :: M.Map TaskKey (Double, Double, Bool))
+    marksRef <- newIORef (M.empty :: M.Map (TaskKey, ProgressPhase) Double)
     -- sizeMap is used for the progress bar indicator to determine how much a
     -- modules compilation should contribute to the overall progress. We use
     -- file size as a heuristic for this, but if all sizes are zero (e.g. due to
@@ -1623,12 +1626,16 @@ newCliReporter progressUI progressState gopts gen plan = do
             then 1 / totalWeight
             else fromIntegral (sizeMap M.! key) / totalWeight
         compilePhaseTotal = 85.0
-        parseRatio = 0.1
-        frontRatio = 0.6
-        backRatio = 0.3
+        -- The part of a module's weight that each phase carries. A module
+        -- without a parse stage has no parse part.
+        phaseRatio t ParsePhase
+          | hasParseStage (cpContext plan) t = 0.1
+          | otherwise                        = 0
+        phaseRatio _ FrontPhase              = 0.6
+        phaseRatio _ BackPhase               = 0.3
         totalPhaseWeight =
           sum
-            [ weightFor (gtKey t) * (frontRatio + backRatio + if hasParseStage (cpContext plan) t then parseRatio else 0)
+            [ weightFor (gtKey t) * (phaseRatio t FrontPhase + phaseRatio t BackPhase + phaseRatio t ParsePhase)
             | t <- neededTasks
             ]
         shareForPhase t ratio =
@@ -1637,10 +1644,9 @@ newCliReporter progressUI progressState gopts gen plan = do
             else compilePhaseTotal * weightFor (gtKey t) * ratio / totalPhaseWeight
         shareMap =
           M.fromList
-            [ (gtKey t, (shareForPhase t (if hasParseStage (cpContext plan) t then parseRatio else 0)
-                        , shareForPhase t frontRatio
-                        , shareForPhase t backRatio))
+            [ ((gtKey t, phase), shareForPhase t (phaseRatio t phase))
             | t <- neededTasks
+            , phase <- [ParsePhase, FrontPhase, BackPhase]
             ]
     -- runCompilePlan calls onEvent only while gen is current, so the event
     -- arms and the helpers only they use do not check the generation.
@@ -1660,11 +1666,7 @@ newCliReporter progressUI progressState gopts gen plan = do
         termProgress = puTermProgress progressUI
         termEnabled = termProgressEnabled termProgress
         timeSep = "    "
-        parseDoneStatus = "Parse done"
-        frontDoneStatus = "Type check done"
-        backDoneStatus = "Compilation done"
         backFailStatus msg = "Compilation failed: " ++ msg
-        finalDoneStatus = "Final compilation done"
         frontOutputActiveStatus kind =
           case kind of
             FrontOutputTydb -> "Preparing .tydb"
@@ -1782,53 +1784,21 @@ newCliReporter progressUI progressState gopts gen plan = do
           "Non-total inferred signature: " ++ intercalate ", " (isigNames sig)
         backTimingLine timing =
           "Back timing: " ++ intercalate ", " [ backPassName pass ++ " " ++ fmtTimePrecise t | (pass, t) <- timing ]
-        parseDoneRenderer =
-          staticStatusRenderer parseDoneStatus "Parsed"
-        frontDoneRenderer =
-          staticStatusRenderer frontDoneStatus "Typed"
-        backDoneRenderer =
-          staticStatusRenderer backDoneStatus "Built"
         backFailRenderer msg =
           \budget ->
             if budget < 10
               then Nothing
               else Just (abbreviateRight budget (backFailStatus msg))
-        finalDoneRenderer =
-          staticStatusRenderer finalDoneStatus "Final"
-        parseDoneLine width mn t =
-          if puWidthAware progressUI
-            then doneStatusLine width (moduleLabel rootPaths mn) parseDoneRenderer "Parsed" (Just t)
-            else plainDoneTimedLine (moduleLabel rootPaths mn) parseDoneStatus t
-        frontDoneLine width mn t =
-          if puWidthAware progressUI
-            then doneStatusLine width (moduleLabel rootPaths mn) frontDoneRenderer "Typed" (Just t)
-            else plainDoneTimedLine (moduleLabel rootPaths mn) frontDoneStatus t
-        backDoneLine width mn mt =
-          if puWidthAware progressUI
-            then
-              case mt of
-                Just t -> doneStatusLine width (moduleLabel rootPaths mn) backDoneRenderer "Built" (Just t)
-                Nothing -> doneStatusLine width (moduleLabel rootPaths mn) backDoneRenderer "Built" Nothing
-            else
-              case mt of
-                Just t -> plainDoneTimedLine (moduleLabel rootPaths mn) backDoneStatus t
-                Nothing -> plainDoneLine (moduleLabel rootPaths mn) backDoneStatus
+        -- The line of a finished step: its label, its status, or the short
+        -- status where the status does not fit, and the time it took when
+        -- that is known.
+        doneLine width label status short mt
+          | puWidthAware progressUI = doneStatusLine width label (staticStatusRenderer status short) short mt
+          | otherwise               = maybe (plainDoneLine label status) (plainDoneTimedLine label status) mt
         backFailLine width mn msg =
           if puWidthAware progressUI
             then doneStatusLine width (moduleLabel rootPaths mn) (backFailRenderer msg) "Failed" Nothing
             else plainDoneLine (moduleLabel rootPaths mn) (backFailStatus msg)
-        finalDoneLine width t =
-          if puWidthAware progressUI
-            then doneStatusLine width "" finalDoneRenderer "Final" (Just t)
-            else plainDoneTimedLine "" finalDoneStatus t
-        frontOutputDoneLine width key kind t =
-          let mn = tkMod key
-              status = frontOutputDoneStatus kind
-              short = frontOutputShortStatus kind
-              renderer = staticStatusRenderer status short
-          in if puWidthAware progressUI
-               then doneStatusLine width (moduleLabel rootPaths mn) renderer short (Just t)
-               else plainDoneTimedLine (moduleLabel rootPaths mn) status t
         renderProjectLine mn statusRender width =
           fitBuildLineLayout width labelWidth statusWidth False (moduleLabel rootPaths mn) statusRender
         parseActiveLine mn =
@@ -1854,21 +1824,18 @@ newCliReporter progressUI progressState gopts gen plan = do
         finalActiveLine width =
           fitBuildLineLayout width labelWidth statusWidth True "" (staticStatusRenderer "Final compilation" "Final")
         clamp01 x = max 0 (min 1 x)
-        parseProgressRatio p =
-          let total = ppTotal p
-          in if total <= 0
-               then 1
-               else clamp01 (fromIntegral (ppCompleted p) / fromIntegral total)
-        progressRatio p =
-          let total = fppTotal p
-          in if total <= 0
-               then 1
-               else clamp01 (fromIntegral (fppCompleted p) / fromIntegral total)
+        -- The completed part of a total, between 0 and 1, and 1 when the
+        -- total is not positive.
+        ratio completed total
+          | total <= 0 = 1
+          | otherwise  = clamp01 (fromIntegral completed / fromIntegral total)
+        parseProgressRatio p = ratio (ppCompleted p) (ppTotal p)
         frontPassFraction p =
           case fppPass p of
-            FrontPassKinds -> 0.05 * progressRatio p
-            FrontPassTypes -> 0.05 + 0.85 * progressRatio p
-            FrontPassHash  -> 0.90 + 0.10 * progressRatio p
+            FrontPassKinds -> 0.05 * passRatio
+            FrontPassTypes -> 0.05 + 0.85 * passRatio
+            FrontPassHash  -> 0.90 + 0.10 * passRatio
+          where passRatio = ratio (fppCompleted p) (fppTotal p)
         frontStatusRenderer p budget
           | budget < 10 = Nothing
           | otherwise =
@@ -1877,31 +1844,19 @@ newCliReporter progressUI progressState gopts gen plan = do
                   countPart
                     | total > 0 = " " ++ show completed ++ "/" ++ show total
                     | otherwise = ""
-                  compact =
-                    let base = if total > 0 then "Types" ++ countPart else "Types"
-                    in if length base <= budget then base else "Types"
-                  fullTypeStatus mCurrent =
-                    let prefix = "Type checking "
-                        staticLen = length prefix + length countPart
-                    in if staticLen < budget
-                         then case mCurrent of
-                                Just nm -> prefix ++ abbreviateRight (budget - staticLen) nm ++ countPart
-                                Nothing -> "Type checking" ++ countPart
-                         else compact
-                  fullHashStatus mCurrent =
-                    let prefix = "Hashing "
-                        staticLen = length prefix + length countPart
-                    in if staticLen < budget
-                         then case mCurrent of
-                                Just label -> prefix ++ abbreviateRight (budget - staticLen) label ++ countPart
-                                Nothing -> "Hashing" ++ countPart
-                         else
-                           let base = if total > 0 then "Hash" ++ countPart else "Hash"
-                           in if length base <= budget then base else "Hash"
+                  -- The pass's word, the current name if any, abbreviated
+                  -- to the room left, and the count. Where the word, a
+                  -- space and the count fill the budget, the short word
+                  -- and the count if they fit, else the short word.
+                  passStatus word short current
+                    | staticLen < budget                    = maybe word (\name -> word ++ " " ++ abbreviateRight (budget - staticLen) name) current ++ countPart
+                    | length (short ++ countPart) <= budget = short ++ countPart
+                    | otherwise                             = short
+                    where staticLen = length word + 1 + length countPart
               in case fppPass p of
                    FrontPassKinds -> staticStatusRenderer "Kinds check" "Kinds" budget
-                   FrontPassTypes -> Just (fullTypeStatus (fppCurrent p))
-                   FrontPassHash  -> Just (fullHashStatus (fppCurrent p))
+                   FrontPassTypes -> Just (passStatus "Type checking" "Types" (fppCurrent p))
+                   FrontPassHash  -> Just (passStatus "Hashing" "Hash" (fppCurrent p))
         backPassStatusRenderer p
           | bppEvent p == BackPassSkipped = staticStatusRenderer ("Back " ++ passName ++ " skipped") (passName ++ " skipped")
           | otherwise                     = staticStatusRenderer ("Back " ++ passName) passName
@@ -1936,34 +1891,15 @@ newCliReporter progressUI progressState gopts gen plan = do
           when (termEnabled && delta > 0) $ do
             new <- atomicModifyIORef' progressRef (\x -> let x' = min compilePhaseTotal (x + delta) in (x', x'))
             setPercent (floor new)
-        shareFor key = M.findWithDefault (0, 0, 0) key shareMap
-        creditParseTo key parseFrac = do
-          let (parseShare, _, _) = shareFor key
-          delta <- atomicModifyIORef' marksRef $ \m ->
-            let (parseDoneFrac, frontDoneFrac, backDone) = M.findWithDefault (0, 0, False) key m
-                parseDoneFrac' = max parseDoneFrac (clamp01 parseFrac)
-                deltaFrac = max 0 (parseDoneFrac' - parseDoneFrac)
-            in (M.insert key (parseDoneFrac', frontDoneFrac, backDone) m, parseShare * deltaFrac)
-          addProgress delta
-        creditFrontTo key frontFrac = do
-          let (_, frontShare, _) = shareFor key
-          delta <- atomicModifyIORef' marksRef $ \m ->
-            let (parseDoneFrac, frontDoneFrac, backDone) = M.findWithDefault (0, 0, False) key m
-                frontDoneFrac' = max frontDoneFrac (clamp01 frontFrac)
-                deltaFrac = max 0 (frontDoneFrac' - frontDoneFrac)
-            in (M.insert key (parseDoneFrac, frontDoneFrac', backDone) m, frontShare * deltaFrac)
-          addProgress delta
-        creditParse key = creditParseTo key 1
-        creditParseProgress key p = creditParseTo key (parseProgressRatio p)
-        creditFront key = creditFrontTo key 1
-        creditFrontProgress key p = creditFrontTo key (frontPassFraction p)
-        creditBack key = do
-          let (_, _, backShare) = shareFor key
-          delta <- atomicModifyIORef' marksRef $ \m ->
-            let (parseDoneFrac, frontDoneFrac, backDone) = M.findWithDefault (0, 0, False) key m
-            in if backDone
-                 then (m, 0)
-                 else (M.insert key (parseDoneFrac, frontDoneFrac, True) m, backShare)
+        -- Credit a module's phase as done up to the fraction: the phase's
+        -- share times the part of it not credited before. A smaller
+        -- fraction than one credited before adds nothing.
+        credit phase key fraction = do
+          let share = M.findWithDefault 0 (key, phase) shareMap
+          delta <- atomicModifyIORef' marksRef $ \marks ->
+            let done  = M.findWithDefault 0 (key, phase) marks
+                done' = max done (clamp01 fraction)
+            in (M.insert (key, phase) done' marks, share * (done' - done))
           addProgress delta
     setPercent 0
     let onEvent event = case event of
@@ -1974,20 +1910,21 @@ newCliReporter progressUI progressState gopts gen plan = do
             startRow (ProgressTaskKey (gtKey t)) (parseActiveLine (tkMod (gtKey t))) (Just 0)
           ParseProgressed t p -> do
             updateRow (ProgressTaskKey (gtKey t)) (parseProgressLine (tkMod (gtKey t)) p) (parseProgressRatio p)
-            creditParseProgress (gtKey t) p
+            credit ParsePhase (gtKey t) (parseProgressRatio p)
           ParseFinished t mtime -> do
             void (endRow (ProgressTaskKey (gtKey t)))
-            creditParse (gtKey t)
+            credit ParsePhase (gtKey t) 1
             when showDoneLines $
-              forM_ mtime $ \tParse -> logRendered (\cols -> parseDoneLine cols (tkMod (gtKey t)) tParse)
+              forM_ mtime $ \tParse ->
+                logRendered (\cols -> doneLine cols (moduleLabel rootPaths (tkMod (gtKey t))) "Parse done" "Parsed" (Just tParse))
           FrontStarted t ->
             startRow (ProgressTaskKey (gtKey t)) (frontInitialLine (tkMod (gtKey t))) (Just 0)
           FrontProgressed t p -> do
             updateRow (ProgressTaskKey (gtKey t)) (frontProgressLine (tkMod (gtKey t)) p) (frontPassFraction p)
-            creditFrontProgress (gtKey t) p
+            credit FrontPhase (gtKey t) (frontPassFraction p)
           FrontFinished t result -> do
             void (endRow (ProgressTaskKey (gtKey t)))
-            creditFront (gtKey t)
+            credit FrontPhase (gtKey t) 1
             forM_ result $ \fr -> do
               forM_ (frFrontTime fr) $ \tFront -> do
                 let mn = tkMod (gtKey t)
@@ -2017,9 +1954,9 @@ newCliReporter progressUI progressState gopts gen plan = do
                                    | line <- lines (isigSignature sig) ]
                                  | sig <- frInferredSigs fr ]
                       | otherwise = []
-                logRendered (\cols -> intercalate "\n" (frontDoneLine cols mn tFront : (timingLines cols ++ sigLines cols)))
+                logRendered (\cols -> intercalate "\n" (doneLine cols (moduleLabel rootPaths mn) "Type check done" "Typed" (Just tFront) : (timingLines cols ++ sigLines cols)))
               case frBack fr of
-                NoBack -> creditBack (gtKey t)
+                NoBack -> credit BackPhase (gtKey t) 1
                 _      -> return ()
           OutputStarted key kind ->
             startRow (ProgressFrontOutputKey key kind) (frontOutputActiveLine key kind) (frontOutputInitialProgress kind)
@@ -2028,9 +1965,10 @@ newCliReporter progressUI progressState gopts gen plan = do
           OutputFinished key kind melapsed -> do
             void (endRow (ProgressFrontOutputKey key kind))
             when showDoneLines $
-              forM_ melapsed $ \elapsed -> logRendered (\cols -> frontOutputDoneLine cols key kind elapsed)
+              forM_ melapsed $ \elapsed ->
+                logRendered (\cols -> doneLine cols (moduleLabel rootPaths (tkMod key)) (frontOutputDoneStatus kind) (frontOutputShortStatus kind) (Just elapsed))
           BackReady _ -> return ()
-          BackSkipped key -> creditBack key
+          BackSkipped key -> credit BackPhase key 1
           BackStarted job ->
             startRow (ProgressTaskKey (bjKey job)) (backActiveLine (tkMod (bjKey job))) (Just 0)
           BackProgressed job p -> do
@@ -2044,11 +1982,11 @@ newCliReporter progressUI progressState gopts gen plan = do
                 _ -> return ()
           BackFinished job result -> do
             void (endRow (ProgressTaskKey (bjKey job)))
-            creditBack (bjKey job)
+            credit BackPhase (bjKey job) 1
             when showDoneLines $
               case result of
                 BackJobOk mtime mtiming -> do
-                  logRendered (\cols -> backDoneLine cols (tkMod (bjKey job)) mtime)
+                  logRendered (\cols -> doneLine cols (moduleLabel rootPaths (tkMod (bjKey job))) "Compilation done" "Built" mtime)
                   when (C.timing gopts) $
                     forM_ mtiming $ \timing ->
                       logRendered (\cols -> detailLine cols detailStmtIndentWide detailStmtIndentNarrow (backTimingLine timing))
@@ -2065,7 +2003,7 @@ newCliReporter progressUI progressState gopts gen plan = do
             when success $
               forM_ mElapsed $ \tFinal ->
                 when showDoneLines $
-                  logRendered (\cols -> finalDoneLine cols tFinal)
+                  logRendered (\cols -> doneLine cols "" "Final compilation done" "Final" (Just tFinal))
     return CliReporter
       { reportEvent = onEvent
       , reportLine = logLine
