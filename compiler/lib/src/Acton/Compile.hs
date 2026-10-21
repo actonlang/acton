@@ -327,7 +327,6 @@ import Data.List (foldl', nub, partition)
 import qualified Data.List
 import Data.IORef
 import Data.Maybe (catMaybes, fromMaybe, isJust, isNothing, listToMaybe, mapMaybe)
-import qualified Data.HashMap.Strict as HM
 import qualified Data.Map as M
 import Data.Ord (Down(..))
 import qualified Data.Sequence as Seq
@@ -2541,11 +2540,8 @@ forceTypeResult :: I.NModule -> A.Module -> Acton.Env.EnvF x -> [String] -> IO (
 forceTypeResult interface typed typeEnv tests = do
     evaluate (rnf interface)
     evaluate (rnf typed)
-    evaluate (forceHTEnv (Acton.Env.hnames typeEnv))
+    evaluate (I.forceHTEnv (Acton.Env.hnames typeEnv))
     evaluate (rnf tests)
-
-forceHTEnv                              :: I.HTEnv -> ()
-forceHTEnv                              = HM.foldl' (\() nameInfo -> nameInfo `seq` ()) ()
 
 -- | The kinds check, reported as one step: 0/1 before it, 1/1 after.
 kindsPass :: ModuleEnv -> Acton.Env.Env0 -> A.Module -> IO A.Module

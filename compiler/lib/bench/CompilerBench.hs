@@ -15,7 +15,6 @@ import qualified Control.Exception as E
 import Control.Monad (forM_)
 import qualified Data.ByteString.Char8 as B
 import Data.Graph (SCC(..), stronglyConnComp)
-import qualified Data.HashMap.Strict as HashMap
 import Data.IORef (newIORef, readIORef)
 import qualified Data.Map as Map
 import qualified Data.Set as Set
@@ -102,9 +101,6 @@ measureRepeated statsEnabled label reps action = do
       count <- action
       let total' = total + count
       total' `seq` loop (n - 1) total'
-
-forceHTEnv = HashMap.foldl' forceNameInfo () where
-    forceNameInfo () ni                          = ni `seq` ()
 
 forceModuleInfos = Map.foldl' forceModuleInfo () where
     forceModuleInfo () mi = rnf (Env.modulePublicTEnv mi)
@@ -205,14 +201,14 @@ prepareHashBench typesPath sourcePath = do
     parsed <- Parser.parseModule modName sourcePath src Nothing
     E.evaluate (rnf parsed)
     env <- Env.mkEnv (Project.searchPath paths) env0 parsed
-    E.evaluate (forceHTEnv (Env.hnames env))
+    E.evaluate (NameInfo.forceHTEnv (Env.hnames env))
     E.evaluate (forceModuleInfos (Env.modules env))
     kchecked <- Kinds.check env parsed
     E.evaluate (rnf kchecked)
     (nmod, tchecked, typeEnv, tests) <- Types.reconstruct Nothing Nothing env kchecked Nothing
     E.evaluate (rnf nmod)
     E.evaluate (rnf tchecked)
-    E.evaluate (forceHTEnv (Env.hnames typeEnv))
+    E.evaluate (NameInfo.forceHTEnv (Env.hnames typeEnv))
     E.evaluate (forceModuleInfos (Env.modules typeEnv))
     E.evaluate (length tests)
 
@@ -700,7 +696,7 @@ runDirect mode typesPath sourcePath = do
       ParseOnly -> return ()
       _ -> do
         env <- Env.mkEnv [typesPath] env0 parsed
-        E.evaluate (forceHTEnv (Env.hnames env))
+        E.evaluate (NameInfo.forceHTEnv (Env.hnames env))
         E.evaluate (forceModuleInfos (Env.modules env))
         t2 <- getCurrentTime
         s2 <- getStats statsEnabled
@@ -720,7 +716,7 @@ runDirect mode typesPath sourcePath = do
             (nmod, tchecked, typeEnv, tests) <- Types.reconstruct Nothing Nothing env kchecked Nothing
             E.evaluate (rnf nmod)
             E.evaluate (rnf tchecked)
-            E.evaluate (forceHTEnv (Env.hnames typeEnv))
+            E.evaluate (NameInfo.forceHTEnv (Env.hnames typeEnv))
             E.evaluate (forceModuleInfos (Env.modules typeEnv))
             E.evaluate (length tests)
             t4 <- getCurrentTime

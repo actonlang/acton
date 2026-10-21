@@ -7,7 +7,6 @@ import qualified Acton.Types as Types
 
 import Control.DeepSeq (rnf)
 import qualified Control.Exception as E
-import qualified Data.HashMap.Strict as HashMap
 import Data.Time.Clock (diffUTCTime, getCurrentTime)
 import GHC.Stats
 import System.Environment (getArgs)
@@ -36,9 +35,6 @@ getStats enabled =
 printStatsMaybe label (Just before) (Just after) = printStats label before after
 printStatsMaybe _ _ _                            = return ()
 
-forceHTEnv = HashMap.foldl' forceNameInfo () where
-    forceNameInfo () ni                          = ni `seq` ()
-
 main = do
     hSetBuffering stdout LineBuffering
     args <- getArgs
@@ -59,7 +55,7 @@ main = do
         printStatsMaybe "parse_stats" s0 s1
 
         env <- Env.mkEnv [typesPath] env0 parsed
-        E.evaluate (forceHTEnv (Env.hnames env))
+        E.evaluate (NameInfo.forceHTEnv (Env.hnames env))
         t2 <- getCurrentTime
         s2 <- getStats statsEnabled
         elapsed "env" t1 t2
@@ -75,7 +71,7 @@ main = do
         (nmod, tchecked, typeEnv, tests) <- Types.reconstruct Nothing Nothing env kchecked Nothing
         E.evaluate (rnf nmod)
         E.evaluate (rnf tchecked)
-        E.evaluate (forceHTEnv (Env.hnames typeEnv))
+        E.evaluate (NameInfo.forceHTEnv (Env.hnames typeEnv))
         E.evaluate (length tests)
         t4 <- getCurrentTime
         s4 <- getStats statsEnabled
