@@ -310,7 +310,6 @@ import Acton.Project
 import qualified Acton.Diagnostics as Diag
 import qualified Acton.SourceProvider as Source
 import Utils
-import qualified Pretty
 import Pretty hiding ((<>))
 import qualified InterfaceFiles
 
@@ -323,10 +322,8 @@ import Control.Exception (Exception, Handler(..), SomeException, catch, catches,
 import Control.Monad
 import Data.Binary (encode)
 import Data.Char (isHexDigit, isSpace)
-import Data.List (foldl', nub, partition)
 import qualified Data.List
 import Data.IORef
-import Data.Maybe (catMaybes, fromMaybe, isJust, isNothing, listToMaybe, mapMaybe)
 import qualified Data.Map as M
 import Data.Ord (Down(..))
 import qualified Data.Sequence as Seq
@@ -336,11 +333,9 @@ import GHC.Conc (getNumCapabilities)
 import System.Clock
 import System.Directory
 import System.Environment (getExecutablePath)
-import System.FilePath ((</>))
 import System.FilePath.Posix
 import System.IO
 import System.Posix.Files (deviceID, fileID, fileSize, getFileStatus, modificationTimeHiRes, statusChangeTimeHiRes)
-import Text.PrettyPrint (renderStyle, style, Style(..), Mode(PageMode))
 import Text.Show.Pretty (ppDoc)
 
 import qualified Data.ByteString.Char8 as B
@@ -1608,7 +1603,7 @@ importsOf (ParseErrorTask _)            = []
 -- dropped.
 restoredImportsOf                       :: Paths -> CompileTask -> [A.ModName]
 restoredImportsOf paths (TyTask h)      = map (dropProjPrefix paths . fst) (InterfaceFiles.summaryImports h)
-restoredImportsOf paths task            = importsOf task
+restoredImportsOf _ task                = importsOf task
 
 -- | The declared modules of a plan's projects, which discovery reads and
 -- resolves imports against.
