@@ -2065,9 +2065,11 @@ data DepChange
 data Reason = SourceChanged | DependencyChanges [DepChange] | Forced | ImplRefreshFailed
 
 -- | How a module's front stage brings it up to date, in priority order.
+-- An impl refresh carries the module's NotImplemented flag as assess read
+-- it.
 data Action
   = RunFront       Reason
-  | RefreshImpl    InterfaceFiles.HeaderSummary [DepChange]
+  | RefreshImpl    InterfaceFiles.HeaderSummary Bool [DepChange]
   | RefreshCodegen InterfaceFiles.HeaderSummary CodegenStatus
   | Reuse          InterfaceFiles.HeaderSummary (Maybe DeferredBackJob)
 
@@ -2092,7 +2094,7 @@ assess env header = do
     changes    <- dependencyChanges env header
     hasNotImpl <- InterfaceFiles.readStmtHasNotImpl (tydbOf env)
     let deferred = deferredJob env hasNotImpl (InterfaceFiles.summaryImplHash header) (InterfaceFiles.summaryNameCount header)
-    case dependencyAction env header changes of
+    case dependencyAction env header hasNotImpl changes of
       Just action -> return action
       Nothing
         | C.altOutput (moduleOptions env) || isJust deferred -> return (Reuse header deferred)
@@ -2103,11 +2105,11 @@ assess env header = do
 -- | The action a cached module's dependency changes call for, if any.  A
 -- changed pub hash or a missing hash runs the front passes, and so does a
 -- forced module.  A changed impl hash refreshes the impl hashes.
-dependencyAction                        :: ModuleEnv -> InterfaceFiles.HeaderSummary -> [DepChange] -> Maybe Action
-dependencyAction env header changes
+dependencyAction                        :: ModuleEnv -> InterfaceFiles.HeaderSummary -> Bool -> [DepChange] -> Maybe Action
+dependencyAction env header hasNotImpl changes
   | any needsFront changes              = Just (RunFront (DependencyChanges changes))
   | moduleForced env                    = Just (RunFront Forced)
-  | any (changedIn Impl) changes        = Just (RefreshImpl header changes)
+  | any (changedIn Impl) changes        = Just (RefreshImpl header hasNotImpl changes)
   | otherwise                           = Nothing
 
 -- | A change the front passes must see: any change but a changed impl hash.
@@ -2200,7 +2202,7 @@ describe env action = case action of
                                     ++ [ stale ("missing dep hashes in " ++ missing cs) | any isMissing cs ]
     RunFront Forced                 -> []
     RunFront ImplRefreshFailed      -> [ stale "impl refresh encountered unresolved dep hashes; rerunning front passes" ]
-    RefreshImpl _ cs                -> [ stale ("impl changes in " ++ deltas Impl cs) ]
+    RefreshImpl _ _ cs              -> [ stale ("impl changes in " ++ deltas Impl cs) ]
     RefreshCodegen _ status         -> [ stale ("generated code out of date" ++ formatCodegenDelta status) ]
     Reuse _ _                       -> [ "  Fresh " ++ labelOf env ++ ": using cached .tydb" ]
   where
@@ -2222,11 +2224,11 @@ act env action = do
     mapM_ (info (moduleBuild env)) (describe env action)
     perform env action
 
-perform                                 :: ModuleEnv -> Action -> IO (Either [Diagnostic String] FrontResult)
-perform env (RunFront _)                = compileModule env
-perform env (RefreshImpl header _)      = refreshImpl env header
-perform env (RefreshCodegen header _)   = Right <$> refreshCodegen env header
-perform env (Reuse header deferred)     = Right <$> reuse env header deferred
+perform                                       :: ModuleEnv -> Action -> IO (Either [Diagnostic String] FrontResult)
+perform env (RunFront _)                      = compileModule env
+perform env (RefreshImpl header hasNotImpl _) = refreshImpl env header hasNotImpl
+perform env (RefreshCodegen header _)         = Right <$> refreshCodegen env header
+perform env (Reuse header deferred)           = Right <$> reuse env header deferred
 
 -- | Check a module from source: parse it unless its parse stage did, run
 -- its front passes with its imports renamed to their providers, and under
@@ -2270,9 +2272,9 @@ nameHashSummary old new
 -- passes, for a synchronous exception or an unresolved hash.  The write
 -- comes after every read, so a fallback never runs on top of a committed
 -- refresh.  A failed write and a missing own interface fail the module.
-refreshImpl :: ModuleEnv -> InterfaceFiles.HeaderSummary -> IO (Either [Diagnostic String] FrontResult)
-refreshImpl env header = do
-    attempt <- trySync (recomputeImpl env header)
+refreshImpl :: ModuleEnv -> InterfaceFiles.HeaderSummary -> Bool -> IO (Either [Diagnostic String] FrontResult)
+refreshImpl env header hasNotImpl = do
+    attempt <- trySync (recomputeImpl env header hasNotImpl)
     case attempt of
       Right (Recomputed dependencies names fr) -> do
         commitTydb env (\_ -> InterfaceFiles.updateImplRefresh (tydbOf env) (mhImpl (frHashes fr)) dependencies names)
@@ -2284,15 +2286,15 @@ refreshImpl env header = do
 -- own impl-hash components and local dependencies from its name rows, the
 -- names of its external dependencies from its dependency rows, and their
 -- current hashes from the resolver.  Its source is unchanged, so nothing is
--- parsed or checked.  The typed module is read only for an eager back job,
--- whose input it is.  Every read and every forcing happens here, before
--- anything is written.  An unavailable input is an outcome, never a module
--- error.
-recomputeImpl :: ModuleEnv -> InterfaceFiles.HeaderSummary -> IO Recomputation
-recomputeImpl env header = do
-    stored     <- InterfaceFiles.readNameHashes tydb
-    hasNotImpl <- InterfaceFiles.readStmtHasNotImpl tydb
-    restored   <- restoreExternalDeps tydb (InterfaceFiles.summaryDepModules header) stored
+-- parsed or checked.  Its NotImplemented flag, which decides between a
+-- deferred and an eager back job, is the one assess read.  The typed module
+-- is read only for an eager back job, whose input it is.  Every read and
+-- every forcing happens before anything is written.  An unavailable input
+-- is an outcome, never a module error.
+recomputeImpl :: ModuleEnv -> InterfaceFiles.HeaderSummary -> Bool -> IO Recomputation
+recomputeImpl env header hasNotImpl = do
+    stored   <- InterfaceFiles.readNameHashes tydb
+    restored <- restoreExternalDeps tydb (InterfaceFiles.summaryDepModules header) stored
     -- Only names with an impl item are refreshed: exactly the names the
     -- front passes gave an own impl-hash component.  The impl hash of a
     -- name with only a signature does not depend on other modules.
@@ -2819,32 +2821,34 @@ dbpCodegenHash moduleImplHash selected =
       ]
 
 -- | The rows of the names the seeds need, keyed by name.  Each seed and each
--- dependency resolves to the name owning its row, through the Derived chain.
--- The search is depth first: a name's local dependencies and extensions, in
--- name order, are visited before the names still waiting.  A missing row or
--- owner fails the selection with a DbpSelectionError naming the module by
--- its label.
+-- dependency resolves to the name owning its row, through the Derived chain,
+-- and keeps the row that resolution read.  The search is depth first: a
+-- name's local dependencies and extensions, in name order, are visited
+-- before the names still waiting.  A name without an owner fails the
+-- selection with a DbpSelectionError naming the module by its label.
 selectedRows :: FilePath -> String -> Data.Set.Set A.Name -> IO (M.Map A.Name InterfaceFiles.NameHashInfo)
 selectedRows tydb label seeds = traverse owner (Data.Set.toList seeds) >>= close M.empty
   where
     close selected []   = return selected
-    close selected (n:ns)
-      | M.member n selected = close selected ns
+    close selected ((n, row) : pending)
+      | M.member n selected = close selected pending
       | otherwise = do
-          row           <- InterfaceFiles.readNameHashMaybe tydb n >>= maybe (failure ("hash info missing for " ++ A.nstr n)) return
           localDeps     <- traverse owner (InterfaceFiles.nhPubLocalDeps row ++ InterfaceFiles.nhImplLocalDeps row)
-          extensions    <- unionNames <$> InterfaceFiles.readExtensionsByClass tydb n <*> InterfaceFiles.readExtensionsByProtocol tydb n
+          extensions    <- unionOn id <$> InterfaceFiles.readExtensionsByClass tydb n <*> InterfaceFiles.readExtensionsByProtocol tydb n
           extensionDeps <- traverse owner extensions
           let selected' = M.insert n row selected
-          close selected' (filter (`M.notMember` selected') (unionNames localDeps extensionDeps) ++ ns)
+          close selected' (filter ((`M.notMember` selected') . fst) (unionOn fst localDeps extensionDeps) ++ pending)
+    owner :: A.Name -> IO (A.Name, InterfaceFiles.NameHashInfo)
     owner n = do
       row <- InterfaceFiles.readNameHashMaybe tydb n
-      case n of
-        _ | isJust row          -> return n
-        A.Derived base _        -> owner base
+      case (row, n) of
+        (Just found, _)         -> return (n, found)
+        (_, A.Derived base _)   -> owner base
         _ | Names.isWitness n   -> failure ("unresolved witness owner for " ++ A.nstr n)
           | otherwise           -> failure ("no top-level owner for " ++ A.nstr n)
-    unionNames xs ys = Data.List.sortOn A.nameText (Data.List.nub (xs ++ ys))
+    -- The items of both lists, the first one of each name, in name order.
+    unionOn :: (a -> A.Name) -> [a] -> [a] -> [a]
+    unionOn name xs ys = Data.List.sortOn (A.nameText . name) (Data.List.nubBy (\x y -> name x == name y) (xs ++ ys))
     failure :: String -> IO a
     failure reason = throwIO (DbpSelectionError ("DBP selection failed for " ++ label ++ ": " ++ reason))
 
