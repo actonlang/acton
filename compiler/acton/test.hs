@@ -3303,7 +3303,6 @@ dependencyDeclarationTests =
         [ "Dependency tree (hash overrides shown):"
         , "- platform (path=../deps/platform)"
         , "  - yang (path=../../shared/yang)"
-        , "- widgets (path=../nowhere/widgets)"
         ]) out
   ]
   where

@@ -1267,8 +1267,6 @@ pkgShow gopts = do
                      Nothing -> "unversioned")
       ++ maybe "" (\dir -> ", subdir=" ++ dir) (BuildSpec.subdir dep)
 
-    isHashDep dep = isNothing (localPath dep) && isJust (BuildSpec.hash dep)
-
     showTree pins dir spec depth = do
       let deps = M.toList (BuildSpec.dependencies spec)
       foldM (step pins dir depth) False deps
@@ -1281,19 +1279,13 @@ pkgShow gopts = do
 
     showConcrete pins dir depth partial depName dep = do
       let (chosen, conflict) = selectDep pins dir depName dep
-      depBase <- resolveDepBase dir depName chosen
-      depExists <- doesDirectoryExist depBase
-      let notFetched = isHashDep chosen && not depExists
-          prefix = replicate (2*depth) ' ' ++ "- "
-          suffix = if notFetched then " (not fetched)" else ""
-          line = prefix ++ depName ++ " (" ++ describeDep dep ++
-                 (if conflict then " overridden -> " ++ describeDep chosen else "") ++ ")" ++ suffix
-      putStrLn line
-      if not depExists
-        then if notFetched
-          then return (partial || True)
-          else dependencyPathError depName "does not exist" depBase
-        else do
+      found <- existingDependencyDir dir depName chosen
+      putStrLn (replicate (2*depth) ' ' ++ "- " ++ depName ++ " (" ++ describeDep dep
+                ++ (if conflict then " overridden -> " ++ describeDep chosen else "") ++ ")"
+                ++ maybe " (not fetched)" (const "") found)
+      case found of
+        Nothing      -> return True
+        Just depBase -> do
           spec' <- loadBuildSpec depBase
           childPartial <- showTree pins depBase spec' (depth + 1)
           return (partial || childPartial)

@@ -50,8 +50,6 @@ module Acton.Project
   , selectDepAndWarn
   , localPath
   , localZigPath
-  , dependencyPathError
-  , resolveDepBase
   , actonCacheRoot
   , depCacheDir
   , depCacheEntry
