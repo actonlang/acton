@@ -1426,10 +1426,6 @@ data TaskKey = TaskKey { tkProj :: FilePath, tkMod :: A.ModName } deriving (Eq, 
 isBuiltin                               :: TaskKey -> Bool
 isBuiltin k                             = tkMod k == mBuiltin
 
-data StageKey = ParseStage TaskKey | FrontStage TaskKey deriving (Eq, Ord, Show)
-
-data StageSuccess = StageParsed CompileTask (Maybe TimeSpec) | StageFronted FrontResult
-
 data GlobalTask = GlobalTask
   { gtKey             :: TaskKey
   , gtPaths           :: Paths
@@ -2923,6 +2919,147 @@ runBackPasses gopts job shouldWrite onProgress = do
     total      = fromEnum (maxBound :: BackPass) + (if output == WriteFiles then 1 else 0)
 
 
+-- The run ------------------------------------------------------------------------------------------
+
+data StageKey = ParseStage TaskKey | FrontStage TaskKey deriving (Eq, Ord, Show)
+
+-- | What a finished stage tells the coordinator.  A parse stage cannot
+-- fail: a parse error becomes a ParseErrorTask, which the module's front
+-- stage reports once its providers are done.
+data StageOutcome
+  = ParseDone TaskKey CompileTask (Maybe TimeSpec)                     -- the parse time, Nothing when quiet or the parse failed
+  | FrontDone TaskKey (Either [Diagnostic String] FrontResult)
+
+-- | A run's constants while its stages are scheduled.
+data Run = Run
+  { runBuild       :: BuildEnv
+  , runContext     :: CompileContext
+  , runTasks       :: M.Map TaskKey GlobalTask                          -- every task of the plan, __builtin__ included
+  , runModuleGraph :: Graph TaskKey                                     -- the import graph of the plan's tasks except __builtin__
+  , runStageGraph  :: Graph StageKey
+  , runBlocked     :: Data.Set.Set TaskKey                              -- library boundaries: their back passes are not deferred
+  , runWeights     :: M.Map TaskKey Integer                             -- critical weights
+  , runJobs        :: Int                                               -- the most stages running at once
+  , runStarted     :: IORef [Async StageOutcome]                        -- what the exit cancels: the running stages as of the last start
+  }
+
+-- | The coordinator's state between two stage completions.
+data BuildState = BuildState
+  { readyStages       :: [StageKey]                                     -- startable, in the order they became so
+  , runningStages     :: [(Async StageOutcome, StageKey)]               -- the last batch started first, each batch in start order
+  , pendingStages     :: Data.Set.Set StageKey                          -- not completed, running ones included
+  , prerequisitesLeft :: M.Map StageKey Int                             -- per stage: its prerequisites not completed
+  , finishedModules   :: M.Map TaskKey ModuleHashes                     -- every module whose front stage succeeded
+  , parsedModules     :: M.Map TaskKey CompileTask                      -- parse stage results waiting for their front stage
+  , accumulatedEnv    :: Acton.Env.Env0                                 -- __builtin__ and every module whose front stage succeeded
+  , interest          :: InterestMap                                    -- the names finished modules use, by the module defining them
+  , deferredBacks     :: M.Map TaskKey (DeferredBackJob, Data.Set.Set TaskKey)  -- with the dependents it waits for
+  , hadErrors         :: Bool
+  }
+
+taskOf                                  :: Run -> TaskKey -> GlobalTask
+taskOf run k                            = runTasks run M.! k
+
+-- | Whether alternative output asks for a module: it applies to the module
+-- the build was started for.
+altOutputFor                            :: CompileContext -> TaskKey -> Bool
+altOutputFor ctx k                      = C.altOutput (optionsFor ctx k) && tkMod k == modName (ccPathsRoot ctx)
+
+-- | Compile a plan's modules, across every project of the plan: reject
+-- import cycles, compile __builtin__, then run every other module's parse
+-- and front stages over the import graph.  Whatever ends the run, running
+-- stages are cancelled first and every output is awaited after: outputs are
+-- never cancelled, and startCompile waits for this before it starts the
+-- next generation.
+compileModules :: BuildEnv -> CompilePlan -> IO (Either CompileFailure (Acton.Env.Env0, Bool))
+compileModules build plan = do
+    started <- newIORef []
+    ((compileAll started >>= withOutputFailure) `finally` (readIORef started >>= mapM_ cancel))
+      `finally` void (awaitOutputs build)
+  where
+    ctx                = cpContext plan
+    (builtins, others) = partition (isBuiltin . gtKey) (cpNeededTasks plan)
+    modules            = importGraph others
+
+    compileAll started
+      | found@(_ : _) <- cycles modules = return (Left (ImportCycles found))
+      | otherwise = do
+          bootstrapped <- case builtins of
+                            [t] -> compileBuiltin build ctx t
+                            _   -> return (Right ())
+          case bootstrapped of
+            Left failure -> return (Left failure)
+            Right ()     -> stages started
+
+    -- The base environment reads __builtin__'s .tydb, committed by now.
+    stages started = do
+      base  <- Acton.Env.initEnvWithEscapeSummaries True builtinTypes False
+      sizes <- M.fromList <$> mapM sourceSize others
+      jobs  <- compileParallelism (buildOptions build)
+      let run = Run { runBuild       = build
+                    , runContext     = ctx
+                    , runTasks       = M.fromList [ (gtKey t, t) | t <- cpNeededTasks plan ]
+                    , runModuleGraph = modules
+                    , runStageGraph  = stageGraph ctx others modules
+                    , runBlocked     = cpDbpBlocked plan
+                    , runWeights     = criticalWeights modules sizes
+                    , runJobs        = jobs
+                    , runStarted     = started }
+      coordinate run (initialState run base)
+
+    builtinTypes = case builtins of
+                     t : _ -> projTypes (gtPaths t)
+                     []    -> sysTypes (ccPathsRoot ctx)
+
+    sourceSize t = do
+      let file = taskSourceFile t
+      exists <- doesFileExist file
+      size   <- if exists then getFileSize file else return 0
+      return (gtKey t, size)
+
+    -- A failed output fails a run that otherwise succeeded.
+    withOutputFailure result = do
+      failure <- awaitOutputs build
+      return (case (result, failure) of
+                (Right _, Just f) -> Left f
+                _                 -> result)
+
+-- | __builtin__ defines the environment every other module is checked in,
+-- so it compiles first, in its own environment, with its imports read
+-- through the module cache.  Its cached interface serves as it is unless
+-- alternative output asks for it, and --only-build compiles nothing.  A
+-- failure fails the run.  Its outputs finish and its hashes become visible
+-- before it reports success.
+compileBuiltin :: BuildEnv -> CompileContext -> GlobalTask -> IO (Either CompileFailure ())
+compileBuiltin build ctx t
+  | C.only_build opts                              = return (Right ())
+  | TyTask _ <- gtTask t, not (altOutputFor ctx k) = return (Right ())
+  | otherwise                                      = do
+      parsed <- materialize (buildSources build) opts (tkMod k) (taskSourceFile t) Nothing (gtTask t)
+      case parsed of
+        Left diags        -> Left BuiltinFailed <$ emit build (Diagnostics t diags)
+        Right (source, m) -> do
+          emit build (FrontStarted t)
+          base   <- Acton.Env.initEnv (projTypes (gtPaths t)) True
+          result <- checkModule build t opts base source m
+          case result of
+            Left diags -> Left BuiltinFailed <$ reportFrontFailure build t diags
+            Right fr   -> do
+              failure <- awaitOutputs build
+              case failure of
+                Just f  -> return (Left f)
+                Nothing -> do rememberFront (buildCache build) (tkMod k) fr
+                              Right () <$ reportFrontSuccess build t fr
+  where k    = gtKey t
+        opts = optionsFor ctx k
+
+-- | A front stage per module, after its providers' front stages and, when
+-- its source is parsed in a stage of its own, after its parse stage.
+stageGraph :: CompileContext -> [GlobalTask] -> Graph TaskKey -> Graph StageKey
+stageGraph ctx tasks modules = graph $
+       [ (ParseStage k, [])                                                                     | t <- tasks, let k = gtKey t, hasParseStage ctx t ]
+    ++ [ (FrontStage k, [ ParseStage k | hasParseStage ctx t ] ++ map FrontStage (depsOf modules k)) | t <- tasks, let k = gtKey t ]
+
 -- | Source size plus the heaviest chain of modules waiting for the module.
 -- The map is defined in terms of itself: sound because the graph is acyclic
 -- (checked before) and Data.Map is the lazy one.
@@ -2930,372 +3067,181 @@ criticalWeights                         :: Graph TaskKey -> M.Map TaskKey Intege
 criticalWeights g sizes                 = weights
   where weights                         = M.fromList [ (k, M.findWithDefault 0 k sizes + maximum (0 : map (weights M.!) (usersOf g k))) | k <- nodes g ]
 
--- | Compile a plan's needed tasks using a parallel, dependency-aware
--- scheduler. This drives front passes and reports diagnostics, progress and
--- ready back-pass jobs as events of the BuildEnv.
---
--- Total build graph scheduler: this compiles all tasks across all projects,
--- i.e. dependencies of the main project are also compiled here, as well as
--- their dependencies, etc. We construct a large DAG of all modules to be
--- compiled and then compile in topological order using concurrent async
--- workers.
---
--- What we build the graph from:
---   - Input is a list of GlobalTask. Each carries a CompileTask (ActonTask or
---     TyTask), its Paths, and a pre-resolved provider map (gtImportProviders ::
---     Map ModName TaskKey) telling us which in-graph node satisfies a given
---     import. TaskKey is (projectRoot, modName).
---   - We always read an initial set of modules (either all src/ files in the
---     root project for a project build or the user-specified files). From those
---     keys we chase imports via gtImportProviders to pull in exactly the
---     reachable dependencies across projects. __builtin__ is compiled first if
---     present, i.e. we are building the base lib.
---
---   1) Construct a dependency graph over non-builtin tasks and reject import cycles.
---   2) Compile __builtin__ first if present.
---   3) Walk modules in topo order, deciding per module whether to compile or reuse cached .tydb,
---      and update the shared environment.
---   4) Track per-name pub/impl hashes and only redo the work that changed:
---      pub changes trigger front passes; impl changes trigger back passes (with
---      an impl-hash refresh); codegen hash mismatches trigger back passes only.
---
--- Key ideas (ActonTask vs TyTask caching):
---   - TyTask is lightweight, read from the .tydb header: moduleSrcBytesHash, modulePubHash,
---     moduleImplHash, imports annotated with the pub hash used, per-name hashes (src/pub/impl
---     + deps), roots, tests, and docstring. It avoids decoding heavy sections.
---   - ParseTask carries source text plus discovered imports; full parsing is
---     deferred until front passes are needed.
---   - ActonTask carries parsed source and must be compiled.
---   - The ModuleHashes of every module whose front stage finished are kept during the run.
---     TyTask compares recorded dependency hashes against current provider hashes (in-graph
---     via those ModuleHashes, otherwise via cached .tydb headers). Pub deltas trigger front
---     passes; impl deltas trigger back passes with an impl-hash refresh.
---   - When a TyTask is stale for public reasons (or altOutput on the root), we convert it to an
---     ActonTask by parsing the .act file and run front passes; when it is fresh we reuse the
---     header and carry forward the recorded hashes.
---
--- Scheduling:
---   - Critical-path heuristic (file size proxy) picks among ready tasks; runs up to job cap.
---   - Each worker uses an env snapshot; coordinator merges the resulting interface/doc and
---     updates indegrees/ready sets. Dependents receive hashes through their ModuleEnv's resolver.
---   - Each module is compiled with optionsFor: dependency projects skip their
---     tests and final binary while the root keeps the user's options.
-compileModules :: BuildEnv -> CompilePlan -> IO (Either CompileFailure (Acton.Env.Env0, Bool))
-compileModules build plan = do
-    runningRef <- newIORef []
-    let cancelRunning = readIORef runningRef >>= mapM_ cancel
-        -- A failed output fails a run that otherwise succeeded.
-        withOutputFailure res = do
-          failure <- awaitOutputs build
-          return (case (res, failure) of
-                    (Right _, Just f) -> Left f
-                    _                 -> res)
-    let compileMain = do
-          -- Reject cycles
-          if not (null importCycles)
-            then return $ Left (ImportCycles importCycles)
-            else do
-              -- Compile __builtin__ first if present anywhere in the graph
-              case builtinOrder of
-                [t] -> do
-                  res <- compileBuiltin t
-                  case res of
-                    Left err -> return (Left err)
-                    Right () -> continue runningRef
-                _ -> continue runningRef
-    -- Whatever ends the run, running stages are cancelled first and every
-    -- output is awaited after: outputs are never cancelled, and startCompile
-    -- waits for this before it starts the next generation.
-    ((compileMain >>= withOutputFailure) `finally` cancelRunning) `finally` void (awaitOutputs build)
+-- | Before any stage starts: the stages without prerequisites are ready, in
+-- stage order.
+initialState :: Run -> Acton.Env.Env0 -> BuildState
+initialState run base = BuildState
+    { readyStages       = [ s | (s, 0) <- M.toList waiting ]
+    , runningStages     = []
+    , pendingStages     = M.keysSet waiting
+    , prerequisitesLeft = waiting
+    , finishedModules   = M.empty
+    , parsedModules     = M.empty
+    , accumulatedEnv    = base
+    , interest          = M.empty
+    , deferredBacks     = M.empty
+    , hadErrors         = False
+    }
+  where waiting = M.fromList [ (s, length (depsOf (runStageGraph run) s)) | s <- nodes (runStageGraph run) ]
+
+-- | Start ready stages, fold each completion into the state, repeat.  The
+-- run finishes when no stage is pending.  When nothing runs and nothing is
+-- ready but stages are still pending, the run is stuck: it ends with errors
+-- and prepares no deferred back job.
+coordinate :: Run -> BuildState -> IO (Either CompileFailure (Acton.Env.Env0, Bool))
+coordinate run state0 = do
+    state <- mask_ (startReady run state0)
+    case (runningStages state, readyStages state) of
+      ([], []) | Data.Set.null (pendingStages state) -> finishRun run state
+               | otherwise                           -> return (Right (accumulatedEnv state, True))
+      _ -> do
+        (done, outcome) <- waitAny (map fst (runningStages state))
+        let state1 = state { runningStages = filter ((/= done) . fst) (runningStages state) }
+        case outcome of
+          ParseDone k task time    -> do emit (runBuild run) (ParseFinished (taskOf run k) time)
+                                         coordinate run (parseDone run k task state1)
+          FrontDone k (Left diags) -> frontFailed run k diags state1 >>= coordinate run
+          FrontDone k (Right fr)   -> do reportFrontSuccess (runBuild run) (taskOf run k) fr
+                                         flushDeferred run (frontSucceeded run k fr state1) >>= either (return . Left) (coordinate run)
+
+-- | Start ready stages up to the parallelism, which parse and front stages
+-- share: front stages first, then the heaviest chain, and equal ones in
+-- their ready order (a stable sort).  Each start is reported before its
+-- thread exists.  coordinate runs this masked, so every started stage is
+-- recorded in runStarted before an exception can arrive.  Stage threads
+-- inherit the mask and run masked-interruptible: a cancel reaches them only
+-- at interruptible points such as blocking I/O.
+startReady :: Run -> BuildState -> IO BuildState
+startReady run state = do
+    started <- forM now $ \stage -> do
+      emit (runBuild run) (stageStarted stage)
+      thread <- async (runStage stage)
+      return (thread, stage)
+    let running = started ++ runningStages state
+    writeIORef (runStarted run) (map fst running)
+    return state { readyStages = later, runningStages = running }
   where
-    continue runningRef = do
-      baseEnv <- Acton.Env.initEnvWithEscapeSummaries True builtinPath False
+    (now, later)                = splitAt (runJobs run - length (runningStages state)) (Data.List.sortOn (Down . priority) (readyStages state))
+    priority (FrontStage k)     = (1 :: Int, weight k)
+    priority (ParseStage k)     = (0, weight k)
+    weight k                    = M.findWithDefault 0 k (runWeights run)
+    stageStarted (ParseStage k) = ParseStarted (taskOf run k)
+    stageStarted (FrontStage k) = FrontStarted (taskOf run k)
+    runStage (ParseStage k)     = uncurry (ParseDone k) <$> parseStage (runBuild run) (optionsFor (runContext run) k) (taskOf run k)
+    runStage (FrontStage k)     = FrontDone k <$> frontStage (moduleEnv run state k)
 
-      costMap <- fmap M.fromList $ forM nonBuiltinTasks $ \t -> do
-                    let fp = taskSourceFile t
-                    ok <- doesFileExist fp
-                    sz <- if ok then getFileSize fp else return 0
-                    return (gtKey t, sz)
-      let cwMap = criticalWeights modules costMap
+-- | A stage completed: it is no longer pending, and the stages whose last
+-- prerequisite it was become ready, appended in stage order.
+stageCompleted :: Run -> StageKey -> BuildState -> BuildState
+stageCompleted run stage state = state { pendingStages = pending, prerequisitesLeft = waiting, readyStages = readyStages state ++ newlyReady }
+  where pending    = Data.Set.delete stage (pendingStages state)
+        stageUsers = usersOf (runStageGraph run) stage
+        waiting    = foldl' (flip (M.adjust (subtract 1))) (prerequisitesLeft state) stageUsers
+        newlyReady = Data.Set.toAscList (Data.Set.fromList [ u | u <- stageUsers, Data.Set.member u pending, M.lookup u waiting == Just 0 ])
 
-      maxParallel <- compileParallelism gopts
+-- | A parse stage completed: its module's front stage checks what it parsed.
+parseDone                               :: Run -> TaskKey -> CompileTask -> BuildState -> BuildState
+parseDone run k task state              = (stageCompleted run (ParseStage k) state) { parsedModules = M.insert k task (parsedModules state) }
 
-      loop runningRef stageInitialReady [] M.empty M.empty M.empty M.empty stageIndeg stagePending0 baseEnv False maxParallel cwMap
+-- | A module's front stage succeeded: later stages see its hashes, its
+-- interface and the names it uses, and its deferred back job waits for
+-- every module depending on it.
+frontSucceeded :: Run -> TaskKey -> FrontResult -> BuildState -> BuildState
+frontSucceeded run k fr state = (stageCompleted run (FrontStage k) state)
+    { finishedModules = M.insert k (frHashes fr) (finishedModules state)
+    , parsedModules   = M.delete k (parsedModules state)
+    , accumulatedEnv  = Acton.Env.addModuleInfo (tkMod k) (frModuleInfo fr) (accumulatedEnv state)
+    , interest        = addInterestDeps (frInterest fr) (interest state)
+    , deferredBacks   = case frBack fr of
+                          DeferredBack job -> M.insert k (job, strictDependents (runModuleGraph run) k) (deferredBacks state)
+                          _                -> deferredBacks state
+    }
 
-    -- Basic maps/sets ----------------------------------------------------
-    sp         = buildSources build
-    gopts      = buildOptions build
-    cache      = buildCache build
-    ctx        = cpContext plan
-    tasks      = cpNeededTasks plan
-    dbpBlocked = cpDbpBlocked plan
+-- | A module's front stage failed.  Every module depending on it is dropped
+-- without events, and their running stages (parse stages only) are
+-- cancelled.  cancel waits for each thread to end.
+frontFailed :: Run -> TaskKey -> [Diagnostic String] -> BuildState -> IO BuildState
+frontFailed run k diags state = do
+    reportFrontFailure (runBuild run) (taskOf run k) diags
+    mapM_ (cancel . fst) cancelled
+    return state { runningStages = kept
+                 , pendingStages = Data.Set.delete (FrontStage k) (pendingStages state `Data.Set.difference` blockedStages)
+                 , readyStages   = filter (`Data.Set.notMember` blockedStages) (readyStages state)
+                 , parsedModules = foldl' (flip M.delete) (parsedModules state) (k : Data.Set.toList blocked)
+                 , hadErrors     = True }
+  where blocked           = strictDependents (runModuleGraph run) k
+        blockedStages     = Data.Set.fromList [ s | b <- Data.Set.toList blocked, s <- [ParseStage b, FrontStage b] ]
+        (cancelled, kept) = partition ((`Data.Set.member` blockedStages) . snd) (runningStages state)
 
-    taskMap = M.fromList [ (gtKey t, t) | t <- tasks ]
-    builtinOrder = [ t | t <- tasks, isBuiltin (gtKey t) ]
-    nonBuiltinTasks = [ t | t <- tasks, not (isBuiltin (gtKey t)) ]
-    modules = importGraph nonBuiltinTasks
-    importCycles = cycles modules
+-- | A successful front stage, as handlers see it.
+reportFrontSuccess :: BuildEnv -> GlobalTask -> FrontResult -> IO ()
+reportFrontSuccess build t fr = do
+    emit build (FrontFinished t (Just fr))
+    case frBack fr of
+      EagerBack job -> emit build (BackReady job)
+      _             -> return ()
 
-    -- A front stage runs after its providers' front stages and, when its
-    -- source is parsed separately, after its own parse stage.
-    stages :: Graph StageKey
-    stages = graph $
-         [ (ParseStage k, [])                                                                     | t <- nonBuiltinTasks, let k = gtKey t, hasParseStage ctx t ]
-      ++ [ (FrontStage k, [ ParseStage k | hasParseStage ctx t ] ++ map FrontStage (depsOf modules k)) | t <- nonBuiltinTasks, let k = gtKey t ]
+-- | A failed front stage, as handlers see it.
+reportFrontFailure :: BuildEnv -> GlobalTask -> [Diagnostic String] -> IO ()
+reportFrontFailure build t diags = do
+    emit build (FrontFinished t Nothing)
+    emit build (Diagnostics t diags)
 
-    stageIndeg :: M.Map StageKey Int
-    stageIndeg = M.fromList [ (s, length (depsOf stages s)) | s <- nodes stages ]
+-- | Prepare the deferred back jobs whose dependents all finished their
+-- front stages: only then is the interest in their names complete.
+-- Preparation runs on the coordinator.  A skipped job is reported as it is
+-- prepared, prepared jobs once the whole batch is.  A synchronous failure
+-- stops the run.
+flushDeferred :: Run -> BuildState -> IO (Either CompileFailure BuildState)
+flushDeferred run state = do
+    prepared <- trySync (mapM prepare (M.elems due))
+    case prepared of
+      Left e     -> return (Left (DeferredBackFailed (displayException e)))
+      Right jobs -> do mapM_ (emit (runBuild run) . BackReady) (catMaybes jobs)
+                       return (Right state { deferredBacks = waiting })
+  where
+    (due, waiting)   = M.partition ((`Data.Set.isSubsetOf` M.keysSet (finishedModules state)) . snd) (deferredBacks state)
+    prepare (job, _) = do
+      back <- prepareDeferredBackJob (runBuild run) (accumulatedEnv state) (interest state) job
+      when (isNothing back) $ emit (runBuild run) (BackSkipped (deferredKey job))
+      return back
 
-    stageInitialReady :: [StageKey]
-    stageInitialReady = [ k | (k, d) <- M.toList stageIndeg, d == 0 ]
+-- | The run's environment, and whether it had errors.  Deferred jobs still
+-- waiting at the end belong to modules with a failed dependent: the run has
+-- errors.
+finishRun :: Run -> BuildState -> IO (Either CompileFailure (Acton.Env.Env0, Bool))
+finishRun run state = fmap (\s -> (accumulatedEnv s, hadErrors s || not (M.null (deferredBacks s)))) <$> flushDeferred run state
 
-    stagePending0 :: Data.Set.Set StageKey
-    stagePending0 = Data.Set.fromList (M.keys stageIndeg)
+-- | A front stage's view of the run, taken from the state it starts in: its
+-- providers finished before it became ready, so that state holds
+-- everything it reads.
+moduleEnv :: Run -> BuildState -> TaskKey -> ModuleEnv
+moduleEnv run state k = ModuleEnv
+    { moduleBuild    = runBuild run
+    , moduleTask     = t
+    , moduleCurrent  = M.findWithDefault (gtTask t) k (parsedModules state)
+    , moduleOptions  = opts
+    , moduleResolver = inRunResolver (buildCache (runBuild run)) (runTasks run) (finishedModules state) t
+    , checkedModules = accumulatedEnv state
+    , moduleBlocked  = Data.Set.member k (runBlocked run)
+    , moduleForced   = altOutputFor (runContext run) k || C.alwaysbuild opts
+    }
+  where t    = taskOf run k
+        opts = optionsFor (runContext run) k
 
-    rootAlt = modName (ccPathsRoot ctx)
-
-    builtinPath =
-      case builtinOrder of
-        (t:_) -> projTypes (gtPaths t)
-        _     -> sysTypes (ccPathsRoot ctx)
-
-    flushReadyDeferredBacks :: Acton.Env.Env0
-                            -> InterestMap
-                            -> M.Map TaskKey ModuleHashes
-                            -> M.Map TaskKey (DeferredBackJob, Data.Set.Set TaskKey)
-                            -> IO (Either CompileFailure (M.Map TaskKey (DeferredBackJob, Data.Set.Set TaskKey)))
-    flushReadyDeferredBacks envAcc interestMap finished deferredBacks = do
-      let (ready, waiting) =
-            M.partitionWithKey
-              (\_ (_deferred, waitSet) -> waitSet `Data.Set.isSubsetOf` M.keysSet finished)
-              deferredBacks
-      prepared <- trySync $
-        forM (M.elems ready) $ \(deferred, _waitSet) -> do
-          mJob <- prepareDeferredBackJob build envAcc interestMap deferred
-          case mJob of
-            Nothing -> emit build (BackSkipped (deferredKey deferred))
-            Just _ -> return ()
-          return mJob
-      case prepared of
-        Left err -> return (Left (DeferredBackFailed (displayException err)))
-        Right jobs -> do
-          mapM_ (emit build . BackReady) (catMaybes jobs)
-          return (Right waiting)
-
-    -- TODO: can we reintegrate this into the normal loop to avoid duplication?
-    -- NOTE: FYI, it was originally part of the main loop but factored out for
-    -- clarity when we changed to use async, front/back jobs etc. There were so
-    -- many other changes so at the time it was easier to separate builtin
-    -- compilation but perhaps we can find a way to merge it back in to one
-    -- general loop.
-    compileBuiltin :: GlobalTask -> IO (Either CompileFailure ())
-    compileBuiltin t = do
-      let bPaths = gtPaths t
-          mn = tkMod (gtKey t)
-          optsBuiltin = optionsFor ctx (gtKey t)
-          actFile = taskSourceFile t
-          forceAlt = C.altOutput optsBuiltin && mn == rootAlt
-      case gtTask t of
-        _ | C.only_build optsBuiltin -> return (Right ())
-        TyTask _ | not forceAlt -> return (Right ())
-        task -> do
-          parsed <- materialize sp optsBuiltin mn actFile Nothing task
-          case parsed of
-            Left diags -> do
-              emit build (Diagnostics t diags)
-              return (Left BuiltinFailed)
-            Right (source, m) -> do
-              emit build (FrontStarted t)
-              builtinEnv0 <- Acton.Env.initEnv (projTypes bPaths) True
-              res <- checkModule build t optsBuiltin builtinEnv0 source m
-              case res of
-                Left diags -> do
-                  emit build (FrontFinished t Nothing)
-                  emit build (Diagnostics t diags)
-                  return (Left BuiltinFailed)
-                Right fr -> do
-                  outputFailure <- awaitOutputs build
-                  case outputFailure of
-                    Just err -> return (Left err)
-                    Nothing -> do
-                      emit build (FrontFinished t (Just fr))
-                      rememberFront cache mn fr
-                      case frBack fr of
-                        EagerBack job -> emit build (BackReady job)
-                        _             -> return ()
-                      return (Right ())
-
-    stageTaskKey :: StageKey -> TaskKey
-    stageTaskKey sk =
-      case sk of
-        ParseStage k -> k
-        FrontStage k -> k
-
-    stagePriority :: M.Map TaskKey Integer -> StageKey -> (Int, Integer)
-    stagePriority cw sk =
-      let phase = case sk of
-                    FrontStage _ -> 1
-                    ParseStage _ -> 0
-      in (phase, M.findWithDefault 0 (stageTaskKey sk) cw)
-
-    runParseStage :: TaskKey -> IO (StageKey, Either [Diagnostic String] StageSuccess)
-    runParseStage key = do
-      t <- case M.lookup key taskMap of
-             Just x -> return x
-             Nothing -> error ("Internal error: missing task for key " ++ show key)
-      let optsT = optionsFor ctx key
-          mn = tkMod key
-          actFile = taskSourceFile t
-          onProgress = emit build . ParseProgressed t
-      timeStart <- getTime Monotonic
-      -- A parse stage exists only for a ParseTask.  A parse error becomes a
-      -- ParseErrorTask, which the module's front stage reports.
-      parsed <- materialize sp optsT mn actFile (Just onProgress) (gtTask t)
-      case parsed of
-        Right (source, m) -> do
-          _ <- evaluate (rnf m)
-          timeEnd <- getTime Monotonic
-          let parseTime = if not (quiet gopts optsT) then Just (timeEnd - timeStart) else Nothing
-          return (ParseStage key, Right (StageParsed (ActonTask source m) parseTime))
-        Left diags -> return (ParseStage key, Right (StageParsed (ParseErrorTask diags) Nothing))
-
-    runFrontStage :: Acton.Env.Env0
-                  -> M.Map TaskKey ModuleHashes
-                  -> M.Map TaskKey CompileTask
-                  -> TaskKey
-                  -> IO (StageKey, Either [Diagnostic String] StageSuccess)
-    runFrontStage envSnap finished parsedTasks key = do
-      t <- case M.lookup key taskMap of
-             Just x -> return x
-             Nothing -> error ("Internal error: missing task for key " ++ show key)
-      let opts = optionsFor ctx key
-      outcome <- frontStage ModuleEnv
-        { moduleBuild    = build
-        , moduleTask     = t
-        , moduleCurrent  = M.findWithDefault (gtTask t) key parsedTasks
-        , moduleOptions  = opts
-        , moduleResolver = inRunResolver cache taskMap finished t
-        , checkedModules = envSnap
-        , moduleBlocked  = Data.Set.member key dbpBlocked
-        , moduleForced   = (C.altOutput opts && tkMod key == rootAlt) || C.alwaysbuild opts
-        }
-      return (FrontStage key, fmap StageFronted outcome)
-
-    scheduleMore :: Int -> [StageKey]
-                 -> [(Async (StageKey, Either [Diagnostic String] StageSuccess), StageKey)]
-                 -> M.Map TaskKey ModuleHashes
-                 -> M.Map TaskKey CompileTask
-                 -> Acton.Env.Env0
-                 -> M.Map TaskKey Integer
-                 -> IO ([StageKey]
-                       , [(Async (StageKey, Either [Diagnostic String] StageSuccess), StageKey)])
-    scheduleMore k rdy running finished parsedTasks envSnap cw = do
-      let rdySorted = Data.List.sortOn (Down . stagePriority cw) rdy
-          (toStart, rdy') = splitAt k rdySorted
-      new <- forM toStart $ \sk -> do
-                case sk of
-                  FrontStage key ->
-                    case M.lookup key taskMap of
-                      Just t -> emit build (FrontStarted t)
-                      Nothing -> return ()
-                  ParseStage key ->
-                    case M.lookup key taskMap of
-                      Just t -> emit build (ParseStarted t)
-                      Nothing -> return ()
-                a <- async $
-                  case sk of
-                    ParseStage key -> runParseStage key
-                    FrontStage key -> runFrontStage envSnap finished parsedTasks key
-                return (a, sk)
-      return (rdy', new ++ running)
-
-    loop :: IORef [Async (StageKey, Either [Diagnostic String] StageSuccess)]
-         -> [StageKey]
-         -> [(Async (StageKey, Either [Diagnostic String] StageSuccess), StageKey)]
-         -> M.Map TaskKey ModuleHashes
-         -> M.Map TaskKey CompileTask
-         -> InterestMap
-         -> M.Map TaskKey (DeferredBackJob, Data.Set.Set TaskKey)
-         -> M.Map StageKey Int
-         -> Data.Set.Set StageKey
-         -> Acton.Env.Env0
-         -> Bool
-         -> Int
-         -> M.Map TaskKey Integer
-         -> IO (Either CompileFailure (Acton.Env.Env0, Bool))
-    loop runningRef rdy running finished parsedTasks interestMap deferredBacks ind pend envAcc hadErrors maxPar cw = do
-      (rdy1, running1) <- mask_ $ do
-        res@(rdy1', running1') <- scheduleMore (maxPar - length running) rdy running finished parsedTasks envAcc cw
-        writeIORef runningRef (map fst running1')
-        return res
-      if null running1 && null rdy1
-        then if Data.Set.null pend
-                 then do
-                   flushRes <- flushReadyDeferredBacks envAcc interestMap finished deferredBacks
-                   case flushRes of
-                     Left err -> return (Left err)
-                     Right deferredBacks' -> do
-                       writeIORef runningRef []
-                       return (Right (envAcc, hadErrors || not (M.null deferredBacks')))
-                 else return (Right (envAcc, True))
-        else do
-          (doneA, (stageDone, outcome)) <- waitAny $ map fst running1
-          let running2 = filter ((/= doneA) . fst) running1
-          writeIORef runningRef (map fst running2)
-          let keyDone = stageTaskKey stageDone
-              tDone = taskMap M.! keyDone
-          case outcome of
-            -- Only a front stage fails: a parse stage reports a parse error as
-            -- a ParseErrorTask, which its front stage turns into diagnostics.
-            Left diags -> do
-              emit build (FrontFinished tDone Nothing)
-              emit build (Diagnostics tDone diags)
-              let blockedMods = strictDependents modules keyDone
-                  blockedStages =
-                    Data.Set.fromList $
-                      concatMap (\m -> [ParseStage m, FrontStage m]) (Data.Set.toList blockedMods)
-                  (blockedRunning, running3) =
-                    partition (\(_, sk) -> Data.Set.member sk blockedStages) running2
-              mapM_ (cancel . fst) blockedRunning
-              writeIORef runningRef (map fst running3)
-              let pend2 = Data.Set.delete stageDone (pend `Data.Set.difference` blockedStages)
-                  rdy2 = filter (`Data.Set.notMember` blockedStages) rdy1
-                  dropKeys = keyDone : Data.Set.toList blockedMods
-                  parsedTasks2 = foldl' (flip M.delete) parsedTasks dropKeys
-              loop runningRef rdy2 running3 finished parsedTasks2 interestMap deferredBacks ind pend2 envAcc True maxPar cw
-            Right success -> do
-              let pend2 = Data.Set.delete stageDone pend
-                  ind2  = foldl' (\m d -> M.adjust (\x -> x-1) d m) ind (usersOf stages stageDone)
-                  runningKeys = map snd running2
-                  newlyReady = [ sk | sk <- Data.Set.toList pend2
-                                    , M.findWithDefault 0 sk ind2 == 0
-                                    , not (sk `elem` rdy1)
-                                    , not (sk `elem` runningKeys)
-                                    ]
-                  rdy2 = rdy1 ++ newlyReady
-              case success of
-                StageParsed parsed mParseTime -> do
-                  emit build (ParseFinished tDone mParseTime)
-                  let parsedTasks2 = M.insert keyDone parsed parsedTasks
-                  loop runningRef rdy2 running2 finished parsedTasks2 interestMap deferredBacks ind2 pend2 envAcc hadErrors maxPar cw
-                StageFronted fr -> do
-                  emit build (FrontFinished tDone (Just fr))
-                  case frBack fr of
-                    EagerBack job -> emit build (BackReady job)
-                    _             -> return ()
-                  let finished2 = M.insert keyDone (frHashes fr) finished
-                      parsedTasks2 = M.delete keyDone parsedTasks
-                      envAcc' = Acton.Env.addModuleInfo (tkMod keyDone) (frModuleInfo fr) envAcc
-                      interestMap2 = addInterestDeps (frInterest fr) interestMap
-                      deferredBacks1 =
-                        case frBack fr of
-                          DeferredBack deferred -> M.insert keyDone (deferred, strictDependents modules keyDone) deferredBacks
-                          _                     -> deferredBacks
-                  flushRes <- flushReadyDeferredBacks envAcc' interestMap2 finished2 deferredBacks1
-                  case flushRes of
-                    Left err -> return (Left err)
-                    Right deferredBacks2 ->
-                      loop runningRef rdy2 running2 finished2 parsedTasks2 interestMap2 deferredBacks2 ind2 pend2 envAcc' hadErrors maxPar cw
+-- | Parse a module's source in a stage of its own, in parallel with its
+-- providers' front stages.  The syntax tree is forced here, so the parse
+-- runs on the stage's thread.  A parse error completes the stage as a
+-- ParseErrorTask, which the module's front stage reports.
+parseStage :: BuildEnv -> C.CompileOptions -> GlobalTask -> IO (CompileTask, Maybe TimeSpec)
+parseStage build opts t = do
+    (parsed, elapsed) <- timed $ do
+      result <- materialize (buildSources build) opts (tkMod (gtKey t)) (taskSourceFile t) (Just (emit build . ParseProgressed t)) (gtTask t)
+      mapM_ (evaluate . rnf . snd) result
+      return result
+    return $ case parsed of
+      Left diags        -> (ParseErrorTask diags, Nothing)
+      Right (source, m) -> (ActonTask source m, if quiet (buildOptions build) opts then Nothing else Just elapsed)
 
 
 -- | Check whether a NameInfo represents a root-eligible actor.
