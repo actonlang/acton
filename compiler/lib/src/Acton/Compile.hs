@@ -630,8 +630,8 @@ enqueueBack queue gen events job = whenCurrent gen $ atomically $ do
 -- of a generation is kept. Progress is reported inside the try, so an
 -- exception from reporting progress fails the job. The start and the end
 -- are reported outside it, so an exception from reporting them ends the
--- worker. The pending count falls after every job, whether it ran or was
--- dropped.
+-- worker without lowering that job's pending count. Otherwise the pending
+-- count falls after every job, whether it ran or was dropped.
 backWorker :: C.GlobalOptions -> BackQueue -> IO ()
 backWorker gopts queue = forever $ do
   QueuedJob gen events job <- atomically (readTChan (queuedJobs queue))
