@@ -32,7 +32,7 @@ finished modules. In `Acton.Compile.compileModules`, each completed module
 extends that snapshot with:
 
 ```haskell
-Acton.Env.addModuleInfo (tkMod keyDone) (frontResultModuleInfo (tkMod keyDone) fr) envAcc
+Acton.Env.addModuleInfo (tkMod keyDone) (frModuleInfo fr) envAcc
 ```
 
 This shared cache stores loaded module interfaces in

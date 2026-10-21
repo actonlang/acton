@@ -89,8 +89,10 @@ module Acton.Compile
   , CompileTask(..)
   , ModuleSource(..)
   , BackJob(..)
-  , DeferredBackJob(..)
+  , DeferredBackJob
+  , BackPlan(..)
   , FrontResult(..)
+  , ModuleHashes(..)
   , FrontOutputKind(..)
   , FrontTiming(..)
   , TypeStmtTiming(..)
@@ -832,9 +834,9 @@ lookupModuleHash cache spath kind m = memoFound (hashTable kind cache) m $
 -- finished module or an earlier read remembered it.
 lookupNameMap :: ModuleCache -> [FilePath] -> A.ModName -> IO (Maybe (M.Map A.Name InterfaceFiles.NameHashInfo))
 lookupNameMap cache spath m = memoFound (nameMapTable cache) m $
-    withTydb cache spath m (fmap (fmap publicNameMap) . InterfaceFiles.readHeaderMaybe)
+    withTydb cache spath m (fmap (fmap (publicNameMap . names)) . InterfaceFiles.readHeaderMaybe)
   where
-    publicNameMap (_, _, _, _, _, _, nameHashes, _, _, _) = nameHashMapFromList (publicNameHashes nameHashes)
+    names (_, _, _, _, _, _, nameHashes, _, _, _) = nameHashes
 
 -- | One name's hashes: from the module's complete map when there is one,
 -- else by a single-name read of its .tydb, whose absence is remembered too.
@@ -853,20 +855,18 @@ lookupNameHash cache spath m n = do
 -- complete maps: it would hide the single-name reads of its .tydb.
 rememberFront :: ModuleCache -> A.ModName -> FrontResult -> IO ()
 rememberFront cache m fr = do
-    modifyMVar_ (pubHashTable cache)  (return . M.insert m (frPubHash fr))
-    modifyMVar_ (implHashTable cache) (return . M.insert m (frImplHash fr))
-    unless (null (frNameHashes fr)) $
-      modifyMVar_ (nameMapTable cache) (return . M.insert m (nameHashMapFromList (frNameHashes fr)))
-
--- | Build a name hash map keyed by Name.
-nameHashMapFromList :: [InterfaceFiles.NameHashInfo] -> M.Map A.Name InterfaceFiles.NameHashInfo
-nameHashMapFromList infos = M.fromList [ (InterfaceFiles.nhName i, i) | i <- infos ]
+    modifyMVar_ (pubHashTable cache)  (return . M.insert m (mhPub hashes))
+    modifyMVar_ (implHashTable cache) (return . M.insert m (mhImpl hashes))
+    unless (M.null (mhNames hashes)) $
+      modifyMVar_ (nameMapTable cache) (return . M.insert m (mhNames hashes))
+  where hashes = frHashes fr
 
 publicIfaceTE :: [(A.Name, I.NameInfo)] -> [(A.Name, I.NameInfo)]
 publicIfaceTE = filter (Names.isPublicName . fst)
 
-publicNameHashes :: [InterfaceFiles.NameHashInfo] -> [InterfaceFiles.NameHashInfo]
-publicNameHashes = filter (Names.isPublicName . InterfaceFiles.nhName)
+-- | The hashes of a module's public names, by name.
+publicNameMap :: [InterfaceFiles.NameHashInfo] -> M.Map A.Name InterfaceFiles.NameHashInfo
+publicNameMap names = M.fromList [ (InterfaceFiles.nhName i, i) | i <- names, Names.isPublicName (InterfaceFiles.nhName i) ]
 
 
 -- Module environment and resolver ------------------------------------------------------------------
@@ -1161,25 +1161,31 @@ data DeferredBackJob = DeferredBackJob
   , deferredNameCount :: Int
   }
 
+-- | A module's back work: none, a job to queue now, or a job that waits for
+-- every module depending on it.
+data BackPlan = NoBack | EagerBack BackJob | DeferredBack DeferredBackJob
+
+-- | A module whose front stage succeeded.
 data FrontResult = FrontResult
-  { frIfaceTE  :: [(A.Name, I.NameInfo)]
-  , frImps     :: [A.ModName]
-  , frDoc      :: Maybe String
-  , frModuleInfo :: Maybe Acton.Env.ModuleInfo
-  , frPubHash :: B.ByteString
-  , frImplHash :: B.ByteString
-  , frNameHashes :: [InterfaceFiles.NameHashInfo]
-  , frInterestDeps :: Data.Set.Set (A.ModName, A.Name)
-  , frFrontTime :: Maybe TimeSpec
-  , frFrontTiming :: Maybe FrontTiming
+  { frModuleInfo   :: Acton.Env.ModuleInfo              -- with escape summaries
+  , frHashes       :: ModuleHashes
+  , frInterest     :: Data.Set.Set (A.ModName, A.Name)  -- other modules' names its code uses, private uses included
+  , frBack         :: BackPlan
+  , frFrontTime    :: Maybe TimeSpec                    -- Nothing when quiet
+  , frFrontTiming  :: Maybe FrontTiming                 -- with --timing
   , frInferredSigs :: [InferredSignature]
-  , frBackJob  :: Maybe BackJob
-  , frDeferredBackJob :: Maybe DeferredBackJob
   }
 
-frontResultModuleInfo :: A.ModName -> FrontResult -> Acton.Env.ModuleInfo
-frontResultModuleInfo mn fr =
-    fromMaybe (Acton.Env.mkModuleInfo mn (frImps fr) (frIfaceTE fr) (frDoc fr)) (frModuleInfo fr)
+-- | A result rebuilt from a module's .tydb, without front passes.
+storedResult :: Acton.Env.ModuleInfo -> ModuleHashes -> Data.Set.Set (A.ModName, A.Name) -> BackPlan -> FrontResult
+storedResult moduleInfo hashes interest back = FrontResult
+    { frModuleInfo = moduleInfo, frHashes = hashes, frInterest = interest, frBack = back
+    , frFrontTime = Nothing, frFrontTiming = Nothing, frInferredSigs = [] }
+
+-- | The result of a module without a readable .tydb under --only-build: an
+-- empty interface, no hashes, no back work.
+emptyResult                             :: ModuleEnv -> FrontResult
+emptyResult env                         = storedResult (Acton.Env.mkModuleInfo (nameOf env) [] [] Nothing) (ModuleHashes B.empty B.empty M.empty) Data.Set.empty NoBack
 
 -- | An impl refresh computed from stored rows, before anything is written.
 data Recomputation
@@ -1187,15 +1193,53 @@ data Recomputation
   | Unresolved                          -- a dependency hash is unavailable: run the front passes
   | InterfaceGone                       -- the module's own .tydb cannot be read: the module fails
 
--- | The ModuleInfo of a module whose result is rebuilt from its .tydb
--- without a front pass, carrying the escape summaries stored there.
--- Modules checked later in the same build read them for their
--- Hashable.hash contracts.
-storedEscapeModuleInfo :: FilePath -> A.ModName -> [A.ModName] -> [(A.Name, I.NameInfo)] -> Maybe String -> IO Acton.Env.ModuleInfo
-storedEscapeModuleInfo tyFile mn imps ifaceTE mdoc = do
-  summaries <- InterfaceFiles.openInterfaceDB tyFile >>= InterfaceFiles.readInterfaceDBEscapeSummaries
-  evaluate (rnf summaries)
-  return $ Acton.Env.withEscapeSummaries summaries (Acton.Env.mkModuleInfo mn imps ifaceTE mdoc)
+-- | The interface of a module read back whole from its .tydb, with the
+-- escape summaries stored there.  Modules checked later in the same build
+-- read them for their Hashable.hash contracts.
+storedModuleInfo :: FilePath -> A.ModName -> InterfaceFiles.StoredModule -> IO Acton.Env.ModuleInfo
+storedModuleInfo tydb mn module' = do
+    summaries <- InterfaceFiles.openInterfaceDB tydb >>= InterfaceFiles.readInterfaceDBEscapeSummaries
+    evaluate (rnf summaries)
+    return (Acton.Env.withEscapeSummaries summaries (Acton.Env.mkModuleInfo mn imports (publicIfaceTE iface) doc))
+  where I.NModule imports iface doc = InterfaceFiles.storedInterface module'
+
+-- | A module's interface shell from its own .tydb: its interface, read on
+-- demand and with its escape summaries, and its module hashes.
+data InterfaceShell = InterfaceShell
+  { shellModuleInfo :: Acton.Env.ModuleInfo
+  , shellPubHash    :: B.ByteString
+  , shellImplHash   :: B.ByteString
+  }
+
+-- | Read a module's interface shell from its own .tydb, without its typed
+-- module.  A given pub hash, the one its header recorded, stands in for the
+-- stored one.  Nothing when the .tydb cannot be read.
+readInterfaceShell :: ModuleEnv -> Maybe B.ByteString -> IO (Maybe InterfaceShell)
+readInterfaceShell env pubHash = do
+    hashes <- InterfaceFiles.readModuleHashesMaybe tydb
+    opened <- InterfaceFiles.openInterfaceDBMaybe tydb
+    case (hashes, opened) of
+      (Just (_, pub, impl), Just db) -> do
+        (imports, doc) <- InterfaceFiles.readInterfaceDBModuleInfo db
+        return (Just InterfaceShell { shellModuleInfo = Acton.Env.mkTyFileModuleInfo (nameOf env) imports doc db
+                                    , shellPubHash    = fromMaybe pub pubHash
+                                    , shellImplHash   = impl })
+      _ -> return Nothing
+  where tydb = tydbOf env
+
+-- | A back job for a typed module read back from a .tydb: its source read
+-- again, its environment rebuilt with protocols converted.
+loadBackJob :: BuildEnv -> Acton.Env.Env0 -> TaskKey -> Paths -> C.CompileOptions -> A.Module -> B.ByteString -> IO BackJob
+loadBackJob build env key paths opts typed implHash = do
+    snap  <- Source.readSource (buildSources build) (srcFile paths (tkMod key))
+    scope <- Acton.Env.mkEnv (searchPath paths) env typed
+    return BackJob { bjKey = key, bjPaths = paths, bjOpts = opts, bjTypeEnv = Converter.convEnvProtos scope
+                   , bjModule = typed, bjSource = Source.ssText snap, bjImplHash = implHash }
+
+-- | The back job of a module's typed module as its own .tydb stores it,
+-- in the environment of the modules checked before it.
+loadStoredModule :: ModuleEnv -> InterfaceFiles.StoredModule -> B.ByteString -> IO BackJob
+loadStoredModule env module' = loadBackJob (moduleBuild env) (checkedModules env) (keyOf env) (pathsOf env) (moduleOptions env) (InterfaceFiles.storedTyped module')
 
 type InterestMap = M.Map A.ModName (Data.Set.Set A.Name)
 
@@ -1206,38 +1250,35 @@ shouldGenerateDocOutput :: C.CompileOptions -> Bool -> Int -> Bool
 shouldGenerateDocOutput opts tmp nameCount =
   not (C.skip_build opts) && not tmp && nameCount <= docNameCountThreshold
 
-dbpDeferredBackJob :: Bool
-                   -> Bool
-                   -> C.CompileOptions
-                   -> Paths
-                   -> TaskKey
-                   -> B.ByteString
-                   -> Int
-                   -> Maybe DeferredBackJob
-dbpDeferredBackJob blocked hasNotImpl opts paths key moduleImplHash nameCount
-  | C.no_dbp opts = Nothing
-  | C.only_build opts = Nothing
-  | C.altOutput opts = Nothing
-  | isBuiltin key = Nothing
-  | blocked = Nothing
-  -- A module with NotImplemented bodies is implemented by a hand-written
-  -- .ext.c and must be rendered whole, like __builtin__ -- its statement
-  -- rows deliberately opt out of selective reads.
-  | hasNotImpl = Nothing
-  | otherwise =
-      Just DeferredBackJob
-        { deferredKey = key
-        , deferredPaths = paths
-        , deferredOptions = opts
-        , deferredImplHash = moduleImplHash
-        , deferredNameCount = nameCount
-        }
+-- | Whether a module's back passes wait for its dependents and generate only
+-- the names they use.  NotImplemented bodies come from a hand-written .ext.c,
+-- so such a module is generated whole, like __builtin__: its statement rows
+-- opt out of selective reads.  Planning asks with hasNotImpl False.
+deferrable                              :: C.CompileOptions -> Bool -> Bool -> TaskKey -> Bool
+deferrable opts blocked hasNotImpl k
+  | C.no_dbp opts                       = False
+  | C.only_build opts                   = False
+  | C.altOutput opts                    = False
+  | isBuiltin k                         = False
+  | blocked                             = False
+  | hasNotImpl                          = False
+  | otherwise                           = True
 
-interestDepsFromNameHashes :: [InterfaceFiles.NameHashInfo] -> Data.Set.Set (A.ModName, A.Name)
-interestDepsFromNameHashes nameHashes =
+-- | A module's deferred back job, given whether it has NotImplemented bodies,
+-- its impl hash and its name count, when its back passes can wait.
+deferredJob :: ModuleEnv -> Bool -> B.ByteString -> Int -> Maybe DeferredBackJob
+deferredJob env hasNotImpl implHash nameCount
+  | deferrable (moduleOptions env) (moduleBlocked env) hasNotImpl (keyOf env)
+              = Just (DeferredBackJob (keyOf env) (pathsOf env) (moduleOptions env) implHash nameCount)
+  | otherwise = Nothing
+
+-- | The other modules' names that a module's names use, through their pub
+-- and impl dependencies.
+interestDeps :: [InterfaceFiles.NameHashInfo] -> Data.Set.Set (A.ModName, A.Name)
+interestDeps names =
   Data.Set.fromList
     [ target
-    | nh <- nameHashes
+    | nh <- names
     , (qn, _) <- InterfaceFiles.nhPubDeps nh ++ InterfaceFiles.nhImplDeps nh
     , Just target <- [qnameTarget qn]
     ]
@@ -1536,10 +1577,8 @@ selectAffectedTasks ctx g dbpBlocked changedFiles
 
     isDbpProvider k =
       case gtTask t of
-        TyTask h ->
-          isJust (dbpDeferredBackJob (Data.Set.member k dbpBlocked) False (optionsFor ctx k) (gtPaths t) k
-                                     (InterfaceFiles.summaryImplHash h) (InterfaceFiles.summaryNameCount h))
-        _ -> False
+        TyTask _ -> deferrable (optionsFor ctx k) (Data.Set.member k dbpBlocked) False k
+        _        -> False
       where t = graphIndex g M.! k
 
 -- | DBP may prune generated C/H for internal library modules, but a module at
@@ -1732,24 +1771,6 @@ adjustImports providers m = m{ A.imps = imps' }
 -- We also treat any alternate output mode (parse/sigs/cgen/etc) as quiet.
 quiet :: C.GlobalOptions -> C.CompileOptions -> Bool
 quiet gopts opts = C.quiet gopts || C.altOutput opts
-
--- | Read a reusable interface shell from the module's own .tydb and return
--- its hashes.  This is used when a module is deemed fresh and we want to
--- avoid reparsing.
-readIfaceFromTy :: Paths -> A.ModName -> String -> Maybe B.ByteString -> IO (Either [Diagnostic String] ([A.ModName], [(A.Name, I.NameInfo)], Maybe String, B.ByteString, B.ByteString, Maybe Acton.Env.ModuleInfo))
-readIfaceFromTy paths mn src mHash = do
-    hashes <- InterfaceFiles.readModuleHashesMaybe tyFile
-    mdb <- InterfaceFiles.openInterfaceDBMaybe tyFile
-    case (hashes, mdb) of
-      (Just (_srcH, pubH, implH), Just db) -> do
-        (ms, mdoc) <- InterfaceFiles.readInterfaceDBModuleInfo db
-        ih <- case mHash of
-                Just h -> return h
-                Nothing -> return pubH
-        return $ Right (ms, [], mdoc, ih, implH, Just (Acton.Env.mkTyFileModuleInfo mn ms mdoc db))
-      _ -> return $ Left (missingIfaceDiagnostics mn src mn)
-  where tyFile = tyDbPath paths mn
-
 
 -- | Snapshot of expected/recorded impl hashes for generated code.
 data CodegenStatus = CodegenStatus
@@ -2272,20 +2293,10 @@ runFrontPasses env source parsed = do
                                  , ftTypeStmtTimings = typeStmtTimings
                                  }
                           else Nothing
-                      key = TaskKey (projPath paths) mn
-                      deferredBackJob = dbpDeferredBackJob (moduleBlocked env) (A.hasNotImpl (A.mbody tchecked)) opts paths key moduleImplHash (length nameHashes)
-                      backJob =
-                        case deferredBackJob of
-                          Just _ -> Nothing
-                          Nothing ->
-                            Just BackJob { bjKey = key
-                                         , bjPaths = paths
-                                         , bjOpts = opts
-                                         , bjTypeEnv = typeEnv
-                                         , bjModule = tchecked
-                                         , bjSource = srcContent
-                                         , bjImplHash = moduleImplHash
-                                         }
+                      key = keyOf env
+                      -- reconstruct's typeEnv is already protocol-converted.
+                      job = BackJob { bjKey = key, bjPaths = paths, bjOpts = opts, bjTypeEnv = typeEnv
+                                    , bjModule = tchecked, bjSource = srcContent, bjImplHash = moduleImplHash }
                   -- Once this module reports done, its rows are on disk.  A
                   -- write failure (disk full, permissions) fails this module.
                   -- Docs and the --tydb copy are never read back within this
@@ -2295,21 +2306,14 @@ runFrontPasses env source parsed = do
                     Left diags -> return (Left diags)
                     Right () -> do
                       startOutputs build key (docOutputs ++ tydbCopy opts paths mn)
-                      return $ Right FrontResult { frIfaceTE = publicIface
-                                                 , frImps = imps
-                                                 , frDoc = mdoc
-                                                 , frModuleInfo = Just $ Acton.Env.withEscapeSummaries escapeSummaries $
-                                                            Acton.Env.mkModuleInfo mn imps publicIface mdoc
-                                                 , frPubHash = modulePubHash
-                                                 , frImplHash = moduleImplHash
-                                                 , frNameHashes = publicNameHashes nameHashes
-                                                 , frInterestDeps = interestDepsFromNameHashes nameHashes
-                                                 , frFrontTime = frontTimeMaybe
-                                                 , frFrontTiming = frontTimingMaybe
-                                                 , frInferredSigs = inferredSigs
-                                                 , frBackJob = backJob
-                                                 , frDeferredBackJob = deferredBackJob
-                                                 }
+                      return $ Right FrontResult
+                        { frModuleInfo   = Acton.Env.withEscapeSummaries escapeSummaries (Acton.Env.mkModuleInfo mn imps publicIface mdoc)
+                        , frHashes       = ModuleHashes { mhPub = modulePubHash, mhImpl = moduleImplHash, mhNames = publicNameMap nameHashes }
+                        , frInterest     = interestDeps nameHashes
+                        , frBack         = maybe (EagerBack job) DeferredBack (deferredJob env (A.hasNotImpl (A.mbody tchecked)) moduleImplHash (length nameHashes))
+                        , frFrontTime    = frontTimeMaybe
+                        , frFrontTiming  = frontTimingMaybe
+                        , frInferredSigs = inferredSigs }
 
 data DbpSelection = DbpSelection
   { dbsModule :: A.Module
@@ -2689,7 +2693,7 @@ compileModules build plan = do
 
       maxParallel <- compileParallelism gopts
 
-      loop runningRef stageInitialReady [] M.empty M.empty M.empty Data.Set.empty M.empty stageIndeg stagePending0 baseEnv False maxParallel cwMap
+      loop runningRef stageInitialReady [] M.empty M.empty M.empty M.empty stageIndeg stagePending0 baseEnv False maxParallel cwMap
 
     -- Basic maps/sets ----------------------------------------------------
     sp         = buildSources build
@@ -2730,13 +2734,13 @@ compileModules build plan = do
 
     flushReadyDeferredBacks :: Acton.Env.Env0
                             -> InterestMap
-                            -> Data.Set.Set TaskKey
+                            -> M.Map TaskKey ModuleHashes
                             -> M.Map TaskKey (DeferredBackJob, Data.Set.Set TaskKey)
                             -> IO (Either CompileFailure (M.Map TaskKey (DeferredBackJob, Data.Set.Set TaskKey)))
-    flushReadyDeferredBacks envAcc interestMap frontDone deferredBacks = do
+    flushReadyDeferredBacks envAcc interestMap finished deferredBacks = do
       let (ready, waiting) =
             M.partitionWithKey
-              (\_ (_deferred, waitSet) -> waitSet `Data.Set.isSubsetOf` frontDone)
+              (\_ (_deferred, waitSet) -> waitSet `Data.Set.isSubsetOf` M.keysSet finished)
               deferredBacks
       prepared <- trySync $
         forM (M.elems ready) $ \(deferred, _waitSet) -> do
@@ -2789,7 +2793,9 @@ compileModules build plan = do
                     Nothing -> do
                       emit build (FrontFinished t (Just fr))
                       rememberFront cache mn fr
-                      forM_ (frBackJob fr) (emit build . BackReady)
+                      case frBack fr of
+                        EagerBack job -> emit build (BackReady job)
+                        _             -> return ()
                       return (Right ())
 
     -- One module ---------------------------------------------------------
@@ -2820,38 +2826,6 @@ compileModules build plan = do
           providers = gtImportProviders t
           actFile = taskSourceFile t
           tyFile = tydbOf env
-          mkFrontResult imps ifaceTE mdoc pubHash implHash nameHashes interestNameHashes backJob deferredBackJob =
-            FrontResult
-              { frIfaceTE = ifaceTE
-              , frImps = imps
-              , frDoc = mdoc
-              , frModuleInfo = Nothing
-              , frPubHash = pubHash
-              , frImplHash = implHash
-              , frNameHashes = nameHashes
-              , frInterestDeps = interestDepsFromNameHashes interestNameHashes
-              , frFrontTime = Nothing
-              , frFrontTiming = Nothing
-              , frInferredSigs = []
-              , frBackJob = backJob
-              , frDeferredBackJob = deferredBackJob
-              }
-          emptyFrontResult =
-            FrontResult
-              { frIfaceTE = []
-              , frImps = []
-              , frDoc = Nothing
-              , frModuleInfo = Nothing
-              , frPubHash = B.empty
-              , frImplHash = B.empty
-              , frNameHashes = []
-              , frInterestDeps = Data.Set.empty
-              , frFrontTime = Nothing
-              , frFrontTiming = Nothing
-              , frInferredSigs = []
-              , frBackJob = Nothing
-              , frDeferredBackJob = Nothing
-              }
           -- The module succeeded: its hashes become visible to reads.
           rememberResult fr = do
             rememberFront cache mn fr
@@ -2862,21 +2836,19 @@ compileModules build plan = do
           finishStored fr = do
             startOutputs build key (tydbCopy optsT paths mn)
             rememberResult fr
-          readTyFile = do
-            tyRes <- InterfaceFiles.readFileMaybe tyFile
-            case tyRes of
-              Nothing -> return (Left (missingIfaceDiagnostics mn "" mn))
-              Just ty -> return (Right ty)
-          mkBackJob env1 tmod srcText moduleImplHash =
-            BackJob
-              { bjKey = key
-              , bjPaths = paths
-              , bjOpts = optsT
-              , bjTypeEnv = Converter.convEnvProtos env1
-              , bjModule = tmod
-              , bjSource = srcText
-              , bjImplHash = moduleImplHash
-              }
+          -- The pub hash a cached module's header recorded.
+          headerPubHash = case taskCurrent of
+            TyTask h -> Just (InterfaceFiles.summaryPubHash h)
+            _        -> Nothing
+          -- A result from the interface shell.  Its interest comes from the
+          -- dependency rows: the per-name rows on disk carry no external
+          -- dependencies.
+          shellResult back shell = do
+            interest <- cachedInterestDeps
+            finishStored (storedResult (shellModuleInfo shell)
+                            ModuleHashes { mhPub = shellPubHash shell, mhImpl = shellImplHash shell, mhNames = M.empty }
+                            interest back)
+          missingOwnInterface = return (key, Left (missingIfaceDiagnostics mn "" mn))
 
           missingNameHashDiagnostics qn =
             errsToDiagnostics "Compilation error" (modNameToFilename (dropProjPrefix paths mn)) ""
@@ -3012,9 +2984,8 @@ compileModules build plan = do
               resolveDepModule depMn =
                 maybe (Left (missingIfaceDiagnostics mn "" depMn)) Right <$> dependencyModule resolver depMn
 
-          nameHashSummary prevMap newInfos =
-            let newMap = nameHashMapFromList newInfos
-                oldKeys = Data.Set.fromList (M.keys prevMap)
+          nameHashSummary prevMap newMap =
+            let oldKeys = Data.Set.fromList (M.keys prevMap)
                 newKeys = Data.Set.fromList (M.keys newMap)
                 added = Data.Set.toList (Data.Set.difference newKeys oldKeys)
                 removed = Data.Set.toList (Data.Set.difference oldKeys newKeys)
@@ -3143,20 +3114,8 @@ compileModules build plan = do
       case taskCurrent of
         ParseErrorTask diags -> return (key, Left diags)
         _ | C.only_build optsT -> do
-              ifaceRes <- case taskCurrent of
-                            TyTask h -> readIfaceFromTy paths mn "" (Just (InterfaceFiles.summaryPubHash h))
-                            ParseTask source _ _ -> readIfaceFromTy paths mn (sourceText source) Nothing
-                            ActonTask source _ -> readIfaceFromTy paths mn (sourceText source) Nothing
-              case ifaceRes of
-                Right (imps, ifaceTE, mdoc, ih, implH, mModuleInfo) -> do
-                  interestDeps <- cachedInterestDeps
-                  let fr = (mkFrontResult imps ifaceTE mdoc ih implH [] [] Nothing Nothing)
-                             { frModuleInfo = mModuleInfo
-                             , frInterestDeps = interestDeps
-                             }
-                  finishStored fr
-                Left _ ->
-                  return (key, Right emptyFrontResult)
+              shell <- readInterfaceShell env headerPubHash
+              maybe (return (key, Right (emptyResult env))) (shellResult NoBack) shell
         _ -> do
           -- For cached .tydb tasks, compare recorded dep hashes against current deps.
           -- This is the up-to-date check that decides if we can skip work. If
@@ -3193,13 +3152,9 @@ compileModules build plan = do
               cachedDeferredBackJob <- case taskCurrent of
                     TyTask h -> do
                       hasNotImpl <- InterfaceFiles.readStmtHasNotImpl tyFile
-                      return (dbpDeferredBackJob (moduleBlocked env) hasNotImpl optsT paths key
-                                                 (InterfaceFiles.summaryImplHash h) (InterfaceFiles.summaryNameCount h))
+                      return (deferredJob env hasNotImpl (InterfaceFiles.summaryImplHash h) (InterfaceFiles.summaryNameCount h))
                     _ -> return Nothing
-              let isCachedDbp =
-                    case cachedDeferredBackJob of
-                      Just _ -> True
-                      Nothing -> False
+              let isCachedDbp = isJust cachedDeferredBackJob
               let canCheckCodegen = not needFront && not needByImpl && not (C.altOutput optsT) && not isCachedDbp
               mCodegenStatus <- case mModuleImplHash of
                 Just implHash | canCheckCodegen -> Just <$> codegenStatus paths mn implHash
@@ -3240,7 +3195,7 @@ compileModules build plan = do
                           Right fr -> do
                             -- prevNameHashes is Nothing unless --verbose.
                             forM_ prevNameHashes $ \prevMap ->
-                              forM_ (nameHashSummary prevMap (frNameHashes fr)) $ \summary ->
+                              forM_ (nameHashSummary prevMap (mhNames (frHashes fr))) $ \summary ->
                                 info build ("  Hash deltas " ++ labelOf env ++ ": " ++ summary)
                             rememberResult fr
                   -- Only the attempt falls back to the front passes, and only
@@ -3257,11 +3212,11 @@ compileModules build plan = do
                         -- The refreshed rows are committed before the module
                         -- reports done.  A write failure is this module's
                         -- diagnostics, returned and not thrown.
-                        committed <- commitTydb build key (\_ -> InterfaceFiles.updateImplRefresh tyFile (frImplHash fr) updatedDepModules updatedNameHashes)
+                        committed <- commitTydb build key (\_ -> InterfaceFiles.updateImplRefresh tyFile (mhImpl (frHashes fr)) updatedDepModules updatedNameHashes)
                         case committed of
                           Left diags -> return (key, Left diags)
                           Right () -> finishStored fr
-                      Right InterfaceGone -> return (key, Left (missingIfaceDiagnostics mn "" mn))
+                      Right InterfaceGone -> missingOwnInterface
                       _ -> do
                         info build ("  Stale " ++ labelOf env ++ ": impl refresh encountered unresolved dep hashes; rerunning front passes")
                         runFront
@@ -3310,79 +3265,50 @@ compileModules build plan = do
                               Left _ -> return Unresolved
                               Right updatedDepModules -> do
                                 evaluate (rnf (moduleImplHash, updatedDepModules, updatedNameHashes))
-                                let deferredBackJob = dbpDeferredBackJob (moduleBlocked env) moduleHasNotImpl optsT paths key moduleImplHash (length updatedNameHashes)
-                                case deferredBackJob of
-                                  Just _ -> do
-                                    ifaceRes <- readIfaceFromTy paths mn "" (Just storedPubHash)
-                                    return $ case ifaceRes of
-                                      Left _ -> InterfaceGone
-                                      Right (imps, ifaceTE, mdoc, pubHash, _storedImplHash, mModuleInfo) ->
-                                        let fr = (mkFrontResult imps ifaceTE mdoc pubHash moduleImplHash (publicNameHashes updatedNameHashes) updatedNameHashes Nothing deferredBackJob)
-                                                   { frModuleInfo = mModuleInfo }
-                                        in Recomputed updatedDepModules updatedNameHashes fr
+                                let hashes pub = ModuleHashes { mhPub = pub, mhImpl = moduleImplHash, mhNames = publicNameMap updatedNameHashes }
+                                    interest   = interestDeps updatedNameHashes
+                                case deferredJob env moduleHasNotImpl moduleImplHash (length updatedNameHashes) of
+                                  Just job -> do
+                                    shell <- readInterfaceShell env (Just storedPubHash)
+                                    return $ case shell of
+                                      Nothing -> InterfaceGone
+                                      Just s  -> Recomputed updatedDepModules updatedNameHashes
+                                                   (storedResult (shellModuleInfo s) (hashes (shellPubHash s)) interest (DeferredBack job))
                                   Nothing -> do
-                                    storedRes <- InterfaceFiles.readFileMaybe tyFile
-                                    case storedRes of
+                                    stored <- InterfaceFiles.readFileMaybe tyFile
+                                    case stored of
                                       Nothing -> return InterfaceGone
-                                      Just stored -> do
-                                        let nmod          = InterfaceFiles.storedInterface stored
-                                            tmod          = InterfaceFiles.storedTyped stored
-                                            mdoc          = InterfaceFiles.storedDoc stored
-                                            modulePubHash = InterfaceFiles.storedPubHash stored
-                                        snap <- Source.readSource sp actFile
-                                        env1 <- Acton.Env.mkEnv (searchPath paths) (checkedModules env) tmod
-                                        evaluate (rnf nmod)
-                                        evaluate (rnf tmod)
-                                        let I.NModule imps ifaceFull _mdoc = nmod
-                                            ifaceTE = publicIfaceTE ifaceFull
-                                            backJob = Just (mkBackJob env1 tmod (Source.ssText snap) moduleImplHash)
-                                        moduleInfo <- storedEscapeModuleInfo tyFile mn imps ifaceTE mdoc
-                                        let fr = (mkFrontResult imps ifaceTE mdoc modulePubHash moduleImplHash (publicNameHashes updatedNameHashes) updatedNameHashes backJob Nothing)
-                                                   { frModuleInfo = Just moduleInfo }
-                                        return (Recomputed updatedDepModules updatedNameHashes fr)
+                                      Just module' -> do
+                                        job <- loadStoredModule env module' moduleImplHash
+                                        -- Forced here, so a corrupt row fails the
+                                        -- attempt before anything is written.
+                                        evaluate (rnf (InterfaceFiles.storedInterface module'))
+                                        evaluate (rnf (InterfaceFiles.storedTyped module'))
+                                        moduleInfo <- storedModuleInfo tyFile mn module'
+                                        return (Recomputed updatedDepModules updatedNameHashes
+                                                  (storedResult moduleInfo (hashes (InterfaceFiles.storedPubHash module')) interest (EagerBack job)))
                       _ -> return Unresolved
+                  -- The codegen check skips a module whose back passes can
+                  -- wait, judged by the NotImplemented flag stored with its
+                  -- typed module, so this job is always eager.
                   runCodegenRefresh = do
                     info build ("  Stale " ++ labelOf env ++ ": generated code out of date" ++ maybe "" formatCodegenDelta mCodegenStatus)
-                    tyRes <- readTyFile
-                    case tyRes of
-                      Left diags -> return (key, Left diags)
-                      Right stored -> do
-                        let nmod                 = InterfaceFiles.storedInterface stored
-                            tmod                 = InterfaceFiles.storedTyped stored
-                            mdoc                 = InterfaceFiles.storedDoc stored
-                            modulePubHash        = InterfaceFiles.storedPubHash stored
-                            moduleImplHashStored = InterfaceFiles.storedImplHash stored
-                            nameHashes           = InterfaceFiles.storedNames stored
-                        snap <- Source.readSource sp actFile
-                        env1 <- Acton.Env.mkEnv (searchPath paths) (checkedModules env) tmod
-                        interestDeps <- cachedInterestDeps
-                        let I.NModule imps ifaceFull _mdoc = nmod
-                            ifaceTE = publicIfaceTE ifaceFull
-                            deferredBackJob = dbpDeferredBackJob (moduleBlocked env) (A.hasNotImpl (A.mbody tmod)) optsT paths key moduleImplHashStored (length nameHashes)
-                            backJob =
-                              case deferredBackJob of
-                                Just _ -> Nothing
-                                Nothing -> Just (mkBackJob env1 tmod (Source.ssText snap) moduleImplHashStored)
-                        moduleInfo <- storedEscapeModuleInfo tyFile mn imps ifaceTE mdoc
-                        let fr = (mkFrontResult imps ifaceTE mdoc modulePubHash moduleImplHashStored (publicNameHashes nameHashes) nameHashes backJob deferredBackJob)
-                                   { frInterestDeps = interestDeps
-                                   , frModuleInfo = Just moduleInfo
-                                   }
-                        finishStored fr
+                    stored <- InterfaceFiles.readFileMaybe tyFile
+                    case stored of
+                      Nothing -> missingOwnInterface
+                      Just module' -> do
+                        job <- loadStoredModule env module' (InterfaceFiles.storedImplHash module')
+                        interest <- cachedInterestDeps
+                        moduleInfo <- storedModuleInfo tyFile mn module'
+                        finishStored (storedResult moduleInfo
+                                        ModuleHashes { mhPub   = InterfaceFiles.storedPubHash module'
+                                                     , mhImpl  = InterfaceFiles.storedImplHash module'
+                                                     , mhNames = publicNameMap (InterfaceFiles.storedNames module') }
+                                        interest (EagerBack job))
                   runReuse = do
                     info build ("  Fresh " ++ labelOf env ++ ": using cached .tydb")
-                    ifaceRes <- case taskCurrent of
-                                  TyTask h -> readIfaceFromTy paths mn "" (Just (InterfaceFiles.summaryPubHash h))
-                                  _ -> readIfaceFromTy paths mn "" Nothing
-                    case ifaceRes of
-                      Left diags -> return (key, Left diags)
-                      Right (imps, ifaceTE, mdoc, ih, implH, mModuleInfo) -> do
-                        interestDeps <- cachedInterestDeps
-                        let fr = (mkFrontResult imps ifaceTE mdoc ih implH [] [] Nothing cachedDeferredBackJob)
-                                   { frModuleInfo = mModuleInfo
-                                   , frInterestDeps = interestDeps
-                                   }
-                        finishStored fr
+                    shell <- readInterfaceShell env headerPubHash
+                    maybe missingOwnInterface (shellResult (maybe NoBack DeferredBack cachedDeferredBackJob)) shell
               case () of
                 _ | needFront -> runFront
                 _ | needByImpl -> runImplRefresh
@@ -3466,7 +3392,6 @@ compileModules build plan = do
          -> M.Map TaskKey ModuleHashes
          -> M.Map TaskKey CompileTask
          -> InterestMap
-         -> Data.Set.Set TaskKey
          -> M.Map TaskKey (DeferredBackJob, Data.Set.Set TaskKey)
          -> M.Map StageKey Int
          -> Data.Set.Set StageKey
@@ -3475,7 +3400,7 @@ compileModules build plan = do
          -> Int
          -> M.Map TaskKey Integer
          -> IO (Either CompileFailure (Acton.Env.Env0, Bool))
-    loop runningRef rdy running finished parsedTasks interestMap frontDone deferredBacks ind pend envAcc hadErrors maxPar cw = do
+    loop runningRef rdy running finished parsedTasks interestMap deferredBacks ind pend envAcc hadErrors maxPar cw = do
       (rdy1, running1) <- mask_ $ do
         res@(rdy1', running1') <- scheduleMore (maxPar - length running) rdy running finished parsedTasks envAcc cw
         writeIORef runningRef (map fst running1')
@@ -3483,7 +3408,7 @@ compileModules build plan = do
       if null running1 && null rdy1
         then if Data.Set.null pend
                  then do
-                   flushRes <- flushReadyDeferredBacks envAcc interestMap frontDone deferredBacks
+                   flushRes <- flushReadyDeferredBacks envAcc interestMap finished deferredBacks
                    case flushRes of
                      Left err -> return (Left err)
                      Right deferredBacks' -> do
@@ -3514,7 +3439,7 @@ compileModules build plan = do
                   rdy2 = filter (`Data.Set.notMember` blockedStages) rdy1
                   dropKeys = keyDone : Data.Set.toList blockedMods
                   parsedTasks2 = foldl' (flip M.delete) parsedTasks dropKeys
-              loop runningRef rdy2 running3 finished parsedTasks2 interestMap frontDone deferredBacks ind pend2 envAcc True maxPar cw
+              loop runningRef rdy2 running3 finished parsedTasks2 interestMap deferredBacks ind pend2 envAcc True maxPar cw
             Right success -> do
               let pend2 = Data.Set.delete stageDone pend
                   ind2  = foldl' (\m d -> M.adjust (\x -> x-1) d m) ind (usersOf stages stageDone)
@@ -3529,25 +3454,25 @@ compileModules build plan = do
                 StageParsed parsed mParseTime -> do
                   emit build (ParseFinished tDone mParseTime)
                   let parsedTasks2 = M.insert keyDone parsed parsedTasks
-                  loop runningRef rdy2 running2 finished parsedTasks2 interestMap frontDone deferredBacks ind2 pend2 envAcc hadErrors maxPar cw
+                  loop runningRef rdy2 running2 finished parsedTasks2 interestMap deferredBacks ind2 pend2 envAcc hadErrors maxPar cw
                 StageFronted fr -> do
                   emit build (FrontFinished tDone (Just fr))
-                  forM_ (frBackJob fr) (emit build . BackReady)
-                  let hashes = ModuleHashes { mhPub = frPubHash fr, mhImpl = frImplHash fr, mhNames = nameHashMapFromList (frNameHashes fr) }
-                      finished2 = M.insert keyDone hashes finished
+                  case frBack fr of
+                    EagerBack job -> emit build (BackReady job)
+                    _             -> return ()
+                  let finished2 = M.insert keyDone (frHashes fr) finished
                       parsedTasks2 = M.delete keyDone parsedTasks
-                      envAcc' = Acton.Env.addModuleInfo (tkMod keyDone) (frontResultModuleInfo (tkMod keyDone) fr) envAcc
-                      interestMap2 = addInterestDeps (frInterestDeps fr) interestMap
-                      frontDone2 = Data.Set.insert keyDone frontDone
+                      envAcc' = Acton.Env.addModuleInfo (tkMod keyDone) (frModuleInfo fr) envAcc
+                      interestMap2 = addInterestDeps (frInterest fr) interestMap
                       deferredBacks1 =
-                        case frDeferredBackJob fr of
-                          Nothing -> deferredBacks
-                          Just deferred -> M.insert keyDone (deferred, strictDependents modules keyDone) deferredBacks
-                  flushRes <- flushReadyDeferredBacks envAcc' interestMap2 frontDone2 deferredBacks1
+                        case frBack fr of
+                          DeferredBack deferred -> M.insert keyDone (deferred, strictDependents modules keyDone) deferredBacks
+                          _                     -> deferredBacks
+                  flushRes <- flushReadyDeferredBacks envAcc' interestMap2 finished2 deferredBacks1
                   case flushRes of
                     Left err -> return (Left err)
                     Right deferredBacks2 ->
-                      loop runningRef rdy2 running2 finished2 parsedTasks2 interestMap2 frontDone2 deferredBacks2 ind2 pend2 envAcc' hadErrors maxPar cw
+                      loop runningRef rdy2 running2 finished2 parsedTasks2 interestMap2 deferredBacks2 ind2 pend2 envAcc' hadErrors maxPar cw
 
 
 -- | Check whether a NameInfo represents a root-eligible actor.

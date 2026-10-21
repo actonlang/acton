@@ -3202,7 +3202,7 @@ recordEvent eventLog event =
     Compile.ParseFinished t _            -> stage ("parse-done " ++ taskName t)
     Compile.FrontStarted t               -> stage ("front-start " ++ taskName t)
     Compile.FrontFinished t result       -> do stage ("front-done " ++ taskName t)
-                                               forM_ result $ \fr -> stage ("front-result " ++ taskName t ++ " " ++ backPlanKind fr)
+                                               forM_ result $ \fr -> stage ("front-result " ++ taskName t ++ " " ++ backPlanKind (Compile.frBack fr))
     Compile.Diagnostics t diags          -> stage ("diagnostics " ++ taskName t ++ " " ++ show (length diags))
     Compile.BackReady job                -> stage ("back-queued " ++ jobName job)
     Compile.BackSkipped key              -> stage ("back-skipped " ++ keyName key)
@@ -3231,11 +3231,10 @@ recordEvent eventLog event =
     keyName  = prstr . Compile.tkMod
     jobName  = keyName . Compile.bjKey
 
-backPlanKind :: Compile.FrontResult -> String
-backPlanKind fr
-  | isJust (Compile.frBackJob fr)         = "eager"
-  | isJust (Compile.frDeferredBackJob fr) = "deferred"
-  | otherwise                             = "none"
+backPlanKind :: Compile.BackPlan -> String
+backPlanKind Compile.NoBack           = "none"
+backPlanKind (Compile.EagerBack _)    = "eager"
+backPlanKind (Compile.DeferredBack _) = "deferred"
 
 outputKindName :: Compile.FrontOutputKind -> String
 outputKindName Compile.FrontOutputTydb     = "tydb"

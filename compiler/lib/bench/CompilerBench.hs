@@ -759,15 +759,16 @@ runCompilerFront buildFront runBack typesPath sourcePath = do
             Left diags -> error ("front pass failed with " ++ show (length diags) ++ " diagnostics")
             Right fr -> return fr
     if runBack then return () else awaitOutputs
-    E.evaluate (length (Compile.frIfaceTE fr) + length (Compile.frImps fr) + length (Compile.frNameHashes fr))
+    let info = Compile.frModuleInfo fr
+    E.evaluate (length (Env.modulePublicNames info) + length (Env.moduleImports info) + Map.size (Compile.mhNames (Compile.frHashes fr)))
     t2 <- getCurrentTime
     s2 <- getStats statsEnabled
     elapsed "front" t1 t2
     printStatsMaybe "front_stats" s1 s2
     forM_ (Compile.frFrontTiming fr) printFrontTiming
 
-    case (runBack, Compile.frBackJob fr) of
-      (True, Just job) -> do
+    case (runBack, Compile.frBack fr) of
+      (True, Compile.EagerBack job) -> do
         (do
             s3 <- getStats statsEnabled
             t3 <- getCurrentTime
@@ -778,7 +779,7 @@ runCompilerFront buildFront runBack typesPath sourcePath = do
             printStatsMaybe "back_stats" s3 s4
             forM_ mtiming printBackTiming)
           `E.finally` awaitOutputs
-      (True, Nothing) -> do
+      (True, _) -> do
         awaitOutputs
         error "front pass did not return a back job"
       (False, _) -> return ()

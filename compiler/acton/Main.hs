@@ -2064,9 +2064,9 @@ initCliCompileHooks progressUI progressState gopts gen plan = do
                                  | sig <- frInferredSigs fr ]
                       | otherwise = []
                 logRendered (\cols -> intercalate "\n" (frontDoneLine cols mn tFront : (timingLines cols ++ sigLines cols)))
-              case (frBackJob fr, frDeferredBackJob fr) of
-                (Nothing, Nothing) -> creditBack (gtKey t)
-                _ -> return ()
+              case frBack fr of
+                NoBack -> creditBack (gtKey t)
+                _      -> return ()
           OutputStarted key kind ->
             progressStartTask progressUI progressState (frontOutputTaskKey key kind)
               (frontOutputActiveLine key kind) (frontOutputInitialProgress kind)
