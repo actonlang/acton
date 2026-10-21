@@ -11,9 +11,9 @@ import Data.Containers.ListUtils (nubOrd)
 import Data.Graph (SCC(..), stronglyConnComp)
 
 -- | A directed graph whose edges point from a node to the nodes it depends
--- on.  Edges to nodes outside the graph are dropped when it is built, and a
--- node's dependencies keep their first-occurrence order.  The order of a
--- node's users carries no meaning: every use takes a set or a maximum.
+-- on.  Edges to nodes outside the graph are dropped when it is built.  A
+-- node's dependencies keep their first-occurrence order.  Its users are the
+-- nodes that list it as a dependency, each once, in unspecified order.
 data Graph k = Graph
   { nodes        :: [k]                    -- in the order the graph was built from
   , dependencies :: M.Map k [k]
