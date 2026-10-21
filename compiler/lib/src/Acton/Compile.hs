@@ -718,7 +718,11 @@ compileParallelism gopts
 -- running generation's writes see themselves stale at once. The previous
 -- run is then cancelled under the MVar, and cancel waits for its finalizer,
 -- which waits for its background outputs, so stale writes never overlap the
--- new run. After the delay the run starts only if no newer generation began.
+-- new run. The cancel also waits until every running stage of the previous
+-- generation ends, normally at the end of its passes, because stages run
+-- masked (startReady). So startCompile can take as long as the rest of a
+-- running type check. After the delay the run starts only if no newer
+-- generation began.
 startCompile :: CompileScheduler -> Int -> (Generation -> IO ()) -> IO Generation
 startCompile sched delay run = do
   number <- atomicModifyIORef' (schedulerCounter sched) (\newest -> (newest + 1, newest + 1))
