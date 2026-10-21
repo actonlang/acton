@@ -6,16 +6,19 @@ the type-checker environment.
 
 Acton compiles a whole program by walking a dependency graph that spans the
 root project and all of its dependencies. The scheduler in `Acton.Compile`
-builds this total graph, runs the front passes (parse, kinds, types) in
-topological order, and normally queues back passes as soon as a module's front
-passes finish. Deferred back pass (DBP) candidates are held until all modules
-that can add interest for that candidate have completed their front passes.
-Front work gates downstream modules, while ready back jobs overlap ongoing front
-work. The scheduler runs tasks concurrently with async jobs across worker
-threads. In watch/LSP mode, each change event bumps a generation id, cancels
-in-flight tasks, and drops stale diagnostics or back jobs that still carry the
-old generation, so we can react to new changes without waiting for obsolete
-work to finish.
+builds this total graph and runs the front passes (parse, kinds, types, escape
+analysis, hashing). A module's parse runs at once. Its later front passes wait
+for the front stages of its imports. Back passes are deferred (DBP, deferred
+back passes): a module's back job waits until every module of the run that
+depends on it, directly or not, has finished its front stage. The exceptions
+are listed under [Deferred Back Passes](#deferred-back-passes) below. A module
+among them queues its back job as soon as its own front stage finishes. Front
+work gates downstream modules, while ready back jobs overlap ongoing front work.
+The scheduler runs tasks concurrently with async jobs across worker threads. In
+watch/LSP mode, each change event bumps a generation id, cancels in-flight
+tasks, and drops stale diagnostics or back jobs that still carry the old
+generation, so we can react to new changes without waiting for obsolete work to
+finish.
 
 Interface files and content hashes tell the scheduler what work it can safely
 reuse. `.tydb` interface headers store hashes and snapshots of dependencies and
