@@ -1,0 +1,45 @@
+# Named iterators can escape; generic iterables need not have native layout.
+def named_iterator(xs: list[int]) -> Iterator[int]:
+    it = iter(xs)
+    for value in it:
+        break
+    return it
+
+def generic_count[C(object,Iterable[int])](xs: C) -> int:
+    result = 0
+    for value in xs:
+        result += value
+    return result
+
+
+# User-defined iteration may do more than initialize a builtin iterator.
+class Wrapped(object):
+    xs: list[int]
+    def __init__(self, xs: list[int]):
+        self.xs = xs
+
+extension Wrapped(Iterable[int]):
+    def __iter__(self) -> Iterator[int]:
+        return iter(self.xs)
+
+def custom_total(xs: Wrapped) -> int:
+    total = 0
+    for value in xs:
+        total += value
+    return total
+
+# A private iterator in a CPS function must survive its current C activation.
+actor Counter():
+    def tick() -> int:
+        return 1
+
+actor main(env):
+    counter = Counter()
+
+    def run():
+        total = 0
+        for value in [1, 2, 3]:
+            total += await async counter.tick()
+        env.exit(0 if total == 3 else 1)
+
+    run()

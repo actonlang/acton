@@ -54,5 +54,7 @@ struct B_IteratorD_set {
 
 extern struct  B_IteratorD_setG_class  B_IteratorD_setG_methods;
 B_IteratorD_set B_IteratorD_setG_new(B_set);
+B_Iterator $setD_U_iter_init(B_IteratorD_set iter, B_set src);
+B_Iterator $isetD_U_iter_init(B_IteratorD_set iter, B_iset src);
 
 void B_set_add_entry(B_set set, B_Hashable hashwit, $WORD key, uint64_t hash);

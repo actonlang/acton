@@ -31,6 +31,7 @@ struct B_IteratorD_bitarray {
 
 extern struct B_IteratorD_bitarrayG_class B_IteratorD_bitarrayG_methods;
 B_IteratorD_bitarray B_IteratorD_bitarrayG_new(B_bitarray src);
+B_Iterator $bitarrayD_U_iter_init(B_IteratorD_bitarray iter, B_bitarray src);
 
 // Raw entry points selected by the compiler for direct bitarray operations.
 // They preserve bounds checks while avoiding virtual method dispatch.

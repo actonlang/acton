@@ -66,6 +66,7 @@ struct B_IteratorD_dict {
 
 extern struct B_IteratorD_dictG_class  B_IteratorD_dictG_methods;
 B_IteratorD_dict B_IteratorD_dictG_new(B_dict);
+B_Iterator $dictD_U_keys_init(B_IteratorD_dict iter, $WORD src);
 
 // values iterator
 
@@ -93,6 +94,7 @@ struct B_IteratorD_dict_values {
 
 extern struct B_IteratorD_dict_valuesG_class  B_IteratorD_dict_valuesG_methods;
 B_IteratorD_dict_values B_IteratorD_dict_valuesG_new(B_dict);
+B_Iterator $dictD_U_values_init(B_IteratorD_dict_values iter, $WORD src);
 
 // items iterator
 
@@ -120,6 +122,7 @@ struct B_IteratorD_dict_items {
 
 extern struct B_IteratorD_dict_itemsG_class  B_IteratorD_dict_itemsG_methods;
 B_IteratorD_dict_items B_IteratorD_dict_itemsG_new(B_dict);
+B_Iterator $dictD_U_items_init(B_IteratorD_dict_items iter, $WORD src);
 
 
 // Convenience methods used for (de)serialization

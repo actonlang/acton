@@ -257,6 +257,12 @@ void B_IteratorD_bitarrayD_init(B_IteratorD_bitarray self, B_bitarray src) {
     self->next = 0;
 }
 
+B_Iterator $bitarrayD_U_iter_init(B_IteratorD_bitarray iter, B_bitarray src) {
+    iter->$class = &B_IteratorD_bitarrayG_methods;
+    B_IteratorD_bitarrayD_init(iter, src);
+    return (B_Iterator)iter;
+}
+
 bool B_IteratorD_bitarrayD_bool(B_IteratorD_bitarray self) {
     return true;
 }

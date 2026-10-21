@@ -36,6 +36,7 @@ struct B_IteratorD_array {
 
 extern struct B_IteratorD_arrayG_class B_IteratorD_arrayG_methods;
 B_IteratorD_array B_IteratorD_arrayG_new(B_array src);
+B_Iterator $arrayD_U_iter_init(B_IteratorD_array iter, B_array src);
 
 // Raw iteration workers selected for loops over a concretely typed array.
 // The generic iterator slot below continues to box at polymorphic boundaries.

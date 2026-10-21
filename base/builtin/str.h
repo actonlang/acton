@@ -78,6 +78,7 @@ struct B_IteratorD_str {
 
 extern struct  B_IteratorD_strG_class  B_IteratorD_strG_methods;
 B_IteratorD_str B_IteratorD_strG_new(B_str);
+B_Iterator $strD_U_iter_init(B_IteratorD_str iter, B_str src);
 
 // bytearray /////////////////////////////////////////////////////////////////////////////////////
 
@@ -119,6 +120,7 @@ struct B_IteratorD_bytearray {
 
 extern struct  B_IteratorD_bytearrayG_class  B_IteratorD_bytearrayG_methods;
 B_IteratorD_bytearray B_IteratorD_bytearrayG_new(B_bytearray);
+B_Iterator $bytearrayD_U_iter_init(B_IteratorD_bytearray iter, B_bytearray src);
 
 // bytes /////////////////////////////////////////////////////////////////////////////////////
 
@@ -172,6 +174,7 @@ struct B_IteratorD_bytes {
 
 extern struct  B_IteratorD_bytesG_class  B_IteratorD_bytesG_methods;
 B_IteratorD_bytes B_IteratorD_bytesG_new(B_bytes);
+B_Iterator $bytesD_U_iter_init(B_IteratorD_bytes iter, B_bytes src);
 
 // Internal auxiliary function /////////////////////////////////////////////
 

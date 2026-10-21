@@ -556,13 +556,21 @@ static B_dict_base B_dict_base_from_iter_src($WORD src) {
     return NULL;
 }
 
-static B_IteratorD_dict B_dict_base_key_iterator($WORD src, B_dict_base dict) {
-    B_IteratorD_dict iter = acton_malloc(sizeof(struct B_IteratorD_dict));
+static B_IteratorD_dict B_dict_base_key_iterator_init(B_IteratorD_dict iter, $WORD src, B_dict_base dict) {
     iter->$class = &B_IteratorD_dictG_methods;
     iter->src = src;
     iter->data = dict;
     iter->nxt = 0;
     return iter;
+}
+
+B_Iterator $dictD_U_keys_init(B_IteratorD_dict iter, $WORD src) {
+    return (B_Iterator)B_dict_base_key_iterator_init(iter, src, (B_dict_base)src);
+}
+
+static B_IteratorD_dict B_dict_base_key_iterator($WORD src, B_dict_base dict) {
+    B_IteratorD_dict iter = acton_malloc(sizeof(struct B_IteratorD_dict));
+    return B_dict_base_key_iterator_init(iter, src, dict);
 }
 
 static bool B_IteratorD_dictD_next(B_IteratorD_dict self, $WORD *out) {
@@ -753,13 +761,21 @@ B_IteratorD_dict_values B_IteratorD_dict_valuesG_new(B_dict dict) {
     return $NEW(B_IteratorD_dict_values, dict);
 }
 
-static B_IteratorD_dict_values B_dict_base_values_iterator($WORD src, B_dict_base dict) {
-    B_IteratorD_dict_values iter = acton_malloc(sizeof(struct B_IteratorD_dict_values));
+static B_IteratorD_dict_values B_dict_base_values_iterator_init(B_IteratorD_dict_values iter, $WORD src, B_dict_base dict) {
     iter->$class = &B_IteratorD_dict_valuesG_methods;
     iter->src = src;
     iter->data = dict;
     iter->nxt = 0;
     return iter;
+}
+
+B_Iterator $dictD_U_values_init(B_IteratorD_dict_values iter, $WORD src) {
+    return (B_Iterator)B_dict_base_values_iterator_init(iter, src, (B_dict_base)src);
+}
+
+static B_IteratorD_dict_values B_dict_base_values_iterator($WORD src, B_dict_base dict) {
+    B_IteratorD_dict_values iter = acton_malloc(sizeof(struct B_IteratorD_dict_values));
+    return B_dict_base_values_iterator_init(iter, src, dict);
 }
  
 void B_IteratorD_dict_values_init(B_IteratorD_dict_values self, B_dict dict) {
@@ -818,13 +834,21 @@ B_IteratorD_dict_items B_IteratorD_dict_itemsG_new(B_dict dict) {
     return $NEW(B_IteratorD_dict_items, dict);
 }
 
-static B_IteratorD_dict_items B_dict_base_items_iterator($WORD src, B_dict_base dict) {
-    B_IteratorD_dict_items iter = acton_malloc(sizeof(struct B_IteratorD_dict_items));
+static B_IteratorD_dict_items B_dict_base_items_iterator_init(B_IteratorD_dict_items iter, $WORD src, B_dict_base dict) {
     iter->$class = &B_IteratorD_dict_itemsG_methods;
     iter->src = src;
     iter->data = dict;
     iter->nxt = 0;
     return iter;
+}
+
+B_Iterator $dictD_U_items_init(B_IteratorD_dict_items iter, $WORD src) {
+    return (B_Iterator)B_dict_base_items_iterator_init(iter, src, (B_dict_base)src);
+}
+
+static B_IteratorD_dict_items B_dict_base_items_iterator($WORD src, B_dict_base dict) {
+    B_IteratorD_dict_items iter = acton_malloc(sizeof(struct B_IteratorD_dict_items));
+    return B_dict_base_items_iterator_init(iter, src, dict);
 }
  
 void B_IteratorD_dict_items_init(B_IteratorD_dict_items self, B_dict dict) {
