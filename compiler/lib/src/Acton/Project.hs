@@ -1,4 +1,4 @@
--- | Acton projects on disk: the Paths of a module, the per-project context of
+-- | Acton projects on disk: the Paths of a project, the per-project context of
 -- a multi-project build, loading and validating Build.act, discovering the
 -- projects a project depends on, the project locks, and the paths of a
 -- module's source and generated files.
@@ -13,8 +13,6 @@ module Acton.Project
   , findPaths
   , findProjectDir
   , discoverProjects
-  , collectDepTypePaths
-  , depTypePathsFromMap
   , RootPins
   , rootPins
   , selectDep
@@ -26,8 +24,9 @@ module Acton.Project
   , depCacheDir
   , depCacheEntry
   , zigGlobalCacheDir
-  , pathsForModule
-  , searchPathForProject
+  , projectPaths
+  , createProjectDirectories
+  , createModuleDirectories
   , systemTypePaths
   , moduleTypesDir
   , scratchBuildSpec
@@ -132,19 +131,23 @@ special_projects = ["", "base", "acton_scratch"]
 
 -- Paths handling -------------------------------------------------------------------------------------
 
-data Paths      = Paths {
-                    searchPath  :: [FilePath],
-                    sysPath     :: FilePath,
-                    sysTypes    :: FilePath,
-                    projPath    :: FilePath,
-                    projOut     :: FilePath,
-                    projTypes   :: FilePath,
-                    binDir      :: FilePath,
-                    srcDir      :: FilePath,
-                    isTmp       :: Bool,
-                    modName     :: A.ModName,
-                    projName    :: String
-                  }
+-- | The directories of a project's build.  A project root holds Build.act
+-- and src/.  A scratch build builds a source file outside any project, with
+-- the --tempdir directory as its root.  The paths findPaths gives a scratch
+-- build are temporary (isTmp), and those projectPaths gives the scratch
+-- project are not.
+data Paths = Paths
+  { searchPath :: [FilePath]    -- projTypes, dependency types, --searchpath, then the system types
+  , sysPath    :: FilePath      -- --syspath, or the parent of the acton executable's directory
+  , sysTypes   :: FilePath      -- base/out/types under sysPath
+  , projPath   :: FilePath      -- the project root, or the --tempdir directory of a scratch build
+  , projOut    :: FilePath      -- out under projPath
+  , projTypes  :: FilePath      -- types under projOut
+  , binDir     :: FilePath      -- bin under projOut, or the source file's directory when isTmp
+  , srcDir     :: FilePath      -- src under projPath, or the source file's directory for a scratch build
+  , isTmp      :: Bool          -- the paths findPaths gives a scratch build
+  , projName   :: String        -- the name in Build.act or of the scratch spec, empty when isTmp
+  }
 
 -- Per-project context used for multi-project orchestration.
 -- Identified by projRoot (absolute path). Keeps directories and BuildSpec if present.
@@ -345,17 +348,6 @@ resolveFollows projects = M.traverseWithKey resolveProject projects
                                            ++ "'. Use the project name as the dependency name.")
                       return target
 
--- Given a FILE and optionally --syspath PATH:
--- 'sysPath' is the path to the system directory as given by PATH, defaulting to the acton executable directory.
--- 'sysTypes' is directory "types" under 'sysPath'.
--- 'projPath' is the closest parent directory of FILE that contains a Build.act
--- file, or a temporary directory in "/tmp" if no such parent exists.
--- 'projOut' is directory "out" under 'projPath'.
--- 'projTypes' is directory "types" under 'projOut'.
--- 'binDir' is the directory prefix of FILE if 'projPath' is temporary, otherwise it is directory "bin" under 'projOut'
--- 'srcDir' is the directory prefix of FILE if 'projPath' is temporary, otherwise it is directory "src" under 'projPath'
--- 'modName' is the module name of FILE (its path after 'src' without the file suffix, split at every '/')
-
 -- | Compute the source file path for a module under its project src dir.
 srcFile                 :: Paths -> A.ModName -> FilePath
 srcFile paths mn        = srcBase paths mn ++ ".act"
@@ -378,12 +370,11 @@ rootStubPath paths test mn = outBase paths (dropProjPrefix paths mn) ++ (if test
 rootBinaryName          :: Paths -> Bool -> A.ModName -> String
 rootBinaryName paths test mn = (if test then ".test_" else "") ++ modNameToString (dropProjPrefix paths mn)
 
--- | All files generated for the module of 'paths'.
-moduleOutputs           :: Paths -> [FilePath]
-moduleOutputs paths     = [ outBase paths mn ++ ext | ext <- [InterfaceFiles.interfaceExt, ".c", ".h"] ] ++
+-- | All files generated for a module.
+moduleOutputs           :: Paths -> A.ModName -> [FilePath]
+moduleOutputs paths mn  = [ outBase paths mn ++ ext | ext <- [InterfaceFiles.interfaceExt, ".c", ".h"] ] ++
                           [ rootStubPath paths test mn | test <- [False, True] ] ++
                           [ Acton.CodeGen.supportFile (outBase paths mn) ]
-  where mn              = modName paths
 
 -- | Compute the module path without extension under the project's src dir.
 -- Used to derive the .act path or related per-module files.
@@ -488,41 +479,38 @@ withProjectLock projDir action =
     withProjectLockOnWait projDir (return ()) action
 
 
--- | Compute Paths for a given source file and compile options.
--- Resolves the project root (or temp root), output dirs, and search path,
--- creating required directories along the way.
-findPaths               :: FilePath -> C.CompileOptions -> IO Paths
+-- | The paths of the project of a source file, and the file's module: its
+-- path under src/ without the extension, prefixed with the project name.  A
+-- file at the project root names a module at the top of src/, and a file
+-- under out/types the module at the same place under src/.  A file anywhere
+-- else in a project is an error.  A file outside any project builds as a
+-- scratch build, and its module has no prefix.  The dependencies' types
+-- directories are those collectDepTypePaths reads from the Build.act files,
+-- which leaves out dependencies fetched by hash that are not fetched yet.
+-- Creates the module's output directories.
+findPaths               :: FilePath -> C.CompileOptions -> IO (Paths, A.ModName)
 findPaths actFile opts  = do execDir <- takeDirectory <$> getExecutablePath
                              sysPath <- canonicalizePath (if null $ C.syspath opts then execDir ++ "/.." else C.syspath opts)
                              absSrcFile <- canonicalizePath actFile
                              (isTmp, projPath, dirInSrc) <- analyze (takeDirectory absSrcFile) []
-                             let sysTypes = sysTypesDir sysPath
-                                 srcDir  = if isTmp then takeDirectory absSrcFile else projectSrcDir projPath
+                             let srcDir  = if isTmp then takeDirectory absSrcFile else projectSrcDir projPath
                                  projOut = projectOutDir projPath
-                                 projTypes = projectTypesDir projPath
-                                 binDir  = if isTmp then srcDir else joinPath [projOut, "bin"]
-                             -- join the search paths from command line options with the ones found in the deps directory
                              depOverrides <- normalizeDepOverrides projPath (C.dep_overrides opts)
                              (projName,depTypePaths) <- if isTmp then return ("",[]) else collectDepTypePaths projPath depOverrides
-                             let sPaths = [projTypes] ++ depTypePaths ++ (C.searchpath opts) ++ systemTypePaths sysPath sysTypes
-                                 modName = A.modName $ (if isTmp then dirInSrc else projName:dirInSrc) ++ [takeBaseName actFile]
-                             InterfaceFiles.registerSystemTypeRoots (systemTypePaths sysPath sysTypes)
-                             createDirectoryIfMissing True binDir
-                             createDirectoryIfMissing True projOut
-                             createDirectoryIfMissing True projTypes
-                             createDirectoryIfMissing True (moduleTypesDir projTypes modName)
-                             return Paths { searchPath = sPaths
-                                          , sysPath    = sysPath
-                                          , sysTypes   = sysTypes
-                                          , projPath   = projPath
-                                          , projOut    = projOut
-                                          , projTypes  = projTypes
-                                          , binDir     = binDir
-                                          , srcDir     = srcDir
-                                          , isTmp      = isTmp
-                                          , modName    = modName
-                                          , projName   = projName
-                                          }
+                             let paths = Paths { searchPath = interfaceSearchPath opts sysPath (projectTypesDir projPath) depTypePaths
+                                               , sysPath    = sysPath
+                                               , sysTypes   = sysTypesDir sysPath
+                                               , projPath   = projPath
+                                               , projOut    = projOut
+                                               , projTypes  = projectTypesDir projPath
+                                               , binDir     = if isTmp then srcDir else joinPath [projOut, "bin"]
+                                               , srcDir     = srcDir
+                                               , isTmp      = isTmp
+                                               , projName   = projName
+                                               }
+                                 mn    = A.modName $ (if isTmp then dirInSrc else projName:dirInSrc) ++ [takeBaseName actFile]
+                             createModuleDirectories paths mn
+                             return (paths, mn)
   where analyze "/" ds  = do tmp <- canonicalizePath (C.tempdir opts)
                              return (True, tmp, [])
         analyze pre ds  = do isProjectRoot <- isActonProjectRoot pre
@@ -569,49 +557,50 @@ enumerateProjectModules ctx = do
           mn <- moduleNameFromFile (projSrcDir ctx) proj f
           return (f, mn)
 
--- | Remove stale generated module artifacts when source modules disappear.
--- Prunes orphan .tydb/.c/.h and support outputs under out/types before planning so
--- cached headers cannot mask deleted .act modules.
-pruneMissingModuleOutputs :: C.CompileOptions -> M.Map FilePath ProjCtx -> ProjCtx -> IO ()
-pruneMissingModuleOutputs opts projMap ctx = do
+-- | Remove the generated outputs under a project's types directory that
+-- belong to no module the project declares, so that a cached header cannot
+-- resurrect a deleted module.
+pruneMissingModuleOutputs :: ProjCtx -> Paths -> IO ()
+pruneMissingModuleOutputs ctx paths = do
     let typesRoot = projTypesDir ctx
     typesExists <- doesDirectoryExist typesRoot
     when typesExists $ do
       mods <- enumerateProjectModules ctx
-      let keep = Data.Set.fromList (concatMap (moduleOutputs . modulePaths opts projMap ctx . snd) mods)
+      let keep = Data.Set.fromList (concatMap (moduleOutputs paths . snd) mods)
       files <- getFilesRecursive typesRoot
       tyDbs <- InterfaceFiles.listInterfaceDirsRecursive typesRoot
       let outputs = filter ((`elem` [".c", ".h", ".inc"]) . takeExtension) files ++ tyDbs
       mapM_ removePathForcibly (filter (`Data.Set.notMember` keep) outputs)
 
--- | Incremental variant: prune only modules whose changed .act file no longer exists.
-pruneMissingChangedModuleOutputs :: C.CompileOptions -> M.Map FilePath ProjCtx -> [FilePath] -> IO ()
-pruneMissingChangedModuleOutputs opts projMap changedPaths = do
+-- | Remove the outputs of every changed .act path that no longer exists,
+-- from each project whose source directory holds it.
+pruneMissingChangedModuleOutputs :: [(ProjCtx, Paths)] -> [FilePath] -> IO ()
+pruneMissingChangedModuleOutputs projects changedPaths = do
     absChanged <- mapM normalizePathSafe changedPaths
     forM_ (filter ((== ".act") . takeExtension) absChanged) $ \actPath -> do
       exists <- doesFileExist actPath
-      unless exists $ forM_ (M.elems projMap) $ \ctx -> do
+      unless exists $ forM_ projects $ \(ctx, paths) -> do
         srcRoot <- normalizePathSafe (projSrcDir ctx)
         when (actPath `isUnder` srcRoot) $ do
           mn <- moduleNameFromFile srcRoot (BuildSpec.specName (projBuildSpec ctx)) actPath
-          mapM_ removePathForcibly (moduleOutputs (modulePaths opts projMap ctx mn))
+          mapM_ removePathForcibly (moduleOutputs paths mn)
 
--- | Build a search path for module interfaces for a project.
--- Includes the project's types dir, dependency types, user searchpath, and
--- the system types directory.
-searchPathForProject :: C.CompileOptions -> M.Map FilePath ProjCtx -> ProjCtx -> [FilePath]
-searchPathForProject opts projMap ctx =
-    let deps = depTypePathsFromMap projMap (projRoot ctx)
-    in [projTypesDir ctx] ++ deps ++ (C.searchpath opts) ++ systemTypePaths (projSysPath ctx) (projSysTypes ctx)
+-- | The interface search path of a project with the system directory
+-- 'sys' and the types directory 'types', given its dependencies' types
+-- directories in search order: the project's own interfaces, its
+-- dependencies', those in the --searchpath directories, then the system's.
+interfaceSearchPath :: C.CompileOptions -> FilePath -> FilePath -> [FilePath] -> [FilePath]
+interfaceSearchPath opts sys types deps =
+    [types] ++ deps ++ C.searchpath opts ++ systemTypePaths sys (sysTypesDir sys)
 
--- | Construct a Paths record for a module within a project context.
--- A module's Paths are never temporary: they have isTmp False, binDir out/bin
--- under the project root and the project name from the BuildSpec, also in a
--- scratch build, whose root Paths from 'findPaths' have isTmp True, binDir
--- equal to the source directory and an empty project name.
-modulePaths :: C.CompileOptions -> M.Map FilePath ProjCtx -> ProjCtx -> A.ModName -> Paths
-modulePaths opts projMap ctx mn =
-    Paths { searchPath = searchPathForProject opts projMap ctx
+-- | The paths of a project of a multi-project build.  The dependencies'
+-- types directories are those depTypePathsFromMap finds in the discovered
+-- projects.  The paths are never temporary, also for the project of a
+-- scratch build: binDir is out/bin under the root and projName the name of
+-- the scratch spec.
+projectPaths :: C.CompileOptions -> M.Map FilePath ProjCtx -> ProjCtx -> Paths
+projectPaths opts projMap ctx =
+    Paths { searchPath = interfaceSearchPath opts (projSysPath ctx) (projTypesDir ctx) (depTypePathsFromMap projMap (projRoot ctx))
           , sysPath    = projSysPath ctx
           , sysTypes   = projSysTypes ctx
           , projPath   = projRoot ctx
@@ -620,18 +609,23 @@ modulePaths opts projMap ctx mn =
           , binDir     = joinPath [projOutDir ctx, "bin"]
           , srcDir     = projSrcDir ctx
           , isTmp      = False
-          , modName    = mn
           , projName   = BuildSpec.specName (projBuildSpec ctx)
           }
 
--- | Construct the Paths record of a module and create its output directories.
-pathsForModule :: C.CompileOptions -> M.Map FilePath ProjCtx -> ProjCtx -> A.ModName -> IO Paths
-pathsForModule opts projMap ctx mn = do
-    let p = modulePaths opts projMap ctx mn
-    InterfaceFiles.registerSystemTypeRoots (systemTypePaths (projSysPath ctx) (projSysTypes ctx))
-    createDirectoryIfMissing True (binDir p)
-    createDirectoryIfMissing True (moduleTypesDir (projTypesDir ctx) mn)
-    return p
+-- | Create a project's binary and types directories, and register its
+-- system type directories with the interface reader.
+createProjectDirectories :: Paths -> IO ()
+createProjectDirectories paths = do
+    InterfaceFiles.registerSystemTypeRoots (systemTypePaths (sysPath paths) (sysTypes paths))
+    createDirectoryIfMissing True (binDir paths)
+    createDirectoryIfMissing True (projTypes paths)
+
+-- | Create the directories of a module's outputs: those of its project and
+-- the module's directory under the types directory.
+createModuleDirectories :: Paths -> A.ModName -> IO ()
+createModuleDirectories paths mn = do
+    createProjectDirectories paths
+    createDirectoryIfMissing True (moduleTypesDir (projTypes paths) mn)
 
 
 -- | Load a BuildSpec from Build.act.

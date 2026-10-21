@@ -231,7 +231,7 @@ selectTestSources gopts opts paths topts files = do
         else if null (C.testNames topts)
           then return True
           else do
-            task <- readModuleTask sp gopts opts paths { modName = mn } file
+            task <- readModuleTask sp gopts opts paths mn file
             case task of
               TyTask h | matches (InterfaceFiles.summaryTests h) -> return True
               ParseTask source _ _ -> fromSource mn matches file (sourceText source)

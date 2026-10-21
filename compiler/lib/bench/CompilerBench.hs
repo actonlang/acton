@@ -199,9 +199,8 @@ prepareHashBench :: FilePath -> FilePath -> IO HashBenchState
 prepareHashBench typesPath sourcePath = do
     src <- readFile sourcePath
     let opts = benchOpts typesPath True
-    paths <- Project.findPaths sourcePath opts
+    (paths, modName) <- Project.findPaths sourcePath opts
     env0 <- Env.initEnv typesPath False
-    let modName = Project.modName paths
 
     parsed <- Parser.parseModule modName sourcePath src Nothing
     E.evaluate (rnf parsed)
@@ -685,9 +684,8 @@ runDirect mode typesPath sourcePath = do
     statsEnabled <- getRTSStatsEnabled
     src <- readFile sourcePath
     let opts = benchOpts typesPath True
-    paths <- Project.findPaths sourcePath opts
+    (_, modName) <- Project.findPaths sourcePath opts
     env0 <- Env.initEnv typesPath False
-    let modName = Project.modName paths
 
     s0 <- getStats statsEnabled
     t0 <- getCurrentTime
@@ -736,9 +734,8 @@ runCompilerFront buildFront runBack typesPath sourcePath = do
     src <- readFile sourcePath
     srcBytes <- B.readFile sourcePath
     let opts = benchOpts typesPath (not buildFront)
-    paths <- Project.findPaths sourcePath opts
+    (paths, modName) <- Project.findPaths sourcePath opts
     env0 <- Env.initEnv typesPath False
-    let modName = Project.modName paths
 
     s0 <- getStats statsEnabled
     t0 <- getCurrentTime

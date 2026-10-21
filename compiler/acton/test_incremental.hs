@@ -1534,8 +1534,8 @@ p27_overlay_source_provider = testCase "27-overlay snapshots drive readModuleTas
         }
       disk = Source.diskSourceProvider
       spSame = disk { Source.spReadOverlay = \path -> return (if path == actAAbs then Just snapSame else Nothing) }
-  paths <- Project.findPaths actAAbs C.defaultCompileOptions
-  taskSame <- Compile.readModuleTask spSame quietGlobalOptions C.defaultCompileOptions paths actAAbs
+  (paths, moduleA) <- Project.findPaths actAAbs C.defaultCompileOptions
+  taskSame <- Compile.readModuleTask spSame quietGlobalOptions C.defaultCompileOptions paths moduleA actAAbs
   case taskSame of
     Compile.TyTask _ -> pure ()
     _ -> assertFailure "expected TyTask when overlay matches header"
@@ -1547,14 +1547,14 @@ p27_overlay_source_provider = testCase "27-overlay snapshots drive readModuleTas
         , Source.ssIsOverlay = True
         }
       spDiff = disk { Source.spReadOverlay = \path -> return (if path == actAAbs then Just snapDiff else Nothing) }
-  taskDiff <- Compile.readModuleTask spDiff quietGlobalOptions C.defaultCompileOptions paths actAAbs
+  taskDiff <- Compile.readModuleTask spDiff quietGlobalOptions C.defaultCompileOptions paths moduleA actAAbs
   case taskDiff of
     Compile.ParseTask source _ doc -> do
       Compile.sourceText source @?= textDiff
       Compile.sourceBytes source @?= bytesDiff
       doc @?= Just "Overlay doc"
     _ -> assertFailure "expected ParseTask when overlay differs from header"
-  case Compile.docIndexEntry C.defaultCompileOptions paths taskDiff of
+  case Compile.docIndexEntry C.defaultCompileOptions paths moduleA taskDiff of
     Just (mn, Just doc, _) -> do
       mn @?= A.modName ["incremental_cases", "a"]
       doc @?= "Overlay doc"

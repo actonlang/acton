@@ -553,6 +553,7 @@ waitBackJobs sched gen = atomically $ do
 data CompileContext = CompileContext
   { ccOpts       :: C.CompileOptions     -- --dep overrides made absolute
   , ccPathsRoot  :: Paths                -- the paths of the file that roots the build
+  , ccRootModule :: A.ModName            -- the module of that file, whose alternative output a build forces
   , ccRootProj   :: FilePath             -- the root project's directory, normalized
   , ccSysAbs     :: FilePath             -- the system directory, normalized
   , ccBuildStamp :: BuildSpecStamp       -- the root project's Build.act when the context was made
@@ -565,14 +566,15 @@ optionsFor ctx k
   | tkProj k == ccRootProj ctx          = ccOpts ctx
   | otherwise                           = (ccOpts ctx) { C.skip_build = True, C.test = False }
 
--- | The context of a build rooted at a file whose paths are known.  The
--- Build.act stamp is read at the project path as the paths give it.
-compileContext :: C.CompileOptions -> Paths -> IO CompileContext
-compileContext opts paths = do
+-- | The context of a build rooted at a file whose paths and module are
+-- known.  The Build.act stamp is read at the project path as the paths give
+-- it.
+compileContext :: C.CompileOptions -> Paths -> A.ModName -> IO CompileContext
+compileContext opts paths mn = do
     root  <- normalizePathSafe (projPath paths)
     sys   <- normalizePathSafe (sysPath paths)
     stamp <- readBuildSpecStamp (projPath paths)
-    return CompileContext { ccOpts = opts, ccPathsRoot = paths, ccRootProj = root, ccSysAbs = sys, ccBuildStamp = stamp }
+    return CompileContext { ccOpts = opts, ccPathsRoot = paths, ccRootModule = mn, ccRootProj = root, ccSysAbs = sys, ccBuildStamp = stamp }
 
 -- | The context of a build of the given files, rooted at the first.  The
 -- --dep overrides are made absolute against the first file's project
@@ -581,12 +583,12 @@ compileContext opts paths = do
 prepareCompileContext :: C.CompileOptions -> [FilePath] -> IO CompileContext
 prepareCompileContext _ []              = throwProjectError "No source files found"
 prepareCompileContext opts (first : _)  = do
-    cwd       <- getCurrentDirectory
-    base      <- fromMaybe cwd <$> findProjectDir (takeDirectory first)
-    overrides <- normalizeDepOverrides base (C.dep_overrides opts)
-    let opts' = opts { C.dep_overrides = overrides }
-    paths     <- findPaths first opts'
-    compileContext opts' paths
+    cwd         <- getCurrentDirectory
+    base        <- fromMaybe cwd <$> findProjectDir (takeDirectory first)
+    overrides   <- normalizeDepOverrides base (C.dep_overrides opts)
+    let opts'   = opts { C.dep_overrides = overrides }
+    (paths, mn) <- findPaths first opts'
+    compileContext opts' paths mn
 
 -- | How much of a project a build asks for.  A whole-project build seeds
 -- discovery with every module and lets the final build prune stale
@@ -629,10 +631,12 @@ prepareCompilePlan sp gopts sched ctx request = do
 prepareCompilePlanFromContext :: Source.SourceProvider -> C.GlobalOptions -> CompileContext -> PlanRequest -> IO CompilePlan
 prepareCompilePlanFromContext sp gopts ctx request = do
     projects <- buildProjects gopts ctx
+    let paths     = buildPaths ctx projects
+        withPaths = M.elems (M.intersectionWith (,) projects paths)
     case requestChanged request of
-      Nothing      -> mapM_ (pruneMissingModuleOutputs opts projects) (M.elems projects)
-      Just changed -> pruneMissingChangedModuleOutputs opts projects changed
-    tasks    <- buildGlobalTasks sp gopts opts projects (seeds projects)
+      Nothing      -> mapM_ (uncurry pruneMissingModuleOutputs) withPaths
+      Just changed -> pruneMissingChangedModuleOutputs withPaths changed
+    tasks    <- buildGlobalTasks sp gopts opts projects paths (seeds projects)
     selectPlan ctx projects tasks request
   where
     opts = ccOpts ctx
@@ -666,6 +670,10 @@ buildProjects gopts ctx = withoutTestLibraries <$> projects
     withoutTestLibraries
       | C.test opts = M.adjust (\p -> p { projBuildSpec = (projBuildSpec p) { BuildSpec.libraries = M.empty } }) root
       | otherwise   = id
+
+-- | The paths of each project of a build.
+buildPaths :: CompileContext -> M.Map FilePath ProjCtx -> M.Map FilePath Paths
+buildPaths ctx projects = M.map (projectPaths (ccOpts ctx) projects) projects
 
 -- | Compile a plan as a generation of the scheduler. Its back jobs run on
 -- the scheduler's workers: wait for them with waitBackJobs. Each event is
@@ -1462,17 +1470,17 @@ checkImportPrefixes index paths imports = unless (projName paths `elem` special_
                                             Left ("Do not use prefix '" ++ projName paths ++ "' when referring to modules in that project (" ++ prstrs prefixed ++ ")")
   where prefixed                        = filter (declares index (projPath paths)) imports
 
--- | Source imports may name only local modules or directly declared projects.
--- Transitive interfaces remain available for types mentioned by imported APIs.
--- The first offending import is reported.
-checkImportDependencies :: ModuleIndex -> Paths -> [A.ModName] -> Either String ()
-checkImportDependencies index paths = mapM_ check
+-- | The source imports of a module may name only local modules or directly
+-- declared projects.  Transitive interfaces remain available for types
+-- mentioned by imported APIs.  The first offending import is reported.
+checkImportDependencies :: ModuleIndex -> Paths -> A.ModName -> [A.ModName] -> Either String ()
+checkImportDependencies index paths importer = mapM_ check
   where
     check mn = case A.modPath mn of
         n:_ | Data.Set.member n projectNames
             , n `notElem` directNames
             , not (declares index (projPath paths) (addProjPrefix paths mn)) ->
-          Left ("Dependency '" ++ n ++ "' imported by " ++ srcFile paths (modName paths)
+          Left ("Dependency '" ++ n ++ "' imported by " ++ srcFile paths importer
                 ++ " is not declared in " ++ projPath paths ++ "/Build.act.\n"
                 ++ "Add a direct dependency, using follows to share another dependency's selection.")
         _ -> Right ()
@@ -1524,9 +1532,10 @@ buildGlobalTasks :: Source.SourceProvider
                  -> C.GlobalOptions
                  -> C.CompileOptions
                  -> M.Map FilePath ProjCtx
+                 -> M.Map FilePath Paths            -- each project's paths
                  -> Maybe [FilePath]                -- seed source files; Nothing seeds every module
                  -> IO [GlobalTask]
-buildGlobalTasks sp gopts opts projects seedFiles = do
+buildGlobalTasks sp gopts opts projects pathsByProject seedFiles = do
     modules <- concat <$> mapM projectModules (M.elems projects)
     seeds   <- maybe (return []) (mapM canonicalizePath) seedFiles
     let index    = ModuleIndex { indexProjects = projects, indexSources = M.fromList modules }
@@ -1549,8 +1558,8 @@ buildGlobalTasks sp gopts opts projects seedFiles = do
                                               visit index (Data.Set.insert key seen) (rest Seq.>< providers) (task : tasks)
 
     discover index key = do
-        paths      <- pathsForModule opts projects (projects M.! tkProj key) (tkMod key)
-        discovered <- readModuleTask sp gopts opts paths file
+        createModuleDirectories paths (tkMod key)
+        discovered <- readModuleTask sp gopts opts paths (tkMod key) file
         -- A cached header stores canonical imports, which spell a bare
         -- dependency import as dep.lib.  When such a namespace has become
         -- local, the source is parsed again, so that its spelling resolves to
@@ -1560,9 +1569,10 @@ buildGlobalTasks sp gopts opts projects seedFiles = do
                           -> either ParseErrorTask (uncurry ActonTask) <$> materialize sp opts (tkMod key) file Nothing discovered
                         _ -> return discovered
         let imports = restoredImportsOf paths task
-        either throwProjectError return (checkImportPrefixes index paths imports >> checkImportDependencies index paths imports)
+        either throwProjectError return (checkImportPrefixes index paths imports >> checkImportDependencies index paths (tkMod key) imports)
         return GlobalTask { gtKey = key, gtPaths = paths, gtTask = task, gtImportProviders = resolveProviders index paths imports }
-      where file = indexSources index M.! key
+      where file  = indexSources index M.! key
+            paths = pathsByProject M.! tkProj key
 
 
 -- | The import graph of the tasks: each task's edges go to its import
@@ -1731,8 +1741,8 @@ sourceSizes tasks = M.fromList <$> forM tasks (\t -> (,) (gtKey t) <$> sourceSiz
 -- content hash (then the recorded stat is refreshed in place).  An editor
 -- overlay is compared by content only.  Otherwise only the source header is
 -- parsed.  Reading can write: the stat refresh.
-readModuleTask :: Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -> Paths -> FilePath -> IO CompileTask
-readModuleTask sp gopts opts paths file = do
+readModuleTask :: Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -> Paths -> A.ModName -> FilePath -> IO CompileTask
+readModuleTask sp gopts opts paths mn file = do
     reusable <- reusableHeader opts tydb
     case reusable of
       Nothing               -> fromSource =<< Source.readSource sp file
@@ -1746,7 +1756,6 @@ readModuleTask sp gopts opts paths file = do
               then return (TyTask header)
               else Source.spReadFile sp file >>= \snap -> verify header snap (Just meta)
   where
-    mn   = modName paths
     tydb = tyDbPath paths mn
 
     fromSource snap = do
@@ -1810,11 +1819,11 @@ moduleSource file snap = ModuleSource (Source.ssText snap) (Source.ssBytes snap)
 
 -- | A module's documentation index entry: its name, its docstring and
 -- whether it gets doc output.
-docIndexEntry                           :: C.CompileOptions -> Paths -> CompileTask -> Maybe (A.ModName, Maybe String, Bool)
-docIndexEntry opts paths (TyTask h)     = Just (modName paths, InterfaceFiles.summaryDoc h,
+docIndexEntry                           :: C.CompileOptions -> Paths -> A.ModName -> CompileTask -> Maybe (A.ModName, Maybe String, Bool)
+docIndexEntry opts paths mn (TyTask h)  = Just (mn, InterfaceFiles.summaryDoc h,
                                                 shouldGenerateDocOutput opts (isTmp paths) (InterfaceFiles.summaryNameCount h))
-docIndexEntry _ paths (ParseTask _ _ d) = Just (modName paths, d, True)
-docIndexEntry _ _ _                     = Nothing
+docIndexEntry _ _ mn (ParseTask _ _ d)  = Just (mn, d, True)
+docIndexEntry _ _ _ _                   = Nothing
 
 -- | The parsed source of a module.  A ParseTask parses the text read at
 -- discovery, whose hash decided it; a TyTask reads its source again
@@ -2872,7 +2881,7 @@ taskOf run k                            = runTasks run M.! k
 -- | Whether alternative output asks for a module: it applies to the module
 -- the build was started for.
 altOutputFor                            :: CompileContext -> TaskKey -> Bool
-altOutputFor ctx k                      = C.altOutput (optionsFor ctx k) && tkMod k == modName (ccPathsRoot ctx)
+altOutputFor ctx k                      = C.altOutput (optionsFor ctx k) && tkMod k == ccRootModule ctx
 
 -- | Compile a plan's modules, across every project of the plan: reject
 -- import cycles, compile __builtin__, then run every other module's parse

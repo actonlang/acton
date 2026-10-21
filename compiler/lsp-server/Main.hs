@@ -237,12 +237,12 @@ cacheCompletionState path state =
 
 loadDiskCompletionState :: FilePath -> IO CompletionState
 loadDiskCompletionState path = do
-  paths <- Project.findPaths path lspCompileOpts
+  (paths, mn) <- Project.findPaths path lspCompileOpts
   env <- Env.initEnv (Project.sysTypes paths) False
   return CompletionState
     { completionEnv = env
     , completionSearchPath = Project.searchPath paths
-    , completionModuleName = Project.modName paths
+    , completionModuleName = mn
     , completionStateGen = 0
     }
 
@@ -391,6 +391,7 @@ refreshChangedGlobalTask changedPath opts cache =
         lspGlobalOpts
         opts
         (Compile.gtPaths old)
+        (Compile.tkMod (Compile.gtKey old))
         changedPath
       let new = old { Compile.gtTask = newTask }
           newKey = taskImportKey new
@@ -634,7 +635,7 @@ resolveCompileRoot path opts = do
   case mproj of
     Just proj -> Project.normalizePathSafe proj
     Nothing -> do
-      paths <- Project.findPaths path opts
+      (paths, _) <- Project.findPaths path opts
       Project.normalizePathSafe (Project.projPath paths)
 
 -- | Prepare and run a compile while holding the per-run project work lock.
