@@ -1932,8 +1932,12 @@ initCliCompileHooks progressUI progressState gopts gen plan = do
         backPassDoneLine mn pass =
           "Back " ++ backPassName pass ++ " done: " ++ modLabel mn
         finalKey = ProgressTaskKey (TaskKey rootProj (A.modName ["__final__"]))
-        taskProgressKey = ProgressTaskKey
-        frontOutputTaskKey = ProgressFrontOutputKey
+        -- A progress row: started with its line and ratio, updated, and
+        -- ended, which gives its elapsed time.
+        startRow row line ratio = progressStartTask progressUI progressState row line ratio
+        updateRow row line ratio = progressUpdateTask progressUI progressState row line (Just ratio)
+        endRow row = progressDoneTask progressUI progressState row
+        showDoneLines = not (quiet gopts optsPlan)
         withTerm action = when termEnabled $ whenCurrent gen (withProgressLock progressUI action)
         setPercent pct = withTerm (termProgressPercent termProgress pct)
         addProgress delta =
@@ -1972,37 +1976,25 @@ initCliCompileHooks progressUI progressState gopts gen plan = do
     setPercent 0
     let onEvent event = case event of
           Diagnostics t diags -> do
-            void (progressDoneTask progressUI progressState (taskProgressKey (gtKey t)))
+            void (endRow (ProgressTaskKey (gtKey t)))
             logDiagnostics diags
           ParseStarted t ->
-            let key = gtKey t
-                mn = tkMod key
-            in progressStartTask progressUI progressState (taskProgressKey key) (parseActiveLine mn) (Just 0)
-          ParseProgressed t p ->
-            let key = gtKey t
-                mn = tkMod key
-            in do
-              progressUpdateTask progressUI progressState (taskProgressKey key) (parseProgressLine mn p) (Just (parseProgressRatio p))
-              creditParseProgress key p
+            startRow (ProgressTaskKey (gtKey t)) (parseActiveLine (tkMod (gtKey t))) (Just 0)
+          ParseProgressed t p -> do
+            updateRow (ProgressTaskKey (gtKey t)) (parseProgressLine (tkMod (gtKey t)) p) (parseProgressRatio p)
+            creditParseProgress (gtKey t) p
           ParseFinished t mtime -> do
-            void (progressDoneTask progressUI progressState (taskProgressKey (gtKey t)))
+            void (endRow (ProgressTaskKey (gtKey t)))
             creditParse (gtKey t)
-            when (not (quiet gopts optsPlan)) $
-              forM_ mtime $ \tParse -> do
-                let mn = tkMod (gtKey t)
-                logRendered (\cols -> parseDoneLine cols mn tParse)
+            when showDoneLines $
+              forM_ mtime $ \tParse -> logRendered (\cols -> parseDoneLine cols (tkMod (gtKey t)) tParse)
           FrontStarted t ->
-            let key = gtKey t
-                mn = tkMod key
-            in progressStartTask progressUI progressState (taskProgressKey key) (frontInitialLine mn) (Just 0)
-          FrontProgressed t p ->
-            let key = gtKey t
-                mn = tkMod key
-            in do
-              progressUpdateTask progressUI progressState (taskProgressKey key) (frontProgressLine mn p) (Just (frontPassFraction p))
-              creditFrontProgress key p
+            startRow (ProgressTaskKey (gtKey t)) (frontInitialLine (tkMod (gtKey t))) (Just 0)
+          FrontProgressed t p -> do
+            updateRow (ProgressTaskKey (gtKey t)) (frontProgressLine (tkMod (gtKey t)) p) (frontPassFraction p)
+            creditFrontProgress (gtKey t) p
           FrontFinished t result -> do
-            void (progressDoneTask progressUI progressState (taskProgressKey (gtKey t)))
+            void (endRow (ProgressTaskKey (gtKey t)))
             creditFront (gtKey t)
             forM_ result $ \fr -> do
               forM_ (frFrontTime fr) $ \tFront -> do
@@ -2038,35 +2030,30 @@ initCliCompileHooks progressUI progressState gopts gen plan = do
                 NoBack -> creditBack (gtKey t)
                 _      -> return ()
           OutputStarted key kind ->
-            progressStartTask progressUI progressState (frontOutputTaskKey key kind)
-              (frontOutputActiveLine key kind) (frontOutputInitialProgress kind)
+            startRow (ProgressFrontOutputKey key kind) (frontOutputActiveLine key kind) (frontOutputInitialProgress kind)
           OutputProgressed key kind p ->
-            progressUpdateTask progressUI progressState (frontOutputTaskKey key kind)
-              (frontOutputProgressLine key kind p) (Just (clamp01 (InterfaceFiles.tyDbWriteProgressRatio p)))
+            updateRow (ProgressFrontOutputKey key kind) (frontOutputProgressLine key kind p) (clamp01 (InterfaceFiles.tyDbWriteProgressRatio p))
           OutputFinished key kind melapsed -> do
-            void (progressDoneTask progressUI progressState (frontOutputTaskKey key kind))
-            when (not (quiet gopts optsPlan)) $
-              forM_ melapsed $ \elapsed ->
-                logRendered (\cols -> frontOutputDoneLine cols key kind elapsed)
+            void (endRow (ProgressFrontOutputKey key kind))
+            when showDoneLines $
+              forM_ melapsed $ \elapsed -> logRendered (\cols -> frontOutputDoneLine cols key kind elapsed)
           BackReady _ -> return ()
           BackSkipped key -> creditBack key
           BackStarted job ->
-            progressStartTask progressUI progressState (taskProgressKey (bjKey job)) (backActiveLine (tkMod (bjKey job))) (Just 0)
+            startRow (ProgressTaskKey (bjKey job)) (backActiveLine (tkMod (bjKey job))) (Just 0)
           BackProgressed job p -> do
-            let mn = tkMod (bjKey job)
-            progressUpdateTask progressUI progressState (taskProgressKey (bjKey job))
-              (backProgressLine mn p) (Just (backProgressRatio p))
-            when (not (quiet gopts optsPlan) && (C.timing gopts || C.verbose gopts)) $
+            updateRow (ProgressTaskKey (bjKey job)) (backProgressLine (tkMod (bjKey job)) p) (backProgressRatio p)
+            when (showDoneLines && (C.timing gopts || C.verbose gopts)) $
               case bppEvent p of
                 BackPassFinished elapsed ->
                   logRendered (\cols ->
                     detailTimedLine cols detailStmtIndentWide detailStmtIndentNarrow
-                      (backPassDoneLine mn (bppPass p)) elapsed)
+                      (backPassDoneLine (tkMod (bjKey job)) (bppPass p)) elapsed)
                 _ -> return ()
           BackFinished job result -> do
-            void (progressDoneTask progressUI progressState (taskProgressKey (bjKey job)))
+            void (endRow (ProgressTaskKey (bjKey job)))
             creditBack (bjKey job)
-            when (not (quiet gopts optsPlan)) $
+            when showDoneLines $
               case result of
                 BackJobOk mtime mtiming -> do
                   logRendered (\cols -> backDoneLine cols (tkMod (bjKey job)) mtime)
@@ -2077,15 +2064,15 @@ initCliCompileHooks progressUI progressState gopts gen plan = do
                   logRendered (\cols -> backFailLine cols (tkMod (bjKey job)) (bpfMessage failure))
           Info msg -> logLine msg
         onFinalStart = do
-          whenCurrent gen (progressStartTask progressUI progressState finalKey finalActiveLine Nothing)
+          whenCurrent gen (startRow finalKey finalActiveLine Nothing)
           setPercent 85
         onFinalDone success =
           whenCurrent gen $ do
-            mElapsed <- progressDoneTask progressUI progressState finalKey
+            mElapsed <- endRow finalKey
             setPercent 100
             when success $
               forM_ mElapsed $ \tFinal ->
-                when (not (quiet gopts optsPlan)) $
+                when showDoneLines $
                   logRendered (\cols -> finalDoneLine cols tFinal)
     return CliCompileHooks
       { cchOnEvent = onEvent
