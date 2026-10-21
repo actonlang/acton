@@ -3212,7 +3212,6 @@ runBackPassesWithProgress gopts opts paths backInput shouldWrite onProgress = do
                         let cFile = outbase ++ ".c"
                             hFile = outbase ++ ".h"
                             supportPath = Acton.CodeGen.supportFile outbase
-                        createDirectoryIfMissing True (takeDirectory supportPath)
                         writeFile supportPath support
                         writeFile hFile h
                         writeFile cFile c
@@ -4908,8 +4907,7 @@ pruneMissingModuleOutputs opts projMap ctx = do
       let keep = Data.Set.fromList (concatMap (moduleOutputs . modulePaths opts projMap ctx . snd) mods)
       files <- getFilesRecursive typesRoot
       tyDbs <- InterfaceFiles.listInterfaceDirsRecursive typesRoot
-      let isOutput f = takeExtension f `elem` [".c", ".h"] || isJust (Acton.CodeGen.supportOwner f)
-          outputs = filter isOutput files ++ tyDbs
+      let outputs = filter ((`elem` [".c", ".h", ".inc"]) . takeExtension) files ++ tyDbs
       mapM_ removePathForcibly (filter (`Data.Set.notMember` keep) outputs)
 
 -- | Incremental variant: prune only modules whose changed .act file no longer exists.

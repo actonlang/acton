@@ -189,7 +189,7 @@ $WORD $closure_deserialize($WORD self, const struct $ClosureLayout *layout, $Ser
         self = acton_malloc(layout->size);
         (($Serializable)self)->$class = layout->methods;
         if (!state)
-            return self; // allocation-only phase, also used during recovery
+            return self; // allocation-only phase
         // Register before restoring captures: they may lead back to this object.
         B_dictD_setitem(state->done, (B_Hashable)B_HashableD_intG_witness,
                        toB_int(state->row_no - 1), self);
