@@ -429,12 +429,10 @@ readModuleNameHashesByModName paths mn = do
     mty <- Acton.Env.findTyFile (Project.searchPath paths) mn
     case mty of
       Nothing -> return M.empty
-      Just tyFile -> do
-        hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader tyFile
-        case hdrE of
-          Left _ -> return M.empty
-          Right (_sourceMeta, _srcH, _ih, _implH, _imps, _depModules, nameHashes, _roots, _tests, _doc) ->
-            return $ M.fromList [ (A.nstr (InterfaceFiles.nhName nh), nh) | nh <- nameHashes ]
+      Just tyFile ->
+        either (const M.empty) nameMap <$> (try :: IO a -> IO (Either SomeException a)) (InterfaceFiles.readNameHashes tyFile)
+  where
+    nameMap nameHashes = M.fromList [ (A.nstr (InterfaceFiles.nhName nh), nh) | nh <- nameHashes ]
 
 -- | Cache-aware wrapper for reading name hashes.
 readModuleNameHashesCached :: IORef (M.Map A.ModName (M.Map String InterfaceFiles.NameHashInfo))

@@ -89,6 +89,10 @@ nameHash n src pub impl =
     , InterfaceFiles.nhStmtIndices = []
     }
 
+-- | A module's source, pub and impl hash from its .tydb header summary.
+moduleHashes :: InterfaceFiles.HeaderSummary -> (B8.ByteString, B8.ByteString, B8.ByteString)
+moduleHashes h = (InterfaceFiles.summarySourceHash h, InterfaceFiles.summaryPubHash h, InterfaceFiles.summaryImplHash h)
+
 hashTestName :: S.Name
 hashTestName = S.name "value"
 
@@ -381,16 +385,15 @@ main = do
           db <- InterfaceFiles.openInterfaceDB tyPath
           InterfaceFiles.readInterfaceDBEscapeSummaries db `shouldReturn` escapeSummaries
 
-          (sourceMetaH, srcHashH, pubHashH, implHashH, impsH, depModulesH, nameHashesH, rootsH, testsH, docH) <-
-            InterfaceFiles.readHeader tyPath
-          sourceMetaH `shouldBe` Nothing
-          (srcHashH, pubHashH, implHashH) `shouldBe` ("src", "pub", "impl")
-          impsH `shouldBe` []
-          depModulesH `shouldBe` []
-          nameHashesH `shouldBe` nameHashes
-          rootsH `shouldBe` roots
-          testsH `shouldBe` tests
-          docH `shouldBe` Just "module docs"
+          header <- InterfaceFiles.readHeaderSummary tyPath
+          InterfaceFiles.summarySourceMeta header `shouldBe` Nothing
+          moduleHashes header `shouldBe` ("src", "pub", "impl")
+          InterfaceFiles.summaryImports header `shouldBe` []
+          InterfaceFiles.summaryDepModules header `shouldBe` []
+          InterfaceFiles.summaryRoots header `shouldBe` roots
+          InterfaceFiles.summaryTests header `shouldBe` tests
+          InterfaceFiles.summaryDoc header `shouldBe` Just "module docs"
+          InterfaceFiles.readNameHashes tyPath `shouldReturn` nameHashes
 
       it "retains builtin escape summaries only in the opt-in base environment" $ do
         withSystemTempDirectory "acton-iface-builtin-escape" $ \dir -> do
@@ -503,8 +506,7 @@ main = do
               nmod = I.NModule [] iface Nothing
               tmod = S.Module mn [] Nothing body
           InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] nameHashes0 [] [] [] Nothing nmod tmod
-          (_sourceMetaH, _srcH, _pubH, _implH, _impsH, _depModulesH, nameHashesH, _rootsH, _testsH, _docH) <-
-            InterfaceFiles.readHeader tyPath
+          nameHashesH <- InterfaceFiles.readNameHashes tyPath
           [ InterfaceFiles.nhStmtIndices nh | nh <- nameHashesH, InterfaceFiles.nhName nh == bName ]
             `shouldBe` [[1]]
           selected <- InterfaceFiles.readSelectedModule tyPath nameHashesH (Set.fromList [aName, cName])
@@ -526,10 +528,8 @@ main = do
           InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] nameHashes [] [] [] Nothing nmod tmod
           mapConcurrently_
             (\_ -> do
-                (_sourceMetaH, srcHashH, pubHashH, implHashH, _impsH, _depModulesH, nameHashesH, _rootsH, _testsH, _docH) <-
-                  InterfaceFiles.readHeader tyPath
-                (srcHashH, pubHashH, implHashH) `shouldBe` ("src", "pub", "impl")
-                nameHashesH `shouldBe` nameHashes)
+                moduleHashes <$> InterfaceFiles.readHeaderSummary tyPath `shouldReturn` ("src", "pub", "impl")
+                InterfaceFiles.readNameHashes tyPath `shouldReturn` nameHashes)
             [1..64 :: Int]
 
       it "copies interface data without carrying LMDB lock state" $ do
@@ -546,10 +546,8 @@ main = do
           InterfaceFiles.copyInterface srcPath dstPath
           doesFileExist (dstPath </> "data.mdb") `shouldReturn` True
           doesFileExist (dstPath </> "lock.mdb") `shouldReturn` False
-          (_sourceMetaH, srcHashH, pubHashH, implHashH, _impsH, _depModulesH, nameHashesH, _rootsH, _testsH, _docH) <-
-            InterfaceFiles.readHeader dstPath
-          (srcHashH, pubHashH, implHashH) `shouldBe` ("src", "pub", "impl")
-          nameHashesH `shouldBe` nameHashes
+          moduleHashes <$> InterfaceFiles.readHeaderSummary dstPath `shouldReturn` ("src", "pub", "impl")
+          InterfaceFiles.readNameHashes dstPath `shouldReturn` nameHashes
 
       it "does not create lock files when reading registered system roots" $ do
         withSystemTempDirectory "acton-iface-syspath" $ \dir -> do
@@ -565,16 +563,14 @@ main = do
           InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] nameHashes [] [] [] Nothing nmod tmod
           removeFile lockPath
           InterfaceFiles.registerSystemTypeRoots [typesRoot]
-          (_sourceMetaH, srcHashH, pubHashH, implHashH, _impsH, _depModulesH, nameHashesH, _rootsH, _testsH, _docH) <-
-            InterfaceFiles.readHeader tyPath
-          (srcHashH, pubHashH, implHashH) `shouldBe` ("src", "pub", "impl")
-          nameHashesH `shouldBe` nameHashes
+          moduleHashes <$> InterfaceFiles.readHeaderSummary tyPath `shouldReturn` ("src", "pub", "impl")
+          InterfaceFiles.readNameHashes tyPath `shouldReturn` nameHashes
           doesFileExist lockPath `shouldReturn` False
 
       it "treats missing .tydb directories as cache misses" $ do
         withSystemTempDirectory "acton-iface-missing" $ \dir -> do
           let tyPath = dir </> "missing.tydb"
-          InterfaceFiles.readHeaderMaybe tyPath `shouldReturn` Nothing
+          InterfaceFiles.readNameHashesMaybe tyPath `shouldReturn` Nothing
           InterfaceFiles.readFileMaybe tyPath `shouldReturn` Nothing
 
       it "treats corrupt .tydb directories as cache misses" $ do
@@ -582,7 +578,7 @@ main = do
           let tyPath = dir </> "corrupt.tydb"
           createDirectoryIfMissing True tyPath
           B8.writeFile (tyPath </> "data.mdb") "garbage"
-          InterfaceFiles.readHeaderMaybe tyPath `shouldReturn` Nothing
+          InterfaceFiles.readNameHashesMaybe tyPath `shouldReturn` Nothing
           InterfaceFiles.readFileMaybe tyPath `shouldReturn` Nothing
 
       it "treats version mismatches as cache misses" $ do
@@ -592,7 +588,7 @@ main = do
               nmod = I.NModule [] [] Nothing
               tmod = S.Module mn [] Nothing []
           InterfaceFiles.writeFileWithVersion (map (+ 1) S.version) tyPath "" "" "" Nothing [] [] [] [] [] [] Nothing nmod tmod
-          InterfaceFiles.readHeaderMaybe tyPath `shouldReturn` Nothing
+          InterfaceFiles.readNameHashesMaybe tyPath `shouldReturn` Nothing
           InterfaceFiles.readFileMaybe tyPath `shouldReturn` Nothing
 
     describe "Names" $ do

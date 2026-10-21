@@ -16,8 +16,8 @@ read API for imported-module lookup:
 
 - `writeFile` writes the cache for one module.
 - `readHeaderSummary` reads metadata, imports, the stored name count, roots,
-  tests, and docstring; `readHeader` additionally decodes every per-name hash
-  record.
+  tests, and docstring; `readNameHashes` decodes every per-name hash record of
+  the module.
 - `tryReadHeaderSummary` gives `Nothing` when `readHeaderSummary` throws a
   synchronous exception, a missing `.tydb` included. A cancel propagates.
 - `readExtensionsByClass` and `readExtensionsByProtocol` read exact extension
@@ -25,8 +25,8 @@ read API for imported-module lookup:
   statements.
 - `readFile` reconstructs the full cached payload: imports, `NameInfo`, typed
   module, metadata, module hashes, per-name hashes, roots, tests, and docstring.
-- `readHeaderMaybe` and `readFileMaybe` turn missing, corrupt, unreadable, or
-  version-mismatched caches into cache misses.
+- `readNameHashesMaybe` and `readFileMaybe` turn missing, corrupt, unreadable,
+  or version-mismatched caches into cache misses.
 - `openInterfaceDB` validates a `.tydb` for selective reads on the shared
   per-path environment; `openInterfaceDBMaybe` is its cache-miss form.
 - `readInterfaceDBModuleInfo` reads only import/doc metadata.

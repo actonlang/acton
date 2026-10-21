@@ -103,10 +103,9 @@ Header summary reads are used for cheap decisions:
 root and test lookups. The module cache's single lookups read less:
 `lookupModuleHash` reads only the meta row, and `lookupNameHash` one
 `name-hash` row. Stale checks and DBP selection read exact `name-hash` rows on
-demand. `readHeader` reads the same fields as the summary, with every
-`name-hash` row in place of the name count. The module cache's `lookupNameMap`
-uses it, behind the `--verbose` hash-delta line, and `acton test` calls it
-directly.
+demand. `readNameHashes` reads every `name-hash` row. The module cache's
+`lookupNameMap` uses it, behind the `--verbose` hash-delta line, and
+`acton test` calls it directly.
 
 ### Full `.tydb` reads
 

@@ -558,9 +558,7 @@ rewriteTyVersion :: FilePath -> [Int] -> IO ()
 rewriteTyVersion tyPath version' = rewriteTy version' tyPath id
 
 readTySourceMeta :: FilePath -> IO (Maybe InterfaceFiles.SourceFileMeta)
-readTySourceMeta tyPath = do
-  (sourceMeta, _srcHash, _pubHash, _implHash, _imps, _depModules, _nameHashes, _roots, _tests, _doc) <- InterfaceFiles.readHeader tyPath
-  pure sourceMeta
+readTySourceMeta tyPath = InterfaceFiles.summarySourceMeta <$> InterfaceFiles.readHeaderSummary tyPath
 
 restoreExternalDeps :: FilePath -> [InterfaceFiles.DepModuleInfo] -> [InterfaceFiles.NameHashInfo] -> IO [InterfaceFiles.NameHashInfo]
 restoreExternalDeps tyPath depModules nameHashes = do

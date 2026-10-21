@@ -1533,13 +1533,11 @@ lookupModuleHash cache searchPaths kind m = fmap pick <$> memoFound (moduleHashT
       Pub  -> pub
       Impl -> impl
 
--- | A module's complete public name map, from its .tydb header unless a
+-- | A module's complete public name map, from its .tydb name rows unless a
 -- finished module or an earlier read remembered it.
 lookupNameMap :: ModuleCache -> [FilePath] -> A.ModName -> IO (Maybe (M.Map A.Name InterfaceFiles.NameHashInfo))
 lookupNameMap cache searchPaths m = memoFound (nameMapTable cache) m $
-    withTydb cache searchPaths m (fmap (fmap (publicNameMap . names)) . InterfaceFiles.readHeaderMaybe)
-  where
-    names (_, _, _, _, _, _, nameHashes, _, _, _) = nameHashes
+    withTydb cache searchPaths m (fmap (fmap publicNameMap) . InterfaceFiles.readNameHashesMaybe)
 
 -- | One name's hashes: from the module's complete map when there is one,
 -- else by a single-name read of its .tydb, which is remembered whether it

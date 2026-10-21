@@ -81,7 +81,7 @@
 -- - Keep the small validity/header fields (version, meta, dependency hashes, roots, tests,
 --   doc, name-hashes) as their own keys so callers can validate and reuse a cache
 --   entry, or do freshness/dependency checks, without decoding the large NameInfo
---   and typed Module sections (readHeader vs readFile).
+--   and typed Module sections (readHeaderSummary vs readFile).
 -- - Store NameInfo and the typed module body as explicitly-ordered entries
 --   (name-order/... and stmt/...) rather than relying on LMDB cursor order, so a
 --   full read reconstructs the exact original ordering -- and so later work can
@@ -96,7 +96,6 @@ module InterfaceFiles
   , DepUsers(..)
   , SourceFileMeta(..)
   , StoredModule(..)
-  , TyHeader
   , HeaderSummary(..)
   , InterfaceDB
   , interfaceExt
@@ -114,18 +113,17 @@ module InterfaceFiles
   , readDepUsers
   , readNameHashMaybe
   , readModuleHashesMaybe
+  , readNameHashesMaybe
   , readFile
   , readModuleIface
   , readNameHashes
   , readStmtHasNotImpl
-  , readHeader
   , readHeaderSummary
   , tryReadHeaderSummary
   , readRoots
   , readExtensionsByClass
   , readExtensionsByProtocol
   , readFileMaybe
-  , readHeaderMaybe
   , openInterfaceDB
   , openInterfaceDBMaybe
   , readInterfaceDBModuleInfo
@@ -284,19 +282,6 @@ data StoredModule = StoredModule
   , storedTests         :: [String]
   , storedDoc           :: Maybe String
   } deriving (Show, Eq)
-
-type TyHeader =
-  ( Maybe SourceFileMeta
-  , BS.ByteString
-  , BS.ByteString
-  , BS.ByteString
-  , [(A.ModName, BS.ByteString)]
-  , [DepModuleInfo]
-  , [NameHashInfo]
-  , [A.Name]
-  , [String]
-  , Maybe String
-  )
 
 -- | The small module-level keys of a .tydb, which readHeaderSummary decodes
 -- without touching any per-name or per-statement row.
@@ -768,8 +753,9 @@ evictSharedEnv cpath = do
 withReadTxn :: FilePath -> (LMDB.MDB_txn -> LMDB.MDB_dbi -> IO a) -> IO a
 withReadTxn path action = do
     -- A genuinely absent data file is a cache miss, not an environmental error:
-    -- surface it as TyCacheInvalid so readFileMaybe/readHeaderMaybe report a miss
-    -- instead of letting mdb_env_open raise a raw "No such file or directory".
+    -- surface it as TyCacheInvalid so readFileMaybe/readNameHashesMaybe report
+    -- a miss instead of letting mdb_env_open raise a raw "No such file or
+    -- directory".
     exists <- doesFileExist (dataFilePath path)
     unless exists $
       E.throwIO (TyCacheInvalid ("Missing .tydb data file: " ++ dataFilePath path))
@@ -1546,25 +1532,8 @@ readModuleIface f =
       traceTydbRead "iface" f ("names " ++ show (length te))
       return (I.NModule (A.importedModules timps) te mdoc)
 
--- Read only cached header fields from .tydb. This avoids decoding the large
--- NameInfo and typed Module statement sections and is much faster than readFile
--- for freshness checks and dependency discovery.
-readHeader :: FilePath -> IO TyHeader
-readHeader f =
-    withReadTxn f $ \txn dbi -> do
-      (sourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash) <- readMeta txn dbi
-      imps <- getValue "imports" txn dbi keyImports
-      depModules <- getValue "deps" txn dbi keyDeps
-      roots <- getValue "roots" txn dbi keyRoots
-      tests <- getValue "tests" txn dbi keyTests
-      doc <- getValue "doc" txn dbi keyDoc
-      nameHashes <- readNameHashEntries txn dbi
-      traceTydbRead "header" f "cached"
-      traceTydbRead "name-hash-all" f (show (length nameHashes))
-      return (sourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash, imps, depModules, nameHashes, roots, tests, doc)
-
--- Like readHeader, but reads the stored name count instead of decoding every
--- per-name hash row, so cache checks stay independent of module size.
+-- | A .tydb's header summary. It decodes no NameInfo entry, per-name hash
+-- row or typed statement, so its cost does not grow with the module's size.
 readHeaderSummary :: FilePath -> IO HeaderSummary
 readHeaderSummary f =
     withReadTxn f $ \txn dbi -> do
@@ -1634,6 +1603,10 @@ readModuleHashesMaybe :: FilePath -> IO (Maybe (BS.ByteString, BS.ByteString, BS
 readModuleHashesMaybe =
     readTyMaybe readModuleHashes
 
+readNameHashesMaybe :: FilePath -> IO (Maybe [NameHashInfo])
+readNameHashesMaybe =
+    readTyMaybe readNameHashes
+
 readExtensionsByClass :: FilePath -> A.Name -> IO [A.Name]
 readExtensionsByClass f n =
     withReadTxn f $ \txn dbi -> do
@@ -1657,9 +1630,6 @@ readExtensionsByProtocol f n =
 -- cache entry is not usable.
 readFileMaybe :: FilePath -> IO (Maybe StoredModule)
 readFileMaybe = readTyMaybe readFile
-
-readHeaderMaybe :: FilePath -> IO (Maybe TyHeader)
-readHeaderMaybe = readTyMaybe readHeader
 
 readTyMaybe :: (FilePath -> IO a) -> FilePath -> IO (Maybe a)
 readTyMaybe readTy f = (Just <$> readTy f) `E.catch` tyCacheMiss

@@ -145,8 +145,8 @@ benchOpts typesPath skipBuild =
       , C.no_dbp = True
       }
 
-nameHashMapFromHeader :: [InterfaceFiles.NameHashInfo] -> Map.Map Syntax.Name InterfaceFiles.NameHashInfo
-nameHashMapFromHeader infos =
+nameHashMap :: [InterfaceFiles.NameHashInfo] -> Map.Map Syntax.Name InterfaceFiles.NameHashInfo
+nameHashMap infos =
     Map.fromList [ (InterfaceFiles.nhName info, info) | info <- infos ]
 
 resolveNameHashMap :: Project.Paths -> Syntax.ModName -> IO (Maybe (Map.Map Syntax.Name InterfaceFiles.NameHashInfo))
@@ -154,11 +154,7 @@ resolveNameHashMap paths mn = do
     mty <- Env.findTyFile (Project.searchPath paths) mn
     case mty of
       Nothing -> return Nothing
-      Just ty -> do
-        mh <- InterfaceFiles.readHeaderMaybe ty
-        return $ case mh of
-          Just (_, _, _, _, _, _, nameHashes, _, _, _) -> Just (nameHashMapFromHeader nameHashes)
-          Nothing -> Nothing
+      Just ty -> fmap nameHashMap <$> InterfaceFiles.readNameHashesMaybe ty
 
 resolveDepHashMap :: String
                   -> (InterfaceFiles.NameHashInfo -> B.ByteString)

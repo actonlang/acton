@@ -85,8 +85,9 @@ We compute `selfPubHash`/`selfImplHash` for each unit, compute a `groupHash`
 from the sorted self-hashes plus all external dependency hashes of the group,
 and then finalize each unit as `H(selfHash || groupHash || unitKey)`.
 
-Header reads return the per-name hashes in deterministic name order. See
-[Interface caches](interface_caches.md) for the exact LMDB key layout.
+`readNameHashes` returns a module's per-name hashes in deterministic name
+order. See [Interface caches](interface_caches.md) for the exact LMDB key
+layout.
 
 ```
 version
