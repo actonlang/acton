@@ -20,6 +20,7 @@ module Acton.Project
   , localPath
   , localZigPath
   , resolveDepBase
+  , existingDependencyDir
   , dependencyPathError
   , depCacheDir
   , depCacheEntry
@@ -294,8 +295,7 @@ discoverProjects gopts sysAbs rootProj depOverrides = do
 
     collectDep pins base (accDeps, fpMap) (depName, dep) = do
       selected <- selectDepAndWarn gopts pins base depName dep
-      depBase <- resolveDepBase base depName selected
-      depAbs  <- normalizePathSafe depBase
+      depAbs <- resolveDepBase base depName selected
       (depPath, fpMap', spec) <- canonicalDep depOverrides fpMap depAbs
       when (depPath /= depAbs && not (C.quiet gopts)) $
         putStrLn ("Warning: dependency fingerprint " ++ fingerprintKeyFromSpec spec
@@ -864,7 +864,8 @@ depTypePathsFromMap ctxs root = snd (go Data.Set.empty root)
               in (seenNext, acc ++ [projTypesDir depCtx] ++ sub)
 
 -- | Resolve a dependency's base directory from a BuildSpec PkgDep.
--- Prefers an explicit project path, otherwise selects subdir in the cached archive.
+-- Prefers an explicit project path, otherwise selects subdir in the cached
+-- archive. The result is absolute and normalised.
 resolveDepBase :: FilePath -> String -> BuildSpec.PkgDep -> IO FilePath
 resolveDepBase base name dep =
     case localPath dep of
@@ -888,6 +889,19 @@ resolveDepBase base name dep =
                                           ++ "\nExpected Build.act and src/ in the selected directory.")
                    return selected
              Nothing -> throwProjectError ("Dependency " ++ name ++ " has no path or hash")
+
+-- | The directory that 'resolveDepBase' gives the dependency 'name' declared
+-- as 'dep' by the project at 'base', when that directory exists. A missing
+-- directory is an error for a local dependency and Nothing for a
+-- dependency fetched by hash that is not fetched yet.
+existingDependencyDir :: FilePath -> String -> BuildSpec.PkgDep -> IO (Maybe FilePath)
+existingDependencyDir base name dep = do
+    dir    <- resolveDepBase base name dep
+    exists <- doesDirectoryExist dir
+    case (exists, localPath dep) of
+      (True,  _)       -> return (Just dir)
+      (False, Just _)  -> dependencyPathError name "does not exist" dir
+      (False, Nothing) -> return Nothing
 
 -- | The directory under the home directory 'home' that holds the Acton
 -- packages fetched by hash, each in its own 'depCacheEntry'.
@@ -917,14 +931,10 @@ collectDepTypePaths projDir overrides = do
       foldM (step dir) (seen, registerFingerprint dir spec fpMap, []) (M.toList (BuildSpec.concreteDependencies spec))
 
     step base (seen, fpMap, acc) (depName, dep) = do
-      depBase <- resolveDepBase base depName dep
-      depAbs  <- normalizePathSafe depBase
-      depExists <- doesDirectoryExist depAbs
-      if not depExists
-        then case localPath dep of
-               Just _  -> dependencyPathError depName "does not exist" depAbs
-               Nothing -> return (seen, fpMap, acc)
-        else do
+      found <- existingDependencyDir base depName dep
+      case found of
+        Nothing -> return (seen, fpMap, acc)
+        Just depAbs -> do
           (depPath, fpMap', spec) <- canonicalDep overrides fpMap depAbs
           let typesDir = projectTypesDir depPath
           if Data.Set.member depPath seen

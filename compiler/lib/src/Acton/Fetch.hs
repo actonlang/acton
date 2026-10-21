@@ -10,9 +10,8 @@ import qualified Acton.BuildSpec as BuildSpec
 import qualified Acton.CommandLineParser as C
 import Acton.ArchiveDownload (downloadArchive)
 import Acton.HttpFetch (isHttpUrl, proxyEnvReportLines, readProxyEnv)
-import Acton.Project ( Paths(..), RootPins, dependencyPathError, depCacheDir, depCacheEntry, loadOverriddenSpec, localPath
-                     , localZigPath, normalizePathSafe, resolveDepBase, rootPins, selectDepAndWarn, throwProjectError
-                     , zigGlobalCacheDir )
+import Acton.Project ( Paths(..), RootPins, depCacheDir, depCacheEntry, existingDependencyDir, loadOverriddenSpec, localPath
+                     , localZigPath, normalizePathSafe, rootPins, selectDepAndWarn, throwProjectError, zigGlobalCacheDir )
 import Acton.ZigFetch (fetchZigPackage)
 import qualified Acton.Zon as Zon
 
@@ -116,18 +115,12 @@ walkProject env visited dir spec = do
         foldM (walkDependency env projAbs) (Data.Set.insert projAbs visited) selectedDeps
 
 -- | Walk the Acton dependency 'name' of the project at 'base', starting
--- from 'visited', in the absolute and normalised directory that
--- resolveDepBase gives. A missing directory is an error for a local
--- dependency and ends the walk of any other dependency.
+-- from 'visited', in its 'existingDependencyDir'. A dependency fetched by
+-- hash whose directory does not exist ends the walk there.
 walkDependency :: FetchEnv -> FilePath -> Data.Set.Set FilePath -> (String, BuildSpec.PkgDep) -> IO (Data.Set.Set FilePath)
-walkDependency env base visited (name, dep) = do
-    dir    <- resolveDepBase base name dep
-    exists <- doesDirectoryExist dir
-    if exists
-      then loadOverriddenSpec (overrides env) dir >>= walkProject env visited dir
-      else case localPath dep of
-             Just _  -> dependencyPathError name "does not exist" dir
-             Nothing -> return visited
+walkDependency env base visited (name, dep) =
+    existingDependencyDir base name dep
+      >>= maybe (return visited) (\dir -> loadOverriddenSpec (overrides env) dir >>= walkProject env visited dir)
 
 -- | The two kinds of dependency a project fetches by url and hash. Both are
 -- fetched into the Zig global cache.
