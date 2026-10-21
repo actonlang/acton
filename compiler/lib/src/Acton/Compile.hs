@@ -1567,9 +1567,6 @@ rememberFront cache m fr = do
       modifyMVar_ (nameMapTable cache) (return . M.insert m (mhNames hashes))
   where hashes = frHashes fr
 
-publicIfaceTE :: [(A.Name, I.NameInfo)] -> [(A.Name, I.NameInfo)]
-publicIfaceTE = filter (Names.isPublicName . fst)
-
 -- | The hashes of a module's public names, by name.
 publicNameMap :: [InterfaceFiles.NameHashInfo] -> M.Map A.Name InterfaceFiles.NameHashInfo
 publicNameMap names = M.fromList [ (InterfaceFiles.nhName i, i) | i <- names, Names.isPublicName (InterfaceFiles.nhName i) ]
@@ -2270,6 +2267,12 @@ storedResult moduleInfo hashes interest back = FrontResult
     { frModuleInfo = moduleInfo, frHashes = hashes, frInterest = interest, frBack = back
     , frFrontTime = Nothing, frFrontTiming = Nothing, frInferredSigs = [] }
 
+-- | What importers see of a checked module: its interface, of which
+-- mkModuleInfo keeps the public names, with its escape summaries.
+interfaceModuleInfo :: A.ModName -> I.NModule -> InterfaceFiles.EscapeSummaries -> Acton.Env.ModuleInfo
+interfaceModuleInfo mn (I.NModule imports iface doc) summaries =
+    Acton.Env.withEscapeSummaries summaries (Acton.Env.mkModuleInfo mn imports iface doc)
+
 -- | The result of a module without a readable .tydb under --only-build: an
 -- empty interface, no hashes, no back work.
 emptyResult                             :: ModuleEnv -> FrontResult
@@ -2282,8 +2285,7 @@ storedModuleInfo :: FilePath -> A.ModName -> InterfaceFiles.StoredModule -> IO A
 storedModuleInfo tydb mn module' = do
     summaries <- InterfaceFiles.openInterfaceDB tydb >>= InterfaceFiles.readInterfaceDBEscapeSummaries
     evaluate (rnf summaries)
-    return (Acton.Env.withEscapeSummaries summaries (Acton.Env.mkModuleInfo mn imports (publicIfaceTE iface) doc))
-  where I.NModule imports iface doc = InterfaceFiles.storedInterface module'
+    return (interfaceModuleInfo mn (InterfaceFiles.storedInterface module') summaries)
 
 -- | A module's interface shell from its own .tydb: its interface, read on
 -- demand and with its escape summaries, and its module hashes.
@@ -2396,7 +2398,7 @@ runFrontPasses env source parsed = do
       escapeDone      <- now
       let checked = Checked { checkedScope = scope, checkedInterface = interface, checkedModule = typed
                             , checkedTypeEnv = typeEnv, checkedTests = tests, checkedEscapes = escapes }
-          I.NModule imports iface doc = interface
+          I.NModule imports iface _ = interface
       hashed          <- hashPass env source parsed checked
       hashDone        <- now
       dumpWhen opts mn C.types "types" (Pretty.print typed)
@@ -2424,7 +2426,7 @@ runFrontPasses env source parsed = do
             , ftTypeHash          = hashDone - escapeDone
             , ftTypeStmtTimings   = statements }
       return FrontResult
-        { frModuleInfo   = Acton.Env.withEscapeSummaries escapes (Acton.Env.mkModuleInfo mn imports (publicIfaceTE iface) doc)
+        { frModuleInfo   = interfaceModuleInfo mn interface escapes
         , frHashes       = ModuleHashes { mhPub = hashedPub hashed, mhImpl = hashedImpl hashed, mhNames = publicNameMap names }
         , frInterest     = interestDeps names
         , frBack         = maybe (EagerBack job) DeferredBack (deferredJob env (A.hasNotImpl (A.mbody typed)) (hashedImpl hashed) (length names))
@@ -2640,7 +2642,7 @@ docOutputs env parsed checked hashed =
     paths       = pathsOf env
     mn          = nameOf env
     I.NModule imports iface doc = checkedInterface checked
-    publicIface = publicIfaceTE iface
+    publicIface = Acton.Env.publicTEnv iface
     docDir      = joinPath [projPath paths, "out", "doc"]
     docFile     = case A.modPath mn of
                     []   -> docDir </> "unnamed" <.> "html"
