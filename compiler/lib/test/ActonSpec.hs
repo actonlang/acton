@@ -35,6 +35,8 @@ import qualified Acton.Testing as Testing
 import qualified Acton.Transform as Transform
 import qualified Acton.WitnessKey as WitnessKey
 import qualified Acton.WitnessStats as WitnessStats
+import qualified Acton.WitnessRegistry as Registry
+import qualified Data.IntMap.Strict as IM
 import qualified InterfaceFiles
 import Pretty (print, prettyText)
 import qualified Pretty
@@ -260,6 +262,121 @@ main = do
         number "constructor_expressions" `shouldBe` Just 2
         number "static_bindings" `shouldBe` Just 1
         number "nonstatic_constructor_expressions_in_loops" `shouldBe` Just 1
+
+    describe "Module witness registry" $ do
+      let w i = S.Internal S.Witness "registry-test" i
+          dep = S.eVar . w
+          bind i e = S.Assign NoLoc [S.pVar (w i) S.tNone] e
+          ctor = S.eCallVar (S.name "Ctor")
+          emit = S.Expr NoLoc
+          fun n qs ps b = S.Def NoLoc (S.name n) qs ps S.KwdNIL (Just S.tNone) b S.NoDec S.fxPure Nothing
+          registry b = Registry.buildRegistry resolve (const False)
+                         (S.Module (S.modName ["registry_test"]) [] Nothing b)
+          resolve q | q `elem` map S.noQ ["Ctor", "OtherCtor"] = Just q
+                    | otherwise = Nothing
+          recipes = IM.elems . Registry.registryRecipes
+          constructors g = [r | r <- recipes g, Registry.Constructor{} <- [Registry.recipeKind r]]
+          lifetimes = map Registry.recipeLifetime . constructors
+          roots = map Registry.bindingRecipe . Registry.registryBindings
+          tv = S.TV S.KType (S.name "A")
+          generic = S.eCall (S.tApp (S.eVar (S.name "Ctor")) [S.tVar tv]) []
+      it "canonicalizes closed descriptions across functions while retaining both sites" $ do
+        let g = registry [S.sDecl [fun "f" [] S.PosNIL [bind 1 (ctor [])],
+                                  fun "g" [] S.PosNIL [bind 2 (ctor [])]]]
+        length (constructors g) `shouldBe` 1
+        length (Registry.registrySites g) `shouldBe` 2
+        length (nub $ map Registry.siteScope $ Registry.registrySites g) `shouldBe` 2
+        lifetimes g `shouldBe` [Registry.Closed]
+      it "keeps identically named witness parameters in different functions distinct" $ do
+        let ps = S.pospar [(w 0,S.tNone)]
+            g = registry [S.sDecl [fun "f" [] ps [bind 1 (ctor [dep 0])],
+                                  fun "g" [] ps [bind 2 (ctor [dep 0])]]]
+        lifetimes g `shouldBe` replicate 2 Registry.ParameterDependent
+        length (nub $ roots g) `shouldBe` 2
+        length (Registry.registryUses g) `shouldBe` 2
+      it "recognizes an outer witness parameter captured by a nested function" $ do
+        let inner = fun "inner" [] S.PosNIL [bind 2 (ctor [dep 0])]
+            outer = fun "outer" [] (S.pospar [(w 0,S.tNone)])
+                      [bind 1 (ctor [dep 0]), S.sDecl [inner]]
+            g = registry [S.sDecl [outer]]
+        lifetimes g `shouldBe` [Registry.ParameterDependent]
+        length (nub $ roots g) `shouldBe` 1
+        length (nub $ map Registry.bindingScope $ Registry.registryBindings g) `shouldBe` 2
+      it "distinguishes shadowed type variables, retaining reuse within one scope" $ do
+        let inner = fun "inner" [S.QBind tv []] S.PosNIL [bind 3 generic]
+            outer = fun "outer" [S.QBind tv []] S.PosNIL
+                      [bind 1 generic, bind 2 generic, S.sDecl [inner]]
+            g = registry [S.sDecl [outer]]
+        lifetimes g `shouldBe` replicate 2 Registry.ParameterDependent
+        length (nub $ roots g) `shouldBe` 2
+      it "normalizes aliases and projections into dependency edges" $ do
+        let project = S.eDot (dep 1) (S.name "component")
+            g = registry [bind 1 (ctor []), bind 2 project, bind 3 (ctor [dep 2]),
+                          bind 4 project, bind 5 (ctor [dep 4])]
+            rs = roots g
+        rs !! 1 `shouldBe` rs !! 3
+        rs !! 2 `shouldBe` rs !! 4
+        length (recipes g) `shouldBe` 3
+        map (Set.size . Registry.recipeDependencies) (constructors g) `shouldBe` [0,1]
+      it "distinguishes implementations and concrete type applications" $ do
+        let typed t = S.eCall (S.tApp (S.eVar (S.name "Ctor")) [t]) []
+            g = registry [bind 1 (ctor []), bind 2 (S.eCallVar (S.name "OtherCtor") []),
+                          bind 3 (typed S.tNone), bind 4 (typed (S.tOpt S.tNone))]
+        length (constructors g) `shouldBe` 4
+      it "classifies local values and unsupported helper calls conservatively" $ do
+        let f = fun "f" [] (S.pospar [(S.name "x",S.tNone)])
+                    [bind 1 (ctor [S.eVar (S.name "x")]),
+                     bind 2 (ctor [S.eCallVar (S.name "helper") []])]
+        lifetimes (registry [S.sDecl [f]]) `shouldBe` [Registry.LocalDependent,Registry.Unknown]
+      it "does not mistake a locally declared function for a constructor" $ do
+        let f = fun "Ctor" [] S.PosNIL [S.sPass]
+            g = registry [S.sDecl [f], bind 1 (ctor [])]
+        length (Registry.registrySites g) `shouldBe` 0
+        map Registry.recipeLifetime (recipes g) `shouldBe` [Registry.Unknown]
+      it "invalidates aliases after branches, loops and exception handlers" $ do
+        let changes = [S.sIf1 (S.eBool True) [bind 1 (dep 0)] [],
+                       S.For NoLoc (S.pVar (S.name "i") S.tNone) (S.eInt 0) [bind 1 (dep 0)] [],
+                       S.Try NoLoc [bind 1 (dep 0)] [] [] []]
+        forM_ changes $ \change -> do
+          let g = registry [bind 1 (ctor []), change, bind 2 (ctor [dep 1])]
+          last (lifetimes g) `shouldBe` Registry.LocalDependent
+      it "invalidates variable reassignment and never merges local descriptions" $ do
+        let x = S.eVar (S.name "x")
+            g = registry [S.Assign NoLoc [S.pVar (S.name "x") S.tNone] (S.eInt 1),
+                          bind 1 (ctor [x]), S.MutAssign NoLoc x (S.eInt 2), bind 2 (ctor [x]),
+                          bind 3 (ctor [x])]
+        lifetimes g `shouldBe` replicate 3 Registry.LocalDependent
+        length (nub $ roots g) `shouldBe` 3
+      it "keeps forward or cyclic dependencies unknown" $ do
+        let g = registry [bind 1 (ctor [dep 2]), bind 2 (ctor [dep 1])]
+        lifetimes g `shouldBe` replicate 2 Registry.Unknown
+      it "resets loop depth for declarations and lambdas" $ do
+        let inner = fun "inner" [] S.PosNIL [bind 2 (ctor [])]
+            lam = S.Lambda NoLoc S.PosNIL S.KwdNIL (ctor []) S.fxPure
+            g = registry [S.While NoLoc (S.eBool True)
+                            [bind 1 (ctor []), S.sDecl [inner], emit lam] []]
+        map Registry.siteLoopDepth (Registry.registrySites g) `shouldBe` [1,0,0]
+      it "excludes declaration defaults and type default metadata" $ do
+        let dflt = ctor []
+            row = S.TRow NoLoc S.PRow (S.name "x") S.tNone
+                    (Just (S.DfltExpr dflt dflt Nothing)) S.posNil
+            f = fun "f" [] (S.PosPar (S.name "x") (Just row) (Just dflt) S.PosNIL) [S.sPass]
+            g = registry [S.sDecl [f], bind 1 (S.eCall (S.tApp (S.eVar (S.name "Ctor")) [row]) [])]
+        length (Registry.registrySites g) `shouldBe` 1
+        lifetimes g `shouldBe` [Registry.Closed]
+      it "does not merge expressions merely because their fingerprints collide" $ do
+        let x = S.Async NoLoc (S.eInt 1)
+            y = S.Await NoLoc (S.eInt 1)
+            g = registry [bind 1 (ctor [x]), bind 2 (ctor [y])]
+        WitnessKey.expressionHash (ctor [x]) `shouldBe` WitnessKey.expressionHash (ctor [y])
+        length (constructors g) `shouldBe` 2
+      it "indexes thousands of recipes without recursively expanding dependencies" $ do
+        let count = 4000
+            originals = [bind i (ctor [S.eInt (fromIntegral i)]) | i <- [1..count]]
+            copies = [bind (count+i) (ctor [S.eInt (fromIntegral i)]) | i <- [1..count]]
+            g = registry (originals ++ copies)
+        length (constructors g) `shouldBe` count
+        length (Registry.registrySites g) `shouldBe` 2*count
 
     describe "Zon (build.zig.zon)" $ do
       let deps src = case Zon.parseZon src of

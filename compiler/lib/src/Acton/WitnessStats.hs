@@ -22,9 +22,10 @@ import qualified Data.Set as S
 import qualified Data.IntMap.Strict as IM
 import Data.List (foldl')
 import Acton.WitnessKey (expressionHash)
+import Acton.WitnessRegistry (buildRegistry, registrySummary)
 import Acton.Syntax hiding (expr, comp)
 import Acton.Names (isWitness)
-import Acton.Env (Env0, lookupName, lookupModuleInfo, moduleLookupName, thismod)
+import Acton.Env (Env0, lookupName, lookupModuleInfo, moduleLookupName, moduleName, thismod)
 import Acton.NameInfo (NameInfo(..))
 import Acton.Prim (tupleWits)
 import Acton.CodeGen (staticWitnessName)
@@ -48,6 +49,7 @@ witnessStats env stage m = object
     , "distinct_constructor_expressions" .= uniqueCount [e | (_,(_,e)) <- calls]
     , "constructors" .= objectCounts calls
     , "nonstatic_constructors" .= M.fromListWith (+) [(prstr n, 1 :: Int) | (_,n) <- dynamic]
+    , "registry" .= registrySummary (buildRegistry resolve static m)
     ]
   where
     (bs, es) = suite 0 (mbody m)
@@ -64,6 +66,21 @@ witnessStats env stage m = object
     witness n = S.member n known || case lookupQ n of
         Just NExt{} -> True
         _ -> False
+    -- Preserve selected implementation names. Qualified constructor references
+    -- are already resolved by reconstruction; unknown calls stay conservative.
+    resolve n | witness n = Just (canonicalName n)
+              | otherwise = Nothing
+    -- Primitive/generated constructors need not have an interface entry. Keep
+    -- this lookup total, including the bootstrap builtin environment.
+    canonicalName q@(NoQ n) = case lookupName n env of
+        Just (NAlias target) -> target
+        _ -> maybe q (\mn -> GName mn n) (thismod env)
+    canonicalName (QName mn n) = case lookupModuleInfo mn env of
+        Just mi -> case moduleLookupName mi n of
+            Just (NAlias target) -> target
+            _ -> GName (moduleName mi) n
+        Nothing -> GName mn n
+    canonicalName q = q
     headName (TApp _ e _) = headName e
     headName (Var _ n) = Just n
     headName (Paren _ e) = headName e
