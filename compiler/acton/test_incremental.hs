@@ -15,7 +15,7 @@ import qualified Acton.Fingerprint as Fingerprint
 import qualified Crypto.Hash.SHA256 as SHA256
 import           Data.Function (on)
 import           Data.IORef (IORef, atomicModifyIORef', newIORef)
-import           Data.List (elemIndex, find, groupBy, intercalate, isPrefixOf, partition, sort, sortOn)
+import           Data.List (elemIndex, find, groupBy, intercalate, isInfixOf, isPrefixOf, partition, sort, sortOn)
 import qualified Data.Map.Strict as M
 import           Data.Maybe (isJust)
 import           System.Directory
@@ -253,13 +253,18 @@ withBackgroundCompilerLockHeld proj =
   Project.withBackgroundCompilerLock proj
     (assertFailure ("failed to acquire .acton.compile.lock in " ++ proj))
 
+-- | The name and fingerprint lines that start the Build.act of the project
+-- 'name'.
+buildActHeader :: String -> [T.Text]
+buildActHeader name =
+  [ T.pack ("name = \"" ++ name ++ "\"")
+  , T.pack ("fingerprint = " ++ fingerprintForName name)
+  ]
+
 -- | Write a Build.act file with optional path deps.
 writeBuildAct :: FilePath -> String -> [(String, FilePath)] -> IO ()
 writeBuildAct proj name deps = do
-  let header = [ T.pack ("name = \"" ++ name ++ "\"")
-               , T.pack ("fingerprint = " ++ fingerprintForName name)
-               ]
-      depLines
+  let depLines
         | null deps = []
         | otherwise =
             [ ""
@@ -270,7 +275,7 @@ writeBuildAct proj name deps = do
             ] ++
             [ "}"
             ]
-  writeFileUtf8 (proj </> "Build.act") (T.unlines (header ++ depLines))
+  writeFileUtf8 (proj </> "Build.act") (T.unlines (buildActHeader name ++ depLines))
 
 -- | Create a dependency project under deps/.
 ensureDepProject :: FilePath -> String -> IO FilePath
@@ -3060,6 +3065,36 @@ p59_full_build_keeps_nested_module_binary =
     assertArtifactsGone [binSub]
     assertArtifactsExist [binMain]
 
+p60_plan_after_failed_fetch_fetches_again :: TestTree
+p60_plan_after_failed_fetch_fetches_again =
+  testCase "60-plan after a failed fetch fetches again" $ withSystemTempDirectory "failed-fetch" $ \tmp -> do
+    proj <- canonicalizePath tmp
+    let actMain = proj </> "src" </> "main.act"
+        fetchError = "Zig dependency remote is missing hash" :: String
+        -- The fetch of a zig dependency without a hash fails before it
+        -- reaches the network, and planning reads no zig dependency, so
+        -- only the fetch can fail a plan.
+        buildAct = T.unlines $ buildActHeader "failed_fetch" ++
+          [ ""
+          , "zig_dependencies = {"
+          , "  \"remote\": (url=\"https://example.invalid/remote.tar.gz\")"
+          , "}"
+          ]
+    createDirectoryIfMissing True (proj </> "src")
+    writeFileUtf8 (proj </> "Build.act") buildAct
+    writeFileUtf8 actMain "x = 1\n"
+    sched <- Compile.newCompileScheduler quietGlobalOptions
+    -- Build.act is the same for both plans, so the second plan fetches
+    -- only because the first fetch did not complete.
+    forM_ ["first", "second" :: String] $ \which -> do
+      res <- E.try (planBuild quietGlobalOptions sched C.defaultCompileOptions
+                      (Compile.PlanRequest [actMain] Compile.SelectedFiles (Just [actMain])))
+      case res of
+        Left (Project.ProjectError msg) ->
+          assertBool ("expected the " ++ which ++ " plan to fail in the fetch, got: " ++ msg)
+            (fetchError `isInfixOf` msg)
+        Right _ -> assertFailure ("expected the " ++ which ++ " plan to fetch and fail")
+
 -- Compile events -------------------------------------------------------------
 
 -- | The events the compiler library reports while it rebuilds a small module
@@ -3405,4 +3440,5 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
       , p58_full_build_drops_undeclared_root_stub
       , p59_full_build_keeps_nested_module_binary
       ]
+  , testGroup "incremental-fetch-cases" [ p60_plan_after_failed_fetch_fetches_again ]
   ]

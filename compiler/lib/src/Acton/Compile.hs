@@ -34,16 +34,16 @@ Plan
 
 prepareCompileContext finds the paths of the file that roots a build and
 makes the --dep overrides absolute.  prepareCompilePlan fetches the
-dependencies on a scheduler's first plan and whenever Build.act changed
-since its previous plan.  It discovers the projects (buildProjects) and
-prunes the outputs of their deleted sources, so that a cached header
-cannot bring a deleted module back.  It then discovers their modules
-(buildGlobalTasks) and selects the modules to compile (selectPlan): the
-requested modules with everything they import or, for an incremental
-plan, the modules that the changed files affect.  A declared build
-library is compiled whole.  The LSP server plans an edit of a project it
-already discovered by reading the edited module again (readModuleTask)
-and selecting from the modules it keeps.
+dependencies unless the scheduler's last completed fetch was of the same
+Build.act.  It discovers the projects (buildProjects) and prunes the
+outputs of their deleted sources, so that a cached header cannot bring a
+deleted module back.  It then discovers their modules (buildGlobalTasks)
+and selects the modules to compile (selectPlan): the requested modules
+with everything they import or, for an incremental plan, the modules
+that the changed files affect.  A declared build library is compiled
+whole.  The LSP server plans an edit of a project it already discovered
+by reading the edited module again (readModuleTask) and selecting from
+the modules it keeps.
 
 Discovery starts from the requested modules, or from every module when the
 selection may need any of them, and goes breadth first.  It reads each
@@ -680,7 +680,7 @@ data CompileScheduler = CompileScheduler
   { schedulerCounter   :: IORef Int                     -- the newest generation
   , schedulerRun       :: MVar (Maybe (Async ()))       -- the newest generation's run
   , schedulerBackQueue :: BackQueue
-  , schedulerBuildSpec :: IORef (Maybe BuildSpecStamp)  -- Build.act at the last plan
+  , schedulerBuildSpec :: IORef (Maybe BuildSpecStamp)  -- Build.act at the last completed fetch
   , schedulerCache     :: ModuleCache
   }
 
@@ -905,7 +905,7 @@ data PlanRequest = PlanRequest
 
 data CompilePlan = CompilePlan
   { cpContext     :: CompileContext
-  , cpRequest     :: PlanRequest              -- as planned: a Build.act change drops requestChanged
+  , cpRequest     :: PlanRequest              -- as planned: a plan that fetches drops requestChanged
   , cpProjMap     :: M.Map FilePath ProjCtx
   , cpGlobalTasks :: [GlobalTask]             -- every discovered module, in discovery order
   , cpNeededTasks :: [GlobalTask]             -- the modules to compile, closed under imports, in discovery order
@@ -915,14 +915,19 @@ data CompilePlan = CompilePlan
   , cpSourceSizes :: M.Map TaskKey Integer    -- each needed module's source size, 0 when missing
   }
 
--- | Plan a build.  A scheduler's first plan, and any plan after Build.act
--- changed, fetches dependencies and plans in full: the request's changed
--- paths are dropped.  The stamp is recorded before fetching.
+-- | Plan a build.  A plan fetches dependencies and plans in full (the
+-- request's changed paths are dropped) unless the scheduler's last
+-- completed fetch was of the same Build.act.  The stamp is recorded once
+-- the fetch completes, so the next plan fetches again after a fetch that
+-- failed or was cancelled.  The plans of one scheduler never overlap:
+-- startCompile awaits the cancelled run before it starts the next, and a
+-- one-shot build plans once.
 prepareCompilePlan :: Source.SourceProvider -> C.GlobalOptions -> CompileScheduler -> CompileContext -> PlanRequest -> IO CompilePlan
 prepareCompilePlan sp gopts sched ctx request = do
-    specChanged <- atomicModifyIORef' (schedulerBuildSpec sched) (\previous -> (stamp, previous /= stamp))
-    when specChanged $
+    specChanged <- (/= stamp) <$> readIORef (schedulerBuildSpec sched)
+    when specChanged $ do
       fetchDependencies gopts (ccPathsRoot ctx) (C.dep_overrides (ccOpts ctx))
+      writeIORef (schedulerBuildSpec sched) stamp
     planFetched sp gopts ctx (if specChanged then request { requestChanged = Nothing } else request)
   where
     stamp = Just (ccBuildStamp ctx)

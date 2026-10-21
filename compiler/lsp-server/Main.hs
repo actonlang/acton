@@ -134,7 +134,7 @@ projectWatchersRef = unsafePerformIO (newIORef HM.empty)
 -- cache and one Build.act stamp.  So two checkouts of one project read
 -- each other's remembered hashes, and a fresh plan of one root fetches
 -- the dependencies again and plans in full after a plan of another root
--- whose Build.act has a different modification time.
+-- that completed a fetch of a Build.act with a different modification time.
 compileScheduler :: Compile.CompileScheduler
 compileScheduler = unsafePerformIO (Compile.newCompileScheduler lspGlobalOpts)
 
