@@ -2945,7 +2945,7 @@ data Run = Run
 
 -- | The coordinator's state between two stage completions.
 data BuildState = BuildState
-  { readyStages       :: [StageKey]                                     -- startable, in the order they became so
+  { readyStages       :: [StageKey]                                     -- startable; equal priorities in the order they became startable, ties in stage order
   , runningStages     :: [(Async StageOutcome, StageKey)]               -- the last batch started first, each batch in start order
   , pendingStages     :: Data.Set.Set StageKey                          -- not completed, running ones included
   , prerequisitesLeft :: M.Map StageKey Int                             -- per stage: its prerequisites not completed
@@ -3124,7 +3124,7 @@ startReady run state = do
     (now, later)                = splitAt (runJobs run - length (runningStages state)) (Data.List.sortOn (Down . priority) (readyStages state))
     priority (FrontStage k)     = (1 :: Int, weight k)
     priority (ParseStage k)     = (0, weight k)
-    weight k                    = M.findWithDefault 0 k (runWeights run)
+    weight k                    = runWeights run M.! k
     stageStarted (ParseStage k) = ParseStarted (taskOf run k)
     stageStarted (FrontStage k) = FrontStarted (taskOf run k)
     runStage (ParseStage k)     = uncurry (ParseDone k) <$> parseStage (runBuild run) (optionsFor (runContext run) k) (taskOf run k)
