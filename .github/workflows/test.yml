@@ -970,7 +970,7 @@ jobs:
     needs: build-debs
     uses: "./.github/workflows/test-app.yml"
     with:
-      repo_url: "orchestron-orchestrator/sorespo"
+      repo_url: "stratoweave/sorespo"
       ref: "main"
       arch: ${{ matrix.arch }}
 
@@ -984,13 +984,13 @@ jobs:
     needs: build-debs
     uses: "./.github/workflows/test-app.yml"
     with:
-      repo_url: "orchestron-orchestrator/netcli"
+      repo_url: "stratoweave/netcli"
 
   test-app-netclics:
     needs: build-debs
     uses: "./.github/workflows/test-app.yml"
     with:
-      repo_url: "orchestron-orchestrator/netclics"
+      repo_url: "stratoweave/netclics"
 
   test-app-snappy:
     needs: build-debs
@@ -1014,37 +1014,37 @@ jobs:
     needs: build-debs
     uses: "./.github/workflows/test-app.yml"
     with:
-      repo_url: "orchestron-orchestrator/acton-yang"
+      repo_url: "stratoweave/acton-yang"
 
   test-app-actmf:
     needs: build-debs
     uses: "./.github/workflows/test-app.yml"
     with:
-      repo_url: "orchestron-orchestrator/actmf"
+      repo_url: "stratoweave/actmf"
 
   test-app-gnmi:
     needs: build-debs
     uses: "./.github/workflows/test-app.yml"
     with:
-      repo_url: "orchestron-orchestrator/acton-gnmi"
+      repo_url: "stratoweave/acton-gnmi"
 
   test-app-actxcrypt:
     needs: build-debs
     uses: "./.github/workflows/test-app.yml"
     with:
-      repo_url: "orchestron-orchestrator/actxcrypt"
+      repo_url: "stratoweave/actxcrypt"
 
   test-app-orchino:
     needs: build-debs
     uses: "./.github/workflows/test-app.yml"
     with:
-      repo_url: "orchestron-orchestrator/orchino"
+      repo_url: "stratoweave/orchino"
 
   test-app-lmdb:
     needs: build-debs
     uses: "./.github/workflows/test-app.yml"
     with:
-      repo_url: "orchestron-orchestrator/acton-lmdb"
+      repo_url: "stratoweave/acton-lmdb"
 
   test-app-zlib:
     needs: build-debs
