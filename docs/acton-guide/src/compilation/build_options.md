@@ -88,7 +88,7 @@ its section below describes:
 | A new thread uses its own free lists [without a warm-up](#gc-thread-local-warm-up) | `"gc_no_thread_local_warmup": "false"` | `GC_NO_THREAD_LOCAL_WARMUP=0` |
 | A refill of a thread's free list takes [up to 16 heap blocks](#gc-thread-local-refills) under the allocator lock instead of one | `"gc_thread_local_refill_blocks": "1"` | `GC_TL_REFILL_MAX=1` |
 | The global mark stack [starts with 4194304 entries](#initial-size), 1048576 on Windows, instead of 16384 with the default blocks | `"gc_initial_mark_stack_size": "0"` | not possible |
-| A collection starts after the program has allocated [as much as the live data](#gc-allocation-budget), pointer-free data included | `"gc_alloc_budget_percent": "0"` | `GC_ALLOC_BUDGET_PERCENT=0` |
+| A collection starts after the program has allocated [twice the live data](#gc-allocation-budget), pointer-free data included | `"gc_alloc_budget_percent": "0"` | `GC_ALLOC_BUDGET_PERCENT=0` |
 | One automatic heap expansion may add up to [a quarter of the heap](#gc-heap-growth) instead of 16 MiB | `"gc_heap_growth_divisor": "0"` | `GC_HEAP_GROWTH_DIVISOR=0` |
 | The heap is managed in [blocks of 16 KiB](#gc-heap-block-size) instead of 4 KiB | `"gc_block_size": "4096"` | not possible |
 | Threads allocate objects of up to [2048 bytes](#gc-thread-local-allocation-size) from their own free lists, instead of 384 | `"gc_thread_local_size_limit": "0"` | not possible |
@@ -250,54 +250,70 @@ whose live data is mostly strings, byte buffers or numbers therefore collects
 often compared with its heap size: pointer-free data counts an eighth as much as
 pointer-containing data. The allocation budget instead makes the amount a
 percentage of all live data and roots, like Go's `GOGC`. Acton uses a budget of
-100% by default, and the build setting changes it:
+200% by default, and the build setting changes it:
 
 ```python
 build_options = {
-    "gc_alloc_budget_percent": "200",
+    "gc_alloc_budget_percent": "100",
 }
 ```
 
-With 100%, a collection starts after the program has allocated as much as
-survived the previous collection, so the heap settles at about twice the live
-data. Larger values collect less often and use more memory, smaller values
-collect more often and use less. Pointer-free data, such as the contents of
-strings and byte buffers, counts like other data instead of an eighth as much.
-In incremental and generational mode the amount is halved, as with the default
-policy.
+With 200%, the collector collects rather than grow the heap once the program has
+allocated twice as much as survived the previous collection, so the heap holds
+about three times the live data or more. Larger values collect less often and
+use more memory, smaller values collect more often and use less. Pointer-free
+data, such as the contents of strings and byte buffers, counts like other data
+instead of an eighth as much. In incremental and generational mode the amount is
+halved, as with the default policy.
 
-The budget is an upper bound. The heap still grows in steps set by the free
-space divisor and `gc_heap_growth_divisor`, and the collector collects before
-it grows the heap a second time since the previous collection. When the budget
-exceeds the free heap plus one growth step, collections therefore come
-earlier.
+The budget does not fix when collections come. A collection comes only when
+the allocator needs heap blocks that it does not have free. The collector then
+collects if the program has allocated the budget since the previous collection
+or if the heap has already grown once since then, and otherwise grows the heap
+by one step (see `gc_heap_growth_divisor`). While the live data grows,
+collections therefore follow the growth steps and come before the budget is
+used. With steady live data the heap settles at the first step whose free part
+covers the budget, so peak memory changes in steps of a quarter of the heap. A
+heap that grew larger earlier, for example while the program built its data,
+keeps its size, and a budget below its free part changes nothing.
 
-Compared with 67%, which collects as often as the free space divisor policy
-when the live data is all pointer-containing, 100% gave these medians of 12
-interleaved rounds on an Apple M4 Pro, with 4 KiB blocks, the heap growth
-divisor at 4 and all 14 markers in every mark phase:
+Compared with 100%, 200% gave these medians of interleaved rounds, on an AMD
+Ryzen 9 5950X running Linux with 16 markers and mark bits (8 rounds), and on
+an Apple M6 with 4 worker threads, 4 markers and mark bytes (12 rounds):
 
-| Workload | CPU | Wall | Peak memory |
-|---|---|---|---|
-| Fleet manager, 50,000 devices | -11% | -8% | +23% |
-| GC heap updates, a million records | -28% | -12% | +25% |
-| GC heap build, 4 million records | -16% | -4% | +25% |
-| GC heap cold inventory, 14,000 records | -31% | -15% | +25% |
-| Fleet load, 50,000 devices | -3% | -2% | +0% |
-| Actor message passing, 8 workers | -1% | -4% | +11% |
+| Workload | Machine | CPU | Wall | Peak memory |
+|---|---|---|---|---|
+| Fleet manager, 10,000 devices | Ryzen | -29% | -19% | +51% |
+| Fleet manager, 50,000 devices | Ryzen | -28% | -14% | +25% |
+| GC heap cold inventory, a million records | Ryzen | -30% | -8% | +25% |
+| GC heap build, 4 million records | Ryzen | -21% | +1% | +56% |
+| Fleet load, 10,000 devices, 16 workers | Ryzen | -5% | -5% | +25% |
+| GC heap updates, a million records | M6 | -23% | -12% | +56% |
+| GC heap cold inventory, a million records | M6 | -18% | -8% | +56% |
+| Fleet load, 10,000 devices, 4 workers | M6 | -8% | -8% | +25% |
+| Binary trees | M6 | 0% | 0% | 0% |
+| Merkle trees | M6 | +1% | +1% | 0% |
 
-Fleet load with 400 and with 10,000 devices did not change, and fleet upgrade
-(480 devices) used 2% more CPU time. With the same settings, 200% against 100%
-saved the fleet manager another 15% CPU time and 9% wall time, and its peak
-memory grew from 6.7 to 10.3 GiB.
+The binary and merkle trees benchmarks keep the heap they grow at start-up,
+whose free part already exceeds the budget. Against 200%, 300% saved the fleet
+manager another 15 and 14% CPU time for 24 and 25% more peak memory, and the
+GC heap cold inventory on the Ryzen 23% for 56%. The other workloads saved at
+most 7% for 25% more peak memory, and the GC heap build none. 150% gave 44% to
+all of the CPU saving of 200% for at most 25% more peak memory than 100%.
+
+A program short of memory can lower the budget, in `build_options` as above
+or, without a rebuild, with the `GC_ALLOC_BUDGET_PERCENT` environment variable
+when it starts, for example `GC_ALLOC_BUDGET_PERCENT=100`. In the eight
+workloads above whose heap the budget changed, 100% peaked at 0.64 to 0.80
+times the memory of 200% for 1.06 to 1.43 times the CPU time, and 67% at 0.51
+to 0.78 times the memory for 1.12 to 2.05 times the CPU time.
 
 `"0"` selects the free space divisor policy. The `GC_ALLOC_BUDGET_PERCENT`
 environment variable overrides the build setting when the program starts; `0`
-there selects the free space divisor policy. Under either
-policy, `GC_MIN_BYTES_ALLOCD` sets the smallest amount allocated between
-collections, in bytes with an optional `K`, `M` or `G` suffix. This is a build
-setting shared by the application and its dependencies, including database
-support.
+there selects the free space divisor policy. Under either policy,
+`GC_MIN_BYTES_ALLOCD` sets the smallest amount allocated between collections,
+in bytes with an optional `K`, `M` or `G` suffix. This is a build setting
+shared by the application and its dependencies, including database support.
 
 ## GC heap block size
 
