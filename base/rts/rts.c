@@ -1428,18 +1428,23 @@ $ROW extract_row($WORD *blob, size_t blob_size) {
 }
 
 void print_rows($ROW row) {
+#ifdef DEV
+    if (!rts_debug)
+        return;
     int n = 0;
     while (row) {
         char b[1024];
-        int len = 0;
-        for (int i = 0; i < row->blob_size; i++)
-            len += sprintf(b+len, "%ld ", (long)row->blob[i]);
-        sprintf(b+len, ".");
+        size_t len = 0;
+        for (int i = 0; i < row->blob_size && len < sizeof(b); i++)
+            len += snprintf(b+len, sizeof(b)-len, "%" PRId64 " ", (int64_t)(intptr_t)row->blob[i]);
+        if (len < sizeof(b))
+            snprintf(b+len, sizeof(b)-len, ".");
 
-        rtsd_printf("--- %2d: class_id %6d, blob_size: %3d, blob: %s", n, row->class_id, row->blob_size, b);
+        log_debug("--- %2d: class_id %6d, blob_size: %3d, blob: %s", n, row->class_id, row->blob_size, b);
         n++;
         row = row->next;
     }
+#endif
 }
 
 void print_msg(B_Msg m) {
@@ -1649,12 +1654,17 @@ void insert_row(int64_t key, size_t total, $ROW row, $WORD table, uuid_t *txnid)
     }
     BlobHd *end = (BlobHd*)p;
 
-    char b[1024];
-    int len = 0;
-    for (int i = 0; i < total; i++)
-        len += sprintf(b+len, "%lu ", (unsigned long)blob[i]);
-    sprintf(b+len, ".");
-    rtsd_printf("## Built blob, size: %ld, blob: %s", total, b);
+#ifdef DEV
+    if (rts_debug) {
+        char b[1024];
+        size_t len = 0;
+        for (size_t i = 0; i < total && len < sizeof(b); i++)
+            len += snprintf(b+len, sizeof(b)-len, "%" PRIu64 " ", (uint64_t)(uintptr_t)blob[i]);
+        if (len < sizeof(b))
+            snprintf(b+len, sizeof(b)-len, ".");
+        log_debug("## Built blob, size: %ld, blob: %s", total, b);
+    }
+#endif
 
     //printf("\n## Sanity check extract row:\n");
     //$ROW row1 = extract_row(blob, total*sizeof($WORD));
