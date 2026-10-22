@@ -569,6 +569,8 @@ $R linesQ_mainD_myprocG_local(linesQ_main self, $Cont C_cont, int64_t i);
 $R linesQ_mainD_nopG_local(linesQ_main self, $Cont C_cont);
 B_Msg linesQ_mainD_myproc(linesQ_main self, int64_t i);
 B_Msg linesQ_mainD_nop(linesQ_main self);
+extern B_OrdD_int linesQ_W_1module;
 extern B_Eq linesQ_W_Apa_1097;
+extern $EqOpt linesQ_W_2module;
 extern B_Eq linesQ_W_Apa_759;
 void linesQ___init__ ();

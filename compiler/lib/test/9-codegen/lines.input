@@ -1,6 +1,10 @@
-W_Apa_1097: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
+W_1module: __builtin__.OrdD_int = __builtin__.OrdD_int()
 
-W_Apa_759: __builtin__.Eq[?__builtin__.int] = $EqOpt@[__builtin__.int](W_Apa_1097)
+W_Apa_1097: __builtin__.Eq[__builtin__.int] = lines.W_1module
+
+W_2module: $EqOpt[__builtin__.int] = $EqOpt@[__builtin__.int](lines.W_1module)
+
+W_Apa_759: __builtin__.Eq[?__builtin__.int] = lines.W_2module
 
 # recursive group:
 proc def L_1C_1cont (self : Apa, C_cont : $Cont[None], C_2res : None) -> $R:

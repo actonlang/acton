@@ -71,6 +71,73 @@ procedures split into several generated continuation functions are subject to
 the same function boundary. More ambitious placement needs further work on
 initialization order, lifetime and serialization policy.
 
+## Sharing closed witnesses across functions
+
+Stage 5 adds `Acton.WitnessPooling`, after local sharing at the end of boxing.
+It builds one module registry and materializes eligible closed recipes once,
+in dependency order. Uses in different functions, actor continuations and
+ordinary user-class initializers then refer to the same typed global pointer.
+A single function site also benefits: repeated invocations no longer construct
+that witness. Parameter-dependent recipes remain activation-dependent.
+
+For example, schematically:
+
+```text
+# Before
+f(...): use(make_list_eq(make_entry_eq()), ...)
+g(...): use(make_list_eq(make_entry_eq()), ...)
+
+# After: module initialization
+entry_eq = make_entry_eq()
+list_eq = make_list_eq(entry_eq)
+
+f(...): use(module.list_eq, ...)
+g(...): use(module.list_eq, ...)
+```
+
+These are ordinary witness objects created with their existing constructors,
+not new C layouts or descriptor-based instances. They live for the module's
+lifetime. Existing builtin static objects are reused through their exact
+static-object expressions, including specialized builtin variants. A pool
+pointer keeps its concrete constructor type so embedded super-witness fields
+remain accessible; older protocol-typed globals remain aliases with their
+original names and types. Qualified references prevent parameter shadowing.
+
+Initialization uses the existing module initializer: imported modules first,
+then local method tables and serialization registration, then the witness DAG,
+then ordinary module-global assignments. Cyclic imports are rejected by the
+compiler. The DAG includes witness globals read by local witness initializers
+and their parent initializers, not merely explicit constructor arguments.
+Unknown ordinary-global reads, missing or opaque initializer bodies and cycles reject
+promotion. Existing witness initializers retain their constructor calls so
+pool construction cannot accidentally recurse through its own entries.
+
+Class-table expressions can call functions before the pool exists, so functions
+in modules with such expressions keep their existing construction sites. C
+extension hooks run earlier still. There, a function construction is promoted
+only when its expression already calls an ordinary local witness constructor:
+that allocator requires the local table's initialized `__init__` slot, so a
+valid early hook could not evaluate the original call either. Imported
+constructors and closure allocators do not establish that prerequisite and
+remain local in this context. Module-global witnesses can still be shared.
+
+Arguments discarded by builtin static-witness selection are not extracted or
+allocated. Code generation follows both local and module witness aliases when
+recognizing builtin iterators, preserving their stack allocation.
+
+Serialization continues to walk ordinary witness fields and method tables.
+Deserialization may create an equivalent copy; witness identity is unobservable.
+No singleton-reference wire format, lazy getter, lock or runtime cache is added.
+RTS startup already allocates module constants before switching to the GC
+allocator. The new constants have a bounded startup cost; a low allocation
+counter inside a hot loop does not mean startup allocated nothing.
+
+The registry is module-local: equivalent user witnesses in different modules
+can still have separate objects. Constructor initializers, early initialization
+contexts, ambiguous occurrences and unsupported descriptions account for
+remaining sites. Pooling can also leave local witness assignments unused;
+removing those is a further cleanup opportunity, separate from placement.
+
 ## Collecting statistics
 
 Run a complete compiler pass over the desired corpus:
@@ -126,10 +193,11 @@ have no runtime effect if boxing already removes those constructions.
 
 ## Module-wide description graph
 
-Stage 3 adds the module-wide diagnostic graph in `Acton.WitnessRegistry`.
-The full module graph is built only by `--witness-stats`; the graph itself does
-not rewrite allocations. Stage 4 uses its function-local builder during normal
-compilation to support the placement pass described above.
+`Acton.WitnessRegistry` supplies descriptions for both optimization and
+diagnostics. Stage 4 uses its function-local builder; stage 5 consumes the
+module graph during normal compilation. `--witness-stats` additionally builds
+and reports graphs at all three diagnostic stages. The registry itself
+describes recipes; the placement passes decide where objects are constructed.
 
 Each recipe records its selected implementation, canonical dependency IDs,
 captured bindings and dependency lifetime. Explicit constructor type arguments
@@ -170,7 +238,8 @@ Version 1 statistics now optionally include a `registry` object:
 | `constructor_recipes`, `constructor_sites` | Canonical constructor descriptions and original construction sites, respectively |
 | `constructor_recipes_by_lifetime`, `constructor_sites_by_lifetime` | Those counts split by dependency lifetime |
 | `nonstatic_sites_by_lifetime`, `nonstatic_recipes_by_lifetime` | Construction sites outside existing static-witness rules, and their distinct descriptions |
-| `nonstatic_recipe_scope_pairs_by_lifetime` | Distinct (recipe, execution scope) pairs outside static-witness rules; helps separate repetition within functions from repetition across functions |
+| `nonstatic_recipe_scope_pairs_by_lifetime` | Distinct (recipe, execution scope) pairs outside static-witness rules; scopes include module initialization, declarations and lambdas |
+| `nonstatic_module_sites_by_lifetime`, `nonstatic_module_recipes_by_lifetime` | Nonstatic sites and distinct descriptions in module initialization (scope 0); subtract these explicitly when counting repetition outside the module initializer |
 | `nonstatic_loop_sites_by_lifetime` | Nonstatic construction sites within loops in their execution context |
 | `nonstatic_closed_constructors` | Closed, nonstatic sites grouped by selected implementation |
 
@@ -182,9 +251,9 @@ A shared description is not a shared allocation. In particular, `closed` does
 not establish that eager module initialization is legal, that a binding
 already dominates a use, or that its initialization/serialization dependencies
 are ready. Even a parameter-dependent description captured by two functions
-still needs a placement decision. Stage 4 makes a conservative decision within
-each generated function. Singleton initialization, broader code motion and
-integration with escape analysis remain subsequent work.
+still needs a placement decision. Stage 4 chooses local placements and stage 5
+initializes eligible closed witnesses at module scope. Broader local placement,
+sharing between modules and integration with escape analysis remain future work.
 
 ## Repeatable performance cases
 

@@ -4,7 +4,9 @@
 
 -- Reuse witnesses inside one generated function. Run after boxing's dead
 -- witness removal, so an unused equation cannot become an eager allocation.
-module Acton.WitnessSharing (shareWitnesses, shareFunction, constructorHeads) where
+module Acton.WitnessSharing
+    ( shareWitnesses, shareFunction, constructorHeads, witnessConstructors
+    , walkStmt, walkExpr, constructorCall ) where
 
 import Control.Monad (forM)
 import Control.Monad.State.Strict
@@ -50,6 +52,16 @@ constructorHeads = S.fromList . concatMap collect
 shareWitnesses :: Env0 -> S.Set QName -> (Expr -> Bool) -> Module -> Module
 shareWitnesses env known isStatic m = m{mbody = map top (mbody m)}
   where
+    info q = M.lookup q (witnessConstructors env known m)
+    top (Decl l ds) = Decl l (map decl ds)
+    top s = s
+    decl d@Def{} = shareFunction info isStatic d
+    decl d@Class{} = d{dbody = map top (dbody d)}
+    decl d = d
+
+witnessConstructors :: Env0 -> S.Set QName -> Module -> M.Map QName (QName,Int)
+witnessConstructors env known m = constructors
+  where
     env1 = define (envOf $ mbody m) (setMod (modname m) env)
     constructors = M.fromList $ concatMap entry (S.toList known)
     entry q = case lookupQ S.empty q of
@@ -66,12 +78,6 @@ shareWitnesses env known isStatic m = m{mbody = map top (mbody m)}
       mi <- lookupModuleInfo (mname q) env1
       ni <- moduleLookupName mi (noq q)
       return (GName (moduleName mi) (noq q),ni)
-    info q = M.lookup q constructors
-    top (Decl l ds) = Decl l (map decl ds)
-    top s = s
-    decl d@Def{} = shareFunction info isStatic d
-    decl d@Class{} = d{dbody = map top (dbody d)}
-    decl d = d
 
 -- A plan uses exact original expressions to connect registry sites to the AST.
 -- Ambiguous expressions (the same spelling referring to different bindings)
@@ -132,7 +138,7 @@ shareFunction info isStatic d@Def{}
     names = S.fromList (free d ++ bound (pos d) ++ bound (kwd d) ++
                        [n | QBind (TV _ n) _ <- qbinds d] ++ map R.bindingName (R.registryBindings registry))
     initial = Sharing IM.empty [] 0 names [] M.empty
-    (body,done) = runState (rewriteSuite plans True (dbody d)) initial
+    (body,done) = runState (rewriteSuite plans isStatic True (dbody d)) initial
     retained = M.keysSet $ M.filter (> 1) (references done)
     made = S.fromList [n | (n,_,_) <- definitions done]
     singles = foldl' expand M.empty (reverse $ definitions done)
@@ -191,28 +197,29 @@ region action = do
     modify $ \s -> s{available = available outer, prefixRev = prefixRev outer}
     return result
 
-rewriteSuite :: Plans -> Bool -> Suite -> Rewrite Suite
-rewriteSuite _ _ [] = return []
-rewriteSuite plans strict (s:ss) = do
-    s' <- rewriteStmt plans strict s
+rewriteSuite :: Plans -> (Expr -> Bool) -> Bool -> Suite -> Rewrite Suite
+rewriteSuite _ _ _ [] = return []
+rewriteSuite plans isStatic strict (s:ss) = do
+    s' <- rewriteStmt plans isStatic strict s
     pre <- gets (reverse . prefixRev)
     modify $ \a -> a{prefixRev = []}
-    ss' <- rewriteSuite plans strict ss
+    ss' <- rewriteSuite plans isStatic strict ss
     return (pre ++ s':ss')
 
-rewriteStmt :: Plans -> Bool -> Stmt -> Rewrite Stmt
-rewriteStmt plans strict (If l bs els) = do
+rewriteStmt :: Plans -> (Expr -> Bool) -> Bool -> Stmt -> Rewrite Stmt
+rewriteStmt plans isStatic strict (If l bs els) = do
     bs' <- forM (zip [0::Int ..] bs) $ \(i,Branch e b) -> do
-        e' <- rewriteExpr plans (strict && i == 0) e
-        b' <- region (rewriteSuite plans strict b)
+        e' <- rewriteExpr plans isStatic (strict && i == 0) e
+        b' <- region (rewriteSuite plans isStatic strict b)
         return (Branch e' b')
-    els' <- region (rewriteSuite plans strict els)
+    els' <- region (rewriteSuite plans isStatic strict els)
     return (If l bs' els')
-rewriteStmt plans strict s = walkStmt (rewriteExpr plans strict)
-                                        (region . rewriteSuite plans strict) s
+rewriteStmt plans isStatic strict s = walkStmt (rewriteExpr plans isStatic strict)
+                                        (region . rewriteSuite plans isStatic strict) s
 
-rewriteExpr :: Plans -> Bool -> Expr -> Rewrite Expr
-rewriteExpr plans strict e = case lookupPlan plans e of
+rewriteExpr :: Plans -> (Expr -> Bool) -> Bool -> Expr -> Rewrite Expr
+rewriteExpr _ isStatic _ e | isStatic e = return e
+rewriteExpr plans isStatic strict e = case lookupPlan plans e of
     Just p -> do
         old <- gets (IM.lookup (planRecipe p) . available)
         case old of
@@ -221,15 +228,15 @@ rewriteExpr plans strict e = case lookupPlan plans e of
           _ -> rebuild
     Nothing -> rebuild
   where
-    visit = rewriteExpr plans strict
-    conditional = rewriteExpr plans False
+    visit = rewriteExpr plans isStatic strict
+    conditional = rewriteExpr plans isStatic False
     rebuild = case e of
       Cond l a c b -> do c' <- visit c; a' <- conditional a; b' <- conditional b; return (Cond l a' c' b')
       BinOp l a op b | op == And || op == Or -> BinOp l <$> visit a <*> pure op <*> conditional b
       -- A Let can shadow names without introducing a registry execution scope.
       -- Leave it intact rather than applying an outer expression index there.
       Let{} -> return e
-      _ -> walkExpr visit (region . rewriteSuite plans False) e
+      _ -> walkExpr visit (region . rewriteSuite plans isStatic False) e
 
 replace :: M.Map Name Expr -> Expr -> Expr
 replace replacements e@(Var _ (NoQ n)) = M.findWithDefault e n replacements

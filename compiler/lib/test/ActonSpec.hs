@@ -10,6 +10,7 @@ import qualified Acton.Parser as P
 import qualified Acton.Syntax as S
 import qualified Acton.Builtin as Builtin
 import qualified Acton.NameInfo as I
+import qualified Acton.Names as Names
 import qualified Acton.Printer as AP
 import qualified Acton.DocPrinter as DocP
 import qualified Acton.Env
@@ -37,6 +38,7 @@ import qualified Acton.WitnessKey as WitnessKey
 import qualified Acton.WitnessStats as WitnessStats
 import qualified Acton.WitnessRegistry as Registry
 import qualified Acton.WitnessSharing as Sharing
+import qualified Acton.WitnessPooling as Pooling
 import qualified Data.IntMap.Strict as IM
 import qualified InterfaceFiles
 import Pretty (print, prettyText)
@@ -495,6 +497,10 @@ main = do
                         [S.Handler (S.ExceptAll NoLoc) [emit (call [ctor [],ctor []])]] []
                         [emit (call [ctor [],ctor []])]]
         count (optimize d) `shouldBe` 3
+      it "does not allocate arguments discarded by a static witness" $ do
+        let static e = case Sharing.constructorCall e of Just (n,_) -> n == other; _ -> False
+            d = plain [emit (S.eCall (S.eQVar other) [ctor [],ctor []])]
+        Sharing.shareFunction info static d `shouldBe` d
       it "handles thousands of unsupported constructor arguments conservatively" $ do
         let d = plain [emit (ctor [S.Async NoLoc (S.eInt (fromIntegral i))]) | i <- [1..4000::Int]]
         optimize d `shouldBe` d
@@ -507,6 +513,150 @@ main = do
             after = Sharing.shareFunction info' (const False) d
             rs = Registry.buildFunctionRegistry (fmap fst . info') (const False) after
         length (Registry.registrySites rs) `shouldBe` 2
+
+    describe "Module-wide witness placement" $ do
+      let mn = S.modName ["pool_fixture"]
+          q = S.qName ["pool_impl"] "Ctor"
+          other = S.qName ["pool_impl"] "Other"
+          info = M.fromList [(q,(q,0)),(other,(other,0))]
+          ctor = S.eCall (S.eQVar q)
+          wt = S.tCon (S.TC q [])
+          w i = S.Internal S.Witness "global" i
+          emit x = S.Expr NoLoc x
+          bind i e = S.Assign NoLoc [S.pVar (w i) wt] e
+          fun n p b = S.Def NoLoc (S.name n) [] p S.KwdNIL (Just S.tNone) b S.NoDec S.fxPure Nothing
+          plain n e = S.sDecl [fun n S.PosNIL [emit e]]
+          modul = S.Module mn [] Nothing
+          optimize = Pooling.poolModule info (const Nothing)
+          graph m = Registry.buildRegistry (fmap fst . (`M.lookup` info)) (const False) m
+          sites = Registry.registrySites . graph
+          count = length . sites
+          globals m = [n | S.Assign _ [S.PVar _ n _] _ <- S.mbody m]
+          firstCtor m = [q' | S.Assign _ _ (S.Call _ (S.Var _ q') _ _) <- S.mbody m]
+      it "shares closed witnesses across functions and repeated invocations" $ do
+        let m = modul [plain "first" (ctor []),plain "second" (ctor [])]
+            after = optimize m
+        count m `shouldBe` 2
+        count after `shouldBe` 1
+        map Registry.siteScope (sites after) `shouldBe` [0]
+      it "promotes a single function site instead of allocating on every call" $ do
+        let m = modul [plain "first" (ctor [])]
+        map Registry.siteScope (sites $ optimize m) `shouldBe` [0]
+      it "merges existing module bindings while retaining their global names" $ do
+        let m = modul [bind 1 (ctor []),bind 2 (ctor []),plain "f" (S.eVar $ w 2)]
+            after = optimize m
+        count after `shouldBe` 1
+        Set.fromList (globals after) `shouldBe` Set.fromList [w 1,w 2]
+      it "keeps generic witnesses dependent on their invocation" $ do
+        let f = fun "f" (S.pospar [(w 0,wt)]) [emit (ctor [S.eVar $ w 0])]
+            m = modul [S.sDecl [f]]
+        optimize m `shouldBe` m
+      it "orders nested constructor dependencies before their users" $ do
+        let m = modul [plain "f" (S.eCall (S.eQVar other) [ctor []])]
+            after = optimize m
+        firstCtor after `shouldBe` [q,other]
+        map Registry.recipeLifetime (IM.elems $ Registry.registryRecipes $ graph after)
+          `shouldSatisfy` all (== Registry.Closed)
+      it "distinguishes selected implementations" $ do
+        let m = modul [plain "f" (ctor []),plain "g" (S.eCall (S.eQVar other) [])]
+        count (optimize m) `shouldBe` 2
+      it "ignores constructor arguments discarded by a static witness" $ do
+        let static = S.qName ["pool_impl"] "Static"
+            infos = M.insert static (static,0) info
+            isStatic e = case Sharing.constructorCall e of Just (n,_) -> n == static; _ -> False
+            m = modul [plain "f" (S.eCall (S.eQVar static) [ctor [],ctor []])]
+        Pooling.poolModule infos (\e -> if isStatic e then Just e else Nothing) m `shouldBe` m
+      it "handles globals read by witness initializers before constructing them" $ do
+        let cn = S.name "LocalCtor"
+            qc = S.GName mn cn
+            init = (fun "__init__" S.PosNIL [emit (S.eVar $ w 1)]){S.dname=Builtin.initKW}
+            cls = S.Class NoLoc cn [] [] [S.sDecl [init]] Nothing
+            infos = M.insert qc (qc,0) info
+            m = modul [S.sDecl [cls],plain "f" (S.eCall (S.eQVar qc) []),bind 1 (ctor [])]
+            after = Pooling.poolModule infos (const Nothing) m
+        firstCtor after `shouldBe` [q,qc]
+        (w 1 `elem` globals after) `shouldBe` True
+      it "does not assume an opaque local initializer has no global dependencies" $ do
+        let cn = S.name "LocalCtor"
+            qc = S.GName mn cn
+            init = (fun "__init__" S.PosNIL [emit S.eNotImpl]){S.dname=Builtin.initKW}
+            cls = S.Class NoLoc cn [] [] [S.sDecl [init]] Nothing
+            infos = M.insert qc (qc,0) info
+            m = modul [S.sDecl [cls],plain "f" (S.eCall (S.eQVar qc) [])]
+        Pooling.poolModule infos (const Nothing) m `shouldBe` m
+      it "rejects recursive initializer dependencies" $ do
+        let cn = S.name "LocalCtor"
+            qc = S.GName mn cn
+            init = (fun "__init__" S.PosNIL [emit (S.eVar $ w 1)]){S.dname=Builtin.initKW}
+            cls = S.Class NoLoc cn [] [] [S.sDecl [init]] Nothing
+            infos = M.insert qc (qc,0) info
+            m = modul [S.sDecl [cls],bind 1 (S.eCall (S.eQVar qc) [])]
+        Pooling.poolModule infos (const Nothing) m `shouldBe` m
+      it "does not eagerly read an ordinary module value in a witness initializer" $ do
+        let cn = S.name "LocalCtor"
+            qc = S.GName mn cn
+            n = S.name "config"
+            init = (fun "__init__" S.PosNIL [emit (S.eVar n)]){S.dname=Builtin.initKW}
+            cls = S.Class NoLoc cn [] [] [S.sDecl [init]] Nothing
+            infos = M.insert qc (qc,0) info
+            m = modul [S.sDecl [cls],S.Assign NoLoc [S.pVar n Builtin.tInt] (S.eInt 1),plain "f" (S.eCall (S.eQVar qc) [])]
+        Pooling.poolModule infos (const Nothing) m `shouldBe` m
+      it "retains function construction sites in modules with early C hooks" $ do
+        let external = S.sDecl [fun "external" S.PosNIL [emit S.eNotImpl]]
+            m = modul [external,bind 1 (ctor []),bind 2 (ctor []),plain "f" (ctor [])]
+            after = optimize m
+        count after `shouldBe` 2
+        (plain "f" (ctor []) `elem` S.mbody after) `shouldBe` True
+      it "retains function sites when an external module value needs an early hook" $ do
+        let external = S.Assign NoLoc [S.pVar (S.name "external") wt] S.eNotImpl
+            m = modul [external,bind 1 (ctor []),bind 2 (ctor []),plain "f" (ctor [])]
+        count (optimize m) `shouldBe` 2
+      it "shares ordinary local constructors which already require initialized tables" $ do
+        let cn = S.name "LocalCtor"
+            qc = S.GName mn cn
+            init = (fun "__init__" S.PosNIL [S.sPass]){S.dname=Builtin.initKW}
+            cls = S.Class NoLoc cn [] [] [S.sDecl [init]] Nothing
+            infos = M.insert qc (qc,0) info
+            external = S.sDecl [fun "external" S.PosNIL [emit S.eNotImpl]]
+            m = modul [external,S.sDecl [cls],plain "f" (S.eCall (S.eQVar qc) [])]
+            after = Pooling.poolModule infos (const Nothing) m
+            rs = Registry.buildRegistry (fmap fst . (`M.lookup` infos)) (const False) after
+        map Registry.siteScope (Registry.registrySites rs) `shouldBe` [0]
+      it "does not assume closure allocation needs an initialized method table" $ do
+        let cn = S.Internal S.LLiftPass "pure" 1
+            qc = S.GName mn cn
+            init = (fun "__init__" S.PosNIL [S.sPass]){S.dname=Builtin.initKW}
+            cls = S.Class NoLoc cn [] [] [S.sDecl [init]] Nothing
+            infos = M.insert qc (qc,0) info
+            external = S.sDecl [fun "external" S.PosNIL [emit S.eNotImpl]]
+            m = modul [external,S.sDecl [cls],plain "f" (S.eCall (S.eQVar qc) [])]
+        Pooling.poolModule infos (const Nothing) m `shouldBe` m
+      it "keeps class-table expressions independent of the pool" $ do
+        let cls = S.Class NoLoc (S.name "Data") [] [] [emit (ctor [])] Nothing
+            m = modul [S.sDecl [cls],plain "f" (ctor [])]
+        optimize m `shouldBe` m
+      it "preserves a shadowed constructor parameter" $ do
+        let n = S.name "Ctor"
+            nq = S.NoQ n
+            infos = M.singleton nq (nq,0)
+            make = S.eCall (S.eQVar nq) []
+            f = fun "f" (S.pospar [(n,wt)]) [emit make]
+            m = modul [plain "g" make,S.sDecl [f]]
+            after = Pooling.poolModule infos (const Nothing) m
+        (S.sDecl [f] `elem` S.mbody after) `shouldBe` True
+      it "leaves Let execution contexts intact" $ do
+        let nested = S.Let NoLoc [] (ctor [])
+            m = modul [plain "f" nested,plain "g" (ctor [])]
+        (plain "f" nested `elem` S.mbody (optimize m)) `shouldBe` True
+      it "uses qualified globals when a function shadows their original name" $ do
+        let f = fun "f" (S.pospar [(w 1,wt)]) [emit (ctor [])]
+            m = modul [bind 1 (ctor []),S.sDecl [f]]
+            after = optimize m
+        Set.member (S.GName mn $ w 1) (Set.fromList $ Names.freeQ (S.mbody after)) `shouldBe` True
+      it "is idempotent" $ do
+        let m = modul [bind 1 (ctor []),plain "f" (S.eCall (S.eQVar other) [ctor []])]
+            after = optimize m
+        optimize after `shouldBe` after
 
     describe "Zon (build.zig.zon)" $ do
       let deps src = case Zon.parseZon src of

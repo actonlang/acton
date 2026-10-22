@@ -11,7 +11,7 @@ module Acton.WitnessRegistry
     ) where
 
 import Control.Monad.State.Strict
-import Control.Monad (foldM, forM, forM_)
+import Control.Monad (foldM, forM, forM_, when)
 import Data.Aeson (Value, object, (.=))
 import qualified Data.IntMap.Strict as IM
 import qualified Data.Map.Strict as M
@@ -72,6 +72,7 @@ data Lex = Lex
 data Build = Build
     { graph :: WitnessRegistry, buckets :: IM.IntMap [Int], serial :: Int
     , constructor :: QName -> Maybe QName, staticRecipe :: Expr -> Bool
+    , currentModule :: Maybe ModName, globalWitnesses :: M.Map Name Int
     }
 type BuildM = State Build
 
@@ -80,20 +81,20 @@ type BuildM = State Build
 -- Types stay on binding records. Constructor keys retain their explicit type
 -- applications; type variables and dependency witnesses have binding identities.
 buildRegistry :: (QName -> Maybe QName) -> (Expr -> Bool) -> Module -> WitnessRegistry
-buildRegistry resolve isStatic m = build resolve isStatic $ suite initialLex (mbody m) >> return ()
+buildRegistry resolve isStatic m = build (Just $ modname m) resolve isStatic $ suite initialLex (mbody m) >> return ()
 
 -- Scope 1 is the function itself. Nested declarations/lambdas get other IDs;
 -- their parameters and construction sites remain separate from this frame.
 buildFunctionRegistry :: (QName -> Maybe QName) -> (Expr -> Bool) -> Decl -> WitnessRegistry
-buildFunctionRegistry resolve isStatic d = build resolve isStatic $ decl initialLex d
+buildFunctionRegistry resolve isStatic d = build Nothing resolve isStatic $ decl initialLex d
 
 initialLex :: Lex
 initialLex = Lex 0 0 M.empty M.empty
 
-build :: (QName -> Maybe QName) -> (Expr -> Bool) -> BuildM () -> WitnessRegistry
-build resolve isStatic action = finish $ execState action initial
+build :: Maybe ModName -> (QName -> Maybe QName) -> (Expr -> Bool) -> BuildM () -> WitnessRegistry
+build mn resolve isStatic action = finish $ execState action initial
   where
-    initial = Build (WitnessRegistry IM.empty [] [] [] 1) IM.empty 0 resolve isStatic
+    initial = Build (WitnessRegistry IM.empty [] [] [] 1) IM.empty 0 resolve isStatic mn M.empty
     finish s = let g = graph s in g
         { registryBindings = reverse (registryBindings g)
         , registrySites = reverse (registrySites g)
@@ -121,6 +122,7 @@ capture env k n = do i <- fresh; return (Capture i (scope env) n k)
 bindValues :: Lex -> [Name] -> BuildM Lex
 bindValues = foldM $ \env n -> do
     c <- capture env LocalValue n
+    when (scope env == 0) $ modify $ \s -> s{globalWitnesses = M.delete n (globalWitnesses s)}
     return env{terms = M.insert n (CapturedValue c) (terms env)}
 
 bindParameters :: Lex -> [Name] -> BuildM Lex
@@ -235,8 +237,22 @@ expr env e@(Var l (NoQ n)) = case M.lookup n (terms env) of
         c <- capture env Unresolved n
         return (Resolved e S.empty (S.singleton c) Nothing)
 expr env e@Var{} = do
-    c <- capture env Unresolved (noq $ var e)
-    return (Resolved e S.empty (S.singleton c) Nothing)
+    mn <- gets currentModule
+    global <- case var e of
+      GName m n | Just m == mn -> do
+        found <- gets (M.lookup n . globalWitnesses)
+        return $ case (scope env,found,M.lookup n $ terms env) of
+          (0,Just i,Just (WitnessValue j)) | i == j -> Just i
+          (0,_,_) -> Nothing
+          _ -> found
+      _ -> return Nothing
+    case global of
+      Just i -> do
+        modifyGraph $ \g -> g{registryUses = Use i (scope env) (eloc e) : registryUses g}
+        fromNode i
+      Nothing -> do
+        c <- capture env Unresolved (noq $ var e)
+        return (Resolved e S.empty (S.singleton c) Nothing)
 expr env e@(Call l f p k) = do
     ctor <- constructorHead env f
     (p',ps) <- positional env p
@@ -340,6 +356,7 @@ stmt env (Assign l [PVar _ n t] e) | isWitness n = do
       Just i -> return i
       Nothing -> intern Opaque (canonical r) (dependencies r) (captures r)
     modifyGraph $ \g -> g{registryBindings = Binding n t i (scope env) l : registryBindings g}
+    when (scope env == 0) $ modify $ \s -> s{globalWitnesses = M.insert n i (globalWitnesses s)}
     return env{terms = M.insert n (WitnessValue i) (terms env)}
 stmt env s = case s of
     Assign _ ps e -> mapM_ (patternExprs env) ps >> expr env e >> bindValues env (bound ps)
@@ -487,6 +504,9 @@ registrySummary g = object
     , "nonstatic_recipes_by_lifetime" .= counts (map (recipeLifetime . at) $ S.toList nonstaticIds)
     , "nonstatic_recipe_scope_pairs_by_lifetime" .= counts
         [recipeLifetime (at i) | (i,_) <- S.toList $ S.fromList [(siteRecipe s,siteScope s) | s <- nonstatic]]
+    , "nonstatic_module_sites_by_lifetime" .= counts (map siteLife moduleSites)
+    , "nonstatic_module_recipes_by_lifetime" .= counts
+        [recipeLifetime (at i) | i <- S.toList $ S.fromList (map siteRecipe moduleSites)]
     , "nonstatic_loop_sites_by_lifetime" .= counts (map siteLife $ filter ((> 0) . siteLoopDepth) nonstatic)
     , "nonstatic_closed_constructors" .= M.fromListWith (+)
         [(prstr q, 1 :: Int) | s <- nonstatic, let r = at (siteRecipe s)
@@ -497,6 +517,7 @@ registrySummary g = object
     recipes = IM.elems (registryRecipes g)
     constructors = [r | r <- recipes, Constructor{} <- [recipeKind r]]
     nonstatic = filter (not . siteStatic) (registrySites g)
+    moduleSites = filter ((== 0) . siteScope) nonstatic
     nonstaticIds = S.fromList (map siteRecipe nonstatic)
     siteLife = recipeLifetime . at . siteRecipe
     label Closed = "closed"

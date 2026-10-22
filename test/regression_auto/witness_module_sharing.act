@@ -1,0 +1,70 @@
+# Closed witnesses are initialized before ordinary globals and shared by
+# functions, default arguments, user-class initialization and continuations.
+class Entry(object):
+    n: int
+    def __init__(self, n: int):
+        self.n = n
+
+extension Entry(Eq):
+    def __eq__(a: Entry, b: Entry) -> bool:
+        return a.n == b.n
+
+extension Entry(Hashable):
+    def hash(self, h):
+        self.n.hash(h)
+
+class Holder[A(Eq)](object):
+    marker: int
+    def __init__(self):
+        self.marker = 0
+    def same(self, a: A, b: A) -> bool:
+        return a == b
+
+class Pair(object):
+    left: Holder[list[Entry]]
+    right: Holder[list[Entry]]
+    def __init__(self, left: Holder[list[Entry]], right: Holder[list[Entry]]):
+        self.left = left
+        self.right = right
+
+def make_holder(h: Holder[list[Entry]] = Holder()) -> Holder[list[Entry]]:
+    return h
+
+def compare_left(a: list[Entry], b: list[Entry]) -> bool:
+    return make_holder().same(a, b)
+
+def compare_right(a: list[Entry], b: list[Entry]) -> bool:
+    return make_holder().same(a, b)
+
+# Both execute during module initialization, before actors are started.
+early_result = compare_left([Entry(1)], [Entry(1)])
+global_holder = make_holder()
+
+actor main(env):
+    assert early_result
+    xs = [Entry(1), Entry(2)]
+    ys = [Entry(1), Entry(2)]
+    assert compare_left(xs, ys) and compare_right(xs, ys)
+    assert not compare_left(xs, [Entry(3)])
+    assert global_holder.same(xs, ys)
+    a = make_holder()
+    b = make_holder()
+    a.marker = 7
+    assert b.marker == 0
+    data = serialize(Pair(a, b))
+    restored = deserialize(data)
+    assert serialize(restored) == data
+    assert isinstance(restored, Pair)
+    if isinstance(restored, Pair):
+        assert restored.left.same(xs, ys)
+        assert not restored.right.same(xs, [Entry(9)])
+        restored.left.marker = 8
+        assert restored.right.marker == 0
+    d = {Entry(1): "one", Entry(2): "two"}
+    assert d[Entry(1)] == "one"
+    s = {Entry(1), Entry(2)}
+    total = 0
+    for x in s:
+        total += x.n
+    assert total == 3
+    env.exit(0)

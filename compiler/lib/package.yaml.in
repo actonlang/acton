@@ -99,6 +99,7 @@ library:
     - Acton.WitnessKey
     - Acton.WitnessRegistry
     - Acton.WitnessSharing
+    - Acton.WitnessPooling
     - Acton.WitnessStats
     - Acton.Transform
     - Acton.WitKnots
