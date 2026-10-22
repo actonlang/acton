@@ -58,6 +58,8 @@ struct acton_gc_info {
     int full_frequency;
     GC_word heap_growth_divisor;
     GC_word alloc_budget_percent;
+    GC_word memory_limit;
+    GC_word heap_ceiling_percent;
     int realloc_no_free;
     int no_thread_local_warmup;
     unsigned tl_refill_max;
@@ -83,6 +85,8 @@ static void *GC_CALLBACK read_gc_info(void *data) {
     info->full_frequency = GC_get_full_freq();
     info->heap_growth_divisor = GC_get_heap_growth_divisor();
     info->alloc_budget_percent = GC_get_alloc_budget_percent();
+    info->memory_limit = GC_get_memory_limit();
+    info->heap_ceiling_percent = GC_get_heap_ceiling_percent();
     info->realloc_no_free = GC_get_realloc_no_free();
     info->no_thread_local_warmup = GC_get_no_thread_local_warmup();
     info->tl_refill_max = GC_get_tl_refill_max();
@@ -134,7 +138,7 @@ B_tuple actonQ_rtsQ_get_gc_info (B_SysCap cap) {
         pause_target = to$float((double)info.time_limit.tv_ms
                                + (double)info.time_limit.tv_nsec / 1000000.0);
 
-    return $NEWTUPLE(24,
+    return $NEWTUPLE(26,
         actStrFromCString(mode), actStrFromCString(ACTON_GC_DIRTY_TRACKING_BACKEND),
         actStrFromCString(backend), supported,
         toB_u64(acton_gc_get_page_hash_table_log2()),
@@ -150,6 +154,7 @@ B_tuple actonQ_rtsQ_get_gc_info (B_SysCap cap) {
         toB_u64(acton_gc_get_initial_mark_stack_size()), pause_target,
         toB_u64(info.free_space_divisor), toB_u64(info.full_frequency),
         toB_u64(info.heap_growth_divisor), toB_u64(info.alloc_budget_percent),
+        toB_u64(info.memory_limit), toB_u64(info.heap_ceiling_percent),
         toB_u64(info.stats.heapsize_full),
         toB_u64(info.stats.free_bytes_full),
         toB_u64(info.stats.unmapped_bytes));

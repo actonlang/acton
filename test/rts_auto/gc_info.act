@@ -17,6 +17,8 @@ actor main(env):
     assert before.markers >= 1
     assert before.initial_mark_stack_size >= 4096
     assert before.free_space_divisor > 0
+    # The physical memory size is known on every supported platform.
+    assert before.memory_limit > 0
     if before.mode == "ordinary":
         assert before.backend == "none"
         assert before.pause_target_ms is None
@@ -50,6 +52,8 @@ actor main(env):
         assert info.initial_mark_stack_size == before.initial_mark_stack_size
         assert info.heap_growth_divisor == before.heap_growth_divisor
         assert info.alloc_budget_percent == before.alloc_budget_percent
+        assert info.memory_limit == before.memory_limit
+        assert info.heap_ceiling_percent == before.heap_ceiling_percent
         assert info.heap_size > 0
         assert info.heap_size >= info.free_bytes
         assert info.free_bytes >= info.unmapped_bytes

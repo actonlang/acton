@@ -2932,7 +2932,8 @@ gcCollectorOptionTests = testGroup "GC collector options"
   ]
   where
     -- Reported get_gc_info fields for a build without settings.
-    defaults = [("alloc_budget_percent", "200"), ("block_size", "16384"),
+    defaults = [("alloc_budget_percent", "250"), ("block_size", "16384"),
+                ("heap_ceiling_percent", "75"), ("memory_limit_known", "True"),
                 ("end_padding", "True"), ("small_object_size", "32"),
                 ("thread_local_size_limit", "2048"),
                 ("no_thread_local_warmup", "True"),
@@ -2944,6 +2945,8 @@ gcCollectorOptionTests = testGroup "GC collector options"
                  if System.Info.os == "mingw32" then "1048576" else "4194304")]
     -- Build.act settings and the fields they should report.
     tuned = [("gc_alloc_budget_percent", "100"), ("gc_block_size", "4096"),
+             ("gc_heap_ceiling_percent", "0"),
+             ("gc_memory_limit", "1073741824"),
              ("gc_mark_range_stealing", "false"),
              ("gc_use_mark_bits", "false"),
              ("gc_bytes_per_marker", "0"),
@@ -2954,6 +2957,8 @@ gcCollectorOptionTests = testGroup "GC collector options"
              ("gc_realloc_no_free", "false"),
              ("gc_no_thread_local_warmup", "false")]
     tunedReports = [("alloc_budget_percent", "100"), ("block_size", "4096"),
+                    ("heap_ceiling_percent", "0"),
+                    ("memory_limit", "1073741824"),
                     ("end_padding", "False"), ("small_object_size", "16"),
                     ("thread_local_size_limit", "2048"),
                     ("no_thread_local_warmup", "False"),
@@ -2986,25 +2991,34 @@ gcCollectorOptionTests = testGroup "GC collector options"
                [("block_size", "16384"), ("thread_local_size_limit", "384")])]
     -- The environment turns the modes that are on by default off in the
     -- default build, and on in the tuned build, which turned them off.
+    -- GC_MEMORY_LIMIT sets a limit in the default build and replaces the
+    -- tuned build's limit. The limits of this test are below the memory of
+    -- the machines that run it, so get_gc_info reports them as set.
     overrides = [("GC_ALLOC_BUDGET_PERCENT", "50"), ("GC_REALLOC_NO_FREE", "0"),
                  ("GC_NO_THREAD_LOCAL_WARMUP", "0"),
-                 ("GC_BYTES_PER_MARKER", "0"), ("GC_TL_REFILL_MAX", "4")]
+                 ("GC_BYTES_PER_MARKER", "0"), ("GC_TL_REFILL_MAX", "4"),
+                 ("GC_HEAP_CEILING_PERCENT", "0"), ("GC_MEMORY_LIMIT", "512M")]
     overridden = [("alloc_budget_percent", "50"), ("realloc_no_free", "False"),
                   ("realloc_frees_moved", "True"),
                   ("no_thread_local_warmup", "False"),
                   ("bytes_per_marker", "0"),
-                  ("thread_local_refill_blocks", "4")]
+                  ("thread_local_refill_blocks", "4"),
+                  ("heap_ceiling_percent", "0"), ("memory_limit", "536870912")]
     tunedOverrides = [("GC_ALLOC_BUDGET_PERCENT", "50"),
                       ("GC_REALLOC_NO_FREE", "1"),
                       ("GC_NO_THREAD_LOCAL_WARMUP", "1"),
                       ("GC_BYTES_PER_MARKER", "1M"),
-                      ("GC_TL_REFILL_MAX", "8")]
+                      ("GC_TL_REFILL_MAX", "8"),
+                      ("GC_HEAP_CEILING_PERCENT", "90"),
+                      ("GC_MEMORY_LIMIT", "768M")]
     tunedOverridden = [("alloc_budget_percent", "50"),
                        ("realloc_no_free", "True"),
                        ("realloc_frees_moved", "False"),
                        ("no_thread_local_warmup", "True"),
                        ("bytes_per_marker", "1048576"),
-                       ("thread_local_refill_blocks", "8")]
+                       ("thread_local_refill_blocks", "8"),
+                       ("heap_ceiling_percent", "90"),
+                       ("memory_limit", "805306368")]
     -- Invalid settings, build flags and the text the diagnostic should
     -- contain.
     invalid =
@@ -3013,6 +3027,10 @@ gcCollectorOptionTests = testGroup "GC collector options"
                         ("gc_alloc_budget_percent", "invalid"),
                         ("gc_bytes_per_marker", "-1"),
                         ("gc_bytes_per_marker", "invalid"),
+                        ("gc_memory_limit", "-1"),
+                        ("gc_memory_limit", "1G"),
+                        ("gc_heap_ceiling_percent", "-1"),
+                        ("gc_heap_ceiling_percent", "invalid"),
                         ("gc_block_size", "2048"),
                         ("gc_block_size", "12288"),
                         ("gc_block_size", "131072"),
@@ -3036,10 +3054,13 @@ gcCollectorOptionTests = testGroup "GC collector options"
          "gc_block_size"),
         ([("gc_block_size", "4096"), ("gc_thread_local_size_limit", "4096")], [],
          "gc_thread_local_size_limit"),
-        -- The collector keeps the value in size_t, 32 bits on this target.
+        -- The collector keeps these values in size_t, 32 bits on this target.
         ([("gc_bytes_per_marker", "4294967296")],
          ["--target", "x86-linux-musl", "--cpu", "baseline"],
-         "gc_bytes_per_marker must be at most 4294967295")
+         "gc_bytes_per_marker must be at most 4294967295"),
+        ([("gc_memory_limit", "4294967296")],
+         ["--target", "x86-linux-musl", "--cpu", "baseline"],
+         "gc_memory_limit must be at most 4294967295")
       ]
     expectSuccess label (code, out, err) =
       assertEqual (label ++ "\nstdout:\n" ++ out ++ "\nstderr:\n" ++ err) ExitSuccess code

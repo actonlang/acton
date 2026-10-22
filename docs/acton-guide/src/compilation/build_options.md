@@ -89,7 +89,8 @@ its section below describes:
 | A new thread uses its own free lists [without a warm-up](#gc-thread-local-warm-up) | `"gc_no_thread_local_warmup": "false"` | `GC_NO_THREAD_LOCAL_WARMUP=0` |
 | A refill of a thread's free list takes [up to 16 heap blocks](#gc-thread-local-refills) under the allocator lock instead of one | `"gc_thread_local_refill_blocks": "1"` | `GC_TL_REFILL_MAX=1` |
 | The global mark stack [starts with 4194304 entries](#initial-size), 1048576 on Windows, instead of 16384 with the default blocks | `"gc_initial_mark_stack_size": "0"` | not possible |
-| A collection starts after the program has allocated [twice the live data](#gc-allocation-budget), pointer-free data included | `"gc_alloc_budget_percent": "0"` | `GC_ALLOC_BUDGET_PERCENT=0` |
+| A collection starts after the program has allocated [2.5 times the live data](#gc-allocation-budget), pointer-free data included | `"gc_alloc_budget_percent": "0"` | `GC_ALLOC_BUDGET_PERCENT=0` |
+| The heap grows to the live data plus the budget at once, and the budget shrinks as the live data approaches [75% of the memory limit](#memory-limit) | `"gc_heap_ceiling_percent": "0"` | `GC_HEAP_CEILING_PERCENT=0` |
 | One automatic heap expansion may add up to [a quarter of the heap](#gc-heap-growth) instead of 16 MiB | `"gc_heap_growth_divisor": "0"` | `GC_HEAP_GROWTH_DIVISOR=0` |
 | The heap is managed in [blocks of 16 KiB](#gc-heap-block-size) instead of 4 KiB | `"gc_block_size": "4096"` | not possible |
 | Threads allocate objects of up to [2048 bytes](#gc-thread-local-allocation-size) from their own free lists, instead of 384 | `"gc_thread_local_size_limit": "0"` | not possible |
@@ -263,6 +264,11 @@ effect until the heap is larger than `N` times the fixed amount (64 MiB for 4).
 the program starts; `0` there turns the scaling off. This is a build setting
 shared by the application and its dependencies, including database support.
 
+By default the heap is [sized by the memory limit](#memory-limit) instead, and
+grows to its target in one expansion. The divisor applies where that sizing is
+off: with `gc_heap_ceiling_percent` or `gc_alloc_budget_percent` set to 0, in
+incremental and generational mode, and where no memory limit is known.
+
 ## GC allocation budget
 
 BDWGC starts a collection after the program has allocated an amount derived
@@ -273,7 +279,7 @@ whose live data is mostly strings, byte buffers or numbers therefore collects
 often compared with its heap size: pointer-free data counts an eighth as much as
 pointer-containing data. The allocation budget instead makes the amount a
 percentage of all live data and roots, like Go's `GOGC`. Acton uses a budget of
-200% by default, and the build setting changes it:
+250% by default, and the build setting changes it:
 
 ```python
 build_options = {
@@ -281,62 +287,205 @@ build_options = {
 }
 ```
 
-With 200%, the collector collects rather than grow the heap once the program has
-allocated twice as much as survived the previous collection, so the heap holds
-about three times the live data or more. Larger values collect less often and
-use more memory, smaller values collect more often and use less. Pointer-free
-data, such as the contents of strings and byte buffers, counts like other data
-instead of an eighth as much. In incremental and generational mode the amount is
-halved, as with the default policy.
+With 250%, the collector collects once the program has allocated two and a half
+times as much as survived the previous collection, so the heap holds about 3.5
+times the live data. As the live data approaches the memory of the machine or
+container, the amount shrinks, down to a tenth of the live data (see
+[Memory limit](#memory-limit)). Larger values collect less often and use more
+memory, smaller values collect more often and use less. Pointer-free data, such
+as the contents of strings and byte buffers, counts like other data instead of
+an eighth as much. In incremental and generational mode the amount is halved,
+as with the default policy.
 
-The budget does not fix when collections come. A collection comes only when
-the allocator needs heap blocks that it does not have free. The collector then
-collects if the program has allocated the budget since the previous collection
-or if the heap has already grown once since then, and otherwise grows the heap
-by one step (see `gc_heap_growth_divisor`). While the live data grows,
+A collection comes only when the allocator needs heap blocks that it does not
+have free. If the heap is smaller than the live data plus the budget, the
+collector grows it to that size in one expansion, and the next shortage of
+blocks collects. At that size, a shortage collects instead of growing the heap
+once the program has allocated half of the budget since the previous
+collection, and at least a tenth of the live data. Before that, or when a
+collection has not freed enough, the heap grows by at least a tenth of the live
+data. At that size part of the free space is in partly used blocks of other
+object sizes, in blocks held back for large objects, or in free runs of blocks
+too short for a request, so the free blocks can run out long before the budget
+is allocated. The wait for half of the budget keeps such cycles from ending
+early. A heap that grew larger earlier, for example while the program built its
+data, keeps its size, and a cycle then lasts until its free blocks run out.
+
+Where the heap is not sized by the memory limit (see
+[Memory limit](#memory-limit)), the heap grows in steps instead. The collector
+then collects if the program has allocated the budget since the previous
+collection or if the heap has already grown once since then, and otherwise grows
+the heap by one step (see `gc_heap_growth_divisor`). While the live data grows,
 collections therefore follow the growth steps and come before the budget is
 used. With steady live data the heap settles at the first step whose free part
-covers the budget, so peak memory changes in steps of a quarter of the heap. A
-heap that grew larger earlier, for example while the program built its data,
-keeps its size, and a budget below its free part changes nothing.
+covers the budget, so peak memory changes in steps of a quarter of the heap.
 
-Compared with 100%, 200% gave these medians of interleaved rounds, on an AMD
-Ryzen 9 5950X running Linux with 16 markers and mark bits (8 rounds), and on
-an Apple M6 with 4 worker threads, 4 markers and mark bytes (12 rounds):
+`"gc_heap_ceiling_percent": "0"` and `"gc_alloc_budget_percent": "200"` select
+200% with the heap growing in steps, the default before the heap was sized by
+the memory limit. The steps can overshoot the budget: with steady live data,
+the programs below allocated up to twice the budget between collections when
+the heap grew in steps. With 200% and the heap sized by the memory limit,
+programs measured earlier peaked at 0.61 to 0.89 times the memory of 200% with
+the heap growing in steps, for 0.78 to 1.22 times the CPU time, so the default
+is 250%. Without a memory limit that binds, 250% with the heap sized by the
+memory limit gave these medians of per-round ratios against 200% with the heap
+growing in steps, in interleaved rounds on an AMD Ryzen 9 5950X running Linux
+with 16 markers (8 rounds) and on an Apple M1 with 4 worker threads and 4
+markers (12 rounds), with mark bits:
 
-| Workload | Machine | CPU | Wall | Peak memory |
-|---|---|---|---|---|
-| Fleet manager, 10,000 devices | Ryzen | -29% | -19% | +51% |
-| Fleet manager, 50,000 devices | Ryzen | -28% | -14% | +25% |
-| GC heap cold inventory, a million records | Ryzen | -30% | -8% | +25% |
-| GC heap build, 4 million records | Ryzen | -21% | +1% | +56% |
-| Fleet load, 10,000 devices, 16 workers | Ryzen | -5% | -5% | +25% |
-| GC heap updates, a million records | M6 | -23% | -12% | +56% |
-| GC heap cold inventory, a million records | M6 | -18% | -8% | +56% |
-| Fleet load, 10,000 devices, 4 workers | M6 | -8% | -8% | +25% |
-| Binary trees | M6 | 0% | 0% | 0% |
-| Merkle trees | M6 | +1% | +1% | 0% |
+| Workload | Machine | CPU | Peak memory |
+|---|---|---|---|
+| Fleet manager, 50,000 devices | Ryzen | +2% | -5% |
+| Fleet manager, 10,000 devices | Ryzen | +4% | -15% |
+| GC heap build, 4 million records | Ryzen | -34% | -2% |
+| GC heap cold inventory, a million records | Ryzen | -19% | +17% |
+| GC heap cold inventory, a million records | M1 | +5% | -2% |
+| GC heap updates, a million records | M1 | +8% | -2% |
+| Fleet load, 10,000 devices | M1 | +9% | -30% |
+| Binary trees | M1 | +5% | +10% |
+| Merkle trees | M1 | +1% | +26% |
 
-The binary and merkle trees benchmarks keep the heap they grow at start-up,
-whose free part already exceeds the budget. Against 200%, 300% saved the fleet
-manager another 15 and 14% CPU time for 24 and 25% more peak memory, and the
-GC heap cold inventory on the Ryzen 23% for 56%. The other workloads saved at
-most 7% for 25% more peak memory, and the GC heap build none. 150% gave 44% to
-all of the CPU saving of 200% for at most 25% more peak memory than 100%.
+With the heap sized by the memory limit, the heap grows to about 3.5 times the
+live data in one expansion. With the heap growing in steps, the last step ended
+at 2.9 times the live data in the merkle trees benchmark and at 3.1 times in
+the cold inventory on the Ryzen, but at 3.7 times on the M1. The GC heap build
+grows its live data to 1.4 GiB. With the heap growing in steps it collects
+between the steps. With the heap sized by the memory limit, its heap grows to
+the target at once, and it collected a third as often. The binary trees
+benchmark keeps the heap it grows at start-up: 83 MiB with the heap sized by the
+memory limit, 75 MiB with the heap growing in steps.
 
-A program short of memory can lower the budget, in `build_options` as above
+Under a memory limit, the amount allocated between collections shrinks as the
+live data approaches the ceiling, and the program collects more often instead
+of growing its heap past the limit. A program that kept 500 MiB of strings live
+while it allocated garbage strings ran in a systemd scope with `MemoryMax=1G` on
+the Ryzen. It finished at a peak of 713 MiB, in 1.19 times the CPU time it took
+without the limit. With 200% and the heap growing in steps, the kernel killed
+it for running out of memory. With 2000 MiB live and `MemoryMax=4G` it peaked at
+2671 MiB in 1.25 times the CPU time, and was killed with the heap growing in
+steps. The live data of this program grows until it ends. Without a limit, it
+peaked at 1.35 and 1.39 times the memory of 200% with the heap growing in
+steps, for 0.95 and 0.96 times the CPU time.
+
+The cost of a limit grows as the ceiling approaches the live data. With an
+explicit limit that put the ceiling at twice the live data, the GC heap cold
+inventory and build peaked at 0.80 to 0.82 of the ceiling, in 1.6 to 2.75 times
+the CPU time of 200% with the heap growing in steps without the limit, whose
+peak memory was 1.17 to 1.4 times the limit itself. With the ceiling at 1.5
+times the live data, they took 2.75 to 4.6 times the CPU time. The build stayed
+under the ceiling, and the cold inventory ended 9% above it, at 82% of the
+limit.
+
+A program that should use less memory can set a lower
+[memory limit](#memory-limit), or lower the budget, in `build_options` as above
 or, without a rebuild, with the `GC_ALLOC_BUDGET_PERCENT` environment variable
-when it starts, for example `GC_ALLOC_BUDGET_PERCENT=100`. In the eight
-workloads above whose heap the budget changed, 100% peaked at 0.64 to 0.80
-times the memory of 200% for 1.06 to 1.43 times the CPU time, and 67% at 0.51
-to 0.78 times the memory for 1.12 to 2.05 times the CPU time.
+when it starts, for example `GC_ALLOC_BUDGET_PERCENT=100`. A lower budget
+collects more often.
 
-`"0"` selects the free space divisor policy. The `GC_ALLOC_BUDGET_PERCENT`
-environment variable overrides the build setting when the program starts; `0`
-there selects the free space divisor policy. Under either policy,
-`GC_MIN_BYTES_ALLOCD` sets the smallest amount allocated between collections,
-in bytes with an optional `K`, `M` or `G` suffix. This is a build setting
-shared by the application and its dependencies, including database support.
+`"0"` selects the free space divisor policy, under which the heap grows in
+steps. The `GC_ALLOC_BUDGET_PERCENT` environment variable overrides the build
+setting when the program starts; `0` there selects the free space divisor
+policy. Under either policy, `GC_MIN_BYTES_ALLOCD` sets the smallest amount
+allocated between collections, in bytes with an optional `K`, `M` or `G`
+suffix. This is a build setting shared by the application and its
+dependencies, including database support.
+
+### Memory limit
+
+The collector sizes the heap by the memory limit of the program: the smallest
+of the physical memory, on Linux the memory limit of the program's cgroup
+(container), and a limit set for the program. The heap ceiling is 75% of the
+limit. With the live data `L` (as for the budget: the data that survived the
+previous collection, plus the roots and thread stacks) and the budget `B`, the
+amount allocated between collections is `B`% of `L`, but at most half the
+distance from `L` to the ceiling, and at least a tenth of `L`:
+
+```text
+allocated between collections = min(B% of L, max(10% of L, (ceiling - L) / 2))
+heap = L + allocated between collections
+```
+
+So the heap grows by the whole budget while that is a small part of the
+memory, and stays halfway between the live data and the ceiling as the live
+data approaches it. On a machine with 48 GiB of memory the ceiling is 36 GiB,
+and with the default budget of 250%:
+
+| Live data | Heap | Allocated between collections |
+|---|---|---|
+| 1 GiB | 3.5 GiB | 2.5 GiB, 250% of the live data |
+| 10 GiB | 23 GiB | 13 GiB, 130% |
+| 20 GiB | 28 GiB | 8 GiB, 40% |
+| 30 GiB | 33 GiB | 3 GiB, 10% |
+
+The whole budget applies up to 6 GiB of live data here (in general up to the
+ceiling times 50 / (`B` + 50)), and a tenth of the live data from 30 GiB (5/6 of
+the ceiling). Past about 33 GiB of live data the heap, 1.1 times the live data,
+is above the ceiling: the program then marks all its live data after every
+tenth of it that it allocates, which costs much CPU time, but the heap stays
+close to the live data. The ceiling is not a hard limit: when a collection does
+not free enough, the heap grows past it. The quarter of the limit above the
+ceiling is left for memory outside the collector's heap, such as C allocations
+and thread stacks, and for other programs.
+
+On Linux, the collector reads the cgroup memory limit when the program starts:
+`memory.max` (cgroup v2) or `memory.limit_in_bytes` (cgroup v1) of the
+program's cgroup and of each cgroup above it, under `/sys/fs/cgroup`, and takes
+the smallest. A program in a container with a memory limit, for example from
+`docker run --memory 2g` or a Kubernetes `resources.limits.memory` of `2Gi`,
+therefore has a heap ceiling of 1.5 GiB. The collector does not count
+`memory.high`: above it the kernel slows the cgroup down and reclaims its
+memory, but kills no process. To keep the heap below `memory.high`, set it as
+an explicit limit. The collector does not read swap limits either, and does
+not see a limit that changes after the program has started. Where it cannot
+read the limit of a container, for example when the cgroup file system is not
+mounted at `/sys/fs/cgroup`, set the limit explicitly. The collector finds the
+physical memory on Linux, macOS, Windows and the BSDs.
+
+An explicit limit is set in bytes:
+
+```python
+build_options = {
+    "gc_memory_limit": "4294967296",
+}
+```
+
+or, without a rebuild, with the `GC_MEMORY_LIMIT` environment variable when the
+program starts, in bytes with an optional `K`, `M` or `G` suffix:
+
+```sh
+GC_MEMORY_LIMIT=4G ./out/bin/myapp
+```
+
+The limit is the smallest of the physical memory, the cgroup limit and the
+explicit limit, so an explicit limit can only lower it. The environment
+variable replaces the build setting, and `GC_MEMORY_LIMIT=0` removes it. An
+explicit limit leaves memory to other programs on the same machine, or stands
+in for a container limit that the collector cannot read.
+
+The ceiling is a percentage of the limit, 75 by default:
+
+```python
+build_options = {
+    "gc_heap_ceiling_percent": "60",
+}
+```
+
+Values above 100 put the ceiling above the limit, for example on a machine
+with swap. `"0"` turns the sizing by the memory limit off: the heap grows in
+steps as described above, and the budget does not shrink near the limit. The
+`GC_HEAP_CEILING_PERCENT` environment variable overrides the build setting when
+the program starts. The sizing is also off with a budget of 0 and where no
+memory limit is known. In incremental and generational mode, the heap grows in
+steps, but the amount allocated between collections still shrinks near the
+ceiling.
+
+`get_gc_info` reports the limit in effect as `memory_limit`, 0 if none is
+known, and the ceiling percentage as `heap_ceiling_percent`. With
+`GC_PRINT_STATS=1`, the collector logs the limit and where it came from when
+the program starts, and after each collection the amount allocated between
+collections, its percentage of the live data and the heap target. Both
+settings are build settings shared by the application and its dependencies,
+including database support.
 
 ## GC heap block size
 
@@ -818,12 +967,13 @@ The result also reports `page_hash_table_log2`, `block_size`, `end_padding`,
 `thread_local_refill_blocks`, `realloc_no_free`, available `markers` (including
 the initiating thread), `bytes_per_marker`, `mark_range_stealing`, `mark_bits`,
 `initial_mark_stack_size`, `pause_target_ms`, `free_space_divisor`,
-`full_frequency`, `heap_growth_divisor`, `alloc_budget_percent`, `heap_size`,
-`free_bytes` and `unmapped_bytes`. The pause target is `None` for ordinary and
-unlimited generational collection, and is not a guaranteed maximum pause.
-Available markers need not participate in every incremental marking attempt.
-Settings that an environment variable can override are reported as in effect,
-after the override.
+`full_frequency`, `heap_growth_divisor`, `alloc_budget_percent`,
+`memory_limit`, `heap_ceiling_percent`, `heap_size`, `free_bytes` and
+`unmapped_bytes`. The pause target is `None` for ordinary and unlimited
+generational collection, and is not a guaranteed maximum pause. Available
+markers need not participate in every incremental marking attempt. Settings
+that an environment variable can override are reported as in effect, after the
+override.
 
 Heap sizes are bytes; both `heap_size` and `free_bytes` include unmapped
 capacity. Their difference approximates occupied GC heap, not resident memory
