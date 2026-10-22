@@ -14,20 +14,35 @@ The following repositories contain syntax highlighting and similar for editors /
 - [ ] git@github.com:actonlang/vim-acton.git
 - [ ] git@github.com:actonlang/vscode-acton.git
 
-The following are Acton projects:
+The following are Acton projects, in dependency order: each project comes
+after the projects it depends on (in parentheses), so a lift can go from top
+to bottom. A project's dependencies are pinned in its Build.act.
 
-- [ ] git@github.com:actonlang/acton-grpc.git
-- [ ] git@github.com:actonlang/acton-http2.git
-- [ ] git@github.com:actonlang/acton-snappy.git
+- [ ] git@github.com:actonlang/pipe.git
 - [ ] git@github.com:actonlang/acton-zlib.git
-- [ ] git@github.com:orchestron-orchestrator/actmf.git
-- [ ] git@github.com:orchestron-orchestrator/acton-yang.git
-- [ ] git@github.com:orchestron-orchestrator/netcli.git
-- [ ] git@github.com:orchestron-orchestrator/netclics.git
-- [ ] git@github.com:orchestron-orchestrator/netconf.git
-- [ ] git@github.com:orchestron-orchestrator/orchestron.git
-- [ ] git@github.com:orchestron-orchestrator/sorespo.git
-- [ ] git@github.com:telemetrify-collector/telemetrify.git
+- [ ] git@github.com:actonlang/acton-snappy.git
+- [ ] git@github.com:actonlang/acton-http2.git
+- [ ] git@github.com:stratoweave/acton-yang.git
+- [ ] git@github.com:stratoweave/acton-lmdb.git
+- [ ] git@github.com:stratoweave/http-router.git
+- [ ] git@github.com:stratoweave/timeseries.git
+- [ ] git@github.com:stratoweave/actxcrypt.git
+- [ ] git@github.com:actonlang/acton-grpc.git (acton-http2)
+- [ ] git@github.com:actonlang/acton-ssh.git (acton-zlib, pipe)
+- [ ] git@github.com:stratoweave/rtrsecrets.git (actxcrypt)
+- [ ] git@github.com:stratoweave/actmf.git (acton-yang)
+- [ ] git@github.com:stratoweave/netcli.git (pipe)
+- [ ] git@github.com:stratoweave/netconf.git (acton-ssh, pipe)
+- [ ] git@github.com:stratoweave/acton-gnmi.git (acton-grpc, acton-yang)
+- [ ] git@github.com:stratoweave/stratoweave.git (acton-ssh, pipe, actmf,
+  acton-lmdb, acton-yang, http-router)
+- [ ] git@github.com:stratoweave/netclics.git (netcli, stratoweave)
+- [ ] git@github.com:stratoweave/orchino.git (stratoweave)
+- [ ] git@github.com:stratoweave/sorespo.git (rtrsecrets, stratoweave,
+  timeseries). Its default branch is stable.
+
+When stratoweave changes, its "Upgrade downstream dependencies" workflow opens
+PRs that bump the stratoweave pin in sorespo and netclics.
 
 ## General Process
 
