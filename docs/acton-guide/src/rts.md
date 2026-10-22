@@ -49,6 +49,12 @@ It is possible to specify the number of worker threads with `--rts-wthreads=COUN
 
 Actor method continuations run to completion, which is why it is wise not to set this value too low. Per default a minimum of 4 threads are started even when there are fewer CPU threads available, which means the operating system will switch between the threads inducing context switching overhead.
 
+# Open files
+
+At startup, the RTS raises its soft limit on open files to the hard limit. On macOS it raises it to at most `kern.maxfilesperproc`. Systems set a low soft limit, 256 on macOS and 1024 on most Linux systems, for programs that use `select()`, which handles only file descriptors below 1024. Acton programs do not need it.
+
+To run a program with a lower limit, lower the hard limit, for example with `ulimit -Hn 4096`. Child processes that the program starts inherit the raised limit.
+
 # Interactive debugging on crashes
 
 If an Acton program crashes, `--rts-bt-dbg` is a convenient option for launching an interactive debugger. It is triggered on `SIGILL` / `SIGSEGV` and launches an interactive GDB session that allows for debugging the running program.

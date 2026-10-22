@@ -3363,6 +3363,16 @@ rtsTests =
           assertEqual "RTS wthreads error retCode" (ExitFailure 1) returnCode
           assertEqual "RTS wthreads error cmdErr" "ERROR: --rts-wthreads requires an argument.\n" cmdErr
 
+  ,   testCase "raise the open file limit" $ do
+          testBuildThing "" ExitSuccess False "../../test/rts/wthreads1.act"
+          -- Each worker thread has a libuv loop with file descriptors of its
+          -- own, so 255 worker threads need more than a soft limit of 256
+          (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode
+              (shell "ulimit -S -n 256 && exec ./wthreads1 --rts-wthreads 255")
+                  { cwd = Just "../../test/rts" } ""
+          assertEqual ("255 worker threads with a soft limit of 256: " ++ cmdOut ++ cmdErr)
+                      ExitSuccess returnCode
+
   ,   testCase "print writes NUL" $ do
           testBuildThing "" ExitSuccess False "../../test/rts/print_nul.act"
           (returnCode, cmdOut, cmdErr) <- runThing "" "../../test/rts/print_nul.act"

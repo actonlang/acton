@@ -72,8 +72,9 @@ its Acton dependencies and the standard library, and it cannot be changed by a
 running program. The tables take about 1 KiB of memory for each worker thread
 that the limit allows, whether or not the program starts it. Each running
 worker thread also has a libuv loop with file descriptors of its own, two on
-macOS, so a program with many worker threads may need a higher open file limit
-(`ulimit -n`). Programs built with `--no-threads` ignore the option.
+macOS. The runtime raises its [open file limit](../rts.md#open-files) at
+startup, so only a low hard limit stops a program with many worker threads.
+Programs built with `--no-threads` ignore the option.
 
 ## GC defaults
 
