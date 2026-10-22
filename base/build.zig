@@ -82,7 +82,7 @@ pub fn build(b: *std.Build) void {
     const cpedantic = b.option(bool, "cpedantic", "") orelse false;
     const use_db = b.option(bool, "db", "") orelse false;
     const no_threads = b.option(bool, "no_threads", "") orelse false;
-    const gc_use_mark_bits = b.option(bool, "gc_use_mark_bits", "Use packed GC mark bits") orelse false;
+    const gc_use_mark_bits = b.option(bool, "gc_use_mark_bits", "Use packed GC mark bits (default: true)") orelse true;
     const gc_mark_bit_per_object = b.option(bool, "gc_mark_bit_per_object", "Track GC marks per object") orelse false;
     const gc_dirty_tracking_backend = b.option([]const u8, "gc_dirty_tracking_backend", "GC dirty tracking backend: auto, soft_dirty, userfaultfd") orelse "auto";
     const gc_page_hash_table_log2 = b.option(u8, "gc_page_hash_table_log2", "Log2 of GC page-hash entries (0 keeps the default)") orelse 0;
@@ -227,6 +227,7 @@ pub fn build(b: *std.Build) void {
         \\GC_API unsigned GC_CALL acton_gc_get_page_hash_table_log2(void);
         \\GC_API unsigned GC_CALL acton_gc_get_block_size(void);
         \\GC_API int GC_CALL acton_gc_get_mark_range_stealing(void);
+        \\GC_API int GC_CALL acton_gc_get_mark_bits(void);
         \\GC_API unsigned long GC_CALL acton_gc_get_initial_mark_stack_size(void);
         \\GC_API int GC_CALL acton_gc_get_end_padding(void);
         \\GC_API unsigned GC_CALL acton_gc_get_thread_local_size_limit(void);
@@ -262,6 +263,14 @@ pub fn build(b: *std.Build) void {
             \\    return 1;
             \\#else
             \\    return 0;
+            \\#endif
+            \\}
+            \\// gcconfig.h selects mark bytes only with parallel marking.
+            \\GC_API int GC_CALL acton_gc_get_mark_bits(void) {
+            \\#ifdef USE_MARK_BYTES
+            \\    return 0;
+            \\#else
+            \\    return 1;
             \\#endif
             \\}
             \\// The same default as in mark.c.
