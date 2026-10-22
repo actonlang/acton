@@ -53,6 +53,16 @@ $R B_StdioD_errG_local (B_Stdio self, $Cont c$cont, B_str s) {
     return $R_CONT(c$cont, B_None);
 }
 
+$R B_StdioD_outbG_local (B_Stdio self, $Cont c$cont, B_bytes b) {
+    fwrite(b->str, 1, b->nbytes, stdout);
+    return $R_CONT(c$cont, B_None);
+}
+
+$R B_StdioD_errbG_local (B_Stdio self, $Cont c$cont, B_bytes b) {
+    fwrite(b->str, 1, b->nbytes, stderr);
+    return $R_CONT(c$cont, B_None);
+}
+
 $R B_StdioD_set_stdinG_local (B_Stdio self, $Cont c$cont, B_bool canonical, B_bool echo) {
 #if defined(_WIN32) || defined(_WIN64)
 #else

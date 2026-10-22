@@ -9,6 +9,7 @@ import Data.Ord
 import Data.Time.Clock.POSIX
 import qualified Data.Aeson as Ae
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString.Lazy.Char8 as LBS
 
 import Control.Exception (catch, IOException)
@@ -18,6 +19,7 @@ import System.Environment (getEnvironment)
 import System.Exit
 import System.FilePath
 import System.FilePath.Posix
+import System.IO (IOMode(..), withBinaryFile)
 import System.Process
 import System.TimeIt
 import System.IO.Temp (withSystemTempDirectory)
@@ -3373,6 +3375,12 @@ rtsTests =
           (returnCode, cmdOut, cmdErr) <- runThing "" "../../test/rts/stdout_write_nul.act"
           assertEqual "stdout_write NUL retCode" ExitSuccess returnCode
           assertEqual "stdout_write NUL output" "a\0b\n" cmdOut
+  ,   testCase "stdio outb and errb write bytes unchanged" $ do
+          testBuildThing "" ExitSuccess False "../../test/rts/stdio_bytes.act"
+          (returnCode, cmdOut, cmdErr) <- runThingBytes "" "../../test/rts/stdio_bytes.act"
+          assertEqual "stdio bytes retCode" ExitSuccess returnCode
+          assertEqual "stdio bytes stdout" (BC.pack "out 1\na\0b\xff\nout 2\noutb 2\n") cmdOut
+          assertEqual "stdio bytes stderr" (BC.pack "c\0d\xfe\nerr 1\n") cmdErr
   ,   testCase "wake workers for timers, calls and bursts" $ do
           testBuildThing "" ExitSuccess False "../../test/rts/wake_stress.act"
           forM_ ["1", "2", "8"] $ \n -> do
@@ -3802,6 +3810,25 @@ runThing opts thing = do
   where (fileBody, fileExt) = splitExtension $ takeFileName thing
         fileParts = splitOn "__" fileBody
         binName = head fileParts
+
+-- runThing for a single file, with stdout and stderr read as bytes and not
+-- decoded, for programs whose output is not valid UTF-8
+runThingBytes opts thing = do
+    wd <- canonicalizePath $ takeDirectory thing
+    withSystemTempDirectory "acton-run" $ \tmp -> do
+        let inPath  = tmp </> "stdin"
+            outPath = tmp </> "stdout"
+            errPath = tmp </> "stderr"
+        writeFile inPath ""
+        returnCode <- withBinaryFile inPath ReadMode $ \hIn ->
+                      withBinaryFile outPath WriteMode $ \hOut ->
+                      withBinaryFile errPath WriteMode $ \hErr -> do
+                          (_, _, _, ph) <- createProcess (proc ("./" ++ takeBaseName thing) (words opts))
+                                               { cwd = Just wd, std_in = UseHandle hIn, std_out = UseHandle hOut, std_err = UseHandle hErr }
+                          waitForProcess ph
+        cmdOut <- BS.readFile outPath
+        cmdErr <- BS.readFile errPath
+        return (returnCode, cmdOut, cmdErr)
 
 
 testBuildThing opts expRet expFail thing = do

@@ -1,0 +1,14 @@
+# env.stdio.outb and env.stdio.errb write the bytes they are given unchanged,
+# including a NUL and bytes that are not valid UTF-8. Calls that one actor makes
+# to out() and outb() are written in the order they were made.
+actor main(env):
+    env.stdio.out("out 1\n")
+    env.stdio.outb(b"a\x00b\xff\n")
+    env.stdio.out("out 2\n")
+    env.stdio.errb(b"c\x00d\xfe\n")
+    env.stdio.err("err 1\n")
+    # The calls above do not wait for Stdio to run them. Stdio runs the calls
+    # from this actor in order, so once the last one has returned, all of the
+    # output has been written and the program can exit.
+    await async env.stdio.outb(b"outb 2\n")
+    env.exit(0)
