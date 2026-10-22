@@ -1638,6 +1638,14 @@ actor Stdio(envcap: _EnvCap, vars: EnvVar):
         """Write s to stderr"""
         NotImplemented
 
+    action def outb(b: bytes) -> None:
+        """Write b to stdout"""
+        NotImplemented
+
+    action def errb(b: bytes) -> None:
+        """Write b to stderr"""
+        NotImplemented
+
     action def stdin_install(on_stdin: ?action(str) -> None=None, encoding: ?str=None, on_error: ?action(str, bytes) -> None=None, on_stdin_bytes: ?action(bytes) -> None=None) -> None:
         if on_stdin is None and on_stdin_bytes is None:
             raise _missing_stdin_callback_error

@@ -42,6 +42,11 @@ does not wait for the actor to run it, and the calls that one actor
 makes to the same service run in the order they were made. See
 [Async method calls](actors/async_method_call.md).
 
+`env.stdio.out(s)` and `env.stdio.err(s)` write the `str` `s` to stdout
+and stderr. `env.stdio.outb(b)` and `env.stdio.errb(b)` write the
+`bytes` `b` unchanged, so binary data and output that is not valid UTF-8
+reach stdout and stderr as they are.
+
 `Env` also has methods that call these services, such as `env.getenv`,
 `env.setenv`, `env.stdout_write` and `env.stdin_install`. Existing
 programs use them. New code should call `env.vars`, `env.stdio` and
