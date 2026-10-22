@@ -368,7 +368,7 @@ dist/deps/libbsdnt: deps-download/$(LIBBSDNT_REF).tar.gz $(LIBBSDNT_BUILD_ZIG)
 # /deps/libgc --------------------------------------------
 # Built with the build.zig of the bdwgc tree itself. The tests are kept so that
 # `zig build test` can run in dist/deps/libgc.
-LIBGC_REF=5ec2cad62d423a43702c1b23026c031dc81f522f
+LIBGC_REF=0642165e83122ef85aaa5c2ecd43009c1da2c09f
 deps-download/$(LIBGC_REF).tar.gz:
 	mkdir -p deps-download
 	$(CURL) -o $@ https://github.com/actonlang/bdwgc/archive/$(LIBGC_REF).tar.gz

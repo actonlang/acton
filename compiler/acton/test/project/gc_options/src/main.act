@@ -37,6 +37,9 @@ actor main(env):
     print("bytes_per_marker=" + str(info.bytes_per_marker))
     print("initial_mark_stack_size=" + str(info.initial_mark_stack_size))
     print("alloc_budget_percent=" + str(info.alloc_budget_percent))
+    print("heap_ceiling_percent=" + str(info.heap_ceiling_percent))
+    print("memory_limit=" + str(info.memory_limit))
+    print("memory_limit_known=" + str(info.memory_limit > 0))
 
     var done = 0
 
