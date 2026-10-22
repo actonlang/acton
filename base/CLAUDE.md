@@ -49,11 +49,6 @@ cd base && zig build
 - DNS resolution
 - Socket operations
 
-#### `process.act` / `process.ext.c`
-- Process spawning through a ProcessCap, kept for programs that still import
-  the module. It is a copy of the builtin Process and RunProcess that
-  env.process starts, so patch both copies until the module is removed.
-
 #### `time.act` / `time.ext.c`
 - Time operations
 - Sleep/delay functions
