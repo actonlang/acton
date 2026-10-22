@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixes
+- Close TCP sockets after failed connection attempts. [#3280]
+
 ## [0.31.0] - 2026-10-08
 
 This release brings major performance improvements across the compiler,
