@@ -1,0 +1,5 @@
+actor main(env):
+    # exit() is sent after stdout_write(), so the output must be written
+    # before the program exits.
+    env.stdout_write("written before exit\n")
+    env.exit(0)

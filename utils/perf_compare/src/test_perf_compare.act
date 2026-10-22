@@ -3,7 +3,6 @@ import file
 import json
 import math
 import perf_compare
-import process
 import testing
 
 
@@ -196,7 +195,6 @@ def _test_pair_order_is_balanced():
 actor _test_comparison_preserves_checkout(t: testing.EnvT):
     fc = file.FileCap(t.env.cap)
     fs = file.FS(fc)
-    pc = process.ProcessCap(t.env.cap)
     temporary = fs.mktmpdir(prefix="perf-compare-test-")
     root = temporary + "/repo"
     external = temporary + "/external project"
@@ -245,7 +243,7 @@ actor _test_comparison_preserves_checkout(t: testing.EnvT):
         else:
             t.error(error)
 
-    action def on_exit(p: process.Process, code: int, sig: int, stdout: bytes, stderr: bytes) -> None:
+    action def on_exit(p: Process, code: int, sig: int, stdout: bytes, stderr: bytes) -> None:
         continuation = pending
         pending = None
         if continuation is not None and not finished:
@@ -257,7 +255,7 @@ actor _test_comparison_preserves_checkout(t: testing.EnvT):
             except Exception as error:
                 fail(error)
 
-    action def on_error(p: process.Process, error: str) -> None:
+    action def on_error(p: Process, error: str) -> None:
         fail(OSError(error))
 
     proc def run(cmd: list[str], logfile: str, continuation: proc(bytes) -> None, success: bool=True) -> None:
@@ -265,7 +263,7 @@ actor _test_comparison_preserves_checkout(t: testing.EnvT):
         pending = continuation
         log_path = temporary + "/" + logfile
         expect_success = success
-        process.RunProcess(pc, cmd, on_exit, on_error, workdir=temporary, env=None)
+        t.env.process.run(cmd, on_exit, on_error, workdir=temporary, env=None)
 
     proc def latest_incomplete(has_study: bool) -> None:
         latest = sorted(fs.listdir(recording_root))[-1]

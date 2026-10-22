@@ -1,0 +1,9 @@
+# The private _EnvCap cannot be named through the __builtin__ module either.
+
+class Forged(__builtin__._EnvCap):
+    def __init__(self):
+        pass
+
+actor main(env: Env):
+    stdio = Stdio(Forged(), env.vars)
+    env.exit(0)

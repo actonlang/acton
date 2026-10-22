@@ -24,10 +24,10 @@ actor main(env: Env):
             print("Unknown command:", input)
 
     # Set non-canonical mode, so we get each key stroke directly
-    env.set_stdin(canonical=False)
+    env.stdio.set_stdin(canonical=False)
     # Turn off terminal echo
-    env.set_stdin(echo=False)
-    env.stdin_install(interact)
+    env.stdio.set_stdin(echo=False)
+    env.stdio.stdin_install(interact)
     print("Type 'q' to quit, 'i' to increment a counter and 'd' to decrement it.")
 
     def periodic():

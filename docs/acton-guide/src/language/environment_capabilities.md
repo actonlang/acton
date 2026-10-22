@@ -16,7 +16,7 @@ This chapter covers the practical side of that model:
 
 - [Security](../security.md) explains why access is explicit.
 - [Environment](../environment.md) covers `env`, arguments, variables,
-  stdin, and terminal mode changes.
+  stdin, terminal mode changes, and child processes.
 
 Use this chapter when you need to:
 
@@ -24,6 +24,7 @@ Use this chapter when you need to:
 - inspect or change environment variables
 - read from standard input
 - handle interactive terminal input
+- start child processes
 - decide what authority a helper should receive
 
 <div class="advanced-content">

@@ -1013,6 +1013,10 @@ struct $Cont $Fail$instance = {
     &$FailG_methods
 };
 ////////////////////////////////////////////////////////////////////////////////////////
+// Bootstrap sequence: the first message goes to Env and runs $InitEnv, which runs
+// the generated Env.__init__. Once Env is fully initialized, Env.__init__ continues
+// with $StartRoot, which sends the root actor $InitRoot to run its __init__ with Env.
+
 $R $InitRootD___call__ ($Cont $this, $WORD val) {
     typedef $R(*ROOT__init__t)($Actor, $Cont, B_Env);    // Assumed type of the ROOT actor's __init__ method
     return ((ROOT__init__t)root_actor->$class->__init__)(root_actor, ($Cont)val, env_actor);
@@ -1040,6 +1044,63 @@ struct $ContG_class $InitRootG_methods = {
 };
 struct $Cont $InitRoot$cont = {
     &$InitRootG_methods
+};
+
+$R $StartRootD___call__ ($Cont $this, $WORD val) {
+    $ASYNC(root_actor, &$InitRoot$cont);
+    return $R_DONE(val);
+}
+
+extern struct $ContG_class $StartRootG_methods;
+
+$Cont $StartRoot__deserialize__($Cont self, $Serial$state state) {
+  $Cont res = $DNEW($Cont,state);
+  res->$class = &$StartRootG_methods;
+  return res;
+}
+
+struct $ContG_class $StartRootG_methods = {
+    "$StartRoot",
+    UNASSIGNED,
+    NULL,
+    $ContD___init__,
+    $ContD___serialize__,
+    $StartRoot__deserialize__,
+    $ContD___bool__,
+    $ContD___str__,
+    $ContD___str__,
+    $StartRootD___call__
+};
+struct $Cont $StartRoot$cont = {
+    &$StartRootG_methods
+};
+
+$R $InitEnvD___call__ ($Cont $this, $WORD args) {
+    return env_actor->$class->__init__(env_actor, &$StartRoot$cont, B_WorldCapG_new(), B_SysCapG_new(), (B_list)args, num_wthreads, B__EnvCapG_new());
+}
+
+extern struct $ContG_class $InitEnvG_methods;
+
+$Cont $InitEnv__deserialize__($Cont self, $Serial$state state) {
+  $Cont res = $DNEW($Cont,state);
+  res->$class = &$InitEnvG_methods;
+  return res;
+}
+
+struct $ContG_class $InitEnvG_methods = {
+    "$InitEnv",
+    UNASSIGNED,
+    NULL,
+    $ContD___init__,
+    $ContD___serialize__,
+    $InitEnv__deserialize__,
+    $ContD___bool__,
+    $ContD___str__,
+    $ContD___str__,
+    $InitEnvD___call__
+};
+struct $Cont $InitEnv$cont = {
+    &$InitEnvG_methods
 };
 ////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1699,59 +1760,56 @@ void serialize_actor($Actor a, uuid_t *txnid) {
 }
 #endif
 
-void serialize_state_shortcut($Actor a) {
-#ifdef ACTON_DB
-    if (db) {
-            int success = 0, ret = 0, minority_status = 0;
-            while(!success && !rts_exit) {
-            uuid_t * txnid = remote_new_txn(db);
-            if(txnid == NULL)
-                continue;
-            serialize_actor(a, txnid);
-            ret = remote_commit_txn(txnid, &minority_status, db);
-            rtsd_printf("############## Commit returned %d, minority_status %d", ret, minority_status);
-            if(handle_status_and_schema_mismatch(ret, minority_status, a->$globkey))
-                continue;
-            if(ret == VAL_STATUS_COMMIT)
-                success = 1;
-            }
-    }
-#endif
-}
-
 void BOOTSTRAP(int argc, char *argv[]) {
     B_list args = B_listG_new(NULL,NULL);
     B_SequenceD_list wit = B_SequenceD_listG_witness;
     for (int i=0; i< argc; i++)
         wit->$class->append(wit,args,actStrFromCStringCopy(argv[i]));
 
-    // env and root get the fixed keys ENV_KEY and ROOT_KEY. B_EnvG_newactor()
-    // and $ROOT() take one key each, for the actor they create, so the actor
+    // env and root get the fixed keys ENV_KEY and ROOT_KEY. $NEWACTOR() and
+    // $ROOT() take one key each, for the actor they create, so the actor
     // gets this worker's next key.
     WorkerCtx wctx = get_wctx();
     int64_t key_next = wctx->key_next;
     wctx->key_next = ENV_KEY;
-    env_actor = B_EnvG_newactor(B_WorldCapG_new(), B_SysCapG_new(), args);
-    env_actor->nr_wthreads = num_wthreads;
+    env_actor = $NEWACTOR(B_Env);
+    env_actor->$affinity = 0;                       // Hard-coded to the special worker on the main thread
 
     wctx->key_next = ROOT_KEY;
     root_actor = $ROOT();                           // Assumed to return $NEWACTOR(X) for the selected root actor X
     wctx->key_next = key_next;
     time_t now = current_time();
-    B_Msg m = B_MsgG_newXX(root_actor, &$InitRoot$cont, now, &$Done$instance);
+    B_Msg m = B_MsgG_newXX(($Actor)env_actor, &$InitEnv$cont, now, args);
 #ifdef ACTON_DB
     if (db) {
+        // One transaction saves Env, the root actor and the first message and
+        // queues the message for Env. A restart after it restores both actors
+        // and runs the message, a restart before it finds no actors and
+        // bootstraps again.
+        int success = 0;
+        while(!success && !rts_exit) {
+            uuid_t * txnid = remote_new_txn(db);
+            if(txnid == NULL)
+                continue;
+            serialize_actor(($Actor)env_actor, txnid);
+            serialize_actor(root_actor, txnid);
+            serialize_msg(m, txnid);
             int ret = 0, minority_status = 0;
-            while(!rts_exit) {
-                ret = remote_enqueue_in_txn(($WORD*)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)root_actor->$globkey, &minority_status, NULL, db);
-                rtsd_printf("   # enqueue bootstrap msg %" PRId64 " to root actor queue %" PRId64 " returns %d, minority_status %d", m->$globkey, root_actor->$globkey, ret, minority_status);
-                if(!handle_status_and_schema_mismatch(ret, minority_status, root_actor->$globkey))
-                    break;
-            }
+            ret = remote_enqueue_in_txn(($WORD*)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)env_actor->$globkey, &minority_status, txnid, db);
+            rtsd_printf("   # enqueue bootstrap msg %" PRId64 " to env actor queue %" PRId64 " returns %d, minority_status %d", m->$globkey, env_actor->$globkey, ret, minority_status);
+            if(handle_status_and_schema_mismatch(ret, minority_status, env_actor->$globkey))
+                continue;
+            ret = remote_commit_txn(txnid, &minority_status, db);
+            rtsd_printf("############## Commit returned %d, minority_status %d", ret, minority_status);
+            if(handle_status_and_schema_mismatch(ret, minority_status, env_actor->$globkey))
+                continue;
+            if(ret == VAL_STATUS_COMMIT)
+                success = 1;
+        }
     }
 #endif
-    if (ENQ_msg(m, root_actor)) {
-        ENQ_ready(root_actor, stamp_us(now_ns()));
+    if (ENQ_msg(m, ($Actor)env_actor)) {
+        ENQ_ready(($Actor)env_actor, stamp_us(now_ns()));
     }
 
 }
@@ -2661,6 +2719,8 @@ void $register_rts () {
   $register(&$DoneG_methods);
   $register(&$InitRootG_methods);
   $register(&B_EnvG_methods);
+  $register(&$StartRootG_methods);
+  $register(&$InitEnvG_methods);
   // $Fail$instance ends up in message $cont slots when an exception propagates
   // to a waiting actor ($RFAIL wake, and the await-on-failed-message path). It
   // must be registered like $Done, or serializing such a message emits no
@@ -3917,6 +3977,16 @@ int main(int argc, char **argv) {
         const char *stats_json = stats_to_json();
         printf("%s\n", stats_json);
     }
+#endif
+
+#if defined(_WIN32) || defined(_WIN64)
+#else
+    // rts_shutdown() restored the terminal settings if set_stdin() had changed
+    // them, but a Stdio.set_stdin() that was running on another worker may
+    // have changed them after that. No worker runs actors any more, so
+    // restore them once more.
+    if (stdin_attr_changed)
+        tcsetattr(STDIN_FILENO, TCSANOW, &old_stdin_attr);
 #endif
 
     if (logf) {

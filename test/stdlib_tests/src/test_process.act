@@ -1,4 +1,3 @@
-import process
 import testing
 
 
@@ -10,7 +9,7 @@ EMPTY_CMD_ERROR = "Failed to spawn process '<empty command>': empty command"
 actor _test_ProcessMissingBinary(t: testing.EnvT):
     """Missing process binaries must report on_error"""
     var done = False
-    var process_refs: list[process.Process] = []
+    var process_refs: list[Process] = []
 
     def _finish_success():
         if done:
@@ -53,10 +52,9 @@ actor _test_ProcessMissingBinary(t: testing.EnvT):
         _finish_success()
 
     def _start():
-        pc = process.ProcessCap(t.env.cap)
-        process_refs.append(process.Process(pc, [PROCESS_MISSING_CMD],
-                                            _on_stdout, _on_stderr, _on_exit,
-                                            _on_error))
+        process_refs.append(t.env.process.spawn([PROCESS_MISSING_CMD],
+                                                _on_stdout, _on_stderr, _on_exit,
+                                                _on_error))
 
     def _watchdog():
         if not done:
@@ -69,7 +67,7 @@ actor _test_ProcessMissingBinary(t: testing.EnvT):
 actor _test_RunProcessMissingBinary(t: testing.EnvT):
     """RunProcess must report spawn errors instead of waiting forever"""
     var done = False
-    var process_refs: list[process.RunProcess] = []
+    var process_refs: list[RunProcess] = []
 
     def _finish_success():
         if done:
@@ -103,9 +101,8 @@ actor _test_RunProcessMissingBinary(t: testing.EnvT):
         _finish_success()
 
     def _start():
-        pc = process.ProcessCap(t.env.cap)
-        process_refs.append(process.RunProcess(pc, [RUNPROCESS_MISSING_CMD],
-                                               _on_exit, _on_error))
+        process_refs.append(t.env.process.run([RUNPROCESS_MISSING_CMD],
+                                              _on_exit, _on_error))
 
     def _watchdog():
         if not done:
@@ -118,7 +115,7 @@ actor _test_RunProcessMissingBinary(t: testing.EnvT):
 actor _test_ProcessEmptyCommand(t: testing.EnvT):
     """Empty process command lists must report on_error"""
     var done = False
-    var process_refs: list[process.Process] = []
+    var process_refs: list[Process] = []
 
     def _finish_success():
         if done:
@@ -159,10 +156,9 @@ actor _test_ProcessEmptyCommand(t: testing.EnvT):
         _finish_success()
 
     def _start():
-        pc = process.ProcessCap(t.env.cap)
-        process_refs.append(process.Process(pc, [],
-                                            _on_stdout, _on_stderr, _on_exit,
-                                            _on_error))
+        process_refs.append(t.env.process.spawn([],
+                                                _on_stdout, _on_stderr, _on_exit,
+                                                _on_error))
 
     def _watchdog():
         if not done:
@@ -175,7 +171,7 @@ actor _test_ProcessEmptyCommand(t: testing.EnvT):
 actor _test_RunProcessEmptyCommand(t: testing.EnvT):
     """RunProcess empty commands must report on_error"""
     var done = False
-    var process_refs: list[process.RunProcess] = []
+    var process_refs: list[RunProcess] = []
 
     def _finish_success():
         if done:
@@ -208,8 +204,7 @@ actor _test_RunProcessEmptyCommand(t: testing.EnvT):
         _finish_success()
 
     def _start():
-        pc = process.ProcessCap(t.env.cap)
-        process_refs.append(process.RunProcess(pc, [], _on_exit, _on_error))
+        process_refs.append(t.env.process.run([], _on_exit, _on_error))
 
     def _watchdog():
         if not done:

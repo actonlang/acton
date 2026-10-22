@@ -1,6 +1,3 @@
-import process
-
-
 actor main(env):
     def on_stderr(p, data):
         if data is not None:
@@ -29,8 +26,7 @@ actor main(env):
 
     def test():
         print("Starting process..")
-        pc = process.ProcessCap(env.cap)
-        p = process.Process(pc, ["sleep", "2"], on_stdout, on_stderr, on_exit, on_error)
+        p = env.process.spawn(["sleep", "2"], on_stdout, on_stderr, on_exit, on_error)
         pid = p.pid()
 
         print("PID:", pid)

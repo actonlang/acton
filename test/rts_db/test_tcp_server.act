@@ -4,7 +4,6 @@ import acton.rts
 import argparse
 import random
 import net
-import process
 
 # Tests that involve running an Acton program together with the database
 # requires communication over localhost. By dynamically allocating ports we can
@@ -43,7 +42,6 @@ actor Client(connect_cap, port: int):
 
 
 actor Tester(env, verbose, port_chunk, app_wthreads=4):
-    process_cap = process.ProcessCap(env.cap)
     var ps = []
     var psp: dict[int, str] = {}
     var combined_output = ""
@@ -123,7 +121,7 @@ actor Tester(env, verbose, port_chunk, app_wthreads=4):
         for i in range(3):
             port = port_chunk + (2*i)
             cmd = ["../dist/bin/actondb", "-p", str(port), "-s", "127.0.0.1:" + str(port_chunk+1)]
-            p = process.Process(process_cap, cmd, on_stdout, on_stderr, db_on_exit, on_error)
+            p = env.process.spawn(cmd, on_stdout, on_stderr, db_on_exit, on_error)
             p_alive += 1
             ps.append(p)
             paid = p.aid()
@@ -199,12 +197,19 @@ actor Tester(env, verbose, port_chunk, app_wthreads=4):
                 # The resumed server re-verifies every persisted bytes vector for
                 # both runtime type and exact content, and replies OK or FAIL...
                 if data == b"OK":
-                    log("YAY, all bytes vectors survived restart intact, test success!!!!")
+                    log("All bytes vectors survived restart intact; checking the Env services")
+                    state = 12
+                    c.write(b"ENV")
+                else:
+                    error("Bytes serialization regression after resume: %s" % data.decode())
+            elif state == 12:
+                if data == b"OK":
+                    log("YAY, Env and its services answer after resume, test success!!!!")
                     state = 9
                     if p is not None:
                         p.terminate()
                 else:
-                    error("Bytes serialization regression after resume: %s" % data.decode())
+                    error("Env services after resume: %s" % data.decode())
 
 
         def tcpc_on_error(c, msg):
@@ -244,7 +249,7 @@ actor Tester(env, verbose, port_chunk, app_wthreads=4):
                 if exit_code == 0 and term_signal == 0:
                     log("App successfully exited in state %d with exit code %d and termination signal %d" % (state, exit_code, term_signal))
                     state = 6
-                    p = process.Process(process_cap, restart_cmd, app_server_on_stdout, on_stderr, app_server_on_exit, on_error)
+                    p = env.process.spawn(restart_cmd, app_server_on_stdout, on_stderr, app_server_on_exit, on_error)
                     ps.append(p)
                     p_alive += 1
                     if p is not None:
@@ -269,7 +274,7 @@ actor Tester(env, verbose, port_chunk, app_wthreads=4):
 
 
         # Start server
-        p = process.Process(process_cap, cmd, app_server_on_stdout, on_stderr, app_server_on_exit, on_error)
+        p = env.process.spawn(cmd, app_server_on_stdout, on_stderr, app_server_on_exit, on_error)
         p_alive += 1
         if p is not None:
             app_pid = p.pid()

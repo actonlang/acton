@@ -15,10 +15,10 @@ actor main(env):
         print("Got some input:", input)
 
     # Set non-canonical mode so we get each key press directly.
-    env.set_stdin(canonical=False)
+    env.stdio.set_stdin(canonical=False)
     # Turn off terminal echo.
-    env.set_stdin(echo=False)
-    env.stdin_install(interact)
+    env.stdio.set_stdin(echo=False)
+    env.stdio.stdin_install(interact)
 ```
 
 Canonical mode is the right default for ordinary command line tools.

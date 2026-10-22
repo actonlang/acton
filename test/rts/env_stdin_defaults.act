@@ -1,0 +1,19 @@
+# Env.set_stdin and Env.stdin_install take the same defaults as the Stdio
+# methods they call. This is only built, not run, since the calls change the
+# terminal settings when stdin is a terminal.
+actor main(env: Env):
+    def on_stdin(s: str):
+        pass
+
+    def on_stdin_bytes(b: bytes):
+        pass
+
+    env.set_stdin(canonical=False)
+    env.set_stdin(echo=False)
+    env.stdin_install(on_stdin)
+    env.stdin_install(on_stdin_bytes=on_stdin_bytes)
+    env.stdio.set_stdin(canonical=False)
+    env.stdio.set_stdin(echo=False)
+    env.stdio.stdin_install(on_stdin)
+    env.stdio.stdin_install(on_stdin_bytes=on_stdin_bytes)
+    env.exit(0)

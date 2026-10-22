@@ -26,27 +26,40 @@ piece instead of the whole environment.</p>
 
 - `env.argv` for command-line arguments
 - `env.cap` for the root `WorldCap` capability
-- `env.getenv`, `env.setenv`, and `env.unsetenv` for environment
-  variables
-- `env.stdin_install`, `env.set_stdin`, `env.stdout_write`, and
-  `env.is_tty` for terminal and stdin handling
+- `env.vars` for environment variables
+- `env.stdio` for stdin, stdout, stderr and terminal settings
+- `env.process` for starting child processes
 - `env.exit(n)` to terminate the program
 
 - [Environment variables](environment/variables.md)
 - [Reading stdin input](environment/stdin.md)
 - [Interactive stdin input](environment/interactive_stdin.md)
+- [Child processes](environment/processes.md)
+
+`env.vars`, `env.stdio` and `env.process` are actors. A call to one of
+them works like any other actor call: a call whose result is not used
+does not wait for the actor to run it, and the calls that one actor
+makes to the same service run in the order they were made. See
+[Async method calls](actors/async_method_call.md).
+
+`Env` also has methods that call these services, such as `env.getenv`,
+`env.setenv`, `env.stdout_write` and `env.stdin_install`. Existing
+programs use them. New code should call `env.vars`, `env.stdio` and
+`env.process` directly.
 
 Use `env` when code needs process arguments, environment variables,
-standard input, or terminal configuration. Pass it only to the code
-that actually needs that access.
+standard input, terminal configuration or child processes. Pass it only
+to the code that actually needs that access. When a helper needs only
+one of the services, pass it that service, such as `env.vars`, instead
+of the whole `env`.
 
 <div class="advanced-content">
 <p><code>env</code> is best understood as a bundle of process-level
 capabilities, not as one ordinary argument. It carries authority over
-things such as arguments, environment variables, standard input, and
-terminal configuration. If that whole bundle gets threaded through many
-layers, those layers quietly become coupled to process concerns even
-when they only need one small part of it.</p>
+things such as arguments, environment variables, standard input,
+terminal configuration and child processes. If that whole bundle gets
+threaded through many layers, those layers quietly become coupled to
+process concerns even when they only need one small part of it.</p>
 
 <p>In larger programs, treat the root actor as the place where broad
 authority is received, then pass inward only the narrower capability or

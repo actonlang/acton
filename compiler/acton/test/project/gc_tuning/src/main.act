@@ -31,7 +31,7 @@ actor main(env):
         assert other not in info.supported_backends
 
     if incremental:
-        target = env.getenv("GC_PAUSE_TIME_TARGET")
+        target = env.vars.getenv("GC_PAUSE_TIME_TARGET")
         assert target is not None
         if int(target!) == 999999:
             assert info.mode == "generational"

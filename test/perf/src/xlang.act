@@ -22,7 +22,6 @@ import crypto.hash.md5
 import file
 import json
 import math
-import process
 import time
 
 
@@ -542,12 +541,11 @@ actor main(env: Env):
     fcap = file.FileCap(env.cap)
     rcap = file.ReadFileCap(fcap)
     wcap = file.WriteFileCap(fcap)
-    pcap = process.ProcessCap(env.cap)
     fs = file.FS(fcap)
 
     var args = argparse.Args()
     var out: ?file.WriteFile = None
-    var child: ?process.RunProcess = None
+    var child: ?RunProcess = None
     var pending: ?proc(int, str, str) -> None = None
     var steps: list[(int, int, str, str)] = []
     var step = 0
@@ -590,7 +588,7 @@ actor main(env: Env):
         print("xlang: " + str(error), err=True)
         finish(1)
 
-    def command_done(p: process.Process, code: int, sig: int, stdout: bytes, stderr: bytes):
+    def command_done(p: Process, code: int, sig: int, stdout: bytes, stderr: bytes):
         done = pending
         pending = None
         child = None
@@ -600,12 +598,12 @@ actor main(env: Env):
             except Exception as error:
                 fail(error)
 
-    def command_error(p: process.Process, message: str):
+    def command_error(p: Process, message: str):
         fail(OSError(message))
 
     proc def run(cmd: list[str], workdir: ?str, done: proc(int, str, str) -> None) -> None:
         pending = done
-        child = process.RunProcess(pcap, cmd, command_done, command_error, workdir, None)
+        child = env.process.run(cmd, command_done, command_error, workdir, None)
 
     proc def write_line(d: dict[str, ?value]) -> None:
         o = out
@@ -673,9 +671,9 @@ actor main(env: Env):
         scale, time_ms = sizes(test)
         time_ms = budget if budget > 0 else time_ms
         if counters == "off":
-            await async env.unsetenv("ACTON_TEST_PERF")
+            await async env.vars.unsetenv("ACTON_TEST_PERF")
         else:
-            await async env.setenv("ACTON_TEST_PERF", "1")
+            await async env.vars.setenv("ACTON_TEST_PERF", "1")
         binary = paths["acton"]
         # The test/perf project directory, as `acton test perf` runs it
         project = "/".join(binary.split("/")[:-3])
@@ -719,8 +717,8 @@ actor main(env: Env):
             perf_cmd = ["perf", "stat", "-x", ",", "-e", "cycles,instructions", "-D", "-1",
                         "--control", "fifo:" + ctl + "," + ack, "-o", perf_csv, "--"] + cmd
             # The ports enable and disable the counters around their samples
-            await async env.setenv("XLANG_PERF_CTL", ctl)
-            await async env.setenv("XLANG_PERF_ACK", ack)
+            await async env.vars.setenv("XLANG_PERF_CTL", ctl)
+            await async env.vars.setenv("XLANG_PERF_ACK", ack)
             run(["mkfifo", ctl, ack], None, fifos_made)
         else:
             perf_csv = ""
@@ -826,8 +824,8 @@ actor main(env: Env):
                         "--name", "ring", "--scale", "1", "--time", "300ms", "--rts-wthreads", "2"], "."))
         builds.append((["go", "build", "-trimpath", "-o", "xlang-go", "."], "xlang/go"))
         builds.append((["cargo", "build", "--release"], "xlang/tokio"))
-        if env.getenv("RUSTFLAGS") is None:
-            await async env.setenv("RUSTFLAGS", "-C target-cpu=" + a.get_str("cpu"))
+        if env.vars.getenv("RUSTFLAGS") is None:
+            await async env.vars.setenv("RUSTFLAGS", "-C target-cpu=" + a.get_str("cpu"))
         next_build(0, "", "")
 
     proc def next_build(code: int, stdout: str, stderr: str) -> None:
