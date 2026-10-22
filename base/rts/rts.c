@@ -48,10 +48,12 @@
 #include <sys/un.h>
 #include <sys/time.h>
 #include <sys/wait.h>
+#include <sys/resource.h>
 #endif
 #ifdef __APPLE__
 #include <fcntl.h>
 #include <mach/mach_time.h>
+#include <sys/sysctl.h>
 #endif
 #ifdef __x86_64__
 #include <cpuid.h>
@@ -3356,7 +3358,35 @@ static void GC_CALLBACK gc_disable_thp(void *space, size_t size) {
 
 void DaveNull () {}
 
+#ifndef _WIN32
+// Raise the soft limit on open files to the hard limit. Systems set a low
+// soft limit (256 on macOS, 1024 on most Linux systems) for programs that
+// pass file descriptors to select(), whose fd_set holds only those below
+// FD_SETSIZE. Acton waits on file descriptors with libuv, and each worker
+// thread has a libuv loop with file descriptors of its own. To keep a lower
+// limit, lower the hard limit. Child processes inherit the raised limit.
+static void raise_open_file_limit(void) {
+    struct rlimit lim;
+    if (getrlimit(RLIMIT_NOFILE, &lim) != 0 || lim.rlim_cur == lim.rlim_max)
+        return;
+    lim.rlim_cur = lim.rlim_max;
+#ifdef __APPLE__
+    // macOS refuses a soft limit above kern.maxfilesperproc, also when the
+    // hard limit is RLIM_INFINITY
+    int max_files;
+    size_t len = sizeof(max_files);
+    if (sysctlbyname("kern.maxfilesperproc", &max_files, &len, NULL, 0) == 0
+        && lim.rlim_cur > (rlim_t)max_files)
+        lim.rlim_cur = (rlim_t)max_files;
+#endif
+    setrlimit(RLIMIT_NOFILE, &lim);
+}
+#endif
+
 int main(int argc, char **argv) {
+#ifndef _WIN32
+    raise_open_file_limit();
+#endif
     rts_perf_init();
     init_counter();
     init_clock();

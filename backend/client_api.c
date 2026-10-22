@@ -22,6 +22,8 @@
 #include "hash_ring.h"
 #include "log.h"
 
+#include <poll.h>
+
 #define GC_THREADS 1
 #include "gc.h"
 
@@ -320,10 +322,21 @@ void comm_wake_up(remote_db_t *db) {
     int r = write(db->wakeup_pipe[1], "!", 1);
 }
 
+// Whether poll() found fd readable: it has data, or it reached its end or an
+// error, so that read() returns at once
+static int polled_readable(struct pollfd *fds, int nfds, int fd)
+{
+    for (int i = 0; i < nfds; i++)
+    {
+        if (fds[i].fd == fd)
+            return (fds[i].revents & (POLLIN | POLLHUP | POLLERR)) != 0;
+    }
+    return 0;
+}
+
 void * comm_thread_loop(void * args)
 {
     remote_db_t * db = (remote_db_t *) args;
-    struct timeval timeout;
     char in_buf[BUFSIZE];
     int msg_len = -1;
     int announced_msg_len = -1;
@@ -331,20 +344,23 @@ void * comm_thread_loop(void * args)
 
     while(!db->stop_comm)
     {
-        timeout.tv_sec = 3;
-        timeout.tv_usec = 0;
-        FD_ZERO(&(db->readfds));
-        FD_SET(db->wakeup_pipe[0], &(db->readfds));
-        int max_fd = db->wakeup_pipe[0];
+        // Wait on the wakeup pipe and the socket of each connected server.
+        // poll() takes file descriptors of any number, also FD_SETSIZE and
+        // above.
+        int max_fds = 1;
+        for(snode_t * crt = HEAD(db->servers); crt!=NULL; crt = NEXT(crt))
+            max_fds++;
+        struct pollfd fds[max_fds];
+        int nfds = 0;
+        fds[nfds++] = (struct pollfd) { .fd = db->wakeup_pipe[0], .events = POLLIN };
 
         for(snode_t * crt = HEAD(db->servers); crt!=NULL; crt = NEXT(crt))
         {
             remote_server * rs = (remote_server *) crt->value;
-            if(rs->sockfd > 0)
+            if(rs->sockfd > 0 && nfds < max_fds)
             {
 //              log_info("Listening to server socket %s..", rs->id);
-                FD_SET(rs->sockfd, &(db->readfds));
-                max_fd = (rs->sockfd > max_fd)? rs->sockfd : max_fd;
+                fds[nfds++] = (struct pollfd) { .fd = rs->sockfd, .events = POLLIN };
             }
             else
             {
@@ -352,19 +368,19 @@ void * comm_thread_loop(void * args)
             }
         }
 
-        int status = select(max_fd + 1 , &(db->readfds) , NULL , NULL , &timeout);
+        int status = poll(fds, nfds, 3000);
 
         if (status < 0)
         {
-            if (errno != EINTR && errno != EBADF)
+            if (errno != EINTR)
             {
-                log_error("select error, errno: %d", errno);
+                log_error("poll error, errno: %d", errno);
                 assert(0); // EINVAL, ENOMEM
             }
             continue;
         }
 
-        if (FD_ISSET(db->wakeup_pipe[0], &(db->readfds))) {
+        if (fds[0].revents & POLLIN) {
             char dummy;
             int r = read(db->wakeup_pipe[0], &dummy, 1); // Consume dummy data
         }
@@ -372,7 +388,7 @@ void * comm_thread_loop(void * args)
         for(snode_t * crt = HEAD(db->servers); crt!=NULL; crt = NEXT(crt))
         {
             remote_server * rs = (remote_server *) crt->value;
-            if(rs->sockfd > 0 && FD_ISSET(rs->sockfd , &(db->readfds)))
+            if(rs->sockfd > 0 && polled_readable(fds, nfds, rs->sockfd))
             // Received a msg from this server:
             {
                 int skip_parsing = 0;
