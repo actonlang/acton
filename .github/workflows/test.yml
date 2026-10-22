@@ -1573,8 +1573,7 @@ jobs:
   update-homebrew:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
-    # Depend on all test jobs so we don't update brew repo in case anything fails
-    needs: [test-macos, test-linux, test-cross-compile, test-windows, test-proxy, build-debs]
+    needs: [release]
     steps:
       - name: "Check out code of main acton repo"
         uses: actions/checkout@v7
@@ -1587,15 +1586,6 @@ jobs:
           echo "Found version: $VERSION"
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-      - name: "Download release tarball"
-        run: wget https://github.com/actonlang/acton/archive/refs/tags/v${VERSION}.tar.gz
-      - name: "Calculate SHA256 checksum"
-        run: sha256sum v${VERSION}.tar.gz
-      - id: shasum
-        run: |
-          CHECKSUM=$(sha256sum v${VERSION}.tar.gz | cut -d' ' -f1)
-          echo "sum=$CHECKSUM" >> $GITHUB_OUTPUT
-          echo "Checksum: $CHECKSUM"
       - name: "Check out code of our brew repo"
         uses: actions/checkout@v7
         with:
@@ -1606,9 +1596,22 @@ jobs:
           cp homebrew/Formula/acton.rb homebrew-acton/Formula/acton.rb
       - name: "Update brew formula for acton with new version"
         run: |
-          sed -i -e 's,^  url.*,  url "https://github.com/actonlang/acton/archive/refs/tags/v'${VERSION}'.tar.gz",' -e 's/^  sha256.*/  sha256 "'${{ steps.shasum.outputs.sum }}'"/' homebrew-acton/Formula/acton.rb
-          echo "Updated formula to version ${VERSION} with checksum ${{ steps.shasum.outputs.sum }}"
-          cat homebrew-acton/Formula/acton.rb | grep -A 1 "^ *url"
+          FORMULA=homebrew-acton/Formula/acton.rb
+          sed -i -e "s/0\.0\.0/${VERSION}/g" ${FORMULA}
+          for PLATFORM in macos-aarch64 macos-x86_64 linux-aarch64 linux-x86_64; do
+            TARBALL=acton-${PLATFORM}-${VERSION}.tar.xz
+            wget https://github.com/actonlang/acton/releases/download/v${VERSION}/${TARBALL}
+            CHECKSUM=$(sha256sum ${TARBALL} | cut -d' ' -f1)
+            echo "Checksum of ${TARBALL}: ${CHECKSUM}"
+            # The sha256 line follows the url line of each tarball
+            sed -i -e "\,/${TARBALL}\",{n;s/sha256 \"[0-9a-f]*\"/sha256 \"${CHECKSUM}\"/}" ${FORMULA}
+          done
+          if grep -q '0\{64\}' ${FORMULA}; then
+            echo "Placeholder checksum left in ${FORMULA}"
+            exit 1
+          fi
+          echo "Updated formula to version ${VERSION}"
+          cat ${FORMULA} | grep -A 1 "^ *url"
       - name: "Create Pull Request"
         uses: peter-evans/create-pull-request@v8
         with:
