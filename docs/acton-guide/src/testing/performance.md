@@ -31,9 +31,12 @@ acton test perf --time 10s
 ```
 
 Durations accept units such as `5s` and `250ms`. The budget is a target: the runner
-finishes a whole invocation, so slow work can overrun it. A separate watchdog
-allows at least five minutes for a slow test; longer budgets extend it.
-Compilation is outside the benchmark budget.
+finishes a whole invocation, and it always runs at least one warmup invocation
+and one measured invocation, so slow work can overrun it. A test too slow for
+the budget reports a single sample instead of failing. A separate watchdog
+recovers from hangs. It allows at least 30 minutes per test, and longer budgets
+or [`t.timeout()`](../testing.md#slow-tests) extend it. Compilation is outside
+the benchmark budget.
 
 ## Worker threads
 
@@ -77,7 +80,8 @@ Measurements run in pairs, with a fresh process each time. The runner randomly
 chooses one of the six schedules containing two old/new pairs and two new/old
 pairs. This balances which version goes first over four complete pairs while
 avoiding a fixed execution pattern. The actual execution order is recorded.
-Slow workloads can leave room for fewer pairs; an incomplete schedule need not
+Slow workloads can leave room for fewer pairs, down to one: the first pair runs
+even when calibration has used up the budget. An incomplete schedule need not
 be balanced. Every process still repeats complete test invocations and loop
 bodies at the fixed scale.
 
@@ -448,10 +452,11 @@ After preparation and warmup, a loop test aims for four complete measured
 invocations within the remaining budget. Each starts the test from the beginning,
 with fresh setup and teardown. Its loop repeats at the fixed scale while time
 remains. Tests without a loop repeat whole invocations until the budget ends.
-Expensive setup can leave fewer measured runs, or no measurement at all. In
-performance mode the loop may be empty if setup has already consumed its budget;
-teardown must handle that case. The report explains when there are no samples.
-Increase `--time` when needed.
+Expensive setup or slow bodies can leave fewer measured runs, down to one: the
+first measured invocation and its first body run even when preparation has used
+up the budget. The report then notes the limited samples; increase `--time` for
+more. In performance mode a later measured invocation's loop may be empty if its
+setup has used up the rest of the budget; teardown must handle that case.
 
 Use one `t.loop()` per invocation and allow it to finish normally in both ordinary
 and performance testing. An unfinished loop, including an early `break` or

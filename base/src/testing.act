@@ -19,7 +19,6 @@ _invalid_scaling_options_error = ValueError("--scaling requires performance mode
 _incomplete_loop_error = ValueError("Benchmark loop must run to exhaustion")
 _missing_loop_error = ValueError("Scaling measurements require t.loop()")
 _inconsistent_loop_error = ValueError("Call t.loop() consistently in every invocation")
-_preparation_timeout_error = ValueError("Performance time budget exhausted during preparation; increase --time")
 _invalid_timeout_error = ValueError("Test timeout must be positive and finite")
 _test_error = AssertionError("Test error")
 
@@ -373,7 +372,7 @@ class PerfLoop(Iterator[int]):
     _yield_scale: ?int
     _report_result: ?action(?bool, ?Exception, ?str) -> None
 
-    def __init__(self, phase: int=0, scale: int=1, budget_ms: float=0.0, remaining_ms: float=0.0, once: bool=False):
+    def __init__(self, phase: int=0, scale: int=1, budget_ms: float=0.0, remaining_ms: ?float=None, once: bool=False):
         self._phase = phase
         self._scale = scale
         self.iterations = 0
@@ -434,9 +433,12 @@ class PerfLoop(Iterator[int]):
             return self._scale if self.iterations == 0 else None
         elapsed = self._sw.elapsed().to_float() * 1000.0
         if completed == 0:
-            # Setup uses the total budget, but a run may finish its first body
-            # after its individual slice expires.
-            return self._scale if elapsed < self._remaining_ms else None
+            # Setup may use the rest of the total budget, not just this
+            # invocation's slice. Without a limit the first body always runs.
+            limit = self._remaining_ms
+            if limit is not None and elapsed >= limit:
+                return None
+            return self._scale
         # Calibration changes scale between invocations, so setup sees the
         # same scale as the single calibration body.
         if self._phase == 1 or elapsed >= self._budget_ms:
@@ -1323,7 +1325,6 @@ class PerfRun(object):
         self.measurement_ms = 0.0
         self.loop_iterations = 0
         self.calibration = []
-        self.preparation_exhausted = False
         self._previous_invocation_ms = 0.0
         self._sw = time.Stopwatch()
 
@@ -1335,12 +1336,17 @@ class PerfRun(object):
             # The parent bounds the study. Each child warms up once, then takes
             # one sample without filling a time budget or batching loop bodies.
             return PerfLoop(2 if self.phase == "warmup" else 3, self.scale, once=True)
-        remaining = self.remaining_ms()
         if self.phase == "calibrate":
-            return PerfLoop(1, self.scale, remaining_ms=remaining)
+            return PerfLoop(1, self.scale)
+        remaining = self.remaining_ms()
         if self.phase == "warmup":
-            return PerfLoop(2, self.scale, min([remaining, float(self.time_ms) / 10.0]), remaining)
-        return PerfLoop(3, self.scale, remaining / float(max([1, 4 - samples])), remaining)
+            return PerfLoop(2, self.scale, min([remaining, float(self.time_ms) / 10.0]))
+        # Setup that uses up the rest of the budget skips a later sample's
+        # body, but the first sample always runs one.
+        return PerfLoop(3, self.scale, remaining / float(max([1, 4 - samples])), remaining if samples > 0 else None)
+
+    def _warmed_up(self) -> bool:
+        return self.warmup_duration_ms >= float(self.time_ms) / 10.0 or self.remaining_ms() <= 0.0
 
     def observe(self, loop: PerfLoop, elapsed_ms: float, invocation_ms: float) -> bool:
         """Preparation never contributes a statistical sample."""
@@ -1364,11 +1370,11 @@ class PerfRun(object):
             self.phase = "warmup"
             if not self.loop:
                 self.warmup_duration_ms = elapsed_ms
-                if elapsed_ms >= float(self.time_ms) / 10.0:
+                if self._warmed_up():
                     self.phase = "measure"
         elif self.phase == "warmup":
             self.warmup_duration_ms = elapsed_ms
-            if self.scaling or self.warmup_duration_ms >= float(self.time_ms) / 10.0:
+            if self.scaling or self._warmed_up():
                 self.phase = "measure"
         else:
             self.measurement_ms += float(loop._wall_ns) / 1000000.0 if self.loop else invocation_ms
@@ -1598,7 +1604,6 @@ actor TestExecutor(syscap, config, t: Test, report_complete, report_progress, en
                     "measurement_ms": perf_run.measurement_ms,
                     "measurement_duration_ms": measurement_duration_ms if perf_run.phase == "measure" else 0.0,
                     "calibration": perf_run.calibration,
-                    "preparation_exhausted": perf_run.preparation_exhausted,
                     "workers": env.nr_wthreads,
                     "gc": "natural",
                 }
@@ -1609,12 +1614,6 @@ actor TestExecutor(syscap, config, t: Test, report_complete, report_progress, en
         if test_info is not None:
             test_info.complete = True
             test_info.test_duration = test_sw.elapsed().to_float() * 1000.0
-            if iteration == 0:
-                if perf_run is not None:
-                    perf_run.preparation_exhausted = True
-                test_info.success = False
-                test_info.exception = "Performance time budget exhausted during preparation; increase --time"
-                test_info.num_failures = 1
         _emit_result(True)
         report_complete(executor_id, t, test_info)
 
@@ -1683,15 +1682,10 @@ actor TestExecutor(syscap, config, t: Test, report_complete, report_progress, en
             if phase != perf_run.phase and (perf_run.loop or perf_run.phase == "measure"):
                 perf_phase_sw.reset()
             if not measured:
-                if perf_run.scaling or perf_run.remaining_ms() > 0.0:
-                    if last_report.elapsed().to_float() > 0.05:
-                        _emit_result(False)
-                    after 0: _run_fn(test)
-                    return
-                perf_run.preparation_exhausted = True
-                success = False
-                exception = _preparation_timeout_error
-                complete = True
+                if last_report.elapsed().to_float() > 0.05:
+                    _emit_result(False)
+                after 0: _run_fn(test)
+                return
 
         if perf_run is not None and (complete or skipped):
             # Failed or skipped invocations are outcomes, never timing samples.
@@ -1762,7 +1756,7 @@ actor TestExecutor(syscap, config, t: Test, report_complete, report_progress, en
             report_complete(executor_id, t, test_info)
 
     def _run_fn(t: Test):
-        if perf_run is not None and not perf_run.scaling and perf_run.remaining_ms() <= 0.0:
+        if perf_run is not None and iteration > 0 and perf_run.remaining_ms() <= 0.0:
             _finish_budget()
             return
         _stress_drift_delay()
@@ -2193,7 +2187,9 @@ actor test_runner(env: Env,
         if config.max_time > 0:
             test_timeout = max([config.max_time, 2.0]) + _stress_timeout_slack_s()
         if config.perf_mode:
-            test_timeout = max([300.0, float(config.time_ms) / 1000.0 + 2.0])
+            # The budget is a target that slow invocations overrun. This only
+            # recovers from hangs.
+            test_timeout = max([1800.0, float(config.time_ms) / 1000.0 + 2.0])
 
         test_name = args.get_str("name")
         if test_name not in all_tests:

@@ -287,51 +287,16 @@ perfTests = testGroup "performance baselines"
       case measured of
         Right pairs -> assertEqual "whole invocations still form independent pairs" 4 (length pairs)
         Left res -> assertFailure (show res)
-  , testCase "performance preparation retries at the selected scale" $ do
-      forM_ [False, True] $ \retryFails -> do
-        launches <- newIORef []
-        measured <- runPerfPairs [True, False, True, False] 5000 (Just 7) $ \old scale budget -> do
-          previous <- readIORef launches
-          modifyIORef' launches (++ [(old, scale, budget)])
-          let obj = if null previous then changeIdentity "preparation_exhausted" (Aeson.Bool True) (sample 10 0 10)
-                                    else sample 10 0 10
-          return (result obj) { trTestDuration = fromIntegral budget
-                              , trSuccess = Just (not (null previous) && not retryFails) }
-        calls <- readIORef launches
-        assertEqual "retry uses the remaining budget without recalibrating"
-          [(True, Just 7, 1250), (True, Just 7, 3750)] (take 2 calls)
-        case measured of
-          Right pairs | not retryFails -> do
-            assertEqual "only completed retries contribute to the pair" 1 (length pairs)
-            assertEqual "current still runs after successful preparation" 3 (length calls)
-          Left _ | retryFails -> assertEqual "a real failure ends retries" 2 (length calls)
-          _ -> assertFailure "unexpected preparation retry result"
-  , testCase "randomized pairs retain orientation when the second process retries" $ do
+  , testCase "a pilot that uses up the budget still measures one pair" $ do
       launches <- newIORef []
-      measured <- runPerfPairs [False, True, False, True] 5000 (Just 7) $ \old _ budget -> do
-        previous <- readIORef launches
-        modifyIORef' launches (++ [old])
-        let n = length previous + 1
-            obj = changeIdentity "preparation_exhausted" (Aeson.Bool (n == 2)) $
-              KM.insert "sequence" (Aeson.toJSON n) (sample 10 0 10)
-        return (result obj) { trTestDuration = fromIntegral budget, trSuccess = Just (n /= 2) }
-      assertEqual "retry only the second side" [False, True, True] =<< readIORef launches
+      measured <- runPerfPairs [True, False, True, False] 5000 Nothing $ \old scale budget -> do
+        modifyIORef' launches (++ [(old, scale, budget)])
+        return (result (sample 2000 0 1)) { trTestDuration = 6000 }
+      calls <- readIORef launches
+      assertEqual "one pair follows at the smallest budget, then the overrun ends the comparison"
+        [(True, Nothing, 625), (True, Just 7, 1), (False, Just 7, 1)] calls
       case measured of
-        Right [(old, new)] -> do
-          assertEqual "accepted baseline follows its discarded preparation" 3 =<< (requirePerfData old >>= requireNumber "sequence")
-          assertEqual "current keeps its earlier measurement" 1 =<< (requirePerfData new >>= requireNumber "sequence")
-        _ -> assertFailure "expected one complete pair after retry"
-  , testCase "later preparation exhaustion retains complete pairs" $ do
-      launches <- newIORef (0 :: Int)
-      measured <- runPerfPairs [True, False, True, False] 5000 (Just 7) $ \_ _ budget -> do
-        n <- atomicModifyIORef' launches (\n -> (n + 1, n + 1))
-        let obj = if n == 3 then changeIdentity "preparation_exhausted" (Aeson.Bool True) (sample 10 0 10)
-                           else sample 10 0 10
-        return (result obj) { trTestDuration = if n == 3 then 3000 else fromIntegral budget
-                           , trSuccess = Just (n /= 3) }
-      assertEqual "do not start the other side of an exhausted pair" 3 =<< readIORef launches
-      case measured of
-        Right pairs -> assertEqual "previous complete pairs remain usable" 1 (length pairs)
+        Right pairs -> assertEqual "the overrun pilot still leaves one complete pair" 1 (length pairs)
         Left res -> assertFailure (show res)
   , testCase "slow processes produce fewer complete pairs" $ do
       launches <- newIORef (0 :: Int)
@@ -711,7 +676,12 @@ perfIntegrationTests =
           , "actor _test_slow_setup(t: testing.EnvT):"
           , "    acton.rts.sleep(t.env.syscap, 0.2)"
           , "    for scale in t.loop():"
-          , "        assert False, \"No body should run after setup exhausts the budget\""
+          , "        pass"
+          , "    t.success()"
+          , ""
+          , "actor _test_slow_body(t: testing.EnvT):"
+          , "    for scale in t.loop():"
+          , "        acton.rts.sleep(t.env.syscap, 0.2)"
           , "    t.success()"
           , ""
           , "actor _test_looped(t: testing.EnvT):"
@@ -955,22 +925,30 @@ perfIntegrationTests =
         assertBool badErr (badCode /= ExitSuccess && "Cannot read performance baseline" `isInfixOf` badErr)
         assertEqual "malformed baseline is not overwritten" "{broken" =<< BL.readFile baseline
         removeFile baseline
-        -- A complete invocation may exceed the requested budget. It must be
-        -- allowed to finish beyond the former three-second watchdog, but a
-        -- run with no time left for measurement is not a successful benchmark.
-        (slowCode, slowOut, slowErr) <- run ["--name", "slow", "--json"]
-        assertBool (slowOut ++ slowErr) (slowCode /= ExitSuccess)
-        slow <- singleJsonTest slowOut
-        assertEqual "exhausting preparation leaves no measured samples" (Just (Aeson.Number 0)) (KM.lookup "iterations" slow)
-        assertEqual "exhausted preparation produces no measurement" (Just Aeson.Null) (KM.lookup "performance" slow)
-        duration <- requireNumber "duration_ms" slow
-        assertBool "the slow invocation completed past the former watchdog" (duration >= 3000)
+        -- The budget is a target. A test that overruns it still gets one
+        -- warmup and one measured invocation, and neither is cut short.
+        slowOut <- runOK ["--name", "slow", "--json"]
+        slow <- singleJsonTest slowOut >>= requireObject "performance" >>= requireObject "measurements"
+        assertEqual "a slow whole invocation is measured once" 1 =<< requireNumber "num_iterations" slow
+        slowInfo <- requireObject "perf_info" slow
+        assertBool "the first slow invocation is the warmup" . (>= 3000) =<< requireNumber "warmup_duration_ms" slowInfo
+        assertBool "the measured slow invocation completes" . (>= 3000) =<< requireNumber "measurement_duration_ms" slowInfo
         assertBool slowOut (not ("TimeoutError" `isInfixOf` slowOut))
-        (setupCode, setupOut, setupErr) <- run ["--name", "slow_setup", "--json"]
-        assertBool (setupOut ++ setupErr) (setupCode /= ExitSuccess)
-        exhausted <- singleJsonTest setupOut
-        assertEqual "setup can exhaust calibration before its first body" (Just Aeson.Null) (KM.lookup "performance" exhausted)
-        assertBool setupOut (not ("No body should run" `isInfixOf` setupOut))
+        -- Calibration, warmup and measurement each run one body, whether the
+        -- budget went to the body or to setup.
+        forM_ ["slow_body", "slow_setup"] $ \test -> do
+          out <- runOK ["--name", test, "--json"]
+          measured <- singleJsonTest out >>= requireObject "performance" >>= requireObject "measurements"
+          assertEqual (test ++ " takes one sample") 1 =<< requireNumber "num_iterations" measured
+          assertEqual (test ++ " measures one body") 1 =<< requireNumber "loop_iterations" measured
+          info <- requireObject "perf_info" measured
+          assertEqual (test ++ " stops calibrating at scale one") (Just (Aeson.Number 1)) (KM.lookup "scale" info)
+          case KM.lookup "calibration" info of
+            Just (Aeson.Array points) -> assertEqual (test ++ " calibrates with one body") 1 (length points)
+            _ -> assertFailure ("missing calibration observations\n" ++ out)
+          assertBool (test ++ " warms up") . (>= 200) =<< requireNumber "warmup_duration_ms" info
+        limitedOut <- runOK ["--name", "slow_body"]
+        assertBool limitedOut ("limited samples: use a larger --time budget" `isInfixOf` limitedOut)
         looped <- runLoop "100ms" "50000" ["--record", "--scale", "50000", "--tag", "beta, alpha", "--tag", "alpha"] >>= requireObject "measurements"
         loopedInfo <- requireObject "perf_info" looped
         assertEqual "author opted into loop measurement" (Just (Aeson.Bool True)) (KM.lookup "loop" loopedInfo)
