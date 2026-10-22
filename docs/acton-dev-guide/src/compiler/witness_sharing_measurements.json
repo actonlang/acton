@@ -1,0 +1,1301 @@
+{
+  "baseline_revision": "fad5a7c37746bcdd849bcb65f2c2b4813def864b",
+  "binary_sha256": {
+    "baseline": "04ec747e8046a65bd9d17f605424d7869e7e0b45ee66bb234de079e840a651db",
+    "current": "fb554de476cc0292db88404fe1db1037a7ec9ff744dc38d18f63cba6e975812e"
+  },
+  "compiler_resources": {
+    "acton-yang": {
+      "baseline": {
+        "median": {
+          "rss_bytes": 1129824256,
+          "system": 0.81,
+          "user": 22.28,
+          "wall": 12.13
+        },
+        "samples": [
+          {
+            "rss_bytes": 1139425280,
+            "system": 0.81,
+            "user": 22.1,
+            "wall": 12.13
+          },
+          {
+            "rss_bytes": 1108393984,
+            "system": 0.8,
+            "user": 22.28,
+            "wall": 12.28
+          },
+          {
+            "rss_bytes": 1129824256,
+            "system": 0.86,
+            "user": 22.35,
+            "wall": 12.11
+          }
+        ]
+      },
+      "current": {
+        "median": {
+          "rss_bytes": 1112227840,
+          "system": 0.77,
+          "user": 22.23,
+          "wall": 12.05
+        },
+        "samples": [
+          {
+            "rss_bytes": 1112227840,
+            "system": 0.76,
+            "user": 21.8,
+            "wall": 11.93
+          },
+          {
+            "rss_bytes": 1262256128,
+            "system": 0.88,
+            "user": 22.23,
+            "wall": 12.05
+          },
+          {
+            "rss_bytes": 1106608128,
+            "system": 0.77,
+            "user": 22.23,
+            "wall": 12.16
+          }
+        ]
+      }
+    },
+    "base": {
+      "baseline": {
+        "median": {
+          "rss_bytes": 838713344,
+          "system": 0.22,
+          "user": 2.9,
+          "wall": 1.27
+        },
+        "samples": [
+          {
+            "rss_bytes": 834961408,
+            "system": 0.23,
+            "user": 2.84,
+            "wall": 1.27
+          },
+          {
+            "rss_bytes": 845266944,
+            "system": 0.19,
+            "user": 2.9,
+            "wall": 1.21
+          },
+          {
+            "rss_bytes": 838713344,
+            "system": 0.22,
+            "user": 3.01,
+            "wall": 1.3
+          }
+        ]
+      },
+      "current": {
+        "median": {
+          "rss_bytes": 837582848,
+          "system": 0.2,
+          "user": 2.96,
+          "wall": 1.27
+        },
+        "samples": [
+          {
+            "rss_bytes": 837320704,
+            "system": 0.2,
+            "user": 2.84,
+            "wall": 1.19
+          },
+          {
+            "rss_bytes": 837582848,
+            "system": 0.2,
+            "user": 2.96,
+            "wall": 1.27
+          },
+          {
+            "rss_bytes": 843563008,
+            "system": 0.23,
+            "user": 3.04,
+            "wall": 1.32
+          }
+        ]
+      }
+    },
+    "stratoweave": {
+      "baseline": {
+        "median": {
+          "rss_bytes": 1476034560,
+          "system": 4.25,
+          "user": 76.61,
+          "wall": 21.8
+        },
+        "samples": [
+          {
+            "rss_bytes": 1538703360,
+            "system": 4.18,
+            "user": 75.52,
+            "wall": 21.63
+          },
+          {
+            "rss_bytes": 1440137216,
+            "system": 4.51,
+            "user": 78.48,
+            "wall": 22.14
+          },
+          {
+            "rss_bytes": 1476034560,
+            "system": 4.25,
+            "user": 76.61,
+            "wall": 21.8
+          }
+        ]
+      },
+      "current": {
+        "median": {
+          "rss_bytes": 1533394944,
+          "system": 4.25,
+          "user": 77.56,
+          "wall": 21.95
+        },
+        "samples": [
+          {
+            "rss_bytes": 1505263616,
+            "system": 4.19,
+            "user": 76.61,
+            "wall": 21.75
+          },
+          {
+            "rss_bytes": 1533394944,
+            "system": 4.46,
+            "user": 79.1,
+            "wall": 22.37
+          },
+          {
+            "rss_bytes": 1569980416,
+            "system": 4.25,
+            "user": 77.56,
+            "wall": 21.95
+          }
+        ]
+      }
+    }
+  },
+  "corpora": {
+    "acton-yang": {
+      "baseline": {
+        "bindings": 2166,
+        "constructor_expressions": 4658,
+        "nonstatic_by_lifetime": {
+          "closed": 925,
+          "local_dependent": 0,
+          "parameter_dependent": 53,
+          "unknown": 5
+        },
+        "nonstatic_constructor_expressions": 983,
+        "nonstatic_constructor_expressions_in_loops": 2
+      },
+      "changed_files": {
+        "c": [
+          "yang.type",
+          "yang.test_atom",
+          "yang.test_fnode_hash",
+          "yang.gdata",
+          "yang.schema",
+          "yang.data",
+          "yang.restconf",
+          "yang.test_data",
+          "yang.test_gdata_scale"
+        ],
+        "h": []
+      },
+      "current": {
+        "bindings": 2215,
+        "constructor_expressions": 4576,
+        "nonstatic_by_lifetime": {
+          "closed": 844,
+          "local_dependent": 0,
+          "parameter_dependent": 52,
+          "unknown": 5
+        },
+        "nonstatic_constructor_expressions": 901,
+        "nonstatic_constructor_expressions_in_loops": 0
+      },
+      "generated_code": {
+        "baseline": {
+          "c_bytes": 4360553,
+          "header_bytes": 1458239
+        },
+        "current": {
+          "c_bytes": 4360183,
+          "header_bytes": 1458239
+        }
+      },
+      "modules": 35
+    },
+    "base": {
+      "baseline": {
+        "bindings": 862,
+        "constructor_expressions": 1051,
+        "nonstatic_by_lifetime": {
+          "closed": 56,
+          "local_dependent": 0,
+          "parameter_dependent": 11,
+          "unknown": 0
+        },
+        "nonstatic_constructor_expressions": 67,
+        "nonstatic_constructor_expressions_in_loops": 0
+      },
+      "changed_files": {
+        "c": [],
+        "h": []
+      },
+      "current": {
+        "bindings": 862,
+        "constructor_expressions": 1051,
+        "nonstatic_by_lifetime": {
+          "closed": 56,
+          "local_dependent": 0,
+          "parameter_dependent": 11,
+          "unknown": 0
+        },
+        "nonstatic_constructor_expressions": 67,
+        "nonstatic_constructor_expressions_in_loops": 0
+      },
+      "generated_code": {
+        "baseline": {
+          "c_bytes": 1681179,
+          "header_bytes": 1201610
+        },
+        "current": {
+          "c_bytes": 1681179,
+          "header_bytes": 1201610
+        }
+      },
+      "modules": 27
+    },
+    "small": {
+      "baseline": {
+        "bindings": 89,
+        "constructor_expressions": 186,
+        "nonstatic_by_lifetime": {
+          "closed": 23,
+          "local_dependent": 0,
+          "parameter_dependent": 0,
+          "unknown": 0
+        },
+        "nonstatic_constructor_expressions": 23,
+        "nonstatic_constructor_expressions_in_loops": 0
+      },
+      "changed_files": {
+        "c": [],
+        "h": []
+      },
+      "current": {
+        "bindings": 89,
+        "constructor_expressions": 186,
+        "nonstatic_by_lifetime": {
+          "closed": 23,
+          "local_dependent": 0,
+          "parameter_dependent": 0,
+          "unknown": 0
+        },
+        "nonstatic_constructor_expressions": 23,
+        "nonstatic_constructor_expressions_in_loops": 0
+      },
+      "generated_code": {
+        "baseline": {
+          "c_bytes": 212050,
+          "header_bytes": 151327
+        },
+        "current": {
+          "c_bytes": 212050,
+          "header_bytes": 151327
+        }
+      },
+      "modules": 18
+    },
+    "stratoweave": {
+      "baseline": {
+        "bindings": 5867,
+        "constructor_expressions": 5433,
+        "nonstatic_by_lifetime": {
+          "closed": 1194,
+          "local_dependent": 0,
+          "parameter_dependent": 13,
+          "unknown": 0
+        },
+        "nonstatic_constructor_expressions": 1207,
+        "nonstatic_constructor_expressions_in_loops": 5
+      },
+      "changed_files": {
+        "c": [
+          "stratoweave.subscriptions",
+          "stratoweave.test_subscription_instances",
+          "stratoweave.yang_dir",
+          "stratoweave.adapters.software_iosxe_rpc",
+          "stratoweave.adapters.adapter",
+          "stratoweave.yp_ttt",
+          "stratoweave.ttt",
+          "stratoweave.test_ttt_subscriptions",
+          "stratoweave.test_ttt_transform",
+          "stratoweave.test_ttt_on_change",
+          "stratoweave.test_yp_ttt",
+          "stratoweave.test_ttt_merge",
+          "stratoweave.test_ttt_layers",
+          "stratoweave.test_ttt_linked",
+          "stratoweave.test_ttt_mmerge"
+        ],
+        "h": []
+      },
+      "current": {
+        "bindings": 5905,
+        "constructor_expressions": 5385,
+        "nonstatic_by_lifetime": {
+          "closed": 1150,
+          "local_dependent": 0,
+          "parameter_dependent": 9,
+          "unknown": 0
+        },
+        "nonstatic_constructor_expressions": 1159,
+        "nonstatic_constructor_expressions_in_loops": 5
+      },
+      "generated_code": {
+        "baseline": {
+          "c_bytes": 11939008,
+          "header_bytes": 19128944
+        },
+        "current": {
+          "c_bytes": 11939229,
+          "header_bytes": 19128944
+        }
+      },
+      "modules": 95
+    }
+  },
+  "date": "2026-10-22",
+  "frontend_statistics_unchanged": true,
+  "implementation_source_sha256": {
+    "compiler/lib/package.yaml.in": "598cb8fefed15653fd59105a4297f85d3a60ee3d31061a0da1eb96679c4ebb82",
+    "compiler/lib/src/Acton/Boxing.hs": "6d6e258223bebd5ef463ceed93f7757177492c232c13d93c3cba912e001b486e",
+    "compiler/lib/src/Acton/WitnessRegistry.hs": "aa70990772fd04c1f32343191c35b98297e1d1940f505c345fe7117c3990980c",
+    "compiler/lib/src/Acton/WitnessSharing.hs": "75d833794049b5bb01ab91ffa953b4dce657e58161490051c00bc528839c7724",
+    "compiler/lib/test/ActonSpec.hs": "2bcda57085e4115e881cce5ca17f4859a5e8e2190db06804e3125ef49005f86b",
+    "test/perf/src/witnesses.act": "4a9d354d83f9c68a29e622b472a9f0ed82d035844d2f7a370f752ddf93662aa5",
+    "test/regression_auto/witness_inline_sharing.act": "70e4c246f63d7756e43d781a092bc54a715371539980851dea4772ea5470b985"
+  },
+  "main_revision": "46e1ccaf85f49231a5f54ced6708cbbcf7a1385b",
+  "method": "Same 175 source modules as stage 3; four compiler jobs, --always-build --skip-build --witness-stats; own modules only. C bytes exclude #line directives and implementation-hash comments. Three sequential resource repeats with alternating compiler order; cached base repeats have 26 modules.",
+  "modules": {
+    "'coro-prime-sieve'": {
+      "after": 0,
+      "before": 0
+    },
+    "'coro-prime-sieve2'": {
+      "after": 0,
+      "before": 0
+    },
+    "'fannkuch-redux'": {
+      "after": 0,
+      "before": 0
+    },
+    "__builtin__": {
+      "after": 25,
+      "before": 25
+    },
+    "acton.rts": {
+      "after": 0,
+      "before": 0
+    },
+    "aon": {
+      "after": 3,
+      "before": 3
+    },
+    "argparse": {
+      "after": 2,
+      "before": 2
+    },
+    "base64": {
+      "after": 0,
+      "before": 0
+    },
+    "buildy": {
+      "after": 1,
+      "before": 1
+    },
+    "crypto.hash.md5": {
+      "after": 0,
+      "before": 0
+    },
+    "diff": {
+      "after": 2,
+      "before": 2
+    },
+    "eq_list_dict": {
+      "after": 16,
+      "before": 16
+    },
+    "fasta": {
+      "after": 0,
+      "before": 0
+    },
+    "file": {
+      "after": 0,
+      "before": 0
+    },
+    "fs": {
+      "after": 0,
+      "before": 0
+    },
+    "hash.wyhash": {
+      "after": 0,
+      "before": 0
+    },
+    "helpers": {
+      "after": 0,
+      "before": 0
+    },
+    "http": {
+      "after": 4,
+      "before": 4
+    },
+    "inter": {
+      "after": 1,
+      "before": 1
+    },
+    "json": {
+      "after": 0,
+      "before": 0
+    },
+    "knucleotide": {
+      "after": 1,
+      "before": 1
+    },
+    "logging": {
+      "after": 0,
+      "before": 0
+    },
+    "lru": {
+      "after": 0,
+      "before": 0
+    },
+    "mandelbrot": {
+      "after": 0,
+      "before": 0
+    },
+    "math": {
+      "after": 0,
+      "before": 0
+    },
+    "matrix": {
+      "after": 6,
+      "before": 6
+    },
+    "merkletrees": {
+      "after": 1,
+      "before": 1
+    },
+    "nbody": {
+      "after": 0,
+      "before": 0
+    },
+    "net": {
+      "after": 1,
+      "before": 1
+    },
+    "nsieve": {
+      "after": 0,
+      "before": 0
+    },
+    "pidigits": {
+      "after": 0,
+      "before": 0
+    },
+    "process": {
+      "after": 0,
+      "before": 0
+    },
+    "qcheck": {
+      "after": 0,
+      "before": 0
+    },
+    "random": {
+      "after": 0,
+      "before": 0
+    },
+    "re": {
+      "after": 0,
+      "before": 0
+    },
+    "reprtest": {
+      "after": 1,
+      "before": 1
+    },
+    "server": {
+      "after": 1,
+      "before": 1
+    },
+    "sieve": {
+      "after": 0,
+      "before": 0
+    },
+    "snappy": {
+      "after": 0,
+      "before": 0
+    },
+    "stratoweave.adapters.adapter": {
+      "after": 21,
+      "before": 23
+    },
+    "stratoweave.adapters.netconf": {
+      "after": 79,
+      "before": 79
+    },
+    "stratoweave.adapters.software_iosxe": {
+      "after": 10,
+      "before": 10
+    },
+    "stratoweave.adapters.software_iosxe_mock": {
+      "after": 8,
+      "before": 8
+    },
+    "stratoweave.adapters.software_iosxe_oper": {
+      "after": 10,
+      "before": 10
+    },
+    "stratoweave.adapters.software_iosxe_rpc": {
+      "after": 5,
+      "before": 10
+    },
+    "stratoweave.adapters.software_iosxe_yang": {
+      "after": 0,
+      "before": 0
+    },
+    "stratoweave.adapters.software_mock": {
+      "after": 1,
+      "before": 1
+    },
+    "stratoweave.adapters.test_software_iosxe": {
+      "after": 15,
+      "before": 15
+    },
+    "stratoweave.app": {
+      "after": 3,
+      "before": 3
+    },
+    "stratoweave.argconf": {
+      "after": 8,
+      "before": 8
+    },
+    "stratoweave.build": {
+      "after": 0,
+      "before": 0
+    },
+    "stratoweave.db": {
+      "after": 6,
+      "before": 6
+    },
+    "stratoweave.db.etcd": {
+      "after": 1,
+      "before": 1
+    },
+    "stratoweave.db.lmdb": {
+      "after": 0,
+      "before": 0
+    },
+    "stratoweave.device": {
+      "after": 32,
+      "before": 32
+    },
+    "stratoweave.device_meta_config": {
+      "after": 9,
+      "before": 9
+    },
+    "stratoweave.device_oper": {
+      "after": 10,
+      "before": 10
+    },
+    "stratoweave.device_schema": {
+      "after": 2,
+      "before": 2
+    },
+    "stratoweave.exception": {
+      "after": 0,
+      "before": 0
+    },
+    "stratoweave.fleet_sched": {
+      "after": 11,
+      "before": 11
+    },
+    "stratoweave.fleet_sched_sim": {
+      "after": 0,
+      "before": 0
+    },
+    "stratoweave.http_server": {
+      "after": 4,
+      "before": 4
+    },
+    "stratoweave.ietf_restconf_monitoring": {
+      "after": 2,
+      "before": 2
+    },
+    "stratoweave.ietf_yang_library": {
+      "after": 9,
+      "before": 9
+    },
+    "stratoweave.lib": {
+      "after": 0,
+      "before": 0
+    },
+    "stratoweave.logs": {
+      "after": 1,
+      "before": 1
+    },
+    "stratoweave.monitoring": {
+      "after": 2,
+      "before": 2
+    },
+    "stratoweave.ncurl": {
+      "after": 6,
+      "before": 6
+    },
+    "stratoweave.netconf": {
+      "after": 17,
+      "before": 17
+    },
+    "stratoweave.netconf.buffer": {
+      "after": 2,
+      "before": 2
+    },
+    "stratoweave.netconf.fixups": {
+      "after": 0,
+      "before": 0
+    },
+    "stratoweave.netconf.fixups.base": {
+      "after": 0,
+      "before": 0
+    },
+    "stratoweave.netconf.fixups.openconfig_list_keys": {
+      "after": 5,
+      "before": 5
+    },
+    "stratoweave.netconf.test_yp": {
+      "after": 4,
+      "before": 4
+    },
+    "stratoweave.netconf.transport": {
+      "after": 0,
+      "before": 0
+    },
+    "stratoweave.netconf.yp": {
+      "after": 0,
+      "before": 0
+    },
+    "stratoweave.netconf_server": {
+      "after": 3,
+      "before": 3
+    },
+    "stratoweave.persistence_bench": {
+      "after": 2,
+      "before": 2
+    },
+    "stratoweave.restconf": {
+      "after": 11,
+      "before": 11
+    },
+    "stratoweave.schema_filter": {
+      "after": 2,
+      "before": 2
+    },
+    "stratoweave.ssh_config": {
+      "after": 0,
+      "before": 0
+    },
+    "stratoweave.static_assets": {
+      "after": 0,
+      "before": 0
+    },
+    "stratoweave.subscriptions": {
+      "after": 25,
+      "before": 30
+    },
+    "stratoweave.swyang": {
+      "after": 0,
+      "before": 0
+    },
+    "stratoweave.test_argconf": {
+      "after": 15,
+      "before": 15
+    },
+    "stratoweave.test_db": {
+      "after": 1,
+      "before": 1
+    },
+    "stratoweave.test_device": {
+      "after": 3,
+      "before": 3
+    },
+    "stratoweave.test_device_crpd": {
+      "after": 1,
+      "before": 1
+    },
+    "stratoweave.test_device_runtime_schema": {
+      "after": 7,
+      "before": 7
+    },
+    "stratoweave.test_device_subscriptions": {
+      "after": 20,
+      "before": 20
+    },
+    "stratoweave.test_devicemgr_netconf": {
+      "after": 29,
+      "before": 29
+    },
+    "stratoweave.test_fleet_sched": {
+      "after": 1,
+      "before": 1
+    },
+    "stratoweave.test_gdata_perf": {
+      "after": 9,
+      "before": 9
+    },
+    "stratoweave.test_logs": {
+      "after": 1,
+      "before": 1
+    },
+    "stratoweave.test_monitoring": {
+      "after": 0,
+      "before": 0
+    },
+    "stratoweave.test_netconf_buffer_perf": {
+      "after": 4,
+      "before": 4
+    },
+    "stratoweave.test_netconf_framing": {
+      "after": 4,
+      "before": 4
+    },
+    "stratoweave.test_netconf_server": {
+      "after": 19,
+      "before": 19
+    },
+    "stratoweave.test_restconf_server": {
+      "after": 0,
+      "before": 0
+    },
+    "stratoweave.test_rig": {
+      "after": 2,
+      "before": 2
+    },
+    "stratoweave.test_static_assets": {
+      "after": 0,
+      "before": 0
+    },
+    "stratoweave.test_subscription_instances": {
+      "after": 30,
+      "before": 34
+    },
+    "stratoweave.test_swmgr": {
+      "after": 4,
+      "before": 4
+    },
+    "stratoweave.test_ttt_callbacks": {
+      "after": 27,
+      "before": 27
+    },
+    "stratoweave.test_ttt_container": {
+      "after": 21,
+      "before": 21
+    },
+    "stratoweave.test_ttt_dynstate_deadlock": {
+      "after": 2,
+      "before": 2
+    },
+    "stratoweave.test_ttt_gen": {
+      "after": 0,
+      "before": 0
+    },
+    "stratoweave.test_ttt_layers": {
+      "after": 25,
+      "before": 28
+    },
+    "stratoweave.test_ttt_linked": {
+      "after": 20,
+      "before": 21
+    },
+    "stratoweave.test_ttt_links": {
+      "after": 0,
+      "before": 0
+    },
+    "stratoweave.test_ttt_list": {
+      "after": 22,
+      "before": 22
+    },
+    "stratoweave.test_ttt_merge": {
+      "after": 7,
+      "before": 8
+    },
+    "stratoweave.test_ttt_merge_perf": {
+      "after": 4,
+      "before": 4
+    },
+    "stratoweave.test_ttt_mmerge": {
+      "after": 38,
+      "before": 41
+    },
+    "stratoweave.test_ttt_on_change": {
+      "after": 93,
+      "before": 94
+    },
+    "stratoweave.test_ttt_oper_read": {
+      "after": 22,
+      "before": 22
+    },
+    "stratoweave.test_ttt_perf": {
+      "after": 19,
+      "before": 19
+    },
+    "stratoweave.test_ttt_persistence": {
+      "after": 42,
+      "before": 42
+    },
+    "stratoweave.test_ttt_persistence_bench": {
+      "after": 0,
+      "before": 0
+    },
+    "stratoweave.test_ttt_persistence_etcd": {
+      "after": 3,
+      "before": 3
+    },
+    "stratoweave.test_ttt_subscriptions": {
+      "after": 47,
+      "before": 48
+    },
+    "stratoweave.test_ttt_transform": {
+      "after": 47,
+      "before": 51
+    },
+    "stratoweave.test_yang_dir": {
+      "after": 9,
+      "before": 9
+    },
+    "stratoweave.test_yp_ttt": {
+      "after": 20,
+      "before": 21
+    },
+    "stratoweave.tmf_api": {
+      "after": 0,
+      "before": 0
+    },
+    "stratoweave.ttt": {
+      "after": 182,
+      "before": 193
+    },
+    "stratoweave.ttt_gen": {
+      "after": 2,
+      "before": 2
+    },
+    "stratoweave.ttt_links": {
+      "after": 0,
+      "before": 0
+    },
+    "stratoweave.yang_dir": {
+      "after": 8,
+      "before": 12
+    },
+    "stratoweave.yp": {
+      "after": 1,
+      "before": 1
+    },
+    "stratoweave.yp.engine": {
+      "after": 1,
+      "before": 1
+    },
+    "stratoweave.yp.mock_backend": {
+      "after": 1,
+      "before": 1
+    },
+    "stratoweave.yp_mockserver": {
+      "after": 3,
+      "before": 3
+    },
+    "stratoweave.yp_ttt": {
+      "after": 17,
+      "before": 19
+    },
+    "term": {
+      "after": 0,
+      "before": 0
+    },
+    "testing": {
+      "after": 19,
+      "before": 19
+    },
+    "time": {
+      "after": 1,
+      "before": 1
+    },
+    "uri": {
+      "after": 3,
+      "before": 3
+    },
+    "witness_workload": {
+      "after": 2,
+      "before": 2
+    },
+    "xml": {
+      "after": 0,
+      "before": 0
+    },
+    "yang.adata": {
+      "after": 10,
+      "before": 10
+    },
+    "yang.ayangc": {
+      "after": 0,
+      "before": 0
+    },
+    "yang.data": {
+      "after": 25,
+      "before": 31
+    },
+    "yang.filter_xpath": {
+      "after": 26,
+      "before": 26
+    },
+    "yang.gdata": {
+      "after": 391,
+      "before": 449
+    },
+    "yang.identityref": {
+      "after": 4,
+      "before": 4
+    },
+    "yang.json": {
+      "after": 1,
+      "before": 1
+    },
+    "yang.lib": {
+      "after": 6,
+      "before": 6
+    },
+    "yang.parser": {
+      "after": 2,
+      "before": 2
+    },
+    "yang.pattern": {
+      "after": 4,
+      "before": 4
+    },
+    "yang.restconf": {
+      "after": 8,
+      "before": 10
+    },
+    "yang.schema": {
+      "after": 267,
+      "before": 269
+    },
+    "yang.sdata": {
+      "after": 1,
+      "before": 1
+    },
+    "yang.test_atom": {
+      "after": 25,
+      "before": 30
+    },
+    "yang.test_data": {
+      "after": 21,
+      "before": 22
+    },
+    "yang.test_fnode_hash": {
+      "after": 21,
+      "before": 26
+    },
+    "yang.test_gdata_key_str": {
+      "after": 1,
+      "before": 1
+    },
+    "yang.test_gdata_scale": {
+      "after": 17,
+      "before": 19
+    },
+    "yang.test_transform_explicit_cases": {
+      "after": 0,
+      "before": 0
+    },
+    "yang.test_transform_remove_empty_refines": {
+      "after": 1,
+      "before": 1
+    },
+    "yang.test_type_restrictions": {
+      "after": 0,
+      "before": 0
+    },
+    "yang.test_union_types": {
+      "after": 5,
+      "before": 5
+    },
+    "yang.test_yang": {
+      "after": 5,
+      "before": 5
+    },
+    "yang.test_ypatch": {
+      "after": 6,
+      "before": 6
+    },
+    "yang.transform_explicit_cases": {
+      "after": 0,
+      "before": 0
+    },
+    "yang.transform_filter_schema": {
+      "after": 3,
+      "before": 3
+    },
+    "yang.transform_list_order": {
+      "after": 1,
+      "before": 1
+    },
+    "yang.transform_remove_empty_refines": {
+      "after": 0,
+      "before": 0
+    },
+    "yang.transform_repair_patterns": {
+      "after": 0,
+      "before": 0
+    },
+    "yang.transform_unions": {
+      "after": 0,
+      "before": 0
+    },
+    "yang.transform_utils": {
+      "after": 0,
+      "before": 0
+    },
+    "yang.type": {
+      "after": 22,
+      "before": 23
+    },
+    "yang.xml": {
+      "after": 9,
+      "before": 9
+    },
+    "yang.xpath": {
+      "after": 10,
+      "before": 10
+    },
+    "yang.ypatch": {
+      "after": 9,
+      "before": 9
+    }
+  },
+  "native_workload": {
+    "baseline": {
+      "allocation_bytes": [
+        144239696,
+        144084464,
+        144222048
+      ],
+      "instrumented_constructor_calls": 2000010
+    },
+    "current": {
+      "allocation_bytes": [
+        112058352,
+        112058352,
+        112059616
+      ],
+      "instrumented_constructor_calls": 1000006
+    },
+    "iterations": 1000000,
+    "source": "import acton.rts\n\nclass Bucket[T(Eq)](object):\n    marker: int\n    def __init__(self):\n        self.marker = 0\n    def same(self, x: T, y: T) -> bool:\n        return x == y\n\ndef take(b: Bucket[list[int]] = Bucket()) -> Bucket[list[int]]:\n    return b\n\ndef take_generic[T(Eq)](b: Bucket[list[T]] = Bucket()) -> Bucket[list[T]]:\n    return b\n\ndef compare_generic[T(Eq)](xs: list[T], ys: list[T]) -> bool:\n    return take_generic().same(xs, ys) and take_generic().same(xs, ys)\n\ndef compare(xs: list[int], ys: list[int]) -> bool:\n    return take().same(xs, ys) and take().same(xs, ys)\n\nclass Pair(object):\n    left: Bucket[list[int]]\n    right: Bucket[list[int]]\n    def __init__(self, left: Bucket[list[int]], right: Bucket[list[int]]):\n        self.left = left\n        self.right = right\n\ndef pair(flag: bool) -> Pair:\n    left = take()\n    if flag:\n        right = take()\n    else:\n        right = take()\n    return Pair(left, right)\n\nactor main(env):\n    n = int(env.argv[1]) if len(env.argv) > 1 else 1000000\n    xs = [1, 2, 3]\n    ys = [1, 2, 3]\n    assert compare_generic(xs, ys)\n    assert compare_generic([\"x\"], [\"x\"])\n    assert not compare_generic([\"x\"], [\"y\"])\n    assert not compare(xs, [9])\n    original = pair(True)\n    second = pair(False)\n    assert second.left.same(xs, ys) and second.right.same(xs, ys)\n    payload = serialize(original)\n    restored = deserialize(payload)\n    assert serialize(restored) == payload\n    assert isinstance(restored, Pair)\n    if isinstance(restored, Pair):\n        assert restored.left.same(xs, ys)\n        assert not restored.right.same(xs, [9])\n        restored.left.marker = 17\n        assert restored.right.marker == 0\n    before = acton.rts.get_gc_total_bytes(env.syscap)\n    ok = True\n    for _ in range(n):\n        ok = compare(xs, ys) and ok\n    allocated_after = acton.rts.get_gc_total_bytes(env.syscap)\n    print(ok, allocated_after - before)\n    env.exit(0)\n",
+    "source_sha256": "e9e7926b92bfb0174a68451457a324073c7c42f6c63f91412c69b564572be83d"
+  },
+  "sources": {
+    "acton-yang/Build.act": "9431fd4794cd196b0bbf01191cdad5c61186b3e9559995cbefc51bc9c91fcd80",
+    "acton-yang/src/adata.act": "1fa3b235cabf78a401b80c89cf505edd854c6be7c9bcd0194cdfb0bc9dc10a5a",
+    "acton-yang/src/ayangc.act": "a5849e167f9194ea7ee0588d9ccd501e93ea4680735f3a4f0abab496b234ac4c",
+    "acton-yang/src/data.act": "ead4d34ba015151d9d125a5dc7e657b1396b133fe4e457124aed2062f2a40916",
+    "acton-yang/src/filter_xpath.act": "7c354a17db8e5c2a7694edeb091fda8762bf814883505c38639bf005fc69b220",
+    "acton-yang/src/gdata.act": "3878bc063fcbb7905f2b03e233e491685fba66069b466d8199dacce5035b9249",
+    "acton-yang/src/identityref.act": "8eafca55b7ffe3c6b470b7a3f1714161284b8b6ca7aa83a2b4b8adc076004e00",
+    "acton-yang/src/json.act": "acb622b3569cd1c15f1f86401342836273e281e911df0361c8ef3778a5d5467f",
+    "acton-yang/src/lib.act": "438a2907a8bef0031e1242e3d2c80dac1788f26f750dfc4b6702025111a5ec0d",
+    "acton-yang/src/parser.act": "81f72e4404f83977a70dd6a0fbc20ba97d37b0f1e70cca574343577ec0225819",
+    "acton-yang/src/pattern.act": "337288cc5ee8b2a3f0a3a94496a291a21498aeee79f6c842bf8fed5381499b73",
+    "acton-yang/src/restconf.act": "e9b05dc4724a142fa8762dd25b6f218d5a82fd87bcd11fd2ec64e8d75c117c4c",
+    "acton-yang/src/schema.act": "67a0d828cc0ec4edc952bed7ef5e6a45f0683e8ea4665d1e5e3907c5050a0ae9",
+    "acton-yang/src/sdata.act": "637bc3872a3d102c7f6e1df8c714110b6dfbdfa25b64ee98f5f4fb0be8a752b9",
+    "acton-yang/src/test_atom.act": "926179822d2467870776fee89c8937eab5c7aab976a974508f5702abb4a6643f",
+    "acton-yang/src/test_data.act": "30bb107d0d928f8db871ec3e6419a6ee7b3a97a4f8d21928dae70319500fcf81",
+    "acton-yang/src/test_fnode_hash.act": "1debd6b46def8d17997070bb3f9b07de68a96a174fdbce51a4d03e31e15556e6",
+    "acton-yang/src/test_gdata_key_str.act": "8d91325832c6b300b42648445ed0e6632f5683abad54957451e08fcf62540172",
+    "acton-yang/src/test_gdata_scale.act": "cac656abd22ddc394cfefe3375773637c718a4cc41c67d0a3c454048e81af1bd",
+    "acton-yang/src/test_transform_explicit_cases.act": "b51b4e2da51044719392f89828dbc8333f87a7287289865dac01d3f1c6b02c91",
+    "acton-yang/src/test_transform_remove_empty_refines.act": "9a4319e95ae1ad5181092629c9724cbd36ad4eccd5d3c136d751a538f1557cca",
+    "acton-yang/src/test_type_restrictions.act": "d53e29b8a0fc4052132915fbd39edee885dcdda583dd611703d1d2e799dcc7e1",
+    "acton-yang/src/test_union_types.act": "64b89df1c29b9569401fab70883d53d59560dbc3abea8cf81fe15655d6c1191a",
+    "acton-yang/src/test_yang.act": "978d8b1eb7f0eb67a81bb3946b94886230b47e37bc63cba11bd013a7ba125d7d",
+    "acton-yang/src/test_ypatch.act": "e1d46934e5f6bb42a9c8a5aebe74a4b9c7702d4bd17fe58a360c1baa9962fc71",
+    "acton-yang/src/transform_explicit_cases.act": "bb6aaf651fdb97033528b349f70c6360862bfe0ad2a9de0181bd99748b17a6de",
+    "acton-yang/src/transform_filter_schema.act": "a1b0fe1cde891b16fd74da22a01fafbca9e1e41daa4ba7097d7146ad069decef",
+    "acton-yang/src/transform_list_order.act": "4a2ff5b5e2b387cc30c0602bccb72c5ace649b28dd77c465b98c08af6b5d863b",
+    "acton-yang/src/transform_remove_empty_refines.act": "f666bf0614b70e2603449994d0fcb9ca75891e551d726e24cf8ab602111f8566",
+    "acton-yang/src/transform_repair_patterns.act": "7d514a1fa61dc2772f93a7d9461bd3f28e803d8ddee63d38535c27474d4598c1",
+    "acton-yang/src/transform_unions.act": "c2057c8b9d55c5c70d436899d01b490716551eb0e288a55aa5f010ff0b2e0e26",
+    "acton-yang/src/transform_utils.act": "e652bc2427f6313fe43553a34f7086a611843f0720e9d05a812703d563ff5e2c",
+    "acton-yang/src/type.act": "2e051b7d34070cd80b94e1e779c0b7958dc6f2793fc99c5bc4ae65b6a6c718e3",
+    "acton-yang/src/xml.act": "d469b10dba4592ad3415d36d4071e5b9baab50f25adaf5107259bce9eb1ef1d7",
+    "acton-yang/src/xpath.act": "017846266860961b96507e963e197ed746d98d557c6e37b483be3173a3e9fe47",
+    "acton-yang/src/ypatch.act": "a57876554a66629a11f766ae094cc5f6ddad4a029dab70c4cf2f0351fc735dcf",
+    "base/Build.act": "f5cc27c52e18ad19ae691cf77896028d25041ad435c30677168dbcb37586b67d",
+    "base/src/__builtin__.act": "3493ce960e8bac64746c6a3dd8462d8496ac00bcdd40ad1972f0c22190c1e27d",
+    "base/src/acton/rts.act": "2cf04354f1f5baaac033dc473bcb619e74294161c6bb17b55a36deec6ec9f449",
+    "base/src/aon.act": "84eb6c4a029b97c0c1b25d876a1c92679102d2ebbb249df21c0a66f85d94e7ad",
+    "base/src/argparse.act": "b1ecc2e062dc6cf9999ce328a17f6bdf4ee562f770e8f16c80c061ff6120ea85",
+    "base/src/base64.act": "35953d49706851a9394a079773c629a9236cd51d7f5f7b44219debc015d340e5",
+    "base/src/buildy.act": "afbb1be6bb01408345788f08ea711f0a476139a586a41262538d1b9ca2daea19",
+    "base/src/crypto/hash/md5.act": "44792a9f59364deb9c0107c2d4cc4d68f6ccd44a79738b2c263bf14c144f2d01",
+    "base/src/diff.act": "c7903e70e85fa2fd09f359e8d9e8ed10dd326886b30a4241578e6afe8be2cc2e",
+    "base/src/file.act": "554a46985d6acc516e4a217ef0ddda17d0321164c183e5eb399744aa514ca5b8",
+    "base/src/fs.act": "025c2f8aef084042808a493ede5ad2c8b42441f98092f39d0a124f9f27130fb2",
+    "base/src/hash/wyhash.act": "7f91413d37817fb4b8aeaf798c1e5a3db8e91b4e3e94b4fdc010a4f4ba15196d",
+    "base/src/http.act": "925547296083806d4d7ebd5afc33944625413b2b96ac587763568e5ad330b4a0",
+    "base/src/json.act": "b974a216bd4dcebd3fc5913ab081f12b28246bb87eecfcbdea60b3798778cbb1",
+    "base/src/logging.act": "6e5978a3bdf870cfdab2516ad9609d406ca34d3b33721bd4f6e4497dc126c0eb",
+    "base/src/math.act": "2ca3a84aea3db2d3f783038519aafac72cc8533c540888baada5dbc029f98e33",
+    "base/src/matrix.act": "f23439a989a6177f87b489367b00c4ff981c8e29ff597f9977a4fb537a86b725",
+    "base/src/net.act": "dce51d14b08359f21d0763eb4315eb120bdbe12943f6279154f0de9a37a25050",
+    "base/src/process.act": "3adc31ab6dbf2bfde83d5c0714fe4713bc2cd2055d2efcede2ebb00521e80373",
+    "base/src/qcheck.act": "09242a32d47959454cbb5329fe2c9fbc4c1d62c077ba4af07b05af6ba2d1e3cb",
+    "base/src/random.act": "57ff76522762c6b4eedeac285baf7db75efa7eb05b269ebb576fd661732f0a6d",
+    "base/src/re.act": "32b93c11940d34bd2045810c9eaa7f59ca937fa6b62270ada2087261a8aa7a71",
+    "base/src/snappy.act": "d130e14c2fe390f92ac67abc3d70eae597166691c368d57027e3b66af129120c",
+    "base/src/term.act": "6baad701abb470b868bc37e1a891bb8ae3b741a3eea4d9bcc2cbb4462d750bb2",
+    "base/src/testing.act": "bc93037e5cc18073aea1606cdc697771c993d260b685e032eb45c2b46350729f",
+    "base/src/time.act": "dee2ecc4bb39de90723459205245a13407a370fbe454393b31807a5b1894618f",
+    "base/src/uri.act": "2676aa1f259910252765d27944b01d21a8854e910b4bb8ae87c63fccfeee7eb2",
+    "base/src/xml.act": "08713c9e34c1557ebf987c542694ca450eb190908a8a6f82de2b78ec17225f1c",
+    "bench/coro-prime-sieve.act": "26f6f1c0a9cedf6d9c052289a9e910ebb8f42b3fdc0923a620a6d58dab3a5f96",
+    "bench/coro-prime-sieve2.act": "0d5b93545340fa3527e80bb5cbec65495913fd76947de0c52371c88e0684e2b5",
+    "bench/eq_list_dict.act": "396c197e803366cb883529d3a6f8e8df0d0d036607218fd6302d879b37aba3e5",
+    "bench/fannkuch-redux.act": "d6e25614c9328ed0896a8502dffb5ea8c80e0786ff57d1079ce3ada4a61b902f",
+    "bench/fasta.act": "fb43f7567d81a34fda45ad41f59e5e4dbe520949e164a9efc36ff3185066744e",
+    "bench/helpers.act": "1d14e89b2d8d71fda779a5250b7ad0a3654ac9f4ee5d625089d38a5a25753bb4",
+    "bench/inter.act": "0a02c0c5149bf03efd187781a94095620bbd22a59cc0e3d88d0180f2ef554ac4",
+    "bench/knucleotide.act": "9b12e25ca7585ba344e82b816e1f8aba9c1aed632156699fd46cd456f492bfb5",
+    "bench/lru.act": "b9b373cf48f5c545ef63c173f00dc620487c24a05b85aabd3bdbd3e268931801",
+    "bench/mandelbrot.act": "e3ba975fbd0ea6d640e15f9e459e6776b3cf0277d527a9155bd9da27fac65f09",
+    "bench/merkletrees.act": "a00c4126881f9efa10e1888ed3d1dbcab91dd8f02105fc52b60cc143c3654122",
+    "bench/nbody.act": "8a6375f660ed80b7e67a8a63559f9c5c873b94968ad4c39a102306700b0510c3",
+    "bench/nsieve.act": "48d99caa757d0a53cf7a8155159a6b89b21d4d5baa1dd9fcc85333275288cc2a",
+    "bench/pidigits.act": "6344e96091f8975237b401f5a7170cd3f3f2ea7cf40ab507108c8ff5c0990fd7",
+    "bench/reprtest.act": "0a96c3e366a2edf2d5fbab150c2f1e799ffc512ee48baf8e6c65d33d69661ba3",
+    "bench/server.act": "10f924caeb62c66bf321d48b6691089b531fdb7d4baaed43f576b4d274a2edbd",
+    "bench/sieve.act": "60366e00729d8fadc4758c06642ae11f3946a82e9168ac5d60d9d0cbde41afc6",
+    "bench/witness_workload.act": "8b62146e954e79582873a9888d09a63b33340e082396ade5b3f72f0b85c5bc52",
+    "stratoweave/Build.act": "df225523b6f131db25e90bdb9d189b0dc868bab247ab4086079e24a4ad5ebf94",
+    "stratoweave/src/adapters/adapter.act": "9dafd2af1f482634e6f58a0cadc205b5b57a90c9cc90fb0291b6221e8454a72c",
+    "stratoweave/src/adapters/netconf.act": "2cce782ebc7df576fb13c86ee0c10c2c52a543f2d2cb9f0fbc20d72555d8cf8b",
+    "stratoweave/src/adapters/software_iosxe.act": "fad49e6fde3329f7263e482d6500dc6bd142376f599d041ae4404c6fa7a86b1b",
+    "stratoweave/src/adapters/software_iosxe_mock.act": "27ee4f846172fd9954cdb58b3de98a52b544a1495008567f0193d8f81bc447d7",
+    "stratoweave/src/adapters/software_iosxe_oper.act": "6cbe24ada5ef316535ef901f607a4507807f574afcefbb2df7b05f485fbca672",
+    "stratoweave/src/adapters/software_iosxe_rpc.act": "27a2508ea3630095062257ff97369111b407b9e8c126927c67228dcd8de04802",
+    "stratoweave/src/adapters/software_iosxe_yang.act": "fa0ecadf89ff8bc0f564a3412f191fd7b0e18c588401cf776203583874999e74",
+    "stratoweave/src/adapters/software_mock.act": "c723fec2a425c419d2a2a6a6d4fbcdb111f1be7c964f1de689f9e74a1a74a40e",
+    "stratoweave/src/adapters/test_software_iosxe.act": "7b8308535e438ceaf11304a1315ba8df99cd30c089a90a62f1b87bf7e4b049f7",
+    "stratoweave/src/app.act": "104b87d5949c734ac08c556ebd419d81e3aa15aa1d5ad60557eb63f2e7d4e357",
+    "stratoweave/src/argconf.act": "8813ec1cca346129dc71e8ab450ab6563e0ea20e1ee666a1b0c63153959d169c",
+    "stratoweave/src/build.act": "d69335faa7c96fedfd8c57acd83395479596810a907447a86de0f24f175c2105",
+    "stratoweave/src/db.act": "0da0acd1ce7409c717308da339f2cdc06c2c918c0767e7d28696f3331291fdf2",
+    "stratoweave/src/db/etcd.act": "1291ff861eb811f8f8ed3285f7345923e3a75519ccc116e57af205faac4954dc",
+    "stratoweave/src/db/lmdb.act": "2490d3b165610da713927668217e6eabc2c9e0afb97d96589f3a37eaa7847a30",
+    "stratoweave/src/device.act": "8a0cdf0954cb85f7c80f86b9c15702121b0af07eb48f20e65f00a3f321a31cb8",
+    "stratoweave/src/device_meta_config.act": "3db4085431a7e8623d2f57046acf6cb53fb6e23a545f465e001847554e444a51",
+    "stratoweave/src/device_oper.act": "53f3901be2f6077af22358b6690c81ac4a9656163ae2c5e52c368ce8191c037b",
+    "stratoweave/src/device_schema.act": "3b04788e922b33bfb8e08c4600f11165676968cdc5ca030ee5323e53924de683",
+    "stratoweave/src/exception.act": "fb36cb80fe6a5a6383243664d15a55b191547595ed796c09c0c522661d3164b7",
+    "stratoweave/src/fleet_sched.act": "f561a2accb902984195c78be1d4c0d653203f4428339f4f70eb6d12c5f609fed",
+    "stratoweave/src/fleet_sched_sim.act": "ce7ecd77dccf2d9ffeb6541872cebabe3ee5c86509cef63376d90a7ab617e877",
+    "stratoweave/src/http_server.act": "d06a71fed0177a40207f8cd1b9f9c017309f469ea2e7e9efe83bb700d8565e3f",
+    "stratoweave/src/ietf_restconf_monitoring.act": "fe4124e17c72364b29d846e6bf6dee86d8163d824a7ab8170cdcc0c6ee816b4a",
+    "stratoweave/src/ietf_yang_library.act": "06e345d311d1db4ec90840b95fd621fcb055db271177a3953a45029e4fccfa84",
+    "stratoweave/src/lib.act": "7d85c05ebdd350376c7c377780c8bc74378c6d11d9ef3712569baf3f4d10ca00",
+    "stratoweave/src/logs.act": "715bd79844277b9fd5bd1e9f12c797494ebe00d627f34b9947fcd893fe8ccd4e",
+    "stratoweave/src/monitoring.act": "4ee41ba7baffc442f8eefbe2613878f46fd7b0a1fa14a4d5cea3e5b758158a9f",
+    "stratoweave/src/ncurl.act": "f477ec0ade6d7bf2f37e410cb755269b4b63f33c2d6c6b419d6b54442df92d61",
+    "stratoweave/src/netconf.act": "f858dc22e39b6a4307c26e56c40bf8ba01b16c5a9b741f4c0e26fdedfc0f9934",
+    "stratoweave/src/netconf/buffer.act": "bdcbe997fc784ea805efe5a5f81894e3784751a1be54e113cca91f28589fbb2b",
+    "stratoweave/src/netconf/fixups.act": "8bd0e7cd83a6d0c62473b12756f70bd8767eac06901b6a003e31779ac3728e63",
+    "stratoweave/src/netconf/fixups/base.act": "daf8d431b9ca8d6dfd432c900f3d04584eea81aab7a62e80d3e51142e8ac23d6",
+    "stratoweave/src/netconf/fixups/openconfig_list_keys.act": "8d2af4801bb9aef57d076391f8c937011bee2096755bac9a80ac33a022f390bd",
+    "stratoweave/src/netconf/test_yp.act": "396b0af64e1fb6be2f1c939d3f4ab3e29c59a116d6ae40d22733a6795ca3f384",
+    "stratoweave/src/netconf/transport.act": "d1d531c8554a7170a191d49ee65076460bfb7578b533653551bf167a35150c71",
+    "stratoweave/src/netconf/yp.act": "0a787844b174928377cebc6078452c6b13f540a9319a94e8d1a00c8da32060f7",
+    "stratoweave/src/netconf_server.act": "15cd6208429a158c92a7c0b8ccd271c0dfca111ec21190e1b69ae12e0c21d7c4",
+    "stratoweave/src/persistence_bench.act": "50da0a02f6becda185fca0b64dd14e689ccf47b98e74541c810d6cce53b5e9e1",
+    "stratoweave/src/restconf.act": "1cc12900e9657bde33c2490a49c41cf7601f0cc421e56b19b4d3ef6de08f0a85",
+    "stratoweave/src/schema_filter.act": "692ee2c4bcc693c8b90b76bc01e22d7374349715a984495d21d4788125616eaa",
+    "stratoweave/src/ssh_config.act": "4f56ba5f771675f60c76eb96f61223db744a9c0153657e5356bc0ccb23d570b2",
+    "stratoweave/src/static_assets.act": "ee9f09802eb87c2bbce180055af9b1c63bcb5288c7b28ead5e2963e0f402c2c0",
+    "stratoweave/src/subscriptions.act": "4f0631f71fef4084ab79412bde23f0ad8bdd0bca7e096c4aa0d1ed9c5ebc1f6e",
+    "stratoweave/src/swyang.act": "0d9316eeb97fc4d951ef4d92ff3f684db1196601e8c8e1917a83b7bf31b0573b",
+    "stratoweave/src/test_argconf.act": "f2dcd6ccf53890c251cfcd0dcb33f8ca65b74972fc994549fac09cf027d6f9e1",
+    "stratoweave/src/test_db.act": "ca158ac28ae042e1e56a45d593f9aaaa88791db3fa0a9c917813e501371fb8c7",
+    "stratoweave/src/test_device.act": "a5765f09af70582e8da7f7f2c70748a3818652ff6c397baeedaaab2242cc5752",
+    "stratoweave/src/test_device_crpd.act": "9b023d1d42091ee19a15e986860ff35002a527a3f444f36bee3149702f188242",
+    "stratoweave/src/test_device_runtime_schema.act": "3194f8f3c3643d62b7580775e27ce848b92703457244497eaad2128d511c6406",
+    "stratoweave/src/test_device_subscriptions.act": "86e5cd9708957e590e691e6ccb9f6ca9e5e346a52220104f60c950a24b61f712",
+    "stratoweave/src/test_devicemgr_netconf.act": "b5117bde5f2c78e85a9d63092c4d291ee3bff83b338f526f923a2a0c3b13c10c",
+    "stratoweave/src/test_fleet_sched.act": "bdff4ac51eaf010569f2f4e2e2e992ba6870480b3cb3ca3486f3e85f6d8e5f4c",
+    "stratoweave/src/test_gdata_perf.act": "8ae2f259d395a99f5b8645d7b5d674d99c38e5c1752903818f155d3193230ed7",
+    "stratoweave/src/test_logs.act": "8f6ba56b874958bc9a29d918f121d472f995f72b27e94cdb49523f2f4c91bc6e",
+    "stratoweave/src/test_monitoring.act": "d0ea39c14fa1e9ac81aa6bbec2a8e92721cdf7a81cff1f23a1c150e7b7c94fee",
+    "stratoweave/src/test_netconf_buffer_perf.act": "2c3ba05a2bfd632c17bcfdd76d2f586307524df839439e24748bcb5dab428cea",
+    "stratoweave/src/test_netconf_framing.act": "c8fecf883007865d3739b212f44d595cb175bf04560d4cced409d37b4871e0f2",
+    "stratoweave/src/test_netconf_server.act": "a71c0ce700e607ff5ea42c9e9830a5840b078a9011f42accf2420d47b6a4322a",
+    "stratoweave/src/test_restconf_server.act": "f0c0c3b2d65d1d7d45a61d561e55d65e9dea46ef52a0a254eb7c24a3a9261807",
+    "stratoweave/src/test_rig.act": "c734f58c0897061bf6805ed61655600afc5bbf83042ef1a7777bab5d093b3492",
+    "stratoweave/src/test_static_assets.act": "511e4e83d201f7efb6e1b1a5c0aa52846759749fdb7bb32984a4bb4af1c43fe8",
+    "stratoweave/src/test_subscription_instances.act": "bf97087146911c401fdfa1c9e7c68c1b26d65a22c454e1ac50f57a7f943f9d4f",
+    "stratoweave/src/test_swmgr.act": "d4c2366611af656f827329e6ae62672532f61e335a738d888bf13cbadf50a993",
+    "stratoweave/src/test_ttt_callbacks.act": "5a395fb272c316a917b914bca950a75e8cf69fca20c6ac4d9756f4dad2b82c9f",
+    "stratoweave/src/test_ttt_container.act": "e391630f18c521e6d9afcd235bfc266e151019c1f27cc7b1e7a5d171d29b9b05",
+    "stratoweave/src/test_ttt_dynstate_deadlock.act": "282ec9b150c167f35fb44366144d94f88ebdddf3806ffe5d5b8180676c9f50f9",
+    "stratoweave/src/test_ttt_gen.act": "e9bcc16ab25c1280e4cfe37793ed45eeddc9a6d6e05d2424a59b28d5bf704053",
+    "stratoweave/src/test_ttt_layers.act": "e1cce2ab7a0ba3cd520d8a66047826b1d9831ad8ba56139d4191fb757c5ec63a",
+    "stratoweave/src/test_ttt_linked.act": "59b6d2a00be4fbebba1d854b1f6d16026493cfec957fbd8b5f157f725e60be24",
+    "stratoweave/src/test_ttt_links.act": "cd172f698e7b05b9806ca2360039393f93ca514e3ff5d803b29d99cc48ceae61",
+    "stratoweave/src/test_ttt_list.act": "d77f35cf3e71007ec8bf481045ab585b35b81a1005884f8fb920a8c1accc43e1",
+    "stratoweave/src/test_ttt_merge.act": "4448893ae78d6e07ea860aa7551839612b33d9728f28d7609a6b12191af95c17",
+    "stratoweave/src/test_ttt_merge_perf.act": "570afeceaa31a938d00af1fcb93579ca6979579a1268d5f813f1bf9f58c9101d",
+    "stratoweave/src/test_ttt_mmerge.act": "dc645f3f9e7af933be9eade2edcaaf29337fe77f63e1a762f9ae7c526af48aae",
+    "stratoweave/src/test_ttt_on_change.act": "8c0b34ddb434e00fb8bdfdfe7489ed8e1f2ef3683d6420e359057e827c8b0537",
+    "stratoweave/src/test_ttt_oper_read.act": "8daca6b692b0bad9fb53c63513692c179ad093a92df650625ff3267700f0fce7",
+    "stratoweave/src/test_ttt_perf.act": "22c93ea4d7f995342af3909e0447a2d428ac23df90155279d079049f4dabf2c0",
+    "stratoweave/src/test_ttt_persistence.act": "12777f0945b8704a6c664fa9b30dd425b8e43c2a0f2bd61394530748043662c0",
+    "stratoweave/src/test_ttt_persistence_bench.act": "b49b851ebf2c71362a3842eb9a4b6b4366f02b277d89e90ed4c009246b42585d",
+    "stratoweave/src/test_ttt_persistence_etcd.act": "5325cd44a75e319b34bac0e3268092bab080e05adc7575866263580ca36c2f93",
+    "stratoweave/src/test_ttt_subscriptions.act": "effbb2a1e07c2793e40c69df2798f72fb53329ca436e0f5a0daba645867cd79b",
+    "stratoweave/src/test_ttt_transform.act": "13008fb19cab82b6e7d7a2fff8e91df44194508a6bc74139796287905093884a",
+    "stratoweave/src/test_yang_dir.act": "34e283a353ddfb227dcf13ca62909614d77164064997ba90b7c76cc294b39ec8",
+    "stratoweave/src/test_yp_ttt.act": "438af0389519be786359b657f92ec421c78d0fb8be09842e7eb2d673943cf2d0",
+    "stratoweave/src/tmf_api.act": "00604bead5b9e70e39c29f157be4c9d6db44831de9c255456a0e7d983473bcea",
+    "stratoweave/src/ttt.act": "ea6b3cc82cff47c0f41382955bb04b0ca5329986056cbc61ab0136d4010cf761",
+    "stratoweave/src/ttt_gen.act": "3b8974984372b2b97e2606f3bd2f8fd8046d77262484d0074bee39a6b3cba64b",
+    "stratoweave/src/ttt_links.act": "e451104f06eb8fa0a307dec5280ce24a46e71d00e2a09a4846cf0a6e292c3787",
+    "stratoweave/src/yang_dir.act": "4d7447921b6af952c4469ab822746c8c93f10a8979b2bbe52e60dba942a2f404",
+    "stratoweave/src/yp.act": "1099e1763612644c791195e22dbb596a648056d1355b6428392191772b8128e9",
+    "stratoweave/src/yp/engine.act": "f2604015472da7318d49dbfeb5ca8692a5255667ab52a4c74d4cf0bad8b1b383",
+    "stratoweave/src/yp/mock_backend.act": "6cd10db5e575c0ed2ccab09dd4c9977d6fcff33a3decf915a440f98945f3efc0",
+    "stratoweave/src/yp_mockserver.act": "80167dc160b2e0e7ddbe8b55613be55a5522a6a650ba1a7661352f886ba8c1f1",
+    "stratoweave/src/yp_ttt.act": "eda199597cd5d6e135b0e6aa90b85eca1daa81d18e135067d04b52d182ab9648"
+  },
+  "verification": {
+    "final_guard_preserves_generated_outputs": true,
+    "generated_files_compared": 350,
+    "library_tests": 751,
+    "make_passed": true,
+    "native_tests": 268,
+    "native_workload_binary_sha256": "d26386525c92e68833d2025c7b35a35bdb4c889769b1216c1e3f65865d148640",
+    "performance_cases": 4,
+    "repeat_statistics_match_initial_survey": true
+  }
+}

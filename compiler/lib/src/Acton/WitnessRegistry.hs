@@ -7,7 +7,7 @@
 module Acton.WitnessRegistry
     ( WitnessRegistry(..), Recipe(..), RecipeKind(..), Lifetime(..)
     , Capture(..), CaptureKind(..), Binding(..), Site(..), Use(..)
-    , buildRegistry, registrySummary
+    , buildRegistry, buildFunctionRegistry, registrySummary
     ) where
 
 import Control.Monad.State.Strict
@@ -52,7 +52,7 @@ data Binding = Binding
 
 data Site = Site
     { siteRecipe :: Int, siteScope :: Int, siteLoopDepth :: Int
-    , siteLocation :: SrcLoc, siteStatic :: Bool
+    , siteLocation :: SrcLoc, siteStatic :: Bool, siteExpression :: Expr
     } deriving (Show)
 
 data Use = Use
@@ -80,10 +80,20 @@ type BuildM = State Build
 -- Types stay on binding records. Constructor keys retain their explicit type
 -- applications; type variables and dependency witnesses have binding identities.
 buildRegistry :: (QName -> Maybe QName) -> (Expr -> Bool) -> Module -> WitnessRegistry
-buildRegistry resolve isStatic m = finish $ execState action initial
+buildRegistry resolve isStatic m = build resolve isStatic $ suite initialLex (mbody m) >> return ()
+
+-- Scope 1 is the function itself. Nested declarations/lambdas get other IDs;
+-- their parameters and construction sites remain separate from this frame.
+buildFunctionRegistry :: (QName -> Maybe QName) -> (Expr -> Bool) -> Decl -> WitnessRegistry
+buildFunctionRegistry resolve isStatic d = build resolve isStatic $ decl initialLex d
+
+initialLex :: Lex
+initialLex = Lex 0 0 M.empty M.empty
+
+build :: (QName -> Maybe QName) -> (Expr -> Bool) -> BuildM () -> WitnessRegistry
+build resolve isStatic action = finish $ execState action initial
   where
     initial = Build (WitnessRegistry IM.empty [] [] [] 1) IM.empty 0 resolve isStatic
-    action = suite (Lex 0 0 M.empty M.empty) (mbody m)
     finish s = let g = graph s in g
         { registryBindings = reverse (registryBindings g)
         , registrySites = reverse (registrySites g)
@@ -237,7 +247,7 @@ expr env e@(Call l f p k) = do
         r <- makeNode (Constructor q) (Call l f' p' k') (ps++ks) cs
         let i = case node r of Just i -> i; Nothing -> error "registry: constructor without node"
         isStatic <- gets (($ e) . staticRecipe)
-        modifyGraph $ \g -> g{registrySites = Site i (scope env) (depth env) l isStatic : registrySites g}
+        modifyGraph $ \g -> g{registrySites = Site i (scope env) (depth env) l isStatic e : registrySites g}
         return r
       Nothing -> do
         f' <- expr env f
@@ -475,6 +485,8 @@ registrySummary g = object
     , "constructor_sites_by_lifetime" .= counts (map siteLife $ registrySites g)
     , "nonstatic_sites_by_lifetime" .= counts (map siteLife nonstatic)
     , "nonstatic_recipes_by_lifetime" .= counts (map (recipeLifetime . at) $ S.toList nonstaticIds)
+    , "nonstatic_recipe_scope_pairs_by_lifetime" .= counts
+        [recipeLifetime (at i) | (i,_) <- S.toList $ S.fromList [(siteRecipe s,siteScope s) | s <- nonstatic]]
     , "nonstatic_loop_sites_by_lifetime" .= counts (map siteLife $ filter ((> 0) . siteLoopDepth) nonstatic)
     , "nonstatic_closed_constructors" .= M.fromListWith (+)
         [(prstr q, 1 :: Int) | s <- nonstatic, let r = at (siteRecipe s)

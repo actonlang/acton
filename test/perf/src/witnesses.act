@@ -27,3 +27,48 @@ def _test_generic_nested_equality(t: testing.SyncT):
     for _ in t.loop():
         result = compare_generic(xs, ys)
     testing.assertEqual(result, True)
+
+
+# Elaborated default arguments contain inline Eq[list[A]] constructions at
+# separate call sites. Share those witnesses within one helper invocation;
+# each default must still construct a distinct user object.
+class _DefaultBucket[A(Eq)](object):
+    def __init__(self):
+        pass
+
+    def same(self, xs: A, ys: A) -> bool:
+        return xs == ys
+
+
+def _take_default(b: _DefaultBucket[list[int]] = _DefaultBucket()) -> _DefaultBucket[list[int]]:
+    return b
+
+
+def compare_inline_defaults(xs: list[int], ys: list[int]) -> bool:
+    return _take_default().same(xs, ys) and _take_default().same(xs, ys)
+
+
+def _take_generic_default[A(Eq)](b: _DefaultBucket[list[A]] = _DefaultBucket()) -> _DefaultBucket[list[A]]:
+    return b
+
+
+def compare_generic_inline_defaults[A(Eq)](xs: list[A], ys: list[A]) -> bool:
+    return _take_generic_default().same(xs, ys) and _take_generic_default().same(xs, ys)
+
+
+def _test_inline_defaults(t: testing.SyncT):
+    xs = [1, 2, 3]
+    ys = [1, 2, 3]
+    result = True
+    for _ in t.loop():
+        result = compare_inline_defaults(xs, ys)
+    testing.assertEqual(result, True)
+
+
+def _test_generic_inline_defaults(t: testing.SyncT):
+    xs = [1, 2, 3]
+    ys = [1, 2, 3]
+    result = True
+    for _ in t.loop():
+        result = compare_generic_inline_defaults(xs, ys)
+    testing.assertEqual(result, True)

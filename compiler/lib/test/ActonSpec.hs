@@ -36,6 +36,7 @@ import qualified Acton.Transform as Transform
 import qualified Acton.WitnessKey as WitnessKey
 import qualified Acton.WitnessStats as WitnessStats
 import qualified Acton.WitnessRegistry as Registry
+import qualified Acton.WitnessSharing as Sharing
 import qualified Data.IntMap.Strict as IM
 import qualified InterfaceFiles
 import Pretty (print, prettyText)
@@ -377,6 +378,135 @@ main = do
             g = registry (originals ++ copies)
         length (constructors g) `shouldBe` count
         length (Registry.registrySites g) `shouldBe` 2*count
+
+    describe "Function-local witness placement" $ do
+      let q = S.qName ["witness_placement"] "Ctor"
+          other = S.qName ["witness_placement"] "Other"
+          info n | n `elem` [q,other] = Just (n,0)
+                 | otherwise = Nothing
+          resolve n = fst <$> info n
+          ctor = S.eCall (S.eQVar q)
+          emit x = S.Expr NoLoc x
+          call xs = S.eCallVar (S.name "consume") xs
+          w i = S.Internal S.Witness "parameter" i
+          dep = S.eVar . w
+          wt = S.tCon (S.TC q [])
+          bind i x = S.Assign NoLoc [S.pVar (w i) wt] x
+          fun p b = S.Def NoLoc (S.name "f") [] p S.KwdNIL (Just S.tNone) b S.NoDec S.fxPure Nothing
+          optimize = Sharing.shareFunction info (const False)
+          sites d = Registry.registrySites (Registry.buildFunctionRegistry resolve (const False) d)
+          count = length . sites
+          plain b = fun S.PosNIL b
+      it "shares repeated inline constructors at their first statement" $ do
+        let before = plain [emit (call [ctor [],ctor []])]
+            after = optimize before
+        count before `shouldBe` 2
+        count after `shouldBe` 1
+        length (S.dbody after) `shouldBe` 2
+      it "reuses a constructor from an earlier binding in later inline arguments" $ do
+        let d = plain [bind 1 (ctor []),emit (call [dep 1,ctor [],ctor []])]
+        count (optimize d) `shouldBe` 1
+      it "normalizes dependency aliases when comparing inline constructions" $ do
+        let d = plain [bind 1 (ctor []),bind 2 (dep 1),emit (call [ctor [dep 1],ctor [dep 2]])]
+        count (optimize d) `shouldBe` 2
+      it "keeps sibling branches separate without speculative allocation" $ do
+        let d = plain [S.sIf1 (S.eBool True) [emit (call [ctor []])] [emit (call [ctor []])]]
+        optimize d `shouldBe` d
+      it "shares within branches but exports no branch definition to a join" $ do
+        let d = plain [S.sIf1 (S.eBool True) [emit (call [ctor [],ctor []])] [],
+                       emit (call [ctor [],ctor []])]
+        count (optimize d) `shouldBe` 2
+      it "keeps new definitions inside zero-trip loop bodies" $ do
+        let d = plain [S.While NoLoc (S.eBool False) [emit (call [ctor [],ctor []])] []]
+            after = optimize d
+        count after `shouldBe` 1
+        map Registry.siteLoopDepth (sites after) `shouldBe` [1]
+        length (S.dbody after) `shouldBe` 1
+      it "reuses an existing outer definition inside a loop" $ do
+        let d = plain [emit (call [ctor []]),S.While NoLoc (S.eBool False) [emit (call [ctor []])] []]
+        map Registry.siteLoopDepth (sites $ optimize d) `shouldBe` [0]
+      it "does not lift constructors out of conditional expressions or short circuits" $ do
+        let cond = S.Cond NoLoc (ctor []) (S.eBool True) (ctor [])
+            short = S.BinOp NoLoc (S.eBool False) S.And (call [ctor [],ctor []])
+        forM_ [cond,short] $ \e -> do
+          let d = plain [emit e]
+          optimize d `shouldBe` d
+      it "uses a dominating definition in conditional expression branches" $ do
+        let d = plain [emit (call [ctor []]),emit (S.Cond NoLoc (ctor []) (S.eBool True) (ctor []))]
+        count (optimize d) `shouldBe` 1
+      it "does not move elif constructions ahead of the first condition" $ do
+        let d = plain [S.If NoLoc [S.Branch (S.eBool True) [],S.Branch (call [ctor [],ctor []]) []] []]
+        optimize d `shouldBe` d
+      it "shares generic witness parameters within their invocation" $ do
+        let d = fun (S.pospar [(w 0,wt)]) [emit (call [ctor [dep 0],ctor [dep 0]])]
+        count (optimize d) `shouldBe` 1
+      it "excludes optional witness parameters and mutable dependency values" $ do
+        let optional = fun (S.pospar [(w 0,S.tOpt wt)]) [emit (call [ctor [dep 0],ctor [dep 0]])]
+            rebound = fun (S.pospar [(w 0,wt)]) [emit (call [ctor [dep 0]]),bind 0 (ctor []),emit (call [ctor [dep 0]])]
+        optimize optional `shouldBe` optional
+        optimize rebound `shouldBe` rebound
+      it "keeps different implementations and dependencies distinct" $ do
+        let d = fun (S.pospar [(w 0,wt),(w 1,wt)])
+                     [emit (call [ctor [dep 0],ctor [dep 1],S.eCall (S.eQVar other) [dep 0]])]
+        optimize d `shouldBe` d
+      it "preserves static witness fast paths and initializer ordering" $ do
+        let d = plain [emit (call [ctor [],ctor []])]
+        Sharing.shareFunction info (const True) d `shouldBe` d
+        forM_ [S.name "__init__",S.globalName "init"] $ \n ->
+          optimize d{S.dname = n} `shouldBe` d{S.dname = n}
+      it "does not share across nested functions or change default metadata" $ do
+        let inner = plain [emit (call [ctor []])]
+            d = fun (S.PosPar (S.name "x") (Just wt) (Just (ctor [])) S.PosNIL)
+                      [emit (call [ctor []]),S.sDecl [inner]]
+        optimize d `shouldBe` d
+      it "is idempotent and uses fresh names" $ do
+        let occupied = S.Internal S.Witness "shared" 0
+            d = plain [S.Assign NoLoc [S.pVar occupied wt] (ctor []),emit (call [S.eVar occupied,ctor []])]
+            once = optimize d
+        optimize once `shouldBe` once
+        count once `shouldBe` 1
+      it "does not shadow an existing free witness name" $ do
+        let global = S.Internal S.Witness "shared" 0
+            d = plain [emit (call [S.eVar global,ctor [],ctor []])]
+            after = optimize d
+            g = Registry.buildFunctionRegistry resolve (const False) after
+        (global `elem` map Registry.bindingName (Registry.registryBindings g)) `shouldBe` False
+        count after `shouldBe` 1
+      it "prunes one-use intermediate definitions while sharing nested recipes" $ do
+        let nested = ctor [ctor []]
+            d = plain [emit (call [nested,nested])]
+            after = optimize d
+        count after `shouldBe` 2
+        length (S.dbody after) `shouldBe` 2
+      it "does not rewrite shadowed constructor calls inside a Let" $ do
+        let local = S.name "LocalCtor"
+            qlocal = S.NoQ local
+            info' n | n == qlocal = Just (qlocal,0)
+                    | otherwise = Nothing
+            make = S.eCall (S.eQVar qlocal) []
+            shadow = (plain [S.sReturn S.eNone]){S.dname = local}
+            localLet = S.Let NoLoc [S.sDecl [shadow]] make
+            d = plain [emit make,emit localLet,emit make]
+            after = Sharing.shareFunction info' (const False) d
+        (emit localLet `elem` S.dbody after) `shouldBe` True
+        length (Registry.registrySites $ Registry.buildFunctionRegistry (fmap fst . info') (const False) after) `shouldBe` 1
+      it "treats exception handlers and finally blocks as separate regions" $ do
+        let d = plain [S.Try NoLoc [emit (call [ctor [],ctor []])]
+                        [S.Handler (S.ExceptAll NoLoc) [emit (call [ctor [],ctor []])]] []
+                        [emit (call [ctor [],ctor []])]]
+        count (optimize d) `shouldBe` 3
+      it "handles thousands of unsupported constructor arguments conservatively" $ do
+        let d = plain [emit (ctor [S.Async NoLoc (S.eInt (fromIntegral i))]) | i <- [1..4000::Int]]
+        optimize d `shouldBe` d
+      it "retains type arguments and distinguishes generic instantiations" $ do
+        let info' n | n == q = Just (q,1)
+                    | otherwise = Nothing
+            typed t = S.eCall (S.tApp (S.eQVar q) [t]) []
+            tv = S.TV S.KType (S.name "T")
+            d = (plain [emit (call [typed (S.tVar tv),typed (S.tVar tv),typed S.tNone])]){S.qbinds = [S.QBind tv []]}
+            after = Sharing.shareFunction info' (const False) d
+            rs = Registry.buildFunctionRegistry (fmap fst . info') (const False) after
+        length (Registry.registrySites rs) `shouldBe` 2
 
     describe "Zon (build.zig.zon)" $ do
       let deps src = case Zon.parseZon src of

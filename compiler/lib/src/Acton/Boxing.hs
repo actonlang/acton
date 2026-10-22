@@ -9,6 +9,7 @@ import Acton.QuickType
 import Acton.Prim
 import Acton.Builtin
 import Acton.Subst
+import qualified Acton.WitnessSharing as WitnessSharing
 import Pretty
 import Utils
 import Debug.Trace
@@ -20,7 +21,9 @@ import qualified Data.HashMap.Strict as M
 
 doBoxing                           :: Acton.Env.Env0 -> Module -> IO Module
 doBoxing env m                     = do (_,ss) <- boxing (boxEnv env) (mbody m)
-                                        return m{mbody = ss}   
+                                        let known = WitnessSharing.constructorHeads (mbody m)
+                                            isStatic = isJust . staticWitnessOf (boxEnv env)
+                                        return $ WitnessSharing.shareWitnesses env known isStatic m{mbody = ss}
 
 type BoxEnv                        = EnvF BoxX
 

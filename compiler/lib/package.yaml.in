@@ -98,6 +98,7 @@ library:
     - Acton.TypeEnv
     - Acton.WitnessKey
     - Acton.WitnessRegistry
+    - Acton.WitnessSharing
     - Acton.WitnessStats
     - Acton.Transform
     - Acton.WitKnots

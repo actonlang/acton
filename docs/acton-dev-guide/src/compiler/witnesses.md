@@ -19,6 +19,58 @@ bindings. Shadowing a term or type dependency invalidates the index. Safe reuse
 of an already available outer binding is retained. This step performs no code
 motion and introduces no runtime cache or singleton initialization scheme.
 
+## Sharing inline constructions after boxing
+
+Stage 4 adds `Acton.WitnessSharing`, called at the end of `doBoxing` in normal
+builds as well as diagnostic builds. Earlier reuse works on witness equations;
+this pass also catches equal constructors embedded in expressions, including
+expanded default arguments. It runs after boxing removes unused equations, so
+those equations cannot accidentally become eager allocations again.
+
+For example, consider this schematic generated function:
+
+```text
+consume(make_list_eq(element_eq))
+consume(make_list_eq(element_eq))
+```
+
+It becomes:
+
+```text
+shared = make_list_eq(element_eq)
+consume(shared)
+consume(shared)
+```
+
+`shared` is a typed local variable holding the ordinary witness pointer. The
+witness constructor, object layout, method table and serialization methods are
+unchanged. Generic `element_eq` remains a parameter of this invocation. Calling
+the function again still constructs its own witness.
+
+The pass builds a function-local registry with the same binding identities and
+recipe rules as the module-wide diagnostic graph. It considers only known
+compiler-generated witness constructors with pure initializers, and only closed
+recipes or recipes depending on this function's type/witness parameters.
+Optional witness parameters, local-value dependencies and unknown recipes are
+excluded. Explicit type arguments and the selected implementation must match.
+Initializers are skipped because their receiver fields may still change.
+
+A new local is placed immediately before the first unconditionally evaluated
+statement that needs it. Later uses can reuse it only where that definition
+already dominates them. An outer definition can be used inside a branch or
+loop; a definition made inside one branch or loop body does not become
+available after that region. A constructor in a zero-trip loop body stays
+inside the body. Conditional expression arms, short-circuit right operands and
+later `elif` conditions can use an existing local but cannot create one outside
+their condition. Nested functions, lambdas and `Let` expressions are barriers.
+A proposed local used only once is removed again.
+
+This policy does not pool witnesses across functions or invocations, create a
+runtime cache, or introduce module-level singleton initialization. Source
+procedures split into several generated continuation functions are subject to
+the same function boundary. More ambitious placement needs further work on
+initialization order, lifetime and serialization policy.
+
 ## Collecting statistics
 
 Run a complete compiler pass over the desired corpus:
@@ -74,9 +126,10 @@ have no runtime effect if boxing already removes those constructions.
 
 ## Module-wide description graph
 
-Stage 3 adds `Acton.WitnessRegistry`, currently built only by `--witness-stats`.
-It describes existing constructions; it does not rewrite the module or move
-allocations. Normal builds do not run the registry traversal.
+Stage 3 adds the module-wide diagnostic graph in `Acton.WitnessRegistry`.
+The full module graph is built only by `--witness-stats`; the graph itself does
+not rewrite allocations. Stage 4 uses its function-local builder during normal
+compilation to support the placement pass described above.
 
 Each recipe records its selected implementation, canonical dependency IDs,
 captured bindings and dependency lifetime. Explicit constructor type arguments
@@ -117,6 +170,7 @@ Version 1 statistics now optionally include a `registry` object:
 | `constructor_recipes`, `constructor_sites` | Canonical constructor descriptions and original construction sites, respectively |
 | `constructor_recipes_by_lifetime`, `constructor_sites_by_lifetime` | Those counts split by dependency lifetime |
 | `nonstatic_sites_by_lifetime`, `nonstatic_recipes_by_lifetime` | Construction sites outside existing static-witness rules, and their distinct descriptions |
+| `nonstatic_recipe_scope_pairs_by_lifetime` | Distinct (recipe, execution scope) pairs outside static-witness rules; helps separate repetition within functions from repetition across functions |
 | `nonstatic_loop_sites_by_lifetime` | Nonstatic construction sites within loops in their execution context |
 | `nonstatic_closed_constructors` | Closed, nonstatic sites grouped by selected implementation |
 
@@ -128,15 +182,18 @@ A shared description is not a shared allocation. In particular, `closed` does
 not establish that eager module initialization is legal, that a binding
 already dominates a use, or that its initialization/serialization dependencies
 are ready. Even a parameter-dependent description captured by two functions
-still needs a placement decision. Allocation movement, singleton initialization
-and integration with escape analysis remain subsequent work.
+still needs a placement decision. Stage 4 makes a conservative decision within
+each generated function. Singleton initialization, broader code motion and
+integration with escape analysis remain subsequent work.
 
 ## Repeatable performance cases
 
 `test/perf/src/witnesses.act` contains concrete and generic nested-list equality
 helpers. Each makes three comparisons using the same two levels of witnesses.
-Inputs are prepared outside the measured loop; each loop body calls one helper.
-These are fixed workloads, independent of scale:
+Two additional concrete/generic helpers exercise equal inline witnesses in
+expanded default arguments. Their user objects must remain distinct even when
+the witnesses are shared. Inputs are prepared outside the measured loop; each
+loop body calls one helper. These are fixed workloads, independent of scale:
 
 ```sh
 cd test/perf

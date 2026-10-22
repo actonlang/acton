@@ -203,3 +203,103 @@ initialization and serialization policy and account for dependency order.
 Generic recipes need scope/dominance placement; equal spelling of witness
 parameters is insufficient. The graph can later support escape analysis, but
 this stage does not replace that pass's witness resolution.
+
+
+## Stage 4: sharing inline constructions within a function
+
+The 2026-10-22 comparison starts from stage 3 (`fad5a7c3`), already based on
+main `46e1ccaf` with the iterator optimization. It adds the actual placement
+pass, `Acton.WitnessSharing`, at the end of boxing. The same 175 modules and
+saved source hashes are used. This is an additional saving beyond the original
+local-equation optimization. Detailed counts, source/binary hashes and samples
+are in [the stage 4 data](witness_sharing_measurements.json).
+
+The pass introduces an ordinary typed local at an existing unconditional
+construction point and reuses it at dominated later uses. It handles closed
+recipes and safe generic-parameter recipes. Branch-local definitions stay in
+their branch; loop-body definitions stay in the loop. Initializers, optional
+witness parameters and unknown/local dependencies are excluded. The guide gives
+[a worked example and the placement rules](witnesses.md#sharing-inline-constructions-after-boxing).
+There are no new global witness objects, cache lookups or object layouts.
+
+After boxing, nonstatic constructor expressions change as follows. These are
+remaining sites in generated functions, not runtime call counts:
+
+| Corpus | Modules | Sites, before → after | Removed |
+| --- | ---: | ---: | ---: |
+| base | 27 | 67 → 67 | 0 |
+| acton-yang | 35 | 983 → 901 | 82 |
+| StratoWeave | 95 | 1,207 → 1,159 | 48 |
+| small programs | 18 | 23 → 23 | 0 |
+
+In acton-yang, 81 removed sites are closed and one is parameter-dependent; in
+StratoWeave, 44 are closed and four are parameter-dependent. `yang.gdata`
+accounts for 58 of the removed sites (449 → 391); `stratoweave.ttt` falls from
+193 to 182. The five unknown sites in `yang.adata` remain unknown. Typed and
+normalized statistics agree at every module: this pass changes only the final
+boxed tree. The new recipe/scope-pair counter helps distinguish repetition
+within a function from repetition across functions, but a shared scope alone
+does not prove that construction can be moved across branches or initialization.
+
+The base and small-program C/header files are unchanged. All headers in both
+larger projects are also unchanged. Nine yang and fifteen StratoWeave C files
+change. C volume is essentially flat: yang decreases by 370 bytes and
+StratoWeave increases by 221 bytes, after excluding implementation-hash comments
+and `#line` directives. Local variables replace repeated expressions; this is
+an allocation optimization rather than a substantial C-volume reduction.
+
+### Runtime allocation and serialization
+
+The new workload compares two prebuilt `list[int]` values through two expanded
+object default arguments. Those arguments contain equal inline list-equality
+witness constructions that the earlier witness-equation pass did not share.
+Over one million helper calls, the baseline allocates 144.08–144.24 MB; the
+new compiler allocates about 112.06 MB in three runs. The saving is about 32 MB,
+or one 32-byte witness per invocation. User objects still allocate separately.
+
+A private measurement-only C wrapper counts 2,000,010 list-witness constructor
+calls before and 1,000,006 after. Of these, the measured loop contributes
+exactly 2,000,000 → 1,000,000; the remainder comes from setup and correctness
+checks. The wrapper leaves the constructors in place and is absent from compiler
+and runtime sources. The native workload is too short for a reliable speed claim.
+
+The regression also exercises generic witnesses with integers and strings,
+short-circuit false results, both branches of object creation, and an object
+graph whose fields carry shared witnesses. Serialization/deserialization and
+subsequent witness method calls succeed. Mutating one restored user object
+leaves the other distinct. No serialization implementation or registration
+scheme was changed.
+
+The existing nested-list workload and all eighteen small corpus programs have
+unchanged generated C. In particular, an existing witness constructed once per
+helper invocation still allocates on every call. Sharing across calls or across
+separate generated continuation functions remains future work.
+
+### Compiler resources and verification
+
+Medians of three sequential paired runs, alternating compiler order, with four
+compiler jobs and statistics enabled, are:
+
+| Corpus | Wall seconds, before → after | User seconds, before → after | Peak RSS MiB, before → after |
+| --- | ---: | ---: | ---: |
+| base | 1.27 → 1.27 | 2.90 → 2.96 | 800 → 799 |
+| acton-yang | 12.13 → 12.05 | 22.28 → 22.23 | 1,077 → 1,061 |
+| StratoWeave | 21.80 → 21.95 | 76.61 → 77.56 | 1,408 → 1,462 |
+
+The cached base repeats contain 26 modules; the fresh-copy survey contains 27.
+The pass now does real analysis during normal builds. These measurements show
+small timing differences and variable memory use, not a compiler speedup.
+
+`make` succeeds, all 751 compiler library tests pass, all four witness
+performance cases pass, and the broader native selection passes all 268 tests.
+The added library cases cover control-flow placement, alias and binding
+identity, generic/optional parameters, initializers, shadowing, exact comparisons,
+type arguments, fresh names, singleton pruning, idempotence and 4,000 unsupported
+constructor arguments. The native selection is the same six groups used for
+stage 3, with the new serialization/default-argument regression included; it is
+not the entire native suite.
+
+The larger remaining opportunity is sharing closed witnesses across functions
+and invocations. That should be a separate stage with an explicit initialization
+and serialization policy. This stage establishes a working consumer of the
+registry while preserving ordinary witness construction and persistence.

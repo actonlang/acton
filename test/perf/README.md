@@ -75,7 +75,9 @@ treating the failure time as an operation latency or speedup.
 
 `witnesses` measures repeated nested-list equality with concrete and generic
 helpers. Each body makes three comparisons that can share the same witness
-recipes. Inputs are prepared before `t.loop()`. These are fixed workloads; use
+recipes. Two further concrete/generic cases exercise inline witnesses in
+expanded default arguments while retaining distinct user objects. Inputs are
+prepared before `t.loop()`. These are fixed workloads; use
 `acton test perf --module witnesses --scale 1`. See the compiler developer
 guide's [witness diagnostics](../../docs/acton-dev-guide/src/compiler/witnesses.md)
 for corpus and allocation measurements.
