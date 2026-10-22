@@ -475,11 +475,11 @@ static B_str str_from_c(const char *str, int64_t nbytes, bool copy, B_ValueError
 }
 
 B_str actStrFromCString(const char *str) {
-    return actStrFromCStringLength(str, strlen(str));
+    return str_from_c(str, strlen(str), false, &B_str_invalid_utf8_error);
 }
 
 B_str actStrFromCStringCopy(const char *str) {
-    return actStrFromCStringLengthCopy(str, strlen(str));
+    return str_from_c(str, strlen(str), true, &B_str_invalid_utf8_error);
 }
 
 B_str actStrFromCStringLength(const char *str, int64_t nbytes) {
@@ -488,6 +488,19 @@ B_str actStrFromCStringLength(const char *str, int64_t nbytes) {
 
 B_str actStrFromCStringLengthCopy(const char *str, int64_t nbytes) {
     return str_from_c(str, nbytes, true, &B_str_invalid_utf8_error);
+}
+
+B_str actStrFromLiteral(const char *str, int64_t nbytes, int64_t nchars) {
+    if (nbytes == 0)
+        return null_str;
+    if (nbytes == 1 && (unsigned char)str[0] < ASCII_CHAR_TABLE_SIZE)
+        return &ascii_char_strs[(unsigned char)str[0]];
+    B_str res = acton_malloc(sizeof(struct B_str));
+    res->$class = &B_strG_methods;
+    res->nbytes = nbytes;
+    res->nchars = nchars;
+    res->str = (unsigned char *)str;
+    return res;
 }
 
 // Keep the old ownership contracts and diagnostics during migration.
@@ -4516,5 +4529,5 @@ B_str $FORMAT_len(const char *format, int64_t nbytes, ...) {
     }
     va_end(args);
     b.data[b.len] = 0;
-    return actStrFromCStringLength(b.data, b.len);
+    return str_from_c(b.data, b.len, false, &B_str_invalid_utf8_error);
 }

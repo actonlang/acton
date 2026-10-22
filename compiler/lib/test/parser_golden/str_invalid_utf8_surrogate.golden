@@ -1,0 +1,10 @@
+ERROR: [error Syntax error]: Invalid UTF-8 in str literal
+     ╭──▶ test@1:1-1:15
+     │
+   1 │ "\355\240\200"
+     • ┬─────────────
+     • ╰╸ Invalid UTF-8 in str literal
+     •
+     │ Note: \x and octal escapes in a str literal write single bytes, which must form valid UTF-8
+     │ Hint: Write the character, or use \u or \U, e.g. \u00ff; use a bytes literal for other bytes
+─────╯

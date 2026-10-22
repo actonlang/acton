@@ -956,6 +956,11 @@ literalBytes = decode
       | otherwise = Nothing
     utf8 = BS.unpack . TE.encodeUtf8 . T.singleton
 
+-- | The number of characters that bytes decode to as UTF-8, or Nothing if they
+-- are not valid UTF-8.
+utf8Chars :: [Word8] -> Maybe Int
+utf8Chars bs = either (const Nothing) (Just . T.length) (TE.decodeUtf8' (BS.pack bs))
+
 -- | Whether a code point may appear in a str: Unicode minus the UTF-16 surrogates.
 isScalarValue :: Int -> Bool
 isScalarValue value                 = value <= 0x10ffff && not (value >= 0xd800 && value <= 0xdfff)

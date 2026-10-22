@@ -35,6 +35,15 @@ def test_str_case_utf8_length():
     return ("ɐı".upper() == "ⱯI" and "ⱯI".lower() == "ɐi"
             and "ɐBC".capitalize() == "Ɐbc" and "hELLO wORLD".capitalize() == "Hello world")
 
+def test_str_literal_chars():
+    # A str literal carries the character count the compiler decoded, also
+    # when escapes write the UTF-8 bytes of a character one by one
+    jp = "\u65e5\u672c"
+    print("str literal lengths: {len("é")} {len(jp)} {len("\xc3\xa9")} {len("a\x00b")}")
+    return (len("é") == 1 and len(jp) == 2 and jp[1] == "本" and jp[-1] == "\u672c"
+            and len("\xc3\xa9") == 1 and "\xc3\xa9" == "é" and len("a\x00b") == 3
+            and len("") == 0 and len("x") == 1)
+
 def test_str_upper_large():
     # upper builds its result on the heap, not in a stack array of four bytes
     # per character

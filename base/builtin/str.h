@@ -24,6 +24,12 @@ B_str actStrFromCStringCopy(const char *str);
 B_str actStrFromCStringLength(const char *str, int64_t nbytes);
 B_str actStrFromCStringLengthCopy(const char *str, int64_t nbytes);
 
+// The str of a str literal, for generated code: nbytes of valid UTF-8 that
+// decode to nchars characters, in static storage and followed by a NUL. The
+// compiler has decoded the literal so no additional checks or counts are
+// needed. Like actStrFromCString it keeps no copy.
+B_str actStrFromLiteral(const char *str, int64_t nbytes, int64_t nchars);
+
 // A NUL-terminated copy of s, for a C API that takes a C string. Such an API
 // takes a NUL as the end of the string, so if s contains one this raises
 // nul_error instead.
