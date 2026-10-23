@@ -1,6 +1,6 @@
 # Environment variable names and values are C strings. The bytes variants of
-# the Env methods must reject a NUL byte instead of cutting the name or value
-# short at it.
+# the EnvVar methods must reject a NUL byte instead of cutting the name or
+# value short at it.
 
 def borrowed_name() -> bytes:
     NotImplemented
@@ -12,42 +12,42 @@ actor main(env):
     def check() -> list[str]:
         failed = []
         try:
-            await async env.setenvb(name, b"a" + nul + b"b")
+            await async env.vars.setenvb(name, b"a" + nul + b"b")
             failed.append("setenvb accepted a NUL byte in the value")
         except ValueError:
             pass
         try:
-            await async env.setenvb(name + nul + b"X", b"value")
+            await async env.vars.setenvb(name + nul + b"X", b"value")
             failed.append("setenvb accepted a NUL byte in the name")
         except ValueError:
             pass
         try:
-            v = env.getenvb(b"PATH" + nul + b"X")
+            v = env.vars.getenvb(b"PATH" + nul + b"X")
             failed.append("getenvb accepted a NUL byte in the name")
         except ValueError:
             pass
         try:
-            await async env.unsetenvb(name + nul)
+            await async env.vars.unsetenvb(name + nul)
             failed.append("unsetenvb accepted a NUL byte in the name")
         except ValueError:
             pass
 
         try:
-            await async env.setenvb(borrowed_name(), b"value")
+            await async env.vars.setenvb(borrowed_name(), b"value")
             failed.append("setenvb accepted an invalid name")
         except RuntimeError as error:
             if not error.error_message.startswith("Failed to set the environment variable =BAD: "):
                 failed.append("setenvb formatted bytes outside the name: {error}")
 
-        await async env.setenvb(name, b"value")
-        v = env.getenvb(name)
+        await async env.vars.setenvb(name, b"value")
+        v = env.vars.getenvb(name)
         if v is not None:
             if v != b"value":
                 failed.append("getenvb returned {v} instead of the value set by setenvb")
         else:
             failed.append("getenvb did not find the variable set by setenvb")
-        await async env.unsetenvb(name)
-        if env.getenvb(name) is not None:
+        await async env.vars.unsetenvb(name)
+        if env.vars.getenvb(name) is not None:
             failed.append("unsetenvb did not remove the variable")
         return failed
 

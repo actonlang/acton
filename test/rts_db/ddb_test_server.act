@@ -57,13 +57,12 @@ actor Tester(env, port):
             print("RECV", c, data.decode(), "RESPONSE:", result)
             c.write(result)
         if data == b"ENV":
-            # After a restore from the DB, Env, EnvVar and Stdio still answer.
-            # The is_tty() result is assigned so that the call waits for the
-            # reply from Stdio.
-            path = env.getenv("PATH")
-            vars_path = env.vars.getenv("PATH")
-            tty = env.is_tty()
-            ok = path is not None and vars_path is not None
+            # After a restore from the DB, EnvVar and Stdio still answer. The
+            # is_tty() result is assigned so that the call waits for the reply
+            # from Stdio.
+            path = env.vars.getenv("PATH")
+            tty = env.stdio.is_tty()
+            ok = path is not None
             result = b"OK" if ok else b"FAIL env services"
             print("RECV", c, data.decode(), "RESPONSE:", result)
             c.write(result)
