@@ -368,7 +368,8 @@ normSuite' env (s : ss)             = do s' <- norm' env s
                                          ss' <- normSuite' (advanceLocalEnv s env) ss
                                          defs <- mapM mkCompFun comps
                                          return (concat defs ++ s' ++ ss')
-  where mkCompFun (f,lambound,comp) = do w <- newName "w"
+  where mkCompFun (f,lambound,comp) = do w' <- newName "w"
+                                         let w = Internal Witness (nameText w') 0
                                          r <- newName "res"
                                          let env0 = define (envOf lambound) env
                                              fx = fxOf env0 comp

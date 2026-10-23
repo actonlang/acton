@@ -230,7 +230,7 @@ import qualified Acton.CPS
 import qualified Acton.Deactorizer
 import qualified Acton.LambdaLifter
 import Acton.Analytics
-import qualified Acton.WitnessStats
+import qualified Acton.WitnessSharing as Witness
 import qualified Acton.Boxing
 import qualified Acton.CodeGen
 import Acton.Builtin (mBuiltin)
@@ -2326,13 +2326,43 @@ readCodegenHash path = do
 -- | Collect codegen hash status for a module.
 codegenStatus :: Paths -> A.ModName -> B.ByteString -> IO CodegenStatus
 codegenStatus paths mn implHash = do
-  let expected = B.unpack $ Base16.encode implHash
+  emptyHook <- moduleHasEmptyExtensionInit paths mn
+  let expected = B.unpack $ Base16.encode (codegenHookHash emptyHook implHash)
       cFile = outBase paths mn ++ ".c"
       hFile = outBase paths mn ++ ".h"
   cHash <- readCodegenHash cFile
   hHash <- readCodegenHash hFile
   supportHash <- readCodegenHash (Acton.CodeGen.supportFile (outBase paths mn))
   return CodegenStatus { csExpected = expected, csC = cHash, csH = hHash, csSupport = supportHash }
+
+-- Only the classification affects generated Acton C. Recheck it even for a
+-- cached .tydb: editing an empty hook into a callback must undo promotion on
+-- the next ordinary build, without requiring a change to the .act source.
+moduleHasEmptyExtensionInit :: Paths -> A.ModName -> IO Bool
+moduleHasEmptyExtensionInit paths mn = do
+  let file = srcBase paths mn ++ ".ext.c"
+  exists <- doesFileExist file
+  if not exists then return False else do
+    contents <- B.readFile file
+    return $ Witness.emptyExtensionInit (Acton.CodeGen.extensionInitName mn) (B.unpack contents)
+
+codegenHookHash :: Bool -> B.ByteString -> B.ByteString
+codegenHookHash False h = h
+codegenHookHash True h = SHA256.hash (B.pack "empty-extension-init-v1:" <> h)
+
+emptyHookTag :: String
+emptyHookTag = "/* Acton empty extension init */"
+
+-- --only-build deliberately skips Acton code generation. Do not let a native
+-- rebuild combine pooled function bodies with a hook which can now call them
+-- before their pool exists. The tag is separate from the implementation hash
+-- because only-build is allowed to ignore unrelated source/hash changes.
+staleEmptyExtensionInit :: Paths -> A.ModName -> IO Bool
+staleEmptyExtensionInit paths mn = do
+  tagged <- try $ withFile (outBase paths mn ++ ".c") ReadMode $ \h -> hGetLine h >> hGetLine h
+  case tagged :: Either IOException String of
+    Right tag | tag == emptyHookTag -> not <$> moduleHasEmptyExtensionInit paths mn
+    _ -> return False
 
 -- | Check every generated artifact against the expected impl hash.
 codegenUpToDate :: CodegenStatus -> Bool
@@ -3112,6 +3142,7 @@ runBackPassesWithProgress :: C.GlobalOptions
                           -> (BackPassProgress -> IO ())
                           -> IO (Maybe TimeSpec, Maybe BackTiming)
 runBackPassesWithProgress gopts opts paths backInput shouldWrite onProgress = do
+      emptyHook <- moduleHasEmptyExtensionInit paths (A.modname $ biTypedMod backInput)
       let mn = A.modname (biTypedMod backInput)
           outbase = outBase paths mn
           relSrcBase = makeRelative (projPath paths) (srcBase paths mn)
@@ -3187,15 +3218,18 @@ runBackPassesWithProgress gopts opts paths backInput shouldWrite onProgress = do
         return res
 
       (boxed, tBoxing) <- timedBackPass BackPassBoxing $ do
-        res <- Acton.Boxing.doBoxing liftEnv lifted
+        res <- Acton.Boxing.doBoxingWithEmptyHook emptyHook liftEnv lifted
         forM_ (biWitnessEnv backInput) $ \we -> emitWitnessStats we "boxed" res
         iff (C.box opts && mn == (modName paths)) $ dump mn "box" (Pretty.print res)
         return res
 
       ((_,h,c,support), tCodeGen) <- timedBackPass BackPassCodeGen $ do
-        let hexHash = B.unpack $ Base16.encode (biImplHash backInput)
+        let hexHash = B.unpack $ Base16.encode (codegenHookHash emptyHook $ biImplHash backInput)
             emitLines = not (C.dbg_no_lines opts)
-        Acton.CodeGen.generateCode writesOutput liftEnv relSrcBase (biSrc backInput) emitLines boxed hexHash
+        (n,h,c,support) <- Acton.CodeGen.generateCode writesOutput liftEnv relSrcBase (biSrc backInput) emitLines boxed hexHash
+        let taggedC | emptyHook, (first,'\n':rest) <- break (== '\n') c = first ++ "\n" ++ emptyHookTag ++ "\n" ++ rest
+                    | otherwise = c
+        return (n,h,taggedC,support)
 
       let finishBack = finish tNormalize tDeactorize tCPS tLLift tBoxing tCodeGen
       if C.hgen opts
@@ -3955,7 +3989,11 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
       case taskCurrent of
         ParseErrorTask{ parseDiagnostics = diags } -> return (key, Left diags)
         _ | C.only_build optsT -> do
-              ifaceRes <- case taskCurrent of
+              staleHook <- staleEmptyExtensionInit paths mn
+              ifaceRes <- if staleHook then
+                            return $ Left $ errsToDiagnostics "Compilation error" (srcFile paths mn) ""
+                              [(NoLoc,"C extension initialization changed; run acton build without --only-build to regenerate witness bindings")]
+                          else case taskCurrent of
                             TyTask{ tyPubHash = h } -> readIfaceFromTy paths mn "" (Just h)
                             ParseTask{ src = srcContent } -> readIfaceFromTy paths mn srcContent Nothing
                             ActonTask{ src = srcContent } -> readIfaceFromTy paths mn srcContent Nothing
@@ -3971,6 +4009,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                              , frInterestDeps = interestDeps
                              }
                   cacheFrontResult fr
+                Left diags | staleHook -> return (key, Left diags)
                 Left _ ->
                   return (key, Right emptyFrontResult)
         _ -> do
@@ -5615,6 +5654,6 @@ witnessStatsLock :: MVar ()
 witnessStatsLock = unsafePerformIO (newMVar ())
 
 emitWitnessStats env stage m = do
-  let record = B.snoc (BL.toStrict $ Aeson.encode $ Acton.WitnessStats.witnessStats env stage m) '\n'
+  let record = B.snoc (BL.toStrict $ Aeson.encode $ Witness.witnessStats env (isJust . fst . Acton.CodeGen.staticWitnessName) stage m) '\n'
   _ <- evaluate (B.length record)
   withMVar witnessStatsLock $ \_ -> B.hPut stdout record

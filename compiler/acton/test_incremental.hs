@@ -3098,6 +3098,50 @@ p59_full_build_keeps_nested_module_binary =
     assertArtifactsGone [binSub]
     assertArtifactsExist [binMain]
 
+p60_empty_extension_hook_refresh :: TestTree
+p60_empty_extension_hook_refresh =
+  testCase "60-empty extension hook classification invalidates cached codegen" $ do
+    let proj = casesProjDir
+        act = casesSrcDir </> "a.act"
+        ext = casesSrcDir </> "a.ext.c"
+        c = proj </> "out" </> "types" </> casesProjName </> "a.c"
+        mod = modLabel proj "a"
+        hook = "incremental_casesQ_aQ___ext_init__"
+        empty = "void " <> hook <> "() {}\nbool incremental_casesQ_aQ_external() { return true; }\n"
+        callback = "void " <> hook <> "() { incremental_casesQ_aQ_compare(B_mk_list(0), B_mk_list(0)); }\n"
+                   <> "bool incremental_casesQ_aQ_external() { return true; }\n"
+        build = buildOutInArgs proj ["--skip-build"]
+        checkCalls n = do
+          generated <- T.readFile c
+          assertEqual "list witness allocator calls in function bodies" n (T.count "B_EqD_listG_new(" generated)
+    ensureCasesProject
+    writeFileUtf8 act $ T.unlines
+      [ "def compare(a: list[list[int]], b: list[list[int]]) -> bool:"
+      , "    return a == b"
+      , "def external() -> bool:"
+      , "    NotImplemented"
+      ]
+    writeFileUtf8 ext empty
+    _ <- build
+    checkCalls 0
+    outFresh <- build
+    assertBool "expected the empty-hook build to remain fresh" (fresh outFresh mod)
+    -- Change only the extension file, keeping the typed Acton module cached.
+    writeFileUtf8 ext callback
+    (ecOnly, outOnly) <- runActonIn proj ["build", "--only-build", "--skip-build", "--color", "never"]
+    assertBool "only-build must not retain the stale empty-hook assumption" (ecOnly /= ExitSuccess)
+    assertBool "expected an explanation to regenerate witness bindings" ("without --only-build" `T.isInfixOf` outOnly)
+    outCallback <- build
+    assertBool "expected a codegen refresh for the nonempty hook" (compiled outCallback mod)
+    assertBool "did not expect to typecheck the unchanged Acton source" (not (typechecked outCallback mod))
+    checkCalls 2
+    writeFileUtf8 ext empty
+    outEmpty <- build
+    assertBool "expected pooling to be restored after removing the callback" (compiled outEmpty mod)
+    checkCalls 0
+    outFreshAgain <- build
+    assertBool "expected restored empty-hook build to remain fresh" (fresh outFreshAgain mod)
+
 -- Main -----------------------------------------------------------------------
 
 -- | Tasty entry point for incremental tests.
@@ -3187,4 +3231,5 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
       , p58_full_build_drops_undeclared_root_stub
       , p59_full_build_keeps_nested_module_binary
       ]
+  , p60_empty_extension_hook_refresh
   ]

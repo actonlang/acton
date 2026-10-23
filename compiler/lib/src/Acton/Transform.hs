@@ -18,7 +18,7 @@ import qualified Data.HashMap.Strict as M
 import qualified Data.IntMap.Strict as IM
 import qualified Data.HashSet as HS
 import Acton.Subst (vfree)
-import Acton.WitnessKey (witnessHash)
+import Acton.WitnessSharing (witnessHash)
 
 import Utils
 import Acton.Syntax

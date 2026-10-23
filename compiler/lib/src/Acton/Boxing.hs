@@ -10,7 +10,6 @@ import Acton.Prim
 import Acton.Builtin
 import Acton.Subst
 import qualified Acton.WitnessSharing as WitnessSharing
-import qualified Acton.WitnessPooling as WitnessPooling
 import Pretty
 import Utils
 import Debug.Trace
@@ -21,12 +20,16 @@ import Control.Monad.Except
 import qualified Data.HashMap.Strict as M
 
 doBoxing                           :: Acton.Env.Env0 -> Module -> IO Module
-doBoxing env m                     = do (_,ss) <- boxing (boxEnv env) (mbody m)
-                                        let known = WitnessSharing.constructorHeads (mbody m)
-                                            isStatic = isJust . staticWitnessOf (boxEnv env)
-                                        let shared = WitnessSharing.shareWitnesses env known isStatic m{mbody = ss}
-                                            staticValue e = staticWitnessExpr <$> staticWitnessOf (boxEnv env) e
-                                        return $ WitnessPooling.poolWitnesses env known staticValue shared
+doBoxing                           = doBoxingWithEmptyHook False
+
+doBoxingWithEmptyHook               :: Bool -> Acton.Env.Env0 -> Module -> IO Module
+doBoxingWithEmptyHook emptyHook env m = do
+    (_,ss) <- boxing (boxEnv env) (mbody m)
+    let known = WitnessSharing.constructorHeads (mbody m)
+        isStatic = isJust . staticWitnessOf (boxEnv env)
+        shared = WitnessSharing.shareWitnesses env known isStatic m{mbody = ss}
+        staticValue e = staticWitnessExpr <$> staticWitnessOf (boxEnv env) e
+    return $ WitnessSharing.poolWitnessesWithEmptyHook emptyHook env known staticValue shared
 
 type BoxEnv                        = EnvF BoxX
 

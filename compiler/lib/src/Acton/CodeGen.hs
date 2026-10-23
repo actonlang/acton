@@ -51,6 +51,13 @@ generate env srcbase srcText emitLines m hash = do
 supportFile                         :: FilePath -> FilePath
 supportFile outbase                 = outbase ++ ".closures.inc"
 
+-- Use the same spelling when inspecting the extension source and calling it.
+extensionInitName :: ModName -> String
+extensionInitName mn
+    | mn == mBuiltin = "B___ext_init__"
+    | otherwise = Data.List.intercalate "Q_" (map (unCkeyword . mkCident . nstr) (modPathNames mn)) ++ "Q___ext_init__"
+  where modPathNames (ModName ns) = ns
+
 -- File builds keep mechanical support in an included fragment; diagnostics and
 -- golden tests request a complete listing with split=False.
 generateCode                        :: Bool -> Acton.Env.Env0 -> FilePath -> String -> Bool -> Module -> String -> IO (String,String,String,String)
@@ -695,7 +702,7 @@ cModuleParts split env srcbase srcText emitLines (Module m imps _ stmts)
         (globalChunkDefs, globalChunkCalls) = initGlobalChunks env1 stmts
         external                    = notImpl && not (inBuiltin env)
         ext_include                 = if notImpl then text "#include" <+> doubleQuotes (text srcbase <> text ".ext.c") else empty
-        ext_init                    = if notImpl then genTopName env (name "__ext_init__") <+> parens empty <> semi else empty
+        ext_init                    = if notImpl then text (extensionInitName m) <+> parens empty <> semi else empty
         notImpl                     = hasNotImpl stmts
         env1                        = classdefine stmts env
         -- Emit a C #line directive for a given Acton SrcLoc if available
