@@ -95,6 +95,7 @@ its section below describes:
 | The heap is managed in [blocks of 16 KiB](#gc-heap-block-size) instead of 4 KiB | `"gc_block_size": "4096"` | not possible |
 | Threads allocate objects of up to [2048 bytes](#gc-thread-local-allocation-size) from their own free lists, instead of 384 | `"gc_thread_local_size_limit": "0"` | not possible |
 | The collector keeps its marks as [bits](#gc-mark-layout) instead of bytes | `"gc_use_mark_bits": "false"` | not possible |
+| Objects get [no padding byte](#gc-object-end-padding) at their end, so a 16-byte object takes 16 bytes instead of 32 | `"gc_no_end_padding": "false"` | not possible |
 
 ## GC mark layout
 
@@ -739,14 +740,14 @@ and its dependencies, including database support.
 ## GC object end padding
 
 The collector treats a pointer into the interior of an object as a reference
-to it. So that a pointer just past the end of an object also keeps the object
-alive, the collector adds a byte to every allocation. With 16-byte size steps,
-the padding turns a 16-byte object into 32 bytes and a 32-byte object into 48.
-The padding can be turned off:
+to it. It can add a byte to every allocation, so that a pointer just past the
+end of an object also keeps the object alive. With 16-byte size steps, the
+padding turns a 16-byte object into 32 bytes and a 32-byte object into 48.
+Acton does not add the padding by default. It can be turned on:
 
 ```python
 build_options = {
-    "gc_no_end_padding": "true",
+    "gc_no_end_padding": "false",
 }
 ```
 
@@ -756,11 +757,27 @@ through such a pointer can be freed while still in use. Acton's runtime,
 standard library and generated code do not rely on the padding: the data of a
 str ends with a NUL inside its allocation, and no other object is kept alive
 through its end pointer alone. The data of bytes and bytearray has no
-terminator. Turn padding off only if the C extensions and C libraries in the
-application never keep an object alive through its end pointer alone. On the
-`gc_heap` benchmark, peak resident memory was 21% to 23% smaller. The default
-is `"false"`. This is a build setting shared by the application and its
-dependencies, including database support.
+terminator. Turn padding on if a C extension or C library in the application
+keeps an object alive through its end pointer alone.
+
+Without padding, nine of ten benchmark loads on x86_64 Linux and an M1 Mac
+took 6% to 24% less CPU time and peaked at 7% to 46% less resident memory, the
+`gc_heap` benchmark at 21% to 23% less. The tenth, binarytrees, took 1.2% more
+CPU time. Its objects are 24 bytes, and objects of 24 or 40 bytes take a 32-
+or 48-byte slot either way. With padding, the collector does not scan the last
+word of a slot, which holds at most 7 bytes of the object and so no pointer.
+Without padding it scans that word too.
+
+Peak memory can also rise. With the default allocation budget, the heap grows
+at once to 3.5 times the live data a collection finds, so its peak follows the
+live data at the last collection before it stops growing, and without padding
+collections come at other points of the program. The merkletrees benchmark,
+one of the nine at depth 17, took 18% less CPU time at depth 19 but peaked 22%
+higher: its heap stopped growing after a collection that found 128 MiB live,
+against 104 MiB with padding.
+
+The default is `"true"`. This is a build setting shared by the application and
+its dependencies, including database support.
 
 ## GC thread-local allocation size
 

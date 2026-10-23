@@ -96,7 +96,7 @@ pub fn build(b: *std.Build) void {
     // Windows commits the whole mark stack when the collector starts. On Linux
     // and macOS its pages become resident only when marking writes them.
     const gc_initial_mark_stack_size = b.option(u32, "gc_initial_mark_stack_size", "Initial number of GC mark stack entries: a power of two, 4096 at least (default: 4194304, 1048576 on Windows; 0 keeps the collector's default of as many entries as a heap block has bytes)") orelse @as(u32, if (target.result.os.tag == .windows) 1048576 else 4194304);
-    const gc_no_end_padding = b.option(bool, "gc_no_end_padding", "Do not pad GC objects by a byte to keep them alive through pointers just past their end") orelse false;
+    const gc_no_end_padding = b.option(bool, "gc_no_end_padding", "Do not pad GC objects by a byte to keep them alive through pointers just past their end (default: true)") orelse true;
     const gc_thread_local_size_limit = b.option(u32, "gc_thread_local_size_limit", "Largest GC object size in bytes served from thread-local free lists: a multiple of 16 up to half the block size (default 2048 with blocks of 16384 bytes or more, else the collector's default, 384 on 64-bit targets; 0 keeps the collector's default)") orelse @as(u32, if (gc_block_size >= 16384) 2048 else 0);
     const gc_realloc_no_free = b.option(bool, "gc_realloc_no_free", "Leave a small collectable object moved by GC_realloc to the collector instead of freeing it (default: true)") orelse true;
     const gc_no_thread_local_warmup = b.option(bool, "gc_no_thread_local_warmup", "Let a new thread use its own GC free list of each size from its first allocation of that size (default: true on targets with threads)") orelse gc_enable_threads;
