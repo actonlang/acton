@@ -752,13 +752,15 @@ build_options = {
 
 Without padding, a pointer just past the end of an object points at the next
 object and keeps that one alive instead, so an object that is referenced only
-through such a pointer can be freed while still in use. Acton's runtime
-allocates strings and byte buffers with room for a terminating NUL, so its end
-pointers stay inside the object. Turn padding off only if the C extensions and
-C libraries in the application never keep an object alive through its end
-pointer alone. On the `gc_heap` benchmark, the heap and resident memory were
-9.5% smaller. The default is `"false"`. This is a build setting shared by the
-application and its dependencies, including database support.
+through such a pointer can be freed while still in use. Acton's runtime,
+standard library and generated code do not rely on the padding: the data of a
+str ends with a NUL inside its allocation, and no other object is kept alive
+through its end pointer alone. The data of bytes and bytearray has no
+terminator. Turn padding off only if the C extensions and C libraries in the
+application never keep an object alive through its end pointer alone. On the
+`gc_heap` benchmark, peak resident memory was 21% to 23% smaller. The default
+is `"false"`. This is a build setting shared by the application and its
+dependencies, including database support.
 
 ## GC thread-local allocation size
 
