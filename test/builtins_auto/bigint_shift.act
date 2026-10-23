@@ -1,0 +1,151 @@
+# a << n is a * 2**n. a >> n shifts the magnitude of a and keeps its sign,
+# so it truncates toward zero: -5 >> 1 == -2. A right shift by at least the
+# bit length of a gives 0, however many whole limbs it skips. Results must
+# be normalised, with no zero top limbs, so that ==, ordering, str(), hash()
+# and arithmetic see the same value as the one built any other way.
+
+# (a, n, a << n, a >> n), computed with Python, with a >> n as
+# sign(a) * (abs(a) >> n). A literal in [2**63, 2**64) is typed u64, so
+# those values go through bigint().
+cases: list[(bigint, int, bigint, bigint)] = [
+    (5, 2, 20, 1),
+    (-5, 1, -10, -2),
+    (5, 3, 40, 0),
+    (-5, 3, -40, 0),
+    (5, 64, 92233720368547758080, 0),
+    (-5, 64, -92233720368547758080, 0),
+    (5, 200, 8034690221294951377709810461705813012611014968913964176506880, 0),
+    (1, 63, bigint(9223372036854775808), 0),
+    (1, 64, 18446744073709551616, 0),
+    (1, 65, 36893488147419103232, 0),
+    (-1, 64, -18446744073709551616, 0),
+    (bigint(18446744073709551615), 63, 170141183460469231722463931679029329920, 1),
+    (bigint(18446744073709551615), 64, 340282366920938463444927863358058659840, 0),
+    (18446744073709551616, 64, 340282366920938463463374607431768211456, 1),
+    (18446744073709551616, 65, 680564733841876926926749214863536422912, 0),
+    (-18446744073709551616, 64, -340282366920938463463374607431768211456, -1),
+    (-18446744073709551616, 65, -680564733841876926926749214863536422912, 0),
+    (340282366920938463463374607431768211456, 127, 57896044618658097711785492504343953926634992332820282019728792003956564819968, 2),
+    (340282366920938463463374607431768211456, 128, 115792089237316195423570985008687907853269984665640564039457584007913129639936, 1),
+    (340282366920938463463374607431768211456, 129, 231584178474632390847141970017375815706539969331281128078915168015826259279872, 0),
+    (-340282366920938463463374607431768211455, 127, -57896044618658097711785492504343953926464851149359812787997104700240680714240, -1),
+    (-340282366920938463463374607431768211455, 128, -115792089237316195423570985008687907852929702298719625575994209400481361428480, 0),
+    (1020847100762815390390123822295304634375, 128, 347376267711948586270712955026063723562191930565368261362616374275761766400000, 3),
+    (1020847100762815390390123822295304634375, 129, 694752535423897172541425910052127447124383861130736522725232748551523532800000, 1),
+    (1020847100762815390390123822295304634375, 130, 1389505070847794345082851820104254894248767722261473045450465497103047065600000, 0),
+    (1020847100762815390390123822295304634375, 192, 6407961107762730247185065118508656343852053279217665075187975349429112842254638138180134502400000, 0),
+    (12345676543456787654567898765456787654345676654, 64, 227737535613946519340543015834221517151174952168658796034459172864, 669260466460959113294768776),
+    (12345676543456787654567898765456787654345676654, 153, 140962706892342321807351613099153147711943947587677373032536522390437215497499532898512928768, 1),
+    (12345676543456787654567898765456787654345676654, 154, 281925413784684643614703226198306295423887895175354746065073044780874430994999065797025857536, 0),
+    (12345676543456787654567898765456787654345676654, 192, 77495067655455240319908197201114620763936829884699188451063898571839946713992302537521806859742409129984, 0),
+    (-12345676543456787654567898765456787654345676654, 100, -15650004280536569312970619838227065180540792120620060882411786183969450491904, -9739021573637133),
+    (-12345676543456787654567898765456787654345676654, 154, -281925413784684643614703226198306295423887895175354746065073044780874430994999065797025857536, 0),
+]
+
+def magnitude(a: bigint) -> bigint:
+    return -a if a < 0 else a
+
+def pow2(n: int) -> bigint:
+    return bigint(2) ** bigint(n)
+
+def ref_lshift(a: bigint, n: int) -> bigint:
+    return a * pow2(n)
+
+def ref_rshift(a: bigint, n: int) -> bigint:
+    """Return a >> n from floor division of the magnitude, without shifts."""
+    r = magnitude(a) // pow2(n)
+    return -r if a < 0 else r
+
+def bit_length(a: bigint) -> int:
+    m = magnitude(a)
+    n = 0
+    while m > 0:
+        m //= 2
+        n += 1
+    return n
+
+def check_value(fail: list[str], what: str, r: bigint, e: bigint):
+    """Check that r is e under every operation that reads the limbs."""
+    if r != e or not (r == e):
+        fail.append(what + " = " + str(r) + ", expected " + str(e))
+        return
+    if r < e or r > e or not (r <= e and r >= e):
+        fail.append(what + ": ordering against " + str(e))
+    if str(r) != str(e):
+        fail.append(what + ": str " + str(r) + " != " + str(e))
+    if hash(r) != hash(e):
+        fail.append(what + ": hash differs from " + str(e))
+    # abs() returns any Real, which would default to int
+    abs_r: bigint = abs(r)
+    abs_e: bigint = abs(e)
+    if (r + 1 != e + 1 or r - e != 0 or r * 3 != e * 3 or -r != -e
+        or abs_r != abs_e or r // 7 != e // 7 or r % 7 != e % 7
+        or ~r != -e - 1):
+        fail.append(what + ": arithmetic differs from " + str(e))
+
+def check_table(fail: list[str]):
+    for a, n, e_lshift, e_rshift in cases:
+        sa = str(a)
+        sn = str(n)
+        check_value(fail, sa + " << " + sn, a << n, e_lshift)
+        check_value(fail, sa + " >> " + sn, a >> n, e_rshift)
+        check_value(fail, "ref " + sa + " << " + sn, ref_lshift(a, n), e_lshift)
+        check_value(fail, "ref " + sa + " >> " + sn, ref_rshift(a, n), e_rshift)
+
+def values() -> list[bigint]:
+    t = bigint(2) ** 64
+    h = bigint(2) ** 63
+    odd = (t - 1) * t + 1
+    big: bigint = 12345676543456787654567898765456787654345676654
+    vs: list[bigint] = [0, 1, 3, 5, -1, -2, -3, -5,
+                        h - 1, h, -h, -h - 1,
+                        t - 1, t, t + 1, -t + 1, -t, -t - 1,
+                        odd, -odd, -3 * t, 5 * t + 7,
+                        t * t - 1, t * t, -t * t + 1, -t * t, -t * t - 1,
+                        -(t * t * t - t), big, -big,
+                        -34567545676545676567656765]
+    return vs
+
+def shifts(a: bigint) -> list[int]:
+    """Shift amounts around limb boundaries and around the bit length of a."""
+    bl = bit_length(a)
+    ns: list[int] = [0, 1, 2, 3, 63, 64, 65, 127, 128, 129,
+                     191, 192, 193, 256, 1000]
+    for n in [bl - 1, bl, bl + 1, bl + 63, bl + 64, bl + 65]:
+        if n >= 0:
+            ns.append(n)
+    return ns
+
+def check_cross(fail: list[str]):
+    for a in values():
+        sa = str(a)
+        for n in shifts(a):
+            sn = str(n)
+            r_lshift = a << n
+            r_rshift = a >> n
+            check_value(fail, sa + " << " + sn, r_lshift, ref_lshift(a, n))
+            check_value(fail, sa + " >> " + sn, r_rshift, ref_rshift(a, n))
+            check_value(fail, "(" + sa + " << " + sn + ") >> " + sn, r_lshift >> n, a)
+            if str(a) != sa:
+                fail.append(sa + " changed to " + str(a) + " by a shift of " + sn)
+
+def check_huge(fail: list[str]):
+    """Right shifts by counts far beyond any operand's bit length give 0."""
+    for a in values():
+        for n in [2**32, 2**62, 9223372036854775807]:
+            check_value(fail, str(a) + " >> " + str(n), a >> n, 0)
+
+actor main(env):
+    fail: list[str] = []
+    try:
+        check_table(fail)
+        check_cross(fail)
+        check_huge(fail)
+    except Exception as e:
+        fail.append("unexpected exception: " + str(e))
+    if fail:
+        print("Failed:", len(fail))
+        for f in fail[:40]:
+            print(f)
+        env.exit(1)
+    env.exit(0)
