@@ -4,10 +4,6 @@ Start other programs through `env.process`. There are two ways to do
 it, depending on whether the program's output is needed as it arrives
 or only once the program has finished.
 
-Older programs start processes with the `process` module, as
-`process.Process` and `process.RunProcess` with a `process.ProcessCap`.
-That still works, but new code should use `env.process`.
-
 `env.process.run` starts a program and calls `on_exit` once it has
 finished, with everything it wrote to stdout and stderr. `on_error` is
 called instead if the program cannot be started.
