@@ -1,8 +1,51 @@
+import file
 import logging
 import net
 import random
 import re
 import testing
+
+actor _test_TCPConnectErrorClosesSocket(t: testing.EnvT):
+    var failed_connects = 0
+    var fd_count_before = 0
+    try:
+        fs = file.FS(file.FileCap(t.env.cap))
+        tcp_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
+        attempts = 100
+
+        def on_connect(c):
+            c.close(lambda c: t.failure(AssertionError("Connection to closed loopback port unexpectedly succeeded")))
+
+        def on_receive(c, payload):
+            pass
+
+        def on_error(c, errmsg):
+            failed_connects += 1
+            if failed_connects == 1:
+                after 0.1: start_repeated_connects()
+            elif failed_connects <= attempts:
+                connect()
+            elif failed_connects == attempts + 1:
+                after 0.1: check_fd_count()
+
+        def start_repeated_connects():
+            # Warm up TCP first; measure subsequent connects after one-time runtime FDs settle.
+            fd_count_before = len(fs.listdir("/dev/fd"))
+            connect()
+
+        def connect():
+            net.TCPConnection(tcp_cap, "127.0.0.1", 1, on_connect, on_receive, on_error)
+
+        def check_fd_count():
+            fd_count_after = len(fs.listdir("/dev/fd"))
+            testing.assertEqual(fd_count_before, fd_count_after, "Repeated refused TCP connects leaked file descriptors")
+            t.success()
+
+        connect()
+    except AssertionError as ex:
+        t.failure(ex)
+    except Exception as ex:
+        t.error(ex)
 
 actor _test_TCPClientSideClose(t: testing.EnvT):
     log = logging.Logger(t.log_handler)

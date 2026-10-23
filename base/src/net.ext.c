@@ -714,10 +714,18 @@ $R netQ_TCPConnectionD__pin_affinityG_local (netQ_TCPConnection self, $Cont c$co
     return $R_CONT(c$cont, B_None);
 }
 
+static void netQ_TCPConnection__close_failed_connect_socket(uv_connect_t *connect_req, int64_t *socket_slot) {
+    uv_tcp_t *socket = (uv_tcp_t *)connect_req->handle;
+    if (*socket_slot == (int64_t)(intptr_t)socket)
+        *socket_slot = -1LL;
+    uv_close((uv_handle_t *)socket, NULL);
+}
+
 void on_connect4(uv_connect_t *connect_req, int status) {
     netQ_TCPConnection self = (netQ_TCPConnection)connect_req->data;
 
     if (status != 0) {
+        netQ_TCPConnection__close_failed_connect_socket(connect_req, &self->_sock4);
         char errmsg[1024] = "Error in TCP connect over IPv4: ";
         uv_strerror_r(status, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
@@ -731,6 +739,7 @@ void on_connect6(uv_connect_t *connect_req, int status) {
     netQ_TCPConnection self = (netQ_TCPConnection)connect_req->data;
 
     if (status != 0) {
+        netQ_TCPConnection__close_failed_connect_socket(connect_req, &self->_sock6);
         char errmsg[1024] = "Error in TCP connect over IPv6: ";
         uv_strerror_r(status, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
