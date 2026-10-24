@@ -11,6 +11,7 @@
 #include <acton_gc_config.h>
 #if ACTON_GC_WRITE_BARRIER
 #include <stdio.h>
+#include <gc/gc_mark.h>
 #endif
 
 #if defined(_WIN32) || defined(_WIN64)
@@ -100,6 +101,60 @@ void acton_wbar_check(const void *obj, const void *slot) {
 #endif
 #endif
 
+#if ACTON_GC_WRITE_BARRIER
+// The collector reads the dirty bits only in incremental mode (generational
+// mode). There, memory that code without the write barrier writes pointers
+// into comes from a collector kind that every read rescans
+// (GC_set_kind_always_rescanned): libuv writes into the uv loops, handles and
+// requests, inside API calls and inside uv_run. libuv's own allocations are
+// uncollectable, which the collector also rescans at every read. The kind has
+// no thread-local free lists, so every allocation from it takes the allocator
+// lock, once per uv request such as a TCP write. In ordinary mode the
+// functions below return ordinary GC memory instead, which uv requests get
+// from the thread's own free lists. GC_INIT sets the mode, before the first
+// of these allocations, and nothing changes it afterwards.
+static int acton_rescanned_kind = -1;
+
+static void acton_init_rescanned_kind(void) {
+    acton_rescanned_kind = (int)GC_new_kind(GC_new_free_list(), 0 | GC_DS_LENGTH, 1, 1);
+    GC_set_kind_always_rescanned(acton_rescanned_kind, 1);
+}
+
+static void *gc_malloc_rescanned(size_t size) {
+    return GC_generic_malloc(size, acton_rescanned_kind);
+}
+
+void *acton_malloc_rescanned(size_t size) {
+    // C library memory while the allocator is the C library's, ordinary GC
+    // memory in ordinary mode
+    if (acton__allocator.calloc != GC_calloc || !GC_is_incremental_mode())
+        return acton_malloc(size);
+    return gc_malloc_rescanned(size);
+}
+
+// In incremental mode the object starts up to align - 1 bytes before the
+// returned pointer, which keeps it alive: the collector recognizes interior
+// pointers.
+void *acton_gc_malloc_rescanned_aligned(size_t align, size_t size) {
+    if (!GC_is_incremental_mode())
+        return GC_memalign(align, size);
+    char *p = gc_malloc_rescanned(size + align - 1);
+    if (p == NULL)
+        return NULL;
+    return (void *)(((uintptr_t)p + align - 1) & ~((uintptr_t)align - 1));
+}
+
+// libuv also allocates with realloc(NULL, n), for example the watchers array
+// of a loop, which holds pointers into the uv handles. GC_realloc(NULL, n)
+// returns ordinary GC memory, so in incremental mode such memory comes from
+// the rescanned kind. GC_realloc keeps the kind of an existing object.
+static void *uv_gc_realloc(void *ptr, size_t size) {
+    if (ptr == NULL && GC_is_incremental_mode())
+        return gc_malloc_rescanned(size);
+    return GC_realloc(ptr, size);
+}
+#endif
+
 void acton_init_alloc() {
     // Allocator regimes for the native IO stack:
     //
@@ -121,8 +176,8 @@ void acton_init_alloc() {
     // collector cannot see them. libuv pairs every internal allocation with
     // a free, so GC_free reclaims them deterministically.
     //
-    // uv handles and requests allocated by Acton code remain ordinary GC
-    // memory; libuv never frees those (caller-owned).
+    // uv handles and requests allocated by Acton code are GC memory from
+    // acton_malloc_rescanned; libuv never frees those (caller-owned).
     //
     // mbedtls needs no setup: with MBEDTLS_PLATFORM_MEMORY its allocator
     // hooks default to calloc/free, which is the regime we want, and nothing
@@ -137,10 +192,18 @@ void acton_init_alloc() {
                         calloc,
                         free);
 
+#if ACTON_GC_WRITE_BARRIER
+    acton_init_rescanned_kind();
+    uv_replace_allocator(uv_gc_malloc,
+                         uv_gc_realloc,
+                         uv_gc_calloc,
+                         GC_free);
+#else
     uv_replace_allocator(uv_gc_malloc,
                          GC_realloc,
                          uv_gc_calloc,
                          GC_free);
+#endif
 }
 
 int acton_replace_allocator(acton_malloc_func malloc_func,

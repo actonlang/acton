@@ -449,7 +449,7 @@ static void udp_close_initialized_handle(uv_udp_t *udp) {
 }
 
 static int udp_connection_start(netQ_UDPConnection self, B_str ip_address, int family) {
-    uv_udp_t *udp = (uv_udp_t *)acton_malloc(sizeof(uv_udp_t));
+    uv_udp_t *udp = (uv_udp_t *)acton_malloc_rescanned(sizeof(uv_udp_t));
     int r = uv_udp_init(get_uv_loop(), udp);
     if (r != 0) {
         return r;
@@ -620,7 +620,7 @@ static int udp_set_recv_buffer_size(uv_udp_t *udp, int64_t size) {
 $R netQ_UDPListenerD__initG_local (netQ_UDPListener self, $Cont c$cont) {
     pin_actor_affinity();
 
-    uv_udp_t *udp = (uv_udp_t *)acton_malloc(sizeof(uv_udp_t));
+    uv_udp_t *udp = (uv_udp_t *)acton_malloc_rescanned(sizeof(uv_udp_t));
     int r = uv_udp_init(get_uv_loop(), udp);
     if (r != 0) {
         char errmsg[1024] = "Failed to initialize UDP listener: ";
@@ -1052,7 +1052,7 @@ static void tcp_connection_connect(netQ_TCPConnection self, B_str ip_address, in
     struct sockaddr_storage dest;
     int r = make_sockaddr(ip_address, self->port, &dest);
     if (r == 0) {
-        socket = (uv_tcp_t *)acton_malloc(sizeof(uv_tcp_t));
+        socket = (uv_tcp_t *)acton_malloc_rescanned(sizeof(uv_tcp_t));
         r = uv_tcp_init(get_uv_loop(), socket);
         if (r != 0) {
             socket = NULL;
@@ -1061,7 +1061,7 @@ static void tcp_connection_connect(netQ_TCPConnection self, B_str ip_address, in
     if (r == 0) {
         *sock = (int64_t)(intptr_t)socket;
         ACTON_WBAR(self, sock, socket);
-        uv_connect_t *connect_req = (uv_connect_t *)acton_malloc(sizeof(uv_connect_t));
+        uv_connect_t *connect_req = (uv_connect_t *)acton_malloc_rescanned(sizeof(uv_connect_t));
         connect_req->data = (void *)self;
         r = uv_tcp_connect(connect_req, socket, (const struct sockaddr *)&dest, family == 4 ? on_connect4 : on_connect6);
     }
@@ -1156,7 +1156,7 @@ $R netQ_TCPConnectionD_writeG_local (netQ_TCPConnection self, $Cont c$cont, B_by
     if ((intptr_t)stream == -1)
         return $R_CONT(c$cont, B_None);
 
-    uv_write_t *req = (uv_write_t *)acton_malloc(sizeof(uv_write_t));
+    uv_write_t *req = (uv_write_t *)acton_malloc_rescanned(sizeof(uv_write_t));
     req->data = self;
     uv_buf_t buf = uv_buf_init((char *)data->str, data->nbytes);
     int r = uv_write(req, stream, &buf, 1, tcp_connection_write_cb);
@@ -1209,7 +1209,7 @@ $R netQ_TCPConnectionD__closeG_local (netQ_TCPConnection self, $Cont c$cont, $ac
     struct close_cb_data *cb_data = (struct close_cb_data *)acton_malloc(sizeof(struct close_cb_data));
     cb_data->self = self;
     cb_data->on_close = on_close;
-    uv_shutdown_t *req = (uv_shutdown_t *)acton_malloc(sizeof(uv_shutdown_t));
+    uv_shutdown_t *req = (uv_shutdown_t *)acton_malloc_rescanned(sizeof(uv_shutdown_t));
     req->data = (void *)cb_data;
     int r = uv_shutdown(req, stream, after_shutdown);
     if (r < 0) {
@@ -1258,7 +1258,7 @@ void on_new_connection(uv_stream_t *server, int status) {
         return;
     }
 
-    uv_tcp_t *client = (uv_tcp_t*)acton_malloc(sizeof(uv_tcp_t));
+    uv_tcp_t *client = (uv_tcp_t*)acton_malloc_rescanned(sizeof(uv_tcp_t));
     uv_tcp_init(get_uv_loop(), client);
     int r = uv_accept(server, (uv_stream_t *)client);
     if (r != 0) {
@@ -1281,7 +1281,7 @@ void on_new_connection(uv_stream_t *server, int status) {
 $R netQ_TCPListenerD__initG_local (netQ_TCPListener self, $Cont c$cont) {
     pin_actor_affinity();
 
-    uv_tcp_t *server = (uv_tcp_t *)acton_malloc(sizeof(uv_tcp_t));
+    uv_tcp_t *server = (uv_tcp_t *)acton_malloc_rescanned(sizeof(uv_tcp_t));
     uv_tcp_init(get_uv_loop(), server);
     server->data = (void *)self;
     char errmsg[1024];
@@ -1444,7 +1444,7 @@ $R netQ_TCPListenConnectionD_writeG_local (netQ_TCPListenConnection self, $Cont 
     if ((intptr_t)stream == -1)
         return $R_CONT(c$cont, B_None);
 
-    uv_write_t *req = (uv_write_t *)acton_malloc(sizeof(uv_write_t));
+    uv_write_t *req = (uv_write_t *)acton_malloc_rescanned(sizeof(uv_write_t));
     req->data = self;
     uv_buf_t buf = uv_buf_init((char *)data->str, data->nbytes);
     int r = uv_write(req, stream, &buf, 1, tcp_listen_conn_write_cb);
@@ -1473,7 +1473,7 @@ static void tcp_listen_conn_close(netQ_TCPListenConnection self) {
     if (uv_is_closing((uv_handle_t *)client))
         return;
 
-    uv_shutdown_t *req = (uv_shutdown_t *)acton_malloc(sizeof(uv_shutdown_t));
+    uv_shutdown_t *req = (uv_shutdown_t *)acton_malloc_rescanned(sizeof(uv_shutdown_t));
     int r = uv_shutdown(req, client, listen_conn_after_shutdown);
     if (r < 0) {
         log_debug("TCP listen connection shutdown failed, closing handle: %s", uv_strerror(r));

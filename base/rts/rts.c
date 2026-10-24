@@ -2709,8 +2709,18 @@ void wt_work_cb(uv_check_t *ev) {
     uv_async_send(&wake_ev[wctx->id]);
 }
 
+// SET_SELF stores the current actor into the worker context for every
+// continuation, without a write barrier.
+static WorkerCtx new_worker_ctx(void) {
+#if ACTON_GC_WRITE_BARRIER
+    return acton_gc_malloc_rescanned_aligned(_Alignof(struct WorkerCtx), sizeof(struct WorkerCtx));
+#else
+    return GC_memalign(_Alignof(struct WorkerCtx), sizeof(struct WorkerCtx));
+#endif
+}
+
 void *main_loop(void *idx) {
-    WorkerCtx wctx = GC_memalign(_Alignof(struct WorkerCtx), sizeof(struct WorkerCtx));
+    WorkerCtx wctx = new_worker_ctx();
     wctxs[(intptr_t)idx] = wctx;
     wctx->id = (intptr_t)idx;
     wctx->uv_loop = uv_loops[wctx->id];
@@ -3838,7 +3848,12 @@ int main(int argc, char **argv) {
     wctxs[0] = NULL;
 
     for (int i=0; i <= num_wthreads; i++) {
+        // libuv writes handle links and timers into the loop
+#if ACTON_GC_WRITE_BARRIER
+        uv_loop_t *loop = acton_gc_malloc_rescanned_aligned(_Alignof(uv_loop_t), sizeof(uv_loop_t));
+#else
         uv_loop_t *loop = GC_malloc(sizeof(uv_loop_t));
+#endif
         check_uv_fatal(uv_loop_init(loop), "Error initializing libuv loop: ");
         uv_loops[i] = loop;
 
@@ -3880,7 +3895,7 @@ int main(int argc, char **argv) {
     B___init__();
     $register_rts();
 
-    WorkerCtx wctx = GC_memalign(_Alignof(struct WorkerCtx), sizeof(struct WorkerCtx));
+    WorkerCtx wctx = new_worker_ctx();
     wctxs[0] = wctx;
     wctx->id = 0;
     wctx->uv_loop = uv_loops[wctx->id];

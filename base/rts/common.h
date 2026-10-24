@@ -81,3 +81,16 @@ GC_ATTR_MALLOC char *acton_gc_strndup(const char *s, size_t n);
 #if ACTON_GC_WRITE_BARRIER
 void acton_init_write_barrier(void);
 #endif
+
+// Memory that a C library writes pointers into by itself, such as the uv
+// loops, handles and requests that libuv links together. Every read of the
+// dirty bits rescans it in generational mode, so the stores need no write
+// barrier. Like acton_malloc, it returns cleared memory, from the C library
+// while the allocator is the C library's.
+#if ACTON_GC_WRITE_BARRIER
+GC_ATTR_MALLOC GC_ATTR_ALLOC_SIZE(1) void *acton_malloc_rescanned(size_t size);
+// Always GC memory, aligned to align, a power of two.
+void *acton_gc_malloc_rescanned_aligned(size_t align, size_t size);
+#else
+#define acton_malloc_rescanned(size) acton_malloc(size)
+#endif
