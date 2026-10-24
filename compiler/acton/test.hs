@@ -3123,6 +3123,10 @@ gcHeapGrowthBuildOptionTests = testGroup "GC heap growth"
             ]
       action acton proj runEnv writeOptions
 
+-- The GC tests choose the collector variables and the GC mode of each run
+withoutGcVariables :: [(String, String)] -> [(String, String)]
+withoutGcVariables = filter (\(name, _) -> not ("GC_" `isPrefixOf` name || "ACTON_GC_" `isPrefixOf` name))
+
 gcCollectorOptionTests = testGroup "GC collector options"
   [ testCase "settings reach the collector and allocation still works" $
       withFixture $ \acton proj runEnv writeOptions -> do
@@ -3144,6 +3148,8 @@ gcCollectorOptionTests = testGroup "GC collector options"
         writeOptions []
         expectSuccess "build default collector" =<< build []
         assertReports "default collector" defaults []
+        forM_ modes $ \(label, extraEnv, reports) ->
+          assertReports label reports extraEnv
         -- The environment overrides the runtime policy of either build.
         assertReports "environment overrides" overridden overrides
         writeOptions tuned
@@ -3177,7 +3183,9 @@ gcCollectorOptionTests = testGroup "GC collector options"
   ]
   where
     -- Reported get_gc_info fields for a build without settings.
-    defaults = [("alloc_budget_percent", "250"), ("block_size", "16384"),
+    defaults = [("mode", "ordinary"), ("backend", "none"),
+                ("pause_target_us", "None"),
+                ("alloc_budget_percent", "250"), ("block_size", "16384"),
                 ("heap_ceiling_percent", "75"), ("memory_limit_known", "True"),
                 ("end_padding", "False"), ("small_object_size", "16"),
                 ("thread_local_size_limit", "2048"),
@@ -3214,9 +3222,26 @@ gcCollectorOptionTests = testGroup "GC collector options"
                     ("mark_bits", "False"),
                     ("bytes_per_marker", "0"),
                     ("initial_mark_stack_size", "65536")]
+    -- The GC mode chosen when starting the program: generational mode marks
+    -- in steps of 50 ms (reported as incremental), or in one stop per
+    -- collection; the write-barrier checker runs in generational mode with
+    -- steps of 1 ms, and its exit status fails the run if it finds a store
+    -- without a barrier.
+    modes = [("generational mode", [("ACTON_GC_MODE", "generational")],
+              [("mode", "incremental"), ("backend", "manual"),
+               ("pause_target_us", "50000")]),
+             ("generational mode in one stop",
+              [("ACTON_GC_MODE", "generational"), ("ACTON_GC_PAUSE_MS", "0")],
+              [("mode", "generational"), ("backend", "manual"),
+               ("pause_target_us", "None")]),
+             ("write-barrier checker", [("ACTON_GC_CHECK", "1")],
+              [("mode", "incremental"), ("backend", "manual"),
+               ("pause_target_us", "1000"), ("alloc_budget_percent", "20")])]
     -- With 0, the initial mark stack has the collector's default size: as
     -- many entries as a block has bytes.
-    others = [([("gc_block_size", "65536"),
+    others = [([("gc_mode", "generational")],
+               [("mode", "incremental"), ("backend", "manual")]),
+              ([("gc_block_size", "65536"),
                 ("gc_initial_mark_stack_size", "0"),
                 ("gc_thread_local_size_limit", "32768")],
                [("block_size", "65536"), ("initial_mark_stack_size", "65536"),
@@ -3281,6 +3306,7 @@ gcCollectorOptionTests = testGroup "GC collector options"
                         ("gc_block_size", "131072"),
                         ("gc_block_size", "invalid"),
                         ("gc_mark_range_stealing", "maybe"),
+                        ("gc_mode", "incremental"),
                         ("gc_initial_mark_stack_size", "2048"),
                         ("gc_initial_mark_stack_size", "12288"),
                         ("gc_initial_mark_stack_size", "invalid"),
@@ -3315,8 +3341,7 @@ gcCollectorOptionTests = testGroup "GC collector options"
       createDirectoryIfMissing True (proj </> "src")
       forM_ ["main.act", "main.ext.c"] $ \file ->
         copyFile ("test/project/gc_options/src" </> file) (proj </> "src" </> file)
-      let runEnv = [("GC_MARKERS", "2")]
-                ++ filter (not . isPrefixOf "GC_" . fst) environment
+      let runEnv = [("GC_MARKERS", "2")] ++ withoutGcVariables environment
           fingerprint = Fingerprint.formatFingerprint
             (Fingerprint.updateFingerprintPrefix (Fingerprint.fingerprintPrefixForName "gc_options") 1)
           writeOptions selected = writeFile (proj </> "Build.act") $ unlines

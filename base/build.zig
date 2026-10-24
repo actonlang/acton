@@ -95,6 +95,7 @@ pub fn build(b: *std.Build) void {
     const gc_use_mark_bits = b.option(bool, "gc_use_mark_bits", "Use packed GC mark bits (default: true)") orelse true;
     const gc_mark_bit_per_object = b.option(bool, "gc_mark_bit_per_object", "Track GC marks per object") orelse false;
     const gc_dirty_tracking_backend = b.option([]const u8, "gc_dirty_tracking_backend", "GC dirty tracking backend: write_barrier (default on targets with threads), auto, soft_dirty, userfaultfd") orelse gcDefaultDirtyTrackingBackend(target.result);
+    const gc_mode = b.option([]const u8, "gc_mode", "Default GC mode, which the ACTON_GC_MODE environment variable overrides: ordinary (default) or generational") orelse "ordinary";
     const gc_page_hash_table_log2 = b.option(u8, "gc_page_hash_table_log2", "Log2 of GC page-hash entries (0 keeps the default)") orelse 0;
     const gc_heap_growth_divisor = b.option(u32, "gc_heap_growth_divisor", "Limit automatic GC heap growth to the heap size divided by this (default 4; 0 keeps the fixed increment)") orelse 4;
     const gc_alloc_budget_percent = b.option(u32, "gc_alloc_budget_percent", "Collect after allocating this percentage of the live data (default 250; 0 selects the free space divisor policy)") orelse 250;
@@ -127,6 +128,7 @@ pub fn build(b: *std.Build) void {
     // diagnostics name the Build.act options.
     const gc_required_vdb = gcRequiredVdb(target.result, gc_dirty_tracking_backend);
     const gc_write_barrier = gc_required_vdb == 0x2;
+    const gc_mode_generational = gcModeGenerational(gc_mode);
     if (gc_page_hash_table_log2 > 30) {
         std.log.err("gc_page_hash_table_log2 must be between 1 and 30, or 0 for the default", .{});
         std.process.exit(1);
@@ -249,6 +251,7 @@ pub fn build(b: *std.Build) void {
         \\#define ACTON_GC_WRITE_BARRIER {d}
         \\#define ACTON_GC_LOG_BLOCK {d}
         \\#define ACTON_GC_LOG_PHT {d}
+        \\#define ACTON_GC_MODE_GENERATIONAL {d}
         \\#ifdef __cplusplus
         \\extern "C" {{
         \\#endif
@@ -265,7 +268,7 @@ pub fn build(b: *std.Build) void {
         \\#endif
         \\
     , .{ gc_dirty_tracking_backend, gc_required_vdb, @intFromBool(gc_enable_threads),
-         @intFromBool(gc_write_barrier), gc_log_block, gc_log_pht }));
+         @intFromBool(gc_write_barrier), gc_log_block, gc_log_pht, @intFromBool(gc_mode_generational) }));
     // The effective settings depend on the collector defaults and its
     // configuration macros, so read them from the collector's private header,
     // compiled with the C flags of libgc itself.
@@ -656,6 +659,15 @@ pub fn gcDefaultDirtyTrackingBackend(t: std.Target) []const u8 {
 // write_barrier builds the collector with the manual dirty-bit mode only.
 pub fn gcLibgcBackend(backend: []const u8) []const u8 {
     return if (std.mem.eql(u8, backend, "write_barrier")) "manual" else backend;
+}
+
+pub fn gcModeGenerational(mode: []const u8) bool {
+    if (std.mem.eql(u8, mode, "generational")) return true;
+    if (!std.mem.eql(u8, mode, "ordinary")) {
+        std.log.err("gc_mode must be ordinary or generational", .{});
+        std.process.exit(1);
+    }
+    return false;
 }
 
 // x86_64 macOS builds leave out mprotect-based dirty tracking. Under

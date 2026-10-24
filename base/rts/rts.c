@@ -3408,6 +3408,132 @@ static void GC_CALLBACK gc_disable_thp(void *space, size_t size) {
 
 void DaveNull () {}
 
+// The GC mode: ordinary, or generational, which collects the young objects
+// in minor collections and marks every collection in world-stopped parallel
+// steps with a target length of ACTON_GC_PAUSE_MS milliseconds (default 50,
+// 0 for one stop per collection). ACTON_GC_MODE=ordinary|generational
+// overrides the gc_mode build option. ACTON_GC_CHECK=1 selects generational
+// mode with the collector's write-barrier checker, a small allocation budget
+// and steps of 1 ms, so that a test run has many collections, and exits with
+// status 70 after a collection that finds a store without its barrier. The
+// RTS sets the collector's environment variables before GC_INIT, unless they
+// are set already, and removes them again after it, so that child processes
+// choose their own mode.
+#define GC_ENV_MAX 4
+static const char *gc_env_set[GC_ENV_MAX];
+static int gc_env_nset = 0;
+
+static void gc_env_default(const char *name, const char *value) {
+    if (getenv(name) != NULL || gc_env_nset == GC_ENV_MAX)
+        return;
+#ifdef _WIN32
+    _putenv_s(name, value);
+#else
+    setenv(name, value, 1);
+#endif
+    gc_env_set[gc_env_nset++] = name;
+}
+
+static void gc_env_restore(void) {
+    for (int i = 0; i < gc_env_nset; i++) {
+#ifdef _WIN32
+        _putenv_s(gc_env_set[i], "");
+#else
+        unsetenv(gc_env_set[i]);
+#endif
+    }
+    gc_env_nset = 0;
+}
+
+static bool gc_env_flag(const char *name) {
+    const char *s = getenv(name);
+    return s != NULL && *s != '\0' && strcmp(s, "0") != 0;
+}
+
+// A pause target in milliseconds: digits, optionally with a fraction.
+static bool gc_valid_pause(const char *s) {
+    const char *p = s;
+    while (*p >= '0' && *p <= '9')
+        p++;
+    if (p == s)
+        return false;
+    if (*p == '.') {
+        const char *f = ++p;
+        while (*p >= '0' && *p <= '9')
+            p++;
+        if (p == f)
+            return false;
+    }
+    return *p == '\0';
+}
+
+static void gc_select_mode(void) {
+    bool check = gc_env_flag("ACTON_GC_CHECK");
+    bool generational = ACTON_GC_MODE_GENERATIONAL;
+    const char *mode = getenv("ACTON_GC_MODE");
+    if (mode != NULL && *mode != '\0') {
+        if (strcmp(mode, "generational") == 0)
+            generational = true;
+        else if (strcmp(mode, "ordinary") == 0)
+            generational = false;
+        else {
+            fprintf(stderr, "Acton RTS: ACTON_GC_MODE must be ordinary or generational, not %s\n", mode);
+            exit(1);
+        }
+    }
+    if (check) {
+#if !ACTON_GC_WRITE_BARRIER
+        fprintf(stderr, "Acton RTS: ACTON_GC_CHECK=1 needs a build with gc_dirty_tracking_backend=write_barrier\n");
+        exit(1);
+#endif
+        if (mode != NULL && strcmp(mode, "ordinary") == 0) {
+            fprintf(stderr, "Acton RTS: ACTON_GC_CHECK=1 needs generational mode\n");
+            exit(1);
+        }
+        generational = true;
+    }
+    if (!generational)
+        return;
+    const char *pause = getenv("ACTON_GC_PAUSE_MS");
+    if (pause == NULL || *pause == '\0')
+        pause = check ? "1" : "50";
+    else if (!gc_valid_pause(pause)) {
+        fprintf(stderr, "Acton RTS: ACTON_GC_PAUSE_MS must be a number of milliseconds, not %s\n", pause);
+        exit(1);
+    }
+    if (strspn(pause, "0.") == strlen(pause))
+        pause = "999999";  // GC_TIME_UNLIMITED: one stop per collection
+    gc_env_default("GC_ENABLE_INCREMENTAL", "1");
+    gc_env_default("GC_PAUSE_TIME_TARGET", pause);
+    if (check) {
+        gc_env_default("GC_WBAR_VERIFY", "1");
+        gc_env_default("GC_ALLOC_BUDGET_PERCENT", "20");
+    }
+}
+
+#if ACTON_GC_WRITE_BARRIER
+#ifndef _WIN32
+#include <dlfcn.h>
+#endif
+// Names the class of an object that the write-barrier checker reports: the
+// name of the symbol that starts at the address in the object's first word,
+// which for an instance of a class is the methods table of its class, if
+// dladdr finds one, else NULL (always on Windows).
+static const char *GC_CALLBACK gc_wbar_describe(const void *obj, size_t size) {
+#ifndef _WIN32
+    Dl_info info;
+    const void *cls = size >= sizeof(void *) ? *(void *const *)obj : NULL;
+    if (cls != NULL && GC_base((void *)cls) == NULL && dladdr(cls, &info) != 0
+            && info.dli_saddr == cls && info.dli_sname != NULL)
+        return info.dli_sname;
+#else
+    (void)obj;
+    (void)size;
+#endif
+    return NULL;
+}
+#endif
+
 #ifndef _WIN32
 // Raise the soft limit on open files to the hard limit. Systems set a low
 // soft limit (256 on macOS, 1024 on most Linux systems) for programs that
@@ -3444,6 +3570,11 @@ int main(int argc, char **argv) {
 #ifdef ACTON_GC_DISABLE_THP
     GC_set_on_os_get_mem(gc_disable_thp);
 #endif
+    gc_select_mode();
+#if ACTON_GC_WRITE_BARRIER
+    if (getenv("GC_WBAR_VERIFY") != NULL)
+        GC_set_wbar_verify_describe(gc_wbar_describe);
+#endif
     GC_INIT();
 #if ACTON_GC_REQUIRED_VDB != 0
     if (getenv("GC_ENABLE_INCREMENTAL") != NULL
@@ -3453,6 +3584,7 @@ int main(int argc, char **argv) {
         exit(1);
     }
 #endif
+    gc_env_restore();
 #if ACTON_GC_WRITE_BARRIER
     acton_init_write_barrier();
 #endif

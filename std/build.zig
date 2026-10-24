@@ -33,6 +33,7 @@ pub fn build(b: *std.Build) void {
     const gc_use_mark_bits = b.option(bool, "gc_use_mark_bits", "Use packed GC mark bits (default: true)") orelse true;
     const gc_mark_bit_per_object = b.option(bool, "gc_mark_bit_per_object", "Track GC marks per object") orelse false;
     const gc_dirty_tracking_backend = b.option([]const u8, "gc_dirty_tracking_backend", "GC dirty tracking backend: write_barrier (default on targets with threads), auto, soft_dirty, userfaultfd") orelse (if (target.result.cpu.arch.isWasm()) "auto" else "write_barrier");
+    const gc_mode = b.option([]const u8, "gc_mode", "Default GC mode, which the ACTON_GC_MODE environment variable overrides: ordinary (default) or generational") orelse "ordinary";
     const gc_page_hash_table_log2 = b.option(u8, "gc_page_hash_table_log2", "Log2 of GC page-hash entries (0 keeps the default)") orelse 0;
     const gc_heap_growth_divisor = b.option(u32, "gc_heap_growth_divisor", "Limit automatic GC heap growth to the heap size divided by this (default 4; 0 keeps the fixed increment)") orelse 4;
     const gc_alloc_budget_percent = b.option(u32, "gc_alloc_budget_percent", "Collect after allocating this percentage of the live data (default 250; 0 selects the free space divisor policy)") orelse 250;
@@ -75,6 +76,7 @@ pub fn build(b: *std.Build) void {
         .gc_no_thread_local_warmup = gc_no_thread_local_warmup,
         .gc_thread_local_refill_blocks = gc_thread_local_refill_blocks,
         .gc_disable_thp = gc_disable_thp,
+        .gc_mode = gc_mode,
         .max_wthreads = max_wthreads,
     });
 
