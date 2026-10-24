@@ -102,6 +102,104 @@ def _test_match_matches_zero_width_non_ascii():
         testing.assertEqual([m.start_pos for m in re.matches("(?=b)", subject)], [position])
         testing.assertEqual([m.start_pos for m in std_re.matches("(?=b)", subject)], [position])
 
+def _test_count_replace():
+    """Bulk operations use the same matches and treat replacement text literally"""
+    nul = chr(0)
+    cases = [
+        ("a", "banana", "é", 3, "bénéné"),
+        ("a", "a" * 300, "界🙂", 300, "界🙂" * 300),
+        ("a", "a" * 300, "", 300, ""),
+        ("aa", "aaa", "_", 1, "_a"),
+        ("q", "aéb", "_", 0, "aéb"),
+        ("a", "", "_", 0, ""),
+        ("", "", "_", 0, ""),
+        ("", "é🙂", "-", 2, "-é-🙂"),
+        ("x*", "éa", "-", 2, "-é-a"),
+        ("(?=b)", "abc", "_", 1, "a_bc"),
+        ("$", "éa", "!", 1, "éa!"),
+        ("a|$", "a", "_", 1, "_"),
+        ("é", "aé🙂é", "_", 2, "a_🙂_"),
+        (".", "é🙂", "界", 2, "界界"),
+        ("(a)|(b)", "ab", r"\1$1", 2, r"\1$1\1$1"),
+        (r"(a)\Kb", "abab", "_", 2, "a_a_"),
+        (nul, "é" + nul + "x" + nul, "🙂" + nul, 2, "é🙂" + nul + "x🙂" + nul),
+        ("(?P<n>a+)", "baaa", "", 1, "b"),
+    ]
+    for pattern, subject, replacement, count, result in cases:
+        p = re.compile(pattern)
+        sp = std_re.compile(pattern)
+        testing.assertEqual(len(p.matches(subject)), count)
+        testing.assertEqual(len(sp.matches(subject)), count)
+        testing.assertEqual(re.count(pattern, subject), count)
+        testing.assertEqual(p.count(subject), count)
+        testing.assertEqual(std_re.count(pattern, subject), count)
+        testing.assertEqual(sp.count(subject), count)
+        testing.assertEqual(re.replace(pattern, subject, replacement), result)
+        testing.assertEqual(p.replace(subject, replacement), result)
+        testing.assertEqual(std_re.replace(pattern, subject, replacement), result)
+        testing.assertEqual(sp.replace(subject, replacement), result)
+
+def _test_count_replace_errors():
+    """Bulk operations preserve compilation, capture boundary and match limit errors"""
+    for f in [lambda: re.count("(", "a") > 0,
+              lambda: std_re.count("(", "a") > 0,
+              lambda: re.replace("(", "a", "_") != "",
+              lambda: std_re.replace("(", "a", "_") != ""]:
+        try:
+            f()
+        except ValueError as error:
+            testing.assertEqual(error.error_message, "regex compilation failed at offset 1: missing closing parenthesis")
+        else:
+            testing.error("Expected ValueError for an invalid pattern")
+
+    for pattern, subject in [(r"a\C", "aé"), (r"(\C)\C", "é")]:
+        p = re.compile(pattern)
+        sp = std_re.compile(pattern)
+        for f in [lambda: re.count(pattern, subject) > 0,
+                  lambda: p.count(subject) > 0,
+                  lambda: std_re.count(pattern, subject) > 0,
+                  lambda: sp.count(subject) > 0,
+                  lambda: re.replace(pattern, subject, "_") != "",
+                  lambda: p.replace(subject, "_") != "",
+                  lambda: std_re.replace(pattern, subject, "_") != "",
+                  lambda: sp.replace(subject, "_") != ""]:
+            for _ in range(3):
+                try:
+                    f()
+                except ValueError as error:
+                    testing.assertEqual(error.error_message, "matched substring starts or ends inside a character")
+                else:
+                    testing.error("Expected ValueError for a match or capture that splits a character")
+        testing.assertEqual(p.count("ab"), 1)
+        testing.assertEqual(sp.count("ab"), 1)
+        testing.assertEqual(p.replace("ab", "_"), "_")
+        testing.assertEqual(sp.replace("ab", "_"), "_")
+
+    subject = "a" * 1000 + "x"
+    for pattern, expected in [("(*LIMIT_MATCH=10)(.)*x", "PCRE2 matching error: -47"),
+                              ("(*LIMIT_HEAP=1)(.)*x", "PCRE2 matching error: -63")]:
+        p = re.compile(pattern)
+        sp = std_re.compile(pattern)
+        for f in [lambda: re.count(pattern, subject) > 0,
+                  lambda: p.count(subject) > 0,
+                  lambda: std_re.count(pattern, subject) > 0,
+                  lambda: sp.count(subject) > 0,
+                  lambda: re.replace(pattern, subject, "_") != "",
+                  lambda: p.replace(subject, "_") != "",
+                  lambda: std_re.replace(pattern, subject, "_") != "",
+                  lambda: sp.replace(subject, "_") != ""]:
+            for _ in range(3):
+                try:
+                    f()
+                except RuntimeError as error:
+                    testing.assertEqual(error.error_message, expected)
+                else:
+                    testing.error("Expected RuntimeError: " + expected)
+        testing.assertEqual(p.count("x"), 1)
+        testing.assertEqual(sp.count("x"), 1)
+        testing.assertEqual(p.replace("x", "_"), "_")
+        testing.assertEqual(sp.replace("x", "_"), "_")
+
 def _test_match_backward_spans():
     """Reject assertion subroutines whose whole match goes backward"""
     cases = [
@@ -114,7 +212,11 @@ def _test_match_backward_spans():
         for f in [lambda: p.match(subject, pos) is not None,
                   lambda: sp.match(subject, pos) is not None,
                   lambda: len(p.matches(subject)) > 0,
-                  lambda: len(sp.matches(subject)) > 0]:
+                  lambda: len(sp.matches(subject)) > 0,
+                  lambda: p.count(subject) > 0,
+                  lambda: sp.count(subject) > 0,
+                  lambda: p.replace(subject, "_") != "",
+                  lambda: sp.replace(subject, "_") != ""]:
             try:
                 f()
             except ValueError as error:
@@ -123,6 +225,8 @@ def _test_match_backward_spans():
                 testing.error("Expected ValueError for a reversed or backward whole match")
         testing.assertNone(p.match("b"))
         testing.assertNone(sp.match("b"))
+        testing.assertEqual(p.count("b"), 0)
+        testing.assertEqual(sp.replace("b", "_"), "b")
 
 def _test_match_positions():
     """Test that match positions (start_pos and end_pos) are correct."""
@@ -452,6 +556,15 @@ def _test_compile_many_groups():
         if n is not None:
             testing.assertEqual(len(n.named), 30)
     testing.assertNone(p.match("x"))
+    repeated = subject + subject
+    testing.assertEqual(re.count(pattern, repeated), 2)
+    testing.assertEqual(p.count(repeated), 2)
+    testing.assertEqual(std_re.count(pattern, repeated), 2)
+    testing.assertEqual(sp.count(repeated), 2)
+    testing.assertEqual(re.replace(pattern, repeated, "_"), "x_x_")
+    testing.assertEqual(p.replace(repeated, "_"), "x_x_")
+    testing.assertEqual(std_re.replace(pattern, repeated, "_"), "x_x_")
+    testing.assertEqual(sp.replace(repeated, "_"), "x_x_")
 
 def _test_compile_errors():
     """re.compile raises ValueError for an invalid pattern. A compiled
@@ -515,6 +628,14 @@ actor _PatternUser(p: re.Pattern, sp: std_re.Pattern, first: int, n: int, done: 
                     wrong += 1
             else:
                 wrong += 1
+            if i % 10 == 0:
+                both = s + chr(0) + s
+                if p.count(both) != 2 or sp.count(both) != 1:
+                    wrong += 1
+                if p.replace(both, "_") != "_" + chr(0) + "_":
+                    wrong += 1
+                if sp.replace(both, "_") != s + chr(0) + "_":
+                    wrong += 1
         done(wrong)
 
 actor _test_compile_shared_between_actors(t: testing.AsyncT):

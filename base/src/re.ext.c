@@ -14,6 +14,8 @@ static struct B_ValueError reQ_invalid_span_error =
     STATIC_EXCEPTION(B_ValueError, "matched substring starts before the search position or ends before it starts");
 static struct B_MemoryError reQ_allocation_failed_error =
     STATIC_EXCEPTION(B_MemoryError, "memory allocation failed");
+static struct B_ValueError reQ_result_too_long_error =
+    STATIC_EXCEPTION(B_ValueError, "result too long");
 
 // The compiled code of a Pattern is pointer-free memory on the GC heap.
 // _compile compiles through a general context that allocates with
@@ -34,10 +36,11 @@ static struct B_MemoryError reQ_allocation_failed_error =
 // threads can match with one Pattern at once.
 //
 // The match data and the backtracking frames of pcre2_match (at least 20 KiB
-// per call with the default heap limit) are on malloc:
+// per match-data block with the default heap limit) are on malloc:
 // pcre2_match_data_create without a general context uses malloc for both,
 // while pcre2_match_data_create_from_pattern would take the allocator of the
-// code. reQ_match_code frees them before it returns, and an exception handler
+// code. count and replace reuse one block for the whole scan. Each call
+// frees its block before it returns, and an exception handler
 // pushed before they are allocated frees them when anything raises in
 // between: a pcre2 error, a group that starts or ends inside a character, or
 // a failed allocation while the result is built.
@@ -133,7 +136,8 @@ static int reQ_exec(pcre2_code *re, B_str text, PCRE2_SIZE start_offset, pcre2_m
     // for forward scanning or replacement. Captures may precede group 0.
     if (ovector[0] < start_offset || ovector[1] < ovector[0])
         RAISE_EXC(&reQ_invalid_span_error);
-    // Groups at or above rc are unset. This also checks named groups.
+    // Groups at or above rc are unset. This also checks named groups and
+    // captures that count and replace do not otherwise use.
     for (int i = 0; i < rc; i++) {
         PCRE2_SIZE start = ovector[2*i];
         PCRE2_SIZE end = ovector[2*i+1];
@@ -245,6 +249,106 @@ reQ_Match reQ_PatternD__match (reQ_Pattern self, B_str arg_text, int64_t arg_sta
     PCRE2_SIZE start_offset = reQ_start_offset(arg_text, arg_start_pos);
     reQ_Match result = reQ_match_code((pcre2_code *)(uintptr_t)self->_code, self->pattern, arg_text, start_offset);
     GC_reachable_here(self);
+    return result;
+}
+
+static void reQ_append(unsigned char **buffer, int64_t *length, int64_t *capacity,
+                       const unsigned char *text, int64_t size) {
+    if (size > MAX_STR_LEN - *length)
+        RAISE_EXC(&reQ_result_too_long_error);
+    int64_t needed = *length + size;
+    if (needed >= *capacity) {
+        int64_t capacity_next = *capacity == 0 ? 256 : *capacity;
+        while (capacity_next <= needed) {
+            if (capacity_next > MAX_STR_LEN / 2) {
+                capacity_next = MAX_STR_LEN + 1;
+                break;
+            }
+            capacity_next *= 2;
+        }
+        unsigned char *next = acton_realloc_atomic(*buffer, capacity_next);
+        if (next == NULL)
+            RAISE_EXC(&reQ_allocation_failed_error);
+        *buffer = next;
+        *capacity = capacity_next;
+    }
+    memcpy(*buffer + *length, text, size);
+    *length = needed;
+}
+
+// Count or replace the same matches as Pattern.matches, keeping byte offsets
+// throughout the scan. A NULL replacement selects counting; result is only
+// used for replacement. Mutable match data belongs to this call, not Pattern.
+static int64_t reQ_scan(reQ_Pattern self, B_str text, B_str replacement, B_str *result) {
+    pcre2_code *re = (pcre2_code *)(uintptr_t)self->_code;
+    uint32_t capture_count;
+    pcre2_pattern_info(re, PCRE2_INFO_CAPTURECOUNT, &capture_count);
+    pcre2_match_data *volatile match_data = NULL;
+    int64_t count = 0;
+    struct JumpBuf frame;
+    if ($PUSH(&frame)) {
+        match_data = pcre2_match_data_create(capture_count + 1, NULL);
+        if (match_data == NULL)
+            RAISE_EXC(&reQ_allocation_failed_error);
+        PCRE2_SIZE pos = 0;
+        PCRE2_SIZE copied = 0;
+        unsigned char *buffer = NULL;
+        int64_t length = 0;
+        int64_t capacity = 0;
+        while (pos < text->nbytes) {
+            if (reQ_exec(re, text, pos, match_data) == PCRE2_ERROR_NOMATCH)
+                break;
+            PCRE2_SIZE *ovector = pcre2_get_ovector_pointer(match_data);
+            PCRE2_SIZE start = ovector[0];
+            PCRE2_SIZE end = ovector[1];
+            count++;
+            if (replacement != NULL) {
+                reQ_append(&buffer, &length, &capacity, text->str + copied, start - copied);
+                reQ_append(&buffer, &length, &capacity, replacement->str, replacement->nbytes);
+                copied = end;
+            }
+            pos = end;
+            if (start == end) {
+                if (pos == text->nbytes)
+                    break;
+                // Step over one whole UTF-8 character after an empty match.
+                do {
+                    pos++;
+                } while (pos < text->nbytes && (text->str[pos] & 0xC0) == 0x80);
+            }
+        }
+        if (replacement != NULL) {
+            if (count == 0) {
+                *result = text;
+            } else {
+                reQ_append(&buffer, &length, &capacity, text->str + copied, text->nbytes - copied);
+                buffer[length] = 0;
+                *result = actStrFromCStringLength((const char *)buffer, length);
+            }
+        }
+        $DROP();
+    } else {
+        B_BaseException ex = $POP();
+        pcre2_match_data_free(match_data);
+        GC_reachable_here(self);
+        GC_reachable_here(text);
+        GC_reachable_here(replacement);
+        $RAISE(ex);
+    }
+    pcre2_match_data_free(match_data);
+    GC_reachable_here(self);
+    GC_reachable_here(text);
+    GC_reachable_here(replacement);
+    return count;
+}
+
+int64_t reQ_PatternD_count(reQ_Pattern self, B_str text) {
+    return reQ_scan(self, text, NULL, NULL);
+}
+
+B_str reQ_PatternD_replace(reQ_Pattern self, B_str text, B_str replacement) {
+    B_str result;
+    reQ_scan(self, text, replacement, &result);
     return result;
 }
 

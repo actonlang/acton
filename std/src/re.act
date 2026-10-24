@@ -68,6 +68,21 @@ class Pattern(object):
                     pos = m.end_pos
         return res
 
+    def count(self, string: str) -> int:
+        """Count non-overlapping matches.
+
+        Uses the same matches as matches(), including its zero-width behavior.
+        """
+        NotImplemented
+
+    def replace(self, string: str, replacement: str) -> str:
+        """Replace each non-overlapping match with literal replacement text.
+
+        Uses the same matches as matches(). Backslashes and group references
+        in replacement are ordinary text.
+        """
+        NotImplemented
+
     def split(self, subject: str, max_split: int=0) -> list[str]:
         if self.pattern == "":
             raise _empty_pattern_error
@@ -136,3 +151,13 @@ def matches(pattern: str, string: str) -> list[Match]:
 
 def split(pattern: str, subject: str, max_split: int=0) -> list[str]:
     return Pattern(pattern).split(subject, max_split)
+
+def count(pattern: str, string: str) -> int:
+    """Count non-overlapping matches.
+    """
+    return Pattern(pattern).count(string)
+
+def replace(pattern: str, string: str, replacement: str) -> str:
+    """Replace each non-overlapping match with literal replacement text.
+    """
+    return Pattern(pattern).replace(string, replacement)

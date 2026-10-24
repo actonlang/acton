@@ -31,8 +31,8 @@ Got a match: foobar
 
 `re.match` compiles its pattern on every call. To match the same pattern many
 times, compile it once with `re.compile` and use the methods of the `Pattern`
-it returns. `match`, `matches` and `split` take the same arguments as the
-module functions, without the pattern.
+it returns. `match`, `matches`, `count`, `replace` and `split` take the same
+arguments as the module functions, without the pattern.
 
 Source:
 ```python
@@ -58,3 +58,43 @@ Output:
 fe80::1 is not an IPv4 address
 10.0.0.255 has last octet 255
 ```
+
+## Counting and replacing matches
+
+Use `re.count(pattern, string)` to count non-overlapping matches. It returns
+the same count as `len(re.matches(pattern, string))`.
+
+`re.replace(pattern, string, replacement)` replaces each match with the
+literal `replacement` string. Backslashes and dollar signs in the replacement
+are ordinary characters; they do not refer to capture groups. Both functions
+also work with compiled patterns as `pattern.count(string)` and
+`pattern.replace(string, replacement)`.
+
+Source:
+```python
+import re
+
+actor main(env):
+    numbers = re.compile(r"[0-9]+")
+    text = "Room 12, floor 3"
+    print(numbers.count(text))
+    print(numbers.replace(text, "?"))
+    print(re.replace("é", "café", "e"))
+    env.exit(0)
+```
+
+Output:
+```sh
+2
+Room ?, floor ?
+cafe
+```
+
+`matches`, `count` and `replace` scan from left to right. After an empty match,
+the next search starts one Unicode character later, so an empty match is
+processed only once at each position. Scanning stops once it reaches the end
+of the string. They perform no search on an empty string, so its count is zero
+and replacement leaves it unchanged. For example,
+`re.replace("", "éa", "-")` returns `"-é-a"`. A search that finds an empty
+match at the end still includes it, so `re.replace("$", "éa", "!")` returns
+`"éa!"`; a preceding match that consumes the end leaves no further search.
