@@ -109,10 +109,12 @@ static PCRE2_SIZE stdQ_reQ_start_offset(B_str arg_text, int64_t arg_start_pos) {
     return (PCRE2_SIZE)$byte_no(arg_text, arg_start_pos);
 }
 
-// Execute a search and check whole-match and capture boundaries.
+// Acton strings are valid UTF-8 and start_offset is a character boundary.
+// Checking the remaining subject on every call would make repeated searches
+// quadratic. Keep checking captured boundaries: \C may split a character.
 static int stdQ_reQ_exec(pcre2_code *re, B_str text, PCRE2_SIZE start_offset, pcre2_match_data *match_data) {
     int rc = pcre2_match(re, text->str, text->nbytes, start_offset,
-                         0, match_data, NULL);
+                         PCRE2_NO_UTF_CHECK, match_data, NULL);
     if (rc == PCRE2_ERROR_NOMATCH)
         return rc;
     if (rc == PCRE2_ERROR_NOMEMORY)
