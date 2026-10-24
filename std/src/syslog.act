@@ -1,4 +1,4 @@
-"""Syslog messages.
+"""Syslog messages and network transport.
 
 `encode` and `decode` implement the RFC 5424 version 1 message format.
 Header fields use `None` for NILVALUE. The message body remains bytes, so
@@ -12,6 +12,7 @@ are preserved. Encoding validates fields and escapes parameter values.
 Malformed input raises `ValueError`. The codec has no transport size limit.
 """
 
+import net
 import time
 
 
@@ -75,6 +76,10 @@ missing_legacy_timestamp_or_hostname_error = ValueError("Missing RFC 3164 timest
 invalid_legacy_timestamp_error = ValueError("Invalid RFC 3164 timestamp")
 missing_legacy_hostname_or_message_error = ValueError("Missing RFC 3164 hostname or message")
 invalid_legacy_hostname_error = ValueError("Invalid RFC 3164 hostname")
+invalid_destination_port_error = ValueError("Syslog destination port must be in 1..65535")
+invalid_udp_max_size_error = ValueError("Syslog UDP max_size must be in 480..65507")
+invalid_max_pending_error = ValueError("Syslog max_pending must not be negative")
+invalid_listen_port_error = ValueError("Syslog listen port must be in 0..65535")
 
 
 class Message(value):
@@ -374,3 +379,169 @@ def decode_legacy(data: bytes) -> Message:
         raise invalid_legacy_hostname_error
     return Message(rest[host_end + 1:], facility=priority // 8, severity=priority % 8,
                    timestamp=ts, hostname=host.decode(), version=0)
+
+
+actor Client(cap: net.UDPConnectCap, address: str, port: int,
+             on_connect: action(Client) -> None, on_error: action(Client, str) -> None,
+             max_size: int=2048, max_pending: int=64):
+    """RFC 5424 UDP sender. Port 514 is the standard syslog port.
+
+    send() queues at most max_pending encoded messages until ready. Invalid,
+    oversized and excess messages are rejected through on_error. UDP provides
+    no delivery acknowledgement. close() discards pending messages and prevents
+    further sends; it does not wait for delivery. There is no automatic retry.
+    """
+    if port < 1 or port > 65535:
+        raise invalid_destination_port_error
+    if max_size < 480 or max_size > 65507:
+        raise invalid_udp_max_size_error
+    if max_pending < 0:
+        raise invalid_max_pending_error
+    var _connection: ?net.UDPConnection = None
+    var _pending: list[bytes] = []
+    var _ready = False
+    var _closed = False
+
+    def connected(c: net.UDPConnection):
+        if _closed:
+            c.close()
+            return
+        _ready = True
+        for data in _pending:
+            c.write(data)
+        _pending = []
+        on_connect(self)
+
+    def received(c: net.UDPConnection, data: bytes, peer: str, peer_port: int):
+        pass
+
+    def failed(c: net.UDPConnection, error: str):
+        if _closed:
+            return
+        _closed = True
+        _ready = False
+        _pending = []
+        c.close()
+        on_error(self, error)
+
+    def start():
+        if not _closed:
+            _connection = net.UDPConnection(cap, address, port, connected, received, failed)
+
+    action def send(message: Message) -> None:
+        """Send one message as one datagram, or report rejection through on_error."""
+        if _closed:
+            on_error(self, "Syslog client is closed")
+            return
+        data = b""
+        try:
+            data = encode(message)
+        except ValueError as error:
+            on_error(self, error.error_message)
+            return
+        if len(data) > max_size:
+            on_error(self, "Syslog message exceeds max_size")
+            return
+        c = _connection
+        if _ready and c is not None:
+            c.write(data)
+        elif len(_pending) < max_pending:
+            _pending.append(data)
+        else:
+            on_error(self, "Syslog startup queue is full")
+
+    action def log(message: str, severity: int=INFO, facility: int=USER,
+                   hostname: ?str=None, app_name: ?str=None, procid: ?str=None,
+                   msgid: ?str=None, structured_data: dict[str, list[(name: str, value: str)]]={}) -> None:
+        """Send UTF-8 text with a BOM and the current UTC timestamp."""
+        send(Message(b"\xef\xbb\xbf" + message.encode(), facility=facility, severity=severity,
+                     timestamp=timestamp(), hostname=hostname, app_name=app_name,
+                     procid=procid, msgid=msgid, structured_data=structured_data))
+
+    action def close() -> None:
+        """Close the socket and discard the startup queue. Safe to call repeatedly."""
+        _closed = True
+        _ready = False
+        _pending = []
+        c = _connection
+        if c is not None:
+            c.close()
+
+    after 0: start()
+
+
+actor Server(cap: net.UDPListenCap, address: str, port: int,
+             on_listen: action(Server, ?str) -> None,
+             on_message: action(Server, Message, str, int) -> None,
+             on_error: action(Server, str) -> None,
+             max_size: int=65507, legacy: bool=True):
+    """Receive syslog datagrams with their source address and port.
+
+    RFC 5424 messages use version 1; canonical RFC 3164 messages use version 0.
+    Set legacy=False to accept only RFC 5424. Malformed or oversized datagrams
+    are discarded and reported through on_error, leaving the listener running.
+    Bind errors go to on_listen. Port 0 selects an ephemeral port; port 514 is
+    the standard syslog port and may require privileges.
+    """
+    if port < 0 or port > 65535:
+        raise invalid_listen_port_error
+    if max_size < 480 or max_size > 65507:
+        raise invalid_udp_max_size_error
+    var _listener: ?net.UDPListener = None
+    var _closed = False
+
+    def bound(listener: net.UDPListener, error: ?str):
+        if _closed:
+            listener.close()
+            return
+        if error is not None:
+            _closed = True
+            listener.close()
+        on_listen(self, error)
+
+    def received(listener: net.UDPListener, data: bytes, peer: str, peer_port: int):
+        if _closed:
+            return
+        if len(data) > max_size:
+            on_error(self, "Syslog datagram from {peer}:{peer_port} exceeds max_size")
+            return
+        message = Message()
+        try:
+            end = data.find(b">")
+            if legacy and end >= 0 and data[end + 1:end + 4] in [b"Jan", b"Feb", b"Mar", b"Apr", b"May", b"Jun", b"Jul", b"Aug", b"Sep", b"Oct", b"Nov", b"Dec"]:
+                message = decode_legacy(data)
+            else:
+                message = decode(data)
+        except ValueError as error:
+            on_error(self, "Invalid syslog datagram from {peer}:{peer_port}: {error.error_message}")
+            return
+        on_message(self, message, peer, peer_port)
+
+    def failed(listener: net.UDPListener, error: str):
+        if not _closed:
+            on_error(self, error)
+
+    def start():
+        if not _closed:
+            _listener = net.UDPListener(cap, address, port, bound, received, failed)
+
+    action def local_address() -> str:
+        listener = _listener
+        if listener is not None and not _closed:
+            return listener.local_address()
+        return ""
+
+    action def local_port() -> int:
+        listener = _listener
+        if listener is not None and not _closed:
+            return listener.local_port()
+        return 0
+
+    action def close() -> None:
+        """Close the listener. Safe to call repeatedly."""
+        _closed = True
+        listener = _listener
+        if listener is not None:
+            listener.close()
+
+    after 0: start()

@@ -79,6 +79,7 @@
   - [Standard Library](stdlib/standard_library.md)
     - [math](stdlib/math.md)
     - [re](stdlib/re.md)
+    - [std.syslog](stdlib/syslog.md)
 
 - [Testing](testing.md)
   - [Unit tests](testing/unit_test.md)
