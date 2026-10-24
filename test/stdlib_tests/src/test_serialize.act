@@ -36,6 +36,18 @@ class Node(object):
         self.next = None
 
 
+# The three fields share the object's last word: a at offset 8, b at 9, c at
+# 12, 16 bytes in all.
+class Narrow(object):
+    a: bool
+    b: u8
+    c: u32
+    def __init__(self, a: bool, b: u8, c: u32):
+        self.a = a
+        self.b = b
+        self.c = c
+
+
 actor SampleActor():
     def ping() -> int:
         return 1
@@ -137,6 +149,48 @@ def _test_object():
     if isinstance(restored, Point):
         testing.assertEqual(restored.x, 3)
         testing.assertEqual(restored.y, 4)
+
+
+# serialize() writes an unboxed value as a row of a 4-byte class id, a 4-byte
+# blob size and one 8-byte word that holds the value's bytes followed by zeros.
+# The value rows of an object come last, in field order.
+def last_value_words(payload: bytes, count: int) -> list[bytes]:
+    words = []
+    for i in range(count):
+        end = len(payload) - 16 * (count - 1 - i)
+        words.append(payload[end - 8:end])
+    return words
+
+
+def _test_narrow_fields():
+    # A whole word copied from a field would also hold the bytes after it: b
+    # and c for a, c for b. The words of b and c would also take the first
+    # bytes of the next object when the collector adds no padding byte to the
+    # 16-byte object.
+    objs = [Narrow(True, u8(3), u32(7)) for i in range(16)]
+    for obj in objs:
+        words = last_value_words(serialize(obj), 3)
+        testing.assertEqual(words[0], b"\x01\x00\x00\x00\x00\x00\x00\x00")
+        testing.assertEqual(words[1], b"\x03\x00\x00\x00\x00\x00\x00\x00")
+        testing.assertEqual(words[2], b"\x07\x00\x00\x00\x00\x00\x00\x00")
+        testing.assertTrue(roundtrips(obj), "narrow fields")
+    restored = deserialize(serialize(objs[0]))
+    testing.assertTrue(isinstance(restored, Narrow), "restored is a Narrow")
+    if isinstance(restored, Narrow):
+        testing.assertEqual(restored.a, True)
+        testing.assertEqual(restored.b, u8(3))
+        testing.assertEqual(restored.c, u32(7))
+
+
+def _test_narrow_scalars():
+    testing.assertEqual(last_value_words(serialize(u8(3)), 1)[0], b"\x03\x00\x00\x00\x00\x00\x00\x00")
+    testing.assertEqual(last_value_words(serialize(i8(-2)), 1)[0], b"\xfe\x00\x00\x00\x00\x00\x00\x00")
+    testing.assertEqual(last_value_words(serialize(i32(-2)), 1)[0], b"\xfe\xff\xff\xff\x00\x00\x00\x00")
+    testing.assertEqual(last_value_words(serialize(True), 1)[0], b"\x01\x00\x00\x00\x00\x00\x00\x00")
+    testing.assertTrue(roundtrips(i8(-2)), "i8")
+    testing.assertTrue(roundtrips(i16(-300)), "i16")
+    testing.assertTrue(roundtrips(u16(65535)), "u16")
+    testing.assertTrue(roundtrips(u32(4000000000)), "u32")
 
 
 def _test_shared_user_object():

@@ -67,9 +67,7 @@ B_NoneType B_u1D___init__(B_u1 self, B_atom a, B_int base){
 }
 
 void B_u1D___serialize__(B_u1 n, $Serial$state state) {
-    // Widen val: $val_serialize copies a whole word and the box padding is not zeroed
-    uint64_t v = n->val;
-    $val_serialize(U1_ID,&v,state);
+    $val_serialize(U1_ID,&n->val,state);
 }
 
 B_u1 B_u1D___deserialize__(B_u1 n, $Serial$state state) {

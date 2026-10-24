@@ -155,9 +155,28 @@ $WORD $step_deserialize($Serial$state state) {
 
 
 
+// The size of an unboxed value of the type that class_id names. Every other
+// class id stands for a word, such as an int, a float, a length or a back
+// reference.
+static size_t $val_size(int class_id) {
+    switch (class_id) {
+    case BOOL_ID: case U1_ID: case I8_ID: case U8_ID:
+        return 1;
+    case I16_ID: case U16_ID:
+        return 2;
+    case I32_ID: case U32_ID:
+        return 4;
+    default:
+        return sizeof($WORD);
+    }
+}
+
+// val may point at a field narrower than a word at the end of an object, so
+// only the value's own bytes are read. The new row is zeroed, so its word
+// holds the value followed by zeros.
 void $val_serialize(int class_id, $WORD val,$Serial$state state) {
     $ROW row = $add_header(class_id,1,state);
-    memcpy(row->blob,val,sizeof($WORD));
+    memcpy(row->blob,val,$val_size(class_id));
 }
 
 $WORD $val_deserialize($Serial$state state) {
