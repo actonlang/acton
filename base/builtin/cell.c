@@ -45,7 +45,7 @@ $Cell $CellD___deserialize__ ($Cell self, $Serial$state state) {
         }
         self = $DNEW($Cell, state);
     }
-    self->cell = $step_deserialize(state);
+    ACTON_STORE(self, self->cell, $step_deserialize(state));
     return self;
 }
 

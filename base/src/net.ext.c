@@ -488,9 +488,12 @@ static int udp_connection_start(netQ_UDPConnection self, B_str ip_address, int f
         return r;
     }
 
+    // A GC pointer in an int attribute, which the generated code stores
+    // without a write barrier
     self->_sock = (int64_t)(intptr_t)udp;
+    ACTON_WBAR(self, &self->_sock, udp);
     self->_ip_version = family == AF_INET ? 4LL : 6LL;
-    self->_remote_address = ip_address;
+    ACTON_STORE(self, self->_remote_address, ip_address);
     self->$class->_on_udp_ready(self);
     return 0;
 }
@@ -676,6 +679,7 @@ $R netQ_UDPListenerD__initG_local (netQ_UDPListener self, $Cont c$cont) {
     }
 
     self->_sock = (int64_t)(intptr_t)udp;
+    ACTON_WBAR(self, &self->_sock, udp);
     $action2 f = ($action2)self->on_listen;
     f->$class->__asyn__(f, self, B_None);
     return $R_CONT(c$cont, B_None);
@@ -1056,6 +1060,7 @@ static void tcp_connection_connect(netQ_TCPConnection self, B_str ip_address, in
     }
     if (r == 0) {
         *sock = (int64_t)(intptr_t)socket;
+        ACTON_WBAR(self, sock, socket);
         uv_connect_t *connect_req = (uv_connect_t *)acton_malloc(sizeof(uv_connect_t));
         connect_req->data = (void *)self;
         r = uv_tcp_connect(connect_req, socket, (const struct sockaddr *)&dest, family == 4 ? on_connect4 : on_connect6);
@@ -1102,9 +1107,9 @@ $R netQ_TCPConnectionD__read_startG_local (netQ_TCPConnection self, $Cont c$cont
     struct tcp_names names;
     tcp_get_names(socket, &names);
     self->_ip_version = names.family;
-    self->_local_address = actStrFromCStringCopy(names.local_address);
+    ACTON_STORE(self, self->_local_address, actStrFromCStringCopy(names.local_address));
     self->_local_port = names.local_port;
-    self->_remote_address = actStrFromCStringCopy(names.remote_address);
+    ACTON_STORE(self, self->_remote_address, actStrFromCStringCopy(names.remote_address));
     self->_remote_port = names.remote_port;
 
     socket->data = self;
@@ -1291,6 +1296,7 @@ $R netQ_TCPListenerD__initG_local (netQ_TCPListener self, $Cont c$cont) {
     }
 
     self->_stream = (int64_t)(intptr_t)server;
+    ACTON_WBAR(self, &self->_stream, server);
     $action2 f = ($action2)self->on_listen;
     f->$class->__asyn__(f, self, B_None);
     return $R_CONT(c$cont, B_None);
@@ -1344,12 +1350,13 @@ $R netQ_TCPListenConnectionD__initG_local (netQ_TCPListenConnection self, $Cont 
 
     uv_tcp_t *client_handle = (uv_tcp_t *)(intptr_t)self->server_client;
     self->client = (int64_t)(intptr_t)client_handle;
+    ACTON_WBAR(self, &self->client, client_handle);
 
     struct tcp_names names;
     tcp_get_names(client_handle, &names);
-    self->_local_address = actStrFromCStringCopy(names.local_address);
+    ACTON_STORE(self, self->_local_address, actStrFromCStringCopy(names.local_address));
     self->_local_port = names.local_port;
-    self->_remote_address = actStrFromCStringCopy(names.remote_address);
+    ACTON_STORE(self, self->_remote_address, actStrFromCStringCopy(names.remote_address));
     self->_remote_port = names.remote_port;
 
     return $R_CONT(c$cont, B_None);
@@ -2617,14 +2624,14 @@ $R netQ_TLSListenConnectionD__initG_local (netQ_TLSListenConnection self, $Cont 
             self->_stream = (int64_t)(intptr_t)stream;
             struct tcp_names names;
             tls_stream_names(stream, &names);
-            self->_local_address = actStrFromCStringCopy(names.local_address);
+            ACTON_STORE(self, self->_local_address, actStrFromCStringCopy(names.local_address));
             self->_local_port = names.local_port;
-            self->_remote_address = actStrFromCStringCopy(names.remote_address);
+            ACTON_STORE(self, self->_remote_address, actStrFromCStringCopy(names.remote_address));
             self->_remote_port = names.remote_port;
-            self->_peer_certificates = tls_peer_certificates(stream);
+            ACTON_STORE(self, self->_peer_certificates, tls_peer_certificates(stream));
             self->_verify_result = tls_verify_result(stream);
-            self->_alpn = tls_alpn(stream);
-            self->_tls_version = tls_version(stream);
+            ACTON_STORE(self, self->_alpn, tls_alpn(stream));
+            ACTON_STORE(self, self->_tls_version, tls_version(stream));
         } else {
             self->server_stream = -1LL;
             self->_stream = -1LL;
@@ -2861,7 +2868,7 @@ $R netQ_TLSConnectionD__closeG_local (netQ_TLSConnection self, $Cont c$cont, $ac
         return $R_CONT(c$cont, B_None);
     }
 
-    self->_on_close = on_close;
+    ACTON_STORE(self, self->_on_close, on_close);
 
     log_debug("Closing TLS TCP connection");
     tls_close((tlsuv_stream_t *)stream);
@@ -3004,14 +3011,14 @@ static void tls_on_connect(uv_connect_t *creq, int status) {
     state->connected = true;
     struct tcp_names names;
     tls_stream_names(stream, &names);
-    self->_local_address = actStrFromCStringCopy(names.local_address);
+    ACTON_STORE(self, self->_local_address, actStrFromCStringCopy(names.local_address));
     self->_local_port = names.local_port;
-    self->_remote_address = actStrFromCStringCopy(names.remote_address);
+    ACTON_STORE(self, self->_remote_address, actStrFromCStringCopy(names.remote_address));
     self->_remote_port = names.remote_port;
-    self->_peer_certificates = tls_peer_certificates(stream);
+    ACTON_STORE(self, self->_peer_certificates, tls_peer_certificates(stream));
     self->_verify_result = tls_verify_result(stream);
-    self->_alpn = tls_alpn(stream);
-    self->_tls_version = tls_version(stream);
+    ACTON_STORE(self, self->_alpn, tls_alpn(stream));
+    ACTON_STORE(self, self->_tls_version, tls_version(stream));
     if (self->on_connect != NULL) {
         self->$class->_on_tls_connect(self, state->attempt);
     } else {

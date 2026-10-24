@@ -45,8 +45,12 @@ static void B_set_table_init_empty(B_set_table *set) {
     set->fill = 0;
     set->mask = MIN_SIZE - 1;
     set->finger = 0;
-    set->table = acton_malloc(MIN_SIZE * sizeof(B_setentry));
-    memset(set->table, 0, MIN_SIZE * sizeof(B_setentry));
+    B_setentry *table = acton_malloc(MIN_SIZE * sizeof(B_setentry));
+    memset(table, 0, MIN_SIZE * sizeof(B_setentry));
+    // set may be the table of an existing set (clear). Its object is not
+    // known here, only the struct inside it.
+    set->table = table;
+    ACTON_WBAR(NULL, &set->table, table);
 }
 
 static void B_set_insert_clean(B_setentry *table, uint64_t mask, $WORD key, uint64_t hash) {
@@ -89,7 +93,9 @@ static void B_set_table_resize(B_set_table *set, uint64_t minsize) {
     B_setentry *oldtable = set->table;
     uint64_t oldmask = set->mask;
     B_setentry *newtable = B_set_table_alloc(minsize, &set->mask);
+    // newtable is filled below while a local holds it
     set->table = newtable;
+    ACTON_WBAR(NULL, &set->table, newtable);
 
     if (set->fill == set->numelements) {
         for (B_setentry *entry = oldtable; entry <= oldtable + oldmask; entry++) {
@@ -168,6 +174,7 @@ found_unused_or_dummy:
     if (freeslot != NULL) {
         set->numelements++;
         freeslot->key = key;
+        ACTON_WBAR(set->table, &freeslot->key, key);
         freeslot->hash = hash;
         return;
     }
@@ -176,6 +183,7 @@ found_unused:
     set->fill++;
     set->numelements++;
     entry->key = key;
+    ACTON_WBAR(set->table, &entry->key, key);
     entry->hash = hash;
     if (set->fill * UINT64_C(5) < mask * UINT64_C(3))
         return;
@@ -213,21 +221,26 @@ static void B_set_table_clear(B_set_table *set) {
 // Copy src into dst. If at most 1/8 of the table of src holds elements, size
 // the new table for the elements and not for the capacity of src.
 static void B_set_table_copy_into(B_set_table *dst, B_set_table *src) {
+    // The new table is filled while a local holds it
     if (src->numelements * UINT64_C(8) > src->mask) {
+        B_setentry *table = acton_malloc((src->mask + 1) * sizeof(B_setentry));
+        memcpy(table, src->table, (src->mask + 1) * sizeof(B_setentry));
         memcpy(dst, src, sizeof(B_set_table));
-        dst->table = acton_malloc((src->mask + 1) * sizeof(B_setentry));
-        memcpy(dst->table, src->table, (src->mask + 1) * sizeof(B_setentry));
+        dst->table = table;
+        ACTON_WBAR(NULL, &dst->table, table);
         return;
     }
-    dst->table = B_set_table_alloc(src->numelements * UINT64_C(2), &dst->mask);
+    B_setentry *table = B_set_table_alloc(src->numelements * UINT64_C(2), &dst->mask);
     dst->numelements = src->numelements;
     dst->fill = src->numelements;
     dst->finger = 0;
     for (uint64_t i = 0; i <= src->mask; i++) {
         B_setentry *entry = &src->table[i];
         if (ACTIVE_ENTRY(entry))
-            B_set_insert_clean(dst->table, dst->mask, entry->key, entry->hash);
+            B_set_insert_clean(table, dst->mask, entry->key, entry->hash);
     }
+    dst->table = table;
+    ACTON_WBAR(NULL, &dst->table, table);
 }
 
 static B_NoneType B_set_table_init_from_iterable(B_set_table *set, B_Hashable hashwit, B_Iterable wit, $WORD iterable) {
@@ -279,10 +292,12 @@ static void B_set_table_deserialize_payload(B_set_table *set, $ROW row, $Serial$
     set->fill = (uint64_t)(uintptr_t)row->blob[1];
     set->mask = (uint64_t)(uintptr_t)row->blob[2];
     set->finger = (uint64_t)(uintptr_t)row->blob[3];
-    set->table = acton_malloc((set->mask + 1) * sizeof(B_setentry));
-    memset(set->table, 0, (set->mask + 1) * sizeof(B_setentry));
+    // The table is filled while only a local holds it, then stored into the
+    // set, which the --db restore may have allocated in an earlier pass
+    B_setentry *table = acton_malloc((set->mask + 1) * sizeof(B_setentry));
+    memset(table, 0, (set->mask + 1) * sizeof(B_setentry));
     for (uint64_t i = 0; i <= set->mask; i++) {
-        B_setentry *entry = &set->table[i];
+        B_setentry *entry = &table[i];
         entry->hash = fromB_u64((B_u64)$step_deserialize(state));
         entry->key = $step_deserialize(state);
         if (entry->key == NULL && entry->hash == UINT64_MAX) {
@@ -290,6 +305,8 @@ static void B_set_table_deserialize_payload(B_set_table *set, $ROW row, $Serial$
             entry->hash = 0;
         }
     }
+    set->table = table;
+    ACTON_WBAR(NULL, &set->table, table);
 }
 
 static bool B_set_table_isdisjoint(B_set_table *set, B_set_table *other, B_Hashable hashwit) {
@@ -404,6 +421,7 @@ static void B_set_table_iand(B_set_table *set, B_set_table *other, B_Hashable ha
     }
     acton_free(set->table);
     *set = res;
+    ACTON_WBAR(NULL, &set->table, res.table);
 }
 
 static void B_set_table_ixor(B_set_table *set, B_set_table *other, B_Hashable hashwit) {
@@ -684,8 +702,8 @@ void B_IteratorD_set_serialize(B_IteratorD_set self, $Serial$state state) {
 B_IteratorD_set B_IteratorD_setD__deserialize(B_IteratorD_set res, $Serial$state state) {
     if (!res)
         res = $DNEW(B_IteratorD_set, state);
-    res->src = $step_deserialize(state);
-    res->data = B_set_table_from_iter_src(res->src);
+    ACTON_STORE(res, res->src, $step_deserialize(state));
+    ACTON_STORE(res, res->data, B_set_table_from_iter_src(res->src));
     res->nxt = fromB_u64((B_u64)$step_deserialize(state));
     return res;
 }

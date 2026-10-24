@@ -42,6 +42,7 @@ static void B_list_base_expand(B_list_base lst, int n) {
     if (newptr == NULL)
         RAISE_EXC(&B_list_allocation_failed_error);
     lst->data = newptr;
+    ACTON_WBAR(lst, &lst->data, newptr);
     lst->capacity = newcapacity;
 }
 
@@ -49,10 +50,13 @@ static void B_list_base_shrink(B_list_base lst) {
     if (lst->capacity > 20 && 2 * lst->length < lst->capacity) {
         int newcapacity = lst->length;
         $WORD *old = lst->data;
-        lst->data = acton_malloc(newcapacity * sizeof($WORD));
-        lst->capacity = newcapacity;
         assert(old != NULL);
-        memcpy(lst->data, old, newcapacity * sizeof($WORD));
+        // The new array is filled while only a local holds it
+        $WORD *newptr = acton_malloc(newcapacity * sizeof($WORD));
+        memcpy(newptr, old, newcapacity * sizeof($WORD));
+        lst->data = newptr;
+        ACTON_WBAR(lst, &lst->data, newptr);
+        lst->capacity = newcapacity;
     }
 }
 
@@ -75,7 +79,10 @@ static B_list_base B_list_base_new(int capacity, $SuperG_class cls) {
 
 static B_NoneType B_list_base_append(B_list_base lst, $WORD elem) {
     B_list_base_expand(lst, 1);
-    lst->data[lst->length++] = elem;
+    $WORD *data = lst->data;
+    data[lst->length] = elem;
+    ACTON_WBAR(data, &data[lst->length], elem);
+    lst->length++;
     return B_None;
 }
 
@@ -101,7 +108,13 @@ static B_str B_list_base_str(B_list_base self) {
     B_list parts = B_listD_new(self->length);
     for (int i = 0; i < self->length; i++) {
         B_value elem = (B_value)self->data[i];
-        parts->data[parts->length++] = elem == B_None ? B_None_str : elem->$class->__repr__(elem);
+        // __repr__ allocates, and the array of parts is reached through
+        // parts, so each store has a barrier.
+        B_str r = elem == B_None ? B_None_str : elem->$class->__repr__(elem);
+        $WORD *data = parts->data;
+        data[parts->length] = r;
+        ACTON_WBAR(data, &data[parts->length], r);
+        parts->length++;
     }
     return B_strD_join_par('[', parts, ']');
 }
@@ -137,18 +150,31 @@ static B_list_base B_list_base_deserialize(B_list_base res, $SuperG_class cls, $
                     toB_int(state->row_no - 1), res);
     res->length = len;
     res->capacity = len;
-    if (len > 0 && res->data == NULL)
-        res->data = acton_malloc(len * sizeof($WORD));
-    for (int i = 0; i < len; i++)
-        res->data[i] = $step_deserialize(state);
+    // The --db restore fills a list that an earlier pass allocated, and the
+    // array is reached through res, so every store has a barrier.
+    if (len > 0 && res->data == NULL) {
+        $WORD *data = acton_malloc(len * sizeof($WORD));
+        res->data = data;
+        ACTON_WBAR(res, &res->data, data);
+    }
+    for (int i = 0; i < len; i++) {
+        $WORD v = $step_deserialize(state);
+        $WORD *data = res->data;
+        data[i] = v;
+        ACTON_WBAR(data, &data[i], v);
+    }
     return res;
 }
 
 static B_list_base B_list_base_copy_as(B_list_base lst, $SuperG_class cls) {
     B_list_base res = B_list_base_new(lst->length, cls);
     res->length = lst->length;
-    if (lst->length > 0)
+    // The new array is reached through res, not held in a local since its
+    // allocation
+    if (lst->length > 0) {
+        ACTON_WBAR_RANGE(res->data, res->data, lst->length * sizeof($WORD));
         memcpy(res->data, lst->data, lst->length * sizeof($WORD));
+    }
     return res;
 }
 
@@ -164,6 +190,7 @@ static B_NoneType B_list_base_extend(B_list_base lst, B_list_base other) {
         return B_None;
     int otherlen = other->length;
     B_list_base_expand(lst, otherlen);
+    ACTON_WBAR_RANGE(lst->data, lst->data + lst->length, otherlen * sizeof($WORD));
     memcpy(lst->data + lst->length, other->data, otherlen * sizeof($WORD));
     lst->length += otherlen;
     return B_None;
@@ -176,6 +203,9 @@ static $WORD B_list_base_pop(B_list_base lst, B_int i) {
     if (ix0 < 0 || ix0 >= len)
         RAISE(B_IndexError, ix0, actStrFromCString("pop: index outside list"));
     $WORD res = lst->data[ix0];
+    // A move within the array: the bits are set before the first move, since
+    // a step of a sliced collection can scan the array between two moves
+    ACTON_WBAR_RANGE(lst->data, lst->data + ix0, (len - ix0 - 1) * sizeof($WORD));
     memmove(lst->data + ix0, lst->data + ix0 + 1, (len - ix0 - 1) * sizeof($WORD));
     lst->data[len - 1] = NULL;
     lst->length--;
@@ -241,6 +271,8 @@ static bool B_list_base_lt(B_list_base a, B_list_base b, B_Ord ordwit) {
 static B_list_base B_list_base_add(B_list_base lst, B_list_base other, $SuperG_class cls) {
     int reslen = lst->length + other->length;
     B_list_base res = B_list_base_new(reslen, cls);
+    // The new array is reached through res
+    ACTON_WBAR_RANGE(res->data, res->data, reslen * sizeof($WORD));
     if (lst->length > 0)
         memcpy(res->data, lst->data, lst->length * sizeof($WORD));
     if (other->length > 0)
@@ -253,6 +285,8 @@ static B_list_base B_list_base_mul(B_list_base lst, int64_t count, $SuperG_class
     if (lst->length == 0 || count <= 0)
         return B_list_base_new(0, cls);
     B_list_base res = B_list_base_new(lst->length * count, cls);
+    // The new array is reached through res
+    ACTON_WBAR_RANGE(res->data, res->data, lst->length * count * sizeof($WORD));
     for (int64_t i = 0; i < count; i++)
         memcpy(res->data + i * lst->length, lst->data, lst->length * sizeof($WORD));
     res->length = lst->length * count;
@@ -274,6 +308,7 @@ static void B_list_base_imul(B_list_base lst, int64_t count) {
     if (count > INT_MAX / len)
         RAISE_EXC(&B_list_too_long_error);
     B_list_base_expand(lst, (int)(len * (count - 1)));
+    ACTON_WBAR_RANGE(lst->data, lst->data + len, len * (count - 1) * sizeof($WORD));
     for (int64_t i = 1; i < count; i++)
         memcpy(lst->data + i * len, lst->data, len * sizeof($WORD));
     lst->length = (int)(len * count);
@@ -292,7 +327,9 @@ static B_NoneType B_list_base_setitem(B_list_base lst, int64_t n, $WORD val) {
     int64_t ix0 = n < 0 ? len + n : n;
     if (ix0 < 0 || ix0 >= len)
         RAISE(B_IndexError, ix0, actStrFromCString("setitem: index outside list"));
-    lst->data[ix0] = val;
+    $WORD *data = lst->data;
+    data[ix0] = val;
+    ACTON_WBAR(data, &data[ix0], val);
     return B_None;
 }
 
@@ -301,6 +338,7 @@ static B_NoneType B_list_base_delitem(B_list_base lst, int64_t n) {
     int64_t ix0 = n < 0 ? len + n : n;
     if (ix0 < 0 || ix0 >= len)
         return B_None;
+    ACTON_WBAR_RANGE(lst->data, lst->data + ix0, (len - ix0 - 1) * sizeof($WORD));
     memmove(lst->data + ix0, lst->data + ix0 + 1, (len - ix0 - 1) * sizeof($WORD));
     lst->data[len - 1] = NULL;
     lst->length--;
@@ -332,7 +370,10 @@ static B_NoneType B_list_base_setslice(B_list_base lst, B_Iterable wit, B_slice 
     int copy = other->length <= slen ? other->length : slen;
     int pos = start;
     for (int i = 0; i < copy; i++) {
-        lst->data[pos] = other->data[i];
+        $WORD v = other->data[i];
+        $WORD *data = lst->data;
+        data[pos] = v;
+        ACTON_WBAR(data, &data[pos], v);
         pos += step;
     }
     if (other->length == slen)
@@ -340,6 +381,8 @@ static B_NoneType B_list_base_setslice(B_list_base lst, B_Iterable wit, B_slice 
 
     // If the lengths differ, normalize_slice guarantees that step is one.
     if (other->length < slen) {
+        ACTON_WBAR_RANGE(lst->data, lst->data + start + copy,
+                         (lst->length - start - slen) * sizeof($WORD));
         memmove(lst->data + start + copy, lst->data + start + slen,
                 (lst->length - start - slen) * sizeof($WORD));
         lst->length -= slen - other->length;
@@ -347,6 +390,9 @@ static B_NoneType B_list_base_setslice(B_list_base lst, B_Iterable wit, B_slice 
         int increment = other->length - slen;
         B_list_base_expand(lst, increment);
         int rest = lst->length - start - copy;
+        // The moved elements and the new ones
+        ACTON_WBAR_RANGE(lst->data, lst->data + start + copy,
+                         (rest + increment) * sizeof($WORD));
         memmove(lst->data + start + copy + increment, lst->data + start + copy,
                 rest * sizeof($WORD));
         for (int i = copy; i < other->length; i++)
@@ -367,6 +413,7 @@ static B_NoneType B_list_base_delslice(B_list_base lst, B_slice slc) {
         start += (slen - 1) * step;
         step = -step;
     }
+    ACTON_WBAR_RANGE(lst->data, lst->data + start, (lst->length - start) * sizeof($WORD));
     $WORD *p = lst->data + start;
     for (int64_t i = 0; i < slen - 1; i++) {
         memmove(p, p + i + 1, (step - 1) * sizeof($WORD));
@@ -378,6 +425,7 @@ static B_NoneType B_list_base_delslice(B_list_base lst, B_slice slc) {
 }
 
 static B_NoneType B_list_base_reverse(B_list_base lst) {
+    ACTON_WBAR_RANGE(lst->data, lst->data, lst->length * sizeof($WORD));
     for (int i = 0; i < lst->length / 2; i++) {
         $WORD tmp = lst->data[i];
         lst->data[i] = lst->data[lst->length - 1 - i];
@@ -390,6 +438,8 @@ static B_NoneType B_list_base_insert(B_list_base lst, int64_t n, $WORD elem) {
     int len = lst->length;
     B_list_base_expand(lst, 1);
     int64_t ix0 = n < 0 ? (len + n < 0 ? 0 : len + n) : (n < len ? n : len);
+    // The moved elements and the new one
+    ACTON_WBAR_RANGE(lst->data, lst->data + ix0, (len - ix0 + 1) * sizeof($WORD));
     memmove(lst->data + ix0 + 1, lst->data + ix0, (len - ix0) * sizeof($WORD));
     lst->data[ix0] = elem;
     lst->length++;
@@ -565,8 +615,8 @@ void B_IteratorD_listD_serialize(B_IteratorD_list self, $Serial$state state) {
 B_IteratorD_list B_IteratorD_list$_deserialize(B_IteratorD_list self, $Serial$state state) {
     if (!self)
         self = $DNEW(B_IteratorD_list, state);
-    self->src = $step_deserialize(state);
-    self->data = B_list_base_from_iter_src(self->src);
+    ACTON_STORE(self, self->src, $step_deserialize(state));
+    ACTON_STORE(self, self->data, B_list_base_from_iter_src(self->src));
     self->nxt = fromB_int((B_int)$step_deserialize(state));
     return self;
 }

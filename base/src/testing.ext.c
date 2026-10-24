@@ -167,7 +167,7 @@ bool testingQ_PerfLoopD___next__(testingQ_PerfLoop self, $WORD *out) {
         if (current & (TESTING_LOOP_CLOSED | TESTING_LOOP_INVALID))
             testing_loop_invalid(self, &testingQ_loop_completed_error);
         if (scale) {
-            self->_yield_scale = scale;
+            ACTON_STORE(self, self->_yield_scale, scale);
             self->_batch_left = self->_batch_size - 1;
             testing_loop_start(self);
             __atomic_fetch_or(&self->_state, TESTING_LOOP_STARTED, __ATOMIC_RELEASE);

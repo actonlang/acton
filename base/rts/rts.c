@@ -624,11 +624,11 @@ B_Msg B_MsgD___deserialize__(B_Msg res, $Serial$state state) {
         res = $DNEW(B_Msg,state);
     }
     res->$next = NULL;
-    res->$to = $step_deserialize(state);
-    res->$cont = $step_deserialize(state);
+    ACTON_STORE(res, res->$to, $step_deserialize(state));
+    ACTON_STORE(res, res->$cont, $step_deserialize(state));
     res->$waiting = NULL;
     res->$baseline = (time_t)$val_deserialize(state) - wall_offset_us();
-    res->value = $step_deserialize(state);
+    ACTON_STORE(res, res->value, $step_deserialize(state));
     atomic_store_explicit(&res->$wait_lock, 0, memory_order_relaxed);
     return res;
 }
@@ -683,9 +683,9 @@ $Actor $ActorD___deserialize__($Actor res, $Serial$state state) {
     res->$next = NULL;
     res->B_Msg = NULL;
     res->$outgoing = NULL;
-    res->$waitsfor = $step_deserialize(state);
+    ACTON_STORE(res, res->$waitsfor, $step_deserialize(state));
     res->$consume_hd = (long)$val_deserialize(state);
-    res->$catcher = $step_deserialize(state);
+    ACTON_STORE(res, res->$catcher, $step_deserialize(state));
     atomic_store_explicit(&res->B_Msg_lock, 0, memory_order_relaxed);
     if (res->$affinity > 0)
         res->$affinity = SHARED_RQ;
@@ -716,9 +716,9 @@ void $CatcherD___serialize__($Catcher self, $Serial$state state) {
 
 $Catcher $CatcherD___deserialize__($Catcher self, $Serial$state state) {
     $Catcher res = $DNEW($Catcher,state);
-    res->$next = $step_deserialize(state);
-    res->$cont = $step_deserialize(state);
-    res->xval = $step_deserialize(state);
+    ACTON_STORE(res, res->$next, $step_deserialize(state));
+    ACTON_STORE(res, res->$cont, $step_deserialize(state));
+    ACTON_STORE(res, res->xval, $step_deserialize(state));
     return res;
 }
 ///////////////////////////////////////////////////////////////////////////////////////
@@ -743,8 +743,8 @@ void $ConstContD___serialize__($ConstCont self, $Serial$state state) {
 
 $ConstCont $ConstContD___deserialize__($ConstCont self, $Serial$state state) {
     $ConstCont res = $DNEW($ConstCont,state);
-    res->val = $step_deserialize(state);
-    res->cont = $step_deserialize(state);
+    ACTON_STORE(res, res->val, $step_deserialize(state));
+    ACTON_STORE(res, res->cont, $step_deserialize(state));
     return res;
 }
 
@@ -833,9 +833,13 @@ bool ADD_waiting($Actor a, B_Msg m) {
 
     spinlock_lock(&m->$wait_lock);
     if (!FROZEN(m)) {
-        a->$next = m->$waiting;
+        $Actor next = m->$waiting;
+        a->$next = next;
+        ACTON_WBAR(a, &a->$next, next);
         m->$waiting = a;
+        ACTON_WBAR(m, &m->$waiting, a);
         a->$waitsfor = m;
+        ACTON_WBAR(a, &a->$waitsfor, m);
         did_add = true;
     }
     spinlock_unlock(&m->$wait_lock);
@@ -880,10 +884,14 @@ bool ENQ_timed(B_Msg m) {
         size_t parent = (pos - 1) / 2;
         if (!timed_before(entry, timerQ[parent]))
             break;
+        // The heap array is a GC object: every moved entry has a barrier
+        B_Msg moved = timerQ[parent].msg;
         timerQ[pos] = timerQ[parent];
+        ACTON_WBAR(timerQ, &timerQ[pos].msg, moved);
         pos = parent;
     }
     timerQ[pos] = entry;
+    ACTON_WBAR(timerQ, &timerQ[pos].msg, m);
     spinlock_unlock(&timerQ_lock);
     return new_head;
 }
@@ -906,10 +914,13 @@ B_Msg DEQ_timed(time_t now) {
                     child++;
                 if (!timed_before(timerQ[child], entry))
                     break;
+                B_Msg moved = timerQ[child].msg;
                 timerQ[pos] = timerQ[child];
+                ACTON_WBAR(timerQ, &timerQ[pos].msg, moved);
                 pos = child;
             }
             timerQ[pos] = entry;
+            ACTON_WBAR(timerQ, &timerQ[pos].msg, entry.msg);
         } else {
             timerQ_sequence = 0;
         }
@@ -1140,19 +1151,27 @@ void register_actor(int64_t key) {
 #endif
 
 void PUSH_outgoing($Actor self, B_Msg m) {
-    m->$next = self->$outgoing;
+    B_Msg next = self->$outgoing;
+    m->$next = next;
+    ACTON_WBAR(m, &m->$next, next);
     self->$outgoing = m;
+    ACTON_WBAR(self, &self->$outgoing, m);
 }
 
 void PUSH_catcher($Actor a, $Catcher c) {
-    c->$next = a->$catcher;
+    $Catcher next = a->$catcher;
+    c->$next = next;
+    ACTON_WBAR(c, &c->$next, next);
     a->$catcher = c;
+    ACTON_WBAR(a, &a->$catcher, c);
 }
 
 $Catcher POP_catcher($Actor a) {
     $Catcher c = a->$catcher;
     if (c) {
-        a->$catcher = c->$next;
+        $Catcher next = c->$next;
+        a->$catcher = next;
+        ACTON_WBAR(a, &a->$catcher, next);
         c->$next = NULL;
     }
     return c;
@@ -1310,11 +1329,14 @@ void reverse_outgoing_queue($Actor self) {
     B_Msg m = self->$outgoing;
     while (m) {
         B_Msg next = m->$next;
+        // An older message now points to a newer one
         m->$next = prev;
+        ACTON_WBAR(m, &m->$next, prev);
         prev = m;
         m = next;
     }
     self->$outgoing = prev;
+    ACTON_WBAR(self, &self->$outgoing, prev);
 }
 
 #ifdef ACTON_DB
@@ -1483,8 +1505,10 @@ $ROW extract_row($WORD *blob, size_t blob_size) {
         if (words_left == 0)
             break;
         head = (BlobHd*)blob;
-        row->next = GC_malloc(sizeof(struct $ROW) + head->blob_size*sizeof($WORD));
-        row = row->next;
+        // Each row is filled while a local holds it
+        $ROW next = GC_malloc(sizeof(struct $ROW) + head->blob_size*sizeof($WORD));
+        row->next = next;
+        row = next;
     };
     row->next = NULL;
     return fst;
@@ -2517,9 +2541,12 @@ void wt_work_cb(uv_check_t *ev) {
         case $RDONE: {
             save_actor_state(current, m, end_us);
             m->value = r.value;                             // m->value holds the message result,
+            ACTON_WBAR(m, &m->value, r.value);
             $Actor b = FREEZE_waiting(m, MARK_RESULT);      // so mark this and stop further m->waiting additions
             while (b) {
-                b->B_Msg->value = r.value;
+                B_Msg bm = b->B_Msg;
+                bm->value = r.value;
+                ACTON_WBAR(bm, &bm->value, r.value);
                 b->$waitsfor = NULL;
                 $Actor c = b->$next;
                 ENQ_ready(b, end_us);
@@ -2534,7 +2561,9 @@ void wt_work_cb(uv_check_t *ev) {
         }
         case $RCONT: {
             m->$cont = r.cont;
+            ACTON_WBAR(m, &m->$cont, r.cont);
             m->value = r.value;
+            ACTON_WBAR(m, &m->value, r.value);
             rtsd_printf("## CONT actor %" PRId64 " : %s", current->$globkey, current->$class->$GCINFO);
             more = true;
             break;
@@ -2543,7 +2572,10 @@ void wt_work_cb(uv_check_t *ev) {
             $Catcher c = current->$catcher;
             if (c) {                            // Normal exception handling
                 c->xval = (B_BaseException)r.value;
-                m->$cont = c->$cont;
+                ACTON_WBAR(c, &c->xval, r.value);
+                $Cont k = c->$cont;
+                m->$cont = k;
+                ACTON_WBAR(m, &m->$cont, k);
                 m->value = B_False;             // False signals the exceptional branch
                 rtsd_printf("## FAIL/handle actor %" PRId64 " : %s", current->$globkey, current->$class->$GCINFO);
                 more = true;
@@ -2551,6 +2583,7 @@ void wt_work_cb(uv_check_t *ev) {
                 save_actor_state(current, m, end_us);
                 B_BaseException ex = (B_BaseException)r.value;
                 m->value = r.value;                                 // m->value holds the raised exception,
+                ACTON_WBAR(m, &m->value, r.value);
                 $Actor b = FREEZE_waiting(m, MARK_EXCEPTION);       // so mark this and stop further m->waiting additions
                 // If any other actor is waiting for our result / exception,
                 // then we consider the exception handled and we can avoid
@@ -2560,8 +2593,10 @@ void wt_work_cb(uv_check_t *ev) {
                 if (!b)
                     fprintf(stderr, "Unhandled exception in actor: %s[%" PRId64 "]:\n  %s\n", unmangle_name(current->$class->$GCINFO), current->$globkey, fromB_str(ex->$class->__str__(ex)));
                 while (b) {
-                    b->B_Msg->$cont = &$Fail$instance;
-                    b->B_Msg->value = r.value;
+                    B_Msg bm = b->B_Msg;
+                    bm->$cont = &$Fail$instance;
+                    bm->value = r.value;
+                    ACTON_WBAR(bm, &bm->value, r.value);
                     b->$waitsfor = NULL;
                     $Actor c = b->$next;
                     ENQ_ready(b, end_us);
@@ -2601,6 +2636,7 @@ void wt_work_cb(uv_check_t *ev) {
             }
 #endif
             m->$cont = r.cont;
+            ACTON_WBAR(m, &m->$cont, r.cont);
             B_Msg x = (B_Msg)r.value;
             assert(x != NULL);
 
@@ -2616,11 +2652,15 @@ void wt_work_cb(uv_check_t *ev) {
             } else if (EXCEPTIONAL(x)) {        // x->cont == MARK_EXCEPTION: x->value holds the raised exception, current is not in x->waiting
                 rtsd_printf("## AWAIT/fail actor %" PRId64 " : %s", current->$globkey, current->$class->$GCINFO);
                 m->$cont = &$Fail$instance;
-                m->value = x->value;
+                $WORD v = x->value;
+                m->value = v;
+                ACTON_WBAR(m, &m->value, v);
                 more = true;
             } else {                            // x->cont == MARK_RESULT: x->value holds the final response, current is not in x->waiting
                 rtsd_printf("## AWAIT/wakeup actor %" PRId64 " : %s", current->$globkey, current->$class->$GCINFO);
-                m->value = x->value;
+                $WORD v = x->value;
+                m->value = v;
+                ACTON_WBAR(m, &m->value, v);
                 more = true;
             }
             break;

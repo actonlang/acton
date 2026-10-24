@@ -1993,7 +1993,7 @@ void B_IteratorD_strD_serialize(B_IteratorD_str self,$Serial$state state) {
 B_IteratorD_str B_IteratorD_str$_deserialize(B_IteratorD_str res, $Serial$state state) {
     if (!res)
         res = $DNEW(B_IteratorD_str,state);
-    res->src = (B_str)$step_deserialize(state);
+    ACTON_STORE(res, res->src, (B_str)$step_deserialize(state));
     res->nxt = fromB_int((B_int)$step_deserialize(state));
     return res;
 }
@@ -2172,6 +2172,7 @@ static void expand_bytearray(B_bytearray b, int64_t n) {
         RAISE_EXC(&B_str_allocation_failed_error);
     }
     b->str = newstr;
+    ACTON_WBAR(b, &b->str, newstr);
     b->capacity = newcapacity;
 }
 
@@ -2247,7 +2248,8 @@ B_bytearray B_bytearrayD___deserialize__(B_bytearray res, $Serial$state state) {
     res->$class = &B_bytearrayG_methods;
     res->nbytes = nbytes;
     res->capacity = nbytes;
-    res->str = alloc_data(nbytes);
+    // The --db restore fills a bytearray that an earlier pass allocated
+    ACTON_STORE(res, res->str, alloc_data(nbytes));
     memcpy(res->str,this->blob+1,nbytes);
     return res;
 }
@@ -2989,7 +2991,7 @@ void B_IteratorD_bytearrayD_serialize(B_IteratorD_bytearray self,$Serial$state s
 B_IteratorD_bytearray B_IteratorD_bytearray$_deserialize(B_IteratorD_bytearray res, $Serial$state state) {
     if(!res)
         res = $DNEW(B_IteratorD_bytearray,state);
-    res->src = (B_bytearray)$step_deserialize(state);
+    ACTON_STORE(res, res->src, (B_bytearray)$step_deserialize(state));
     res->nxt = fromB_int((B_int)$step_deserialize(state));
     return res;
 }
@@ -4243,7 +4245,7 @@ void B_IteratorD_bytesD_serialize(B_IteratorD_bytes self,$Serial$state state) {
 B_IteratorD_bytes B_IteratorD_bytes$_deserialize(B_IteratorD_bytes res, $Serial$state state) {
     if (!res)
         res = $DNEW(B_IteratorD_bytes,state);
-    res->src = (B_bytes)$step_deserialize(state);
+    ACTON_STORE(res, res->src, (B_bytes)$step_deserialize(state));
     res->nxt = fromB_int((B_int)$step_deserialize(state));
     return res;
 }

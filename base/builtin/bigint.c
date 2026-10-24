@@ -163,7 +163,8 @@ B_bigint B_bigintD___deserialize__(B_bigint res,$Serial$state state) {
     state->row_no++;
     long size = (long)this->blob[0];
     long nwords = labs(size);
-    res->val.n = nwords > 0 ? acton_malloc_atomic(nwords*sizeof(long)) : NULL;
+    // The --db restore fills a bigint that an earlier pass allocated
+    ACTON_STORE(res, res->val.n, nwords > 0 ? acton_malloc_atomic(nwords*sizeof(long)) : NULL);
     res->val.size = size;
     res->val.alloc = nwords;
     if (nwords > 0)

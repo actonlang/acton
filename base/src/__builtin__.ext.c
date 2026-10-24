@@ -172,7 +172,10 @@ $R B_ProcessD__create_processG_local(B_Process self, $Cont c$cont) {
     uv_process_options_t *options = acton_calloc(1, sizeof(uv_process_options_t));
 
     uv_process_t *req = acton_calloc(1, sizeof(uv_process_t));
+    // A GC pointer in an int attribute, which the generated code stores
+    // without a write barrier
     self->_p = (int64_t)(intptr_t)req;
+    ACTON_WBAR(self, &self->_p, req);
 
     req->data = process_data;
 
