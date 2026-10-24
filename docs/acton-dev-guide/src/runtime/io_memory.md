@@ -17,13 +17,19 @@ somebody must `free()` it on every path.
 | Component | Allocator | Freed by |
 |---|---|---|
 | Acton objects (actors, builtins) | GC via `acton__allocator` | collector |
-| uv handles/requests allocated by Acton code (TCP path) | GC (`acton_malloc`) | collector |
-| libuv internals (watcher arrays, request buffers, ...) | `GC_malloc_uncollectable` | libuv itself, via `GC_free` |
+| uv handles/requests allocated by Acton code (TCP path), uv loops | GC (`acton_malloc_rescanned`), the rescanned kind in generational mode | collector |
+| libuv internals (request buffers, ...) | `GC_malloc_uncollectable` | libuv itself, via `GC_free` |
+| libuv `realloc(NULL, n)` (the loop's watchers array) | GC, the rescanned kind in generational mode | libuv itself, via `GC_free` |
 | tlsuv (streams' engines, write queue, connectors, ...) | libc `malloc`/`free` | tlsuv itself |
 | mbedtls (TLS state, X.509, bignums, ...) | libc `calloc`/`free` | mbedtls itself |
 | TLS-path native objects in `net.ext.c` (streams, requests, state structs, payload copies) | libc `malloc`/`free` | `net.ext.c`, in close/completion callbacks |
 | DNS `uv_getaddrinfo_t` requests in `net.ext.c` | libc `malloc`/`free` | the resolve callback |
 | Read buffers (`alloc_buffer`, `base/rts/io.c`) | `GC_malloc_atomic` | collector |
+
+The rescanned kind, used in generational mode only, exists in `write_barrier`
+builds (see [Memory and GC](memory.md#write-barrier)). Every allocation from
+it takes the collector's allocator lock, so ordinary mode and other builds
+use ordinary GC memory instead.
 
 The wiring lives in `acton_init_alloc()` (`base/rts/common.c`), called from
 `main()` right after `GC_INIT()` and before any uv/tlsuv/mbedtls allocation.

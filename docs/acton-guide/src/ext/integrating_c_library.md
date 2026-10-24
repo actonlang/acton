@@ -240,7 +240,7 @@ B_bytes zlibQ_compress(B_bytes data) {
 }
 ```
 
-Memory management is always top of mind when writing C, as it the case here. We can allocate memory via the Acton GC-heap malloc or just plain `malloc()` (the non-GC heap, to be explicit). Since `zlibQ_compress` is pure, we have no state leaking out of the function other than via its return value. All return values must be allocated on the Acton GC heap, so we know we must use `acton_malloc` for any value that we return. Any other local variables within the function can use classic malloc, as long as we make sure to explicitly free it up. For class or actor methods, any allocation for class or actor attributes must be performed using the Acton GC malloc, since there is no destructor or similar where a free can be inserted, so using classic malloc would be bound to leak. Also note that in this particular case, we know that the returned bytes value itself is not going to contain any pointers, so by using `acton_malloc_atomic` we can get a chunk of memory that will not be internally scanned by the GC, which saves a bit of time and thus improves GC performance. If we allocate structs that do carry pointers, they must use the normal `acton_malloc()`.
+Memory management is always top of mind when writing C, as it the case here. We can allocate memory via the Acton GC-heap malloc or just plain `malloc()` (the non-GC heap, to be explicit). Since `zlibQ_compress` is pure, we have no state leaking out of the function other than via its return value. All return values must be allocated on the Acton GC heap, so we know we must use `acton_malloc` for any value that we return. Any other local variables within the function can use classic malloc, as long as we make sure to explicitly free it up. For class or actor methods, any allocation for class or actor attributes must be performed using the Acton GC malloc, since there is no destructor or similar where a free can be inserted, so using classic malloc would be bound to leak. Also note that in this particular case, we know that the returned bytes value itself is not going to contain any pointers, so by using `acton_malloc_atomic` we can get a chunk of memory that will not be internally scanned by the GC, which saves a bit of time and thus improves GC performance. If we allocate structs that do carry pointers, they must use the normal `acton_malloc()`. Storing pointers into such memory later needs a write barrier, see [Storing pointers into GC memory](#storing-pointers-into-gc-memory).
 
 Acton's own boxed scalars (`int`, `float`, `complex` and the fixed-width integer types) are allocated pointer-free in the same way, as are ranges and the digits of `bigint` values. So a pointer converted to an integer and stored in a boxed `int` does not keep the object it points to alive. Keep such a pointer in a field of a struct allocated with `acton_malloc()` instead.
 
@@ -332,6 +332,49 @@ user@host:~/acton-zlib$
 ```
 
 And with that, we're done! A simple wrapper around zlib, which is also available [on GitHub](https://github.com/actonlang/acton-zlib) if you want to study it further.
+
+## Storing pointers into GC memory
+
+In generational mode (`ACTON_GC_MODE=generational`, see
+[build options](../compilation/build_options.md#gc-mode)) a minor collection
+does not scan the whole heap. It rescans only the marked objects of the heap
+blocks that the program recorded as written since the previous collection,
+through a write barrier. Generated Acton code has the barrier built in. C code
+that stores a pointer to GC memory into GC memory must add it itself; a missing
+barrier lets the collector free an object that is still in use. The macros are
+in `rts/wbar.h`, which `rts/common.h` includes:
+
+1. After storing a GC pointer `v` into a field of a GC object `obj`, call
+   `ACTON_WBAR(obj, &obj->field, v)`, or write the store as
+   `ACTON_STORE(obj, obj->field, v)`. `obj` is the start of the object that
+   holds the field; pass `NULL` if the code only has a pointer to a struct
+   inside it.
+2. Before copying, moving or sorting pointers in bulk into a GC object
+   (`memcpy`, `memmove`, a copy loop, reversing or sorting an array in place),
+   call `ACTON_WBAR_RANGE(obj, dst, nbytes)` over the destination.
+3. No barrier is needed for stores into an object that the same function
+   allocated and has held in a local variable since, for stores of `NULL`,
+   `None`, integers or static objects, and for stores into stack variables,
+   C globals, `malloc` memory or memory from `acton_malloc_atomic`. An object
+   reached through a new object is not new itself: filling the array of a list
+   returned by `B_listD_new` needs barriers. A barrier is always safe.
+4. The result of `acton_realloc` is not a new object: it may be the old one.
+5. A GC pointer stored in an `int` field (a handle kept as an integer) needs
+   `ACTON_WBAR` too, since the generated code sees only an integer.
+6. Memory that a C library writes pointers into by itself, such as libuv
+   handles and requests, comes from `acton_malloc_rescanned()`, which every
+   collection rescans. Threads that the collector does not stop, like libuv's
+   thread pool, must not write GC pointers into GC memory at all.
+7. Test with `acton test --gc-check` (or `ACTON_GC_CHECK=1`), which runs the
+   collector's write-barrier checker at every collection and exits with
+   status 70 when it finds a store without its barrier.
+
+```c
+B_NoneType fooQ_ThingD_set_name(fooQ_Thing self, B_str name) {
+    ACTON_STORE(self, self->name, name);
+    return B_None;
+}
+```
 
 ## Converting C strings to Acton strings
 
