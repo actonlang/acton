@@ -1,0 +1,26 @@
+import re
+import testing
+
+
+def _test_count_dense(t: testing.SyncT):
+    text = "é123 " * t.scale()
+    pattern = re.compile(r"[0-9]+")
+    total = 0
+    repeats = 0
+    for _ in t.loop():
+        total += pattern.count(text)
+        repeats += 1
+    testing.assertEqual(total, repeats * t.scale())
+
+
+def _test_replace_dense(t: testing.SyncT):
+    text = "é123 " * t.scale()
+    expected = "é? " * t.scale()
+    pattern = re.compile(r"[0-9]+")
+    last = ""
+    repeats = 0
+    for _ in t.loop():
+        last = pattern.replace(text, "?")
+        repeats += 1
+    if repeats > 0:
+        testing.assertEqual(last, expected)
