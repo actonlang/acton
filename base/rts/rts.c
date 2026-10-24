@@ -3850,7 +3850,9 @@ int main(int argc, char **argv) {
         int * seed_ports = (int *) malloc(ddb_no_host * sizeof(int));
 
         for (int i=0; i<ddb_no_host; i++) {
-            seed_hosts[i] = acton_strdup(ddb_host[i]);
+            // The array is malloc memory, which the GC does not scan, so the
+            // names it holds are malloc memory too
+            seed_hosts[i] = strdup(ddb_host[i]);
             seed_ports[i] = ddb_port;
             char *colon = strchr(seed_hosts[i], ':');
             if (colon) {
@@ -3860,6 +3862,8 @@ int main(int argc, char **argv) {
             log_info("Using distributed database backend (DDB): %s:%d", seed_hosts[i], seed_ports[i]);
         }
         db = get_remote_db(ddb_replication, rts_rack_id, rts_dc_id, rts_host, rts_node_id, ddb_no_host, seed_hosts, seed_ports, &seed);
+        for (int i=0; i<ddb_no_host; i++)
+            free(seed_hosts[i]);
         free(seed_hosts);
         free(seed_ports);
 #else
