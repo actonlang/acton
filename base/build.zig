@@ -27,14 +27,24 @@ fn joinPath(allocator: std.mem.Allocator, base: []const u8, relative: []const u8
 
 // The ACTON_GC_REQUIRED_VDB value (a GC_VDB_* constant, or 0 for automatic
 // selection) for gc_dirty_tracking_backend, which must be supported by target.
+// write_barrier selects the collector's manual dirty-bit mode (GC_VDB_MANUAL),
+// in which the program's write barrier (rts/wbar.h) sets the dirty bits.
 fn gcRequiredVdb(t: std.Target, backend: []const u8) u8 {
-    const required_vdb: u8 = if (std.mem.eql(u8, backend, "auto")) 0
+    const required_vdb: u8 = if (std.mem.eql(u8, backend, "write_barrier")) 0x2
+        else if (std.mem.eql(u8, backend, "auto")) 0
         else if (std.mem.eql(u8, backend, "soft_dirty")) 0x40
         else if (std.mem.eql(u8, backend, "userfaultfd")) 0x80
         else {
-            std.log.err("gc_dirty_tracking_backend must be auto, soft_dirty or userfaultfd", .{});
+            std.log.err("gc_dirty_tracking_backend must be write_barrier, auto, soft_dirty or userfaultfd", .{});
             std.process.exit(1);
         };
+    if (required_vdb == 0x2) {
+        if (t.cpu.arch.isWasm()) {
+            std.log.err("gc_dirty_tracking_backend=write_barrier requires a target with threads", .{});
+            std.process.exit(1);
+        }
+        return required_vdb;
+    }
     if (required_vdb != 0 and (t.os.tag != .linux or !t.abi.isGnu())) {
         std.log.err("gc_dirty_tracking_backend={s} requires a Linux GNU target", .{backend});
         std.process.exit(1);
@@ -84,7 +94,7 @@ pub fn build(b: *std.Build) void {
     const no_threads = b.option(bool, "no_threads", "") orelse false;
     const gc_use_mark_bits = b.option(bool, "gc_use_mark_bits", "Use packed GC mark bits (default: true)") orelse true;
     const gc_mark_bit_per_object = b.option(bool, "gc_mark_bit_per_object", "Track GC marks per object") orelse false;
-    const gc_dirty_tracking_backend = b.option([]const u8, "gc_dirty_tracking_backend", "GC dirty tracking backend: auto, soft_dirty, userfaultfd") orelse "auto";
+    const gc_dirty_tracking_backend = b.option([]const u8, "gc_dirty_tracking_backend", "GC dirty tracking backend: write_barrier (default on targets with threads), auto, soft_dirty, userfaultfd") orelse gcDefaultDirtyTrackingBackend(target.result);
     const gc_page_hash_table_log2 = b.option(u8, "gc_page_hash_table_log2", "Log2 of GC page-hash entries (0 keeps the default)") orelse 0;
     const gc_heap_growth_divisor = b.option(u32, "gc_heap_growth_divisor", "Limit automatic GC heap growth to the heap size divided by this (default 4; 0 keeps the fixed increment)") orelse 4;
     const gc_alloc_budget_percent = b.option(u32, "gc_alloc_budget_percent", "Collect after allocating this percentage of the live data (default 250; 0 selects the free space divisor policy)") orelse 250;
@@ -116,6 +126,7 @@ pub fn build(b: *std.Build) void {
     // Validate here, before the collector's own option checks, so that the
     // diagnostics name the Build.act options.
     const gc_required_vdb = gcRequiredVdb(target.result, gc_dirty_tracking_backend);
+    const gc_write_barrier = gc_required_vdb == 0x2;
     if (gc_page_hash_table_log2 > 30) {
         std.log.err("gc_page_hash_table_log2 must be between 1 and 30, or 0 for the default", .{});
         std.process.exit(1);
@@ -180,6 +191,12 @@ pub fn build(b: *std.Build) void {
         std.process.exit(1);
     }
     const gc_enable_mprotect_vdb = gcEnableMprotectVdb(target.result);
+    // The write barrier compiles in the block size and the number of dirty
+    // bits, which the RTS checks against the collector when it starts:
+    // LOG_PHT_ENTRIES of LARGE_CONFIG unless gc_page_hash_table_log2 sets it.
+    const gc_log_block: u32 = std.math.log2_int(u32, if (gc_block_size != 0) gc_block_size else 4096);
+    const gc_log_pht: u32 = if (gc_page_hash_table_log2 != 0) gc_page_hash_table_log2
+        else if (target.result.ptrBitWidth() == 32) 20 else 21;
 
     const projpath_outtypes = joinPath(b.allocator, buildroot_path, "out/types");
 
@@ -199,7 +216,7 @@ pub fn build(b: *std.Build) void {
         .enable_mmap = true,
         .enable_mark_bits = gc_use_mark_bits,
         .enable_mark_bit_per_obj = gc_mark_bit_per_object,
-        .dirty_tracking_backend = gc_dirty_tracking_backend,
+        .dirty_tracking_backend = gcLibgcBackend(gc_dirty_tracking_backend),
         .page_hash_table_log2 = gc_page_hash_table_log2,
         .heap_growth_divisor = gc_heap_growth_divisor,
         .alloc_budget_percent = gc_alloc_budget_percent,
@@ -229,6 +246,9 @@ pub fn build(b: *std.Build) void {
         \\#define ACTON_GC_DIRTY_TRACKING_BACKEND "{s}"
         \\#define ACTON_GC_REQUIRED_VDB {d}
         \\#define ACTON_GC_THREADS {d}
+        \\#define ACTON_GC_WRITE_BARRIER {d}
+        \\#define ACTON_GC_LOG_BLOCK {d}
+        \\#define ACTON_GC_LOG_PHT {d}
         \\#ifdef __cplusplus
         \\extern "C" {{
         \\#endif
@@ -244,7 +264,8 @@ pub fn build(b: *std.Build) void {
         \\#endif
         \\#endif
         \\
-    , .{ gc_dirty_tracking_backend, gc_required_vdb, @intFromBool(gc_enable_threads) }));
+    , .{ gc_dirty_tracking_backend, gc_required_vdb, @intFromBool(gc_enable_threads),
+         @intFromBool(gc_write_barrier), gc_log_block, gc_log_pht }));
     // The effective settings depend on the collector defaults and its
     // configuration macros, so read them from the collector's private header,
     // compiled with the C flags of libgc itself.
@@ -551,6 +572,7 @@ pub fn build(b: *std.Build) void {
     libActon.installHeader(b.path("rts/rts.h"), "rts/rts.h");
     libActon.installHeader(b.path("rts/log.h"), "rts/log.h");
     libActon.installHeader(b.path("rts/perf.h"), "rts/perf.h");
+    libActon.installHeader(b.path("rts/wbar.h"), "rts/wbar.h");
 
     libActon.root_module.addIncludePath(b.path("."));
     libActon.root_module.addIncludePath(dep_libtlsuv.path("include"));
@@ -615,12 +637,25 @@ pub fn build(b: *std.Build) void {
     });
     if (enable_lto) base_tests.lto = .thin;
     base_tests.root_module.addIncludePath(b.path("."));
+    base_tests.root_module.addIncludePath(gc_config_files.getDirectory());
     base_tests.root_module.linkLibrary(dep_libbsdnt.artifact("bsdnt"));
     base_tests.root_module.linkLibrary(libgc);
     base_tests.root_module.link_libc = true;
     const run_base_tests = b.addRunArtifact(base_tests);
     const test_step = b.step("test", "Run tests");
     test_step.dependOn(&run_base_tests.step);
+}
+
+// The write barrier needs threads: the collector refuses the manual
+// dirty-bit mode without them.
+pub fn gcDefaultDirtyTrackingBackend(t: std.Target) []const u8 {
+    return if (t.cpu.arch.isWasm()) "auto" else "write_barrier";
+}
+
+// The collector's dirty_tracking_backend for gc_dirty_tracking_backend:
+// write_barrier builds the collector with the manual dirty-bit mode only.
+pub fn gcLibgcBackend(backend: []const u8) []const u8 {
+    return if (std.mem.eql(u8, backend, "write_barrier")) "manual" else backend;
 }
 
 // x86_64 macOS builds leave out mprotect-based dirty tracking. Under

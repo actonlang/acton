@@ -14,7 +14,7 @@ pub fn build(b: *std.Build) void {
     const only_actondb = b.option(bool, "only_actondb", "") orelse false;
     const gc_use_mark_bits = b.option(bool, "gc_use_mark_bits", "Use packed GC mark bits (default: true)") orelse true;
     const gc_mark_bit_per_object = b.option(bool, "gc_mark_bit_per_object", "Track GC marks per object") orelse false;
-    const gc_dirty_tracking_backend = b.option([]const u8, "gc_dirty_tracking_backend", "GC dirty tracking backend: auto, soft_dirty, userfaultfd") orelse "auto";
+    const gc_dirty_tracking_backend = b.option([]const u8, "gc_dirty_tracking_backend", "GC dirty tracking backend: write_barrier (default on targets with threads), auto, soft_dirty, userfaultfd") orelse (if (target.result.cpu.arch.isWasm()) "auto" else "write_barrier");
     const gc_page_hash_table_log2 = b.option(u8, "gc_page_hash_table_log2", "Log2 of GC page-hash entries (0 keeps the default)") orelse 0;
     const gc_heap_growth_divisor = b.option(u32, "gc_heap_growth_divisor", "Limit automatic GC heap growth to the heap size divided by this (default 4; 0 keeps the fixed increment)") orelse 4;
     const gc_alloc_budget_percent = b.option(u32, "gc_alloc_budget_percent", "Collect after allocating this percentage of the live data (default 250; 0 selects the free space divisor policy)") orelse 250;
@@ -46,7 +46,8 @@ pub fn build(b: *std.Build) void {
         .enable_mmap = true,
         .enable_mark_bits = gc_use_mark_bits,
         .enable_mark_bit_per_obj = gc_mark_bit_per_object,
-        .dirty_tracking_backend = gc_dirty_tracking_backend,
+        // write_barrier: the collector's manual dirty-bit mode only.
+        .dirty_tracking_backend = if (std.mem.eql(u8, gc_dirty_tracking_backend, "write_barrier")) "manual" else gc_dirty_tracking_backend,
         .page_hash_table_log2 = gc_page_hash_table_log2,
         .heap_growth_divisor = gc_heap_growth_divisor,
         .alloc_budget_percent = gc_alloc_budget_percent,

@@ -2978,7 +2978,7 @@ gcTuningBuildOptionTests = testGroup "GC dirty tracking build options" $
                                       ++ show code ++ "): " ++ out ++ err)
         originalShared <- mapM BS.readFile sourceFiles
         -- Keep all generated output and dependency caches between selections.
-        forM_ [([], 0, 0), (options "soft_dirty" "23", 64, 23),
+        forM_ [([], 2, 0), (options "soft_dirty" "23", 64, 23),
                (options "userfaultfd" "23", 128, 23),
                (options "auto" "0", 0, 0)] $ \(selected, backend, log2) -> do
           writeOptions selected
@@ -2987,7 +2987,10 @@ gcTuningBuildOptionTests = testGroup "GC dirty tracking build options" $
           when (backend /= 128 || canRunUffd) $ do
             assertRuns backend log2 False []
             when (backend /= 0) $ do
-              let name = if backend == 64 then "soft_dirty" else "userfaultfd"
+              let name = case backend of
+                           2 -> "write_barrier"
+                           64 -> "soft_dirty"
+                           _ -> "userfaultfd"
               -- Kernel policy may disallow UFFD or soft-dirty in CI. Only the
               -- explicit startup rejection is acceptable in place of success.
               forM_ ["999999", "123"] $ \pauseTarget ->

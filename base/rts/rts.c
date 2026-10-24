@@ -3403,6 +3403,9 @@ int main(int argc, char **argv) {
         exit(1);
     }
 #endif
+#if ACTON_GC_WRITE_BARRIER
+    acton_init_write_barrier();
+#endif
     GC_set_warn_proc(DaveNull);
     acton_init_alloc();
     acton_replace_allocator(GC_malloc, GC_malloc_atomic, GC_realloc, GC_calloc, acton_noop_free, GC_strdup, GC_strndup);

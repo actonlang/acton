@@ -141,7 +141,8 @@ genEnv env0                         = setX env0 GenX{ globalX = HashSet.empty,
                                                       closureAdaptersX = Map.empty,
                                                       closureAdapterDocsX = [],
                                                       stackIteratorsX = [], iteratorWitnessesX = [],
-                                                      moduleWitnessesX = Map.empty }
+                                                      moduleWitnessesX = Map.empty,
+                                                      plainClassX = False, freshSelfX = Nothing }
 
 type GenEnv                         = EnvF GenX
 
@@ -180,6 +181,8 @@ data GenX                           = GenX { globalX :: HashSet.HashSet Name
                                            , stackIteratorsX :: [(Name, StackIteratorSpec)]
                                            , iteratorWitnessesX :: [(Name, Expr)]
                                            , moduleWitnessesX :: Map.Map QName Expr
+                                           , plainClassX :: Bool
+                                           , freshSelfX :: Maybe Name
                                            }
 
 gdefine te env                      = modX env1 $ \x -> x{ globalX = foldr HashSet.insert (globalX x) (dom te) }
@@ -237,6 +240,18 @@ arrayIter env n                     = case localRep env n of
 setVolVars as env                   = modX env $ \x -> x{ volVarsX = as }
 
 isVolVar a env                      = a `elem` volVarsX (envX env)
+
+-- The methods of a class that is neither an actor class nor a closure are
+-- generated with plainClassX set. In its __init__ and G_init methods,
+-- freshSelfX names the self parameter: the object was allocated by the
+-- constructor that calls them and is held by it, so the stores into its
+-- attributes need no write barrier (see genV MutAssign). This relies on
+-- __init__ running only on a new object.
+setPlainClass b env                 = modX env $ \x -> x{ plainClassX = b }
+
+setFreshSelf n env                  = modX env $ \x -> x{ freshSelfX = n }
+
+freshSelf env                       = freshSelfX (envX env)
 
 -- The Boxing pass wraps a condition's value in a single Box/UnBox node; its
 -- combinators collapse adjacent ones, so they never nest. Strip that one layer
@@ -858,7 +873,7 @@ declDecl env (Class _ n q as b ddoc)
     | isClosureName n               = declClosure env1 n q b'
     | cDefinedClass                 = vcat [ declDecl env1 d{ dname = methodname n (dname d) } | Decl _ ds <- b', d@Def{} <- ds ] $+$
                                       text "struct" <+> classname env n <+> methodtable env n <> semi
-    | otherwise                     = vcat [ declDecl env1 d{ dname = methodname n (dname d) } | Decl _ ds <- b', d@Def{} <- ds ] $+$
+    | otherwise                     = vcat [ declDecl (setPlainClass (null sup_c) env1) d{ dname = methodname n (dname d) } | Decl _ ds <- b', d@Def{} <- ds ] $+$
                                       declSerialize env1 n c props sup_c $+$
                                       declDeserialize env1 n c props sup_c $+$
                                       declCleanup env1 n sup_c $+$
@@ -910,7 +925,13 @@ declFunctionWithStorage env storage symbol (Def dloc n q p KwdNIL (Just t) b d f
                                       char '}'
         env1                        = modX env3 $ \x -> x{ stackIteratorsX = if t2 == tR then [] else stackIteratorLocals env3 b }
         env3                        = modX env2 $ \x -> x{ iteratorWitnessesX = [ (n,e) | Assign _ [PVar _ n _] e <- b, isWitness n ] }
-        env2                        = setMaybeOut mbMaybeOut $ setRet t2 $ ldefine (envOf p) $ defineTVars q env
+        env2                        = setFreshSelf freshSelfName $ setMaybeOut mbMaybeOut $ setRet t2 $ ldefine (envOf p) $ defineTVars q env
+        freshSelfName
+          | plainClassX (envX env),
+            Derived _ n0 <- n,
+            n0 == initKW || n0 == altInit,
+            PosPar x _ _ _ <- p     = Just x
+          | otherwise               = Nothing
         t2                          = exposeMsg fx t
         t3 | isMaybeOutFunction n t1 = genVolatile env n <+> boolType
            | otherwise              = genVolatile env n <+> settype env (rawReturn (restype t1)) t2
@@ -1058,7 +1079,8 @@ declDeserialize env n c props sup_c = (gen env (tCon c) <+> genTopName env (meth
         step (i,t)
            | B.isUnboxable t        = gen env tmpV <+> text "=" <+> gen env primValDeserialize <> parens (gen env st) <> semi $+$
                                       text "memcpy" <> parens (text "&" <> gen env self <> text "->" <> gen env i <> comma <+> text "&" <> gen env tmpV <> comma <+> text "sizeof" <> parens (gen env self <> text "->" <> gen env i)) <> semi
-           | otherwise              = gen env self <> text "->" <> gen env i <+> text "=" <+> gen env primStepDeserialize <> parens (gen env st) <> semi
+           -- The --db restore fills objects that an earlier pass allocated
+           | otherwise              = genStoreAttr env (gen env self) i (gen env primStepDeserialize <> parens (gen env st))
         ret                         = text "return" <+> gen env self <> semi
 
 
@@ -1898,7 +1920,10 @@ instance Gen Stmt where
                                     = (genTarget env tg <+> equals <+> d <> semi, [])
     genV env (AugAssign _ tg op e)  = (genTarget env tg <+> augPretty op <+> genExp env t e <> semi, [])
       where t                       = targetType env tg
-    genV env (MutAssign _ tg e)     = (genTarget env tg <+> equals <+> rhs <> semi, [])
+    genV env (MutAssign _ tg e)
+      | Dot _ r a <- tg,
+        needsWriteBarrier env r t e = (genStoreAttr env (genReceiver env r) a rhs, [])
+      | otherwise                   = (genTarget env tg <+> equals <+> rhs <> semi, [])
       where t                       = targetType env tg
             -- Lifted witness initializers store super-witnesses in fields.
             -- Apply the same static substitution as for a local witness.
@@ -2655,6 +2680,22 @@ genReceiver env e                   = parens (parens (gen env t) <> parens (gen 
 
 genTarget env (Dot _ e n)           = genReceiver env e <> text "->" <> gen env n
 genTarget env e                     = gen env e
+
+-- recv->attr = value with the write barrier (rts/wbar.h). The macro
+-- evaluates the value first, then the receiver, as clang does for the plain
+-- assignment.
+genStoreAttr env recv attr value    = text "ACTON_STORE_ATTR" <> parens (recv <> comma <+> gen env attr <> comma <+> value) <> semi
+
+-- A store into an attribute of a heap object sets the dirty bit of the
+-- object's block for generational collection, unless the attribute is
+-- unboxed, the value is None, or the object is the fresh self of an __init__
+-- or G_init method (see setPlainClass).
+needsWriteBarrier env r t v
+  | isUnboxedRep t                  = False
+  | None{} <- v                     = False
+  | Var _ (NoQ x) <- r,
+    Just x == freshSelf env         = False
+  | otherwise                       = True
 
 
 genEnter env ts e n p

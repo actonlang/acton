@@ -8,6 +8,10 @@
 #include <tlsuv/tlsuv.h>
 
 #include "rts/common.h"
+#include <acton_gc_config.h>
+#if ACTON_GC_WRITE_BARRIER
+#include <stdio.h>
+#endif
 
 #if defined(_WIN32) || defined(_WIN64)
 
@@ -56,6 +60,45 @@ static void *uv_gc_malloc(size_t size) {
 static void *uv_gc_calloc(size_t count, size_t size) {
     return GC_malloc_uncollectable(count * size);
 }
+
+#if ACTON_GC_WRITE_BARRIER
+// The collector's dirty bits, set by acton_init_write_barrier(). The RTS
+// calls it right after GC_INIT, before it allocates a GC object, starts a
+// thread or initializes a module, so no barrier runs while this is NULL.
+volatile uintptr_t *acton_gc_dirty_bits = NULL;
+
+// Called after GC_INIT, before any thread but the main one runs. The
+// collector's table is at the same address for the life of the process. Its
+// bits are read only in the manual dirty-bit mode, which the collector
+// chooses in GC_INIT; in ordinary mode the barrier sets bits that nothing
+// reads.
+void acton_init_write_barrier(void) {
+    unsigned log_block = 0, log_entries = 0;
+    volatile GC_word *bits = GC_get_dirty_bits(&log_block, &log_entries);
+    if (bits == NULL) {
+        fprintf(stderr, "Acton RTS: the write barrier needs a collector built with the manual dirty-bit mode\n");
+        exit(1);
+    }
+    if (log_block != ACTON_GC_LOG_BLOCK || log_entries != ACTON_GC_LOG_PHT) {
+        fprintf(stderr, "Acton RTS: the write barrier was built for GC blocks of 2^%u bytes and 2^%u dirty bits, the collector has 2^%u and 2^%u\n",
+                (unsigned)ACTON_GC_LOG_BLOCK, (unsigned)ACTON_GC_LOG_PHT,
+                log_block, log_entries);
+        exit(1);
+    }
+    acton_gc_dirty_bits = (volatile uintptr_t *)bits;
+}
+
+#ifdef ACTON_WBAR_DEBUG
+void acton_wbar_check(const void *obj, const void *slot) {
+    void *base = GC_base((void *)slot);
+    if (obj != NULL && base != NULL && base != obj) {
+        fprintf(stderr, "Acton RTS: write barrier for slot %p names object %p, the slot is in %p\n",
+                slot, obj, base);
+        abort();
+    }
+}
+#endif
+#endif
 
 void acton_init_alloc() {
     // Allocator regimes for the native IO stack:

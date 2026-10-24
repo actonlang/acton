@@ -314,13 +314,13 @@ $Cont linesQ_L_21ContD___deserialize__($Cont self, $Serial$state state) {
 struct $ContClass linesQ_L_21ContG_methods;
 $R linesQ_L_12C_7cont (linesQ_main self, $Cont C_cont, linesQ_Bepa C_8res) {
     #line 34 "test/src/lines.act"
-    ((linesQ_main)(self))->b = C_8res;
+    ACTON_STORE_ATTR(((linesQ_main)(self)), b, C_8res);
     #line 35 "test/src/lines.act"
     ((B_NoneType (*) (B_tuple, B_str, B_str, bool, bool))B_print)($NEWTUPLE(1, actStrFromLiteral("-----", 5, 5)), actStrFromLiteral(" ", 1, 1), actStrFromLiteral("\n", 1, 1), false, false);
     #line 36 "test/src/lines.act"
     ((B_Msg (*) ($WORD, $action))((linesQ_Apa)(((linesQ_main)(self))->a))->$class->setup)(((linesQ_main)(self))->a, (($action)((linesQ_L_14action)$Action_R1_new(&linesQ_L_14actionG_methods, ((linesQ_main)(self))->a))));
     #line 37 "test/src/lines.act"
-    ((linesQ_main)(self))->x = ((B_Msg (*) ($WORD, $action))((linesQ_Apa)(((linesQ_main)(self))->a))->$class->compute)(((linesQ_main)(self))->a, (($action)((linesQ_L_16action)$Action_R1_new(&linesQ_L_16actionG_methods, ((linesQ_main)(self))->b))));
+    ACTON_STORE_ATTR(((linesQ_main)(self)), x, ((B_Msg (*) ($WORD, $action))((linesQ_Apa)(((linesQ_main)(self))->a))->$class->compute)(((linesQ_main)(self))->a, (($action)((linesQ_L_16action)$Action_R1_new(&linesQ_L_16actionG_methods, ((linesQ_main)(self))->b)))));
     return $AWAIT((($Cont)((linesQ_L_21Cont)$Cont_R2_new(&linesQ_L_21ContG_methods, self, C_cont))), ((linesQ_main)(self))->x);
 }
 $R linesQ_L_22ContD___call__($Cont $closure, $WORD $result) {
@@ -336,7 +336,7 @@ $Cont linesQ_L_22ContD___deserialize__($Cont self, $Serial$state state) {
 struct $ContClass linesQ_L_22ContG_methods;
 $R linesQ_L_11C_5cont (linesQ_main self, $Cont C_cont, linesQ_Apa C_6res) {
     #line 33 "test/src/lines.act"
-    ((linesQ_main)(self))->a = C_6res;
+    ACTON_STORE_ATTR(((linesQ_main)(self)), a, C_6res);
     return linesQ_BepaG_newact((($Cont)((linesQ_L_22Cont)$Cont_R2_new(&linesQ_L_22ContG_methods, self, C_cont))));
 }
 $R linesQ_L_23ContD___call__($Cont $closure, $WORD $result) {
@@ -542,7 +542,7 @@ $R linesQ_BepaG_new($Cont G_1) {
 }
 struct linesQ_BepaG_class linesQ_BepaG_methods;
 $R linesQ_mainD___init__ (linesQ_main self, $Cont C_cont, B_Env env) {
-    ((linesQ_main)(self))->env = env;
+    ACTON_STORE_ATTR(((linesQ_main)(self)), env, env);
     return linesQ_ApaG_newact((($Cont)((linesQ_L_23Cont)$Cont_R2_new(&linesQ_L_23ContG_methods, self, C_cont))));
 }
 #line 28 "test/src/lines.act"
@@ -588,10 +588,10 @@ linesQ_main linesQ_mainD___deserialize__ (linesQ_main self, $Serial$state state)
         self = $DNEW(linesQ_main, state);
     }
     $ActorG_methods.__deserialize__(($Actor)self, state);
-    self->env = $step_deserialize(state);
-    self->a = $step_deserialize(state);
-    self->b = $step_deserialize(state);
-    self->x = $step_deserialize(state);
+    ACTON_STORE_ATTR(self, env, $step_deserialize(state));
+    ACTON_STORE_ATTR(self, a, $step_deserialize(state));
+    ACTON_STORE_ATTR(self, b, $step_deserialize(state));
+    ACTON_STORE_ATTR(self, x, $step_deserialize(state));
     $tmp = $val_deserialize(state);
     memcpy(&self->r, &$tmp, sizeof(self->r));
     $tmp = $val_deserialize(state);

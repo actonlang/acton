@@ -7,6 +7,7 @@
 #include <winsock2.h>
 #endif
 #include <gc.h>
+#include "wbar.h"
 
 typedef void *(*acton_malloc_func)(size_t size);
 typedef void *(*acton_malloc_func)(size_t size);
@@ -74,3 +75,9 @@ void *acton_gc_calloc(size_t count, size_t size);
 void acton_gc_free(void* ptr);
 GC_ATTR_MALLOC char *acton_gc_strdup(const char *s);
 GC_ATTR_MALLOC char *acton_gc_strndup(const char *s, size_t n);
+
+// Points the write barrier (wbar.h) at the collector's dirty bits, right
+// after GC_INIT.
+#if ACTON_GC_WRITE_BARRIER
+void acton_init_write_barrier(void);
+#endif
