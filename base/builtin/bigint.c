@@ -422,11 +422,11 @@ B_bigint B_IntegralD_bigintD___rshift__(B_IntegralD_bigint wit,  B_bigint a, int
     long shw = bval/64;
     long shb = bval%64;
     long mres = labs(ma) - shw;
+    // Every limb of a is shifted out, leaving the zero malloc_bigint returns.
+    if (mres <= 0)
+        return res;
     zz_fit(rval,mres);
-    unsigned long tmp[mres];
-    for (int i = 0; i < mres; i++)
-        tmp[i] = aval.n[i+shw];
-    word_t ci = nn_shr(rval->n, tmp, mres, shb);
+    nn_shr(rval->n, aval.n + shw, mres, shb);
     mres = mres - (rval->n[mres-1]==0);
     mres = ma<0?-mres:mres;
     res->val.size = mres;
