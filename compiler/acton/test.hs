@@ -15,7 +15,7 @@ import qualified Data.ByteString.Lazy.Char8 as LBS
 import Control.Exception (catch, IOException)
 import System.Directory
 import System.Directory.Recursive
-import System.Environment (getEnvironment)
+import System.Environment (getEnvironment, lookupEnv)
 import System.Exit
 import System.FilePath
 import System.FilePath.Posix
@@ -4081,7 +4081,8 @@ runThing opts thing = do
     let wd = if isProj then projBinPath else twd
     let exe = if isProj then binName else fileBody
     (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc ("./" ++ exe) (words opts)){ cwd = Just wd } ""
-    return (returnCode, cmdOut, cmdErr)
+    cmdErr' <- dropCheckerLines cmdErr
+    return (returnCode, cmdOut, cmdErr')
   where (fileBody, fileExt) = splitExtension $ takeFileName thing
         fileParts = splitOn "__" fileBody
         binName = head fileParts
@@ -4102,8 +4103,39 @@ runThingBytes opts thing = do
                                                { cwd = Just wd, std_in = UseHandle hIn, std_out = UseHandle hOut, std_err = UseHandle hErr }
                           waitForProcess ph
         cmdOut <- BS.readFile outPath
-        cmdErr <- BS.readFile errPath
+        cmdErr <- BS.readFile errPath >>= dropCheckerLinesBytes
         return (returnCode, cmdOut, cmdErr)
+
+-- In the write barrier's checker mode (ACTON_GC_CHECK=1) the collector of a
+-- program writes lines of its own to stderr: a line after a collection whose
+-- check was incomplete, and its reports before it exits with status 70. A
+-- store without its barrier fails a test through that exit status, so the
+-- stderr the tests compare is taken without these lines.
+checkerLinePrefixes :: [String]
+checkerLinePrefixes = ["WBVERIFY ", "GC_WBAR_VERIFY: "]
+
+checkerMode :: IO Bool
+checkerMode = do
+    v <- lookupEnv "ACTON_GC_CHECK"
+    return $ maybe False (\s -> s /= "" && s /= "0") v
+
+dropCheckerLines :: String -> IO String
+dropCheckerLines err = do
+    check <- checkerMode
+    let ls = lines err
+        isChecker l = any (`isPrefixOf` l) checkerLinePrefixes
+    return $ if check && any isChecker ls
+               then unlines (filter (not . isChecker) ls)
+               else err
+
+dropCheckerLinesBytes :: BS.ByteString -> IO BS.ByteString
+dropCheckerLinesBytes err = do
+    check <- checkerMode
+    let ls = BC.lines err
+        isChecker l = any (`BC.isPrefixOf` l) (map BC.pack checkerLinePrefixes)
+    return $ if check && any isChecker ls
+               then BC.unlines (filter (not . isChecker) ls)
+               else err
 
 
 testBuildThing opts expRet expFail thing = do
