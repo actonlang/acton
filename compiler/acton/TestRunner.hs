@@ -522,7 +522,7 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
             nameWidth = max 20 (maxNameLen + 5)
             runContext = mkRunContext opts topts mode buildOptions
             ctxHash = contextHashBytes runContext
-            useCache = not (C.testNoCache topts) && mode == TestModeRun
+            useCache = not (C.testNoCache topts) && not (C.testGcCheck topts) && mode == TestModeRun
         when (mode == TestModePerf) $ forM_ (C.testCompare topts) $ \path -> do
           exists <- doesFileExist path
           unless exists $ printErrorAndExit ("Performance baseline does not exist: " ++ path)
@@ -571,7 +571,8 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
           case mode of
             TestModePerf -> putStrLn "Skipping test result cache in perf mode; running all selected tests"
             TestModeStress -> putStrLn "Skipping test result cache in stress mode; running all selected tests"
-            _ -> putStrLn "Skipping test result cache (--no-cache); running all selected tests"
+            _ | C.testGcCheck topts -> putStrLn "Skipping test result cache (--gc-check); running all selected tests"
+              | otherwise -> putStrLn "Skipping test result cache (--no-cache); running all selected tests"
         when (not emitJson && showCached && not (null cachedResults)) $
           putStrLn ("Using cached results for " ++ show (length cachedResults) ++ " tests")
         withTestProgressUI gopts nameWidth useColorOut $ \ui -> do
@@ -950,7 +951,8 @@ runModuleTestStreaming opts paths topts mode perfHostInfo baselineScale limits m
     let procSpec = (proc binPath cmd)
           { cwd = Just (projPath paths)
           , env = Just ((if mode `elem` [TestModePerf, TestModeScale] then [("ACTON_TEST_PERF", "1")] else [])
-              ++ filter ((/= "ACTON_TEST_PERF") . fst) environment)
+              ++ (if C.testGcCheck topts then [("ACTON_GC_CHECK", "1")] else [])
+              ++ filter ((`notElem` ["ACTON_TEST_PERF", "ACTON_GC_CHECK"]) . fst) environment)
           , create_group = C.watch opts || isJust limits
           , delegate_ctlc = not (C.watch opts || isJust limits)
           }
