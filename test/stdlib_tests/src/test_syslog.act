@@ -1,0 +1,278 @@
+import std.syslog as syslog
+import testing
+
+
+def reject_decode(wire: bytes):
+    try:
+        syslog.decode(wire)
+    except ValueError:
+        pass
+    else:
+        testing.error("Accepted invalid syslog packet: " + repr(wire))
+
+
+def reject_encode(message: syslog.Message):
+    try:
+        syslog.encode(message)
+    except ValueError:
+        pass
+    else:
+        testing.error("Encoded an invalid syslog message")
+
+
+def _test_syslog_error_messages():
+    invalid_packets = [
+        (b"<14>2 - - - - - -", "Unsupported syslog version"),
+        (b"<14>1 - - - - - [same][same]", "Duplicate syslog SD-ID"),
+        (b"<14>1 - host app\tname proc id -", "Invalid character in syslog APP-NAME"),
+        (b"<14>1 202x-01-01T00:00:00Z - - - - -", "Invalid syslog timestamp year"),
+    ]
+    invalid_messages = [
+        (syslog.Message(version=2), "Unsupported syslog version"),
+        (syslog.Message(facility=24), "Syslog facility must be between 0 and 23"),
+        (syslog.Message(hostname=""), "Invalid syslog HOSTNAME length"),
+        (syslog.Message(msgid="bad id"), "Invalid character in syslog MSGID"),
+    ]
+    for attempt in range(2):
+        for wire, expected in invalid_packets:
+            try:
+                syslog.decode(wire)
+            except ValueError as error:
+                testing.assertEqual(error.error_message, expected)
+            else:
+                testing.error("Accepted invalid syslog packet: " + repr(wire))
+        for message, expected in invalid_messages:
+            try:
+                syslog.encode(message)
+            except ValueError as error:
+                testing.assertEqual(error.error_message, expected)
+            else:
+                testing.error("Encoded an invalid syslog message")
+
+
+def _test_syslog_rfc5424_packet():
+    wire = b'<165>1 2003-10-11T22:14:15.003Z mymachine.example.com evntslog - ID47 [exampleSDID@32473 iut="3" eventSource="Application" eventID="1011"] An application event log entry...'
+    message = syslog.decode(wire)
+    testing.assertEqual(message.version, 1)
+    testing.assertEqual(message.facility, 20)
+    testing.assertEqual(message.severity, 5)
+    testing.assertEqual(message.timestamp, "2003-10-11T22:14:15.003Z")
+    testing.assertEqual(message.hostname, "mymachine.example.com")
+    testing.assertEqual(message.app_name, "evntslog")
+    testing.assertEqual(message.procid, None)
+    testing.assertEqual(message.msgid, "ID47")
+    testing.assertEqual(message.message, b"An application event log entry...")
+    testing.assertEqual(len(message.structured_data), 1)
+    testing.assertEqual(message.structured_data["exampleSDID@32473"], [
+        (name="iut", value="3"), (name="eventSource", value="Application"), (name="eventID", value="1011")
+    ])
+    testing.assertEqual(syslog.encode(message), wire)
+
+
+def _test_syslog_defaults_and_nil_fields():
+    message = syslog.Message()
+    testing.assertEqual(message.facility, syslog.USER)
+    testing.assertEqual(message.severity, syslog.INFO)
+    testing.assertEqual(syslog.encode(message), b"<14>1 - - - - - -")
+    parsed = syslog.decode(b"<14>1 - - - - - -")
+    testing.assertEqual(parsed.timestamp, None)
+    testing.assertEqual(parsed.hostname, None)
+    testing.assertEqual(parsed.app_name, None)
+    testing.assertEqual(parsed.procid, None)
+    testing.assertEqual(parsed.msgid, None)
+    testing.assertEqual(parsed.message, None)
+    testing.assertEqual(len(parsed.structured_data), 0)
+
+
+def _test_syslog_message_bytes():
+    # The optional SP distinguishes an absent MSG from an empty MSG. MSG-ANY
+    # also permits NULs and arbitrary bytes unless the UTF-8 BOM is present.
+    prefix = b"<14>1 - - - - - -"
+    for payload in [b"", b" ", b"first\nsecond\r\n", b"\x00\xff\x80\xc0\xaf", "räksmörgås 🫡".encode(), b"\xef\xbb\xbf" + "räksmörgås 🫡".encode()]:
+        wire = prefix + b" " + payload
+        testing.assertEqual(syslog.encode(syslog.Message(payload)), wire)
+        testing.assertEqual(syslog.decode(wire).message, payload)
+        testing.assertEqual(syslog.encode(syslog.decode(wire)), wire)
+    testing.assertEqual(syslog.decode(prefix).message, None)
+    testing.assertEqual(syslog.decode(prefix + b" ").message, b"")
+
+
+def _test_syslog_priority_boundaries():
+    for facility in range(24):
+        for severity in range(8):
+            message = syslog.Message(facility=facility, severity=severity)
+            wire = ("<" + str(facility * 8 + severity) + ">1 - - - - - -").encode()
+            testing.assertEqual(syslog.encode(message), wire)
+            parsed = syslog.decode(wire)
+            testing.assertEqual(parsed.facility, facility)
+            testing.assertEqual(parsed.severity, severity)
+    for facility, severity in [(-1, 0), (24, 0), (0, -1), (0, 8)]:
+        reject_encode(syslog.Message(facility=facility, severity=severity))
+    for priority in ["", "-1", "+1", "00", "01", "192", "999", "1000", "a", "1 "]:
+        reject_decode(("<" + priority + ">1 - - - - - -").encode())
+
+
+def _test_syslog_structured_data_escaping():
+    params = [("value", 'a"b\\c]d'), ("same", "first"), ("same", "second")]
+    elements = {"origin": params, "empty": []}
+    message = syslog.Message(b"payload", structured_data=elements)
+    wire = b'<14>1 - - - - - [origin value="a\\"b\\\\c\\]d" same="first" same="second"][empty] payload'
+    testing.assertEqual(syslog.encode(message), wire)
+    parsed = syslog.decode(wire)
+    testing.assertEqual(len(parsed.structured_data), 2)
+    testing.assertEqual(parsed.structured_data["origin"], [
+        (name="value", value='a"b\\c]d'), (name="same", value="first"), (name="same", value="second")
+    ])
+    testing.assertEqual(len(parsed.structured_data["empty"]), 0)
+    testing.assertEqual(syslog.encode(parsed), wire)
+
+
+def _test_syslog_structured_data_named_params():
+    positional = {"event@32473": [("instance", "one")]}
+    named = {"event@32473": [(name="instance", value="one")]}
+    wire = b'<14>1 - - - - - [event@32473 instance="one"]'
+    testing.assertEqual(syslog.encode(syslog.Message(structured_data=positional)), wire)
+    testing.assertEqual(syslog.encode(syslog.Message(structured_data=named)), wire)
+    param = syslog.decode(wire).structured_data["event@32473"][0]
+    testing.assertEqual(param.name, "instance")
+    testing.assertEqual(param.value, "one")
+
+
+def _test_syslog_structured_data_unknown_escape():
+    wire = b'<14>1 - - - - - [origin value="left\\qright"]'
+    parsed = syslog.decode(wire)
+    testing.assertEqual(parsed.structured_data["origin"], [(name="value", value="left\\qright")])
+    canonical = b'<14>1 - - - - - [origin value="left\\\\qright"]'
+    testing.assertEqual(syslog.encode(parsed), canonical)
+    testing.assertEqual(syslog.decode(canonical).structured_data["origin"], parsed.structured_data["origin"])
+
+
+def _test_syslog_structured_data_unicode_and_controls():
+    value = "räksmörgås 🫡\n\t" + chr(0) + "tail"
+    # '[' and backslash are permitted SD-NAME characters, even though
+    # backslash needs escaping inside a quoted PARAM-VALUE.
+    sd_id = "[origin\\"
+    param_name = "[name\\"
+    elements = {sd_id: [(param_name, value)]}
+    wire = syslog.encode(syslog.Message(structured_data=elements))
+    parsed = syslog.decode(wire)
+    testing.assertEqual(parsed.structured_data[sd_id], [(name=param_name, value=value)])
+    testing.assertEqual(syslog.encode(parsed), wire)
+
+
+def _test_syslog_header_boundaries():
+    hostname = "h" * 255
+    app_name = "a" * 48
+    procid = "p" * 128
+    msgid = "m" * 32
+    message = syslog.Message(hostname=hostname, app_name=app_name, procid=procid, msgid=msgid)
+    parsed = syslog.decode(syslog.encode(message))
+    testing.assertEqual(parsed.hostname, hostname)
+    testing.assertEqual(parsed.app_name, app_name)
+    testing.assertEqual(parsed.procid, procid)
+    testing.assertEqual(parsed.msgid, msgid)
+    for invalid in ["", "has space", "line\nfeed", "tab\t", chr(0), chr(127), "é"]:
+        reject_encode(syslog.Message(hostname=invalid))
+        reject_encode(syslog.Message(app_name=invalid))
+        reject_encode(syslog.Message(procid=invalid))
+        reject_encode(syslog.Message(msgid=invalid))
+    for index, oversized in [(0, hostname + "h"), (1, app_name + "a"), (2, procid + "p"), (3, msgid + "m")]:
+        fields = ["-", "-", "-", "-"]
+        fields[index] = oversized
+        reject_decode(("<14>1 - " + " ".join(fields) + " -").encode())
+    reject_encode(syslog.Message(hostname=hostname + "h"))
+    reject_encode(syslog.Message(app_name=app_name + "a"))
+    reject_encode(syslog.Message(procid=procid + "p"))
+    reject_encode(syslog.Message(msgid=msgid + "m"))
+
+
+def _test_syslog_timestamp_validation():
+    for stamp in ["0000-02-29T00:00:00Z", "2000-02-29T23:59:59.123456+23:59", "2024-02-29T00:00:00.1-00:00", "2026-10-24T12:34:56+02:00", "9999-12-31T23:59:59Z"]:
+        wire = ("<14>1 " + stamp + " - - - - -").encode()
+        testing.assertEqual(syslog.encode(syslog.Message(timestamp=stamp)), wire)
+        testing.assertEqual(syslog.decode(wire).timestamp, stamp)
+    for stamp in ["", "2025-02-29T00:00:00Z", "1900-02-29T00:00:00Z", "2026-04-31T00:00:00Z", "2026-00-01T00:00:00Z", "2026-13-01T00:00:00Z", "2026-01-00T00:00:00Z", "2026-01-01T24:00:00Z", "2026-01-01T00:60:00Z", "2026-01-01T00:00:60Z", "2026-01-01t00:00:00Z", "2026-01-01T00:00:00z", "2026-01-01T00:00:00", "2026-01-01T00:00:00.Z", "2026-01-01T00:00:00.1234567Z", "2026-01-01T00:00:00+24:00", "2026-01-01T00:00:00+00:60", "2026-1-01T00:00:00Z", "2026-01-01T00:00:00Ztail"]:
+        reject_encode(syslog.Message(timestamp=stamp))
+        reject_decode(("<14>1 " + stamp + " - - - - -").encode())
+
+
+def _test_syslog_timestamp_clock():
+    stamp = syslog.timestamp()
+    testing.assertEqual(len(stamp), 27)
+    testing.assertEqual(stamp[19], ".")
+    testing.assertEqual(stamp[26], "Z")
+    parsed = syslog.decode(syslog.encode(syslog.Message(timestamp=stamp)))
+    testing.assertEqual(parsed.timestamp, stamp)
+
+
+def _test_syslog_invalid_structured_data():
+    for name in ["", "x" * 33, "has space", "equals=", "close]", 'quote"', chr(0), chr(127), "é"]:
+        reject_encode(syslog.Message(structured_data={name: []}))
+        reject_encode(syslog.Message(structured_data={"origin": [(name, "value")]}))
+    limit = "x" * 32
+    elements = {limit: [(limit, "")]}
+    parsed = syslog.decode(syslog.encode(syslog.Message(structured_data=elements)))
+    testing.assertEqual(parsed.structured_data[limit], [(name=limit, value="")])
+    for data in [b"", b"[]", b"[origin", b"[origin ]", b'[origin value=noquotes]', b'[origin value="unterminated]', b'[origin value="unescaped]bracket"]', b'[origin value="trailing\\"]', b'[origin value="one"extra="two"]', b"[same][same]", b"[origin]trailing", b'-trailing', b'[origin value="\xff"]', b'[origin value="\xc0\xaf"]', b'[origin value="\xed\xa0\x80"]', b'[origin value="\xf4\x90\x80\x80"]']:
+        reject_decode(b"<14>1 - - - - - " + data)
+
+
+def _test_syslog_rejects_invalid_utf8_bom_messages():
+    for value in [b"\xff", b"\xc0\xaf", b"\xed\xa0\x80", b"\xf4\x90\x80\x80", b"\xe2\x82"]:
+        message = b"\xef\xbb\xbf" + value
+        reject_encode(syslog.Message(message))
+        reject_decode(b"<14>1 - - - - - - " + message)
+
+
+def _test_syslog_rejects_malformed_headers():
+    for wire in [b"", b"<14>", b"14>1 - - - - - -", b"<14 1 - - - - - -", b"<14>0 - - - - - -", b"<14>01 - - - - - -", b"<14>2 - - - - - -", b"<14>1  - - - - - -", b"<14>1\t- - - - - -", b"<14>1 - host\x00name app proc id -", b"<14>1 - host app\tname proc id -", b"<14>1 - host app proc\x7f id -", b"<14>1 - host app proc \xff -", b"<14>Oct 11 22:14:15 host legacy message"]:
+        reject_decode(wire)
+    for version in [0, 2, -1]:
+        reject_encode(syslog.Message(version=version))
+
+
+def _test_syslog_rejects_truncated_packet():
+    wire = b'<34>1 2003-10-11T22:14:15.003Z mymachine su - ID47 [exampleSDID@32473 iut="3"]'
+    for end in range(len(wire)):
+        reject_decode(wire[:end])
+    testing.assertEqual(syslog.encode(syslog.decode(wire)), wire)
+
+
+def _test_syslog_legacy_packet():
+    wire = b"<34>Oct 11 22:14:15 mymachine su[123]: user logged in"
+    message = syslog.decode_legacy(wire)
+    testing.assertEqual(message.version, 0)
+    testing.assertEqual(message.facility, 4)
+    testing.assertEqual(message.severity, 2)
+    testing.assertEqual(message.timestamp, "Oct 11 22:14:15")
+    testing.assertEqual(message.hostname, "mymachine")
+    testing.assertEqual(message.app_name, None)
+    testing.assertEqual(message.procid, None)
+    testing.assertEqual(message.msgid, None)
+    testing.assertEqual(len(message.structured_data), 0)
+    testing.assertEqual(message.message, b"su[123]: user logged in")
+    reject_encode(message)
+
+
+def _test_syslog_legacy_timestamp_and_bytes():
+    for stamp in [b"Jan  1 00:00:00", b"Feb 29 23:59:59", b"Dec 31 12:34:56"]:
+        for payload in [b"", b"tag: text", b"tag: \x00\xff\x80"]:
+            wire = b"<191>" + stamp + b" host " + payload
+            message = syslog.decode_legacy(wire)
+            testing.assertEqual(message.timestamp, stamp.decode())
+            testing.assertEqual(message.facility, 23)
+            testing.assertEqual(message.severity, 7)
+            testing.assertEqual(message.message, payload)
+
+
+def _test_syslog_legacy_rejects_malformed_packets():
+    invalid = [b"", b"Oct 11 22:14:15 host message", b"<034>Oct 11 22:14:15 host message", b"<192>Oct 11 22:14:15 host message", b"<34>oct 11 22:14:15 host message", b"<34>Jan 01 00:00:00 host message", b"<34>Jan  0 00:00:00 host message", b"<34>Apr 31 00:00:00 host message", b"<34>Jan  1 24:00:00 host message", b"<34>Jan  1 00:60:00 host message", b"<34>Jan  1 00:00:60 host message", b"<34>Jan  1 00:00:00  message", b"<34>Jan  1 00:00:00 host", b"<34>Jan  1 00:00:00 ho\x00st message", b"<34>1 - - - - - -"]
+    invalid.append(b"<34>Jan  1 00:00:00 " + ("h" * 256).encode() + b" message")
+    invalid.append(b"<14>Oct  1 " + "😀😀".encode() + b" host message")
+    for wire in invalid:
+        try:
+            syslog.decode_legacy(wire)
+        except ValueError:
+            pass
+        else:
+            testing.error("Accepted invalid legacy syslog packet: " + repr(wire))
