@@ -10,6 +10,8 @@ static struct B_RuntimeError reQ_small_ovector_error =
     STATIC_EXCEPTION(B_RuntimeError, "ovector was not big enough for all captured substrings");
 static struct B_ValueError reQ_split_char_error =
     STATIC_EXCEPTION(B_ValueError, "matched substring starts or ends inside a character");
+static struct B_ValueError reQ_invalid_span_error =
+    STATIC_EXCEPTION(B_ValueError, "matched substring starts before the search position or ends before it starts");
 static struct B_MemoryError reQ_allocation_failed_error =
     STATIC_EXCEPTION(B_MemoryError, "memory allocation failed");
 
@@ -107,6 +109,41 @@ static PCRE2_SIZE reQ_start_offset(B_str arg_text, int64_t arg_start_pos) {
     return (PCRE2_SIZE)$byte_no(arg_text, arg_start_pos);
 }
 
+// Execute a search and check whole-match and capture boundaries.
+static int reQ_exec(pcre2_code *re, B_str text, PCRE2_SIZE start_offset, pcre2_match_data *match_data) {
+    int rc = pcre2_match(re, text->str, text->nbytes, start_offset,
+                         0, match_data, NULL);
+    if (rc == PCRE2_ERROR_NOMATCH)
+        return rc;
+    if (rc == PCRE2_ERROR_NOMEMORY)
+        RAISE_EXC(&reQ_allocation_failed_error);
+    if (rc < 0) {
+        char errmsg[256];
+        snprintf(errmsg, sizeof(errmsg), "PCRE2 matching error: %d", rc);
+        RAISE(B_RuntimeError, actStrFromCStringCopy(errmsg));
+    }
+    if (rc == 0)
+        RAISE_EXC(&reQ_small_ovector_error);
+
+    PCRE2_SIZE *ovector = pcre2_get_ovector_pointer(match_data);
+    // A subroutine using \K inside an assertion can produce a reversed or
+    // backward whole-match span on older PCRE2 versions. It cannot be used
+    // for forward scanning or replacement. Captures may precede group 0.
+    if (ovector[0] < start_offset || ovector[1] < ovector[0])
+        RAISE_EXC(&reQ_invalid_span_error);
+    // Groups at or above rc are unset. This also checks named groups.
+    for (int i = 0; i < rc; i++) {
+        PCRE2_SIZE start = ovector[2*i];
+        PCRE2_SIZE end = ovector[2*i+1];
+        if (start == PCRE2_UNSET || end == PCRE2_UNSET)
+            continue;
+        if (!reQ_char_boundary(text->str, text->nbytes, start) ||
+            !reQ_char_boundary(text->str, text->nbytes, end))
+            RAISE_EXC(&reQ_split_char_error);
+    }
+    return rc;
+}
+
 // Match the compiled code re against arg_text from start_offset, a byte
 // offset. arg_pattern is the pattern of the returned Match.
 static reQ_Match reQ_match_code(pcre2_code *re, B_str arg_pattern, B_str arg_text, PCRE2_SIZE start_offset) {
@@ -116,7 +153,6 @@ static reQ_Match reQ_match_code(pcre2_code *re, B_str arg_pattern, B_str arg_tex
     B_dict named_groups = $NEW(B_dict, hwit, NULL, NULL);
 
     PCRE2_SPTR text = (PCRE2_SPTR)fromB_str(arg_text);
-    size_t text_length = arg_text->nbytes;
 
     uint32_t capture_count;
     pcre2_pattern_info(re, PCRE2_INFO_CAPTURECOUNT, &capture_count);
@@ -133,40 +169,12 @@ static reQ_Match reQ_match_code(pcre2_code *re, B_str arg_pattern, B_str arg_tex
         match_data = pcre2_match_data_create(capture_count + 1, NULL);
         if (match_data == NULL)
             RAISE_EXC(&reQ_allocation_failed_error);
-        int rc = pcre2_match(
-            re,
-            text,
-            text_length,
-            start_offset,
-            0,
-            match_data,
-            NULL
-        );
+        int rc = reQ_exec(re, arg_text, start_offset, match_data);
 
         if (rc == PCRE2_ERROR_NOMATCH) {
             // result stays None
-        } else if (rc == PCRE2_ERROR_NOMEMORY) {
-            RAISE_EXC(&reQ_allocation_failed_error);
-        } else if (rc < 0) {
-            char errmsg[256];
-            snprintf(errmsg, sizeof(errmsg), "PCRE2 matching error: %d", rc);
-            RAISE(B_RuntimeError, actStrFromCStringCopy(errmsg));
-        } else if (rc == 0) {
-            RAISE_EXC(&reQ_small_ovector_error);
         } else {
             PCRE2_SIZE *ovector = pcre2_get_ovector_pointer(match_data);
-
-            // Groups at or above rc are unset, so this checks every group, also
-            // the named ones.
-            for (int i = 0; i < rc; i++) {
-                PCRE2_SIZE ss_start = ovector[2*i];
-                PCRE2_SIZE ss_end = ovector[2*i+1];
-                if (ss_start == PCRE2_UNSET || ss_end == PCRE2_UNSET)
-                    continue;
-                if (!reQ_char_boundary(text, text_length, ss_start) ||
-                    !reQ_char_boundary(text, text_length, ss_end))
-                    RAISE_EXC(&reQ_split_char_error);
-            }
 
             // Extract all unnamed groups
             // group 0 is the entire match, group 1... are subgroups

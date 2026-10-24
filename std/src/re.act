@@ -57,10 +57,10 @@ class Pattern(object):
                 break
             if m is not None:
                 res.append(m)
-                if m.end_pos == pos:
+                if m.end_pos == m.start_pos:
                     # Zero-width match: move forward one character if possible
-                    if pos < str_len:
-                        pos += 1
+                    if m.end_pos < str_len:
+                        pos = m.end_pos + 1
                     else:
                         # At the very end, just break
                         break

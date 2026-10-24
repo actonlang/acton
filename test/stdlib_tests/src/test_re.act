@@ -98,6 +98,31 @@ def _test_match_matches_zero_width_non_ascii():
     """matches steps over a non-ASCII character after a zero-width match"""
     ms = re.matches("x*", "éa")
     testing.assertEqual([m.start_pos for m in ms], [0, 1])
+    for subject, position in [("abc", 1), ("é🙂b", 2)]:
+        testing.assertEqual([m.start_pos for m in re.matches("(?=b)", subject)], [position])
+        testing.assertEqual([m.start_pos for m in std_re.matches("(?=b)", subject)], [position])
+
+def _test_match_backward_spans():
+    """Reject assertion subroutines whose whole match goes backward"""
+    cases = [
+        (r"(?(DEFINE)(?<x>a\K))(?=(?&x))", "a", 0),
+        (r"(?(DEFINE)(?<x>\Ka))(?<=(?&x))", "aa", 1),
+    ]
+    for pattern, subject, pos in cases:
+        p = re.compile(pattern)
+        sp = std_re.compile(pattern)
+        for f in [lambda: p.match(subject, pos) is not None,
+                  lambda: sp.match(subject, pos) is not None,
+                  lambda: len(p.matches(subject)) > 0,
+                  lambda: len(sp.matches(subject)) > 0]:
+            try:
+                f()
+            except ValueError as error:
+                testing.assertEqual(error.error_message, "matched substring starts before the search position or ends before it starts")
+            else:
+                testing.error("Expected ValueError for a reversed or backward whole match")
+        testing.assertNone(p.match("b"))
+        testing.assertNone(sp.match("b"))
 
 def _test_match_positions():
     """Test that match positions (start_pos and end_pos) are correct."""
