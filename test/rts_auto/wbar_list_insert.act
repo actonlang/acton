@@ -1,0 +1,44 @@
+# Pointer stores that the write barrier covers: new strings inserted at the
+# front and in the middle of a list that outlives many collections, which
+# moves the elements after them. In checker mode (ACTON_GC_CHECK=1) an insert
+# without its barrier over the moved range makes the program exit with
+# status 70.
+
+def fresh(i: int) -> str:
+    return "v" + str(i)
+
+def num(s: str) -> int:
+    return int(s[1:])
+
+actor main(env):
+    n = int(env.argv[1]) if len(env.argv) > 1 else 20000
+    rounds = int(env.argv[2]) if len(env.argv) > 2 else 5
+
+    def work() -> bool:
+        lst: list[str] = []
+        total = 0
+        nxt = 1000000
+        for i in range(n):
+            lst.append(fresh(nxt))
+            total += nxt
+            nxt += 1
+        for r in range(rounds):
+            for j in range(500):
+                lst.insert(0, fresh(nxt))
+                total += nxt
+                nxt += 1
+                lst.insert(len(lst) // 2, fresh(nxt))
+                total += nxt
+                nxt += 1
+                churn = [str(k) for k in range(20)]
+            while len(lst) > n:
+                total -= num(lst.pop(-1))
+            t = 0
+            for s in lst:
+                t += num(s)
+            if t != total:
+                print("wrong sum", r, t, total)
+                return False
+        return True
+
+    env.exit(0 if work() else 1)

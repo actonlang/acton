@@ -1,0 +1,41 @@
+# Pointer stores that the write barrier covers: messages with new payloads
+# go around a ring of actors, and each waits in the mailbox of an old actor,
+# linked in by the enqueue's stores. In checker mode (ACTON_GC_CHECK=1) an
+# enqueue without its barriers makes the program exit with status 70 in some
+# runs.
+#
+# wbar_mailbox [NODES TOKENS HOPS]
+
+actor Node(id: int, done: action(int) -> None):
+    var nxt: ?Node = None
+    var seen = 0
+
+    def link(n: Node):
+        nxt = n
+
+    def recv(tok: int, payload: list[str], left: int):
+        seen += 1
+        if left == 0:
+            done(tok)
+            return
+        p = [s + "." for s in payload[0:3]] + [str(left)]
+        n = nxt
+        if n is not None:
+            n.recv(tok, p, left - 1)
+
+actor main(env):
+    nodes = int(env.argv[1]) if len(env.argv) > 1 else 64
+    tokens = int(env.argv[2]) if len(env.argv) > 2 else 64
+    hops = int(env.argv[3]) if len(env.argv) > 3 else 500
+    var left = tokens
+
+    def done(tok: int):
+        left -= 1
+        if left == 0:
+            env.exit(0)
+
+    ring = [Node(i, done) for i in range(nodes)]
+    for i in range(nodes):
+        ring[i].link(ring[(i + 1) % nodes])
+    for t in range(tokens):
+        ring[t % nodes].recv(t, ["a", "b", "c"], hops)

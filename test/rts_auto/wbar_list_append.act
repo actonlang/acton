@@ -1,0 +1,16 @@
+# Pointer stores that the write barrier covers: new strings appended to a
+# list that outlives many collections. In checker mode (ACTON_GC_CHECK=1) a
+# list append without its barrier makes the program exit with status 70.
+
+actor main(env):
+    n = int(env.argv[1]) if len(env.argv) > 1 else 100000
+    keep = []
+    for i in range(n):
+        keep.append(str(i))
+        if i % 500 == 0:
+            tmp = [str(j) for j in range(200)]
+    for i in range(n):
+        if keep[i] != str(i):
+            print("wrong element", i)
+            env.exit(1)
+    env.exit(0)
