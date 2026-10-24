@@ -1534,13 +1534,6 @@ class _EnvCap():
     def __init__(self):
         pass
 
-# Env is declared before EnvVar and Stdio, which have methods with the same
-# names as Env's. For a value without a type, the type checker tries the
-# classes that have the attribute one at a time, those of __builtin__ in the
-# order they are declared here, and keeps the first one that fits every use.
-# So an env parameter without an annotation that calls Env's methods is an
-# Env. A def without annotations that is given env.vars or env.stdio then
-# needs an annotation on its parameter, such as vars: EnvVar.
 actor Env (wc: WorldCap, sc: SysCap, args: list[str], wthreads: int, envcap: _EnvCap):
     cap = wc
     auth = wc
@@ -1550,51 +1543,6 @@ actor Env (wc: WorldCap, sc: SysCap, args: list[str], wthreads: int, envcap: _En
     vars = EnvVar(envcap)
     stdio = Stdio(envcap, vars)
     process = EnvProcess(envcap, vars)
-
-    # The methods below forward to vars and stdio and wait for the reply, so
-    # they stay ordered with the other Env methods, e.g. an exit() sent after
-    # stdout_write() runs only once the Stdio actor has written the output.
-    # They are kept for existing programs. New code calls vars and stdio.
-
-    action def getenv(name: str) -> ?str:
-        """Get the value of an environment variable, as env.vars.getenv()"""
-        return vars.getenv(name)
-
-    action def getenvb(name: bytes) -> ?bytes:
-        """Get the value of an environment variable, as env.vars.getenvb()"""
-        return vars.getenvb(name)
-
-    action def setenv(n: str, v: str) -> None:
-        """Set the value of an environment variable, as env.vars.setenv()"""
-        return vars.setenv(n, v)
-
-    action def setenvb(n: bytes, v: bytes) -> None:
-        """Set the value of an environment variable, as env.vars.setenvb()"""
-        return vars.setenvb(n, v)
-
-    action def unsetenv(n: str) -> None:
-        """Unset an environment variable, as env.vars.unsetenv()"""
-        return vars.unsetenv(n)
-
-    action def unsetenvb(n: bytes) -> None:
-        """Unset an environment variable, as env.vars.unsetenvb()"""
-        return vars.unsetenvb(n)
-
-    action def stdout_write(s: str) -> None:
-        """Write s to stdout, as env.stdio.out()"""
-        return stdio.out(s)
-
-    action def stdin_install(on_stdin: ?action(str) -> None=None, encoding: ?str=None, on_error: ?action(str, bytes) -> None=None, on_stdin_bytes: ?action(bytes) -> None=None) -> None:
-        """Install a handler for stdin, as env.stdio.stdin_install()"""
-        return stdio.stdin_install(on_stdin, encoding, on_error, on_stdin_bytes)
-
-    action def set_stdin(canonical: ?bool=None, echo: ?bool=None) -> None:
-        """Set terminal options of stdin, as env.stdio.set_stdin()"""
-        return stdio.set_stdin(canonical, echo)
-
-    action def is_tty() -> bool:
-        """Check if stdout is a terminal, as env.stdio.is_tty()"""
-        return stdio.is_tty()
 
     action def exit(n: int):
         NotImplemented
@@ -1647,6 +1595,7 @@ actor Stdio(envcap: _EnvCap, vars: EnvVar):
         NotImplemented
 
     action def stdin_install(on_stdin: ?action(str) -> None=None, encoding: ?str=None, on_error: ?action(str, bytes) -> None=None, on_stdin_bytes: ?action(bytes) -> None=None) -> None:
+        """Install a handler for stdin"""
         if on_stdin is None and on_stdin_bytes is None:
             raise _missing_stdin_callback_error
         elif on_stdin_bytes is not None:
@@ -1674,9 +1623,11 @@ actor Stdio(envcap: _EnvCap, vars: EnvVar):
             _on_stdin_bytes(sd.decode)
 
     action def set_stdin(canonical: ?bool=None, echo: ?bool=None) -> None:
+        """Set terminal options of stdin"""
         NotImplemented
 
     action def is_tty() -> bool:
+        """Check if stdout is a terminal"""
         NotImplemented
 
     action def _on_stdin_bytes(cb: action(bytes) -> None) -> None:

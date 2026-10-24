@@ -3401,11 +3401,11 @@ rtsTests =
           (returnCode, cmdOut, cmdErr) <- runThing "" "../../test/rts/print_nul.act"
           assertEqual "print NUL retCode" ExitSuccess returnCode
           assertEqual "print NUL output" "a\0b\nc\0d\0\0\n" cmdOut
-  ,   testCase "stdout_write writes NUL" $ do
-          testBuildThing "" ExitSuccess False "../../test/rts/stdout_write_nul.act"
-          (returnCode, cmdOut, cmdErr) <- runThing "" "../../test/rts/stdout_write_nul.act"
-          assertEqual "stdout_write NUL retCode" ExitSuccess returnCode
-          assertEqual "stdout_write NUL output" "a\0b\n" cmdOut
+  ,   testCase "stdio out writes NUL" $ do
+          testBuildThing "" ExitSuccess False "../../test/rts/stdio_out_nul.act"
+          (returnCode, cmdOut, cmdErr) <- runThing "" "../../test/rts/stdio_out_nul.act"
+          assertEqual "stdio out NUL retCode" ExitSuccess returnCode
+          assertEqual "stdio out NUL output" "a\0b\n" cmdOut
   ,   testCase "stdio outb and errb write bytes unchanged" $ do
           testBuildThing "" ExitSuccess False "../../test/rts/stdio_bytes.act"
           (returnCode, cmdOut, cmdErr) <- runThingBytes "" "../../test/rts/stdio_bytes.act"
@@ -3439,20 +3439,8 @@ rtsTests =
                      (sum (M.mapMaybe (M.lookup "wait_count") workers) > 0)
   ,   testCase "Env init starts root actor with initialized Env and service actors" $ do
           testBuildAndRun "" "--rts-wthreads=7" ExitSuccess False "../../test/rts/env_init.act"
-  ,   testCase "Env stdout_write is done before a later exit" $ do
-          testBuildThing "" ExitSuccess False "../../test/rts/env_stdout_exit.act"
-          (returnCode, cmdOut, cmdErr) <- runThing "" "../../test/rts/env_stdout_exit.act"
-          assertEqual "Env stdout_write retCode" ExitSuccess returnCode
-          assertEqual "Env stdout_write output" "written before exit\n" cmdOut
-  ,   testCase "untyped env of a root actor is an Env" $ do
-          forM_ ["env_untyped_getenv", "env_untyped_stdin"] $ \name -> do
-              let bin = "../../test/rts/" ++ name
-              removePathForcibly bin
-              testBuildThing "" ExitSuccess False (bin ++ ".act")
-              built <- doesFileExist bin
-              assertBool (name ++ ".act should build a program") built
-  ,   testCase "Env stdin methods take the defaults of Stdio's" $ do
-          testBuildThing "" ExitSuccess False "../../test/rts/env_stdin_defaults.act"
+  ,   testCase "stdio stdin methods take keyword arguments" $ do
+          testBuildThing "" ExitSuccess False "../../test/rts/stdio_stdin_keywords.act"
   ]
 
 stdlibTests =

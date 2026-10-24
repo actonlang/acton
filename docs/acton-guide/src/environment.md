@@ -45,12 +45,9 @@ makes to the same service run in the order they were made. See
 `env.stdio.out(s)` and `env.stdio.err(s)` write the `str` `s` to stdout
 and stderr. `env.stdio.outb(b)` and `env.stdio.errb(b)` write the
 `bytes` `b` unchanged, so binary data and output that is not valid UTF-8
-reach stdout and stderr as they are.
-
-`Env` also has methods that call these services, such as `env.getenv`,
-`env.setenv`, `env.stdout_write` and `env.stdin_install`. Existing
-programs use them. New code should call `env.vars`, `env.stdio` and
-`env.process` directly.
+reach stdout and stderr as they are. To be sure the output is written
+before the program exits, wait for the call, as in
+`await async env.stdio.out(s)`, before `env.exit()`.
 
 Use `env` when code needs process arguments, environment variables,
 standard input, terminal configuration or child processes. Pass it only

@@ -63,9 +63,7 @@ not just a local dictionary. Keep that in mind when passing `env.vars`
 to helpers.
 
 A helper that only works with environment variables can take
-`env.vars`, an `EnvVar`, instead of the whole `env`. Give its parameter
-the type `EnvVar`: a parameter without a type that calls `getenv` is
-taken to be an `Env`.
+`env.vars`, an `EnvVar`, instead of the whole `env`.
 
 ```python
 proc def user_name(vars: EnvVar) -> str:
