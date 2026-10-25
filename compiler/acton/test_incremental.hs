@@ -3107,7 +3107,7 @@ p60_empty_extension_hook_refresh =
         c = proj </> "out" </> "types" </> casesProjName </> "a.c"
         mod = modLabel proj "a"
         hook = "incremental_casesQ_aQ___ext_init__"
-        empty = "void " <> hook <> "() {}\nbool incremental_casesQ_aQ_external() { return true; }\n"
+        empty = "#include <stddef.h>\nACTON_EMPTY_EXT_INIT(" <> hook <> ")\nbool incremental_casesQ_aQ_external() { return true; }\n"
         callback = "void " <> hook <> "() { incremental_casesQ_aQ_compare(B_mk_list(0), B_mk_list(0)); }\n"
                    <> "bool incremental_casesQ_aQ_external() { return true; }\n"
         build = buildOutInArgs proj ["--skip-build"]

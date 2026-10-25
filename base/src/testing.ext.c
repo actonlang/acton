@@ -22,7 +22,7 @@ enum {
     TESTING_LOOP_BUSY = 32
 };
 
-void testingQ___ext_init__() {}
+ACTON_EMPTY_EXT_INIT(testingQ___ext_init__)
 
 static void testing_loop_invalid(testingQ_PerfLoop self, B_ValueError error) {
     uint64_t state = __atomic_load_n(&self->_state, __ATOMIC_ACQUIRE);

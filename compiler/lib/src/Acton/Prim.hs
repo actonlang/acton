@@ -575,7 +575,10 @@ tupleProtos         :: [PCon]
 tupleProtos         = [ TC n [] | (n,_) <- tupleWits ]
 
 --  class $IdentityActor (Identity[$Actor]): pass
-clIdentityActor     = NClass [] (leftpath [TC qnIdentity [tActor]]) [] Nothing                 -- methods not modelled
+clIdentityActor     = NClass [] (leftpath [TC qnIdentity [tActor]]) clTEnv Nothing
+  -- The primitive C initializer is empty. Model it so witness placement can
+  -- prove construction pure; the remaining primitive methods stay unmodelled.
+  where clTEnv      = [(initKW, NDef (tSchema [] $ tFun fxPure posNil kwdNil tNone) NoDec Nothing)]
 
 --  w$EqNone        : Eq[None]
 tEqNone             = tCon $ TC qnEq [tNone]

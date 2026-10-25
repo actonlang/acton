@@ -141,6 +141,7 @@ data Binding = Binding
 data Site = Site
     { siteRecipe :: Int, siteScope :: Int, siteLoopDepth :: Int
     , siteLocation :: SrcLoc, siteStatic :: Bool, siteExpression :: Expr
+    , siteContext :: Maybe [Name]
     } deriving (Show)
 
 data Use = Use
@@ -156,6 +157,7 @@ data Term = WitnessValue Int | CapturedValue Capture
 data Lex = Lex
     { scope :: Int, depth :: Int, terms :: M.Map Name Term
     , types :: M.Map Name Capture
+    , placementContext :: Maybe [Name]
     }
 data Build = Build
     { graph :: WitnessRegistry, buckets :: IM.IntMap [Int], serial :: Int
@@ -177,7 +179,7 @@ buildFunctionRegistry :: (QName -> Maybe QName) -> (Expr -> Bool) -> Decl -> Wit
 buildFunctionRegistry resolve isStatic d = build Nothing resolve isStatic $ decl initialLex d
 
 initialLex :: Lex
-initialLex = Lex 0 0 M.empty M.empty
+initialLex = Lex 0 0 M.empty M.empty (Just [])
 
 build :: Maybe ModName -> (QName -> Maybe QName) -> (Expr -> Bool) -> BuildM () -> WitnessRegistry
 build mn resolve isStatic action = finish $ execState action initial
@@ -351,7 +353,7 @@ expr env e@(Call l f p k) = do
         r <- makeNode (Constructor q) (Call l f' p' k') (ps++ks) cs
         let i = case node r of Just i -> i; Nothing -> error "registry: constructor without node"
         isStatic <- gets (($ e) . staticRecipe)
-        modifyGraph $ \g -> g{registrySites = Site i (scope env) (depth env) l isStatic e : registrySites g}
+        modifyGraph $ \g -> g{registrySites = Site i (scope env) (depth env) l isStatic e (placementContext env) : registrySites g}
         return r
       Nothing -> do
         f' <- expr env f
@@ -371,11 +373,11 @@ expr env e@(Dot l x n) = do
       Just _ -> makeNode (Projection n) (Dot l (canonical r) n) [r] S.empty
       Nothing -> opaque env e [r]
 expr env e@(Lambda _ p k x _) = do
-    inner <- newScope env >>= (\a -> bindParameters a (bound p ++ bound k))
+    inner <- newScope env{placementContext = Nothing} >>= (\a -> bindParameters a (bound p ++ bound k))
     r <- expr inner x
     opaque env e [r]
 expr env e@(Let _ b x) = do
-    inner <- suite env b
+    inner <- suite env{placementContext = Nothing} b
     r <- expr inner x
     opaque env e [r]
 expr env e@(ListComp _ x c) = comprehension env e [element x] c
@@ -537,7 +539,8 @@ patternExprs env p = case p of
 decl :: Lex -> Decl -> BuildM ()
 decl _ Typedef{} = return ()
 decl env d = do
-    inner <- newScope env >>= (\a -> bindTypes a (qbinds d))
+    inner <- newScope env{placementContext = (dname d :) <$> placementContext env}
+               >>= (\a -> bindTypes a (qbinds d))
     case d of
       Def{pos=p,kwd=k} -> bindParameters inner (bound p ++ bound k) >>= body
       Actor{pos=p,kwd=k} -> bindParameters inner (bound p ++ bound k) >>= body
@@ -936,11 +939,15 @@ poolModuleWithEmptyHook emptyHook constructors staticValue m
     registry = buildRegistry resolve isStatic m
     recipes = registryRecipes registry
     at i = recipes IM.! i
-    -- Retain every original spelling's other interpretations when deciding
-    -- ambiguity. A closed occurrence must never rewrite a captured one.
-    groups = foldl' (\a s -> IM.insertWith (++) (expressionHash $ siteExpression s) [s] a)
-                    IM.empty (registrySites registry)
-    index = IM.map candidates groups
+    -- Equal spellings in different declarations can refer to different
+    -- bindings, notably a closed outer witness and a lifted helper parameter.
+    -- Keep an index per lexical declaration; within it, retain every recipe
+    -- interpretation so reassignment/shadowing still prevents unsafe reuse.
+    -- Let/lambda contexts remain barriers, as they are in the rewriting walk.
+    groups = M.fromListWith (IM.unionWith (++))
+        [(context, IM.singleton (expressionHash $ siteExpression s) [s])
+        | s <- registrySites registry, Just context <- [siteContext s]]
+    index = M.map (IM.map candidates) groups
     candidates ss | any (\s -> recipeLifetime (at $ siteRecipe s) == Closed && not (siteStatic s)) ss
                             = mapMaybe unique (partitionExpressions ss)
                   | otherwise = []
@@ -952,9 +959,9 @@ poolModuleWithEmptyHook emptyHook constructors staticValue m
               , recipeLifetime (at i) == Closed
               , not (isStatic $ siteExpression $ head xs) = Just (siteExpression $ head xs,i)
               | otherwise = Nothing
-    lookupSite locals e = case constructorCall e of
+    lookupSite context locals e = case constructorCall e of
       Just (NoQ n,_) | S.member n locals -> Nothing
-      _ -> lookup e (IM.findWithDefault [] (expressionHash e) index)
+      _ -> lookup e (IM.findWithDefault [] (expressionHash e) (M.findWithDefault IM.empty context index))
 
     -- Class-table expressions can call functions before the pool is ready.
     -- A C hook runs even earlier, before local tables. In that case a normal
@@ -970,6 +977,9 @@ poolModuleWithEmptyHook emptyHook constructors staticValue m
     classStmt (Decl _ ds) = all safeDecl ds
     classStmt Signature{} = True
     classStmt Pass{} = True
+    -- A documentation string after a method is an expression statement, but
+    -- cannot call a function before the witness pool has been initialized.
+    classStmt (Expr _ Strings{}) = True
     classStmt _ = False
 
     localClasses = M.fromList [(n,d) | Decl _ ds <- mbody m, d@Class{dname=n} <- ds]
@@ -989,15 +999,16 @@ poolModuleWithEmptyHook emptyHook constructors staticValue m
     one _ = Nothing
     moduleValues = S.fromList (bound (mbody m)) S.\\ (M.keysSet localClasses `S.union` localFunctions)
 
-    -- Constructor arguments are not its only initialization dependencies:
-    -- lifting can put a witness used by __init__ into a module-global binding.
-    -- Include these reads (and parent/local constructor initializers) in the
-    -- ordering. Unknown module values and recursive initialization stay local.
-    initNeeds = M.mapWithKey (\n _ -> needs S.empty n) localClasses
-    needs seen n | S.member n seen = Nothing
-    needs seen n = case M.lookup n localClasses of
-      Nothing -> Just []
-      Just d -> do
+    -- Initializers are graph nodes as well as recipes. An object must wait
+    -- for both the globals its initializer already reads and any witnesses
+    -- whose constructions we replace there. Calls to local constructors and
+    -- parent initializers add edges to their initializer nodes. The same DFS
+    -- then rejects direct, indirect and recipe/initializer cycles, without
+    -- recursively expanding a class's dependencies for each of its callers.
+    firstInitializer = maybe 0 ((+ 1) . fst) (IM.lookupMax recipes)
+    initializerNodes = M.fromList (zip (M.keys localClasses) [firstInitializer..])
+    initializerEdges = IM.fromList [(initializerNodes M.! n, needs n d) | (n,d) <- M.toList localClasses]
+    needs n d = do
         let bodies = [f | Decl _ fs <- dbody d, f@Def{dname=k} <- fs, k `elem` [initKW,altInit]]
             names = S.unions (map runtimeNames bodies)
             values = S.toList (S.intersection names moduleValues)
@@ -1006,8 +1017,8 @@ poolModuleWithEmptyHook emptyHook constructors staticValue m
         if null bodies || any (hasNotImpl . dbody) bodies || not (S.null $ names S.\\ knownNames) ||
            not (S.null $ S.intersection names localFunctions) then Nothing else do
           bs <- mapM (`M.lookup` topBindings) values
-          inherited <- concat <$> mapM (needs $ S.insert n seen) classes
-          return (map bindingRecipe bs ++ inherited)
+          return (map bindingRecipe bs ++ map (initializerNodes M.!) classes ++
+                  S.toList (M.findWithDefault S.empty n initializerUses))
     runtimeNames d = S.fromList $ mapMaybe runtimeName $ S.toList qs
       where qs = execState (mapM_ statement $ dbody d) S.empty
             locals = S.fromList (bound (pos d) ++ bound (kwd d) ++ assigned (dbody d))
@@ -1019,10 +1030,10 @@ poolModuleWithEmptyHook emptyHook constructors staticValue m
             expression e = do
               case e of Var _ q -> modify (S.insert q); _ -> return ()
               walkExpr expression (mapM statement) e
-    hidden (GName mn n) | mn == modname m = M.findWithDefault Nothing n initNeeds
-    hidden (NoQ n) = M.findWithDefault (Just []) n initNeeds
+    hidden (GName mn n) | mn == modname m = (:[]) <$> M.lookup n initializerNodes
+    hidden (NoQ n) = Just (maybe [] (:[]) $ M.lookup n initializerNodes)
     hidden _ = Just []
-    edges = IM.map deps recipes
+    edges = IM.union (IM.map deps recipes) initializerEdges
     deps r | recipeLifetime r /= Closed = Nothing
            | isStatic (recipeExpression r) = Just []
            | otherwise = case recipeKind r of
@@ -1037,12 +1048,20 @@ poolModuleWithEmptyHook emptyHook constructors staticValue m
 
     -- First discover actual eligible occurrences. In particular, arguments of
     -- a static witness are discarded by C generation and must not allocate.
-    (_,requested) = runState (walkModule find (mbody m)) S.empty
-    find locals e = do
-      case lookupSite locals e of
-        Just i -> modify (S.insert i)
+    (_, (requested,initializerUses)) = runState (walkModule find (mbody m)) (S.empty,M.empty)
+    find context locals e = do
+      case lookupSite context locals e of
+        Just i -> modify $ \(rs,uses) ->
+          (S.insert i rs, case initializerOwner context of
+             Just n -> M.insertWith S.union n (S.singleton i) uses
+             Nothing -> uses)
         _ -> return ()
-      descend (find locals) e
+      descend (find context locals) e
+    -- Nested definitions can also read the pool if invoked during __init__.
+    -- Include them conservatively in the enclosing initializer's requirements.
+    initializerOwner [method,owner] | method `elem` [initKW,altInit], M.member owner localClasses = Just owner
+    initializerOwner (_:context) = initializerOwner context
+    initializerOwner [] = Nothing
     -- Memoized DFS rejects cycles/missing dependencies without penalizing the
     -- other roots. A second walk retains only nodes needed by surviving roots.
     verdicts = execState (mapM_ (valid S.empty) $ S.toList requested) IM.empty
@@ -1069,7 +1088,8 @@ poolModuleWithEmptyHook emptyHook constructors staticValue m
     -- Static dependencies also need named witness bindings: C generation turns
     -- their RHS into an existing builtin object. Inlining Ctor() as an argument
     -- would instead call its allocator, even for a builtin static witness.
-    pooled = [i | i <- order, Constructor{} <- [recipeKind $ at i]]
+    recipeOrder = filter (`IM.member` recipes) order
+    pooled = [i | i <- recipeOrder, Constructor{} <- [recipeKind $ at i]]
     bindings = IM.fromListWith (++) [(bindingRecipe b,[b]) | b <- M.elems topBindings]
     reserved = S.fromList (free (mbody m) ++ bound (mbody m) ++ map bindingName (registryBindings registry))
     (_,globals) = foldl' allocate (reserved,IM.empty) pooled
@@ -1104,59 +1124,89 @@ poolModuleWithEmptyHook emptyHook constructors staticValue m
             aliases = [Assign NoLoc [pVar (bindingName b) t] (value i)
                        | b <- IM.findWithDefault [] i bindings, Just t <- [bindingType b]
                        , maybe True ((/= bindingName b) . fst) (IM.lookup i globals)]
-    initializers = concatMap declarations order
+    initializers = concatMap declarations recipeOrder
     moved = S.fromList [n | Assign _ [PVar _ n _] _ <- initializers]
-    rewrite ss = filter (not . movedStmt) $ runIdentity $ walkModule (\locals e -> Identity $ replace locals e) ss
+    rewrite ss = filter (not . movedStmt) $ runIdentity $ walkModule (\context locals e -> Identity $ replace context locals e) ss
     movedStmt (Assign _ [PVar _ n _] _) = S.member n moved
     movedStmt _ = False
-    replace locals e | Just i <- lookupSite locals e, IM.member i globals = global i
-    replace locals e = runIdentity $ descend (Identity . replace locals) e
+    replace context locals e | Just i <- lookupSite context locals e, IM.member i globals = global i
+    replace context locals e = runIdentity $ descend (Identity . replace context locals) e
 
-    -- Witness initializers retain their original constructors. Their global
-    -- reads have explicit ordering edges; rewriting their calls could create
-    -- hidden recursion through the pool being initialized.
-    walkModule :: Monad f => (S.Set Name -> Expr -> f Expr) -> Suite -> f Suite
-    walkModule = walkSuite Nothing S.empty
-    walkSuite :: Monad f => Maybe Name -> S.Set Name -> (S.Set Name -> Expr -> f Expr) -> Suite -> f Suite
-    walkSuite owner locals f = mapM statement
-      where statement (Decl l ds) = Decl l <$> mapM (walkDecl owner locals f) ds
-            statement s = walkStmt (f locals) (walkSuite owner locals f) s
-    walkDecl :: Monad f => Maybe Name -> S.Set Name -> (S.Set Name -> Expr -> f Expr) -> Decl -> f Decl
-    walkDecl _ outer f d@Class{} = do
+    -- Closed initializer sites use the same binding-aware lookup as other
+    -- functions. Their pool reads have explicit dependency edges above; the
+    -- graph must be valid before either a use or its constructor is rewritten.
+    walkModule :: Monad f => ([Name] -> S.Set Name -> Expr -> f Expr) -> Suite -> f Suite
+    walkModule = walkSuite [] S.empty
+    walkSuite :: Monad f => [Name] -> S.Set Name -> ([Name] -> S.Set Name -> Expr -> f Expr) -> Suite -> f Suite
+    walkSuite context locals f = mapM statement
+      where statement (Decl l ds) = Decl l <$> mapM (walkDecl context locals f) ds
+            statement s = walkStmt (f context locals) (walkSuite context locals f) s
+    walkDecl :: Monad f => [Name] -> S.Set Name -> ([Name] -> S.Set Name -> Expr -> f Expr) -> Decl -> f Decl
+    walkDecl context outer f d@Class{} = do
       b <- mapM classBody (dbody d)
       return d{dbody=b}
-      where classBody (Decl l ds) = Decl l <$> mapM (walkDecl (Just $ dname d) outer f) ds
+      where classBody (Decl l ds) = Decl l <$> mapM (walkDecl (dname d:context) outer f) ds
             classBody s = return s
-    walkDecl owner outer f d@Def{}
+    walkDecl context outer f d@Def{}
       | not allowFunctions = return d
-      | maybe False (\n -> M.member (GName (modname m) n) constructors || M.member (NoQ n) constructors) owner
-      , dname d `elem` [initKW,altInit] = return d
       | otherwise = do
           let locals = outer `S.union` S.fromList (bound (pos d) ++ bound (kwd d) ++ assigned (dbody d))
-          b <- walkSuite Nothing locals (if earlyHook then restricted f else f) (dbody d)
+          b <- walkSuite (dname d:context) locals (if earlyHook then restricted f else f) (dbody d)
           return d{dbody=b}
     walkDecl _ _ _ d = return d
-    restricted :: Monad f => (S.Set Name -> Expr -> f Expr) -> S.Set Name -> Expr -> f Expr
-    restricted f locals e
-      | ordinaryLocal e = f locals e
-      | otherwise = descend (restricted f locals) e
+    restricted :: Monad f => ([Name] -> S.Set Name -> Expr -> f Expr) -> [Name] -> S.Set Name -> Expr -> f Expr
+    restricted f context locals e
+      | ordinaryLocal e = f context locals e
+      | otherwise = descend (restricted f context locals) e
     descend :: Monad f => (Expr -> f Expr) -> Expr -> f Expr
     descend f e | isStatic e = return e
     descend _ e@Let{} = return e
-    descend f e = walkExpr f (walkModule $ \_ -> f) e
+    descend f e = walkExpr f (walkModule $ \_ _ -> f) e
 
 -- Empty extension initialization ------------------------------------------
 
--- Recognize only preprocessing-free files with a literal empty initial hook.
+-- Literal definitions require a preprocessing-free file. Extensions needing
+-- headers can instead use the RTS's ACTON_EMPTY_EXT_INIT(hook) definition.
+-- That explicit foreign-code contract defines an empty hook and rules out
+-- earlier startup callbacks, including ones hidden in headers. The macro and
+-- hook name must not be redefined by the extension or its headers.
 emptyExtensionInit :: String -> String -> Bool
-emptyExtensionInit hook source = case tokens (splice $ newlines source) of
-    Just ts | not ("??" `isInfixOf` source), not (any forbidden ts) ->
-        any (`isPrefixOf` ts)
-            [["void",hook,"(",")","{","}"],
-             ["void",hook,"(","void",")","{","}"]]
-    _ -> False
+emptyExtensionInit hook source
+    | "??" `isInfixOf` source = False
+    | otherwise = literal || explicit
   where
-    -- No directives anywhere: a later macro can also change the generated
+    clean = splice $ newlines source
+    literal = case tokens clean of
+      Just ts | not (any forbidden ts) -> any (`isPrefixOf` ts)
+          [["void",hook,"(",")","{","}"],
+           ["void",hook,"(","void",")","{","}"]]
+      _ -> False
+    explicit = case tokens (unlines $ map stripInclude $ lines clean) of
+      Just ts | not (any forbidden ts) -> declaration [] True False ts
+      _ -> False
+    marker = "ACTON_EMPTY_EXT_INIT"
+    -- Consume entire include lines. A marker in ignored trailing tokens of a
+    -- directive must never be mistaken for a real definition. Other directives
+    -- (especially conditionals and macro redefinitions) remain barriers.
+    stripInclude line = case tokens line of
+      Just ["#","include","literal"] -> ""
+      Just ("#":"include":"<":rest)
+        | not (null rest), last rest == ">", not (null $ init rest)
+        , all (all (\c -> isAlphaNum c || c `elem` ['_', '.', '/', '-'])) (init rest) -> ""
+      _ -> line
+    declaration :: [String] -> Bool -> Bool -> [String] -> Bool
+    declaration stack _ found [] = null stack && found
+    declaration [] True False (n:"(":h:")":rest)
+      | n == marker, h == hook = declaration [] True True rest
+    declaration _ _ _ (n:_) | n == marker || n == hook = False
+    declaration stack _ found (n:rest)
+      | Just close <- lookup n [("{","}"),("(",")"),("[","]")] =
+          declaration (close:stack) False found rest
+    declaration (close:stack) _ found (n:rest)
+      | n == close = declaration stack (null stack && n == "}") found rest
+    declaration [] _ found (";":rest) = declaration [] True found rest
+    declaration stack _ found (_:rest) = declaration stack False found rest
+    -- No other directives: a later macro can also change the generated
     -- call to the hook, after this file has been included. Reject GNU/MS
     -- startup attributes and assembly rather than interpreting their effects.
     forbidden t = t `elem` ["#","%:","asm","__asm","__asm__",

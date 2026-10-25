@@ -2,6 +2,12 @@
 #include <stddef.h>
 #include <stdlib.h>
 
+// Define an empty module hook and allow witnesses to be initialized before
+// functions run. This is a C extension contract: neither this macro nor the
+// hook may be redefined, and the extension and its headers must not arrange
+// callbacks into Acton before module initialization.
+#define ACTON_EMPTY_EXT_INIT(name) void name(void) {}
+
 #define GC_THREADS 1
 #ifdef _WIN32
 #include <winsock2.h>

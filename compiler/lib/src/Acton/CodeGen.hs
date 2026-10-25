@@ -1766,8 +1766,14 @@ instance Gen Stmt where
                                     = (genTarget env tg <+> equals <+> d <> semi, [])
     genV env (AugAssign _ tg op e)  = (genTarget env tg <+> augPretty op <+> genExp env t e <> semi, [])
       where t                       = targetType env tg
-    genV env (MutAssign _ tg e)     = (genTarget env tg <+> equals <+> genExp env t e <> semi, [])
+    genV env (MutAssign _ tg e)     = (genTarget env tg <+> equals <+> rhs <> semi, [])
       where t                       = targetType env tg
+            -- Lifted witness initializers store super-witnesses in fields.
+            -- Apply the same static substitution as for a local witness.
+            rhs                     = case tg of
+                                        Dot _ _ n -> assignRHS env n t e
+                                        Var _ (NoQ n) -> assignRHS env n t e
+                                        _ -> genExp env t e
     genV env (Pass _)               = (empty, [])
     genV env (Return _ Nothing)     = (text "return" <+> gen env eNone <> semi, [])
     genV env (Return _ (Just e))

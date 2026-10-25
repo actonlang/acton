@@ -13,12 +13,44 @@ extension Entry(Hashable):
     def hash(self, h):
         self.n.hash(h)
 
+# The loop's element witness becomes a field of the generated Eq initializer.
+# It must be pooled before Eq[Bucket] is first constructed or used.
+class Bucket(object):
+    items: list[Entry]
+    def __init__(self, items: list[Entry]):
+        self.items = items
+
+extension Bucket(Eq):
+    def __eq__(self, other: Bucket) -> bool:
+        if len(self.items) == len(other.items):
+            for i in range(len(self.items)):
+                if self.items[i] != other.items[i]:
+                    return False
+            return True
+        return False
+
 class Holder[A(Eq)](object):
     marker: int
     def __init__(self):
         self.marker = 0
     def same(self, a: A, b: A) -> bool:
         return a == b
+
+class Documented(object):
+    @staticmethod
+    def marker() -> int:
+        return 7
+
+    """A harmless class string after a method must not block witness pooling."""
+
+actor Peer():
+    pass
+
+def same_peer(a: Peer, b: Peer) -> bool:
+    return a is b
+
+def keyed[A(Hashable)](items: list[A]) -> dict[A, A]:
+    return {item: item for item in items}
 
 class Pair(object):
     left: Holder[list[Entry]]
@@ -38,10 +70,18 @@ def compare_right(a: list[Entry], b: list[Entry]) -> bool:
 
 # Both execute during module initialization, before actors are started.
 early_result = compare_left([Entry(1)], [Entry(1)])
+early_bucket_result = Bucket([Entry(1), Entry(2)]) == Bucket([Entry(1), Entry(2)])
 global_holder = make_holder()
 
 actor main(env):
-    assert early_result
+    assert early_result and early_bucket_result
+    first_bucket = Bucket([Entry(1), Entry(2)])
+    assert first_bucket == Bucket([Entry(1), Entry(2)])
+    assert first_bucket != Bucket([Entry(1), Entry(3)])
+    bucket_copy = deserialize(serialize(first_bucket))
+    assert isinstance(bucket_copy, Bucket)
+    if isinstance(bucket_copy, Bucket):
+        assert first_bucket == bucket_copy
     xs = [Entry(1), Entry(2)]
     ys = [Entry(1), Entry(2)]
     assert compare_left(xs, ys) and compare_right(xs, ys)
@@ -67,4 +107,15 @@ actor main(env):
     for x in s:
         total += x.n
     assert total == 3
+    assert Documented.marker() == 7
+    # Lifted comprehensions receive their own witness parameters. Exercise
+    # different implementations so accidental capture of a module witness fails.
+    by_entry = keyed([Entry(1), Entry(2)])
+    by_number = keyed([3, 4])
+    assert by_entry[Entry(1)].n == 1
+    assert by_number[3] == 3
+    first = Peer()
+    second = Peer()
+    assert same_peer(first, first)
+    assert not same_peer(first, second)
     env.exit(0)
