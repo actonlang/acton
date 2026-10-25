@@ -23,7 +23,7 @@ test:
 ddb-tests:
 	$(MAKE) $(DDB_TESTS)
 
-DDB_TESTS=test_db_app test_db_resume_tcp_server test_db_resume_tcp_client
+DDB_TESTS=test_db_app test_db_unresolvable_seed test_db_resume_tcp_server test_db_resume_tcp_client
 .PHONY: $(DDB_TESTS)
 
 .PHONY: tls-test-server
@@ -37,6 +37,12 @@ test_db_app:
 	$(ACTON) --db rts_db/ddb_test_app.act
 	$(ACTON) --db rts_db/test_db_app.act
 	@$(call RETRY,rts_db/test_db_app)
+
+# The app is given an unresolvable seed host before the hosts of the cluster
+test_db_unresolvable_seed:
+	$(ACTON) --db rts_db/ddb_test_app.act
+	$(ACTON) --db rts_db/test_db_app.act
+	@$(call RETRY,rts_db/test_db_app --unresolvable-seed)
 
 test_db_resume_tcp_server:
 	$(ACTON) --db rts_db/ddb_test_server.act
