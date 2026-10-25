@@ -214,8 +214,14 @@ actor UDPConnection(cap: UDPConnectCap, address: str, port: int, on_connect: act
     _connect(self)
 
 
-actor UDPListener(cap: UDPListenCap, address: str, port: int, on_listen: action(UDPListener, ?str) -> None, on_receive: action(UDPListener, bytes, str, int) -> None, on_error: action(UDPListener, str) -> None):
-    """UDP Listener"""
+actor UDPListener(cap: UDPListenCap, address: str, port: int, on_listen: action(UDPListener, ?str) -> None, on_receive: action(UDPListener, bytes, str, int) -> None, on_error: action(UDPListener, str) -> None, recv_buffer_size: int=0):
+    """UDP Listener
+
+    recv_buffer_size sets the socket receive buffer (SO_RCVBUF) in bytes, 0
+    keeps the system default. A larger buffer absorbs bursts of datagrams
+    that would otherwise be dropped. The system may cap the size (on Linux
+    at net.core.rmem_max), see get_recv_buffer_size().
+    """
     var _sock = -1
     var _bytes_in: u64 = 0
     var _bytes_out: u64 = 0
@@ -224,6 +230,18 @@ actor UDPListener(cap: UDPListenCap, address: str, port: int, on_listen: action(
 
     action def send(data: bytes, address: str, port: int) -> None:
         """Send a datagram to a remote address"""
+        NotImplemented
+
+    action def set_recv_buffer_size(size: int) -> None:
+        """Set the socket receive buffer (SO_RCVBUF) size in bytes"""
+        NotImplemented
+
+    action def get_recv_buffer_size() -> int:
+        """Get the socket receive buffer (SO_RCVBUF) size in bytes
+
+        Linux reports twice the size that was set, as it counts its
+        bookkeeping overhead. Returns 0 if the listener is closed.
+        """
         NotImplemented
 
     action def close() -> None:
