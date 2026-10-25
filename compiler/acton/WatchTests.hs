@@ -222,6 +222,23 @@ watchProcessTests = testGroup "watch subprocesses"
             assertBool logText (not ("\ESC[?25" `isInfixOf` logText))
       | (label, args) <- [("redirected", []), ("quiet", ["--tty", "--quiet"]), ("JSON", ["--tty", "--json"])]
       ]
+  , testGroup "test process exit overrides reported success"
+      [ testCase label $ withProcessProject $ \acton proj system -> do
+          forM_ [0, 70] $ \exitCode -> do
+            writeExecutable (proj </> "out/bin/.test_main") [testInfo True, "exit " ++ show exitCode]
+            (code, out, err) <- readCreateProcessWithExitCode
+              (proc acton (["test", "--no-cache", "--syspath", system] ++ args)) { cwd = Just proj } ""
+            let logText = out ++ err
+                failed = exitCode /= 0
+                summary = if null args
+                  then if failed then "1 out of 1 tests errored" else "All 1 tests passed"
+                  else if failed then "\"errors\":1" else "\"errors\":0"
+            assertEqual logText (if failed then ExitFailure 2 else ExitSuccess) code
+            assertBool logText (summary `isInfixOf` out)
+            when failed $
+              assertBool logText ("Test process exited with code 70" `isInfixOf` out)
+      | (label, args) <- [("text", []), ("JSON", ["--json"])]
+      ]
   , testCase "a failed test process restores the cursor" $
       withProcessProject $ \acton proj system -> do
         writeExecutable (proj </> "out/bin/.test_main") ["exit 1"]
