@@ -311,6 +311,7 @@ actor _test_comparison_preserves_checkout(t: testing.EnvT):
             assert len(recordings) == 2
             assert sorted(fs.listdir(project + "/out")) == ["perf_compare", "preserved"]
             assert read(project + "/out/preserved") == "existing output\n"
+            hashes: list[str] = []
             for index, recording in enumerate(recordings):
                 stage = "recorded measurements " + project + "/" + recording
                 directory = project_recordings + "/" + recording
@@ -323,6 +324,16 @@ actor _test_comparison_preserves_checkout(t: testing.EnvT):
                 assert recorded_project == expected_project, f"Expected project {repr(expected_project)}, got {repr(recorded_project)}"
                 benchmark_hash = perf_compare.text(manifest["benchmark_hash"])
                 assert len(benchmark_hash) == 32, f"Invalid MD5 benchmark hash: {repr(benchmark_hash)}"
+                hashes.append(benchmark_hash)
+                if project == root + "/test/perf":
+                    assert exists(directory + "/sources/snapshots/expected/nested/work/touch")
+                    assert exists(directory + "/sources/test/golden/nested/work/legacy")
+                    assert not exists(directory + "/sources/snapshots/output")
+                    if index == 1:
+                        assert hashes[0] != hashes[1], "Changed expected snapshot did not change the input hash"
+                else:
+                    assert not exists(directory + "/sources/snapshots")
+                    assert not exists(directory + "/sources/test")
                 worktree = perf_compare.text(manifest["worktree"])
                 assert len(worktree.split("/")[-2]) == 32, f"Invalid repository hash in worktree: {repr(worktree)}"
                 worktrees.append(worktree)
@@ -360,6 +371,9 @@ actor _test_comparison_preserves_checkout(t: testing.EnvT):
         run(external_command + ["--project", external], "absolute.log", external_absolute_done)
 
     proc def automatic_done(output: bytes) -> None:
+        # Only the expected snapshot changes; it must affect the input digest.
+        write(root + "/test/perf/snapshots/expected/nested/work/touch", "updated expected output\n")
+        write(temporary + "/snapshot/snapshots/expected/nested/work/touch", "updated expected output\n")
         stage = "explicit-scale comparison"
         run(command + ["--scale", "257"], "run-1.log", default_done)
 
@@ -391,6 +405,14 @@ side=baseline
 snapshot=${PERF_FIXTURE_SNAPSHOT:-$PERF_FIXTURE/snapshot}
 cmp Build.act "$snapshot/Build.act"
 diff -r src "$snapshot/src"
+if [ -d "$snapshot/snapshots/expected" ]; then
+    diff -r snapshots/expected "$snapshot/snapshots/expected"
+    diff -r test/golden "$snapshot/test/golden"
+    test ! -e snapshots/output
+else
+    test ! -e snapshots
+    test ! -e test
+fi
 printf '%s\n' "$PWD" >> "$PERF_FIXTURE/projects"
 case "$1 $2" in
     'test list')
@@ -456,12 +478,19 @@ printf 'unstaged benchmark\n' >> test/perf/src/nested/work.act
 printf 'untracked helper\n' > test/perf/src/helper.act
 mkdir test/perf/out
 printf 'existing output\n' > test/perf/out/preserved
+mkdir -p test/perf/snapshots/expected/nested/work test/perf/snapshots/output test/perf/test/golden/nested/work
+printf 'original expected output\n' > test/perf/snapshots/expected/nested/work/touch
+printf 'legacy expectation\n' > test/perf/test/golden/nested/work/legacy
+printf 'previous snapshot output\n' > test/perf/snapshots/output/preserved
 cp .git/index ../index.before
 git rev-parse HEAD > ../head.before
 git status --porcelain > ../status.before
 mkdir ../snapshot
 cp test/perf/Build.act ../snapshot/Build.act
 cp -R test/perf/src ../snapshot/src
+mkdir -p ../snapshot/snapshots ../snapshot/test
+cp -R test/perf/snapshots/expected ../snapshot/snapshots/expected
+cp -R test/perf/test/golden ../snapshot/test/golden
 mkdir -p "../external project/src/nested" "../external project/out" "../external snapshot"
 printf 'external build file\n' > "../external project/Build.act"
 printf 'external benchmark\n' > "../external project/src/nested/work.act"
@@ -477,6 +506,9 @@ git -C repo status --porcelain > status.after
 cmp status.before status.after
 cmp repo/test/perf/Build.act snapshot/Build.act
 diff -r repo/test/perf/src snapshot/src
+diff -r repo/test/perf/snapshots/expected snapshot/snapshots/expected
+diff -r repo/test/perf/test/golden snapshot/test/golden
+test "$(cat repo/test/perf/snapshots/output/preserved)" = 'previous snapshot output'
 cmp "external project/Build.act" "external snapshot/Build.act"
 diff -r "external project/src" "external snapshot/src"
 """)
