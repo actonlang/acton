@@ -205,7 +205,7 @@ class str (atom):
         NotImplemented
     def rstrip       (self, chars: ?str=None) -> str:
         NotImplemented
-    def split        (self, sep: str, maxsplit: ?int=None) -> list[str]:
+    def split        (self, sep: ?str=None, maxsplit: ?int=None) -> list[str]:
         NotImplemented
     def splitlines   (self, keepends: ?bool=None) -> list[str]:
         NotImplemented
@@ -280,7 +280,7 @@ class bytes (atom):
         NotImplemented
     def rstrip       (self, chars: ?bytes=None) -> bytes:
         NotImplemented
-    def split        (self, sep: bytes, maxsplit: ?int=None) -> list[bytes]:
+    def split        (self, sep: ?bytes=None, maxsplit: ?int=None) -> list[bytes]:
         NotImplemented
     def splitlines   (self, keepends: ?bool=None) -> list[bytes]:
         NotImplemented
@@ -355,7 +355,7 @@ class bytearray (object):
         NotImplemented
     def rstrip       (self, chars: ?bytearray=None) -> bytearray:
         NotImplemented
-    def split        (self, sep: bytearray, maxsplit: ?int=None) -> list[bytearray]:
+    def split        (self, sep: ?bytearray=None, maxsplit: ?int=None) -> list[bytearray]:
         NotImplemented
     def splitlines   (self, keepends: ?bool=None) -> list[bytearray]:
         NotImplemented

@@ -2651,20 +2651,14 @@ B_list B_bytearrayD_split(B_bytearray s, B_bytearray sep, B_int maxsplit) {
             }
             p++;
         }
-        // this if statement should be simplified; almost code duplication.
-        if (p < s->str + s->nbytes) { // we did not break out of the while loop
-            if (inword) {
-                B_bytearray word;
-                NEW_UNFILLED_BYTEARRAY(word,p-q);
-                memcpy(word->str,q,p-q);
-                 wit->$class->append(wit,res,word);
-            }
-        } else {
+        // The loop ends inside a word either at the end of s or when maxsplit
+        // pieces are done. Either way the last piece runs from q to the end.
+        if (inword) {
             B_bytearray word;
             p = s->str+s->nbytes;
             NEW_UNFILLED_BYTEARRAY(word,p-q);
             memcpy(word->str,q,p-q);
-             wit->$class->append(wit,res,word);
+            wit->$class->append(wit,res,word);
         }
         return res;
     } else { // separator given
@@ -3824,20 +3818,14 @@ B_list B_bytesD_split(B_bytes s, B_bytes sep, B_int maxsplit) {
             }
             p++;
         }
-        // this if statement should be simplified; almost code duplication.
-        if (p < s->str + s->nbytes) { // we did not break out of the while loop
-            if (inword) {
-                B_bytes word;
-                NEW_UNFILLED_BYTES(word,p-q);
-                memcpy(word->str,q,p-q);
-                wit->$class->append(wit,res,word);
-            }
-        } else {
+        // The loop ends inside a word either at the end of s or when maxsplit
+        // pieces are done. Either way the last piece runs from q to the end.
+        if (inword) {
             B_bytes word;
             p = s->str+s->nbytes;
             NEW_UNFILLED_BYTES(word,p-q);
             memcpy(word->str,q,p-q);
-           wit->$class->append(wit,res,word);
+            wit->$class->append(wit,res,word);
         }
         return res;
     } else { // separator given
