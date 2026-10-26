@@ -10,6 +10,7 @@
 #include <tlsuv/tlsuv.h>
 #include <uv.h>
 #include <errno.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -542,6 +543,14 @@ $R netQ_UDPConnectionD_local_portG_local (netQ_UDPConnection self, $Cont c$cont)
     return $R_CONT(c$cont, toB_int(port));
 }
 
+static int udp_set_recv_buffer_size(uv_udp_t *udp, int64_t size) {
+    if (size <= 0 || size > INT_MAX) {
+        return UV_EINVAL;
+    }
+    int value = (int)size;
+    return uv_recv_buffer_size((uv_handle_t *)udp, &value);
+}
+
 $R netQ_UDPListenerD__initG_local (netQ_UDPListener self, $Cont c$cont) {
     pin_actor_affinity();
 
@@ -576,6 +585,19 @@ $R netQ_UDPListenerD__initG_local (netQ_UDPListener self, $Cont c$cont) {
         $action2 f = ($action2)self->on_listen;
         f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
         return $R_CONT(c$cont, B_None);
+    }
+
+    if (self->recv_buffer_size != 0) {
+        r = udp_set_recv_buffer_size(udp, self->recv_buffer_size);
+        if (r != 0) {
+            udp_close_initialized_handle(udp);
+            char errmsg[1024] = "Failed to set UDP receive buffer size: ";
+            uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+            log_warn(errmsg);
+            $action2 f = ($action2)self->on_listen;
+            f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
+            return $R_CONT(c$cont, B_None);
+        }
     }
 
     udp->data = self;
@@ -638,6 +660,31 @@ $R netQ_UDPListenerD_sendG_local (netQ_UDPListener self, $Cont c$cont, B_bytes d
     self->_bytes_out += data->nbytes;
     self->_datagrams_out += 1;
     return $R_CONT(c$cont, B_None);
+}
+
+$R netQ_UDPListenerD_set_recv_buffer_sizeG_local (netQ_UDPListener self, $Cont c$cont, int64_t size) {
+    uv_udp_t *udp = (uv_udp_t *)(intptr_t)self->_sock;
+    if ((intptr_t)udp == -1) {
+        return $R_CONT(c$cont, B_None);
+    }
+    int r = udp_set_recv_buffer_size(udp, size);
+    if (r != 0) {
+        char errmsg[1024] = "Failed to set UDP receive buffer size: ";
+        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        log_warn(errmsg);
+        $action2 f = ($action2)self->on_error;
+        f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
+    }
+    return $R_CONT(c$cont, B_None);
+}
+
+$R netQ_UDPListenerD_get_recv_buffer_sizeG_local (netQ_UDPListener self, $Cont c$cont) {
+    uv_udp_t *udp = (uv_udp_t *)(intptr_t)self->_sock;
+    int value = 0;
+    if ((intptr_t)udp == -1 || uv_recv_buffer_size((uv_handle_t *)udp, &value) != 0) {
+        value = 0;
+    }
+    return $R_CONT(c$cont, toB_int(value));
 }
 
 $R netQ_UDPListenerD_closeG_local (netQ_UDPListener self, $Cont c$cont) {

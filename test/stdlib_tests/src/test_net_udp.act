@@ -141,3 +141,34 @@ actor _test_UDPIpv4Roundtrip(t: testing.EnvT):
 
 actor _test_UDPIpv6Roundtrip(t: testing.EnvT):
     udp_roundtrip(t, "::1", True)
+
+
+actor _test_UDPRecvBufferSize(t: testing.EnvT):
+    """A listener sets the receive buffer size it is given, and a new one"""
+    udp_cap = net.UDPCap(net.NetCap(t.env.cap))
+
+    def on_listen(l: net.UDPListener, error: ?str):
+        if error is not None:
+            t.failure(AssertionError("listen error: " + error))
+            return
+        # Linux reports twice the size that was set
+        size = l.get_recv_buffer_size()
+        if size < 100000:
+            l.close()
+            t.failure(AssertionError("receive buffer is %d bytes, want at least 100000" % size))
+            return
+        l.set_recv_buffer_size(150000)
+        size = l.get_recv_buffer_size()
+        l.close()
+        if size < 150000:
+            t.failure(AssertionError("receive buffer is %d bytes after setting it, want at least 150000" % size))
+        else:
+            t.success()
+
+    def on_receive(l: net.UDPListener, data: bytes, address: str, port: int):
+        pass
+
+    def on_error(l: net.UDPListener, errmsg: str):
+        t.failure(AssertionError("error: " + errmsg))
+
+    net.UDPListener(net.UDPListenCap(udp_cap), "127.0.0.1", 0, on_listen, on_receive, on_error, recv_buffer_size=100000)
