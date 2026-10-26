@@ -488,12 +488,34 @@ actor TCPListenConnection(cap: _TCPListenConnectCap, server_client: int):
     _init()
 
 actor TCPListener(cap: TCPListenCap, address: str, port: int, on_listen: action(TCPListener, ?str) -> None, on_accept: action(TCPListenConnection) -> None):
-    """TCP Listener"""
-    _stream = -1
+    """TCP Listener
+
+    Listens on address and port, where port 0 picks a free port, see
+    local_port(). on_listen is called with None once listening, or with an
+    error. Each accepted connection is passed to on_accept. close() stops
+    listening, connections already accepted stay open.
+    """
+    var _stream = -1
     def create_tcp_listen_connection(cap: _TCPListenConnectCap, client: int):
         """Implementation internal"""
         c = TCPListenConnection(cap, client)
+        if _stream == -1:
+            # Accepted just before the listener was closed
+            c.close()
+            return
         on_accept(c)
+
+    action def close() -> None:
+        """Stop listening"""
+        NotImplemented
+
+    action def local_address() -> str:
+        """Local address of the listening socket, "" when closed"""
+        NotImplemented
+
+    action def local_port() -> int:
+        """Local port of the listening socket, 0 when closed"""
+        NotImplemented
 
     mut def __resume__() -> None:
         NotImplemented

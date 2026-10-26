@@ -754,6 +754,51 @@ $R netQ_UDPListenerD_local_portG_local (netQ_UDPListener self, $Cont c$cont) {
     return $R_CONT(c$cont, toB_int(port));
 }
 
+// Closes a TCP handle. TCP handles are GC memory, so there is nothing to free
+// once the close completes.
+static void tcp_close_handle(uv_handle_t *handle) {
+    if (uv_is_closing(handle) == 0) {
+        uv_close(handle, NULL);
+    }
+}
+
+// Binds and listens on a TCP server handle, errmsg is set on failure
+static int tcp_listen(uv_tcp_t *server, B_str address, int64_t port, uv_connection_cb cb, const char *proto, char *errmsg, size_t errmsg_len) {
+    struct sockaddr_storage addr;
+    int r = make_sockaddr(address, port, &addr);
+    if (r != 0) {
+        snprintf(errmsg, errmsg_len, "Address is not an IPv4 or IPv6 address: %s", (const char *)fromB_str(address));
+        return r;
+    }
+    r = uv_tcp_bind(server, (const struct sockaddr *)&addr, 0);
+    if (r != 0) {
+        snprintf(errmsg, errmsg_len, "Error in %s bind: %s", proto, uv_strerror(r));
+        return r;
+    }
+    r = uv_listen((uv_stream_t *)server, 1024, cb);
+    if (r != 0) {
+        snprintf(errmsg, errmsg_len, "Error in %s listen: %s", proto, uv_strerror(r));
+        return r;
+    }
+    return 0;
+}
+
+static void tcp_listener_names(int64_t sock, char *addr, size_t addr_len, int *port) {
+    uv_tcp_t *server = (uv_tcp_t *)(intptr_t)sock;
+    addr[0] = '\0';
+    *port = 0;
+    if ((intptr_t)server == -1) {
+        return;
+    }
+    struct sockaddr_storage name;
+    int namelen = sizeof(name);
+    if (uv_tcp_getsockname(server, (struct sockaddr *)&name, &namelen) == 0) {
+        if (sockaddr_to_addr_port((struct sockaddr *)&name, addr, addr_len, port) != 0) {
+            addr[0] = '\0';
+        }
+    }
+}
+
 void netQ_TCPConnection__on_receive(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
     if (nread < 0){
         if (nread == UV_EOF) {
@@ -777,7 +822,6 @@ void netQ_TCPConnection__on_receive(uv_stream_t *stream, ssize_t nread, const uv
         }
     }
 }
-
 
 $R netQ_TCPConnectionD__pin_affinityG_local (netQ_TCPConnection self, $Cont c$cont) {
     pin_actor_affinity();
@@ -990,9 +1034,11 @@ $R netQ_TCPConnectionD_remote_addressG_local (netQ_TCPConnection self, $Cont c$c
     return $R_CONT(c$cont, actStrFromCStringCopy(addr));
 }
 
-
 void on_new_connection(uv_stream_t *server, int status) {
     netQ_TCPListener self = (netQ_TCPListener)server->data;
+    if (self == NULL) {
+        return;
+    }
 
     if (status != 0) {
         char errmsg[1024] = "Error on new TCP client connection: ";
@@ -1021,67 +1067,55 @@ void on_new_connection(uv_stream_t *server, int status) {
     // NOTE: free() here if do manual memory management in I/O one day
 }
 
-
 $R netQ_TCPListenerD__initG_local (netQ_TCPListener self, $Cont c$cont) {
     pin_actor_affinity();
 
     uv_tcp_t *server = (uv_tcp_t *)acton_malloc(sizeof(uv_tcp_t));
     uv_tcp_init(get_uv_loop(), server);
     server->data = (void *)self;
-    int r;
-    struct sockaddr_in addr4;
-    struct sockaddr_in6 addr6;
-    if (inet_pton(AF_INET, (const char *)fromB_str(self->address), &(addr4.sin_addr)) == 1) {
-        r = uv_ip4_addr((const char *)fromB_str(self->address), (int)self->port, &addr4);
-    } else if (inet_pton(AF_INET6, (const char *)fromB_str(self->address), &(addr6.sin6_addr)) == 1) {
-        r = uv_ip6_addr((const char *)fromB_str(self->address), (int)self->port, &addr6);
-    } else {
-        B_str errmsg = $FORMAT("Address is not an IPv4 or IPv6 address: %s", fromB_str(self->address));
-        log_warn((const char *)fromB_str(errmsg));
-        $action2 f = ($action2)self->on_listen;
-        f->$class->__asyn__(f, self, errmsg);
-        // NOTE: free() here if do manual memory management in I/O one day
-        return $R_CONT(c$cont, B_None);
-    }
+    char errmsg[1024];
+    int r = tcp_listen(server, self->address, self->port, on_new_connection, "TCP", errmsg, sizeof(errmsg));
     if (r != 0) {
-        char errmsg[1024] = "Unable to parse address: ";
-        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
+        server->data = NULL;
+        tcp_close_handle((uv_handle_t *)server);
         $action2 f = ($action2)self->on_listen;
         f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
-        // NOTE: free() here if do manual memory management in I/O one day
         return $R_CONT(c$cont, B_None);
     }
 
-    if (inet_pton(AF_INET, (const char *)fromB_str(self->address), &(addr4.sin_addr)) == 1) {
-        r = uv_tcp_bind(server, (const struct sockaddr *)&addr4, 0);
-    } else if (inet_pton(AF_INET6, (const char *)fromB_str(self->address), &(addr6.sin6_addr)) == 1) {
-        r = uv_tcp_bind(server, (const struct sockaddr *)&addr6, 0);
-    }
-    if (r != 0) {
-        char errmsg[1024] = "Error in TCP bind: ";
-        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
-        log_warn(errmsg);
-        $action2 f = ($action2)self->on_listen;
-        f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
-        // NOTE: free() here if do manual memory management in I/O one day
-        return $R_CONT(c$cont, B_None);
-    }
-
-    r = uv_listen((uv_stream_t *)server, 1024, on_new_connection);
-    if (r != 0) {
-        char errmsg[1024] = "Error in TCP listen: ";
-        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
-        log_warn(errmsg);
-        $action2 f = ($action2)self->on_listen;
-        f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
-        // NOTE: free() here if do manual memory management in I/O one day
-        return $R_CONT(c$cont, B_None);
-    }
-
+    self->_stream = (int64_t)(intptr_t)server;
     $action2 f = ($action2)self->on_listen;
     f->$class->__asyn__(f, self, B_None);
     return $R_CONT(c$cont, B_None);
+}
+
+static void tcp_listener_close(netQ_TCPListener self) {
+    uv_tcp_t *server = (uv_tcp_t *)(intptr_t)self->_stream;
+    self->_stream = -1LL;
+    if ((intptr_t)server != -1) {
+        server->data = NULL;
+        tcp_close_handle((uv_handle_t *)server);
+    }
+}
+
+$R netQ_TCPListenerD_closeG_local (netQ_TCPListener self, $Cont c$cont) {
+    tcp_listener_close(self);
+    return $R_CONT(c$cont, B_None);
+}
+
+$R netQ_TCPListenerD_local_addressG_local (netQ_TCPListener self, $Cont c$cont) {
+    char addr[INET6_ADDRSTRLEN];
+    int port;
+    tcp_listener_names(self->_stream, addr, sizeof(addr), &port);
+    return $R_CONT(c$cont, actStrFromCStringCopy(addr));
+}
+
+$R netQ_TCPListenerD_local_portG_local (netQ_TCPListener self, $Cont c$cont) {
+    char addr[INET6_ADDRSTRLEN];
+    int port;
+    tcp_listener_names(self->_stream, addr, sizeof(addr), &port);
+    return $R_CONT(c$cont, toB_int(port));
 }
 
 B_NoneType netQ_TCPListenerD___resume__ (netQ_TCPListener self) {
