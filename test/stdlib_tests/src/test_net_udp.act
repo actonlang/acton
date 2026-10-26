@@ -172,3 +172,50 @@ actor _test_UDPRecvBufferSize(t: testing.EnvT):
         t.failure(AssertionError("error: " + errmsg))
 
     net.UDPListener(net.UDPListenCap(udp_cap), "127.0.0.1", 0, on_listen, on_receive, on_error, recv_buffer_size=100000)
+
+
+actor udp_send_error(t: testing.EnvT, destination: str, expect: list[str]):
+    """A failed send reports an error that names the destination"""
+    udp_cap = net.UDPCap(net.NetCap(t.env.cap))
+    var done = False
+    var listener: ?net.UDPListener = None
+
+    def finish(error: ?str):
+        if done:
+            return
+        done = True
+        if listener is not None:
+            listener.close()
+        if error is not None:
+            t.failure(AssertionError(error))
+        else:
+            t.success()
+
+    def on_listen(l: net.UDPListener, error: ?str):
+        if error is not None:
+            finish("listen error: " + error)
+            return
+        listener = l
+        l.send(b"hello", destination, 9)
+
+    def on_receive(l: net.UDPListener, data: bytes, address: str, port: int):
+        pass
+
+    def on_error(l: net.UDPListener, errmsg: str):
+        for e in expect:
+            if errmsg.find(e) == -1:
+                finish("expected '" + e + "' in error: " + errmsg)
+                return
+        finish(None)
+
+    after 8: finish("no send error for " + destination)
+    net.UDPListener(net.UDPListenCap(udp_cap), "127.0.0.1", 0, on_listen, on_receive, on_error)
+
+
+actor _test_UDPSendErrorNamesInvalidAddress(t: testing.EnvT):
+    udp_send_error(t, "2001:db8::zz", ["[2001:db8::zz]:9", "invalid address"])
+
+
+actor _test_UDPSendErrorNamesDestination(t: testing.EnvT):
+    # Sending to the broadcast address needs SO_BROADCAST, so it fails
+    udp_send_error(t, "255.255.255.255", ["255.255.255.255:9"])
