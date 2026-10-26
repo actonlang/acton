@@ -703,6 +703,29 @@ static void tcp_close_reset(uv_tcp_t *handle) {
     }
 }
 
+// Local and remote address and port of a connected TCP handle
+struct tcp_names {
+    char local_address[INET6_ADDRSTRLEN];
+    int local_port;
+    char remote_address[INET6_ADDRSTRLEN];
+    int remote_port;
+    int family;
+};
+
+static void tcp_get_names(const uv_tcp_t *handle, struct tcp_names *names) {
+    memset(names, 0, sizeof(*names));
+    struct sockaddr_storage name;
+    int namelen = sizeof(name);
+    if (uv_tcp_getsockname(handle, (struct sockaddr *)&name, &namelen) == 0) {
+        sockaddr_to_addr_port((struct sockaddr *)&name, names->local_address, sizeof(names->local_address), &names->local_port);
+    }
+    namelen = sizeof(name);
+    if (uv_tcp_getpeername(handle, (struct sockaddr *)&name, &namelen) == 0) {
+        sockaddr_to_addr_port((struct sockaddr *)&name, names->remote_address, sizeof(names->remote_address), &names->remote_port);
+        names->family = name.ss_family == AF_INET6 ? 6 : 4;
+    }
+}
+
 // Binds and listens on a TCP server handle, errmsg is set on failure
 static int tcp_listen(uv_tcp_t *server, B_str address, int64_t port, uv_connection_cb cb, const char *proto, char *errmsg, size_t errmsg_len) {
     struct sockaddr_storage addr;
@@ -871,6 +894,14 @@ $R netQ_TCPConnectionD__close_attemptsG_local (netQ_TCPConnection self, $Cont c$
 
 $R netQ_TCPConnectionD__read_startG_local (netQ_TCPConnection self, $Cont c$cont) {
     uv_tcp_t* socket = (uv_tcp_t *)(intptr_t)self->_sock;
+    struct tcp_names names;
+    tcp_get_names(socket, &names);
+    self->_ip_version = names.family;
+    self->_local_address = actStrFromCStringCopy(names.local_address);
+    self->_local_port = names.local_port;
+    self->_remote_address = actStrFromCStringCopy(names.remote_address);
+    self->_remote_port = names.remote_port;
+
     socket->data = self;
     int r = uv_read_start((uv_stream_t *)socket, alloc_buffer, netQ_TCPConnection__on_receive);
     if (r < 0) {
@@ -992,59 +1023,6 @@ $R netQ_TCPConnectionD__abortG_local (netQ_TCPConnection self, $Cont c$cont) {
     return $R_CONT(c$cont, B_None);
 }
 
-$R netQ_TCPConnectionD_ip_versionG_local (netQ_TCPConnection self, $Cont c$cont) {
-    struct sockaddr_storage peername;
-    int namelen = sizeof(peername);
-    if (uv_tcp_getpeername((const uv_tcp_t *)(intptr_t)self->_sock, (struct sockaddr*)&peername, &namelen) == 0) {
-        if (peername.ss_family == AF_INET) {
-            return $R_CONT(c$cont, toB_int(4));
-        } else if (peername.ss_family == AF_INET6) {
-            return $R_CONT(c$cont, toB_int(6));
-        } else {
-            log_error("Unhandled AFI");
-        }
-    } else {
-        log_error("Failed to get peer name from handle %lld", (long long)self->_sock);
-    }
-    return $R_CONT(c$cont, B_None);
-}
-
-$R netQ_TCPConnectionD_local_addressG_local (netQ_TCPConnection self, $Cont c$cont) {
-    struct sockaddr_storage sockname;
-    int namelen = sizeof(sockname);
-    char addr[INET6_ADDRSTRLEN] = { '\0' };
-    if (uv_tcp_getsockname((const uv_tcp_t *)(intptr_t)self->_sock, (struct sockaddr*)&sockname, &namelen) == 0) {
-        if (sockname.ss_family == AF_INET) {
-            uv_ip4_name((struct sockaddr_in*)&sockname, addr, sizeof(addr));
-        } else if (sockname.ss_family == AF_INET6) {
-            uv_ip6_name((struct sockaddr_in6*)&sockname, addr, sizeof(addr));
-        } else {
-            log_error("Unhandled AFI");
-        }
-    } else {
-        log_error("Failed to get sock name from handle %lld", (long long)self->_sock);
-    }
-    return $R_CONT(c$cont, actStrFromCStringCopy(addr));
-}
-
-$R netQ_TCPConnectionD_remote_addressG_local (netQ_TCPConnection self, $Cont c$cont) {
-    struct sockaddr_storage peername;
-    int namelen = sizeof(peername);
-    char addr[INET6_ADDRSTRLEN] = { '\0' };
-    if (uv_tcp_getpeername((const uv_tcp_t *)(intptr_t)self->_sock, (struct sockaddr*)&peername, &namelen) == 0) {
-        if (peername.ss_family == AF_INET) {
-            uv_ip4_name((struct sockaddr_in*)&peername, addr, sizeof(addr));
-        } else if (peername.ss_family == AF_INET6) {
-            uv_ip6_name((struct sockaddr_in6*)&peername, addr, sizeof(addr));
-        } else {
-            log_error("Unhandled AFI");
-        }
-    } else {
-        log_error("Failed to get peer name from handle %lld", (long long)self->_sock);
-    }
-    return $R_CONT(c$cont, actStrFromCStringCopy(addr));
-}
-
 void on_new_connection(uv_stream_t *server, int status) {
     netQ_TCPListener self = (netQ_TCPListener)server->data;
     if (self == NULL) {
@@ -1146,6 +1124,13 @@ $R netQ_TCPListenConnectionD__initG_local (netQ_TCPListenConnection self, $Cont 
     uv_tcp_init(get_uv_loop(), client_handle);
     uv_tcp_open(client_handle, (uv_os_sock_t)fd);
     self->client = (int64_t)(intptr_t)client_handle;
+
+    struct tcp_names names;
+    tcp_get_names(client_handle, &names);
+    self->_local_address = actStrFromCStringCopy(names.local_address);
+    self->_local_port = names.local_port;
+    self->_remote_address = actStrFromCStringCopy(names.remote_address);
+    self->_remote_port = names.remote_port;
 
     return $R_CONT(c$cont, B_None);
 }
