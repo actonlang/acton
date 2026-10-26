@@ -226,11 +226,19 @@ class MessageParser(object):
     data arrives, so a message costs time linear in its size, however many
     reads deliver it and however many chunks it consists of.
 
+    responses tells whether the parser reads requests or responses. A
+    response with status 1xx, 204 or 304 has no body, whatever its framing
+    fields say, and neither has the response to a HEAD request. The parser
+    sees the status itself. A client tells it about the requests it sends
+    with expect_response(), so that it can frame the responses to HEAD
+    requests.
+
     When the input is not a valid HTTP/1.1 message, error is set to a
     description of the problem. feed() still returns the messages completed
     before the malformed one. From then on it returns no messages, because
     where the following messages begin is unknown.
     """
+    responses: bool
     error: ?str
     _state: int
     _remaining: int              # bytes left of the body or of the current chunk
@@ -239,8 +247,10 @@ class MessageParser(object):
     _start_line: bytes
     _headers: dict[str, str]
     _body_parts: list[bytes]     # body of the message under construction, joined once at the end
+    _pending_methods: list[str]  # methods of the requests whose responses are still to come, oldest first
 
-    def __init__(self):
+    def __init__(self, responses: bool=False):
+        self.responses = responses
         self.error = None
         self._state = _ST_HEADERS
         self._remaining = 0
@@ -249,6 +259,7 @@ class MessageParser(object):
         self._start_line = b""
         self._headers = {}
         self._body_parts = []
+        self._pending_methods = []
 
     def feed(self, data: bytes) -> list[Message]:
         """Consume data and return the messages completed by it"""
@@ -263,6 +274,15 @@ class MessageParser(object):
             self._partial_len = 0
             self._body_parts = []
         return msgs
+
+    def expect_response(self, method: str) -> None:
+        """Note a request written on the connection whose responses this parser reads
+
+        Call once per request, in the order the requests are written. Interim
+        1xx responses do not answer a request, the final response that follows
+        them does.
+        """
+        self._pending_methods.append(method)
 
     def _parse(self, data: bytes, msgs: list[Message]) -> None:
         n = len(data)
@@ -407,6 +427,20 @@ class MessageParser(object):
         self._body_parts = []
         self._remaining = 0
 
+        if self.responses:
+            status = parse_status_code(self._start_line)
+            interim = status >= 100 and status < 200
+            bodyless = interim or status == 204 or status == 304
+            if not interim and len(self._pending_methods) > 0:
+                # A final response answers the oldest outstanding request
+                if self._pending_methods[0] == "HEAD":
+                    bodyless = True
+                del self._pending_methods[0]
+            if bodyless:
+                # _ST_BODY with nothing remaining completes the message right away
+                self._state = _ST_BODY
+                return
+
         tenc = headers.get("transfer-encoding")
         clen = headers.get("content-length")
         if tenc is not None:
@@ -479,6 +513,21 @@ def parse_chunk_size(line: bytes) -> int:
     return int(line.decode(), 16)
 
 
+def parse_status_code(start_line: bytes) -> int:
+    """The status code of a status line
+
+    Raises ValueError when the second word of the line is not a three-digit
+    number.
+    """
+    parts = start_line.split(b" ", 2)
+    if len(parts) < 2 or len(parts[1]) != 3:
+        raise _status_line_error
+    for c in parts[1]:
+        if c < 48 or c > 57:
+            raise _status_line_error
+    return int(parts[1].decode())
+
+
 def request_from_message(msg: Message) -> Request:
     """The request a parsed message carries
 
@@ -522,12 +571,7 @@ def response_from_message(msg: Message) -> Response:
     version = verparts[1]
     if version != b"1.1" and version != b"1.0":
         raise _http_version_error
-    status = 0
-    try:
-        status = int(slparts[1].decode())
-    except ValueError:
-        raise _status_line_error
-    return Response(version, status, msg.headers, msg.body)
+    return Response(version, parse_status_code(msg.start_line), msg.headers, msg.body)
 
 
 def connection_options(headers: dict[str, str]) -> list[str]:
@@ -829,10 +873,10 @@ actor Client(cap: net.TCPConnectCap, address: str, on_connect: action(Client) ->
     actors may run concurrently.
     """
     _log = logging.Logger(log_handler)
-    # Outstanding requests, oldest first: request bytes and callback
-    var _on_response: list[(bytes, action(Client, Response) -> None)] = []
+    # Outstanding requests, oldest first: request bytes, method and callback
+    var _on_response: list[(bytes, str, action(Client, Response) -> None)] = []
     var version: ?bytes = None
-    var _parser = MessageParser()
+    var _parser = MessageParser(responses=True)
     var _connected: bool = False
     var tcp_conn: ?net.TCPConnection = None
     var tls_conn: ?net.TLSConnection = None
@@ -854,9 +898,10 @@ actor Client(cap: net.TCPConnectCap, address: str, on_connect: action(Client) ->
         # Requests issued while there was no connection, or that were not
         # answered before a reconnect, are sent now, in order. A new
         # connection starts a new byte stream.
-        _parser = MessageParser()
+        _parser = MessageParser(responses=True)
         _connected = True
         for r in _on_response:
+            _parser.expect_response(r.1)
             _conn_write(r.0)
         on_connect(self)
 
@@ -887,12 +932,16 @@ actor Client(cap: net.TCPConnectCap, address: str, on_connect: action(Client) ->
                 failure = e.error_message
                 break
             if r is not None:
+                if r.status >= 100 and r.status < 200:
+                    # Interim response, the final response to the request follows
+                    _log.debug("Ignoring interim response", {"status": r.status})
+                    continue
                 if len(_on_response) == 0:
                     _log.notice("Data received with no on_response callback set", None)
                     break
                 outreq = _on_response[0]
                 del _on_response[0]
-                cb = outreq.1
+                cb = outreq.2
 
                 cb(self, r)
                 if "close" in connection_options(r.headers):
@@ -938,37 +987,38 @@ actor Client(cap: net.TCPConnectCap, address: str, on_connect: action(Client) ->
     def close():
         _conn_close()
 
-    def _send_request(req: bytes, on_response: action(Client, Response) -> None) -> None:
-        _on_response.append((req, on_response))
+    def _send_request(method: str, req: bytes, on_response: action(Client, Response) -> None) -> None:
+        _on_response.append((req, method, on_response))
         if _connected:
+            _parser.expect_response(method)
             _conn_write(req)
 
     # HTTP methods
     def get(path: str, on_response: action(Client, Response) -> None, headers: dict[str, str] = {}):
         req = build_request(address, b"GET", path.encode(), b"1.1", headers, b"")
         _log.debug("Sending request", {"method": "GET", "path": path})
-        _send_request(req, on_response)
+        _send_request("GET", req, on_response)
 
     def head(path: str, on_response: action(Client, Response) -> None, headers: dict[str, str] = {}):
         req = build_request(address, b"HEAD", path.encode(), b"1.1", headers, b"")
         _log.debug("Sending request", {"method": "HEAD", "path": path})
-        _send_request(req, on_response)
+        _send_request("HEAD", req, on_response)
 
     def post(path: str, body: bytes, on_response: action(Client, Response) -> None, headers: dict[str, str] = {}):
         if "Content-Type" not in headers:
             headers["Content-Type"] = "application/x-www-form-urlencoded"
         req = build_request(address, b"POST", path.encode(), b"1.1", headers, body)
         _log.debug("Sending request", {"method": "POST", "path": path})
-        _send_request(req, on_response)
+        _send_request("POST", req, on_response)
 
     def put(path: str, body: bytes, on_response: action(Client, Response) -> None, headers: dict[str, str] = {}):
         req = build_request(address, b"PUT", path.encode(), b"1.1", headers, body)
         _log.debug("Sending request", {"method": "PUT", "path": path})
-        _send_request(req, on_response)
+        _send_request("PUT", req, on_response)
 
     def delete(path: str, on_response: action(Client, Response) -> None, headers: dict[str, str] = {}):
         req = build_request(address, b"DELETE", path.encode(), b"1.1", headers, b"")
         _log.debug("Sending request", {"method": "DELETE", "path": path})
-        _send_request(req, on_response)
+        _send_request("DELETE", req, on_response)
 
     _connect()
