@@ -11,3 +11,4 @@ Modules:
 
 - [math](math.md)
 - [re](re.md)
+- [std.syslog](syslog.md)

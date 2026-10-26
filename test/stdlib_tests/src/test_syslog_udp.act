@@ -1,0 +1,307 @@
+import net
+import std.syslog as syslog
+import testing
+
+
+actor server_recovery(t: testing.EnvT, address: str, legacy: bool=True, optional: bool=False):
+    """Feed independent wire messages, advancing only after each callback."""
+    udp_cap = net.UDPCap(net.NetCap(t.env.cap))
+    modern = b'<165>1 2003-10-11T22:14:15Z host app 123 ID47 [meta@32473 n="1"] payload\x00\xff'
+    old = b"<13>Feb  5 17:32:18 router daemon[42]: legacy payload"
+    var server: ?syslog.Server = None
+    var sender: ?net.UDPConnection = None
+    var source_port = 0
+    var phase = 0
+    var done = False
+
+    def close():
+        if sender is not None:
+            sender.close()
+        if server is not None:
+            server.close()
+            server.close()
+
+    def fail(message: str):
+        if done:
+            return
+        done = True
+        close()
+        t.failure(AssertionError(message))
+
+    def success():
+        if done:
+            return
+        done = True
+        close()
+        t.success()
+
+    def send(data: bytes):
+        if sender is not None:
+            sender.write(data)
+
+    def server_failed(s: syslog.Server, error: str):
+        if done:
+            return
+        if error == "":
+            fail("Syslog server reported an empty error")
+        elif phase == 0:
+            phase = 1
+            send(b"<14>Oct  1 " + "😀😀".encode() + b" host message")
+        elif phase == 1:
+            phase = 2
+            send(b"x" * 481)
+        elif phase == 2:
+            if error.find("max_size") == -1:
+                fail("Oversized datagram did not report max_size: " + error)
+                return
+            phase = 3
+            send(modern)
+        elif phase == 4 and not legacy:
+            # Rejecting a legacy message must also leave the server usable.
+            phase = 5
+            send(modern)
+        else:
+            fail("Unexpected syslog server error: " + error)
+
+    def received(s: syslog.Server, message: syslog.Message, peer: str, port: int):
+        if done:
+            return
+        try:
+            testing.assertEqual(peer, address)
+            testing.assertEqual(port, source_port)
+            if phase == 3 or phase == 5:
+                testing.assertEqual(message.version, 1)
+                testing.assertEqual(message.facility, 20)
+                testing.assertEqual(message.severity, 5)
+                testing.assertEqual(message.timestamp, "2003-10-11T22:14:15Z")
+                testing.assertEqual(message.hostname, "host")
+                testing.assertEqual(message.app_name, "app")
+                testing.assertEqual(message.procid, "123")
+                testing.assertEqual(message.msgid, "ID47")
+                testing.assertEqual(message.message, b"payload\x00\xff")
+                testing.assertEqual(len(message.structured_data), 1)
+                testing.assertEqual(message.structured_data["meta@32473"], [(name="n", value="1")])
+                if phase == 5:
+                    success()
+                else:
+                    phase = 4
+                    send(old)
+            elif phase == 4 and legacy:
+                testing.assertEqual(message.version, 0)
+                testing.assertEqual(message.facility, 1)
+                testing.assertEqual(message.severity, 5)
+                testing.assertEqual(message.timestamp, "Feb  5 17:32:18")
+                testing.assertEqual(message.hostname, "router")
+                testing.assertEqual(message.message, b"daemon[42]: legacy payload")
+                success()
+            else:
+                fail("Syslog server delivered an unexpected message")
+        except AssertionError as error:
+            fail(error.error_message)
+
+    def sender_failed(c: net.UDPConnection, error: str):
+        fail("UDP sender error: " + error)
+
+    def sender_received(c: net.UDPConnection, data: bytes, peer: str, port: int):
+        fail("Syslog server unexpectedly replied")
+
+    def sender_connected(c: net.UDPConnection):
+        if done:
+            c.close()
+            return
+        sender = c
+        source_port = c.local_port()
+        if source_port <= 0:
+            fail("UDP sender did not report its source port")
+            return
+        c.write(b"not a syslog message")
+
+    def bound(s: syslog.Server, error: ?str):
+        if done:
+            s.close()
+            return
+        if error is not None:
+            if optional and (error.find("address family not supported") != -1 or error.find("protocol family unavailable") != -1):
+                success()
+            else:
+                fail("Syslog listen error: " + error)
+            return
+        port = s.local_port()
+        if port <= 0 or s.local_address() != address:
+            fail("Syslog server did not report its bound address and port")
+            return
+        sender = net.UDPConnection(net.UDPConnectCap(udp_cap), address, port, sender_connected, sender_received, sender_failed)
+
+    server = syslog.Server(net.UDPListenCap(udp_cap), address, 0, bound, received, server_failed, max_size=480, legacy=legacy)
+    after 5: fail("Syslog server recovery timed out")
+
+
+actor _test_SyslogUDPServerIPv4(t: testing.EnvT):
+    server_recovery(t, "127.0.0.1")
+
+
+actor _test_SyslogUDPServerIPv6(t: testing.EnvT):
+    server_recovery(t, "::1", optional=True)
+
+
+actor _test_SyslogUDPServerStrict(t: testing.EnvT):
+    server_recovery(t, "127.0.0.1", legacy=False)
+
+
+actor _test_SyslogUDPClientWire(t: testing.EnvT):
+    """Inspect sender datagrams without using the syslog decoder."""
+    udp_cap = net.UDPCap(net.NetCap(t.env.cap))
+    message = syslog.Message(b"client\x00\xff", hostname="host", app_name="app")
+    var listener: ?net.UDPListener = None
+    var client: ?syslog.Client = None
+    var phase = 0
+    var source_port = 0
+    var done = False
+
+    def close():
+        if client is not None:
+            client.close()
+        if listener is not None:
+            listener.close()
+
+    def fail(message: str):
+        if done:
+            return
+        done = True
+        close()
+        t.failure(AssertionError(message))
+
+    def client_failed(c: syslog.Client, error: str):
+        if done:
+            return
+        if phase != 2 or error.find("closed") == -1:
+            fail("Unexpected syslog client error: " + error)
+            return
+        done = True
+        close()
+        t.success()
+
+    def client_connected(c: syslog.Client):
+        if done:
+            c.close()
+
+    def received(l: net.UDPListener, data: bytes, peer: str, port: int):
+        if done:
+            return
+        try:
+            testing.assertEqual(peer, "127.0.0.1")
+            testing.assertTrue(port > 0)
+            if phase == 0:
+                testing.assertEqual(data, b"<14>1 - host app - - - client\x00\xff")
+                source_port = port
+                phase = 1
+                if client is not None:
+                    client.log("caf\u00e9", hostname="host", app_name="test",
+                               structured_data={"event@32473": [(name="instance", value="one")]})
+            elif phase == 1:
+                testing.assertEqual(port, source_port)
+                testing.assertTrue(data.startswith(b"<14>1 "))
+                testing.assertTrue(data.endswith(b' host test - - [event@32473 instance="one"] \xef\xbb\xbfcaf\xc3\xa9'))
+                timestamp = data.split(b" ")[1]
+                testing.assertTrue(len(timestamp) >= 20)
+                testing.assertTrue(timestamp.endswith(b"Z"))
+                phase = 2
+                if client is not None:
+                    client.close()
+                    client.close()
+                    client.send(message)
+            else:
+                fail("Syslog client sent a datagram after close")
+        except AssertionError as error:
+            fail(error.error_message)
+
+    def listener_failed(l: net.UDPListener, error: str):
+        fail("UDP listener error: " + error)
+
+    def bound(l: net.UDPListener, error: ?str):
+        if done:
+            l.close()
+            return
+        if error is not None:
+            fail("UDP listen error: " + error)
+            return
+        c = syslog.Client(net.UDPConnectCap(udp_cap), "127.0.0.1", l.local_port(), client_connected, client_failed)
+        client = c
+        # Sending immediately must work before the connection callback arrives.
+        c.send(message)
+
+    listener = net.UDPListener(net.UDPListenCap(udp_cap), "127.0.0.1", 0, bound, received, listener_failed)
+    after 5: fail("Syslog client wire test timed out")
+
+
+actor _test_SyslogUDPClientRejections(t: testing.EnvT):
+    udp_cap = net.UDPCap(net.NetCap(t.env.cap))
+    var listener: ?net.UDPListener = None
+    var client: ?syslog.Client = None
+    var invalid_rejected = False
+    var oversized_rejected = False
+    var message_received = False
+    var done = False
+
+    def close():
+        if client is not None:
+            client.close()
+        if listener is not None:
+            listener.close()
+
+    def fail(message: str):
+        if done:
+            return
+        done = True
+        close()
+        t.failure(AssertionError(message))
+
+    def maybe_success():
+        if not done and invalid_rejected and oversized_rejected and message_received:
+            done = True
+            close()
+            t.success()
+
+    def client_failed(c: syslog.Client, error: str):
+        if done:
+            return
+        if error.find("severity") != -1 and not invalid_rejected:
+            invalid_rejected = True
+        elif error.find("max_size") != -1 and not oversized_rejected:
+            oversized_rejected = True
+        else:
+            fail("Unexpected syslog rejection: " + error)
+            return
+        maybe_success()
+
+    def client_connected(c: syslog.Client):
+        if done:
+            c.close()
+            return
+        c.send(syslog.Message(b"invalid", severity=8))
+        c.send(syslog.Message(b"x" * 480))
+        c.send(syslog.Message(b"accepted"))
+
+    def received(l: net.UDPListener, data: bytes, peer: str, port: int):
+        if done:
+            return
+        if message_received or data != b"<14>1 - - - - - - accepted":
+            fail("Syslog client sent rejected or duplicate data: " + str(data))
+            return
+        message_received = True
+        maybe_success()
+
+    def listener_failed(l: net.UDPListener, error: str):
+        fail("UDP listener error: " + error)
+
+    def bound(l: net.UDPListener, error: ?str):
+        if done:
+            l.close()
+            return
+        if error is not None:
+            fail("UDP listen error: " + error)
+            return
+        client = syslog.Client(net.UDPConnectCap(udp_cap), "127.0.0.1", l.local_port(), client_connected, client_failed, max_size=480)
+
+    listener = net.UDPListener(net.UDPListenCap(udp_cap), "127.0.0.1", 0, bound, received, listener_failed)
+    after 5: fail("Syslog client rejection test timed out")

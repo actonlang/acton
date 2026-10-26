@@ -1,0 +1,547 @@
+"""Syslog messages and network transport.
+
+`encode` and `decode` implement the RFC 5424 version 1 message format.
+Header fields use `None` for NILVALUE. The message body remains bytes, so
+unknown encodings and binary content are preserved. A UTF-8 body can include
+the UTF-8 BOM; bodies beginning with that marker must contain valid UTF-8.
+`None` omits MSG, while `b""` represents an explicitly empty MSG.
+
+Structured data maps SD-IDs to ordered lists of `(name: str, value: str)`
+parameters. Element and parameter order, including repeated parameter names,
+are preserved. Encoding validates fields and escapes parameter values.
+Malformed input raises `ValueError`. The codec has no transport size limit.
+"""
+
+import net
+import time
+
+
+# PRI is facility * 8 + severity.
+KERN = 0
+USER = 1
+MAIL = 2
+DAEMON = 3
+AUTH = 4
+SYSLOG = 5
+LPR = 6
+NEWS = 7
+UUCP = 8
+CRON = 9
+AUTHPRIV = 10
+FTP = 11
+NTP = 12
+AUDIT = 13
+ALERT_FACILITY = 14
+CLOCK = 15
+LOCAL0 = 16
+LOCAL1 = 17
+LOCAL2 = 18
+LOCAL3 = 19
+LOCAL4 = 20
+LOCAL5 = 21
+LOCAL6 = 22
+LOCAL7 = 23
+
+EMERGENCY = 0
+ALERT = 1
+CRITICAL = 2
+ERROR = 3
+WARNING = 4
+NOTICE = 5
+INFO = 6
+DEBUG = 7
+
+
+invalid_timestamp_error = ValueError("Invalid syslog timestamp")
+invalid_timestamp_day_error = ValueError("Invalid syslog timestamp day")
+invalid_timestamp_fraction_error = ValueError("Invalid syslog timestamp fraction")
+invalid_timestamp_offset_error = ValueError("Invalid syslog timestamp offset")
+unsupported_version_error = ValueError("Unsupported syslog version")
+invalid_facility_error = ValueError("Syslog facility must be between 0 and 23")
+invalid_severity_error = ValueError("Syslog severity must be between 0 and 7")
+duplicate_sd_id_error = ValueError("Duplicate syslog SD-ID")
+missing_parameter_value_error = ValueError("Missing syslog parameter value")
+unescaped_parameter_bracket_error = ValueError("Unescaped closing bracket in syslog parameter")
+unterminated_parameter_value_error = ValueError("Unterminated syslog parameter value")
+unterminated_structured_data_error = ValueError("Unterminated syslog structured data")
+missing_structured_data_error = ValueError("Missing syslog structured data")
+incomplete_header_error = ValueError("Incomplete syslog header")
+invalid_pri_error = ValueError("Invalid syslog PRI")
+leading_zero_pri_error = ValueError("Leading zero in syslog PRI")
+invalid_pri_range_error = ValueError("Syslog PRI must be between 0 and 191")
+invalid_structured_data_separator_error = ValueError("Invalid separator after syslog structured data")
+invalid_legacy_priority_error = ValueError("Invalid syslog priority")
+invalid_legacy_priority_range_error = ValueError("Syslog priority must be in 0..191")
+missing_legacy_timestamp_or_hostname_error = ValueError("Missing RFC 3164 timestamp or hostname")
+invalid_legacy_timestamp_error = ValueError("Invalid RFC 3164 timestamp")
+missing_legacy_hostname_or_message_error = ValueError("Missing RFC 3164 hostname or message")
+invalid_legacy_hostname_error = ValueError("Invalid RFC 3164 hostname")
+invalid_destination_port_error = ValueError("Syslog destination port must be in 1..65535")
+invalid_udp_max_size_error = ValueError("Syslog UDP max_size must be in 480..65507")
+invalid_max_pending_error = ValueError("Syslog max_pending must not be negative")
+invalid_listen_port_error = ValueError("Syslog listen port must be in 0..65535")
+
+
+class Message(value):
+    """A syslog message, independent of its transport.
+
+    Constructing a message does not validate it; `encode` validates fields
+    before producing wire data. Set `timestamp=syslog.timestamp()` to use
+    the current time. The default timestamp is unknown.
+
+    `structured_data` maps unique SD-IDs to parameter lists. Parameters accept
+    both `(name="instance", value="one")` and `("instance", "one")`. Private
+    SD-IDs should use `name@enterprise-number`.
+    """
+    message: ?bytes
+    facility: int
+    severity: int
+    timestamp: ?str
+    hostname: ?str
+    app_name: ?str
+    procid: ?str
+    msgid: ?str
+    structured_data: dict[str, list[(name: str, value: str)]]
+    version: int
+
+    def __init__(self, message: ?bytes=None, facility: int=USER,
+                 severity: int=INFO, timestamp: ?str=None,
+                 hostname: ?str=None, app_name: ?str=None,
+                 procid: ?str=None, msgid: ?str=None,
+                 structured_data: dict[str, list[(name: str, value: str)]]={}, version: int=1):
+        self.message = message
+        self.facility = facility
+        self.severity = severity
+        self.timestamp = timestamp
+        self.hostname = hostname
+        self.app_name = app_name
+        self.procid = procid
+        self.msgid = msgid
+        self.structured_data = structured_data
+        self.version = version
+
+
+def timestamp() -> str:
+    """Return the current UTC time with RFC 5424 microsecond precision."""
+    dt = time.utcnow()
+    return "{dt.year:04d}-{dt.month:02d}-{dt.day:02d}T{dt.hour:02d}:{dt.minute:02d}:{dt.second:02d}.{dt.attosecond // 10**12:06d}Z"
+
+
+def check_ascii(text: str, limit: int, field: str, sd_name: bool=False) -> None:
+    data = text.encode()
+    if len(data) == 0 or len(data) > limit:
+        raise ValueError("Invalid syslog {field} length")
+    for byte in data:
+        if byte < 33 or byte > 126:
+            raise ValueError("Invalid character in syslog {field}")
+        if sd_name and (byte == 34 or byte == 61 or byte == 93):
+            raise ValueError("Invalid character in syslog {field}")
+
+
+def header(value: ?str, limit: int, field: str) -> bytes:
+    if value is not None:
+        check_ascii(value, limit, field)
+        return value.encode()
+    return b"-"
+
+
+def read_header(data: bytes, limit: int, field: str) -> ?str:
+    if data == b"-":
+        return None
+    value = data.decode()
+    check_ascii(value, limit, field)
+    return value
+
+
+def decimal(text: str, field: str) -> int:
+    if len(text) == 0:
+        raise ValueError("Missing syslog {field}")
+    for char in text:
+        if char not in "0123456789":
+            raise ValueError("Invalid syslog {field}")
+    return int(text)
+
+
+def check_timestamp(value: str) -> None:
+    if len(value) < 20 or value[4] != "-" or value[7] != "-" or value[10] != "T" or value[13] != ":" or value[16] != ":":
+        raise invalid_timestamp_error
+    year = decimal(value[:4], "timestamp year")
+    month = decimal(value[5:7], "timestamp month")
+    day = decimal(value[8:10], "timestamp day")
+    hour = decimal(value[11:13], "timestamp hour")
+    minute = decimal(value[14:16], "timestamp minute")
+    second = decimal(value[17:19], "timestamp second")
+    if month < 1 or month > 12 or hour > 23 or minute > 59 or second > 59:
+        raise invalid_timestamp_error
+    month_days = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    if year % 4 == 0 and (year % 100 != 0 or year % 400 == 0):
+        month_days[1] = 29
+    if day < 1 or day > month_days[month - 1]:
+        raise invalid_timestamp_day_error
+    pos = 19
+    if value[pos] == ".":
+        pos += 1
+        start = pos
+        while pos < len(value) and value[pos] in "0123456789":
+            pos += 1
+        if pos - start < 1 or pos - start > 6:
+            raise invalid_timestamp_fraction_error
+    offset = value[pos:]
+    if offset == "Z":
+        return
+    if len(offset) != 6 or (offset[0] != "+" and offset[0] != "-") or offset[3] != ":":
+        raise invalid_timestamp_offset_error
+    if decimal(offset[1:3], "timestamp offset hour") > 23 or decimal(offset[4:6], "timestamp offset minute") > 59:
+        raise invalid_timestamp_offset_error
+
+
+def check_message(message: ?bytes) -> None:
+    if message is not None and message.startswith(b"\xef\xbb\xbf"):
+        # The BOM promises UTF-8, including shortest-form encoding.
+        message[3:].decode()
+
+
+def encode_structured_data(elements: dict[str, list[(name: str, value: str)]]) -> bytes:
+    if len(elements) == 0:
+        return b"-"
+    parts: list[bytes] = []
+    for sd_id, params in elements.items():
+        check_ascii(sd_id, 32, "SD-ID", True)
+        parts.append(b"[" + sd_id.encode())
+        for param in params:
+            check_ascii(param.name, 32, "PARAM-NAME", True)
+            escaped = param.value.replace("\\", "\\\\").replace('"', '\\"').replace("]", "\\]")
+            parts.append(b" " + param.name.encode() + b'="' + escaped.encode() + b'"')
+        parts.append(b"]")
+    return b"".join(parts)
+
+
+def encode(message: Message) -> bytes:
+    """Encode an RFC 5424 version 1 message, raising ValueError if invalid."""
+    if message.version != 1:
+        raise unsupported_version_error
+    if message.facility < 0 or message.facility > 23:
+        raise invalid_facility_error
+    if message.severity < 0 or message.severity > 7:
+        raise invalid_severity_error
+    ts = message.timestamp
+    ts_data = b"-"
+    if ts is not None:
+        check_timestamp(ts)
+        ts_data = ts.encode()
+    priority = message.facility * 8 + message.severity
+    fields = [
+        "<{priority}>1".encode(),
+        ts_data,
+        header(message.hostname, 255, "HOSTNAME"),
+        header(message.app_name, 48, "APP-NAME"),
+        header(message.procid, 128, "PROCID"),
+        header(message.msgid, 32, "MSGID"),
+        encode_structured_data(message.structured_data),
+    ]
+    result = b" ".join(fields)
+    body = message.message
+    check_message(body)
+    if body is not None:
+        result += b" " + body
+    return result
+
+
+def read_structured_data(data: bytes) -> (dict[str, list[(name: str, value: str)]], int):
+    if data.startswith(b"-"):
+        return {}, 1
+    elements: dict[str, list[(name: str, value: str)]] = {}
+    pos = 0
+    while pos < len(data) and data[pos] == 91:
+        pos += 1
+        start = pos
+        while pos < len(data) and data[pos] != 32 and data[pos] != 93:
+            pos += 1
+        sd_id = data[start:pos].decode()
+        check_ascii(sd_id, 32, "SD-ID", True)
+        if sd_id in elements:
+            raise duplicate_sd_id_error
+        params: list[(name: str, value: str)] = []
+        while pos < len(data) and data[pos] == 32:
+            pos += 1
+            start = pos
+            while pos < len(data) and data[pos] != 61:
+                pos += 1
+            name = data[start:pos].decode()
+            check_ascii(name, 32, "PARAM-NAME", True)
+            if pos + 1 >= len(data) or data[pos + 1] != 34:
+                raise missing_parameter_value_error
+            pos += 2
+            value = bytearray(b"")
+            while pos < len(data) and data[pos] != 34:
+                byte = data[pos]
+                if byte == 93:
+                    raise unescaped_parameter_bracket_error
+                if byte == 92 and pos + 1 < len(data):
+                    escaped = data[pos + 1]
+                    if escaped == 34 or escaped == 92 or escaped == 93:
+                        value.append(escaped)
+                        pos += 2
+                        continue
+                # RFC 5424 requires unknown escapes to retain the backslash.
+                value.append(byte)
+                pos += 1
+            if pos >= len(data):
+                raise unterminated_parameter_value_error
+            params.append((name=name, value=value.decode()))
+            pos += 1
+        if pos >= len(data) or data[pos] != 93:
+            raise unterminated_structured_data_error
+        pos += 1
+        elements[sd_id] = params
+    if len(elements) == 0:
+        raise missing_structured_data_error
+    return elements, pos
+
+
+def decode(data: bytes) -> Message:
+    """Decode one RFC 5424 version 1 message without interpreting MSG bytes.
+
+    The caller supplies one complete message without transport framing.
+    Unknown parameter escapes retain their backslash as required by RFC 5424.
+    """
+    fields = data.split(b" ", 6)
+    if len(fields) != 7:
+        raise incomplete_header_error
+    prefix = fields[0]
+    end = prefix.find(b">")
+    if not prefix.startswith(b"<") or end < 2 or end > 4:
+        raise invalid_pri_error
+    digits = prefix[1:end]
+    if len(digits) > 1 and digits[0] == 48:
+        raise leading_zero_pri_error
+    priority = decimal(digits.decode(), "PRI")
+    if priority > 191:
+        raise invalid_pri_range_error
+    if prefix[end + 1:] != b"1":
+        raise unsupported_version_error
+    ts = read_header(fields[1], 32, "TIMESTAMP")
+    if ts is not None:
+        check_timestamp(ts)
+    hostname = read_header(fields[2], 255, "HOSTNAME")
+    app_name = read_header(fields[3], 48, "APP-NAME")
+    procid = read_header(fields[4], 128, "PROCID")
+    msgid = read_header(fields[5], 32, "MSGID")
+    remaining = fields[6]
+    elements, pos = read_structured_data(remaining)
+    body: ?bytes = None
+    if pos < len(remaining):
+        if remaining[pos] != 32:
+            raise invalid_structured_data_separator_error
+        body = remaining[pos + 1:]
+    check_message(body)
+    return Message(body, priority // 8, priority % 8, ts, hostname,
+                   app_name, procid, msgid, elements)
+
+
+def decode_legacy(data: bytes) -> Message:
+    """Decode canonical RFC 3164: <PRI>Mmm dd hh:mm:ss HOST MSG.
+
+    The result has version 0. Its timestamp has no year or timezone; the message
+    retains the complete MSG, including any tag or process ID. This decoder does
+    not guess missing headers or normalize vendor-specific formats.
+    """
+    end = data.find(b">")
+    if not data.startswith(b"<") or end < 2 or end > 4:
+        raise invalid_legacy_priority_error
+    digits = data[1:end]
+    if any(c < 48 or c > 57 for c in digits) or (len(digits) > 1 and digits[0] == 48):
+        raise invalid_legacy_priority_error
+    priority = int(digits.decode())
+    if priority > 191:
+        raise invalid_legacy_priority_range_error
+    rest = data[end + 1:]
+    if len(rest) < 18 or rest[15:16] != b" ":
+        raise missing_legacy_timestamp_or_hostname_error
+    if any(c > 127 for c in rest[:15]):
+        raise invalid_legacy_timestamp_error
+    ts = rest[:15].decode()
+    months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    if ts[:3] not in months or ts[3] != " " or ts[6] != " " or ts[9] != ":" or ts[12] != ":":
+        raise invalid_legacy_timestamp_error
+    if ts[4] not in " 123" or ts[5] not in "0123456789" or any(c not in "0123456789" for c in ts[7:9] + ts[10:12] + ts[13:15]):
+        raise invalid_legacy_timestamp_error
+    day = int(ts[4:6].strip())
+    days = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    month = months.index(ts[:3])
+    if day < 1 or day > days[month] or int(ts[7:9]) > 23 or int(ts[10:12]) > 59 or int(ts[13:15]) > 59:
+        raise invalid_legacy_timestamp_error
+    host_end = rest.find(b" ", 16)
+    if host_end < 17:
+        raise missing_legacy_hostname_or_message_error
+    host = rest[16:host_end]
+    if len(host) > 255 or any(c < 33 or c > 126 for c in host):
+        raise invalid_legacy_hostname_error
+    return Message(rest[host_end + 1:], facility=priority // 8, severity=priority % 8,
+                   timestamp=ts, hostname=host.decode(), version=0)
+
+
+actor Client(cap: net.UDPConnectCap, address: str, port: int,
+             on_connect: action(Client) -> None, on_error: action(Client, str) -> None,
+             max_size: int=2048, max_pending: int=64):
+    """RFC 5424 UDP sender. Port 514 is the standard syslog port.
+
+    send() queues at most max_pending encoded messages until ready. Invalid,
+    oversized and excess messages are rejected through on_error. UDP provides
+    no delivery acknowledgement. close() discards pending messages and prevents
+    further sends; it does not wait for delivery. There is no automatic retry.
+    """
+    if port < 1 or port > 65535:
+        raise invalid_destination_port_error
+    if max_size < 480 or max_size > 65507:
+        raise invalid_udp_max_size_error
+    if max_pending < 0:
+        raise invalid_max_pending_error
+    var _connection: ?net.UDPConnection = None
+    var _pending: list[bytes] = []
+    var _ready = False
+    var _closed = False
+
+    def connected(c: net.UDPConnection):
+        if _closed:
+            c.close()
+            return
+        _ready = True
+        for data in _pending:
+            c.write(data)
+        _pending = []
+        on_connect(self)
+
+    def received(c: net.UDPConnection, data: bytes, peer: str, peer_port: int):
+        pass
+
+    def failed(c: net.UDPConnection, error: str):
+        if _closed:
+            return
+        _closed = True
+        _ready = False
+        _pending = []
+        c.close()
+        on_error(self, error)
+
+    def start():
+        if not _closed:
+            _connection = net.UDPConnection(cap, address, port, connected, received, failed)
+
+    action def send(message: Message) -> None:
+        """Send one message as one datagram, or report rejection through on_error."""
+        if _closed:
+            on_error(self, "Syslog client is closed")
+            return
+        data = b""
+        try:
+            data = encode(message)
+        except ValueError as error:
+            on_error(self, error.error_message)
+            return
+        if len(data) > max_size:
+            on_error(self, "Syslog message exceeds max_size")
+            return
+        c = _connection
+        if _ready and c is not None:
+            c.write(data)
+        elif len(_pending) < max_pending:
+            _pending.append(data)
+        else:
+            on_error(self, "Syslog startup queue is full")
+
+    action def log(message: str, severity: int=INFO, facility: int=USER,
+                   hostname: ?str=None, app_name: ?str=None, procid: ?str=None,
+                   msgid: ?str=None, structured_data: dict[str, list[(name: str, value: str)]]={}) -> None:
+        """Send UTF-8 text with a BOM and the current UTC timestamp."""
+        send(Message(b"\xef\xbb\xbf" + message.encode(), facility=facility, severity=severity,
+                     timestamp=timestamp(), hostname=hostname, app_name=app_name,
+                     procid=procid, msgid=msgid, structured_data=structured_data))
+
+    action def close() -> None:
+        """Close the socket and discard the startup queue. Safe to call repeatedly."""
+        _closed = True
+        _ready = False
+        _pending = []
+        c = _connection
+        if c is not None:
+            c.close()
+
+    after 0: start()
+
+
+actor Server(cap: net.UDPListenCap, address: str, port: int,
+             on_listen: action(Server, ?str) -> None,
+             on_message: action(Server, Message, str, int) -> None,
+             on_error: action(Server, str) -> None,
+             max_size: int=65507, legacy: bool=True):
+    """Receive syslog datagrams with their source address and port.
+
+    RFC 5424 messages use version 1; canonical RFC 3164 messages use version 0.
+    Set legacy=False to accept only RFC 5424. Malformed or oversized datagrams
+    are discarded and reported through on_error, leaving the listener running.
+    Bind errors go to on_listen. Port 0 selects an ephemeral port; port 514 is
+    the standard syslog port and may require privileges.
+    """
+    if port < 0 or port > 65535:
+        raise invalid_listen_port_error
+    if max_size < 480 or max_size > 65507:
+        raise invalid_udp_max_size_error
+    var _listener: ?net.UDPListener = None
+    var _closed = False
+
+    def bound(listener: net.UDPListener, error: ?str):
+        if _closed:
+            listener.close()
+            return
+        if error is not None:
+            _closed = True
+            listener.close()
+        on_listen(self, error)
+
+    def received(listener: net.UDPListener, data: bytes, peer: str, peer_port: int):
+        if _closed:
+            return
+        if len(data) > max_size:
+            on_error(self, "Syslog datagram from {peer}:{peer_port} exceeds max_size")
+            return
+        message = Message()
+        try:
+            end = data.find(b">")
+            if legacy and end >= 0 and data[end + 1:end + 4] in [b"Jan", b"Feb", b"Mar", b"Apr", b"May", b"Jun", b"Jul", b"Aug", b"Sep", b"Oct", b"Nov", b"Dec"]:
+                message = decode_legacy(data)
+            else:
+                message = decode(data)
+        except ValueError as error:
+            on_error(self, "Invalid syslog datagram from {peer}:{peer_port}: {error.error_message}")
+            return
+        on_message(self, message, peer, peer_port)
+
+    def failed(listener: net.UDPListener, error: str):
+        if not _closed:
+            on_error(self, error)
+
+    def start():
+        if not _closed:
+            _listener = net.UDPListener(cap, address, port, bound, received, failed)
+
+    action def local_address() -> str:
+        listener = _listener
+        if listener is not None and not _closed:
+            return listener.local_address()
+        return ""
+
+    action def local_port() -> int:
+        listener = _listener
+        if listener is not None and not _closed:
+            return listener.local_port()
+        return 0
+
+    action def close() -> None:
+        """Close the listener. Safe to call repeatedly."""
+        _closed = True
+        listener = _listener
+        if listener is not None:
+            listener.close()
+
+    after 0: start()

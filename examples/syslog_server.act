@@ -1,0 +1,24 @@
+import net
+import std.syslog as syslog
+
+
+actor main(env):
+    def bound(server: syslog.Server, error: ?str):
+        if error is not None:
+            print("Syslog server could not listen:", error)
+            env.exit(1)
+        else:
+            print("Listening on", server.local_address(), server.local_port())
+
+    def received(server: syslog.Server, message: syslog.Message,
+                 peer: str, port: int):
+        print("{peer}:{port} version={message.version} facility={message.facility} severity={message.severity}")
+        print("timestamp:", message.timestamp, "hostname:", message.hostname,
+              "app:", message.app_name, "procid:", message.procid,
+              "msgid:", message.msgid, "message:", repr(message.message))
+
+    def failed(server: syslog.Server, error: str):
+        print("Syslog server error:", error)
+
+    cap = net.UDPListenCap(net.UDPCap(net.NetCap(env.cap)))
+    syslog.Server(cap, "127.0.0.1", 5514, bound, received, failed)
