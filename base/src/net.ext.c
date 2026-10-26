@@ -26,6 +26,9 @@ void netQ___ext_init__() {
     // NOP
 }
 
+// Longest address and port string: [IPv6 address]:65535
+#define NET_ADDRPORTSTRLEN (INET6_ADDRSTRLEN + 8)
+
 
 bool netQ_is_ipv4 (B_str address) {
     struct sockaddr_in sa;
@@ -189,6 +192,7 @@ struct udp_send_req_state {
     size_t len;
     $WORD actor;
     bool listener;
+    char dest[NET_ADDRPORTSTRLEN];
 };
 
 static void udp_call_receive($WORD cb, $WORD actor, B_bytes data, B_str address, B_int port) {
@@ -217,6 +221,15 @@ static int sockaddr_to_addr_port(const struct sockaddr *addr, char *addrbuf, siz
         return 0;
     }
     return UV_EINVAL;
+}
+
+// Formats address and port for messages: 192.0.2.1:161 or [2001:db8::1]:161
+static void format_addr_port(char *buf, size_t buf_len, const char *address, int64_t port) {
+    if (strchr(address, ':') != NULL) {
+        snprintf(buf, buf_len, "[%s]:%lld", address, (long long)port);
+    } else {
+        snprintf(buf, buf_len, "%s:%lld", address, (long long)port);
+    }
 }
 
 static int make_sockaddr(B_str address, int64_t port, struct sockaddr_storage *dest) {
@@ -258,7 +271,7 @@ static int make_udp_bind_addr(int family, struct sockaddr_storage *dest) {
     return UV_EINVAL;
 }
 
-static struct udp_send_req_state *udp_send_req_state_new(B_bytes data, $WORD actor, bool listener) {
+static struct udp_send_req_state *udp_send_req_state_new(B_bytes data, $WORD actor, bool listener, const char *dest) {
     struct udp_send_req_state *state = (struct udp_send_req_state *)malloc(sizeof(*state));
     if (state == NULL) {
         return NULL;
@@ -275,6 +288,7 @@ static struct udp_send_req_state *udp_send_req_state_new(B_bytes data, $WORD act
     }
     state->actor = actor;
     state->listener = listener;
+    snprintf(state->dest, sizeof(state->dest), "%s", dest);
     return state;
 }
 
@@ -288,7 +302,8 @@ static void udp_send_req_state_free(struct udp_send_req_state *state) {
 static void udp_send_cb(uv_udp_send_t *req, int status) {
     struct udp_send_req_state *state = (struct udp_send_req_state *)req->data;
     if (status < 0 && status != UV_ECANCELED && state != NULL && state->actor != NULL) {
-        char errmsg[1024] = "Failed to send UDP datagram: ";
+        char errmsg[1024];
+        snprintf(errmsg, sizeof(errmsg), "Failed to send UDP datagram to %s: ", state->dest);
         uv_strerror_r(status, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
         if (state->listener) {
@@ -470,8 +485,10 @@ $R netQ_UDPConnectionD_writeG_local (netQ_UDPConnection self, $Cont c$cont, B_by
         return $R_CONT(c$cont, B_None);
     }
 
+    char dest[NET_ADDRPORTSTRLEN];
+    format_addr_port(dest, sizeof(dest), (const char *)fromB_str(self->_remote_address), self->port);
     uv_udp_send_t *req = (uv_udp_send_t *)malloc(sizeof(uv_udp_send_t));
-    struct udp_send_req_state *state = udp_send_req_state_new(data, ($WORD)self, false);
+    struct udp_send_req_state *state = udp_send_req_state_new(data, ($WORD)self, false, dest);
     if (req == NULL || state == NULL) {
         free(req);
         udp_send_req_state_free(state);
@@ -483,7 +500,8 @@ $R netQ_UDPConnectionD_writeG_local (netQ_UDPConnection self, $Cont c$cont, B_by
     uv_buf_t buf = uv_buf_init(state->buf, state->len);
     int r = uv_udp_send(req, udp, &buf, 1, NULL, udp_send_cb);
     if (r != 0) {
-        char errmsg[1024] = "Failed to send UDP datagram: ";
+        char errmsg[1024];
+        snprintf(errmsg, sizeof(errmsg), "Failed to send UDP datagram to %s: ", dest);
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
         $action2 f = ($action2)self->on_error;
@@ -624,11 +642,15 @@ $R netQ_UDPListenerD_sendG_local (netQ_UDPListener self, $Cont c$cont, B_bytes d
         return $R_CONT(c$cont, B_None);
     }
 
+    // Room for an invalid address too, to name it in the error
+    char dest_name[NET_ADDRPORTSTRLEN + 256];
+    format_addr_port(dest_name, sizeof(dest_name), (const char *)fromB_str(address), port);
+
     struct sockaddr_storage dest;
     int r = make_sockaddr(address, port, &dest);
     if (r != 0) {
-        char errmsg[1024] = "Unable to parse UDP send address: ";
-        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        char errmsg[1024];
+        snprintf(errmsg, sizeof(errmsg), "Failed to send UDP datagram to %s: invalid address", dest_name);
         log_warn(errmsg);
         $action2 f = ($action2)self->on_error;
         f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
@@ -636,7 +658,7 @@ $R netQ_UDPListenerD_sendG_local (netQ_UDPListener self, $Cont c$cont, B_bytes d
     }
 
     uv_udp_send_t *req = (uv_udp_send_t *)malloc(sizeof(uv_udp_send_t));
-    struct udp_send_req_state *state = udp_send_req_state_new(data, ($WORD)self, true);
+    struct udp_send_req_state *state = udp_send_req_state_new(data, ($WORD)self, true, dest_name);
     if (req == NULL || state == NULL) {
         free(req);
         udp_send_req_state_free(state);
@@ -648,7 +670,8 @@ $R netQ_UDPListenerD_sendG_local (netQ_UDPListener self, $Cont c$cont, B_bytes d
     uv_buf_t buf = uv_buf_init(state->buf, state->len);
     r = uv_udp_send(req, udp, &buf, 1, (const struct sockaddr *)&dest, udp_send_cb);
     if (r != 0) {
-        char errmsg[1024] = "Failed to send UDP datagram: ";
+        char errmsg[1024];
+        snprintf(errmsg, sizeof(errmsg), "Failed to send UDP datagram to %s: ", dest_name);
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
         $action2 f = ($action2)self->on_error;
