@@ -327,6 +327,666 @@ actor _test_HttpClientPipelinedResponses(t: testing.EnvT):
     after 10: _timeout()
 
 
+actor _test_HttpServerPipelinedRequests(t: testing.EnvT):
+    """Server answers pipelined requests in order, also when responses are asynchronous
+
+    A raw TCP client sends two GET requests in a single write, so both are
+    parsed from one read and dispatched. The request handler responds
+    asynchronously, and slower to the first request than to the second, so
+    the server has to hold the second response back until the first has been
+    sent: the responses must arrive in request order.
+    """
+    log = logging.Logger(t.log_handler)
+    t.timeout(15.0)
+    var done = False
+    var attempts = 0
+    var listen_attempts = 0
+    var port = random.randint(20000, 45000)
+    var server = None
+    var rbuf = b""
+    var bodies: list[bytes] = []
+
+    serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
+
+    def _finish_success():
+        if done:
+            return
+        done = True
+        t.success()
+
+    def _finish_failure(msg: str):
+        if done:
+            return
+        done = True
+        t.failure(AssertionError(msg))
+
+    def _on_http_accept(s):
+        s.cb_install(_on_http_request, _on_http_server_error)
+
+    def _on_http_request(s, request, respond):
+        if request.path == "/1":
+            after 0.1: respond(200, {}, request.path)
+        else:
+            after 0.01: respond(200, {}, request.path)
+
+    def _on_http_server_error(s, error):
+        _finish_failure("HTTP server error: " + error)
+
+    def _on_http_listen_error(listener, error):
+        if listen_attempts < 10:
+            listen_attempts += 1
+            port = random.randint(20000, 45000)
+            _start_listener()
+        else:
+            _finish_failure("HTTP listen failed: " + error)
+
+    def _on_raw_connect(conn):
+        conn.write(b"GET /1 HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\nGET /2 HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
+
+    def _on_raw_receive(conn, data):
+        rbuf += data
+        while True:
+            r, rbuf = http.parse_response(rbuf, log)
+            if r is not None:
+                bodies.append(r.body)
+            else:
+                break
+        if len(bodies) >= 2:
+            if bodies[0] != b"/1" or bodies[1] != b"/2":
+                _finish_failure("Responses out of order or wrong: " + str(bodies))
+                return
+            _finish_success()
+
+    def _on_raw_error(conn, errmsg):
+        if attempts < 5:
+            attempts += 1
+            after 0.1: _start_client()
+        else:
+            _finish_failure("TCP client error: " + errmsg)
+
+    def _start_client():
+        rbuf = b""
+        bodies = []
+        net.TCPConnection(conn_cap, "127.0.0.1", port, _on_raw_connect, _on_raw_receive, _on_raw_error, None)
+
+    def _start_listener():
+        server = http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
+
+    def _timeout():
+        _finish_failure("timeout, responses received: " + str(bodies))
+
+    _start_listener()
+    after 0.05: _start_client()
+    after 10: _timeout()
+
+
+actor _test_HttpServerConnectionClose(t: testing.EnvT):
+    """Server closes the connection after the response to the request that asked for it
+
+    A raw TCP client pipelines three requests in one write. The second one
+    carries Connection: close. The handler answers the first request later
+    than the second, so the response to the second is held back until the
+    first has been sent. The client must receive exactly the first two
+    responses, in order, and then see the server close the connection. The
+    third request must never reach the handler.
+    """
+    log = logging.Logger(t.log_handler)
+    t.timeout(15.0)
+    var done = False
+    var attempts = 0
+    var listen_attempts = 0
+    var port = random.randint(20000, 45000)
+    var server = None
+    var rbuf = b""
+    var bodies: list[bytes] = []
+    var handled: list[str] = []
+
+    serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
+
+    def _finish_success():
+        if done:
+            return
+        done = True
+        t.success()
+
+    def _finish_failure(msg: str):
+        if done:
+            return
+        done = True
+        t.failure(AssertionError(msg))
+
+    def _on_http_accept(s):
+        s.cb_install(_on_http_request, _on_http_server_error)
+
+    def _on_http_request(s, request, respond):
+        handled.append(request.path)
+        if request.path == "/1":
+            after 0.1: respond(200, {}, request.path)
+        else:
+            respond(200, {}, request.path)
+
+    def _on_http_server_error(s, error):
+        _finish_failure("HTTP server error: " + error)
+
+    def _on_http_listen_error(listener, error):
+        if listen_attempts < 10:
+            listen_attempts += 1
+            port = random.randint(20000, 45000)
+            _start_listener()
+        else:
+            _finish_failure("HTTP listen failed: " + error)
+
+    def _on_raw_connect(conn):
+        conn.write(b"GET /1 HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\nGET /2 HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: keep-alive, Close\r\n\r\nGET /3 HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
+
+    def _on_raw_receive(conn, data):
+        rbuf += data
+        while True:
+            r, rbuf = http.parse_response(rbuf, log)
+            if r is not None:
+                bodies.append(r.body)
+            else:
+                break
+
+    def _on_raw_remote_close(conn):
+        if bodies != [b"/1", b"/2"]:
+            _finish_failure("Expected the responses to /1 and /2 before the close, got: " + str(bodies))
+            return
+        if handled != ["/1", "/2"]:
+            _finish_failure("Expected only /1 and /2 to be handled, handled: " + str(handled))
+            return
+        _finish_success()
+
+    def _on_raw_error(conn, errmsg):
+        if attempts < 5:
+            attempts += 1
+            after 0.1: _start_client()
+        else:
+            _finish_failure("TCP client error: " + errmsg)
+
+    def _start_client():
+        rbuf = b""
+        bodies = []
+        handled = []
+        net.TCPConnection(conn_cap, "127.0.0.1", port, _on_raw_connect, _on_raw_receive, _on_raw_error, _on_raw_remote_close)
+
+    def _start_listener():
+        server = http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
+
+    def _timeout():
+        _finish_failure("timeout, responses received: " + str(bodies) + ", handled: " + str(handled))
+
+    _start_listener()
+    after 0.05: _start_client()
+    after 10: _timeout()
+
+
+actor _test_HttpsServerPipelinedRequests(t: testing.EnvT):
+    """TLSServer answers pipelined requests in order, also when responses are asynchronous
+
+    A raw TLS client sends two GET requests in a single write, so both are
+    parsed from one read and dispatched. The request handler responds
+    asynchronously, and slower to the first request than to the second, so
+    the server has to hold the second response back until the first has been
+    sent: the responses must arrive in request order.
+    """
+    log = logging.Logger(t.log_handler)
+    t.timeout(15.0)
+    var done = False
+    var attempts = 0
+    var listen_attempts = 0
+    var port = random.randint(20000, 45000)
+    var server = None
+    var rbuf = b""
+    var bodies: list[bytes] = []
+
+    serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
+
+    def _finish_success():
+        if done:
+            return
+        done = True
+        t.success()
+
+    def _finish_failure(msg: str):
+        if done:
+            return
+        done = True
+        t.failure(AssertionError(msg))
+
+    def _on_http_accept(s):
+        s.cb_install(_on_http_request, _on_http_server_error)
+
+    def _on_http_request(s, request, respond):
+        if request.path == "/1":
+            after 0.1: respond(200, {}, request.path)
+        else:
+            after 0.01: respond(200, {}, request.path)
+
+    def _on_http_server_error(s, error):
+        _finish_failure("HTTP server error: " + error)
+
+    def _on_http_listen_error(listener, error):
+        if listen_attempts < 10:
+            listen_attempts += 1
+            port = random.randint(20000, 45000)
+            _start_listener()
+        else:
+            _finish_failure("HTTP listen failed: " + error)
+
+    def _on_raw_connect(conn):
+        conn.write(b"GET /1 HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\nGET /2 HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
+
+    def _on_raw_receive(conn, data):
+        rbuf += data
+        while True:
+            r, rbuf = http.parse_response(rbuf, log)
+            if r is not None:
+                bodies.append(r.body)
+            else:
+                break
+        if len(bodies) >= 2:
+            if bodies[0] != b"/1" or bodies[1] != b"/2":
+                _finish_failure("Responses out of order or wrong: " + str(bodies))
+                return
+            _finish_success()
+
+    def _on_raw_error(conn, errmsg):
+        if attempts < 5:
+            attempts += 1
+            after 0.1: _start_client()
+        else:
+            _finish_failure("TLS client error: " + errmsg)
+
+    def _start_client():
+        rbuf = b""
+        bodies = []
+        net.TLSConnection(conn_cap, "127.0.0.1", port, _on_raw_connect, _on_raw_receive, _on_raw_error, None, verify_tls=False)
+
+    def _start_listener():
+        server = http.TLSListener(serv_cap, "127.0.0.1", port, CERT_PEM.encode(), KEY_PEM.encode(), _on_http_accept, _on_http_listen_error)
+
+    def _timeout():
+        _finish_failure("timeout, responses received: " + str(bodies))
+
+    _start_listener()
+    after 0.05: _start_client()
+    after 10: _timeout()
+
+
+actor _test_HttpServerMalformedRequest(t: testing.EnvT):
+    """Server answers the requests before malformed input and then closes
+
+    A raw TCP client sends a valid request followed by one whose
+    Content-Length is not a number, in one write. The server must answer the
+    first request and then close the connection without handing the second
+    one to the handler.
+    """
+    log = logging.Logger(t.log_handler)
+    t.timeout(15.0)
+    var done = False
+    var attempts = 0
+    var listen_attempts = 0
+    var port = random.randint(20000, 45000)
+    var server = None
+    var rbuf = b""
+    var bodies: list[bytes] = []
+    var handled: list[str] = []
+
+    serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
+
+    def _finish_success():
+        if done:
+            return
+        done = True
+        t.success()
+
+    def _finish_failure(msg: str):
+        if done:
+            return
+        done = True
+        t.failure(AssertionError(msg))
+
+    def _on_http_accept(s):
+        s.cb_install(_on_http_request, _on_http_server_error)
+
+    def _on_http_request(s, request, respond):
+        handled.append(request.path)
+        after 0.05: respond(200, {}, request.path)
+
+    def _on_http_server_error(s, error):
+        _finish_failure("HTTP server error: " + error)
+
+    def _on_http_listen_error(listener, error):
+        if listen_attempts < 10:
+            listen_attempts += 1
+            port = random.randint(20000, 45000)
+            _start_listener()
+        else:
+            _finish_failure("HTTP listen failed: " + error)
+
+    def _on_raw_connect(conn):
+        conn.write(b"GET /1 HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\nGET /2 HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: many\r\n\r\n")
+
+    def _on_raw_receive(conn, data):
+        rbuf += data
+        while True:
+            r, rbuf = http.parse_response(rbuf, log)
+            if r is not None:
+                bodies.append(r.body)
+            else:
+                break
+
+    def _on_raw_remote_close(conn):
+        if bodies != [b"/1"]:
+            _finish_failure("Expected the response to /1 before the close, got: " + str(bodies))
+            return
+        if handled != ["/1"]:
+            _finish_failure("Expected only /1 to be handled, handled: " + str(handled))
+            return
+        _finish_success()
+
+    def _on_raw_error(conn, errmsg):
+        if attempts < 5:
+            attempts += 1
+            after 0.1: _start_client()
+        else:
+            _finish_failure("TCP client error: " + errmsg)
+
+    def _start_client():
+        rbuf = b""
+        bodies = []
+        handled = []
+        net.TCPConnection(conn_cap, "127.0.0.1", port, _on_raw_connect, _on_raw_receive, _on_raw_error, _on_raw_remote_close)
+
+    def _start_listener():
+        server = http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
+
+    def _timeout():
+        _finish_failure("timeout, responses received: " + str(bodies) + ", handled: " + str(handled))
+
+    _start_listener()
+    after 0.05: _start_client()
+    after 10: _timeout()
+
+
+actor _test_HttpServerHttp10(t: testing.EnvT):
+    """Server answers an HTTP/1.0 request and then closes the connection
+
+    The server does not keep HTTP/1.0 connections alive. A raw TCP client
+    sends one HTTP/1.0 request and must get its response and then see the
+    server close the connection.
+    """
+    log = logging.Logger(t.log_handler)
+    t.timeout(15.0)
+    var done = False
+    var attempts = 0
+    var listen_attempts = 0
+    var port = random.randint(20000, 45000)
+    var server = None
+    var rbuf = b""
+    var bodies: list[bytes] = []
+    var handled: list[str] = []
+
+    serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
+
+    def _finish_success():
+        if done:
+            return
+        done = True
+        t.success()
+
+    def _finish_failure(msg: str):
+        if done:
+            return
+        done = True
+        t.failure(AssertionError(msg))
+
+    def _on_http_accept(s):
+        s.cb_install(_on_http_request, _on_http_server_error)
+
+    def _on_http_request(s, request, respond):
+        handled.append(request.path)
+        respond(200, {}, request.path)
+
+    def _on_http_server_error(s, error):
+        _finish_failure("HTTP server error: " + error)
+
+    def _on_http_listen_error(listener, error):
+        if listen_attempts < 10:
+            listen_attempts += 1
+            port = random.randint(20000, 45000)
+            _start_listener()
+        else:
+            _finish_failure("HTTP listen failed: " + error)
+
+    def _on_raw_connect(conn):
+        conn.write(b"GET /a HTTP/1.0\r\nHost: 127.0.0.1\r\n\r\n")
+
+    def _on_raw_receive(conn, data):
+        rbuf += data
+        while True:
+            r, rbuf = http.parse_response(rbuf, log)
+            if r is not None:
+                bodies.append(r.body)
+            else:
+                break
+
+    def _on_raw_remote_close(conn):
+        if bodies != [b"/a"] or handled != ["/a"]:
+            _finish_failure("Expected the response to /a before the close, got: " + str(bodies) + ", handled: " + str(handled))
+            return
+        _finish_success()
+
+    def _on_raw_error(conn, errmsg):
+        if attempts < 5:
+            attempts += 1
+            after 0.1: _start_client()
+        else:
+            _finish_failure("TCP client error: " + errmsg)
+
+    def _start_client():
+        rbuf = b""
+        bodies = []
+        handled = []
+        net.TCPConnection(conn_cap, "127.0.0.1", port, _on_raw_connect, _on_raw_receive, _on_raw_error, _on_raw_remote_close)
+
+    def _start_listener():
+        server = http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
+
+    def _timeout():
+        _finish_failure("timeout, responses received: " + str(bodies) + ", handled: " + str(handled))
+
+    _start_listener()
+    after 0.05: _start_client()
+    after 10: _timeout()
+
+
+actor _test_HttpServerDuplicateRespond(t: testing.EnvT):
+    """A second response to the same request is ignored
+
+    A raw TCP client pipelines two requests, the second with Connection:
+    close. The handler answers the first request late and the second one
+    twice right away, so both answers to the second are held back while the
+    first is outstanding. The client must get the first answer to each
+    request, in order, and then see the server close the connection.
+    """
+    log = logging.Logger(t.log_handler)
+    t.timeout(15.0)
+    var done = False
+    var attempts = 0
+    var listen_attempts = 0
+    var port = random.randint(20000, 45000)
+    var server = None
+    var rbuf = b""
+    var bodies: list[bytes] = []
+    var handled: list[str] = []
+
+    serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
+
+    def _finish_success():
+        if done:
+            return
+        done = True
+        t.success()
+
+    def _finish_failure(msg: str):
+        if done:
+            return
+        done = True
+        t.failure(AssertionError(msg))
+
+    def _on_http_accept(s):
+        s.cb_install(_on_http_request, _on_http_server_error)
+
+    def _on_http_request(s, request, respond):
+        handled.append(request.path)
+        if request.path == "/a":
+            after 0.1: respond(200, {}, "a")
+        else:
+            respond(200, {}, "b-first")
+            respond(200, {}, "b-second")
+
+    def _on_http_server_error(s, error):
+        _finish_failure("HTTP server error: " + error)
+
+    def _on_http_listen_error(listener, error):
+        if listen_attempts < 10:
+            listen_attempts += 1
+            port = random.randint(20000, 45000)
+            _start_listener()
+        else:
+            _finish_failure("HTTP listen failed: " + error)
+
+    def _on_raw_connect(conn):
+        conn.write(b"GET /a HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\nGET /b HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n")
+
+    def _on_raw_receive(conn, data):
+        rbuf += data
+        while True:
+            r, rbuf = http.parse_response(rbuf, log)
+            if r is not None:
+                bodies.append(r.body)
+            else:
+                break
+
+    def _on_raw_remote_close(conn):
+        if bodies != [b"a", b"b-first"]:
+            _finish_failure("Expected the first answer to each request, got: " + str(bodies))
+            return
+        _finish_success()
+
+    def _on_raw_error(conn, errmsg):
+        if attempts < 5:
+            attempts += 1
+            after 0.1: _start_client()
+        else:
+            _finish_failure("TCP client error: " + errmsg)
+
+    def _start_client():
+        rbuf = b""
+        bodies = []
+        handled = []
+        net.TCPConnection(conn_cap, "127.0.0.1", port, _on_raw_connect, _on_raw_receive, _on_raw_error, _on_raw_remote_close)
+
+    def _start_listener():
+        server = http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
+
+    def _timeout():
+        _finish_failure("timeout, responses received: " + str(bodies) + ", handled: " + str(handled))
+
+    _start_listener()
+    after 0.05: _start_client()
+    after 10: _timeout()
+
+
+actor _test_HttpServerLateCbInstall(t: testing.EnvT):
+    """Server answers a request that arrived before its callbacks were installed
+
+    The listener starts reading from the connection as soon as the server is
+    created, but on_accept installs the request handler only 0.3 s later, by
+    which time the client's request has been received. The server must keep
+    the request and dispatch it to the handler once it is installed.
+    """
+    log = logging.Logger(t.log_handler)
+    t.timeout(15.0)
+    var done = False
+    var attempts = 0
+    var listen_attempts = 0
+    var port = random.randint(20000, 45000)
+    var server = None
+
+    serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
+
+    def _finish_success():
+        if done:
+            return
+        done = True
+        t.success()
+
+    def _finish_failure(msg: str):
+        if done:
+            return
+        done = True
+        t.failure(AssertionError(msg))
+
+    def _install(s):
+        s.cb_install(_on_http_request, _on_http_server_error)
+
+    def _on_http_accept(s):
+        after 0.3: _install(s)
+
+    def _on_http_request(s, request, respond):
+        respond(200, {}, "late install")
+
+    def _on_http_server_error(s, error):
+        _finish_failure("HTTP server error: " + error)
+
+    def _on_http_listen_error(listener, error):
+        if listen_attempts < 10:
+            listen_attempts += 1
+            port = random.randint(20000, 45000)
+            _start_listener()
+        else:
+            _finish_failure("HTTP listen failed: " + error)
+
+    def _on_connect(c):
+        c.get("/", _on_response)
+
+    def _on_response(c, r):
+        if r.status != 200 or r.body != b"late install":
+            _finish_failure("Unexpected response: " + str(r.status) + " " + str(r.body))
+            return
+        _finish_success()
+
+    def _on_client_error(c, errmsg):
+        if attempts < 5:
+            attempts += 1
+            after 0.1: _start_client()
+        else:
+            _finish_failure("HTTP client error: " + errmsg)
+
+    def _start_client():
+        http.Client(conn_cap, "127.0.0.1", _on_connect, _on_client_error, scheme="http", port=port)
+
+    def _start_listener():
+        server = http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
+
+    def _timeout():
+        _finish_failure("timeout: the request that arrived before cb_install was not answered")
+
+    _start_listener()
+    after 0.05: _start_client()
+    after 10: _timeout()
+
+
 actor _test_HttpsClientServer(t: testing.EnvT):
     """HTTPS client/server roundtrip over TLS"""
     log = logging.Logger(t.log_handler)

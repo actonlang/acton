@@ -195,6 +195,15 @@ extension Response(Eq):
         return self.version == other.version and self.status == other.status and self.headers == other.headers and self.body == other.body
 
 
+def connection_options(headers: dict[str, str]) -> list[str]:
+    """The options listed in the Connection header field, in lower case"""
+    value = headers.get("connection")
+    if value is not None:
+        # Options are tokens, so only ASCII letters are folded
+        return [o.strip(" \t").encode().lower().decode() for o in value.split(",", None)]
+    return []
+
+
 def parse_message(i: bytes, log: logging.Logger) -> (?Message, bytes):
     rs = i.split(b"\r\n\r\n", 1)
     if len(rs) == 1:
@@ -353,79 +362,115 @@ def parse_response(i: bytes, log: logging.Logger) -> (?Response, bytes):
 
 
 actor Server(conn: net.TCPListenConnection, on_accept: action(Server) -> None, log_handler: ?logging.Handler=None):
-    """Server serves a single client connection"""
+    """Server serves a single client connection
+
+    Responses are sent on the connection in request order. A response to a
+    later request is held back until the responses to all earlier requests
+    have been sent.
+    """
     _log = logging.Logger(log_handler)
     var on_request_cb: ?action(Server, Request, action(int, dict[str, str], str) -> None) -> None = None
     var on_error_cb: ?action(Server, str) -> None = None
     var version: ?bytes = None
-    var buf = b""
-    var close_connection: bool = True
     var query_count: u64 = 0
     var response_count: u64 = 0
-    var outstanding_requests: dict[u64, Response] = {}
+    var outstanding_responses: dict[u64, (int, dict[str, str], str)] = {}
+    # Id of the request whose response ends the connection, 0 while there is none
+    var close_after: u64 = 0
+    var buf = b""
+    # Set when the client sent something that is not a valid request
+    var _bad_input: bool = False
+    # Requests received but not yet handed to the request handler
+    var _requests: list[Request] = []
 
     def cb_install(new_on_request: action(Server, Request, action(int, dict[str, str], str) -> None) -> None, new_on_error: action(Server, str) -> None):
         on_request_cb = new_on_request
         on_error_cb = new_on_error
-        if buf != b"":
-            req, buf = parse_request(buf, _log)
+        # Dispatch any requests that arrived before the callbacks were installed
+        _dispatch()
 
     def on_conn_receive(conn_obj, data: bytes) -> None:
-        # TODO: do we really need a buf?
-        if on_request_cb is None:
-            buf += data
-            return None
-        else:
-            if buf != b"":
-                data = buf + data
+        if close_after != 0 or _bad_input:
+            # No further requests are processed on a connection that is closing
+            return
+        buf += data
+        try:
+            while len(buf) > 0:
+                req, rest = parse_request(buf, _log)
+                if req is not None:
+                    _requests.append(req)
+                    buf = rest
+                elif len(rest) == 0:
+                    # parse_request returns no rest for a malformed request
+                    _bad_input = True
+                    break
+                else:
+                    break
+        except ValueError:
+            _bad_input = True
+        if _bad_input:
+            _log.notice("Malformed HTTP request, closing the connection", None)
+            buf = b""
+        _dispatch()
 
-        req, buf = parse_request(data, _log)
-        if req is not None:
-            if version is None:
-                version = req.version
-            elif version is not None and version != req.version:
-                _log.debug("Version mismatch", None)
+    def _dispatch() -> None:
+        while on_request_cb is not None and close_after == 0 and len(_requests) > 0:
+            req = _requests[0]
+            del _requests[0]
+            _handle_request(req)
+        if _bad_input and close_after == 0 and len(_requests) == 0:
+            # Answer the requests received before the malformed input, then close
+            if response_count == query_count:
                 conn.close()
-
-            if version is not None and version == b"1.0":
-                if "connection" in req.headers:
-                    if req.headers["connection"] == "close":
-                        _log.debug("HTTP 1.0 with connection: close, closing connection...", None)
-                        close_connection = True
-                    else:
-                        _log.debug("HTTP 1.0 with connection header, not closing connection...", None)
-                        _log.trace("connection header", {"connection": req.headers["connection"]})
-                else:
-                    close_connection = True
-            elif version is not None and version == b"1.1":
-                if "connection" in req.headers and req.headers["connection"] == "close":
-                    _log.debug("HTTP 1.1, closing connection...", None)
-                    close_connection = True
-                else:
-                    close_connection = False
-
-            query_count += 1
-            def respond(status_code: int, headers: dict[str, str], body: str):
-                _log.trace("Going to respond with query id", {"query_count": query_count})
-                if query_count == response_count + 1:
-                    # In order, send response immediately
-                    _log.trace("Sending response immediately", None)
-                    send_response(status_code, headers, body)
-                    response_count += 1
-                else:
-                    # Buffer up response
-                    _log.trace("Buffering response", None)
-                    # TODO: actually implement buffering?
-                    #outstanding_requests[query_count] = Response("GABBA", version, status_code, headers, body.encode())
-
-            if on_request_cb is not None:
-                response = on_request_cb(self, req, respond)
-                if response is not None:
-                    _log.trace("Sending response immediately", None)
-                else:
-                    _log.trace("Async response", None)
             else:
-                _log.notice("No on_request callback set", None)
+                close_after = query_count
+
+    def _handle_request(req: Request):
+        if version is None:
+            version = req.version
+        elif version is not None and version != req.version:
+            _log.debug("Version mismatch", None)
+            conn.close()
+
+        query_count += 1
+        req_id = query_count
+        # The server does not keep HTTP/1.0 connections alive
+        if req.version == b"1.0" or "close" in connection_options(req.headers):
+            _log.debug("Closing the connection after responding to this request", None)
+            close_after = req_id
+            _requests = []
+
+        def respond(status_code: int, headers: dict[str, str], body: str):
+            _log.trace("Going to respond to query", {"query_id": req_id})
+            if req_id == response_count + 1:
+                # In order, send response immediately
+                _log.trace("Sending response immediately", None)
+                send_response(status_code, headers, body)
+                response_count += 1
+                # Send buffered responses that are next in line
+                while response_count + 1 in outstanding_responses:
+                    nxt = outstanding_responses[response_count + 1]
+                    del outstanding_responses[response_count + 1]
+                    send_response(nxt.0, nxt.1, nxt.2)
+                    response_count += 1
+                if response_count == close_after:
+                    conn.close()
+            elif req_id > response_count + 1 and req_id not in outstanding_responses:
+                # Responses must go out in request order, so buffer this one
+                # until responses to all earlier requests have been sent
+                _log.trace("Buffering response", None)
+                outstanding_responses[req_id] = (status_code, headers, body)
+            else:
+                _log.notice("Duplicate response to query, ignoring", None)
+
+        if on_request_cb is not None:
+            response = on_request_cb(self, req, respond)
+            if response is not None:
+                _log.trace("Sending response immediately", None)
+            else:
+                _log.trace("Async response", None)
+        else:
+            _log.notice("No on_request callback set", None)
 
     def on_conn_error(conn, error):
         # TODO: the conn should really be in here, but type error!?
@@ -439,84 +484,117 @@ actor Server(conn: net.TCPListenConnection, on_accept: action(Server) -> None, l
             res = build_response(version, status_code, headers, data)
             conn.write(res)
 
-        if close_connection:
-            conn.close()
-
 
 actor TLSServer(conn: net.TLSListenConnection, on_accept: action(TLSServer) -> None, log_handler: ?logging.Handler=None):
-    """Server serves a single TLS client connection"""
+    """Server serves a single TLS client connection
+
+    Responses are sent on the connection in request order. A response to a
+    later request is held back until the responses to all earlier requests
+    have been sent.
+    """
     _log = logging.Logger(log_handler)
     var on_request_cb: ?action(TLSServer, Request, action(int, dict[str, str], str) -> None) -> None = None
     var on_error_cb: ?action(TLSServer, str) -> None = None
     var version: ?bytes = None
-    var buf = b""
-    var close_connection: bool = True
     var query_count: u64 = 0
     var response_count: u64 = 0
-    var outstanding_requests: dict[u64, Response] = {}
+    var outstanding_responses: dict[u64, (int, dict[str, str], str)] = {}
+    # Id of the request whose response ends the connection, 0 while there is none
+    var close_after: u64 = 0
+    var buf = b""
+    # Set when the client sent something that is not a valid request
+    var _bad_input: bool = False
+    # Requests received but not yet handed to the request handler
+    var _requests: list[Request] = []
 
     def cb_install(new_on_request: action(TLSServer, Request, action(int, dict[str, str], str) -> None) -> None, new_on_error: action(TLSServer, str) -> None):
         on_request_cb = new_on_request
         on_error_cb = new_on_error
-        if buf != b"":
-            req, buf = parse_request(buf, _log)
+        # Dispatch any requests that arrived before the callbacks were installed
+        _dispatch()
 
     def on_conn_receive(conn_obj, data: bytes) -> None:
-        # TODO: do we really need a buf?
-        if on_request_cb is None:
-            buf += data
-            return None
-        else:
-            if buf != b"":
-                data = buf + data
+        if close_after != 0 or _bad_input:
+            # No further requests are processed on a connection that is closing
+            return
+        buf += data
+        try:
+            while len(buf) > 0:
+                req, rest = parse_request(buf, _log)
+                if req is not None:
+                    _requests.append(req)
+                    buf = rest
+                elif len(rest) == 0:
+                    # parse_request returns no rest for a malformed request
+                    _bad_input = True
+                    break
+                else:
+                    break
+        except ValueError:
+            _bad_input = True
+        if _bad_input:
+            _log.notice("Malformed HTTP request, closing the connection", None)
+            buf = b""
+        _dispatch()
 
-        req, buf = parse_request(data, _log)
-        if req is not None:
-            if version is None:
-                version = req.version
-            elif version is not None and version != req.version:
-                _log.debug("Version mismatch", None)
+    def _dispatch() -> None:
+        while on_request_cb is not None and close_after == 0 and len(_requests) > 0:
+            req = _requests[0]
+            del _requests[0]
+            _handle_request(req)
+        if _bad_input and close_after == 0 and len(_requests) == 0:
+            # Answer the requests received before the malformed input, then close
+            if response_count == query_count:
                 conn.close()
-
-            if version is not None and version == b"1.0":
-                if "connection" in req.headers:
-                    if req.headers["connection"] == "close":
-                        _log.debug("HTTP 1.0 with connection: close, closing connection...", None)
-                        close_connection = True
-                    else:
-                        _log.debug("HTTP 1.0 with connection header, not closing connection...", None)
-                        _log.trace("connection header", {"connection": req.headers["connection"]})
-                else:
-                    close_connection = True
-            elif version is not None and version == b"1.1":
-                if "connection" in req.headers and req.headers["connection"] == "close":
-                    _log.debug("HTTP 1.1, closing connection...", None)
-                    close_connection = True
-                else:
-                    close_connection = False
-
-            query_count += 1
-            def respond(status_code: int, headers: dict[str, str], body: str):
-                _log.trace("Going to respond with query id", {"query_count": query_count})
-                if query_count == response_count + 1:
-                    # In order, send response immediately
-                    _log.trace("Sending response immediately", None)
-                    send_response(status_code, headers, body)
-                    response_count += 1
-                else:
-                    # Buffer up response
-                    _log.trace("Buffering response", None)
-                    # TODO: actually implement buffering?
-                    #outstanding_requests[query_count] = Response("GABBA", version, status_code, headers, body.encode())
-
-            if on_request_cb is not None:
-                response = on_request_cb(self, req, respond)
-                if response is not None:
-                    _log.trace("Sending response immediately", None)
-                else:
-                    _log.trace("Async response", None)
             else:
-                _log.notice("No on_request callback set", None)
+                close_after = query_count
+
+    def _handle_request(req: Request):
+        if version is None:
+            version = req.version
+        elif version is not None and version != req.version:
+            _log.debug("Version mismatch", None)
+            conn.close()
+
+        query_count += 1
+        req_id = query_count
+        # The server does not keep HTTP/1.0 connections alive
+        if req.version == b"1.0" or "close" in connection_options(req.headers):
+            _log.debug("Closing the connection after responding to this request", None)
+            close_after = req_id
+            _requests = []
+
+        def respond(status_code: int, headers: dict[str, str], body: str):
+            _log.trace("Going to respond to query", {"query_id": req_id})
+            if req_id == response_count + 1:
+                # In order, send response immediately
+                _log.trace("Sending response immediately", None)
+                send_response(status_code, headers, body)
+                response_count += 1
+                # Send buffered responses that are next in line
+                while response_count + 1 in outstanding_responses:
+                    nxt = outstanding_responses[response_count + 1]
+                    del outstanding_responses[response_count + 1]
+                    send_response(nxt.0, nxt.1, nxt.2)
+                    response_count += 1
+                if response_count == close_after:
+                    conn.close()
+            elif req_id > response_count + 1 and req_id not in outstanding_responses:
+                # Responses must go out in request order, so buffer this one
+                # until responses to all earlier requests have been sent
+                _log.trace("Buffering response", None)
+                outstanding_responses[req_id] = (status_code, headers, body)
+            else:
+                _log.notice("Duplicate response to query, ignoring", None)
+
+        if on_request_cb is not None:
+            response = on_request_cb(self, req, respond)
+            if response is not None:
+                _log.trace("Sending response immediately", None)
+            else:
+                _log.trace("Async response", None)
+        else:
+            _log.notice("No on_request callback set", None)
 
     def on_conn_error(conn, error):
         # TODO: the conn should really be in here, but type error!?
@@ -529,9 +607,6 @@ actor TLSServer(conn: net.TLSListenConnection, on_accept: action(TLSServer) -> N
         if version is not None:
             res = build_response(version, status_code, headers, data)
             conn.write(res)
-
-        if close_connection:
-            conn.close()
 
 
 # TODO: change port to u16, when u16 has a sub-type relationship to int
