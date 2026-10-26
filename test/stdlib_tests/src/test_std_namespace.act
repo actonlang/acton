@@ -1,4 +1,3 @@
-import logging
 import testing
 
 import std.argparse as argparse
@@ -99,8 +98,7 @@ def _test_std_namespace_parsers_and_random():
 def _test_std_namespace_protocol_module():
     response = http.build_response(b"1.1", 200, {}, "ok")
     testing.assertEqual(response[:15], b"HTTP/1.1 200 OK")
-    # Same parser as base's http: a second response in the buffer comes back as the rest
-    second = b"HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\ntwo"
-    parsed, rest = http.parse_response(b"HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\none" + second, logging.Logger(None))
-    testing.assertEqual(http.Response(b"1.1", 200, {"content-length": "3"}, b"one"), parsed)
-    testing.assertEqual(second, rest)
+    # Same parser as base's http: pipelined responses in one feed all come out
+    msgs = http.MessageParser().feed(b"HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\none" + b"HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\ntwo")
+    testing.assertEqual([http.Response(b"1.1", 200, {"content-length": "3"}, b"one"), http.Response(b"1.1", 200, {"content-length": "3"}, b"two")],
+                        [http.response_from_message(m) for m in msgs])
