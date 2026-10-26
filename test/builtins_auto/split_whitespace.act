@@ -1,0 +1,107 @@
+# split() without a separator splits on runs of whitespace and ignores
+# whitespace at both ends, so it never returns empty pieces. With maxsplit,
+# the remainder after the last split keeps its trailing whitespace. str
+# splits on the characters for which isspace() is true, which includes
+# Unicode spaces. bytes and bytearray split on the six ASCII whitespace
+# bytes: space, \t, \n, \r, \x0b and \x0c.
+
+# (s, maxsplit, s.split(maxsplit=maxsplit)), computed with Python.
+str_cases: list[(str, ?int, list[str])] = [
+    ("", None, []),
+    ("   ", None, []),
+    (" \t\n\r\x0b\x0c ", None, []),
+    ("a", None, ["a"]),
+    ("  a  b c  ", None, ["a", "b", "c"]),
+    ("a b ", None, ["a", "b"]),
+    (" a b", None, ["a", "b"]),
+    ("a\tb\nc\rd\x0be\x0cf", None, ["a", "b", "c", "d", "e", "f"]),
+    ("a\x1cb\x1fc\u0085d e", None, ["a", "b", "c", "d", "e"]),
+    ("f g h i j　k", None, ["f", "g", "h", "i", "j", "k"]),
+    ("a​b﻿c", None, ["a​b﻿c"]),
+    ("é€  𝄞a　ü", None, ["é€", "𝄞a", "ü"]),
+    ("a b c  ", 1, ["a", "b c  "]),
+    ("  a b ", 0, ["a b "]),
+    ("   ", 0, []),
+    ("", 0, []),
+    ("a b c", 2, ["a", "b", "c"]),
+    ("a b c ", 2, ["a", "b", "c "]),
+    ("a b c", 5, ["a", "b", "c"]),
+    ("a b c", -1, ["a", "b", "c"]),
+    ("　é b　　€ c ", 1, ["é", "b　　€ c "]),
+]
+
+# (b, maxsplit, b.split(maxsplit=maxsplit)), computed with Python. The same
+# cases apply to bytearray.
+bytes_cases: list[(bytes, ?int, list[bytes])] = [
+    (b"", None, []),
+    (b"   ", None, []),
+    (b" \t\n\r\x0b\x0c ", None, []),
+    (b"a", None, [b"a"]),
+    (b"  a  b c  ", None, [b"a", b"b", b"c"]),
+    (b"a b ", None, [b"a", b"b"]),
+    (b" a b", None, [b"a", b"b"]),
+    (b"a\tb\nc\rd\x0be\x0cf", None, [b"a", b"b", b"c", b"d", b"e", b"f"]),
+    (b"a\x1cb\x1fc\x85d\xa0e", None, [b"a\x1cb\x1fc\x85d\xa0e"]),
+    (b"a b c  ", 1, [b"a", b"b c  "]),
+    (b"  a b ", 0, [b"a b "]),
+    (b"   ", 0, []),
+    (b"", 0, []),
+    (b"a b c", 2, [b"a", b"b", b"c"]),
+    (b"a b c ", 2, [b"a", b"b", b"c "]),
+    (b"a b c", 5, [b"a", b"b", b"c"]),
+    (b"a b c", -1, [b"a", b"b", b"c"]),
+]
+
+def check_str(fail: list[str], what: str, got: list[str], expected: list[str]):
+    if got != expected:
+        fail.append(what + " = " + str(got) + ", expected " + str(expected))
+        return
+    for i in range(len(got)):
+        if len(got[i]) != len(expected[i]):
+            fail.append(what + ": len(" + repr(got[i]) + ") = " + str(len(got[i])))
+
+def check_bytes(fail: list[str], what: str, got: list[bytes], expected: list[bytes]):
+    if got != expected:
+        fail.append(what + " = " + str(got) + ", expected " + str(expected))
+
+def check_bytearray(fail: list[str], what: str, got: list[bytearray], expected: list[bytes]):
+    if got != [bytearray(e) for e in expected]:
+        fail.append(what + " = " + str(got) + ", expected " + str(expected))
+
+def test_str(fail: list[str]):
+    for s, m, expected in str_cases:
+        check_str(fail, repr(s) + ".split(maxsplit=" + str(m) + ")", s.split(maxsplit=m), expected)
+    check_str(fail, "'  a b '.split()", "  a b ".split(), ["a", "b"])
+    check_str(fail, "'a b c'.split(None, 1)", "a b c".split(None, 1), ["a", "b c"])
+    check_str(fail, "'a  b'.split(' ')", "a  b".split(" "), ["a", "", "b"])
+
+def test_bytes(fail: list[str]):
+    for b, m, expected in bytes_cases:
+        check_bytes(fail, repr(b) + ".split(maxsplit=" + str(m) + ")", b.split(maxsplit=m), expected)
+    check_bytes(fail, "b'  a b '.split()", b"  a b ".split(), [b"a", b"b"])
+    check_bytes(fail, "b'a b c'.split(None, 1)", b"a b c".split(None, 1), [b"a", b"b c"])
+    check_bytes(fail, "b'a  b'.split(b' ')", b"a  b".split(b" "), [b"a", b"", b"b"])
+
+def test_bytearray(fail: list[str]):
+    for b, m, expected in bytes_cases:
+        ba = bytearray(b)
+        check_bytearray(fail, "bytearray(" + repr(b) + ").split(maxsplit=" + str(m) + ")",
+                        ba.split(maxsplit=m), expected)
+    check_bytearray(fail, "bytearray(b'  a b ').split()", bytearray(b"  a b ").split(), [b"a", b"b"])
+    check_bytearray(fail, "bytearray(b'a b c').split(None, 1)",
+                    bytearray(b"a b c").split(None, 1), [b"a", b"b c"])
+
+actor main(env):
+    fail: list[str] = []
+    try:
+        test_str(fail)
+        test_bytes(fail)
+        test_bytearray(fail)
+    except Exception as e:
+        fail.append("unexpected exception: " + str(e))
+    if fail:
+        print("Failed:", len(fail))
+        for f in fail[:40]:
+            print(f)
+        env.exit(1)
+    env.exit(0)
