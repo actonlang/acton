@@ -1021,7 +1021,7 @@ runModuleTestStreaming opts paths topts mode perfHostInfo baselineScale limits m
               case exitCode of
                 ExitSuccess -> res1
                 ExitFailure code ->
-                  res1 { trException = Just ("Test process exited with code " ++ show code) }
+                  res1 { trSuccess = Nothing, trException = Just ("Test process exited with code " ++ show code) }
     updated <-
       if C.testSnapshotUpdate topts
         then applySnapshotUpdate paths res
