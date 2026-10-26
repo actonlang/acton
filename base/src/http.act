@@ -5,6 +5,19 @@ import net
 import time
 
 _unreachable_error = ValueError("Unreachable")
+_header_field_error = ValueError("Malformed header field")
+_content_length_error = ValueError("Malformed Content-Length")
+_transfer_encoding_error = ValueError("Unsupported Transfer-Encoding")
+_framing_conflict_error = ValueError("Both Transfer-Encoding and Content-Length")
+_http10_transfer_encoding_error = ValueError("Transfer-Encoding in an HTTP/1.0 message")
+_chunk_size_error = ValueError("Malformed chunk size line")
+_chunk_end_error = ValueError("Missing CRLF after chunk data")
+_request_line_error = ValueError("Malformed request line")
+_status_line_error = ValueError("Malformed status line")
+_http_version_error = ValueError("Unsupported HTTP version")
+
+# tchar of RFC 9110 section 5.6.2, the characters of a field name
+_TOKEN_CHARS = set(b"!#$%&'*+-.^_`|~0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz")
 
 
 responses : dict[int,bytes] = {
@@ -195,6 +208,328 @@ extension Response(Eq):
         return self.version == other.version and self.status == other.status and self.headers == other.headers and self.body == other.body
 
 
+# MessageParser states
+_ST_HEADERS    = 0  # waiting for the end of a header block
+_ST_BODY       = 1  # inside a Content-Length body, _remaining bytes still to come
+_ST_CHUNK_SIZE = 2  # waiting for the end of a chunk-size line
+_ST_CHUNK_DATA = 3  # inside chunk data, _remaining bytes still to come
+_ST_CHUNK_END  = 4  # waiting for the CRLF that ends a chunk
+_ST_TRAILER    = 5  # after the last chunk, waiting for the end of a trailer line
+
+class MessageParser(object):
+    """Incremental HTTP/1.1 message parser
+
+    feed(data) consumes the bytes of a connection as they arrive and returns
+    the messages they complete, in order. Between calls the parser remembers
+    where it is: inside a header block, inside a body of known length or
+    inside a chunked body. Bytes are not searched or copied again when more
+    data arrives, so a message costs time linear in its size, however many
+    reads deliver it and however many chunks it consists of.
+
+    When the input is not a valid HTTP/1.1 message, error is set to a
+    description of the problem. feed() still returns the messages completed
+    before the malformed one. From then on it returns no messages, because
+    where the following messages begin is unknown.
+    """
+    error: ?str
+    _state: int
+    _remaining: int              # bytes left of the body or of the current chunk
+    _partial: list[bytes]        # the incomplete header block or line, in pieces
+    _partial_len: int
+    _start_line: bytes
+    _headers: dict[str, str]
+    _body_parts: list[bytes]     # body of the message under construction, joined once at the end
+
+    def __init__(self):
+        self.error = None
+        self._state = _ST_HEADERS
+        self._remaining = 0
+        self._partial = []
+        self._partial_len = 0
+        self._start_line = b""
+        self._headers = {}
+        self._body_parts = []
+
+    def feed(self, data: bytes) -> list[Message]:
+        """Consume data and return the messages completed by it"""
+        msgs: list[Message] = []
+        if self.error is not None:
+            return msgs
+        try:
+            self._parse(data, msgs)
+        except ValueError as e:
+            self.error = e.error_message
+            self._partial = []
+            self._partial_len = 0
+            self._body_parts = []
+        return msgs
+
+    def _parse(self, data: bytes, msgs: list[Message]) -> None:
+        n = len(data)
+        pos = 0
+        while True:
+            if self._state == _ST_HEADERS:
+                if self._partial_len == 0:
+                    # Empty lines before a start line are ignored
+                    while data[pos:pos + 2] == b"\r\n":
+                        pos += 2
+                if pos >= n:
+                    break
+                head, pos = self._take(data, pos, b"\r\n\r\n")
+                if head is not None:
+                    while head.startswith(b"\r\n"):
+                        head = head[2:]
+                    if len(head) > 0:
+                        self._begin_message(head)
+                else:
+                    break
+            elif self._state == _ST_BODY or self._state == _ST_CHUNK_DATA:
+                avail = n - pos
+                if avail < self._remaining:
+                    # Take what is here and wait for the rest
+                    if avail > 0:
+                        self._body_parts.append(data if pos == 0 else data[pos:])
+                        self._remaining -= avail
+                    break
+                if self._remaining > 0:
+                    self._body_parts.append(data[pos:pos + self._remaining])
+                    pos += self._remaining
+                    self._remaining = 0
+                if self._state == _ST_BODY:
+                    msgs.append(self._finish())
+                else:
+                    self._state = _ST_CHUNK_END
+            elif self._state == _ST_CHUNK_SIZE:
+                line, pos = self._take(data, pos, b"\r\n")
+                if line is not None:
+                    size = parse_chunk_size(line)
+                    if size == 0:
+                        self._state = _ST_TRAILER
+                    else:
+                        self._remaining = size
+                        self._state = _ST_CHUNK_DATA
+                else:
+                    break
+            elif self._state == _ST_CHUNK_END:
+                line, pos = self._take(data, pos, b"\r\n")
+                if line is not None:
+                    if len(line) > 0:
+                        raise _chunk_end_error
+                    self._state = _ST_CHUNK_SIZE
+                else:
+                    break
+            elif self._state == _ST_TRAILER:
+                line, pos = self._take(data, pos, b"\r\n")
+                if line is not None:
+                    # Trailer fields are ignored, the empty line ends the message
+                    if len(line) == 0:
+                        msgs.append(self._finish())
+                else:
+                    break
+            else:
+                raise _unreachable_error
+
+    def _take(self, data: bytes, pos: int, delim: bytes) -> (?bytes, int):
+        # Return the element that ends at the next delim, which may have
+        # started in earlier reads, and the position after delim. Without a
+        # delim, keep the rest of data as part of the element and return
+        # None. Only data is searched, plus a window of len(delim) - 1 bytes
+        # on either side of the boundary with the bytes kept from before.
+        k = len(delim)
+        if self._partial_len > 0:
+            tail = self._partial_tail(k - 1)
+            i = (tail + data[pos:pos + k - 1]).find(delim)
+            if i >= 0:
+                elem = b"".join(self._partial)[:self._partial_len - len(tail) + i]
+                self._partial = []
+                self._partial_len = 0
+                return elem, pos + i + k - len(tail)
+        end = data.find(delim, pos)
+        if end < 0:
+            if pos < len(data):
+                piece = data if pos == 0 else data[pos:]
+                self._partial.append(piece)
+                self._partial_len += len(piece)
+            return None, len(data)
+        elem = data[pos:end]
+        if self._partial_len > 0:
+            self._partial.append(elem)
+            elem = b"".join(self._partial)
+            self._partial = []
+            self._partial_len = 0
+        return elem, end + k
+
+    def _partial_tail(self, m: int) -> bytes:
+        # The last m bytes kept of the incomplete element, or all of them
+        tail = b""
+        i = len(self._partial) - 1
+        while len(tail) < m and i >= 0:
+            piece = self._partial[i]
+            need = m - len(tail)
+            if len(piece) > need:
+                piece = piece[len(piece) - need:]
+            tail = piece + tail
+            i -= 1
+        return tail
+
+    def _begin_message(self, head: bytes) -> None:
+        # head is the header block without the terminating empty line
+        lines = head.split(b"\r\n", None)
+        self._start_line = lines[0]
+        values: dict[str, list[str]] = {}
+        for line in lines[1:]:
+            colon = line.find(b":")
+            if colon <= 0:
+                raise _header_field_error
+            name = line[:colon]
+            # A field name is a token. This also rejects whitespace before
+            # the colon and lines folded onto the previous one.
+            for c in name:
+                if c not in _TOKEN_CHARS:
+                    raise _header_field_error
+            hname = name.lower().decode()
+            hvalue = ""
+            try:
+                hvalue = line[colon + 1:].decode().strip(" \t")
+            except ValueError:
+                raise _header_field_error
+            if hname in values:
+                values[hname].append(hvalue)
+            else:
+                values[hname] = [hvalue]
+        # A field repeated on several lines means the same as one line with
+        # the values joined by commas, except Set-Cookie, which cannot be
+        # joined and keeps its last value
+        headers: dict[str, str] = {}
+        for hname, hvalues in values.items():
+            headers[hname] = hvalues[-1] if hname == "set-cookie" else ", ".join(hvalues)
+        self._headers = headers
+        self._body_parts = []
+        self._remaining = 0
+
+        tenc = headers.get("transfer-encoding")
+        clen = headers.get("content-length")
+        if tenc is not None:
+            if clen is not None:
+                raise _framing_conflict_error
+            # The version is the first word of a status line and the last
+            # word of a request line
+            words = self._start_line.split(b" ", None)
+            version = words[0] if words[0].startswith(b"HTTP/") else words[-1]
+            if version == b"HTTP/1.0":
+                raise _http10_transfer_encoding_error
+            codings = tenc.split(",", None)
+            if len(codings) != 1 or codings[0].strip(" \t").encode().lower() != b"chunked":
+                raise _transfer_encoding_error
+            self._state = _ST_CHUNK_SIZE
+        else:
+            if clen is not None:
+                self._remaining = parse_content_length(clen)
+            # Without framing fields there is no body, and _ST_BODY with
+            # nothing remaining completes the message right away
+            self._state = _ST_BODY
+
+    def _finish(self) -> Message:
+        parts = self._body_parts
+        body = parts[0] if len(parts) == 1 else b"".join(parts)
+        msg = Message(self._start_line, self._headers, body)
+        self._state = _ST_HEADERS
+        self._remaining = 0
+        self._start_line = b""
+        self._headers = {}
+        self._body_parts = []
+        return msg
+
+
+def parse_content_length(value: str) -> int:
+    """The body length given by a Content-Length field value
+
+    The value is a decimal number, or a comma-separated list of the same
+    number when the field was repeated. Raises ValueError for anything else.
+    """
+    length = -1
+    for item in value.split(",", None):
+        item = item.strip(" \t")
+        if len(item) == 0:
+            raise _content_length_error
+        for c in item:
+            if c not in "0123456789":
+                raise _content_length_error
+        n = int(item)
+        if length >= 0 and n != length:
+            raise _content_length_error
+        length = n
+    return length
+
+
+def parse_chunk_size(line: bytes) -> int:
+    """The chunk size given by a chunk-size line without its CRLF
+
+    The size is a hexadecimal number. A chunk extension after it is ignored.
+    Raises ValueError for anything else.
+    """
+    semi = line.find(b";")
+    if semi >= 0:
+        line = line[:semi].rstrip(b" \t")
+    if len(line) == 0:
+        raise _chunk_size_error
+    for c in line:
+        if not ((c >= 48 and c <= 57) or (c >= 65 and c <= 70) or (c >= 97 and c <= 102)):
+            raise _chunk_size_error
+    return int(line.decode(), 16)
+
+
+def request_from_message(msg: Message) -> Request:
+    """The request a parsed message carries
+
+    Raises ValueError when the start line is not a valid HTTP/1.0 or HTTP/1.1
+    request line.
+    """
+    slparts = msg.start_line.split(b" ", None)
+    if len(slparts) != 3:
+        # HTTP request must have exactly 3 parts: METHOD PATH HTTP/VERSION
+        raise _request_line_error
+    method = ""
+    path = ""
+    try:
+        method = slparts[0].decode()
+        path = slparts[1].decode()
+    except ValueError:
+        raise _request_line_error
+    verparts = slparts[2].split(b"/", 1)
+    if len(verparts) != 2:
+        # TODO: actually HTTP 0.9 might only have 2 parts, but we don't support that
+        raise _request_line_error
+    version = verparts[1]
+    if version != b"1.1" and version != b"1.0":
+        raise _http_version_error
+    return Request(method, path, version, msg.headers, msg.body)
+
+
+def response_from_message(msg: Message) -> Response:
+    """The response a parsed message carries
+
+    Raises ValueError when the start line is not a valid HTTP/1.0 or HTTP/1.1
+    status line.
+    """
+    slparts = msg.start_line.split(b" ", None)
+    if len(slparts) < 2:
+        # HTTP response must have at least 2 parts: HTTP/VERSION STATUS_CODE [REASON_PHRASE]
+        raise _status_line_error
+    verparts = slparts[0].split(b"/", 1)
+    if len(verparts) != 2:
+        raise _status_line_error
+    version = verparts[1]
+    if version != b"1.1" and version != b"1.0":
+        raise _http_version_error
+    status = 0
+    try:
+        status = int(slparts[1].decode())
+    except ValueError:
+        raise _status_line_error
+    return Response(version, status, msg.headers, msg.body)
+
+
 def connection_options(headers: dict[str, str]) -> list[str]:
     """The options listed in the Connection header field, in lower case"""
     value = headers.get("connection")
@@ -203,162 +538,6 @@ def connection_options(headers: dict[str, str]) -> list[str]:
         return [o.strip(" \t").encode().lower().decode() for o in value.split(",", None)]
     return []
 
-
-def parse_message(i: bytes, log: logging.Logger) -> (?Message, bytes):
-    rs = i.split(b"\r\n\r\n", 1)
-    if len(rs) == 1:
-        return None, i
-    else:
-        header_lines = rs[0].split(b"\r\n", None)
-        start_line = header_lines[0].rstrip(b"\r\n")
-
-        headers : dict[str, str] = {}
-        for hline in header_lines[1:]:
-            hv = hline.split(b":", 1)
-            if len(hv) == 1:
-                # TODO: silently ignore or explicitly throw error or something?
-                pass
-            else:
-                try:
-                    hname = hv[0].decode().strip(" ").lower()
-                    headers[hname] = hv[1].decode().strip(" ")
-                except ValueError:
-                    log.debug("Invalid header")
-                    return None, i
-
-        # TODO: why do we have to init body & rest here? seems we segfault otherwise...
-        body = b""
-        rest = b""
-        if "content-length" in headers:
-            clen = int(headers["content-length"].strip(" "))
-            log.trace(f"Got content-length in headers, expecting {clen} bytes", None)
-            if len(rs[1]) >= clen:
-                body = rs[1][:clen]
-                rest = rs[1][clen:]
-                log.trace("Enough data to reach content-length!", None)
-                msg = Message(start_line, headers, body)
-                return msg, rest
-            else:
-                log.trace("Not enough data to reach content-length", None)
-                return None, i
-        elif "transfer-encoding" in headers:
-            tenc = set(headers["transfer-encoding"].strip(" ").split(",", None))
-            if "chunked" in tenc:
-                log.trace("Got chunked transfer-encoding", None)
-                reached_end = False
-                rest = rs[1]
-                log.trace(f"Rest: {str(rest)}", None)
-                body = b""
-                while not reached_end:
-                    maybe_chunk = rest.split(b"\r\n", 1)
-                    if len(maybe_chunk) == 1:
-                        log.trace("No chunk header found", None)
-                        return None, i
-                    elif len(maybe_chunk) == 2:
-                        chunk_header = maybe_chunk[0].strip(b"\r\n")
-                        if chunk_header == b"":
-                            log.trace("Empty chunk header", None)
-                            return None, i
-                        try:
-                            chunk_header_str = chunk_header.decode()
-                        except ValueError:
-                            log.debug("Invalid chunk header")
-                            return None, i
-                        else:
-                            rest = maybe_chunk[1]
-                            log.trace(f"Chunk header: {chunk_header[:20]}", None)
-                            try:
-                                clen = int(chunk_header_str, 16)
-                                log.trace(f"Chunk length: {clen}", None)
-                            except ValueError:
-                                log.trace("Chunk header not a length", None)
-                            else:
-                                if len(rest) >= clen:
-                                    gap = rest[clen-10:clen+10]
-                                    chunk = rest[:clen]
-                                    log.trace(f"Read chunk: {str(chunk)}", None)
-                                    rest = rest[clen:]
-                                    if len(rest) < 2 and rest[0:2] != b"\r\n":
-                                        log.trace("Could not find chunk end marker", None)
-                                        return None, i
-                                    rest = rest[2:]
-                                    #log.trace("Enough data to reach end of chunk", None)
-                                    chunk_preview = str(chunk[-5:])
-                                    rest_preview = str(rest[:5])
-                                    log.trace(f"Enough data to reach end of chunk, chunk gap: {chunk_preview}|{rest_preview}", None)
-                                    body += chunk
-                                    if clen == 0:
-                                        reached_end = True
-                                        msg = Message(start_line, headers, body)
-                                        log.trace("Reached end of chunked message", None)
-                                        return msg, rest
-                                else:
-                                    log.trace("Not enough data to reach end of chunk", None)
-                                    return None, i
-
-                    else:
-                        # TODO: InternalError?
-                        raise _unreachable_error
-        else:
-            body = b""
-            rest = rs[1]
-            msg = Message(start_line, headers, body)
-            return msg, rest
-        return None, i
-
-
-def parse_request(i: bytes, log: logging.Logger) -> (?Request, bytes):
-    msg, rest = parse_message(i, log)
-    if msg is not None:
-        slparts = msg.start_line.split(b" ", None)
-        if len(slparts) != 3:
-            # HTTP request must have exactly 3 parts: METHOD PATH HTTP/VERSION
-            return None, b""
-        try:
-            method = slparts[0].decode()
-            path = slparts[1].decode()
-        except ValueError:
-            log.debug("Invalid method/path")
-            return None, b""
-        else:
-            verparts = slparts[2].split(b"/", 1)
-            if len(verparts) != 2:
-                # invalid request
-                # TODO: actually HTTP 0.9 might only have 2 parts, but we don't support that
-                return None, b""
-            version = verparts[1]
-            if version != b"1.1" and version != b"1.0":
-                return None, b""
-            req = Request(method, path, version, msg.headers, msg.body)
-            return req, rest
-    return None, i
-
-def parse_response(i: bytes, log: logging.Logger) -> (?Response, bytes):
-    msg, rest = parse_message(i, log)
-    if msg is not None:
-        slparts = msg.start_line.split(b" ", None)
-        if len(slparts) < 2:
-            # HTTP response must have at least 2 parts: HTTP/VERSION STATUS_CODE [REASON_PHRASE]
-            return None, b""
-        verparts = slparts[0].split(b"/", 1)
-        if len(verparts) != 2:
-            # invalid request
-            # TODO: actually HTTP 0.9 might only have 2 parts, but we don't support that
-            return None, b""
-        version = verparts[1]
-        if version != b"1.1" and version != b"1.0":
-            log.trace("Invalid HTTP version", None)
-            return None, b""
-
-        try:
-            status = int(slparts[1].decode())
-        except ValueError:
-            log.debug("Invalid status")
-            return None, b""
-        else:
-            resp = Response(version, status, msg.headers, msg.body)
-            return resp, rest
-    return None, i
 
 
 actor Server(conn: net.TCPListenConnection, on_accept: action(Server) -> None, log_handler: ?logging.Handler=None):
@@ -379,7 +558,7 @@ actor Server(conn: net.TCPListenConnection, on_accept: action(Server) -> None, l
     var outstanding_responses: dict[u64, (int, dict[str, str], str)] = {}
     # Id of the request whose response ends the connection, 0 while there is none
     var close_after: u64 = 0
-    var buf = b""
+    _parser = MessageParser()
     # Set when the client sent something that is not a valid request
     var _bad_input: bool = False
     # Requests received but not yet handed to the request handler
@@ -395,24 +574,17 @@ actor Server(conn: net.TCPListenConnection, on_accept: action(Server) -> None, l
         if close_after != 0 or _bad_input:
             # No further requests are processed on a connection that is closing
             return
-        buf += data
-        try:
-            while len(buf) > 0:
-                req, rest = parse_request(buf, _log)
-                if req is not None:
-                    _requests.append(req)
-                    buf = rest
-                elif len(rest) == 0:
-                    # parse_request returns no rest for a malformed request
-                    _bad_input = True
-                    break
-                else:
-                    break
-        except ValueError:
+        msgs = _parser.feed(data)
+        failure = _parser.error
+        for msg in msgs:
+            try:
+                _requests.append(request_from_message(msg))
+            except ValueError as e:
+                failure = e.error_message
+                break
+        if failure is not None:
+            _log.notice("Malformed HTTP request, closing the connection", {"error": failure})
             _bad_input = True
-        if _bad_input:
-            _log.notice("Malformed HTTP request, closing the connection", None)
-            buf = b""
         _dispatch()
 
     def _dispatch() -> None:
@@ -501,7 +673,7 @@ actor TLSServer(conn: net.TLSListenConnection, on_accept: action(TLSServer) -> N
     var outstanding_responses: dict[u64, (int, dict[str, str], str)] = {}
     # Id of the request whose response ends the connection, 0 while there is none
     var close_after: u64 = 0
-    var buf = b""
+    _parser = MessageParser()
     # Set when the client sent something that is not a valid request
     var _bad_input: bool = False
     # Requests received but not yet handed to the request handler
@@ -517,24 +689,17 @@ actor TLSServer(conn: net.TLSListenConnection, on_accept: action(TLSServer) -> N
         if close_after != 0 or _bad_input:
             # No further requests are processed on a connection that is closing
             return
-        buf += data
-        try:
-            while len(buf) > 0:
-                req, rest = parse_request(buf, _log)
-                if req is not None:
-                    _requests.append(req)
-                    buf = rest
-                elif len(rest) == 0:
-                    # parse_request returns no rest for a malformed request
-                    _bad_input = True
-                    break
-                else:
-                    break
-        except ValueError:
+        msgs = _parser.feed(data)
+        failure = _parser.error
+        for msg in msgs:
+            try:
+                _requests.append(request_from_message(msg))
+            except ValueError as e:
+                failure = e.error_message
+                break
+        if failure is not None:
+            _log.notice("Malformed HTTP request, closing the connection", {"error": failure})
             _bad_input = True
-        if _bad_input:
-            _log.notice("Malformed HTTP request, closing the connection", None)
-            buf = b""
         _dispatch()
 
     def _dispatch() -> None:
@@ -667,9 +832,8 @@ actor Client(cap: net.TCPConnectCap, address: str, on_connect: action(Client) ->
     # Outstanding requests, oldest first: request bytes and callback
     var _on_response: list[(bytes, action(Client, Response) -> None)] = []
     var version: ?bytes = None
-    var buf = b""
+    var _parser = MessageParser()
     var _connected: bool = False
-    var close_connection: bool = True
     var tcp_conn: ?net.TCPConnection = None
     var tls_conn: ?net.TLSConnection = None
 
@@ -688,7 +852,9 @@ actor Client(cap: net.TCPConnectCap, address: str, on_connect: action(Client) ->
 
     def _on_conn_connect():
         # Requests issued while there was no connection, or that were not
-        # answered before a reconnect, are sent now, in order
+        # answered before a reconnect, are sent now, in order. A new
+        # connection starts a new byte stream.
+        _parser = MessageParser()
         _connected = True
         for r in _on_response:
             _conn_write(r.0)
@@ -707,18 +873,20 @@ actor Client(cap: net.TCPConnectCap, address: str, on_connect: action(Client) ->
         _on_con_receive(data)
 
     def _on_con_receive(data: bytes) -> None:
-        buf += data
+        if not _connected:
+            # Data that arrives after the client gave up on the connection
+            return
         _log.debug("Received data", {"bytes": len(data)})
-        #_log.trace("Received data", {"data": data})
-
-        while True:
-            r, buf = parse_response(buf, _log)
+        msgs = _parser.feed(data)
+        failure = _parser.error
+        for msg in msgs:
+            r = None
+            try:
+                r = response_from_message(msg)
+            except ValueError as e:
+                failure = e.error_message
+                break
             if r is not None:
-                if "connection" in r.headers and r.headers["connection"] == "close":
-                    close_connection = True
-                    _conn_close()
-                    _log.debug("Closing TCP connection due to header: Connection: close", None)
-                    _connect()
                 if len(_on_response) == 0:
                     _log.notice("Data received with no on_response callback set", None)
                     break
@@ -727,8 +895,17 @@ actor Client(cap: net.TCPConnectCap, address: str, on_connect: action(Client) ->
                 cb = outreq.1
 
                 cb(self, r)
-            else:
-                break
+                if "close" in connection_options(r.headers):
+                    # The server closes the connection after this response,
+                    # so whatever else this read holds is not a response
+                    _log.debug("Closing TCP connection due to header: Connection: close", None)
+                    _conn_close()
+                    _connect()
+                    return
+        if failure is not None:
+            _log.notice("Malformed HTTP response, closing connection", {"error": failure})
+            _conn_close()
+            _on_con_error("Malformed HTTP response: " + failure)
 
     def _on_tcp_error(conn: net.TCPConnection, error: str) -> None:
         _on_con_error(error)
@@ -752,7 +929,7 @@ actor Client(cap: net.TCPConnectCap, address: str, on_connect: action(Client) ->
             tls_conn.close(_noop)
 
     def _conn_write(data: bytes) -> None:
-        _log.trace("Sending data", {"data": data})
+        _log.trace("Sending data", {"bytes": len(data)})
         if tcp_conn is not None:
             tcp_conn.write(data)
         elif tls_conn is not None:
