@@ -1160,6 +1160,129 @@ actor _test_HttpClientCallbackCallsBack(t: testing.EnvT):
 
 
 
+actor _EarlyRequests(t: testing.EnvT, scheme: str):
+    """Requests issued before the client has connected are sent exactly once
+
+    200 requests are issued right after the client is created, before it
+    has connected. Each one must reach the server once and be answered in
+    order, and the client must not report errors for them.
+    """
+    log = logging.Logger(t.log_handler)
+    t.timeout(15.0)
+    var done = False
+    var attempts = 0
+    var listen_attempts = 0
+    var port = random.randint(20000, 45000)
+    var server = None
+    var tls_server = None
+    var handled: list[str] = []
+    var received: list[bytes] = []
+    expected = [("/" + str(i)).encode() for i in range(200)]
+
+    serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
+
+    def _finish_success():
+        if done:
+            return
+        done = True
+        t.success()
+
+    def _finish_failure(msg: str):
+        if done:
+            return
+        done = True
+        t.failure(AssertionError(msg))
+
+    def _on_http_accept(s):
+        s.cb_install(_on_http_request, _on_http_server_error)
+
+    def _on_http_request(s, request, respond):
+        handled.append(request.path)
+        respond(200, {}, request.path)
+
+    def _on_http_server_error(s, error):
+        _finish_failure("HTTP server error: " + error)
+
+    def _listen_failed(error: str):
+        if listen_attempts < 10:
+            listen_attempts += 1
+            port = random.randint(20000, 45000)
+            _start_listener()
+        else:
+            _finish_failure("HTTP listen failed: " + error)
+
+    def _on_http_listen_error(listener, error):
+        _listen_failed(error)
+
+    def _on_connect(c):
+        pass
+
+    def _on_response(c, r):
+        received.append(r.body)
+        if len(received) == len(expected):
+            if received != expected:
+                _finish_failure("Responses out of order or wrong: " + str(received))
+                return
+            # Give duplicate requests time to reach the handler
+            after 0.2: _check_handled()
+
+    def _check_handled():
+        if handled != [e.decode() for e in expected]:
+            _finish_failure("Each request must be handled once, handled: " + str(handled))
+            return
+        _finish_success()
+
+    def _on_client_error(c, errmsg):
+        if len(received) == 0 and len(handled) == 0 and attempts < 5 and "not established" not in errmsg:
+            # The listener was not up yet, try again with a new client
+            attempts += 1
+            after 0.1: _start_client()
+        else:
+            _finish_failure("HTTP client error: " + errmsg)
+
+    def _start_client():
+        c = http.Client(conn_cap, "127.0.0.1", _on_connect, _on_client_error, scheme=scheme, port=port, tls_verify=False)
+        for i in range(len(expected)):
+            c.get("/" + str(i), _on_response)
+
+    def _start_listener():
+        if scheme == "https":
+            tls_server = http.TLSListener(serv_cap, "127.0.0.1", port, CERT_PEM.encode(), KEY_PEM.encode(), _on_https_accept, _on_https_listen_error)
+        else:
+            server = http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
+
+    def _on_https_accept(s):
+        s.cb_install(_on_https_request, _on_https_server_error)
+
+    def _on_https_request(s, request, respond):
+        handled.append(request.path)
+        respond(200, {}, request.path)
+
+    def _on_https_server_error(s, error):
+        _finish_failure("HTTPS server error: " + error)
+
+    def _on_https_listen_error(listener, error):
+        _listen_failed(error)
+
+    def _timeout():
+        _finish_failure("timeout, responses received: " + str(received) + ", handled: " + str(handled))
+
+    _start_listener()
+    after 0.05: _start_client()
+    after 10: _timeout()
+
+
+actor _test_HttpClientEarlyRequests(t: testing.EnvT):
+    """HTTP requests issued before the client has connected are sent exactly once"""
+    _EarlyRequests(t, "http")
+
+
+actor _test_HttpsClientEarlyRequests(t: testing.EnvT):
+    """HTTPS requests issued before the client has connected are sent exactly once"""
+    _EarlyRequests(t, "https")
+
+
 actor _test_HttpsClientServer(t: testing.EnvT):
     """HTTPS client/server roundtrip over TLS"""
     log = logging.Logger(t.log_handler)
