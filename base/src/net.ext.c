@@ -762,6 +762,17 @@ static void tcp_close_handle(uv_handle_t *handle) {
     }
 }
 
+// Closes a TCP handle with a reset (RST) rather than an orderly shutdown
+static void tcp_close_reset(uv_tcp_t *handle) {
+    if (uv_is_closing((uv_handle_t *)handle)) {
+        return;
+    }
+    // Fails while a shutdown is in progress
+    if (uv_tcp_close_reset(handle, NULL) != 0) {
+        uv_close((uv_handle_t *)handle, NULL);
+    }
+}
+
 // Binds and listens on a TCP server handle, errmsg is set on failure
 static int tcp_listen(uv_tcp_t *server, B_str address, int64_t port, uv_connection_cb cb, const char *proto, char *errmsg, size_t errmsg_len) {
     struct sockaddr_storage addr;
@@ -800,25 +811,36 @@ static void tcp_listener_names(int64_t sock, char *addr, size_t addr_len, int *p
 }
 
 void netQ_TCPConnection__on_receive(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
-    if (nread < 0){
-        if (nread == UV_EOF) {
-            netQ_TCPConnection self = stream->data;
-            if ((intptr_t)stream != -1)
-                uv_close((uv_handle_t *)stream, NULL);
+    netQ_TCPConnection self = stream->data;
+    if (self == NULL) {
+        return;
+    }
+
+    if (nread > 0) {
+        $action2 f = ($action2)self->on_receive;
+        f->$class->__asyn__(f, self, actBytesFromCStringLengthCopy(buf->base, nread));
+        self->_bytes_in += nread;
+    } else if (nread < 0) {
+        // End of stream or a read error, like a reset: the connection is over
+        stream->data = NULL;
+        tcp_close_handle((uv_handle_t *)stream);
+        if ((uv_stream_t *)(intptr_t)self->_sock == stream) {
             self->_sock = -1LL;
             self->_sock4 = -1LL;
             self->_sock6 = -1LL;
+            self->_state = self->STATE_CLOSED;
+        }
+        if (nread == UV_EOF) {
             if (self->on_remote_close) {
                 $action f = ($action)self->on_remote_close;
                 f->$class->__asyn__(f, self);
             }
-        }
-    } else if (nread > 0) {
-        if (stream->data) {
-            netQ_TCPConnection self = stream->data;
-            $action2 f = ($action2)self->on_receive;
-            f->$class->__asyn__(f, self, actBytesFromCStringLengthCopy(buf->base, nread));
-            self->_bytes_in += nread;
+        } else {
+            char errmsg[1024] = "TCP read error: ";
+            uv_strerror_r((int)nread, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+            log_debug("%s", errmsg);
+            $action2 f = ($action2)self->on_error;
+            f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
         }
     }
 }
@@ -904,6 +926,32 @@ $R netQ_TCPConnectionD__read_startG_local (netQ_TCPConnection self, $Cont c$cont
     return $R_CONT(c$cont, B_None);
 }
 
+// A write failed: close the connection and report the error, unless the
+// connection was already closed
+static void tcp_connection_write_failed(netQ_TCPConnection self, uv_stream_t *stream, int status) {
+    char errmsg[1024] = "Failed to write to TCP socket: ";
+    uv_strerror_r(status, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+    log_debug("%s", errmsg);
+    if ((uv_stream_t *)(intptr_t)self->_sock != stream) {
+        return;
+    }
+    self->_sock = -1LL;
+    self->_sock4 = -1LL;
+    self->_sock6 = -1LL;
+    self->_state = self->STATE_CLOSED;
+    stream->data = NULL;
+    tcp_close_handle((uv_handle_t *)stream);
+    $action2 f = ($action2)self->on_error;
+    f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
+}
+
+static void tcp_connection_write_cb(uv_write_t *req, int status) {
+    // UV_ECANCELED: the connection was closed with the write still queued
+    if (status < 0 && status != UV_ECANCELED) {
+        tcp_connection_write_failed((netQ_TCPConnection)req->data, req->handle, status);
+    }
+}
+
 $R netQ_TCPConnectionD_writeG_local (netQ_TCPConnection self, $Cont c$cont, B_bytes data) {
     uv_stream_t *stream = (uv_stream_t *)(intptr_t)self->_sock;
     // fd == -1 means invalid FD and can happen after __resume__
@@ -911,14 +959,12 @@ $R netQ_TCPConnectionD_writeG_local (netQ_TCPConnection self, $Cont c$cont, B_by
         return $R_CONT(c$cont, B_None);
 
     uv_write_t *req = (uv_write_t *)acton_malloc(sizeof(uv_write_t));
+    req->data = self;
     uv_buf_t buf = uv_buf_init((char *)data->str, data->nbytes);
-    int r = uv_write(req, stream, &buf, 1, NULL);
+    int r = uv_write(req, stream, &buf, 1, tcp_connection_write_cb);
     if (r < 0) {
-        char errmsg[1024] = "Failed to write to TCP socket: ";
-        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
-        log_warn(errmsg);
-        $action2 f = ($action2)self->on_error;
-        f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
+        tcp_connection_write_failed(self, stream, r);
+        return $R_CONT(c$cont, B_None);
     }
     self->_bytes_out += data->nbytes;
     return $R_CONT(c$cont, B_None);
@@ -940,9 +986,9 @@ struct close_cb_data {
 
 static void after_shutdown(uv_shutdown_t* req, int status) {
     log_debug("TCP Shutdown complete, closing handle");
-    if (status < 0)
+    if (status < 0 && status != UV_ECANCELED)
         log_warn("Error in TCP shutdown: %s", uv_strerror(status));
-    uv_close((uv_handle_t*)req->handle, NULL);
+    tcp_close_handle((uv_handle_t*)req->handle);
     struct close_cb_data *cb_data = (struct close_cb_data *)req->data;
     $action on_close = ($action)cb_data->on_close;
     on_close->$class->__asyn__(on_close, cb_data->self);
@@ -950,6 +996,9 @@ static void after_shutdown(uv_shutdown_t* req, int status) {
 
 $R netQ_TCPConnectionD_closeG_local (netQ_TCPConnection self, $Cont c$cont, $action on_close) {
     uv_stream_t *stream = (uv_stream_t *)(intptr_t)self->_sock;
+    self->_sock = -1LL;
+    self->_sock4 = -1LL;
+    self->_sock6 = -1LL;
     // fd == -1 means invalid FD and can happen after __resume__
     if ((intptr_t)stream == -1) {
         on_close->$class->__asyn__(on_close, self);
@@ -957,26 +1006,35 @@ $R netQ_TCPConnectionD_closeG_local (netQ_TCPConnection self, $Cont c$cont, $act
     }
 
     log_debug("Closing TCP connection");
+    // No more on_receive or on_error once the connection is being closed
+    uv_read_stop(stream);
+    stream->data = NULL;
     struct close_cb_data *cb_data = (struct close_cb_data *)acton_malloc(sizeof(struct close_cb_data));
     cb_data->self = self;
     cb_data->on_close = on_close;
     uv_shutdown_t *req = (uv_shutdown_t *)acton_malloc(sizeof(uv_shutdown_t));
     req->data = (void *)cb_data;
     int r = uv_shutdown(req, stream, after_shutdown);
+    if (r < 0) {
+        // Nothing to flush on a broken connection, for example one that
+        // was reset
+        log_debug("TCP shutdown failed, closing handle: %s", uv_strerror(r));
+        tcp_close_handle((uv_handle_t *)stream);
+        on_close->$class->__asyn__(on_close, self);
+    }
+    return $R_CONT(c$cont, B_None);
+}
+
+$R netQ_TCPConnectionD_abortG_local (netQ_TCPConnection self, $Cont c$cont) {
+    uv_tcp_t *socket = (uv_tcp_t *)(intptr_t)self->_sock;
     self->_sock = -1LL;
     self->_sock4 = -1LL;
     self->_sock6 = -1LL;
-    if (r < 0) {
-        // TODO: we could probably ignore most or all of these errors as the
-        // purpose is to shutdown our side of the connection and many of these
-        // errors are about "not connected" or "already closed", turning this
-        // into a NOP
-        char errmsg[1024] = "Failed to shutdown TCP client socket: ";
-        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
-        log_warn(errmsg);
-        on_close->$class->__asyn__(on_close, self);
-        // TODO: we should always call uv_close() here
-        return $R_CONT(c$cont, B_None);
+    self->_state = self->STATE_CLOSED;
+    if ((intptr_t)socket != -1) {
+        log_debug("Resetting TCP connection");
+        socket->data = NULL;
+        tcp_close_reset(socket);
     }
     return $R_CONT(c$cont, B_None);
 }
@@ -1140,28 +1198,36 @@ $R netQ_TCPListenConnectionD__initG_local (netQ_TCPListenConnection self, $Cont 
 }
 
 void netQ_TCPListenConnection__on_receive(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
-    if (nread < 0){
-        if (nread == UV_EOF) {
-            netQ_TCPListenConnection self = stream->data;
-            if ((intptr_t)stream != -1)
-                uv_close((uv_handle_t *)stream, NULL);
+    netQ_TCPListenConnection self = stream->data;
+    if (self == NULL) {
+        return;
+    }
+
+    if (nread > 0) {
+        $action2 f = ($action2)self->on_receive;
+        f->$class->__asyn__(f, self, actBytesFromCStringLengthCopy(buf->base, nread));
+    } else if (nread < 0) {
+        // End of stream or a read error, like a reset: the connection is over
+        stream->data = NULL;
+        tcp_close_handle((uv_handle_t *)stream);
+        if ((uv_stream_t *)(intptr_t)self->client == stream) {
             self->client = -1LL;
+        }
+        if (nread == UV_EOF) {
             if (self->on_remote_close) {
                 $action f = ($action)self->on_remote_close;
                 f->$class->__asyn__(f, self);
             }
-        }
-    } else if (nread > 0) {
-        if (stream->data) {
-            netQ_TCPListenConnection self = stream->data;
-            $action2 f = ($action2)self->on_receive;
-            f->$class->__asyn__(f, self, actBytesFromCStringLengthCopy(buf->base, nread));
+        } else {
+            char errmsg[1024] = "TCP read error: ";
+            uv_strerror_r((int)nread, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+            log_debug("%s", errmsg);
+            if (self->on_error) {
+                $action2 f = ($action2)self->on_error;
+                f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
+            }
         }
     }
-
-    // No free with GC, but maybe one day we do this explicitly?
-    //if (buf->base)
-    //    free(buf->base);
 }
 
 $R netQ_TCPListenConnectionD__read_startG_local (netQ_TCPListenConnection self, $Cont c$cont) {
@@ -1180,6 +1246,31 @@ $R netQ_TCPListenConnectionD__read_startG_local (netQ_TCPListenConnection self, 
     return $R_CONT(c$cont, B_None);
 }
 
+// A write failed: close the connection and report the error, unless the
+// connection was already closed
+static void tcp_listen_conn_write_failed(netQ_TCPListenConnection self, uv_stream_t *stream, int status) {
+    char errmsg[1024] = "Failed to write to TCP socket: ";
+    uv_strerror_r(status, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+    log_debug("%s", errmsg);
+    if ((uv_stream_t *)(intptr_t)self->client != stream) {
+        return;
+    }
+    self->client = -1LL;
+    stream->data = NULL;
+    tcp_close_handle((uv_handle_t *)stream);
+    if (self->on_error) {
+        $action2 f = ($action2)self->on_error;
+        f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
+    }
+}
+
+static void tcp_listen_conn_write_cb(uv_write_t *req, int status) {
+    // UV_ECANCELED: the connection was closed with the write still queued
+    if (status < 0 && status != UV_ECANCELED) {
+        tcp_listen_conn_write_failed((netQ_TCPListenConnection)req->data, req->handle, status);
+    }
+}
+
 $R netQ_TCPListenConnectionD_writeG_local (netQ_TCPListenConnection self, $Cont c$cont, B_bytes data) {
     uv_stream_t *stream = (uv_stream_t *)(intptr_t)self->client;
     // fd == -1 means invalid FD and can happen after __resume__
@@ -1187,14 +1278,11 @@ $R netQ_TCPListenConnectionD_writeG_local (netQ_TCPListenConnection self, $Cont 
         return $R_CONT(c$cont, B_None);
 
     uv_write_t *req = (uv_write_t *)acton_malloc(sizeof(uv_write_t));
+    req->data = self;
     uv_buf_t buf = uv_buf_init((char *)data->str, data->nbytes);
-    int r = uv_write(req, stream, &buf, 1, NULL);
+    int r = uv_write(req, stream, &buf, 1, tcp_listen_conn_write_cb);
     if (r < 0) {
-        char errmsg[1024] = "Failed to write to TCP socket: ";
-        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
-        log_warn(errmsg);
-        $action2 f = ($action2)self->on_error;
-        f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
+        tcp_listen_conn_write_failed(self, stream, r);
     }
     return $R_CONT(c$cont, B_None);
 }
@@ -1203,9 +1291,7 @@ static void listen_conn_after_shutdown(uv_shutdown_t *req, int status) {
     log_debug("TCP listen connection shutdown complete, closing handle");
     if (status < 0 && status != UV_ECANCELED)
         log_warn("Error in TCP listen connection shutdown: %s", uv_strerror(status));
-    uv_handle_t *handle = (uv_handle_t *)req->handle;
-    if (uv_is_closing(handle) == 0)
-        uv_close(handle, NULL);
+    tcp_close_handle((uv_handle_t *)req->handle);
 }
 
 $R netQ_TCPListenConnectionD_closeG_local (netQ_TCPListenConnection self, $Cont c$cont) {
@@ -1225,6 +1311,17 @@ $R netQ_TCPListenConnectionD_closeG_local (netQ_TCPListenConnection self, $Cont 
     if (r < 0) {
         log_debug("TCP listen connection shutdown failed, closing handle: %s", uv_strerror(r));
         uv_close((uv_handle_t *)client, NULL);
+    }
+    return $R_CONT(c$cont, B_None);
+}
+
+$R netQ_TCPListenConnectionD_abortG_local (netQ_TCPListenConnection self, $Cont c$cont) {
+    uv_tcp_t *client = (uv_tcp_t *)(intptr_t)self->client;
+    self->client = -1LL;
+    if ((intptr_t)client != -1) {
+        log_debug("Resetting TCP listen connection");
+        client->data = NULL;
+        tcp_close_reset(client);
     }
     return $R_CONT(c$cont, B_None);
 }
