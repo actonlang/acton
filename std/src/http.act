@@ -364,7 +364,9 @@ def parse_response(i: bytes, log: logging.Logger) -> (?Response, bytes):
 actor Server(conn: net.TCPListenConnection, on_accept: action(Server) -> None, log_handler: ?logging.Handler=None):
     """Server serves a single client connection
 
-    Responses are sent on the connection in request order. A response to a
+    User callbacks are invoked asynchronously and the server does not wait
+    for them, so a callback is free to call back into this actor. Responses
+    are sent on the connection in request order. A response to a
     later request is held back until the responses to all earlier requests
     have been sent.
     """
@@ -464,11 +466,7 @@ actor Server(conn: net.TCPListenConnection, on_accept: action(Server) -> None, l
                 _log.notice("Duplicate response to query, ignoring", None)
 
         if on_request_cb is not None:
-            response = on_request_cb(self, req, respond)
-            if response is not None:
-                _log.trace("Sending response immediately", None)
-            else:
-                _log.trace("Async response", None)
+            on_request_cb(self, req, respond)
         else:
             _log.notice("No on_request callback set", None)
 
@@ -488,7 +486,9 @@ actor Server(conn: net.TCPListenConnection, on_accept: action(Server) -> None, l
 actor TLSServer(conn: net.TLSListenConnection, on_accept: action(TLSServer) -> None, log_handler: ?logging.Handler=None):
     """Server serves a single TLS client connection
 
-    Responses are sent on the connection in request order. A response to a
+    User callbacks are invoked asynchronously and the server does not wait
+    for them, so a callback is free to call back into this actor. Responses
+    are sent on the connection in request order. A response to a
     later request is held back until the responses to all earlier requests
     have been sent.
     """
@@ -588,11 +588,7 @@ actor TLSServer(conn: net.TLSListenConnection, on_accept: action(TLSServer) -> N
                 _log.notice("Duplicate response to query, ignoring", None)
 
         if on_request_cb is not None:
-            response = on_request_cb(self, req, respond)
-            if response is not None:
-                _log.trace("Sending response immediately", None)
-            else:
-                _log.trace("Async response", None)
+            on_request_cb(self, req, respond)
         else:
             _log.notice("No on_request callback set", None)
 
@@ -625,8 +621,8 @@ actor Listener(cap: net.TCPListenCap, address: str, port: int, on_accept: action
 
     def on_listener_accept(conn):
         s = Server(conn, on_accept, log_handler)
-        await async on_accept(s)
-        await async conn.cb_install(s.on_conn_receive, s.on_conn_error, None)
+        on_accept(s)
+        conn.cb_install(s.on_conn_receive, s.on_conn_error, None)
 
     var _listener = net.TCPListener(cap, address, port, on_conn_listen, on_listener_accept)
 
@@ -647,8 +643,8 @@ actor TLSListener(cap: net.TCPListenCap, address: str, port: int, cert_pem: byte
 
     def on_listener_accept(conn):
         s = TLSServer(conn, on_accept, log_handler)
-        await async on_accept(s)
-        await async conn.cb_install(s.on_conn_receive, s.on_conn_error, None)
+        on_accept(s)
+        conn.cb_install(s.on_conn_receive, s.on_conn_error, None)
 
     var _listener = net.TLSListener(cap, address, port, cert_pem, key_pem, on_conn_listen, on_listener_accept)
 
@@ -659,6 +655,13 @@ actor Client(cap: net.TCPConnectCap, address: str, on_connect: action(Client) ->
 
     scheme is either 'http' or 'https', the default is 'https'
     port is optional, if not provided, it will be inferred from the scheme where http=80 and https=443
+
+    User callbacks (on_connect, on_error and the per-request on_response) are
+    invoked asynchronously and the client does not wait for them, so a
+    callback is free to call back into this actor, e.g. to issue the next
+    request. The on_response callbacks are invoked in request order.
+    Callbacks of one actor run in that order, while callbacks of different
+    actors may run concurrently.
     """
     _log = logging.Logger(log_handler)
     var _on_response: list[(bytes, action(Client, Response) -> None)] = []
@@ -684,7 +687,7 @@ actor Client(cap: net.TCPConnectCap, address: str, on_connect: action(Client) ->
         # If there are outstanding requests, it probably means we were
         for r in _on_response:
             _conn_write(r.0)
-        await async on_connect(self)
+        on_connect(self)
 
     def _on_tcp_connect(conn: net.TCPConnection) -> None:
         _on_conn_connect()
@@ -718,7 +721,7 @@ actor Client(cap: net.TCPConnectCap, address: str, on_connect: action(Client) ->
                 del _on_response[0]
                 cb = outreq.1
 
-                await async cb(self, r)
+                cb(self, r)
             else:
                 break
 
