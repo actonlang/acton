@@ -226,7 +226,7 @@ actor _test_UDPSendErrorNamesEmptyZone(t: testing.EnvT):
 
 
 actor udp_send_to(t: testing.EnvT, listen_address: str, destination: str, optional: bool=False):
-    """UDPListener.send reaches another listener at destination, like an address with a zone"""
+    """UDPListener.send reaches another listener at destination, like a host name or an address with a zone"""
     udp_cap = net.UDPCap(net.NetCap(t.env.cap))
     var done = False
     var receiver: ?net.UDPListener = None
@@ -282,3 +282,11 @@ actor udp_send_to(t: testing.EnvT, listen_address: str, destination: str, option
 actor _test_UDPSendToZone(t: testing.EnvT):
     # The zone of a loopback address does not matter, but must parse
     udp_send_to(t, "::1", "::1%1", True)
+
+
+actor _test_UDPSendToHostName(t: testing.EnvT):
+    udp_send_to(t, "127.0.0.1", "localhost")
+
+
+actor _test_UDPSendErrorNamesUnresolvableHost(t: testing.EnvT):
+    udp_send_error(t, "nonexistent.invalid", ["nonexistent.invalid:9", "resolve"])
