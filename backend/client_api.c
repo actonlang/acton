@@ -570,13 +570,14 @@ int add_server_to_membership(char *hostname, int portno, int status, remote_db_t
     struct sockaddr_in dummy_serveraddr;
 
     remote_server * rs = get_remote_server(hostname, portno, dummy_serveraddr, dummy_serveraddr, DUMMY_FD, 0, 0);
-    rs->status = status;
 
     if(rs == NULL)
     {
         log_error("ERROR: Failed joining server %s:%d (DNS/network problem?)!", hostname, portno);
         return 1;
     }
+
+    rs->status = status;
 
     snode_t * prev_entry = skiplist_search(db->servers, &rs->serveraddr);
 
@@ -601,6 +602,12 @@ int add_server_to_membership(char *hostname, int portno, int status, remote_db_t
     free_remote_server(rs);
 
     rs = get_remote_server(hostname, portno, dummy_serveraddr, dummy_serveraddr, DUMMY_FD, 1, 0);
+
+    if(rs == NULL)
+    {
+        log_error("ERROR: Failed joining server %s:%d (DNS/network problem?)!", hostname, portno);
+        return 1;
+    }
 
     if((skiplist_insert(db->servers, &rs->serveraddr, rs, seedptr)) != 0)
     {

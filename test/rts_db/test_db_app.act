@@ -20,7 +20,7 @@ PORT_CHUNK_MAX=30000
 # given how RTS works, but maybe that should be fixed...
 
 
-actor Tester(env, verbose, port_chunk):
+actor Tester(env, verbose, port_chunk, unresolvable_seed):
     var ps = []
     var psp: dict[int, str] = {}
     var combined_output = ""
@@ -115,6 +115,11 @@ actor Tester(env, verbose, port_chunk):
     def db_args(start_port, replication_factor) -> list[str]:
         #a = ["127.0.0.1:" for idx in range(replication_factor)]
         args = ["--rts-ddb-replication", str(replication_factor)]
+        if unresolvable_seed:
+            # The first seed host name does not resolve. The app must skip it
+            # and join the cluster through the other seed hosts.
+            args.append("--rts-ddb-host")
+            args.append("unresolvable.invalid:" + str(start_port))
         for idx in range(replication_factor):
             args.append("--rts-ddb-host")
             args.append("127.0.0.1:" + str(start_port + idx*2))
@@ -134,12 +139,13 @@ actor Tester(env, verbose, port_chunk):
 
 actor main(env):
     verbose = '--verbose' in set(env.argv)
+    unresolvable_seed = '--unresolvable-seed' in set(env.argv)
 
     # compute random base port between PORT_CHUNK_MIN and PORT_CHUNK_MAX
     # in increments of PORT_CHUNK_SIZE
     port_chunk = random.randint(int(PORT_CHUNK_MIN/PORT_CHUNK_SIZE), int(PORT_CHUNK_MAX/PORT_CHUNK_SIZE)) * PORT_CHUNK_SIZE
 
-    t = Tester(env, verbose, port_chunk)
+    t = Tester(env, verbose, port_chunk, unresolvable_seed)
 
     def test_timeout():
         t.error("Test failed - timeout reached")
