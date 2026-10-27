@@ -178,10 +178,12 @@ actor tcp_test_result(t: testing.EnvT, what: str):
 
 
 actor _test_TCPListenerPortZero(t: testing.EnvT):
-    """A listener on port 0 reports the port it listens on"""
+    """A listener on port 0 reports its port, and both ends know each other's address"""
     tcp_cap = net.TCPCap(net.NetCap(t.env.cap))
     base = tcp_test_result(t, "listener port zero")
+    var port = 0
     var listener: ?net.TCPListener = None
+    var client: ?net.TCPConnection = None
 
     def on_listen(l: net.TCPListener, error: ?str):
         if error is not None:
@@ -195,16 +197,42 @@ actor _test_TCPListenerPortZero(t: testing.EnvT):
         if l.local_address() != "127.0.0.1":
             base.failure("listener reports local address " + l.local_address())
             return
-        net.TCPConnection(net.TCPConnectCap(tcp_cap), "127.0.0.1", port, on_connect, on_receive, on_error)
+        client = net.TCPConnection(net.TCPConnectCap(tcp_cap), "127.0.0.1", port, on_connect, on_receive, on_error)
 
     def on_accept(s: net.TCPListenConnection):
-        s.close()
+        s.cb_install(on_server_receive, on_server_error, None)
 
-    def on_connect(c: net.TCPConnection):
-        c.close(lambda c: None)
+    def on_server_receive(s: net.TCPListenConnection, data: bytes):
+        # The client sends its local port
+        ep = s.endpoints()
+        try:
+            testing.assertEqual(ep.remote_address, "127.0.0.1", "accepted connection remote address")
+            testing.assertEqual(str(ep.remote_port), data.decode(), "accepted connection remote port")
+            testing.assertEqual(ep.local_address, "127.0.0.1", "accepted connection local address")
+            testing.assertEqual(ep.local_port, port, "accepted connection local port")
+        except AssertionError as e:
+            base.failure(str(e))
+            return
+        s.close()
         if listener is not None:
             listener.close()
         base.success()
+
+    def on_server_error(s: net.TCPListenConnection, errmsg: str):
+        base.failure("server error: " + errmsg)
+
+    def on_connect(c: net.TCPConnection):
+        ep = c.endpoints()
+        try:
+            testing.assertEqual(ep.remote_address, "127.0.0.1", "client remote address")
+            testing.assertEqual(ep.remote_port, port, "client remote port")
+            testing.assertEqual(ep.local_address, "127.0.0.1", "client local address")
+            testing.assertTrue(ep.local_port > 0, "client local port")
+            testing.assertEqual(c.ip_version(), 4, "client IP version")
+        except AssertionError as e:
+            base.failure(str(e))
+            return
+        c.write(str(ep.local_port).encode())
 
     def on_receive(c: net.TCPConnection, data: bytes):
         pass
@@ -216,10 +244,16 @@ actor _test_TCPListenerPortZero(t: testing.EnvT):
     net.TCPListener(net.TCPListenCap(tcp_cap), "127.0.0.1", 0, on_listen, on_accept)
 
 
-actor _test_TCPListenerClose(t: testing.EnvT):
-    """close() stops listening, so a new connection is refused"""
+actor tcp_refused_once(t: testing.EnvT, address: str):
+    """A connection to a closed listener is refused, reported exactly once
+
+    Connects after the listener is closed, with a short connect_timeout, and
+    waits past the timeout for a second report.
+    """
     tcp_cap = net.TCPCap(net.NetCap(t.env.cap))
-    base = tcp_test_result(t, "listener close")
+    base = tcp_test_result(t, "refused connect")
+    var errors: list[str] = []
+    var connected = False
 
     def on_listen(l: net.TCPListener, error: ?str):
         if error is not None:
@@ -230,22 +264,158 @@ actor _test_TCPListenerClose(t: testing.EnvT):
         after 0.1: connect(port)
 
     def connect(port: int):
-        net.TCPConnection(net.TCPConnectCap(tcp_cap), "127.0.0.1", port, on_connect, on_receive, on_error)
+        net.TCPConnection(net.TCPConnectCap(tcp_cap), address, port, on_connect, on_receive, on_error, None, connect_timeout=0.5)
+        after 1.5: check()
+
+    def check():
+        if connected:
+            base.failure("connected to a closed listener")
+        elif len(errors) != 1:
+            base.failure("expected one error, got %d: %s" % (len(errors), str(errors)))
+        elif errors[0].find("refused") == -1:
+            base.failure("expected connection refused, got: " + errors[0])
+        else:
+            base.success()
 
     def on_accept(s: net.TCPListenConnection):
         base.failure("closed listener accepted a connection")
 
     def on_connect(c: net.TCPConnection):
-        base.failure("connected to a closed listener")
+        connected = True
 
     def on_receive(c: net.TCPConnection, data: bytes):
         pass
 
     def on_error(c: net.TCPConnection, errmsg: str):
-        if errmsg.find("refused") == -1:
-            base.failure("expected connection refused, got: " + errmsg)
+        errors.append(errmsg)
+
+    after 5: base.timeout("no result")
+    net.TCPListener(net.TCPListenCap(tcp_cap), "127.0.0.1", 0, on_listen, on_accept)
+
+
+actor _test_TCPListenerCloseRefusedOnce(t: testing.EnvT):
+    """close() stops listening, a refused connection is reported once"""
+    tcp_refused_once(t, "127.0.0.1")
+
+
+actor _test_TCPConnectLocalhostRefusedOnce(t: testing.EnvT):
+    """A refused name that resolves to IPv4 and IPv6 is reported once"""
+    tcp_refused_once(t, "localhost")
+
+
+actor _test_TCPConnectLocalhost(t: testing.EnvT):
+    """A name resolving to IPv4 and IPv6 connects once, the refused family is not reported"""
+    tcp_cap = net.TCPCap(net.NetCap(t.env.cap))
+    base = tcp_test_result(t, "localhost connect")
+    var connects = 0
+    var errors: list[str] = []
+
+    def on_listen(l: net.TCPListener, error: ?str):
+        if error is not None:
+            base.failure("listen error: " + error)
+            return
+        # Only IPv4 listens, so an IPv6 attempt to localhost is refused
+        net.TCPConnection(net.TCPConnectCap(tcp_cap), "localhost", l.local_port(), on_connect, on_receive, on_error)
+        after 1.0: check(l)
+
+    def check(l: net.TCPListener):
+        l.close()
+        if connects != 1 or len(errors) != 0:
+            base.failure("expected one connect and no errors, got %d connects and errors %s" % (connects, str(errors)))
         else:
             base.success()
+
+    def on_accept(s: net.TCPListenConnection):
+        s.close()
+
+    def on_connect(c: net.TCPConnection):
+        connects += 1
+
+    def on_receive(c: net.TCPConnection, data: bytes):
+        pass
+
+    def on_error(c: net.TCPConnection, errmsg: str):
+        errors.append(errmsg)
+
+    after 5: base.timeout("no result")
+    net.TCPListener(net.TCPListenCap(tcp_cap), "127.0.0.1", 0, on_listen, on_accept)
+
+
+actor _test_TCPConnectUnresolvable(t: testing.EnvT):
+    """A host name that does not resolve is reported, once"""
+    tcp_cap = net.TCPCap(net.NetCap(t.env.cap))
+    base = tcp_test_result(t, "unresolvable name")
+    var errors: list[str] = []
+    var connected = False
+    var reported = False
+
+    def on_connect(c: net.TCPConnection):
+        connected = True
+
+    def on_receive(c: net.TCPConnection, data: bytes):
+        pass
+
+    def on_error(c: net.TCPConnection, errmsg: str):
+        errors.append(errmsg)
+        if not reported:
+            reported = True
+            # Wait a little for a second report
+            after 0.5: check()
+
+    def check():
+        if connected:
+            base.failure("connected to an unresolvable name")
+        elif len(errors) != 1:
+            base.failure("expected one error, got %d: %s" % (len(errors), str(errors)))
+        elif errors[0].find("DNS") == -1 and errors[0].find("timeout") == -1:
+            base.failure("expected a DNS error or timeout, got: " + errors[0])
+        else:
+            base.success()
+
+    after 8: base.timeout("unresolvable name not reported")
+    # .invalid never resolves (RFC 2606); connect_timeout covers resolution
+    net.TCPConnection(net.TCPConnectCap(tcp_cap), "nonexistent.invalid", 80, on_connect, on_receive, on_error, None, connect_timeout=5.0)
+
+
+actor _test_TCPCloseWhileConnecting(t: testing.EnvT):
+    """close() right after creating a connection cancels the attempt"""
+    tcp_cap = net.TCPCap(net.NetCap(t.env.cap))
+    base = tcp_test_result(t, "close while connecting")
+    var closes = 0
+    var events: list[str] = []
+
+    def on_listen(l: net.TCPListener, error: ?str):
+        if error is not None:
+            base.failure("listen error: " + error)
+            return
+        c = net.TCPConnection(net.TCPConnectCap(tcp_cap), "127.0.0.1", l.local_port(), on_connect, on_receive, on_error, None, connect_timeout=0.3)
+        c.close(on_close)
+        # Past connect_timeout, which must not fire either
+        after 0.6: check(l)
+
+    def check(l: net.TCPListener):
+        l.close()
+        if closes != 1:
+            base.failure("expected on_close once, got %d" % closes)
+        elif len(events) != 0:
+            base.failure("events after close: " + str(events))
+        else:
+            base.success()
+
+    def on_accept(s: net.TCPListenConnection):
+        s.close()
+
+    def on_close(c: net.TCPConnection):
+        closes += 1
+
+    def on_connect(c: net.TCPConnection):
+        events.append("on_connect")
+
+    def on_receive(c: net.TCPConnection, data: bytes):
+        events.append("on_receive")
+
+    def on_error(c: net.TCPConnection, errmsg: str):
+        events.append("on_error: " + errmsg)
 
     after 5: base.timeout("no result")
     net.TCPListener(net.TCPListenCap(tcp_cap), "127.0.0.1", 0, on_listen, on_accept)

@@ -203,6 +203,12 @@ actor UDPConnection(cap: UDPConnectCap, address: str, port: int, on_connect: act
     action def remote_address() -> str:
         return _remote_address
 
+    action def endpoints() -> (local_address: str, local_port: int, remote_address: str, remote_port: int):
+        """Local and remote address and port, empty and 0 when not set up"""
+        if _remote_address == "":
+            return (local_address="", local_port=0, remote_address="", remote_port=0)
+        return (local_address=local_address(), local_port=local_port(), remote_address=_remote_address, remote_port=port)
+
     action def metrics():
         return (connections=_connections,
                 consecutive_connect_errors=_consecutive_connect_errors,
@@ -272,6 +278,13 @@ actor UDPListener(cap: UDPListenCap, address: str, port: int, on_listen: action(
 actor TCPConnection(cap: TCPConnectCap, address: str, port: int, on_connect: action(TCPConnection) -> None, on_receive: action(TCPConnection, bytes) -> None, on_error: action(TCPConnection, str) -> None, on_remote_close: ?action(TCPConnection) -> None=None, connect_timeout: float=10.0):
     """TCP IP Connection
 
+    The connection is set up when the actor is created. A host name is
+    resolved to IPv4 and IPv6 addresses and the two address families race
+    (Happy Eyeballs): the first to connect wins and the other attempt is
+    abandoned. Each connection attempt ends with exactly one call to either
+    on_connect or on_error, unless close() or abort() cancels it first.
+    connect_timeout limits the whole attempt, name resolution included.
+
     Once connected, on_error reports read and write errors, such as a
     connection reset by the peer, after which the connection is closed.
     on_remote_close reports that the peer closed the connection.
@@ -285,6 +298,10 @@ actor TCPConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
     var _sock6 = -1
     var _sock6_state = 0
     var _sock6_error = ""
+    var _dns_error = ""
+    # Identifies the current connection attempt, so that DNS results and
+    # timeouts of an abandoned attempt are ignored
+    var _attempt = 0
 
     STATE_NONE = 0
     STATE_RESOLVING  = 1 # Resolving DNS
@@ -292,6 +309,12 @@ actor TCPConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
     STATE_CONNECTED  = 3 # TCP Connected
     STATE_CLOSED     = 4 # TCP Connection disconnected / closed (it might never have been connected)
     var _state = STATE_NONE
+
+    var _ip_version = 0
+    var _local_address = ""
+    var _local_port = 0
+    var _remote_address = ""
+    var _remote_port = 0
 
     var _connections = 0
     var _consecutive_connect_errors = 0
@@ -306,49 +329,80 @@ actor TCPConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
     # but rather arrange them in order of preference and try them in that order,
     # more details in Happy Eye Balls v2 https://tools.ietf.org/html/rfc8305
 
-    # DNS A
-    def _on_dns_a_resolve(result):
-        _a_res = result
-        _sock4_state = STATE_CONNECTING
-        _state = STATE_CONNECTING
-        _connect4(result[0])
+    def _on_dns_resolve(attempt: int, family: int, result: list[str]):
+        if attempt != _attempt:
+            return
+        if family == 4:
+            if _sock4_state != STATE_RESOLVING:
+                return
+            if len(result) == 0:
+                _on_dns_error(attempt, 4, "DNS lookup returned no IPv4 addresses")
+                return
+            _a_res = result
+            _sock4_state = STATE_CONNECTING
+            _state = STATE_CONNECTING
+            _connect4(result[0])
+        else:
+            if _sock6_state != STATE_RESOLVING:
+                return
+            if len(result) == 0:
+                _on_dns_error(attempt, 6, "DNS lookup returned no IPv6 addresses")
+                return
+            _aaaa_res = result
+            _sock6_state = STATE_CONNECTING
+            _state = STATE_CONNECTING
+            _connect6(result[0])
 
-    def _on_dns_a_error(name, msg):
-        if _state == STATE_RESOLVING:
-            after 0.1: _lookup_a(address, _on_dns_a_resolve, _on_dns_a_error)
+    def _on_dns_error(attempt: int, family: int, msg: str):
+        if attempt != _attempt:
+            return
+        if family == 4 and _sock4_state != STATE_RESOLVING:
+            return
+        if family == 6 and _sock6_state != STATE_RESOLVING:
+            return
+        if _dns_error == "" or _dns_error == msg:
+            _dns_error = msg
+        else:
+            _dns_error = _dns_error + "  " + msg
+        _on_family_failed(family)
 
-    # DNS AAAA
-    def _on_dns_aaaa_resolve(result):
-        _aaaa_res = result
-        _sock6_state = STATE_CONNECTING
-        _state = STATE_CONNECTING
-        _connect6(result[0])
-
-    def _on_dns_aaaa_error(name, msg):
-        if _state == STATE_RESOLVING:
-            after 0.1: _lookup_aaaa(address, _on_dns_aaaa_resolve, _on_dns_aaaa_error)
-
-    action def _on_tcp_error(sockfamily: int, err: int, errmsg: str):
+    action def _on_tcp_error(sockfamily: int, sock: int, err: int, errmsg: str):
         if sockfamily == 4:
-            if _sock6_state == STATE_NONE: # IPv4 only connection
-                _consecutive_connect_errors += 1
-                on_error(self, errmsg)
-            else: # dual stack connection
-                # wait for other socket to connect or fail
-                if _sock6_error != "":
-                    _consecutive_connect_errors += 1
-                    on_error(self, errmsg + "  IPv6 error: " + _sock6_error)
+            if sock != _sock4 or _sock4_state != STATE_CONNECTING:
+                return
             _sock4_error = errmsg
-        elif sockfamily == 6:
-            if _sock4_state == STATE_NONE: # IPv6 only connection
-                _consecutive_connect_errors += 1
-                on_error(self, errmsg)
-            else: # dual stack connection
-                # wait for other socket to connect or fail
-                if _sock4_error != "":
-                    _consecutive_connect_errors += 1
-                    on_error(self, errmsg + "  IPv4 error: " + _sock4_error)
+        else:
+            if sock != _sock6 or _sock6_state != STATE_CONNECTING:
+                return
             _sock6_error = errmsg
+        _on_family_failed(sockfamily)
+
+    # An address family failed to resolve or connect, report the attempt as
+    # failed unless the other family may still connect
+    proc def _on_family_failed(family: int):
+        if family == 4:
+            _sock4 = -1
+            _sock4_state = STATE_CLOSED
+        else:
+            _sock6 = -1
+            _sock6_state = STATE_CLOSED
+        if _sock4_state == STATE_RESOLVING or _sock4_state == STATE_CONNECTING:
+            return
+        if _sock6_state == STATE_RESOLVING or _sock6_state == STATE_CONNECTING:
+            return
+        # Prefer connect errors, a failed AAAA lookup is normal for a host
+        # with only IPv4 addresses
+        errmsg = _dns_error
+        if _sock4_error != "" and _sock6_error != "":
+            errmsg = _sock4_error + "  " + _sock6_error
+        elif _sock4_error != "":
+            errmsg = _sock4_error
+        elif _sock6_error != "":
+            errmsg = _sock6_error
+        _attempt += 1
+        _state = STATE_CLOSED
+        _consecutive_connect_errors += 1
+        on_error(self, errmsg)
 
     # TCP connect over IPv4
     proc def _connect4(ip_address: str):
@@ -358,42 +412,46 @@ actor TCPConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
     proc def _connect6(ip_address: str):
         NotImplemented
 
-    action def _on_connect4():
+    # Close the sockets of connection attempts in progress
+    proc def _close_attempts():
+        NotImplemented
+
+    # Abandon the connection attempt in progress, if any
+    proc def _abandon_attempt():
+        _attempt += 1
+        if _sock4_state != STATE_CONNECTED:
+            _sock4_state = STATE_NONE
+        if _sock6_state != STATE_CONNECTED:
+            _sock6_state = STATE_NONE
+        _close_attempts()
+
+    action def _on_connect4(sock: int):
+        if sock != _sock4 or _sock4_state != STATE_CONNECTING:
+            # The attempt was abandoned and the socket closed
+            return
+        _sock4 = -1
         _sock4_state = STATE_CONNECTED
         _sock4_error = ""
-        if _sock6_state == STATE_CONNECTED:
-            # If IPv6 is already connected, we (IPv4) lost, so close our socket
-            # TODO: close IPv4 socket
-            return
-        _on_connect(_sock4)
+        _on_connect(sock)
 
-    action def _on_connect6():
+    action def _on_connect6(sock: int):
+        if sock != _sock6 or _sock6_state != STATE_CONNECTING:
+            # The attempt was abandoned and the socket closed
+            return
+        _sock6 = -1
         _sock6_state = STATE_CONNECTED
         _sock6_error = ""
-        if _sock4_state == STATE_CONNECTED:
-            # If IPv4 is already connected, we (IPv6) lost, so close our socket
-            # TODO: close IPv6 socket
-            return
-        _on_connect(_sock6)
+        _on_connect(sock)
 
-    # Handle on_connect event
+    # Handle on_connect event, the first address family to connect wins
     proc def _on_connect(sock: int):
-        if _state == STATE_CONNECTING:
-            _state = STATE_CONNECTED
-            _sock = sock
-            _read_start()
-            _connections += 1
-            _consecutive_connect_errors = 0
-            on_connect(self)
-        elif _state == STATE_CONNECTED:
-            # It is normal to get multiple on_connect events since we are doing
-            # Happy Eyeballs and letting IPv4 race against IPv6, however, those
-            # should be cancelled out in the _on_connect[46] functions above.
-            pass
-        else:
-            # We don't expect to establish a connection in any other state
-            # TODO: use RTS log instead
-            print("Unexpected state", _state)
+        _abandon_attempt()
+        _state = STATE_CONNECTED
+        _sock = sock
+        _read_start()
+        _connections += 1
+        _consecutive_connect_errors = 0
+        on_connect(self)
 
     proc def _read_start():
         NotImplemented
@@ -403,31 +461,57 @@ actor TCPConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
         NotImplemented
 
     action def close(on_close: action(TCPConnection) -> None) -> None:
-        """Close the connection"""
+        """Close the connection
+
+        Data already written is sent before the connection is closed.
+        Closing while the connection is being set up cancels the attempt,
+        so neither on_connect nor on_error is called for it. on_close is
+        called once the connection is closed.
+        """
+        _abandon_attempt()
+        _state = STATE_CLOSED
+        _close(on_close)
+
+    proc def _close(on_close: action(TCPConnection) -> None) -> None:
         NotImplemented
 
     action def abort() -> None:
         """Close the connection with a TCP reset (RST)
 
         Unsent data is discarded and the peer sees the connection reset
-        instead of an orderly close.
+        instead of an orderly close. Like close(), abort() cancels a
+        connection attempt in progress.
         """
+        _abandon_attempt()
+        _state = STATE_CLOSED
+        _abort()
+
+    proc def _abort() -> None:
         NotImplemented
 
-    def _connect_timeout():
-        if _state == STATE_CONNECTING:
+    def _connect_timeout(attempt: int):
+        if attempt != _attempt:
+            return
+        if _state == STATE_RESOLVING or _state == STATE_CONNECTING:
+            _abandon_attempt()
             _state = STATE_CLOSED
             _consecutive_connect_errors += 1
-            def _on_close(c):
-                on_error(self, "Connection attempt failed due to timeout")
-            close(_on_close)
+            on_error(self, "Connection attempt failed due to timeout")
 
     def reconnect():
         close(_connect)
 
     def _connect(c):
-        # TODO: would be nice to cancel connect_timeout when connection succeeds
-        after connect_timeout: _connect_timeout()
+        _abandon_attempt()
+        attempt = _attempt
+        _a_res = []
+        _aaaa_res = []
+        _sock4_state = STATE_NONE
+        _sock4_error = ""
+        _sock6_state = STATE_NONE
+        _sock6_error = ""
+        _dns_error = ""
+        after connect_timeout: _connect_timeout(attempt)
         if is_ipv4(address):
             _sock4_state = STATE_CONNECTING
             _state = STATE_CONNECTING
@@ -438,21 +522,43 @@ actor TCPConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
             _connect6(address)
         else:
             _state = STATE_RESOLVING
-            _lookup_aaaa(address, _on_dns_aaaa_resolve, _on_dns_aaaa_error)
+            _sock4_state = STATE_RESOLVING
+            _sock6_state = STATE_RESOLVING
+            def on_a_resolve(result: list[str]):
+                _on_dns_resolve(attempt, 4, result)
+            def on_a_error(name: str, msg: str):
+                _on_dns_error(attempt, 4, msg)
+            def on_aaaa_resolve(result: list[str]):
+                _on_dns_resolve(attempt, 6, result)
+            def on_aaaa_error(name: str, msg: str):
+                _on_dns_error(attempt, 6, msg)
+            _lookup_aaaa(address, on_aaaa_resolve, on_aaaa_error)
             # TODO: delay this by a few milliseconds to give IPv6 a slight preference
-            _lookup_a(address, _on_dns_a_resolve, _on_dns_a_error)
+            _lookup_a(address, on_a_resolve, on_a_error)
 
     mut def __resume__() -> None:
         NotImplemented
 
     action def ip_version() -> ?int:
-        NotImplemented
+        """IP version of the connection, None if not connected"""
+        if _state != STATE_CONNECTED:
+            return None
+        return _ip_version
 
     action def local_address() -> str:
-        NotImplemented
+        """Local address of the current or most recent connection, see endpoints()"""
+        return _local_address
 
     action def remote_address() -> str:
-        NotImplemented
+        """Remote address of the current or most recent connection, see endpoints()"""
+        return _remote_address
+
+    action def endpoints() -> (local_address: str, local_port: int, remote_address: str, remote_port: int):
+        """Local and remote address and port of the current or most recent connection
+
+        Empty addresses and port 0 before the first connection.
+        """
+        return (local_address=_local_address, local_port=_local_port, remote_address=_remote_address, remote_port=_remote_port)
 
     action def metrics():
         return (connections=_connections,
@@ -476,6 +582,10 @@ actor TCPListenConnection(cap: _TCPListenConnectCap, server_client: int):
     var on_error: ?action(TCPListenConnection, str) -> None = None
     var on_remote_close: ?action(TCPListenConnection) -> None = None
     var _initialized = False
+    var _local_address = ""
+    var _local_port = 0
+    var _remote_address = ""
+    var _remote_port = 0
 
     proc def _read_start():
         """Implementation internal"""
@@ -491,7 +601,10 @@ actor TCPListenConnection(cap: _TCPListenConnectCap, server_client: int):
             _initialized = True
 
     action def close() -> None:
-        """Close connection"""
+        """Close connection
+
+        Data already written is sent before the connection is closed.
+        """
         NotImplemented
 
     action def abort() -> None:
@@ -505,6 +618,10 @@ actor TCPListenConnection(cap: _TCPListenConnectCap, server_client: int):
     action def write(data: bytes) -> None:
         """Write data to remote"""
         NotImplemented
+
+    action def endpoints() -> (local_address: str, local_port: int, remote_address: str, remote_port: int):
+        """Local and remote address and port of the connection"""
+        return (local_address=_local_address, local_port=_local_port, remote_address=_remote_address, remote_port=_remote_port)
 
     mut def __resume__() -> None:
         NotImplemented
