@@ -14,3 +14,12 @@ def _test_is_ipv6():
 
     testing.assertFalse(net.is_ipv6("2001:db8::123456"))
     testing.assertFalse(net.is_ipv6("2001:db8:::1"))
+
+def _test_is_ipv6_zone():
+    testing.assertTrue(net.is_ipv6("fe80::1%1"), "zone by interface index")
+    testing.assertTrue(net.is_ipv6("::1%1"), "zone on loopback")
+
+    testing.assertFalse(net.is_ipv6("fe80::1%"), "empty zone")
+    testing.assertFalse(net.is_ipv6("fe80::1%0"), "zone index 0")
+    testing.assertFalse(net.is_ipv6("fe80::1%no-such-interface"), "unknown interface")
+    testing.assertFalse(net.is_ipv6("1.2.3.4%1"), "IPv4 address with zone")

@@ -49,6 +49,11 @@ def is_ipv4(address: str) -> bool:
     NotImplemented
 
 def is_ipv6(address: str) -> bool:
+    """Check if address is an IPv6 address
+
+    The address may name its zone, by interface name or index, like
+    fe80::1%eth0 or fe80::1%2.
+    """
     NotImplemented
 
 def _lookup_a(name: str, on_resolve: action(list[str]) -> None, on_error: action(str, str) -> None) -> None:
@@ -227,6 +232,10 @@ actor UDPListener(cap: UDPListenCap, address: str, port: int, on_listen: action(
     keeps the system default. A larger buffer absorbs bursts of datagrams
     that would otherwise be dropped. The system may cap the size (on Linux
     at net.core.rmem_max), see get_recv_buffer_size().
+
+    The source address of a received datagram from an IPv6 link-local
+    address includes the zone, like fe80::1%eth0, so it can be passed back
+    to send().
     """
     var _sock = -1
     var _bytes_in: u64 = 0
@@ -235,7 +244,11 @@ actor UDPListener(cap: UDPListenCap, address: str, port: int, on_listen: action(
     var _datagrams_out: u64 = 0
 
     action def send(data: bytes, address: str, port: int) -> None:
-        """Send a datagram to a remote address"""
+        """Send a datagram to a remote address
+
+        address is an IPv4 or IPv6 address, optionally with a zone like
+        fe80::1%eth0.
+        """
         NotImplemented
 
     action def set_recv_buffer_size(size: int) -> None:
