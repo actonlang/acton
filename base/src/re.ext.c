@@ -17,15 +17,10 @@ static struct B_MemoryError reQ_allocation_failed_error =
 static struct B_ValueError reQ_result_too_long_error =
     STATIC_EXCEPTION(B_ValueError, "result too long");
 
-// The compiled code of a Pattern is pointer-free memory on the GC heap.
-// _compile compiles through a general context that allocates with
-// acton_malloc_atomic. The code holds no pointer to GC memory: its memory
-// control fields are the two functions below, its character tables are
-// pcre2's static default ones, and there is no JIT code. The Pattern keeps
-// the code reachable through _code, so the GC frees it with the Pattern, and
-// pcre2_code_free is never called. pcre2_compile allocates temporaries only
-// for large patterns, through the same context, and frees them with
-// acton_free.
+// A Pattern owns compiled code allocated with pcre2's default malloc
+// allocator, including any JIT allocations. A native finalizer registered
+// on the Pattern calls pcre2_code_free to release all of them. JIT compilation
+// finishes before the Pattern is shared with actors.
 //
 // _match, behind the module function match, compiles its pattern for the one
 // call with malloc, pcre2's default allocator, which is selected by compiling
@@ -53,12 +48,8 @@ static struct B_ValueError reQ_result_too_long_error =
 void reQ___ext_init__() {
 }
 
-static void *reQ_code_malloc(size_t size, void *data) {
-    return acton_malloc_atomic(size);
-}
-
-static void reQ_code_free(void *ptr, void *data) {
-    acton_free(ptr);
+static void reQ_Pattern_finalize(void *object, void *data) {
+    pcre2_code_free(data);
 }
 
 static void reQ_raise_compile_error(int errornumber, PCRE2_SIZE erroroffset) {
@@ -70,12 +61,6 @@ static void reQ_raise_compile_error(int errornumber, PCRE2_SIZE erroroffset) {
 }
 
 uint64_t reQ__compile (B_str arg_pattern) {
-    pcre2_general_context *gcontext = pcre2_general_context_create(reQ_code_malloc, reQ_code_free, NULL);
-    if (gcontext == NULL)
-        RAISE_EXC(&reQ_allocation_failed_error);
-    pcre2_compile_context *ccontext = pcre2_compile_context_create(gcontext);
-    if (ccontext == NULL)
-        RAISE_EXC(&reQ_allocation_failed_error);
     int errornumber;
     PCRE2_SIZE erroroffset;
     pcre2_code *re = pcre2_compile(
@@ -84,13 +69,30 @@ uint64_t reQ__compile (B_str arg_pattern) {
         PCRE2_UTF,
         &errornumber,
         &erroroffset,
-        ccontext
+        NULL
     );
-    pcre2_compile_context_free(ccontext);
-    pcre2_general_context_free(gcontext);
     if (re == NULL)
         reQ_raise_compile_error(errornumber, erroroffset);
+    // JIT counts match limits differently and ignores heap and depth limits.
+    // Preserve explicit resource limits by using the interpreter for them.
+    uint32_t limit;
+    if (pcre2_pattern_info(re, PCRE2_INFO_MATCHLIMIT, &limit) == PCRE2_ERROR_UNSET &&
+        pcre2_pattern_info(re, PCRE2_INFO_HEAPLIMIT, &limit) == PCRE2_ERROR_UNSET &&
+        pcre2_pattern_info(re, PCRE2_INFO_DEPTHLIMIT, &limit) == PCRE2_ERROR_UNSET)
+        // Unsupported patterns or unavailable executable memory retain the
+        // interpreter code. pcre2_match selects JIT only when it is ready.
+        (void)pcre2_jit_compile(re, PCRE2_JIT_COMPLETE);
     return (uint64_t)(uintptr_t)re;
+}
+
+B_NoneType reQ_PatternD__register_finalizer(reQ_Pattern self) {
+    void *previous_code = NULL;
+    GC_register_finalizer_no_order(self, reQ_Pattern_finalize,
+                                  (void *)(uintptr_t)self->_code, NULL, &previous_code);
+    // Reinitializing a Pattern releases its previous compiled code.
+    pcre2_code_free(previous_code);
+    GC_reachable_here(self);
+    return B_None;
 }
 
 // An offset where a substring of valid UTF-8 text may start or end. Matched
@@ -118,6 +120,11 @@ static PCRE2_SIZE reQ_start_offset(B_str arg_text, int64_t arg_start_pos) {
 static int reQ_exec(pcre2_code *re, B_str text, PCRE2_SIZE start_offset, pcre2_match_data *match_data) {
     int rc = pcre2_match(re, text->str, text->nbytes, start_offset,
                          PCRE2_NO_UTF_CHECK, match_data, NULL);
+    // The default JIT stack lives on the calling thread's machine stack.
+    // A pattern that needs more space can still run with the interpreter.
+    if (rc == PCRE2_ERROR_JIT_STACKLIMIT)
+        rc = pcre2_match(re, text->str, text->nbytes, start_offset,
+                         PCRE2_NO_UTF_CHECK | PCRE2_NO_JIT, match_data, NULL);
     if (rc == PCRE2_ERROR_NOMATCH)
         return rc;
     if (rc == PCRE2_ERROR_NOMEMORY)
