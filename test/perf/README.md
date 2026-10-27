@@ -105,6 +105,19 @@ can share cached objects, so start at scale 2 to measure byte comparisons.
 All timed strings contain ordinary text; embedded NUL and malformed UTF-8
 are covered by `test/builtins_auto/bytes_decode.act`.
 
+## Regular expressions
+
+`regex_matching` counts and replaces dense matches with a compiled pattern.
+Scale is the number of `"é123 "` records, each six UTF-8 bytes with one match.
+Each loop body scans the complete subject; replacement includes output
+allocation. Pattern compilation, input construction and result checks are
+outside the timed loop.
+
+```sh
+acton test perf --module regex_matching --scale 65536 --time 3s
+acton test scale --module regex_matching --start-scale 1024 --end-scale 65536
+```
+
 ## JSON conversion
 
 `json_strings` covers object and array encoding and decoding with long ASCII
