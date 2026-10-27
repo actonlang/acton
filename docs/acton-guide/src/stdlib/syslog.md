@@ -101,6 +101,22 @@ Both actors accept `max_size` from 480 through 65507 bytes. These limits apply
 to the entire encoded message. Choose a limit that suits the receiving system
 and network; larger UDP datagrams may require IP fragmentation.
 
+## Stream framing
+
+Octet counting prefixes each message with its byte length and a space. Newlines
+and binary content remain part of the body; newline-delimited framing is not
+supported.
+
+`frame(message, max_size=65536) -> bytes` encodes one RFC 5424 message with
+that prefix. `StreamDecoder(max_size=65536)` incrementally splits incoming
+bytes into complete wire messages. Both require a positive `max_size`.
+
+`feed(data)` returns `(messages, error)`, where `error` is `None` on success.
+Pass each message to `decode()` or `decode_legacy()`. Process returned messages
+before handling a framing error: a chunk may contain valid messages followed
+by invalid framing. A failed decoder remains failed. `finish()` raises
+`ValueError` for incomplete input at EOF or a previous framing error.
+
 ## Message codec
 
 `Message(message=None, facility=USER, severity=INFO, timestamp=None,

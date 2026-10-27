@@ -1,0 +1,204 @@
+import std.syslog as syslog
+import testing
+
+
+def feed(decoder: syslog.StreamDecoder, data: bytes) -> list[bytes]:
+    messages, error = decoder.feed(data)
+    testing.assertEqual(error, None)
+    return messages
+
+
+def reject_feed(decoder: syslog.StreamDecoder, data: bytes) -> ?str:
+    messages, error = decoder.feed(data)
+    testing.assertEqual(messages, [])
+    testing.assertNotNone(error)
+    return error
+
+
+def reject_finish(decoder: syslog.StreamDecoder):
+    try:
+        decoder.finish()
+    except ValueError:
+        pass
+    else:
+        testing.error("Accepted truncated syslog frame")
+
+
+def _test_syslog_frame_encoding():
+    for payload in [b"", b"first\nsecond\r\n", b"\x00\xff\x80", "räksmörgås 🫡".encode()]:
+        message = syslog.Message(payload)
+        wire = syslog.encode(message)
+        testing.assertEqual(syslog.frame(message), str(len(wire)).encode() + b" " + wire)
+        testing.assertEqual(syslog.frame(message, max_size=len(wire)), str(len(wire)).encode() + b" " + wire)
+    # 20 encoded octets: the UTF-8 body has two bytes, not one character.
+    testing.assertEqual(syslog.frame(syslog.Message("é".encode())), b"20 <14>1 - - - - - - \xc3\xa9")
+
+
+def _test_syslog_frame_rejects_invalid_messages_and_limits():
+    for limit in [-1, 0, 1, 15]:
+        try:
+            syslog.frame(syslog.Message(), max_size=limit)
+        except ValueError:
+            pass
+        else:
+            testing.error("Accepted invalid or insufficient syslog frame limit")
+    try:
+        syslog.frame(syslog.Message(severity=8))
+    except ValueError:
+        pass
+    else:
+        testing.error("Framed an invalid syslog message")
+    for limit in [-1, 0]:
+        try:
+            syslog.StreamDecoder(max_size=limit)
+        except ValueError:
+            pass
+        else:
+            testing.error("Accepted invalid syslog stream limit")
+
+
+def _test_syslog_stream_every_split():
+    message = syslog.Message("first\nsecond\r\n 🫡".encode() + b"\x00\xff\x80")
+    wire = syslog.encode(message)
+    framed = syslog.frame(message)
+    for split in range(len(framed) + 1):
+        decoder = syslog.StreamDecoder()
+        received = feed(decoder, framed[:split])
+        received.extend(feed(decoder, framed[split:]))
+        testing.assertEqual(received, [wire])
+        decoder.finish()
+
+
+def _test_syslog_stream_byte_chunks():
+    messages = [syslog.Message(), syslog.Message(b"one"), syslog.Message("å\nä\r\nö".encode())]
+    framed = b"".join([syslog.frame(message) for message in messages])
+    decoder = syslog.StreamDecoder()
+    received: list[bytes] = []
+    for pos in range(len(framed)):
+        received.extend(feed(decoder, framed[pos:pos + 1]))
+    testing.assertEqual(received, [syslog.encode(message) for message in messages])
+    decoder.finish()
+
+
+def _test_syslog_stream_coalesced_frames():
+    messages = [syslog.Message(str(index).encode()) for index in range(100)]
+    framed = b"".join([syslog.frame(message) for message in messages])
+    decoder = syslog.StreamDecoder()
+    testing.assertEqual(feed(decoder, framed), [syslog.encode(message) for message in messages])
+    testing.assertEqual(feed(decoder, b""), [])
+    decoder.finish()
+
+
+def _test_syslog_stream_complete_and_partial_frames():
+    decoder = syslog.StreamDecoder()
+    testing.assertEqual(feed(decoder, b"1 a2 b"), [b"a"])
+    testing.assertEqual(feed(decoder, b"c3 def4 gh"), [b"bc", b"def"])
+    testing.assertEqual(feed(decoder, b"ij"), [b"ghij"])
+    decoder.finish()
+    # The framing layer does not impose a syslog message format.
+    legacy = b"<34>Oct 11 22:14:15 host tag: hello"
+    testing.assertEqual(feed(decoder, str(len(legacy)).encode() + b" " + legacy), [legacy])
+    decoder.finish()
+
+
+def _test_syslog_stream_frame_limits():
+    decoder = syslog.StreamDecoder(max_size=10)
+    testing.assertEqual(feed(decoder, b"10 01234"), [])
+    testing.assertEqual(feed(decoder, b"567891 x"), [b"0123456789", b"x"])
+    decoder.finish()
+    for invalid in [b"11 ", b"100", b"99999999999999999999999999999999999999"]:
+        reject_feed(syslog.StreamDecoder(max_size=10), invalid)
+    # Prefixes must be bounded even when no separating space ever arrives.
+    decoder = syslog.StreamDecoder(max_size=65536)
+    testing.assertEqual(feed(decoder, b"6553"), [])
+    reject_feed(decoder, b"7")
+    decoder = syslog.StreamDecoder(max_size=1)
+    reject_feed(decoder, b"2")
+
+
+def _test_syslog_stream_default_size_boundary():
+    message = syslog.Message(b"x" * 65518)
+    wire = syslog.encode(message)
+    testing.assertEqual(len(wire), 65536)
+    framed = syslog.frame(message)
+    decoder = syslog.StreamDecoder()
+    received: list[bytes] = []
+    for pos in range(0, len(framed), 8192):
+        received.extend(feed(decoder, framed[pos:pos + 8192]))
+    testing.assertEqual(received, [wire])
+    decoder.finish()
+    reject_feed(syslog.StreamDecoder(), b"65537 ")
+    try:
+        syslog.frame(syslog.Message(b"x" * 65519))
+    except ValueError:
+        pass
+    else:
+        testing.error("Framed a message larger than the default limit")
+
+
+def _test_syslog_stream_rejects_malformed_prefixes():
+    for invalid in [b" ", b"0", b"01 a", b"+1 a", b"-1 a", b"1\ta", b"1\na", b"1\r\na", b"1\x00a", b"a", b"\xff", b"<14>1 - - - - - -\n"]:
+        decoder = syslog.StreamDecoder()
+        error = reject_feed(decoder, invalid)
+        testing.assertEqual(reject_feed(decoder, b"1 a"), error)
+        testing.assertEqual(reject_feed(decoder, b""), error)
+        reject_finish(decoder)
+
+
+def _test_syslog_stream_preserves_messages_before_framing_error():
+    messages = [syslog.Message(b"one"), syslog.Message("å\nö".encode())]
+    valid = b"".join([syslog.frame(message) for message in messages])
+    expected = [syslog.encode(message) for message in messages]
+    for invalid in [b"0", b"65537 ", b"1\n"]:
+        framed = valid + invalid
+        decoder = syslog.StreamDecoder()
+        received, error = decoder.feed(framed)
+        testing.assertEqual(received, expected)
+        testing.assertNotNone(error)
+        testing.assertEqual(reject_feed(decoder, b"1 a"), error)
+        reject_finish(decoder)
+        # TCP chunk boundaries cannot change which preceding messages arrive.
+        for split in range(len(framed) + 1):
+            decoder = syslog.StreamDecoder()
+            received, first_error = decoder.feed(framed[:split])
+            remaining, last_error = decoder.feed(framed[split:])
+            received.extend(remaining)
+            testing.assertEqual(received, expected)
+            testing.assertEqual(last_error, error)
+            if first_error is not None:
+                testing.assertEqual(first_error, error)
+            reject_finish(decoder)
+
+
+def _test_syslog_stream_truncated_eof():
+    framed = syslog.frame(syslog.Message(b"hello"))
+    for end in range(1, len(framed)):
+        decoder = syslog.StreamDecoder()
+        testing.assertEqual(feed(decoder, framed[:end]), [])
+        reject_finish(decoder)
+        reject_feed(decoder, framed[end:])
+    decoder = syslog.StreamDecoder()
+    testing.assertEqual(feed(decoder, b""), [])
+    decoder.finish()
+
+
+def _test_syslog_stream_structured_data():
+    elements = {"event@32473": [(name="source", value="å\nö"), (name="source", value='a"b\\c]d')], "empty": []}
+    message = syslog.Message(b"payload", structured_data=elements)
+    decoder = syslog.StreamDecoder()
+    received = feed(decoder, syslog.frame(message))
+    testing.assertEqual(received, [syslog.encode(message)])
+    testing.assertEqual(syslog.decode(received[0]).structured_data, elements)
+    decoder.finish()
+
+
+def _test_syslog_stream_integer_boundary():
+    # Parsing a valid maximum prefix must not allocate its advertised body.
+    limit = 9223372036854775807
+    decoder = syslog.StreamDecoder(max_size=limit)
+    testing.assertEqual(feed(decoder, b"9223372036854775807 "), [])
+    reject_finish(decoder)
+    for invalid in [b"9223372036854775808", b"92233720368547758070"]:
+        decoder = syslog.StreamDecoder(max_size=limit)
+        testing.assertEqual(reject_feed(decoder, invalid), "Syslog message exceeds max_size")
+        reject_finish(decoder)

@@ -545,3 +545,106 @@ actor Server(cap: net.UDPListenCap, address: str, port: int,
             listener.close()
 
     after 0: start()
+
+
+invalid_frame_max_size_error = ValueError("Syslog frame size limit must be positive")
+oversized_frame_error = ValueError("Syslog message exceeds max_size")
+missing_frame_length_error = ValueError("Missing syslog frame length")
+leading_zero_frame_length_error = ValueError("Syslog frame length must start with 1 through 9")
+invalid_frame_length_error = ValueError("Invalid syslog frame length")
+truncated_frame_error = ValueError("Truncated syslog frame")
+
+
+def frame(message: Message, max_size: int=65536) -> bytes:
+    """Encode a message with RFC 6587 octet-counting framing.
+
+    `max_size` limits the encoded message, excluding the length prefix.
+    Newlines and arbitrary bytes in the message do not affect framing.
+    """
+    if max_size < 1:
+        raise invalid_frame_max_size_error
+    data = encode(message)
+    if len(data) > max_size:
+        raise oversized_frame_error
+    return str(len(data)).encode() + b" " + data
+
+
+class StreamDecoder(object):
+    """Incrementally split an octet-counted syslog stream into messages.
+
+    `feed` returns complete wire messages for `decode` or `decode_legacy`
+    and an optional framing error. Completed messages preceding an error
+    are preserved. Partial messages are buffered up to `max_size`. A framing
+    error permanently invalidates the decoder; callers should process
+    completed messages, then close that session.
+    """
+    _max_size: int
+    _length: int
+    _remaining: int
+    _body: bytearray
+    _error: ?ValueError
+
+    def __init__(self, max_size: int=65536):
+        if max_size < 1:
+            raise invalid_frame_max_size_error
+        self._max_size = max_size
+        self._length = 0
+        self._remaining = 0
+        self._body = bytearray(b"")
+        self._error = None
+
+    mut def feed(self, data: bytes) -> (list[bytes], ?str):
+        """Return completed messages and an optional fatal framing error.
+
+        After an error, later calls return no messages and the same error.
+        """
+        error = self._error
+        if error is not None:
+            return [], error.error_message
+        messages: list[bytes] = []
+        pos = 0
+        while pos < len(data):
+            if self._remaining == 0:
+                byte = data[pos]
+                pos += 1
+                if byte == 32:
+                    if self._length == 0:
+                        self._error = missing_frame_length_error
+                        break
+                    self._remaining = self._length
+                    self._length = 0
+                elif byte >= 48 and byte <= 57:
+                    digit = byte - 48
+                    if self._length == 0 and digit == 0:
+                        self._error = leading_zero_frame_length_error
+                        break
+                    # Reject oversized prefixes before multiplication, including
+                    # prefixes too large for the integer representation.
+                    if digit > self._max_size or self._length > (self._max_size - digit) // 10:
+                        self._error = oversized_frame_error
+                        break
+                    self._length = self._length * 10 + digit
+                else:
+                    self._error = invalid_frame_length_error
+                    break
+            else:
+                count = min([self._remaining, len(data) - pos])
+                self._body += bytearray(data[pos:pos + count])
+                pos += count
+                self._remaining -= count
+                if self._remaining == 0:
+                    messages.append(bytes(self._body))
+                    self._body = bytearray(b"")
+        error = self._error
+        if error is not None:
+            return messages, error.error_message
+        return messages, None
+
+    mut def finish(self) -> None:
+        """Check EOF, raising ValueError for a partial frame or prior error."""
+        if self._error is None and (self._length != 0 or self._remaining != 0):
+            self._error = truncated_frame_error
+            self._body = bytearray(b"")
+        error = self._error
+        if error is not None:
+            raise error
