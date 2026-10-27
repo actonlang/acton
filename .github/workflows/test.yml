@@ -1058,6 +1058,12 @@ jobs:
     with:
       repo_url: "actonlang/acton-http2"
 
+  test-app-textfsm:
+    needs: build-debs
+    uses: "./.github/workflows/test-app.yml"
+    with:
+      repo_url: "actonlang/textfsm"
+
   build-container-image:
     needs: [test-macos, test-linux, test-cross-compile, test-windows, test-proxy, build-debs]
     runs-on: ubuntu-latest
