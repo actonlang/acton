@@ -16,6 +16,7 @@
 #include <string.h>
 #ifndef _WIN32
 #include <arpa/inet.h>
+#include <net/if.h>
 #include <netinet/in.h>
 #include <unistd.h>
 #endif
@@ -26,8 +27,46 @@ void netQ___ext_init__() {
     // NOP
 }
 
-// Longest address and port string: [IPv6 address]:65535
-#define NET_ADDRPORTSTRLEN (INET6_ADDRSTRLEN + 8)
+// Longest address string: an IPv6 address with a zone (fe80::1%eth0)
+#define NET_ADDRSTRLEN (INET6_ADDRSTRLEN + UV_IF_NAMESIZE)
+// ...with a port: [fe80::1%eth0]:65535
+#define NET_ADDRPORTSTRLEN (NET_ADDRSTRLEN + 8)
+
+// Parses an IPv6 address, optionally with a zone given by interface name or
+// index: fe80::1%eth0 or fe80::1%2. Unlike uv_ip6_addr, an unknown interface
+// is an error rather than silently ignored.
+static int parse_ip6(const char *address, int port, struct sockaddr_in6 *addr6) {
+    const char *zone = strchr(address, '%');
+    if (zone == NULL) {
+        return uv_ip6_addr(address, port, addr6);
+    }
+    char ip[INET6_ADDRSTRLEN];
+    size_t ip_len = (size_t)(zone - address);
+    zone++;
+    if (ip_len >= sizeof(ip) || *zone == '\0') {
+        return UV_EINVAL;
+    }
+    memcpy(ip, address, ip_len);
+    ip[ip_len] = '\0';
+    int r = uv_ip6_addr(ip, port, addr6);
+    if (r != 0) {
+        return r;
+    }
+    char *end = NULL;
+    unsigned long index = strtoul(zone, &end, 10);
+    if (*end != '\0') {
+#ifdef _WIN32
+        return UV_EINVAL;
+#else
+        index = if_nametoindex(zone);
+#endif
+    }
+    if (index == 0 || index > UINT32_MAX) {
+        return UV_EINVAL;
+    }
+    addr6->sin6_scope_id = (uint32_t)index;
+    return 0;
+}
 
 
 bool netQ_is_ipv4 (B_str address) {
@@ -41,11 +80,7 @@ bool netQ_is_ipv4 (B_str address) {
 
 bool netQ_is_ipv6 (B_str address) {
     struct sockaddr_in6 sa;
-    if (inet_pton(AF_INET6, (const char *)fromB_str(address), &(sa.sin6_addr)) == 0) {
-        return false;
-    } else {
-        return true;
-    }
+    return parse_ip6((const char *)fromB_str(address), 0, &sa) == 0;
 }
 
 // Holds GC pointers (callback closures, hostname bytes) but is referenced only
@@ -199,6 +234,8 @@ static void udp_call_receive($WORD cb, $WORD actor, B_bytes data, B_str address,
     ((B_Msg (*)($WORD, $WORD, $WORD, $WORD, $WORD))(($action)cb)->$class->__asyn__)(cb, actor, data, address, port);
 }
 
+// Formats an address as a string. An IPv6 address with a scope, like a
+// link-local address, gets its zone: fe80::1%eth0.
 static int sockaddr_to_addr_port(const struct sockaddr *addr, char *addrbuf, size_t addrbuf_len, int *port) {
     if (addr == NULL) {
         return UV_EINVAL;
@@ -217,6 +254,15 @@ static int sockaddr_to_addr_port(const struct sockaddr *addr, char *addrbuf, siz
         if (r != 0) {
             return r;
         }
+        if (addr6->sin6_scope_id != 0) {
+            size_t len = strlen(addrbuf);
+            char zone[UV_IF_NAMESIZE];
+            size_t zone_len = sizeof(zone);
+            if (uv_if_indextoname(addr6->sin6_scope_id, zone, &zone_len) != 0) {
+                snprintf(zone, sizeof(zone), "%u", (unsigned)addr6->sin6_scope_id);
+            }
+            snprintf(addrbuf + len, addrbuf_len - len, "%%%s", zone);
+        }
         *port = (int)ntohs(addr6->sin6_port);
         return 0;
     }
@@ -232,24 +278,21 @@ static void format_addr_port(char *buf, size_t buf_len, const char *address, int
     }
 }
 
+// Parses an IPv4 or IPv6 address, see parse_ip6 for zones
 static int make_sockaddr(B_str address, int64_t port, struct sockaddr_storage *dest) {
     // TODO: port should be uint16 at the Acton API boundary.
+    const char *addr = (const char *)fromB_str(address);
     struct sockaddr_in addr4;
     struct sockaddr_in6 addr6;
-    if (inet_pton(AF_INET, (const char *)fromB_str(address), &(addr4.sin_addr)) == 1) {
-        int r = uv_ip4_addr((const char *)fromB_str(address), (int)port, &addr4);
-        if (r == 0) {
-            memcpy(dest, &addr4, sizeof(addr4));
-        }
-        return r;
-    } else if (inet_pton(AF_INET6, (const char *)fromB_str(address), &(addr6.sin6_addr)) == 1) {
-        int r = uv_ip6_addr((const char *)fromB_str(address), (int)port, &addr6);
-        if (r == 0) {
-            memcpy(dest, &addr6, sizeof(addr6));
-        }
-        return r;
+    if (uv_ip4_addr(addr, (int)port, &addr4) == 0) {
+        memcpy(dest, &addr4, sizeof(addr4));
+        return 0;
     }
-    return UV_EINVAL;
+    int r = parse_ip6(addr, (int)port, &addr6);
+    if (r == 0) {
+        memcpy(dest, &addr6, sizeof(addr6));
+    }
+    return r;
 }
 
 static int make_udp_bind_addr(int family, struct sockaddr_storage *dest) {
@@ -328,7 +371,7 @@ static void udp_connection_on_receive(uv_udp_t *handle, ssize_t nread, const uv_
     }
 
     if (nread >= 0 && addr != NULL) {
-        char addrbuf[INET6_ADDRSTRLEN] = { '\0' };
+        char addrbuf[NET_ADDRSTRLEN] = { '\0' };
         int port = 0;
         int r = sockaddr_to_addr_port(addr, addrbuf, sizeof(addrbuf), &port);
         if (r != 0) {
@@ -360,7 +403,7 @@ static void udp_listener_on_receive(uv_udp_t *handle, ssize_t nread, const uv_bu
     }
 
     if (nread >= 0 && addr != NULL) {
-        char addrbuf[INET6_ADDRSTRLEN] = { '\0' };
+        char addrbuf[NET_ADDRSTRLEN] = { '\0' };
         int port = 0;
         int r = sockaddr_to_addr_port(addr, addrbuf, sizeof(addrbuf), &port);
         if (r != 0) {
@@ -536,7 +579,7 @@ $R netQ_UDPConnectionD_local_addressG_local (netQ_UDPConnection self, $Cont c$co
     }
     struct sockaddr_storage sockname;
     int namelen = sizeof(sockname);
-    char addr[INET6_ADDRSTRLEN] = { '\0' };
+    char addr[NET_ADDRSTRLEN] = { '\0' };
     if (uv_udp_getsockname((const uv_udp_t *)udp, (struct sockaddr *)&sockname, &namelen) == 0) {
         int port = 0;
         if (sockaddr_to_addr_port((struct sockaddr *)&sockname, addr, sizeof(addr), &port) != 0) {
@@ -553,7 +596,7 @@ $R netQ_UDPConnectionD_local_portG_local (netQ_UDPConnection self, $Cont c$cont)
     }
     struct sockaddr_storage sockname;
     int namelen = sizeof(sockname);
-    char addr[INET6_ADDRSTRLEN] = { '\0' };
+    char addr[NET_ADDRSTRLEN] = { '\0' };
     int port = 0;
     if (uv_udp_getsockname((const uv_udp_t *)udp, (struct sockaddr *)&sockname, &namelen) == 0) {
         sockaddr_to_addr_port((struct sockaddr *)&sockname, addr, sizeof(addr), &port);
@@ -729,7 +772,7 @@ $R netQ_UDPListenerD_local_addressG_local (netQ_UDPListener self, $Cont c$cont) 
     }
     struct sockaddr_storage sockname;
     int namelen = sizeof(sockname);
-    char addr[INET6_ADDRSTRLEN] = { '\0' };
+    char addr[NET_ADDRSTRLEN] = { '\0' };
     if (uv_udp_getsockname((const uv_udp_t *)udp, (struct sockaddr *)&sockname, &namelen) == 0) {
         int port = 0;
         if (sockaddr_to_addr_port((struct sockaddr *)&sockname, addr, sizeof(addr), &port) != 0) {
@@ -746,7 +789,7 @@ $R netQ_UDPListenerD_local_portG_local (netQ_UDPListener self, $Cont c$cont) {
     }
     struct sockaddr_storage sockname;
     int namelen = sizeof(sockname);
-    char addr[INET6_ADDRSTRLEN] = { '\0' };
+    char addr[NET_ADDRSTRLEN] = { '\0' };
     int port = 0;
     if (uv_udp_getsockname((const uv_udp_t *)udp, (struct sockaddr *)&sockname, &namelen) == 0) {
         sockaddr_to_addr_port((struct sockaddr *)&sockname, addr, sizeof(addr), &port);
@@ -775,9 +818,9 @@ static void tcp_close_reset(uv_tcp_t *handle) {
 
 // Local and remote address and port of a connected TCP handle
 struct tcp_names {
-    char local_address[INET6_ADDRSTRLEN];
+    char local_address[NET_ADDRSTRLEN];
     int local_port;
-    char remote_address[INET6_ADDRSTRLEN];
+    char remote_address[NET_ADDRSTRLEN];
     int remote_port;
     int family;
 };
@@ -1167,14 +1210,14 @@ $R netQ_TCPListenerD_closeG_local (netQ_TCPListener self, $Cont c$cont) {
 }
 
 $R netQ_TCPListenerD_local_addressG_local (netQ_TCPListener self, $Cont c$cont) {
-    char addr[INET6_ADDRSTRLEN];
+    char addr[NET_ADDRSTRLEN];
     int port;
     tcp_listener_names(self->_stream, addr, sizeof(addr), &port);
     return $R_CONT(c$cont, actStrFromCStringCopy(addr));
 }
 
 $R netQ_TCPListenerD_local_portG_local (netQ_TCPListener self, $Cont c$cont) {
-    char addr[INET6_ADDRSTRLEN];
+    char addr[NET_ADDRSTRLEN];
     int port;
     tcp_listener_names(self->_stream, addr, sizeof(addr), &port);
     return $R_CONT(c$cont, toB_int(port));

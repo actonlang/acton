@@ -219,3 +219,66 @@ actor _test_UDPSendErrorNamesInvalidAddress(t: testing.EnvT):
 actor _test_UDPSendErrorNamesDestination(t: testing.EnvT):
     # Sending to the broadcast address needs SO_BROADCAST, so it fails
     udp_send_error(t, "255.255.255.255", ["255.255.255.255:9"])
+
+
+actor _test_UDPSendErrorNamesEmptyZone(t: testing.EnvT):
+    udp_send_error(t, "fe80::1%", ["[fe80::1%]:9", "invalid address"])
+
+
+actor udp_send_to(t: testing.EnvT, listen_address: str, destination: str, optional: bool=False):
+    """UDPListener.send reaches another listener at destination, like an address with a zone"""
+    udp_cap = net.UDPCap(net.NetCap(t.env.cap))
+    var done = False
+    var receiver: ?net.UDPListener = None
+    var sender: ?net.UDPListener = None
+
+    def finish(error: ?str):
+        if done:
+            return
+        done = True
+        if receiver is not None:
+            receiver.close()
+        if sender is not None:
+            sender.close()
+        if error is not None:
+            t.failure(AssertionError(error))
+        else:
+            t.success()
+
+    def on_receiver_listen(l: net.UDPListener, error: ?str):
+        if error is not None:
+            if optional:
+                # No IPv6 on this host
+                finish(None)
+            else:
+                finish("receiver listen error: " + error)
+            return
+        receiver = l
+        sender = net.UDPListener(net.UDPListenCap(udp_cap), listen_address, 0, on_sender_listen, on_sender_receive, on_error)
+
+    def on_sender_listen(l: net.UDPListener, error: ?str):
+        if error is not None:
+            finish("sender listen error: " + error)
+            return
+        if receiver is not None:
+            l.send(b"hello", destination, receiver.local_port())
+
+    def on_receive(l: net.UDPListener, data: bytes, address: str, port: int):
+        if data != b"hello":
+            finish("unexpected datagram: " + str(data))
+        else:
+            finish(None)
+
+    def on_sender_receive(l: net.UDPListener, data: bytes, address: str, port: int):
+        pass
+
+    def on_error(l: net.UDPListener, errmsg: str):
+        finish("error: " + errmsg)
+
+    after 5: finish("datagram to " + destination + " not received")
+    net.UDPListener(net.UDPListenCap(udp_cap), listen_address, 0, on_receiver_listen, on_receive, on_error)
+
+
+actor _test_UDPSendToZone(t: testing.EnvT):
+    # The zone of a loopback address does not matter, but must parse
+    udp_send_to(t, "::1", "::1%1", True)

@@ -565,3 +565,46 @@ actor _test_TCPAcceptLeavesNoHandles(t: testing.EnvT):
 
     after 5: base.timeout("connections not closed")
     net.TCPListener(net.TCPListenCap(tcp_cap), "127.0.0.1", 0, on_listen, on_accept)
+
+
+actor _test_TCPListenOnZone(t: testing.EnvT):
+    """A listener takes an IPv6 address with a zone, and a client reaches it"""
+    tcp_cap = net.TCPCap(net.NetCap(t.env.cap))
+    base = tcp_test_result(t, "listen on zone")
+    var listener: ?net.TCPListener = None
+    var zone_error = ""
+
+    def on_listen(l: net.TCPListener, error: ?str):
+        if error is not None:
+            # Fails also without IPv6, so find out which it is
+            zone_error = error
+            net.TCPListener(net.TCPListenCap(tcp_cap), "::1", 0, on_ipv6_listen, on_accept)
+            return
+        listener = l
+        net.TCPConnection(net.TCPConnectCap(tcp_cap), "::1", l.local_port(), on_connect, on_receive, on_error)
+
+    def on_ipv6_listen(l: net.TCPListener, error: ?str):
+        l.close()
+        if error is not None:
+            # No IPv6 on this host
+            base.success()
+        else:
+            base.failure("listen on ::1%1 failed: " + zone_error)
+
+    def on_accept(s: net.TCPListenConnection):
+        s.close()
+
+    def on_connect(c: net.TCPConnection):
+        c.close(lambda c: None)
+        if listener is not None:
+            listener.close()
+        base.success()
+
+    def on_receive(c: net.TCPConnection, data: bytes):
+        pass
+
+    def on_error(c: net.TCPConnection, errmsg: str):
+        base.failure("client error: " + errmsg)
+
+    after 5: base.timeout("no connection")
+    net.TCPListener(net.TCPListenCap(tcp_cap), "::1%1", 0, on_listen, on_accept)
