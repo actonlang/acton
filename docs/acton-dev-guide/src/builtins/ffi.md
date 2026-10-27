@@ -1,5 +1,12 @@
 # FFI hooks
 
+## Module initialization hook
+
+Every `.ext.c` file defines an `__ext_init__` hook, which runs first in its
+module's initialization. It may only set up C state and must not depend on
+Acton code. See [Module initialization](../runtime/module_init.md#__ext_init__)
+for the full contract.
+
 ## Raising exceptions
 
 Use `RAISE(Type, args...)` to construct and raise an exception, for example

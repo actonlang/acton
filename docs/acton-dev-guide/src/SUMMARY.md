@@ -28,6 +28,7 @@
   - [Builtin functions](builtins/functions.md)
   - [FFI hooks](builtins/ffi.md)
 - [Runtime](runtime/index.md)
+  - [Module initialization](runtime/module_init.md)
   - [Scheduler](runtime/scheduler.md)
   - [RTS sync pause](runtime/sync_pause.md)
   - [Actors](runtime/actors.md)
