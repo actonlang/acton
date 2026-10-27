@@ -569,7 +569,7 @@ actor TCPConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
     _connect(self)
 
 
-actor TCPListenConnection(cap: _TCPListenConnectCap, server_client: int):
+actor TCPListenConnection(cap: _TCPListenConnectCap, server_client: int, worker_id: int):
     """TCP Listener Connection
 
     A connection accepted by a TCPListener. Reading starts once callbacks are
@@ -640,9 +640,9 @@ actor TCPListener(cap: TCPListenCap, address: str, port: int, on_listen: action(
     listening, connections already accepted stay open.
     """
     var _stream = -1
-    def create_tcp_listen_connection(cap: _TCPListenConnectCap, client: int):
+    def create_tcp_listen_connection(cap: _TCPListenConnectCap, client: int, worker_id: int):
         """Implementation internal"""
-        c = TCPListenConnection(cap, client)
+        c = TCPListenConnection(cap, client, worker_id)
         if _stream == -1:
             # Accepted just before the listener was closed
             c.close()

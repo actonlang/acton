@@ -1116,13 +1116,16 @@ void on_new_connection(uv_stream_t *server, int status) {
         char errmsg[1024] = "Error in accepting TCP client connection: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
+        tcp_close_handle((uv_handle_t *)client);
         $action2 f = ($action2)self->on_listen;
         f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
         // NOTE: free() here if do manual memory management in I/O one day
         return;
     }
 
-    self->$class->create_tcp_listen_connection(self, B_None, (int64_t)(intptr_t)client);
+    // The handle belongs to this loop, so the connection actor runs on this
+    // worker thread
+    self->$class->create_tcp_listen_connection(self, B_None, (int64_t)(intptr_t)client, get_wtid());
     // NOTE: free() here if do manual memory management in I/O one day
 }
 
@@ -1185,14 +1188,12 @@ B_NoneType netQ_TCPListenerD___resume__ (netQ_TCPListener self) {
 }
 
 $R netQ_TCPListenConnectionD__initG_local (netQ_TCPListenConnection self, $Cont c$cont) {
-    pin_actor_affinity();
+    // The accepted handle belongs to the loop of the listener's worker thread.
+    // This may run on another worker, so it must not use the loop; only the
+    // actor's later messages run on the listener's worker.
+    set_actor_affinity(self->worker_id);
 
-    uv_stream_t *client = (uv_stream_t *)(intptr_t)self->server_client;
-    uv_os_fd_t fd;
-    uv_fileno((uv_handle_t *)client, &fd);
-    uv_tcp_t* client_handle = (uv_tcp_t*)acton_malloc(sizeof(uv_tcp_t));
-    uv_tcp_init(get_uv_loop(), client_handle);
-    uv_tcp_open(client_handle, (uv_os_sock_t)fd);
+    uv_tcp_t *client_handle = (uv_tcp_t *)(intptr_t)self->server_client;
     self->client = (int64_t)(intptr_t)client_handle;
 
     struct tcp_names names;
@@ -1240,6 +1241,8 @@ void netQ_TCPListenConnection__on_receive(uv_stream_t *stream, ssize_t nread, co
 
 $R netQ_TCPListenConnectionD__read_startG_local (netQ_TCPListenConnection self, $Cont c$cont) {
     uv_stream_t *client = (uv_stream_t *)(intptr_t)self->client;
+    if ((intptr_t)client == -1)
+        return $R_CONT(c$cont, B_None);
     client->data = self;
     int r = uv_read_start(client, alloc_buffer, netQ_TCPListenConnection__on_receive);
     if (r < 0) {

@@ -1,3 +1,4 @@
+import acton.rts
 import logging
 import net
 import random
@@ -505,4 +506,62 @@ actor _test_TCPClientResetReported(t: testing.EnvT):
         base.failure("client error: " + errmsg)
 
     after 5: base.timeout("reset not reported")
+    net.TCPListener(net.TCPListenCap(tcp_cap), "127.0.0.1", 0, on_listen, on_accept)
+
+
+actor _test_TCPAcceptLeavesNoHandles(t: testing.EnvT):
+    """Accepting and closing connections leaves no TCP handles behind"""
+    tcp_cap = net.TCPCap(net.NetCap(t.env.cap))
+    base = tcp_test_result(t, "accepted handles")
+    monitor = acton.rts.Monitor(t.env)
+    CONNECTIONS = 3
+    var baseline = 0
+    var closed = 0
+    var listener: ?net.TCPListener = None
+
+    def tcp_handles() -> int:
+        n = 0
+        for wthread_id, handles in monitor.io_handles().items():
+            for k, v in handles.items():
+                if v.typ == "tcp":
+                    n += 1
+        return n
+
+    def on_listen(l: net.TCPListener, error: ?str):
+        if error is not None:
+            base.failure("listen error: " + error)
+            return
+        listener = l
+        baseline = tcp_handles()
+        for i in range(CONNECTIONS):
+            net.TCPConnection(net.TCPConnectCap(tcp_cap), "127.0.0.1", l.local_port(), on_connect, on_receive, on_error, on_remote_close)
+
+    def on_accept(s: net.TCPListenConnection):
+        s.close()
+
+    def on_connect(c: net.TCPConnection):
+        pass
+
+    def on_receive(c: net.TCPConnection, data: bytes):
+        pass
+
+    def on_error(c: net.TCPConnection, errmsg: str):
+        base.failure("client error: " + errmsg)
+
+    def on_remote_close(c: net.TCPConnection):
+        closed += 1
+        if closed == CONNECTIONS:
+            # Let the closes complete
+            after 0.2: check()
+
+    def check():
+        n = tcp_handles()
+        if listener is not None:
+            listener.close()
+        if n > baseline:
+            base.failure("%d TCP handles left, %d before connecting" % (n, baseline))
+        else:
+            base.success()
+
+    after 5: base.timeout("connections not closed")
     net.TCPListener(net.TCPListenCap(tcp_cap), "127.0.0.1", 0, on_listen, on_accept)
