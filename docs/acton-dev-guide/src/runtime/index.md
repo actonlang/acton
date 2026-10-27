@@ -3,6 +3,7 @@
 This section covers the runtime system, scheduling model, and core services
 that the compiler targets.
 
+- [Module initialization](module_init.md)
 - [Scheduler](scheduler.md)
 - [RTS sync pause](sync_pause.md)
 - [Actors](actors.md)

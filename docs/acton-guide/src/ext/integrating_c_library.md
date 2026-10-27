@@ -77,7 +77,24 @@ pure def decompress(data: bytes) -> bytes:
 
 The `NotImplemented` statement tells the compiler that the implementation is not written in Acton but rather external. When there is a `.ext.c` file, the compiler expects it to contain the implementations for the `NotImplemented` functions. Also note the explicit types. Normally the Acton compiler can infer types, but since there is no Acton code here, only C code, there is nothing to infer from.
 
-Now create `src/zlib.ext.c` which is where we will do the actual implementation of these functions. We need to add a `__ext_init__` function, which runs on module load by the Acton RTS, which must always exist. There is nothing to do in particular for zlib so let's just create an empty function, like so:
+Now create `src/zlib.ext.c`, which is where we will write the actual
+implementation of these functions. The file must always define an
+`__ext_init__` function. The module's generated initialization function calls
+it once, when the module is loaded.
+
+`__ext_init__` is for setting up the C state that the module's C functions
+rely on, for example initializing a C library (libxml2 needs `xmlInitParser()`)
+or seeding a random number generator. It must not depend on Acton code: do not
+call functions or methods written in Acton, from this module or from any other
+module. `__ext_init__` runs at the very start of the module's initialization,
+before the module initializes its imports, its classes and its module-level
+values. Acton code called from it could therefore find any of these not yet
+initialized. The rule applies only to `__ext_init__`. The C functions that
+implement the `NotImplemented` declarations are called from Acton code and
+always run after it.
+
+There is nothing to set up for zlib, so let's just create an empty function,
+like so:
 
 ```c
 void zlibQ___ext_init__() {}
