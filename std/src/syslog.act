@@ -80,6 +80,7 @@ invalid_destination_port_error = ValueError("Syslog destination port must be in 
 invalid_udp_max_size_error = ValueError("Syslog UDP max_size must be in 480..65507")
 invalid_max_pending_error = ValueError("Syslog max_pending must not be negative")
 invalid_listen_port_error = ValueError("Syslog listen port must be in 0..65535")
+invalid_stream_limits_error = ValueError("Invalid syslog stream limits")
 
 
 class Message(value):
@@ -381,6 +382,13 @@ def decode_legacy(data: bytes) -> Message:
                    timestamp=ts, hostname=host.decode(), version=0)
 
 
+def decode_wire(data: bytes, legacy: bool) -> Message:
+    end = data.find(b">")
+    if legacy and end >= 0 and data[end + 1:end + 4] in [b"Jan", b"Feb", b"Mar", b"Apr", b"May", b"Jun", b"Jul", b"Aug", b"Sep", b"Oct", b"Nov", b"Dec"]:
+        return decode_legacy(data)
+    return decode(data)
+
+
 actor Client(cap: net.UDPConnectCap, address: str, port: int,
              on_connect: action(Client) -> None, on_error: action(Client, str) -> None,
              max_size: int=2048, max_pending: int=64):
@@ -507,11 +515,7 @@ actor Server(cap: net.UDPListenCap, address: str, port: int,
             return
         message = Message()
         try:
-            end = data.find(b">")
-            if legacy and end >= 0 and data[end + 1:end + 4] in [b"Jan", b"Feb", b"Mar", b"Apr", b"May", b"Jun", b"Jul", b"Aug", b"Sep", b"Oct", b"Nov", b"Dec"]:
-                message = decode_legacy(data)
-            else:
-                message = decode(data)
+            message = decode_wire(data, legacy)
         except ValueError as error:
             on_error(self, "Invalid syslog datagram from {peer}:{peer_port}: {error.error_message}")
             return
@@ -648,3 +652,237 @@ class StreamDecoder(object):
         error = self._error
         if error is not None:
             raise error
+
+
+actor StreamClient(cap: net.TCPConnectCap, address: str, port: int,
+                   on_connect: action(StreamClient) -> None,
+                   on_error: action(StreamClient, str) -> None,
+                   max_size: int=65536, max_pending: int=64,
+                   connect_timeout: float=10.0):
+    """Send RFC 5424 messages over TCP using RFC 6587 octet counting.
+
+    Startup buffering is bounded by max_pending. Transport errors close the
+    connection; messages are never retried because the receiver may already
+    have them.
+    close() discards startup messages and closes the transport. There is no
+    application-level delivery acknowledgement.
+    """
+    if port < 1 or port > 65535:
+        raise invalid_destination_port_error
+    if max_size < 480 or max_pending < 0 or connect_timeout <= 0:
+        raise invalid_stream_limits_error
+    var _connection: ?net.TCPConnection = None
+    var _pending: list[bytes] = []
+    var _ready = False
+    var _closed = False
+
+    def closed(c: net.TCPConnection):
+        pass
+
+    def close_connection():
+        _closed = True
+        _ready = False
+        _pending = []
+        c = _connection
+        if c is not None:
+            c.close(closed)
+
+    def connected(c: net.TCPConnection):
+        if _closed:
+            c.close(closed)
+            return
+        _ready = True
+        for data in _pending:
+            c.write(data)
+        _pending = []
+        on_connect(self)
+
+    def received(c: net.TCPConnection, data: bytes):
+        pass
+
+    def failed(c: net.TCPConnection, error: str):
+        if not _closed:
+            close_connection()
+            on_error(self, error)
+
+    def remote_closed(c: net.TCPConnection):
+        failed(c, "Syslog connection closed by peer")
+
+    def start():
+        if not _closed:
+            _connection = net.TCPConnection(cap, address, port, connected,
+                                           received, failed, remote_closed,
+                                           connect_timeout)
+
+    action def send(message: Message) -> None:
+        """Send an octet-counted message, or report rejection through on_error."""
+        if _closed:
+            on_error(self, "Syslog client is closed")
+            return
+        data = b""
+        try:
+            data = frame(message, max_size)
+        except ValueError as error:
+            on_error(self, error.error_message)
+            return
+        c = _connection
+        if _ready and c is not None:
+            c.write(data)
+        elif len(_pending) < max_pending:
+            _pending.append(data)
+        else:
+            on_error(self, "Syslog startup queue is full")
+
+    action def log(message: str, severity: int=INFO, facility: int=USER,
+                   hostname: ?str=None, app_name: ?str=None, procid: ?str=None,
+                   msgid: ?str=None, structured_data: dict[str, list[(name: str, value: str)]]={}) -> None:
+        """Send UTF-8 text with a BOM and the current UTC timestamp."""
+        send(Message(b"\xef\xbb\xbf" + message.encode(), facility=facility, severity=severity,
+                     timestamp=timestamp(), hostname=hostname, app_name=app_name,
+                     procid=procid, msgid=msgid, structured_data=structured_data))
+
+    action def close() -> None:
+        """Close the connection and discard startup messages. Idempotent."""
+        close_connection()
+
+    after 0: start()
+
+
+actor StreamServer(cap: net.TCPListenCap, address: str, port: int,
+                   on_listen: action(StreamServer, ?str) -> None,
+                   on_message: action(StreamServer, Message, str, int) -> None,
+                   on_error: action(StreamServer, str) -> None,
+                   max_size: int=65536, max_connections: int=64, legacy: bool=True):
+    """Collect octet-counted syslog messages over TCP.
+
+    Each connection has its own bounded decoder. Invalid framing or truncated
+    EOF closes that connection; a malformed complete syslog message is reported
+    and skipped. Other connections remain usable. No newline framing is used.
+    close() closes both the listener and its accepted connections.
+    """
+    if port < 0 or port > 65535:
+        raise invalid_listen_port_error
+    if max_size < 480 or max_connections < 1:
+        raise invalid_stream_limits_error
+    var _listener: ?net.TCPListener = None
+    var _connections: dict[int, (decoder: StreamDecoder, peer: str, port: int, close: action() -> None)] = {}
+    var _next_connection = 0
+    var _ready = False
+    var _closed = False
+
+    def bound(listener: net.TCPListener, error: ?str):
+        if _closed:
+            listener.close()
+        elif _ready:
+            if error is not None:
+                if error == "resume":
+                    close()
+                on_error(self, error)
+        else:
+            if error is not None:
+                _closed = True
+                listener.close()
+            else:
+                _ready = True
+            on_listen(self, error)
+
+    def remove(key: int):
+        if key in _connections:
+            close_connection = _connections[key].close
+            del _connections[key]
+            close_connection()
+
+    def data_received(key: int, data: bytes):
+        if _closed or key not in _connections:
+            return
+        state = _connections[key]
+        parser = state.decoder
+        peer = state.peer
+        peer_port = state.port
+        frames, framing_error = parser.feed(data)
+        for wire in frames:
+            message = Message()
+            try:
+                message = decode_wire(wire, legacy)
+            except ValueError as error:
+                on_error(self, "Invalid syslog message from {peer}:{peer_port}: {error.error_message}")
+                continue
+            on_message(self, message, peer, peer_port)
+        if framing_error is not None:
+            remove(key)
+            on_error(self, "Invalid syslog framing from {peer}:{peer_port}: {framing_error}")
+
+    def remote_closed(key: int):
+        if key in _connections:
+            state = _connections[key]
+            parser = state.decoder
+            peer = state.peer
+            peer_port = state.port
+            remove(key)
+            if not _closed:
+                try:
+                    parser.finish()
+                except ValueError as error:
+                    on_error(self, "Truncated syslog stream from {peer}:{peer_port}: {error.error_message}")
+
+    def connection_failed(key: int, error: str):
+        if key in _connections:
+            state = _connections[key]
+            parser = state.decoder
+            peer = state.peer
+            peer_port = state.port
+            remove(key)
+            if not _closed:
+                on_error(self, "Syslog connection from {peer}:{peer_port}: {error}")
+
+    def accepted(c: net.TCPListenConnection):
+        if _closed:
+            c.close()
+        elif len(_connections) >= max_connections:
+            c.close()
+            on_error(self, "Syslog connection limit reached")
+        else:
+            key = _next_connection
+            _next_connection += 1
+            endpoints = c.endpoints()
+            _connections[key] = (StreamDecoder(max_size), endpoints.remote_address, endpoints.remote_port, c.close)
+
+            def received(conn: net.TCPListenConnection, data: bytes):
+                data_received(key, data)
+
+            def failed(conn: net.TCPListenConnection, error: str):
+                connection_failed(key, error)
+
+            def closed(conn: net.TCPListenConnection):
+                remote_closed(key)
+
+            c.cb_install(received, failed, closed)
+
+    def start():
+        if not _closed:
+            _listener = net.TCPListener(cap, address, port, bound, accepted)
+
+    action def local_address() -> str:
+        listener = _listener
+        if listener is not None and not _closed:
+            return listener.local_address()
+        return ""
+
+    action def local_port() -> int:
+        listener = _listener
+        if listener is not None and not _closed:
+            return listener.local_port()
+        return 0
+
+    action def close() -> None:
+        """Close the listener and every accepted connection. Idempotent."""
+        _closed = True
+        listener = _listener
+        if listener is not None:
+            listener.close()
+        for state in _connections.values():
+            close_connection = state.close
+            close_connection()
+        _connections = {}
+
+    after 0: start()
