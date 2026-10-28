@@ -2049,12 +2049,18 @@ runCliPostCompile reporter gopts plan env = do
     if C.skip_build opts'
       then
         logLine "  Skipping final build step" >> return True
-      else do
-        binTasks <- if C.test opts'
-                      then catMaybes <$> mapM (filterMainActor env pathsRoot) preTestBinTasks
-                      else return preBinTasks
-        if C.altOutput opts' then return True else
-          runFinal (zigBuild env gopts opts' pathsRoot rootSpec rootModules binTasks allowPrune rootModuleSources rootBuildLibraries rootDepModuleOpts rootDepPathOverrides (Just (reporterProgressUI reporter)))
+      else if C.altOutput opts' then return True else do
+        let (candidateBinTasks, explicitRoot)
+              | C.test opts' = (preTestBinTasks, False)
+              | otherwise    = (preBinTasks, not (null (C.root opts')))
+        selected <- mapM (selectRootActor env pathsRoot explicitRoot) candidateBinTasks
+        case partitionEithers selected of
+          ([], binTasks) ->
+            runFinal (zigBuild env gopts opts' pathsRoot rootSpec rootModules (catMaybes binTasks) allowPrune rootModuleSources rootBuildLibraries rootDepModuleOpts rootDepPathOverrides (Just (reporterProgressUI reporter)))
+          (diags, _) -> do
+            progressWithLog (reporterProgressUI reporter) (printDiagnostics gopts diags)
+            unless (C.watch opts') System.Exit.exitFailure
+            return False
 
 -- Generate documentation index for a project build by reading module names and
 -- docstrings from cached .tydb headers or source headers.
@@ -2195,37 +2201,54 @@ printDiagnostics :: C.GlobalOptions -> [Diagnostic String] -> IO ()
 printDiagnostics gopts diags =
     mapM_ (printDiag gopts) diags
 
--- | Generate a root actor C file when a root is still declared.
+-- | Look up the root name of a bin task in the .tydb of its module. The bin
+-- task builds when the name is an actor that can be the root actor. An actor
+-- that cannot is an error at its definition, and so is any other definition
+-- of a name given with --root. A module that does not define the default root
+-- name (main, or test_main in a test build) as an actor builds no binary,
+-- while a name given with --root must be defined.
+selectRootActor :: Acton.Env.Env0 -> Paths -> Bool -> BinTask -> IO (Either (Diagnostic String) (Maybe BinTask))
+selectRootActor env paths explicitRoot binTask = do
+    let A.GName m n = rootActor binTask
+        mn = dropProjPrefix paths m
+    mty <- Acton.Env.findTyFile (searchPath paths) m
+    db <- case mty of
+            Just ty -> InterfaceFiles.openInterfaceDB ty
+            Nothing -> throwProjectError ("Root module " ++ prstr mn ++ " not found")
+    entry <- InterfaceFiles.readInterfaceDBNameInfoMaybe db n
+    case entry of
+      Just (n', i) -> case rootActorProblem (simp (setMod m env)) i of
+        Nothing -> return (Right (Just binTask))
+        Just problem
+          | explicitRoot || isActor i -> do
+              src <- readFile (srcFile paths m)
+              return (Left (Diag.actErrToDiagnostic "Compilation error" (modNameToFilename mn) src (A.nloc n')
+                              ("Cannot use " ++ A.nstr n ++ " as the root actor: " ++ problem)))
+          | otherwise -> return (Right Nothing)
+      Nothing
+        | explicitRoot -> throwProjectError ("Cannot use " ++ prstr (A.GName mn n) ++ " as the root actor: module "
+                                             ++ prstr mn ++ " does not define " ++ A.nstr n)
+        | otherwise -> return (Right Nothing)
+  where isActor I.NAct{} = True
+        isActor _        = False
+
+-- | Generate the root actor C file of a bin task that selectRootActor kept.
 writeRootC :: Acton.Env.Env0 -> C.GlobalOptions -> C.CompileOptions -> Paths -> BinTask -> IO (Maybe BinTask)
 writeRootC env gopts opts paths binTask = do
-    let qn@(A.GName mn n) = rootActor binTask
+    let qn = rootActor binTask
         rootFile = binTaskRoot paths binTask
     -- In --only-build mode, reuse existing root stubs; generate only if missing.
     existing <- if C.only_build opts then doesFileExist rootFile else return False
     if C.only_build opts && existing
       then return (Just binTask)
       else do
-        -- Read the up-to-date roots from the on-disk .tydb header (post-compile)
-        -- Avoid using preloaded TyTask roots, which may be stale if the module
-        -- was rebuilt during this run.
-        tyPath <- Acton.Env.findTyFile (searchPath paths) mn
-        rootsHeader <- case tyPath of
-                         Just ty -> InterfaceFiles.summaryRoots <$> InterfaceFiles.readHeaderSummary ty
-                         Nothing -> throwProjectError ("Root module " ++ prstr (dropProjPrefix paths mn) ++ " not found")
-        let rootsEnv = case Acton.Env.lookupModuleInfo mn env of
-                         Nothing -> []
-                         Just mi -> [ n' | (n', i) <- Acton.Env.modulePublicTEnv mi, rootEligible i ]
-            shouldGen = n `elem` rootsHeader || n `elem` rootsEnv
-        if shouldGen
-          then do
-            res <- (try :: IO a -> IO (Either SomeException a)) $ do
-              c <- Acton.CodeGen.genRoot env qn
-              createDirectoryIfMissing True (takeDirectory rootFile)
-              writeFileIfChanged rootFile c
-            case res of
-              Right _ -> return (Just binTask)
-              Left _  -> return Nothing
-          else return Nothing
+        res <- (try :: IO a -> IO (Either SomeException a)) $ do
+          c <- Acton.CodeGen.genRoot env qn
+          createDirectoryIfMissing True (takeDirectory rootFile)
+          writeFileIfChanged rootFile c
+        case res of
+          Right _ -> return (Just binTask)
+          Left _  -> return Nothing
 
 -- | Check whether a target triple refers to Windows.
 isWindowsOS :: String -> Bool
@@ -2826,24 +2849,6 @@ normalizeZigDep b dep =
                 return dep { BuildSpec.zpath = Just p' }
         else return dep { BuildSpec.zpath = Just (collapseDots (normalise p)) }
     Nothing -> return dep
-
--- | Filter bin tasks to those with a valid root actor.
-filterMainActor :: Acton.Env.Env0 -> Paths -> BinTask -> IO (Maybe BinTask)
-filterMainActor env paths binTask = do
-    let qn@(A.GName m n) = rootActor binTask
-    let checkEnv = case Acton.Env.lookupModuleInfo m env of
-                     Nothing -> return Nothing
-                     Just mi -> do
-                       let rootsEnv = [ n' | (n', i) <- Acton.Env.modulePublicTEnv mi, rootEligible i ]
-                       if n `elem` rootsEnv then return (Just binTask) else return Nothing
-    mty <- Acton.Env.findTyFile (searchPath paths) m
-    case mty of
-      Just ty -> do
-        header <- InterfaceFiles.tryReadHeaderSummary ty
-        case header of
-          Just h | n `elem` InterfaceFiles.summaryRoots h -> return (Just binTask)
-          _ -> checkEnv
-      Nothing -> checkEnv
 
 -- | Check whether git is available on PATH.
 isGitAvailable :: IO Bool

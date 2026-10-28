@@ -1,0 +1,7 @@
+[error Compilation error]: Cannot use main as the root actor: it takes no parameters, but the root actor takes one parameter, of type Env
+     +--> no_parameter.act@1:7-1:11
+     |
+   1 | actor main():
+     :       ^--- 
+     :       `- Cannot use main as the root actor: it takes no parameters, but the root actor takes one parameter, of type Env
+-----+

@@ -273,6 +273,7 @@ module Acton.Compile
   , awaitOutputs
   , checkModule
   , rootEligible
+  , rootActorProblem
   , docNameCountThreshold
   , shouldGenerateDocOutput
   , runBackPasses
@@ -285,7 +286,7 @@ import Acton.Syntax (modNameToString)
 import qualified Acton.NameInfo as I
 import Text.Megaparsec.Error (ParseErrorBundle)
 import qualified Acton.CommandLineParser as C
-import Acton.Printer ()
+import Acton.Printer (prettyFunRow)
 import qualified Acton.Env
 import qualified Acton.EscapeAnalysis
 import qualified Acton.TypeEnv
@@ -2598,9 +2599,25 @@ nameLocations items = M.fromList [ (n, A.dloc d) | Hashing.TLDecl n d <- items ]
 -- | Whether a name is an actor that can be a program's root: one without
 -- type parameters, with an empty positional row and a keyword row of one
 -- parameter, whose type is Env or None.
-rootEligible                                                       :: I.NameInfo -> Bool
-rootEligible (I.NAct [] A.TNil{} (A.TRow _ _ _ t _ A.TNil{}) _ _) = prstr t `elem` ["Env", "None", "__builtin__.Env", "__builtin__.None"]
-rootEligible _                                                     = False
+rootEligible :: I.NameInfo -> Bool
+rootEligible = isNothing . rootActorProblem id
+
+-- | Why a name cannot be a program's root, or Nothing when it can (see
+-- rootEligible). The explanation prints types through display.
+rootActorProblem :: (A.Type -> A.Type) -> I.NameInfo -> Maybe String
+rootActorProblem display (I.NAct q p k _ _)
+                                    = case (p,k) of
+                                        (A.TNil{}, A.TRow _ _ x t _ A.TNil{})
+                                          | prstr t `notElem` envTypes ->
+                                              Just ("its parameter " ++ A.nstr x ++ " has type " ++ prstr (display t) ++
+                                                    ", but the root actor's parameter must have type Env")
+                                          | not (null q) -> Just "it is generic"
+                                          | otherwise -> Nothing
+                                        (A.TNil{}, A.TNil{}) -> Just ("it takes no parameters" ++ oneEnv)
+                                        _ -> Just ("it takes the parameters (" ++ render (prettyFunRow (display p) (display k)) ++ ")" ++ oneEnv)
+  where envTypes = ["Env", "None", "__builtin__.Env", "__builtin__.None"]
+        oneEnv = ", but the root actor takes one parameter, of type Env"
+rootActorProblem _ _ = Just "it is not an actor"
 
 -- | Write a checked and hashed module's .tydb, reporting its progress.
 writeTydb :: ModuleEnv -> ModuleSource -> Checked -> Hashed -> (InterfaceFiles.TyDbWriteProgress -> IO ()) -> IO ()

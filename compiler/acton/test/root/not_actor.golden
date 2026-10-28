@@ -1,0 +1,7 @@
+[error Compilation error]: Cannot use helper as the root actor: it is not an actor
+     +--> not_actor.act@1:5-1:11
+     |
+   1 | def helper():
+     :     ^----- 
+     :     `- Cannot use helper as the root actor: it is not an actor
+-----+
