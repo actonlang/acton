@@ -1,16 +1,16 @@
 # std.syslog
 
-The `std.syslog` module provides a UDP client and server, an
+The `std.syslog` module provides UDP and TCP clients and servers, an
 [RFC 5424](https://www.rfc-editor.org/rfc/rfc5424) message codec, and a decoder
 for canonical [RFC 3164](https://www.rfc-editor.org/rfc/rfc3164) messages.
 
-The transport sends one message per datagram using
-[RFC 5426](https://www.rfc-editor.org/rfc/rfc5426). This implementation supports
-UDP; TCP and TLS transports are not implemented. Pass the destination or listen
-port explicitly. The standard syslog UDP port is 514. The examples use loopback
-port 5514, which can be opened without privileged-port permissions.
+The UDP transport sends one message per datagram using
+[RFC 5426](https://www.rfc-editor.org/rfc/rfc5426). The TCP transport uses
+[RFC 6587](https://www.rfc-editor.org/rfc/rfc6587) octet counting. Pass the
+destination or listen port explicitly. The standard syslog UDP port is 514.
+The examples use loopback port 5514.
 
-## Sending messages
+## Sending UDP messages
 
 ```python
 import net
@@ -56,7 +56,7 @@ does not wait for delivery. The short delay in this example lets the
 asynchronous send run before the program exits; it is not a delivery guarantee.
 In a long-running application, keep the client open for subsequent messages.
 
-## Receiving messages
+## Receiving UDP messages
 
 ```python
 import net
@@ -100,6 +100,56 @@ ready or after it is closed.
 Both actors accept `max_size` from 480 through 65507 bytes. These limits apply
 to the entire encoded message. Choose a limit that suits the receiving system
 and network; larger UDP datagrams may require IP fragmentation.
+
+## TCP streams
+
+`StreamClient(cap, address, port, on_connect, on_error, max_size=65536,
+max_pending=64, connect_timeout=10.0)` accepts a `net.TCPConnectCap`.
+Its `send()` and `log()` methods accept the same messages and fields as the
+UDP client. `on_connect(client)` runs when the TCP connection is ready;
+`connect_timeout` covers the whole connection attempt, including DNS lookup.
+The startup queue holds at most `max_pending` messages. Invalid messages,
+oversized messages, and a full startup queue are reported through `on_error`.
+
+`StreamServer(cap, address, port, on_listen, on_message, on_error,
+max_size=65536, max_connections=64, legacy=True)` accepts a `net.TCPListenCap`.
+Its callbacks have the same arguments as the UDP server, with the TCP peer's
+address and port included in `on_message`. Port 0 selects an ephemeral port;
+query `local_port()` after `on_listen` succeeds. `local_address()` returns the
+bound address.
+
+Both stream actors require `max_size` of at least 480 bytes. This limits the
+encoded message, excluding its length prefix. The server buffers at most one
+partial message per connection and accepts at most `max_connections` open
+connections. It rejects excess connections through `on_error`.
+
+Malformed complete messages are reported and skipped. Invalid framing or a
+truncated frame at EOF closes the affected connection; complete messages
+preceding the error are still delivered. Other connections remain usable.
+Set `legacy=False` to reject RFC 3164 messages.
+
+Transport errors close the client and call `on_error`. Messages are not
+retried, since the receiver may already have processed them. Client `close()`
+cancels connection setup and discards startup messages; writes already handed
+to TCP are drained before closing. Server `close()` stops listening and closes
+its accepted connections. Repeated calls are safe. TCP supplies no syslog
+application acknowledgement.
+
+### Framing
+
+Octet counting prefixes each message with its byte length and a space. Newlines
+and binary content remain part of the body; newline-delimited framing is not
+supported.
+
+`frame(message, max_size=65536) -> bytes` encodes one RFC 5424 message with
+that prefix. `StreamDecoder(max_size=65536)` incrementally splits incoming
+bytes into complete wire messages. Both require a positive `max_size`.
+
+`feed(data)` returns `(messages, error)`, where `error` is `None` on success.
+Pass each message to `decode()` or `decode_legacy()`. Process returned messages
+before handling a framing error: a chunk may contain valid messages followed
+by invalid framing. A failed decoder remains failed. `finish()` raises
+`ValueError` for incomplete input at EOF or a previous framing error.
 
 ## Message codec
 
