@@ -34,6 +34,11 @@ times, compile it once with `re.compile` and use the methods of the `Pattern`
 it returns. `match`, `matches`, `count`, `replace` and `split` take the same
 arguments as the module functions, without the pattern.
 
+On supported platforms, compiled patterns use PCRE2's JIT compiler. Patterns
+with explicit resource limits use the interpreter to preserve those limits.
+The interpreter also handles patterns that JIT cannot compile, environments
+that cannot allocate executable memory, and matches that exceed the JIT stack.
+
 Source:
 ```python
 import re

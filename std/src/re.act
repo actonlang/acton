@@ -11,7 +11,7 @@ class Match:
         self.named = named_group
 
 def _compile(pattern: str) -> u64:
-    """Compile pattern and return the address of its compiled code
+    """Compile pattern and return the address of its native code
     """
     NotImplemented
 
@@ -29,8 +29,13 @@ class Pattern(object):
     _code: u64
 
     def __init__(self, pattern: str) -> None:
+        code = _compile(pattern)
         self.pattern = pattern
-        self._code = _compile(pattern)
+        self._code = code
+        self._register_finalizer()
+
+    def _register_finalizer(self) -> None:
+        NotImplemented
 
     def _match(self, string: str, start_pos: int) -> ?Match:
         NotImplemented

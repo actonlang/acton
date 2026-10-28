@@ -10,6 +10,10 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
     const enable_lto = optimize != .debug and target.result.os.tag != .macos;
+    const enable_jit = switch (target.result.cpu.arch) {
+        .aarch64, .x86_64 => true,
+        else => false,
+    };
     const linkage = b.option(std.lang.LinkMode, "linkage", "whether to statically or dynamically link the library") orelse @as(std.lang.LinkMode, if (target.result.isGnuLibC()) .dynamic else .static);
     const codeUnitWidth = b.option(CodeUnitWidth, "code-unit-width", "Sets the code unit width") orelse .@"8";
 
@@ -42,6 +46,7 @@ pub fn build(b: *std.Build) !void {
         "-DMAX_VARLOOKBEHIND=255",
         "-DSUPPORT_UNICODE",
     });
+    if (enable_jit) try cflags.append(b.allocator, "-DSUPPORT_JIT");
     switch (codeUnitWidth) {
         .@"8" => try cflags.append(b.allocator, "-DSUPPORT_PCRE2_8"),
         .@"16" => try cflags.append(b.allocator, "-DSUPPORT_PCRE2_16"),
@@ -68,6 +73,7 @@ pub fn build(b: *std.Build) !void {
             "src/pcre2_error.c",
             "src/pcre2_extuni.c",
             "src/pcre2_find_bracket.c",
+            "src/pcre2_jit_compile.c",
             "src/pcre2_maketables.c",
             "src/pcre2_match.c",
             "src/pcre2_match_data.c",

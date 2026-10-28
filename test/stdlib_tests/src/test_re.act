@@ -177,7 +177,8 @@ def _test_count_replace_errors():
 
     subject = "a" * 1000 + "x"
     for pattern, expected in [("(*LIMIT_MATCH=10)(.)*x", "PCRE2 matching error: -47"),
-                              ("(*LIMIT_HEAP=1)(.)*x", "PCRE2 matching error: -63")]:
+                              ("(*LIMIT_HEAP=1)(.)*x", "PCRE2 matching error: -63"),
+                              ("(*LIMIT_DEPTH=10)(.)*x", "PCRE2 matching error: -53")]:
         p = re.compile(pattern)
         sp = std_re.compile(pattern)
         for f in [lambda: re.count(pattern, subject) > 0,
@@ -521,10 +522,22 @@ def _test_compile_reuse():
             testing.assertEqual(n.named, {"y": y, "m": mo})
         testing.assertNone(p.match("date " + y + "/" + mo))
 
+class _CyclicPattern(re.Pattern):
+    def __init__(self, pattern: str):
+        re.Pattern.__init__(self, pattern)
+        self.cycle = []
+        self.cycle.append(self)
+
+class _StdCyclicPattern(std_re.Pattern):
+    def __init__(self, pattern: str):
+        std_re.Pattern.__init__(self, pattern)
+        self.cycle = []
+        self.cycle.append(self)
+
 def _test_compile_survives_collections():
     """A Pattern keeps its code while many other Patterns are collected"""
-    p = re.compile("(b+)c")
-    sp = std_re.compile("(b+)c")
+    p = _CyclicPattern("(b+)c")
+    sp = _StdCyclicPattern("(b+)c")
     for i in range(20000):
         q = re.compile("x" + str(i) + "(y+)z")
         m = q.match("ax" + str(i) + "yyz")
@@ -537,6 +550,52 @@ def _test_compile_survives_collections():
             if n is not None:
                 testing.assertEqual(n.group, ["bbbc", "bbb"])
             testing.assertEqual(_std_desc(sp.match("abbbc")), _desc(n))
+
+def _test_compile_reinitialize():
+    """Reinitializing a Pattern replaces its compiled expression"""
+    p = re.compile("a+")
+    sp = std_re.compile("a+")
+    for pattern, subject in [("b+", "bb"), ("c+", "ccc")]:
+        re.Pattern.__init__(p, pattern)
+        std_re.Pattern.__init__(sp, pattern)
+        testing.assertEqual(p.pattern, pattern)
+        testing.assertEqual(sp.pattern, pattern)
+        testing.assertEqual(p.count(subject), 1)
+        testing.assertEqual(sp.count(subject), 1)
+        testing.assertEqual(p.replace(subject, "_"), "_")
+        testing.assertEqual(sp.replace(subject, "_"), "_")
+        testing.assertNone(p.match("aaa"))
+        testing.assertNone(sp.match("aaa"))
+    for initialize in [lambda: re.Pattern.__init__(p, "("),
+                       lambda: std_re.Pattern.__init__(sp, "(")]:
+        try:
+            initialize()
+        except ValueError:
+            pass
+        else:
+            testing.error("Expected ValueError for invalid pattern")
+    testing.assertEqual(p.pattern, "c+")
+    testing.assertEqual(sp.pattern, "c+")
+    testing.assertEqual(p.count("ccc"), 1)
+    testing.assertEqual(sp.count("ccc"), 1)
+
+def _test_compile_jit_fallback():
+    """Interpreter fallback preserves captures and bulk operations"""
+    for pattern, subject in [("(*NO_JIT)(a+)", "aaa"),
+                             (r"(\C)", "a"),
+                             ("(a|b)+$", "a" * 10000)]:
+        expected = re.match(pattern, subject)
+        p = re.compile(pattern)
+        sp = std_re.compile(pattern)
+        testing.assertNotNone(expected)
+        testing.assertEqual(_desc(p.match(subject)), _desc(expected))
+        testing.assertEqual(_std_desc(sp.match(subject)), _desc(expected))
+        testing.assertEqual(p.count(subject), 1)
+        testing.assertEqual(sp.count(subject), 1)
+        testing.assertEqual(p.replace(subject, "_"), "_")
+        testing.assertEqual(sp.replace(subject, "_"), "_")
+        testing.assertNone(p.match(""))
+        testing.assertNone(sp.match(""))
 
 def _test_compile_many_groups():
     """A compiled pattern with 300 groups, 30 of them named, matches twice"""
