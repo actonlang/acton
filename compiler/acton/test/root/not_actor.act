@@ -1,0 +1,5 @@
+def helper():
+    pass
+
+actor main(env):
+    env.exit(0)

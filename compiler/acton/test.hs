@@ -65,8 +65,11 @@ main = do
     regressionSegfaultTests <- createTests "Regression segfaults" "../../test/regression_segfault" False [] (testBuild "" ExitSuccess)
     rtsAutoTests <- createAutoTests "RTS auto" "../../test/rts_auto"
     stdlibAutoTests <- createAutoTests "stdlib auto" "../../test/stdlib_auto"
-    syntaxErrorAutoTests <- createGoldenErrorAutoTests "syntax errors" "test/syntaxerrors"
-    typeErrorAutoTests <- createGoldenErrorAutoTests "type errors" "test/typeerrors"
+    syntaxErrorAutoTests <- createGoldenErrorAutoTests "syntax errors" "test/syntaxerrors" ""
+    typeErrorAutoTests <- createGoldenErrorAutoTests "type errors" "test/typeerrors" ""
+    -- Root actor errors come after type checking, so --quiet keeps the
+    -- progress lines of the passes that ran out of the golden output.
+    rootErrorAutoTests <- createGoldenErrorAutoTests "root actor errors" "test/rooterrors" "--quiet"
     defaultMain $ localOption timeout $ testGroup "Tests" $
       [ builtinsAutoTests
       , coreLangAutoTests
@@ -85,6 +88,7 @@ main = do
       , stdlibAutoTests
       , syntaxErrorAutoTests
       , typeErrorAutoTests
+      , rootErrorAutoTests
       , parseFlagTests
       , WatchTests.watchProcessTests
       , PerfTests.perfTests
@@ -3393,6 +3397,12 @@ actonRootArgTests =
     after AllFinish "unqualified --root" $
     testCase "discover root actor" $
         testBuildAndRun "" "" ExitSuccess False "test/root/test.act"
+  , testCase "--root naming an undefined name" $ do
+        (returnCode, cmdOut, cmdErr) <- buildThing "--root nosuch" "test/root/not_actor.act"
+        assertEqual "acton should error out" (ExitFailure 1) returnCode
+        assertEqual "acton should report error" "acton: Cannot use not_actor.nosuch as the root actor: module not_actor does not define nosuch\n" cmdErr
+  , goldenVsString "--root naming a function" "test/root/not_actor.golden" $
+        getCompileError "--quiet --root helper" "test/root/not_actor.act"
   ]
 
 
@@ -3767,18 +3777,18 @@ createAutoTest file = do
     testCase testName $ testFunc expRet False file
   where (fileBody, fileExt) = splitExtension $ takeFileName file
 
-createGoldenErrorAutoTests name dir = do
+createGoldenErrorAutoTests name dir opts = do
     actFiles <- findThings dir
-    return $ testGroup name $ map (createGoldenErrorAutoTest dir) actFiles
+    return $ testGroup name $ map (createGoldenErrorAutoTest dir opts) actFiles
 
-createGoldenErrorAutoTest dir file = do
+createGoldenErrorAutoTest dir opts file = do
     let testName  = fileBody
         goldenFile = joinPath [dir, fileBody ++ ".golden"]
-    goldenVsString testName goldenFile (getCompileError file)
+    goldenVsString testName goldenFile (getCompileError opts file)
   where (fileBody, fileExt) = splitExtension $ takeFileName file
 
-getCompileError file = do
-    (returnCode, cmdOut, cmdErr) <- buildThing "" file
+getCompileError opts file = do
+    (returnCode, cmdOut, cmdErr) <- buildThing opts file
     assertEqual "compile error retCode" (ExitFailure 1) returnCode
     return (LBS.pack (TestGolden.normalizeProgressTimings cmdOut))
 

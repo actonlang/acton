@@ -1,0 +1,13 @@
+# show takes an untyped parameter that the local actor Config fits, so
+# passing env.vars to it leaves env inferred as a tuple of the attributes
+# used on it instead of Env.
+actor Config():
+    def getenv(name: str) -> ?str:
+        return None
+
+proc def show(v):
+    print(v.getenv("HOME"))
+
+actor main(env):
+    show(env.vars)
+    env.exit(0)

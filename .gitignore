@@ -98,4 +98,5 @@ snapshots/output/**
 test/**/out/**
 test/**/.acton.lock
 compiler/acton/test/project/*/out
+compiler/acton/test/rooterrors/*/out
 compiler/acton/test/root/test
