@@ -608,3 +608,61 @@ actor _test_TCPListenOnZone(t: testing.EnvT):
 
     after 5: base.timeout("no connection")
     net.TCPListener(net.TCPListenCap(tcp_cap), "::1%1", 0, on_listen, on_accept)
+
+
+actor _test_TCPDroppedConnectionsClosed(t: testing.EnvT):
+    """Accepted connections dropped before cb_install() are closed when collected
+
+    A stale pointer can keep an actor or two reachable for a while, so the
+    test is done once half of the connections are closed.
+    """
+    tcp_cap = net.TCPCap(net.NetCap(t.env.cap))
+    base = tcp_test_result(t, "dropped connections")
+    CONNECTIONS = 10
+    var accepted = 0
+    var closed = 0
+    var listener: ?net.TCPListener = None
+    var clients: list[net.TCPConnection] = []
+
+    def on_listen(l: net.TCPListener, error: ?str):
+        if error is not None:
+            base.failure("listen error: " + error)
+            return
+        listener = l
+        for i in range(CONNECTIONS):
+            net.TCPConnection(net.TCPConnectCap(tcp_cap), "127.0.0.1", l.local_port(), on_connect, on_receive, on_error, on_remote_close)
+
+    def on_accept(s: net.TCPListenConnection):
+        # Drop the connection without cb_install() or close()
+        accepted += 1
+        if accepted == CONNECTIONS:
+            collect()
+
+    def collect():
+        if not base.is_done():
+            acton.rts.gc(t.env.syscap)
+            after 0.05: collect()
+
+    def on_connect(c: net.TCPConnection):
+        clients.append(c)
+
+    def on_receive(c: net.TCPConnection, data: bytes):
+        pass
+
+    def on_error(c: net.TCPConnection, errmsg: str):
+        on_remote_close(c)
+
+    def on_remote_close(c: net.TCPConnection):
+        closed += 1
+        if closed == CONNECTIONS // 2:
+            finish()
+
+    def finish():
+        if listener is not None:
+            listener.close()
+        for c in clients:
+            c.close(lambda c: None)
+        base.success()
+
+    after 5: base.timeout("%d of %d dropped connections closed" % (closed, CONNECTIONS))
+    net.TCPListener(net.TCPListenCap(tcp_cap), "127.0.0.1", 0, on_listen, on_accept)
