@@ -164,22 +164,39 @@ qualifyInterfaceDefaults env          = map qualifyBinding
 instantiateDefaults env sc@(TSchema _ q _)
                                         = do (cs,tvs,t) <- instantiate env sc
                                              let s = [ (w,e) | Eqn _ w _ e <- witSubst env q cs ]
-                                             return (cs,tvs,substDefaultTerms s t)
+                                             t <- substDefaultTerms s t
+                                             return (cs,tvs,t)
 
-substDefaultTerms s (TCon l (TC q ts))= TCon l (TC q (map (substDefaultTerms s) ts))
-substDefaultTerms s (TFun l fx p k r) = TFun l (substDefaultTerms s fx)
-                                               (substDefaultTerms s p)
-                                               (substDefaultTerms s k)
-                                               (substDefaultTerms s r)
-substDefaultTerms s (TTuple l p k)    = TTuple l (substDefaultTerms s p) (substDefaultTerms s k)
-substDefaultTerms s (TOpt l t)        = TOpt l (substDefaultTerms s t)
+substDefaultTerms s (TCon l (TC q ts))= TCon l . TC q <$> mapM (substDefaultTerms s) ts
+substDefaultTerms s (TFun l fx p k r) = TFun l <$> substDefaultTerms s fx
+                                               <*> substDefaultTerms s p
+                                               <*> substDefaultTerms s k
+                                               <*> substDefaultTerms s r
+substDefaultTerms s (TTuple l p k)    = TTuple l <$> substDefaultTerms s p <*> substDefaultTerms s k
+substDefaultTerms s (TOpt l t)        = TOpt l <$> substDefaultTerms s t
 substDefaultTerms s (TRow l rk n t d r)
-                                        = TRow l rk n (substDefaultTerms s t)
-                                                  (fmap substDefault d) (substDefaultTerms s r)
-  where substDefault (DfltExpr e v ref)= DfltExpr e (termsubst s v) ref
-substDefaultTerms s (TStar l rk r)    = TStar l rk (substDefaultTerms s r)
-substDefaultTerms s (TUnboxed l t)    = TUnboxed l (substDefaultTerms s t)
-substDefaultTerms _ t                 = t
+                                        = TRow l rk n <$> substDefaultTerms s t
+                                                      <*> mapM substDefault d <*> substDefaultTerms s r
+  where substDefault (DfltExpr e v ref)= DfltExpr e <$> freshDefaultWits s v <*> pure ref
+substDefaultTerms s (TStar l rk r)    = TStar l rk <$> substDefaultTerms s r
+substDefaultTerms s (TUnboxed l t)    = TUnboxed l <$> substDefaultTerms s t
+substDefaultTerms _ t                 = return t
+
+-- A checked default binds the witnesses it constructs itself in Lets around
+-- its value (inlineWitnessExpr), under names generated for the defining
+-- statement.  A caller with the same top-level name generates the same names,
+-- and a statement can hold several copies of one default, so give the binders
+-- of every copy fresh caller-side names.
+freshDefaultWits s (Let l ss e)         = do ws <- mapM (const newWitness) ns
+                                             let r = ns `zip` ws
+                                                 s1 = s ++ [ (n, eVar w) | (n,w) <- r ]
+                                             e <- freshDefaultWits s1 e
+                                             return (Let l (termsubst s1 $ map (rebind r) ss) e)
+  where ns                              = bound ss
+        rebind r (Assign l [PVar l' n t] e)
+                                        = Assign l [PVar l' (rename r n) t] e
+        rebind r (Signature l ns sc d)  = Signature l (map (rename r) ns) sc d
+freshDefaultWits s e                    = return (termsubst s e)
 
 
 -- | Print a .tydb header and interface; include name hashes when verbose.
