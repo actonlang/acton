@@ -1,0 +1,16 @@
+# A caller with the same top-level name f as defaults.f generates witness
+# names of the same form. Each copy of the default must keep its own
+# witnesses, apart from the caller's and from the other copies.
+
+import defaults
+
+def f() -> list[bool]:
+    a = [[1]] == [[2]]
+    return [defaults.f(1), [1] == [1], defaults.f(1.0), defaults.f(2)]
+
+actor main(env):
+    r = f()
+    if r != [True, True, True, False]:
+        print("FAIL: copied default witnesses", r)
+        await async env.exit(1)
+    await async env.exit(0)

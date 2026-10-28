@@ -1,0 +1,5 @@
+# The default value of s needs a Hashable witness for (A, int), which the
+# default binds itself under a name generated for the top-level name f.
+
+def f[A(Number, Hashable)](x: A, s: set[(A, int)] = {(1, 2)}) -> bool:
+    return (x, 2) in s
