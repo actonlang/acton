@@ -1,0 +1,25 @@
+import acton.rts
+
+
+actor main(env):
+    # Each chunk is a large object in its own heap blocks.
+    chunk_size = 4 * 1024 * 1024
+    chunk_count = 16
+    chunks = []
+    for i in range(chunk_count):
+        chunks.append("x" * chunk_size)
+    for i in range(chunk_count):
+        chunks[i] = ""
+
+    # The first collection frees the chunks. A collection that unmaps free
+    # memory would return them to the system in the second one.
+    acton.rts.gc(env.syscap)
+    acton.rts.gc(env.syscap)
+    info = acton.rts.get_gc_info(env.syscap)
+
+    # A stale word on the stack may keep a chunk or two reachable.
+    mapped_free = info.free_bytes - info.unmapped_bytes
+    if mapped_free < u64(chunk_count * chunk_size // 2):
+        print(f"free memory was unmapped: free_bytes {info.free_bytes}, unmapped_bytes {info.unmapped_bytes}")
+        env.exit(1)
+    env.exit(0)

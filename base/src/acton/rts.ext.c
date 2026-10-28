@@ -14,7 +14,7 @@ void actonQ_rtsQ___ext_init__() {
 }
 
 B_NoneType actonQ_rtsQ_gc (B_SysCap cap) {
-    GC_gcollect_and_unmap();
+    GC_gcollect();
     return B_None;
 }
 

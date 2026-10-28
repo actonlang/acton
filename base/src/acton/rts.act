@@ -1,6 +1,10 @@
 def gc(cap: SysCap) -> None:
     """Collect garbage
 
+    Runs a full collection. The memory it frees stays mapped for reuse, and
+    goes back to the system only after it has stayed free over several
+    collections.
+
     Jedi level. This is not the function you are looking for.
     """
     NotImplemented
