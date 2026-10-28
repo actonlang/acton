@@ -3208,6 +3208,37 @@ dependencyDeclarationTests =
       expectSuccess "transitive type in direct dependency API" =<< runBuild acton app
       expectSuccess "cached transitive type in direct dependency API" =<< runBuild acton app
 
+  , testCase "dependency APIs retain transitive extensions" $ withFixture $ \acton _ app platform yang -> do
+      writeModule yang "api" $ unlines
+        [ "class Box(object):"
+        , "    values: list[int]"
+        , "    def __init__(self, values: list[int]):"
+        , "        self.values = values"
+        , ""
+        , "extension Box (Iterable[int]):"
+        , "    def __iter__(self) -> Iterator[int]:"
+        , "        return self.values.__iter__()"
+        ]
+      writeModule platform "lib" $ unlines
+        [ "import yang.api"
+        , ""
+        , "def create() -> yang.api.Box:"
+        , "    return yang.api.Box([40, 2])"
+        ]
+      let mainSrc = unlines
+            [ "import platform"
+            , ""
+            , "def answer() -> int:"
+            , "    total = 0"
+            , "    for v in platform.create():"
+            , "        total += v"
+            , "    return total"
+            ]
+      writeModule app "main" mainSrc
+      expectSuccess "transitive extension in direct dependency API" =<< runBuild acton app
+      writeModule app "main" (mainSrc ++ "# edited\n")
+      expectSuccess "cached transitive extension in direct dependency API" =<< runBuild acton app
+
   , testCase "follows chains preserve dependency path ownership" $ withFixture $ \acton tmp app platform _ -> do
       let adapter = tmp </> "deps" </> "adapter"
       writeProject adapter "adapter" [("yang", pathDep "../../shared/yang")]

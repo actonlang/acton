@@ -1,0 +1,19 @@
+# things is reached only through makers. Iterating a Thing and calling
+# makers.describe with an int need witnesses from extensions in things.
+
+import makers
+
+def make_thing():
+    return makers.make_thing()
+
+def make_key(k: int):
+    return makers.make_key(k)
+
+def elements() -> list[str]:
+    return [e for e in makers.make_thing()]
+
+def describe_int() -> str:
+    return makers.describe(7)
+
+def describe(x):
+    return makers.describe(x)
