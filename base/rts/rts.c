@@ -3427,6 +3427,7 @@ int main(int argc, char **argv) {
     bool auto_backtrace = true;
     bool interactive_backtrace = false;
     char *log_path = NULL;
+    char *wthreads_arg = NULL;
     FILE *logf = NULL;
     bool log_stderr = false;
 
@@ -3632,7 +3633,7 @@ int main(int argc, char **argv) {
                 rts_verbose = 1;
                 break;
             case 'w':
-                num_wthreads = atoi(optarg);
+                wthreads_arg = optarg;
                 break;
             case 'x':
                 interactive_backtrace = true;
@@ -3686,6 +3687,16 @@ int main(int argc, char **argv) {
     }
 
 #ifdef ACTON_THREADS
+    // The main thread only runs the actors pinned to it, so at least one
+    // worker thread is needed to run the root actor
+    if (wthreads_arg) {
+        char *end;
+        num_wthreads = strtoll(wthreads_arg, &end, 10);
+        if (end == wthreads_arg || *end != '\0' || num_wthreads < 1) {
+            fprintf(stderr, "ERROR: --rts-wthreads requires a whole number of at least 1, got '%s'.\n", wthreads_arg);
+            exit(1);
+        }
+    }
     // Determine number of worker threads, normally 1:1 per CPU thread / core
     // For low core count systems we do a minimum of 4 worker threads
     if (num_wthreads == -1 && num_cores < 4) { // auto, few CPU cores, so use 4 worker threads
@@ -3712,7 +3723,7 @@ int main(int argc, char **argv) {
     record_waits = mon_log_path != NULL || mon_socket_path != NULL || mon_on_exit;
 #else
     log_info("Running without threads, main thread will perform all work");
-    if (num_wthreads != -1) {
+    if (wthreads_arg) {
         fprintf(stderr, "ERROR: Threads disabled, provided --rts-wthreads argument has no effect.\n");
         fprintf(stderr, "HINT: You cannot compile with --no-threads and use --rts-wthreads at run time.\n");
         exit(1);
