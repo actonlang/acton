@@ -247,7 +247,10 @@ actor UDPListener(cap: UDPListenCap, address: str, port: int, on_listen: action(
         """Send a datagram to a remote address
 
         address is an IPv4 or IPv6 address, optionally with a zone like
-        fe80::1%eth0.
+        fe80::1%eth0, or a host name. A host name is resolved to an address
+        of the listener's address family for each send, so the datagram can
+        go out after datagrams sent later to addresses. Errors, like a name
+        that does not resolve, are reported through on_error.
         """
         NotImplemented
 

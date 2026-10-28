@@ -31,6 +31,8 @@ void netQ___ext_init__() {
 #define NET_ADDRSTRLEN (INET6_ADDRSTRLEN + UV_IF_NAMESIZE)
 // ...with a port: [fe80::1%eth0]:65535
 #define NET_ADDRPORTSTRLEN (NET_ADDRSTRLEN + 8)
+// A destination named in messages: a host name or address, and a port
+#define NET_DESTSTRLEN (NET_ADDRPORTSTRLEN + 256)
 
 // Parses an IPv6 address, optionally with a zone given by interface name or
 // index: fe80::1%eth0 or fe80::1%2. Unlike uv_ip6_addr, an unknown interface
@@ -227,7 +229,7 @@ struct udp_send_req_state {
     size_t len;
     $WORD actor;
     bool listener;
-    char dest[NET_ADDRPORTSTRLEN];
+    char dest[NET_DESTSTRLEN];
 };
 
 static void udp_call_receive($WORD cb, $WORD actor, B_bytes data, B_str address, B_int port) {
@@ -679,27 +681,8 @@ $R netQ_UDPListenerD__initG_local (netQ_UDPListener self, $Cont c$cont) {
     return $R_CONT(c$cont, B_None);
 }
 
-$R netQ_UDPListenerD_sendG_local (netQ_UDPListener self, $Cont c$cont, B_bytes data, B_str address, int64_t port) {
-    uv_udp_t *udp = (uv_udp_t *)(intptr_t)self->_sock;
-    if ((intptr_t)udp == -1) {
-        return $R_CONT(c$cont, B_None);
-    }
-
-    // Room for an invalid address too, to name it in the error
-    char dest_name[NET_ADDRPORTSTRLEN + 256];
-    format_addr_port(dest_name, sizeof(dest_name), (const char *)fromB_str(address), port);
-
-    struct sockaddr_storage dest;
-    int r = make_sockaddr(address, port, &dest);
-    if (r != 0) {
-        char errmsg[1024];
-        snprintf(errmsg, sizeof(errmsg), "Failed to send UDP datagram to %s: invalid address", dest_name);
-        log_warn(errmsg);
-        $action2 f = ($action2)self->on_error;
-        f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
-        return $R_CONT(c$cont, B_None);
-    }
-
+// Sends a datagram to a parsed address, dest_name names it in errors
+static void udp_listener_send_to(netQ_UDPListener self, uv_udp_t *udp, B_bytes data, const struct sockaddr *dest, const char *dest_name) {
     uv_udp_send_t *req = (uv_udp_send_t *)malloc(sizeof(uv_udp_send_t));
     struct udp_send_req_state *state = udp_send_req_state_new(data, ($WORD)self, true, dest_name);
     if (req == NULL || state == NULL) {
@@ -707,11 +690,11 @@ $R netQ_UDPListenerD_sendG_local (netQ_UDPListener self, $Cont c$cont, B_bytes d
         udp_send_req_state_free(state);
         $action2 f = ($action2)self->on_error;
         f->$class->__asyn__(f, self, actStrFromCString("Failed to allocate UDP send request"));
-        return $R_CONT(c$cont, B_None);
+        return;
     }
     req->data = state;
     uv_buf_t buf = uv_buf_init(state->buf, state->len);
-    r = uv_udp_send(req, udp, &buf, 1, (const struct sockaddr *)&dest, udp_send_cb);
+    int r = uv_udp_send(req, udp, &buf, 1, dest, udp_send_cb);
     if (r != 0) {
         char errmsg[1024];
         snprintf(errmsg, sizeof(errmsg), "Failed to send UDP datagram to %s: ", dest_name);
@@ -721,10 +704,119 @@ $R netQ_UDPListenerD_sendG_local (netQ_UDPListener self, $Cont c$cont, B_bytes d
         f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
         udp_send_req_state_free(state);
         free(req);
-        return $R_CONT(c$cont, B_None);
+        return;
     }
     self->_bytes_out += data->nbytes;
     self->_datagrams_out += 1;
+}
+
+static void udp_listener_send_error(netQ_UDPListener self, const char *dest_name, const char *reason) {
+    char errmsg[1024];
+    snprintf(errmsg, sizeof(errmsg), "Failed to send UDP datagram to %s: %s", dest_name, reason);
+    log_warn(errmsg);
+    $action2 f = ($action2)self->on_error;
+    f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
+}
+
+// A datagram waiting for its destination host name to resolve. Like struct
+// dns_cb_data it holds GC pointers but is referenced only from the libc
+// request, so it is GC_malloc_uncollectable.
+struct udp_resolve_state {
+    netQ_UDPListener self;
+    B_bytes data;
+    int64_t port;
+    char dest_name[NET_DESTSTRLEN];
+};
+
+static void udp_listener_on_resolve(uv_getaddrinfo_t *req, int status, struct addrinfo *res) {
+    struct udp_resolve_state *state = (struct udp_resolve_state *)req->data;
+    netQ_UDPListener self = state->self;
+    uv_udp_t *udp = (uv_udp_t *)(intptr_t)self->_sock;
+    if ((intptr_t)udp == -1) {
+        // The listener was closed while resolving
+    } else if (status != 0 || res == NULL) {
+        char reason[256];
+        snprintf(reason, sizeof(reason), "unable to resolve host name: %s", uv_strerror(status != 0 ? status : UV_EAI_NONAME));
+        udp_listener_send_error(self, state->dest_name, reason);
+    } else {
+        struct sockaddr_storage dest;
+        memcpy(&dest, res->ai_addr, res->ai_addrlen);
+        if (dest.ss_family == AF_INET) {
+            ((struct sockaddr_in *)&dest)->sin_port = htons((uint16_t)state->port);
+        } else {
+            ((struct sockaddr_in6 *)&dest)->sin6_port = htons((uint16_t)state->port);
+        }
+        udp_listener_send_to(self, udp, state->data, (const struct sockaddr *)&dest, state->dest_name);
+    }
+    uv_freeaddrinfo(res);
+    GC_free(state);
+    free(req);
+}
+
+// Resolves a host name to an address of the listener socket's family, then
+// sends the datagram there
+static void udp_listener_resolve_and_send(netQ_UDPListener self, uv_udp_t *udp, B_bytes data, B_str address, int64_t port, const char *dest_name) {
+    struct sockaddr_storage sockname;
+    int namelen = sizeof(sockname);
+    int r = uv_udp_getsockname(udp, (struct sockaddr *)&sockname, &namelen);
+    if (r != 0) {
+        udp_listener_send_error(self, dest_name, uv_strerror(r));
+        return;
+    }
+    // libuv copies the name and hints, see net_lookup_address
+    struct addrinfo hints = {0};
+    hints.ai_family = sockname.ss_family;
+    hints.ai_socktype = SOCK_DGRAM;
+    hints.ai_protocol = IPPROTO_UDP;
+#ifdef AI_V4MAPPED
+    if (sockname.ss_family == AF_INET6) {
+        hints.ai_flags = AI_V4MAPPED;
+    }
+#endif
+
+    struct udp_resolve_state *state = (struct udp_resolve_state *)GC_malloc_uncollectable(sizeof(*state));
+    // libc memory, see net_lookup_address
+    uv_getaddrinfo_t *req = (uv_getaddrinfo_t *)malloc(sizeof(uv_getaddrinfo_t));
+    if (state == NULL || req == NULL) {
+        GC_free(state);
+        free(req);
+        udp_listener_send_error(self, dest_name, "out of memory");
+        return;
+    }
+    state->self = self;
+    state->data = data;
+    state->port = port;
+    snprintf(state->dest_name, sizeof(state->dest_name), "%s", dest_name);
+    req->data = state;
+    r = uv_getaddrinfo(get_uv_loop(), req, udp_listener_on_resolve, (const char *)fromB_str(address), NULL, &hints);
+    if (r != 0) {
+        GC_free(state);
+        free(req);
+        char reason[256];
+        snprintf(reason, sizeof(reason), "unable to resolve host name: %s", uv_strerror(r));
+        udp_listener_send_error(self, dest_name, reason);
+    }
+}
+
+$R netQ_UDPListenerD_sendG_local (netQ_UDPListener self, $Cont c$cont, B_bytes data, B_str address, int64_t port) {
+    uv_udp_t *udp = (uv_udp_t *)(intptr_t)self->_sock;
+    if ((intptr_t)udp == -1) {
+        return $R_CONT(c$cont, B_None);
+    }
+
+    const char *addr = (const char *)fromB_str(address);
+    char dest_name[NET_DESTSTRLEN];
+    format_addr_port(dest_name, sizeof(dest_name), addr, port);
+
+    struct sockaddr_storage dest;
+    if (make_sockaddr(address, port, &dest) == 0) {
+        udp_listener_send_to(self, udp, data, (const struct sockaddr *)&dest, dest_name);
+    } else if (strchr(addr, ':') != NULL || strchr(addr, '%') != NULL) {
+        // A malformed IPv6 address or zone is no host name
+        udp_listener_send_error(self, dest_name, "invalid address");
+    } else {
+        udp_listener_resolve_and_send(self, udp, data, address, port, dest_name);
+    }
     return $R_CONT(c$cont, B_None);
 }
 
