@@ -726,7 +726,13 @@ actor TLSListenConnection(cap: _TCPListenConnectCap, server_stream: int, tls_own
     _init()
 
 actor TLSListener(cap: TCPListenCap, address: str, port: int, cert_pem: bytes, key_pem: bytes, on_listen: action(TLSListener, ?str) -> None, on_accept: action(TLSListenConnection) -> None):
-    """TLS Listener"""
+    """TLS Listener
+
+    Listens on address and port, where port 0 picks a free port, see
+    local_port(). Each connection that completes the TLS handshake is passed
+    to on_accept. on_listen is called with None once listening, or with an
+    error. It is also called with an error for each failed handshake.
+    """
     _stream = -1
     _tls_owner = -1
     def create_tls_listen_connection(cap: _TCPListenConnectCap, stream: int, tls_owner: int, worker_id: int):
@@ -735,7 +741,15 @@ actor TLSListener(cap: TCPListenCap, address: str, port: int, cert_pem: bytes, k
         on_accept(c)
 
     action def close() -> None:
-        """Close listener"""
+        """Stop listening, connections already accepted stay open"""
+        NotImplemented
+
+    action def local_address() -> str:
+        """Local address of the listening socket, "" when closed"""
+        NotImplemented
+
+    action def local_port() -> int:
+        """Local port of the listening socket, 0 when closed"""
         NotImplemented
 
     action def __cleanup__() -> None:

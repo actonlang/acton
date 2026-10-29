@@ -2103,8 +2103,6 @@ $R netQ_TLSListenerD__initG_local (netQ_TLSListener self, $Cont c$cont) {
     struct tls_listener_owner *owner = NULL;
     uv_tcp_t *server = NULL;
     int r;
-    struct sockaddr_in addr4;
-    struct sockaddr_in6 addr6;
     if (tls == NULL) {
         $action2 f = ($action2)self->on_listen;
         f->$class->__asyn__(f, self, actStrFromCString("Failed to initialize TLS context"));
@@ -2179,50 +2177,10 @@ $R netQ_TLSListenerD__initG_local (netQ_TLSListener self, $Cont c$cont) {
         return $R_CONT(c$cont, B_None);
     }
     server->data = (void *)server_state;
-    if (inet_pton(AF_INET, (const char *)fromB_str(self->address), &(addr4.sin_addr)) == 1) {
-        r = uv_ip4_addr((const char *)fromB_str(self->address), (int)self->port, &addr4);
-    } else if (inet_pton(AF_INET6, (const char *)fromB_str(self->address), &(addr6.sin6_addr)) == 1) {
-        r = uv_ip6_addr((const char *)fromB_str(self->address), (int)self->port, &addr6);
-    } else {
-        B_str errmsg = $FORMAT("Address is not an IPv4 or IPv6 address: %s", fromB_str(self->address));
-        log_warn((const char *)fromB_str(errmsg));
-        $action2 f = ($action2)self->on_listen;
-        f->$class->__asyn__(f, self, errmsg);
-        uv_close((uv_handle_t *)server, tls_listener_server_on_close);
-        tls_listener_owner_release(owner);
-        return $R_CONT(c$cont, B_None);
-    }
-    if (r != 0) {
-        char errmsg[1024] = "Unable to parse address: ";
-        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
-        log_warn(errmsg);
-        $action2 f = ($action2)self->on_listen;
-        f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
-        uv_close((uv_handle_t *)server, tls_listener_server_on_close);
-        tls_listener_owner_release(owner);
-        return $R_CONT(c$cont, B_None);
-    }
 
-    if (inet_pton(AF_INET, (const char *)fromB_str(self->address), &(addr4.sin_addr)) == 1) {
-        r = uv_tcp_bind(server, (const struct sockaddr *)&addr4, 0);
-    } else if (inet_pton(AF_INET6, (const char *)fromB_str(self->address), &(addr6.sin6_addr)) == 1) {
-        r = uv_tcp_bind(server, (const struct sockaddr *)&addr6, 0);
-    }
+    char errmsg[1024];
+    r = tcp_listen(server, self->address, self->port, on_new_tls_connection, "TLS", errmsg, sizeof(errmsg));
     if (r != 0) {
-        char errmsg[1024] = "Error in TLS bind: ";
-        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
-        log_warn(errmsg);
-        $action2 f = ($action2)self->on_listen;
-        f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
-        uv_close((uv_handle_t *)server, tls_listener_server_on_close);
-        tls_listener_owner_release(owner);
-        return $R_CONT(c$cont, B_None);
-    }
-
-    r = uv_listen((uv_stream_t *)server, 1024, on_new_tls_connection);
-    if (r != 0) {
-        char errmsg[1024] = "Error in TLS listen: ";
-        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
         $action2 f = ($action2)self->on_listen;
         f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
@@ -2236,6 +2194,20 @@ $R netQ_TLSListenerD__initG_local (netQ_TLSListener self, $Cont c$cont) {
     $action2 f = ($action2)self->on_listen;
     f->$class->__asyn__(f, self, B_None);
     return $R_CONT(c$cont, B_None);
+}
+
+$R netQ_TLSListenerD_local_addressG_local (netQ_TLSListener self, $Cont c$cont) {
+    char addr[NET_ADDRSTRLEN];
+    int port;
+    tcp_listener_names(self->_stream, addr, sizeof(addr), &port);
+    return $R_CONT(c$cont, actStrFromCStringCopy(addr));
+}
+
+$R netQ_TLSListenerD_local_portG_local (netQ_TLSListener self, $Cont c$cont) {
+    char addr[NET_ADDRSTRLEN];
+    int port;
+    tcp_listener_names(self->_stream, addr, sizeof(addr), &port);
+    return $R_CONT(c$cont, toB_int(port));
 }
 
 $R netQ_TLSListenerD_closeG_local (netQ_TLSListener self, $Cont c$cont) {
