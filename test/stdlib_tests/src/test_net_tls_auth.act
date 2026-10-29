@@ -136,7 +136,7 @@ actor tls_handshake(t: testing.EnvT, what: str,
         port = l.local_port()
         net.TLSConnection(connect_cap, "127.0.0.1", port, on_connect, on_receive, on_error, None,
                           protocols=protocols, ca_pem=ca_pem, cert_pem=cert_pem, key_pem=key_pem,
-                          server_name=server_name)
+                          server_name=server_name, connect_timeout=5.0)
 
     def on_accept(s: net.TLSListenConnection):
         server_conn = s
@@ -284,3 +284,137 @@ actor _test_TLSServerNameLocalhost(t: testing.EnvT):
 
 actor _test_TLSServerNameNone(t: testing.EnvT):
     tls_server_name_ok(t, "")
+
+
+actor _test_TLSClientHandshakeTimeout(t: testing.EnvT):
+    """connect_timeout covers a handshake the server never answers"""
+    tcp_cap = net.TCPCap(net.NetCap(t.env.cap))
+    var errors: list[str] = []
+    var connected = False
+    var listener: ?net.TCPListener = None
+
+    def on_listen(l: net.TCPListener, error: ?str):
+        if error is not None:
+            t.failure(AssertionError("listen error: " + error))
+            return
+        listener = l
+        net.TLSConnection(net.TCPConnectCap(tcp_cap), "127.0.0.1", l.local_port(), on_connect, on_receive, on_error, None,
+                          ca_pem=CA_PEM, connect_timeout=0.5)
+        after 1.5: check()
+
+    def check():
+        if listener is not None:
+            listener.close()
+        if connected:
+            t.failure(AssertionError("connected without a handshake"))
+        elif errors != ["TLS handshake timed out"]:
+            t.failure(AssertionError("errors: " + str(errors)))
+        else:
+            t.success()
+
+    def on_accept(s: net.TCPListenConnection):
+        # Read the client hello, never answer
+        s.cb_install(lambda s, d: None, lambda s, e: None, None)
+
+    def on_connect(c: net.TLSConnection):
+        connected = True
+
+    def on_receive(c: net.TLSConnection, data: bytes):
+        pass
+
+    def on_error(c: net.TLSConnection, error: str):
+        errors.append(error)
+
+    net.TCPListener(net.TCPListenCap(tcp_cap), "127.0.0.1", 0, on_listen, on_accept)
+
+
+actor _test_TLSServerHandshakeTimeout(t: testing.EnvT):
+    """handshake_timeout drops a client that never starts the handshake"""
+    tcp_cap = net.TCPCap(net.NetCap(t.env.cap))
+    var listener: ?net.TLSListener = None
+    var client: ?net.TCPConnection = None
+    var done = False
+
+    def finish(error: ?str):
+        if done:
+            return
+        done = True
+        if listener is not None:
+            listener.close()
+        if client is not None:
+            client.close(lambda c: None)
+        if error is not None:
+            t.failure(AssertionError(error))
+        else:
+            t.success()
+
+    def on_listen(l: net.TLSListener, error: ?str):
+        if listener is None:
+            if error is not None:
+                finish("listen error: " + error)
+                return
+            listener = l
+            client = net.TCPConnection(net.TCPConnectCap(tcp_cap), "127.0.0.1", l.local_port(), on_connect, on_receive, on_error)
+        elif error is not None and client is not None:
+            expected = "TLS handshake with client 127.0.0.1:%d timed out" % client.endpoints().local_port
+            if error != expected:
+                finish("expected '" + expected + "', got: " + error)
+            else:
+                finish(None)
+
+    def on_accept(s: net.TLSListenConnection):
+        finish("accepted a connection without a handshake")
+
+    def on_connect(c: net.TCPConnection):
+        pass
+
+    def on_receive(c: net.TCPConnection, data: bytes):
+        pass
+
+    def on_error(c: net.TCPConnection, error: str):
+        pass
+
+    after 3: finish("handshake timeout not reported")
+    net.TLSListener(net.TCPListenCap(tcp_cap), "127.0.0.1", 0, SERVER_CERT_PEM, SERVER_KEY_PEM, on_listen, on_accept, handshake_timeout=0.3)
+
+
+actor _test_TLSCloseWhileConnecting(t: testing.EnvT):
+    """close() right after creating a TLS connection cancels the attempt"""
+    tcp_cap = net.TCPCap(net.NetCap(t.env.cap))
+    var closes = 0
+    var events: list[str] = []
+
+    def on_listen(l: net.TLSListener, error: ?str):
+        if error is not None:
+            t.failure(AssertionError("listen error: " + error))
+            return
+        c = net.TLSConnection(net.TCPConnectCap(tcp_cap), "127.0.0.1", l.local_port(), on_connect, on_receive, on_error, None,
+                              ca_pem=CA_PEM, connect_timeout=0.3)
+        c.close(on_close)
+        after 0.6: check(l)
+
+    def check(l: net.TLSListener):
+        l.close()
+        if closes != 1:
+            t.failure(AssertionError("expected on_close once, got %d" % closes))
+        elif len(events) != 0:
+            t.failure(AssertionError("events after close: " + str(events)))
+        else:
+            t.success()
+
+    def on_accept(s: net.TLSListenConnection):
+        s.close()
+
+    def on_close(c: net.TLSConnection):
+        closes += 1
+
+    def on_connect(c: net.TLSConnection):
+        events.append("on_connect")
+
+    def on_receive(c: net.TLSConnection, data: bytes):
+        events.append("on_receive")
+
+    def on_error(c: net.TLSConnection, error: str):
+        events.append("on_error: " + error)
+
+    net.TLSListener(net.TCPListenCap(tcp_cap), "127.0.0.1", 0, SERVER_CERT_PEM, SERVER_KEY_PEM, on_listen, on_accept)

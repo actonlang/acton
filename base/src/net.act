@@ -768,7 +768,7 @@ actor TLSListenConnection(cap: _TCPListenConnectCap, server_stream: int, tls_own
         NotImplemented
     _init()
 
-actor TLSListener(cap: TCPListenCap, address: str, port: int, cert_pem: bytes, key_pem: bytes, on_listen: action(TLSListener, ?str) -> None, on_accept: action(TLSListenConnection) -> None, client_auth: bool=False, ca_pem: ?bytes=None, protocols: list[str]=[]):
+actor TLSListener(cap: TCPListenCap, address: str, port: int, cert_pem: bytes, key_pem: bytes, on_listen: action(TLSListener, ?str) -> None, on_accept: action(TLSListenConnection) -> None, client_auth: bool=False, ca_pem: ?bytes=None, protocols: list[str]=[], handshake_timeout: float=60.0):
     """TLS Listener
 
     Listens on address and port, where port 0 picks a free port, see
@@ -781,7 +781,8 @@ actor TLSListener(cap: TCPListenCap, address: str, port: int, cert_pem: bytes, k
     the listener does not ask.
 
     protocols lists the ALPN protocols the listener supports, in order of
-    preference.
+    preference. handshake_timeout limits the time a client may take to
+    complete the handshake, 0 for no limit.
 
     on_listen is called with None once listening, or with an error. It is
     also called with an error for each failed handshake, for example a
@@ -817,8 +818,13 @@ actor TLSListener(cap: TCPListenCap, address: str, port: int, cert_pem: bytes, k
         NotImplemented
     _init()
 
-actor TLSConnection(cap: TCPConnectCap, address: str, port: int, on_connect: action(TLSConnection) -> None, on_receive: action(TLSConnection, bytes) -> None, on_error: action(TLSConnection, str) -> None, on_remote_close: ?action(TLSConnection) -> None=None, verify_tls: bool=True, protocols: list[str]=[], ca_pem: ?bytes=None, cert_pem: ?bytes=None, key_pem: ?bytes=None, server_name: ?str=None):
+actor TLSConnection(cap: TCPConnectCap, address: str, port: int, on_connect: action(TLSConnection) -> None, on_receive: action(TLSConnection, bytes) -> None, on_error: action(TLSConnection, str) -> None, on_remote_close: ?action(TLSConnection) -> None=None, verify_tls: bool=True, protocols: list[str]=[], ca_pem: ?bytes=None, cert_pem: ?bytes=None, key_pem: ?bytes=None, server_name: ?str=None, connect_timeout: float=10.0):
     """TLS connection
+
+    Connects to address and port and performs a TLS handshake. Each
+    connection attempt ends with exactly one call to either on_connect or
+    on_error, unless close() cancels it first. connect_timeout limits the
+    whole attempt, handshake included.
 
     The server certificate is verified against the CA certificates in ca_pem
     (PEM, one or more), or the system CA bundle without it, and against
@@ -833,12 +839,19 @@ actor TLSConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
     protocols to offer, see tls_info().
     """
     # TODO: do DNS lookup in Acton
-    # TODO: implement state machine
-    # TODO: support timeout
     # TODO: do Happy Eyeballs
     var _stream = -1
 
     var _on_close: ?action(TLSConnection) -> None = None
+
+    STATE_NONE = 0
+    STATE_CONNECTING = 2
+    STATE_CONNECTED = 3
+    STATE_CLOSED = 4
+    var _state = STATE_NONE
+    # Identifies the current connection attempt, so that events and timeouts
+    # of an abandoned attempt are ignored
+    var _attempt = 0
 
     var _local_address = ""
     var _local_port = 0
@@ -858,15 +871,34 @@ actor TLSConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
         NotImplemented
     _pin_affinity()
 
-    action def _on_tls_connect():
+    action def _on_tls_connect(attempt: int):
+        if attempt != _attempt or _state != STATE_CONNECTING:
+            return
+        _state = STATE_CONNECTED
         _connections += 1
+        _consecutive_connect_errors = 0
         on_connect(self)
 
-    action def _on_tls_error(sockfamily: int, err: int, errmsg: str):
+    action def _on_tls_error(attempt: int, sockfamily: int, err: int, errmsg: str):
+        if attempt != _attempt or _state == STATE_CLOSED:
+            return
+        if _state == STATE_CONNECTING:
+            _consecutive_connect_errors += 1
+        _state = STATE_CLOSED
         on_error(self, errmsg)
 
     action def close(on_close: action(TLSConnection) -> None) -> None:
-        """Close the connection"""
+        """Close the connection
+
+        Closing while the connection is being set up cancels the attempt, so
+        neither on_connect nor on_error is called for it. on_close is called
+        once the connection is closed.
+        """
+        _attempt += 1
+        _state = STATE_CLOSED
+        _close(on_close)
+
+    proc def _close(on_close: action(TLSConnection) -> None) -> None:
         NotImplemented
 
     action def write(data: bytes) -> None:
@@ -902,6 +934,27 @@ actor TLSConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
     proc def _connect_tls():
         NotImplemented
 
-    proc def _connect(c):
+    # Close the stream of an attempt that timed out, True if the TCP
+    # connection was up and the handshake in progress
+    proc def _abandon_handshake() -> bool:
+        NotImplemented
+
+    def _connect_timeout(attempt: int):
+        if attempt != _attempt or _state != STATE_CONNECTING:
+            return
+        handshaking = _abandon_handshake()
+        _attempt += 1
+        _state = STATE_CLOSED
+        _consecutive_connect_errors += 1
+        if handshaking:
+            on_error(self, "TLS handshake timed out")
+        else:
+            on_error(self, "Connection attempt failed due to timeout")
+
+    def _connect(c):
+        _attempt += 1
+        attempt = _attempt
+        _state = STATE_CONNECTING
+        after connect_timeout: _connect_timeout(attempt)
         _connect_tls()
     _connect(self)
