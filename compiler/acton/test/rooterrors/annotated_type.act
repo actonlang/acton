@@ -1,0 +1,2 @@
+actor main(env: int):
+    print(env)

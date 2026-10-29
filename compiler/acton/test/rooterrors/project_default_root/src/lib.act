@@ -1,0 +1,8 @@
+# lib has no actor main, so the project build makes no executable from it.
+# The untyped parameter of show is inferred as Config, which has getenv.
+actor Config():
+    def getenv(name: str) -> ?str:
+        return None
+
+proc def show(v):
+    print(v.getenv("HOME"))

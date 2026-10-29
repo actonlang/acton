@@ -1,0 +1,7 @@
+[error Compilation error]: Cannot use main as the root actor: its parameter env has type (exit: action(int) -> None, vars: Config), but the root actor's parameter must have type Env
+     +--> env_tuple.act@11:7-11:11
+     |
+  11 | actor main(env):
+     :       ^--- 
+     :       `- Cannot use main as the root actor: its parameter env has type (exit: action(int) -> None, vars: Config), but the root actor's parameter must have type Env
+-----+

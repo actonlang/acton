@@ -1,0 +1,7 @@
+[error Compilation error]: Cannot use main as the root actor: its parameter env has type Config, but the root actor's parameter must have type Env
+     +--> env_local_actor.act@7:7-7:11
+     |
+   7 | actor main(env):
+     :       ^--- 
+     :       `- Cannot use main as the root actor: its parameter env has type Config, but the root actor's parameter must have type Env
+-----+

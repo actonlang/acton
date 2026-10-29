@@ -1,0 +1,8 @@
+# env is untyped and only used for getenv, which the local actor Config also
+# has, so env is inferred as Config and main cannot be the root actor.
+actor Config():
+    def getenv(name: str) -> ?str:
+        return None
+
+actor main(env):
+    print(env.getenv("HOME"))

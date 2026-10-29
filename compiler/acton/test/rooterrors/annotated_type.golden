@@ -1,0 +1,7 @@
+[error Compilation error]: Cannot use main as the root actor: its parameter env has type int, but the root actor's parameter must have type Env
+     +--> annotated_type.act@1:7-1:11
+     |
+   1 | actor main(env: int):
+     :       ^--- 
+     :       `- Cannot use main as the root actor: its parameter env has type int, but the root actor's parameter must have type Env
+-----+
