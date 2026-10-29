@@ -929,6 +929,75 @@ p15_rebuild_import = testCase "15-rebuild with stdlib import" $ do
   res2 <- runActonIn casesProjDir ["build", "--color", "never"]
   assertExitSuccess "second build" res2
 
+p15b_transitive_stdlib_import :: TestTree
+p15b_transitive_stdlib_import = testCase "15b-transitive stdlib import via cached module" $ do
+  let proj = casesProjDir
+      src = casesSrcDir
+      mainSrc = T.unlines
+        [ "import b"
+        , ""
+        , "class Consumer(b.Box):"
+        , "    pass"
+        , ""
+        , "actor main(env):"
+        , "    env.exit(0)"
+        ]
+  ensureCasesProject
+  writeFileUtf8 (src </> "b.act") $ T.unlines
+    [ "import logging"
+    , ""
+    , "class Box(logging.Logger):"
+    , "    pass"
+    ]
+  writeFileUtf8 (src </> "main.act") mainSrc
+  res1 <- runActonIn proj ["build", "--color", "never"]
+  assertExitSuccess "initial build" res1
+  writeFileUtf8 (src </> "main.act") (mainSrc <> "# edited\n")
+  res2@(_, out2) <- runActonIn proj ["build", "--color", "never", "--verbose"]
+  assertExitSuccess "build with b from its cached .tydb" res2
+  assertBool ("expected b to stay fresh\n" ++ T.unpack out2)
+    (T.isInfixOf "Fresh b: using cached .tydb" out2)
+  assertBool ("expected main to type check\n" ++ T.unpack out2)
+    (typechecked out2 (modLabel proj "main"))
+
+p15c_transitive_extension_import :: TestTree
+p15c_transitive_extension_import = testCase "15c-transitive extension via cached module" $ do
+  let proj = casesProjDir
+      src = casesSrcDir
+      writeMain imports = writeFileUtf8 (src </> "main.act") $ T.unlines $ imports ++
+        [ ""
+        , "actor main(env):"
+        , "    for e in b.make():"
+        , "        print(e)"
+        , "    env.exit(0)"
+        ]
+  ensureCasesProject
+  writeFileUtf8 (src </> "a.act") $ T.unlines
+    [ "class Thing:"
+    , "    def __init__(self, elements: list[str]):"
+    , "        self.elements = elements"
+    , ""
+    , "extension Thing (Iterable[str]):"
+    , "    def __iter__(self) -> Iterator[str]:"
+    , "        return self.elements.__iter__()"
+    ]
+  writeFileUtf8 (src </> "b.act") $ T.unlines
+    [ "import a"
+    , ""
+    , "def make():"
+    , "    return a.Thing([\"foo\", \"bar\"])"
+    ]
+  writeMain ["import a", "import b"]
+  res1 <- runActonIn proj ["build", "--color", "never"]
+  assertExitSuccess "build importing a" res1
+  writeMain ["import b"]
+  res2@(_, out2) <- runActonIn proj ["build", "--color", "never", "--verbose"]
+  assertExitSuccess "build reaching a through cached b" res2
+  assertBool ("expected a and b to stay fresh\n" ++ T.unpack out2)
+    (T.isInfixOf "Fresh a: using cached .tydb" out2 && T.isInfixOf "Fresh b: using cached .tydb" out2)
+  assertBool ("expected main to type check\n" ++ T.unpack out2)
+    (typechecked out2 (modLabel proj "main"))
+
 p16_dep_api_change :: TestTree
 p16_dep_api_change = testCase "16-dependency API change triggers rebuild" $ do
   let originalContent = T.unlines
@@ -3133,6 +3202,8 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
   , sequentialTestGroup "incremental-project-cases" AllSucceed
       [ p14_partial_rebuild
       , p15_rebuild_import
+      , p15b_transitive_stdlib_import
+      , p15c_transitive_extension_import
       , p16_dep_api_change
       , p17_dep_impl_change
       , p17b_dep_escape_change

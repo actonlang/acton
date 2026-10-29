@@ -1,0 +1,15 @@
+# things is reached through middle and makers. Iterating a Thing, using Keys
+# in a dict and describing an int need witnesses from extensions in things.
+
+import middle
+
+actor main(env):
+    keys = {middle.make_key(1): "a", middle.make_key(2): "b"}
+    r = [middle.elements(),
+         [e for e in middle.make_thing()],
+         [middle.describe_int(), middle.describe(8)],
+         [keys[middle.make_key(2)]]]
+    if r != [["foo", "bar"], ["foo", "bar"], ["int 7", "int 8"], ["b"]]:
+        print("FAIL: witnesses from extensions in things", r)
+        await async env.exit(1)
+    env.exit(0)

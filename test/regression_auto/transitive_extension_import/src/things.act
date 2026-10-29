@@ -1,0 +1,26 @@
+# The extensions of this module are used in modules that never import it.
+
+class Thing:
+    def __init__(self, elements: list[str]):
+        self.elements = elements
+
+extension Thing (Iterable[str]):
+    def __iter__(self) -> Iterator[str]:
+        return self.elements.__iter__()
+
+class Key:
+    def __init__(self, k: int):
+        self.k = k
+
+extension Key (Hashable):
+    def __eq__(a: Key, b: Key) -> bool:
+        return a.k == b.k
+    def hash(self, h):
+        self.k.hash(h)
+
+protocol Describer:
+    describe : () -> str
+
+extension int (Describer):
+    def describe(self) -> str:
+        return "int " + str(self)

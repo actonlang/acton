@@ -1,0 +1,10 @@
+import things
+
+def make_thing():
+    return things.Thing(["foo", "bar"])
+
+def make_key(k: int):
+    return things.Key(k)
+
+def describe[A(things.Describer)](x: A) -> str:
+    return x.describe()
