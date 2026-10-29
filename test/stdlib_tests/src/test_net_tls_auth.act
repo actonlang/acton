@@ -432,3 +432,61 @@ actor _test_TLSCloseWhileConnecting(t: testing.EnvT):
         events.append("on_error: " + error)
 
     net.TLSListener(net.TCPListenCap(tcp_cap), "127.0.0.1", 0, SERVER_CERT_PEM, SERVER_KEY_PEM, on_listen, on_accept)
+
+
+actor _test_TLSListenerCloseAbortsHandshake(t: testing.EnvT):
+    """Closing the listener aborts a handshake in progress"""
+    tcp_cap = net.TCPCap(net.NetCap(t.env.cap))
+    var listener: ?net.TLSListener = None
+    var client: ?net.TCPConnection = None
+    var done = False
+
+    def finish(error: ?str):
+        if done:
+            return
+        done = True
+        if listener is not None:
+            listener.close()
+        if client is not None:
+            client.close(lambda c: None)
+        if error is not None:
+            t.failure(AssertionError(error))
+        else:
+            t.success()
+
+    def on_listen(l: net.TLSListener, error: ?str):
+        if listener is None:
+            if error is not None:
+                finish("listen error: " + error)
+                return
+            listener = l
+            # A client that never starts the handshake
+            client = net.TCPConnection(net.TCPConnectCap(tcp_cap), "127.0.0.1", l.local_port(), on_connect, on_receive, on_error, on_remote_close)
+        elif error is not None:
+            finish("unexpected listener error: " + error)
+
+    def on_accept(s: net.TLSListenConnection):
+        finish("accepted a connection without a handshake")
+
+    def on_connect(c: net.TCPConnection):
+        # Let the listener take the connection, then close the listener
+        after 0.2: close_listener()
+
+    def close_listener():
+        if listener is not None:
+            listener.close()
+
+    def on_receive(c: net.TCPConnection, data: bytes):
+        pass
+
+    def on_error(c: net.TCPConnection, error: str):
+        # A reset ends the connection too
+        finish(None)
+
+    def on_remote_close(c: net.TCPConnection):
+        finish(None)
+
+    # The handshake timeout is far off, so only closing the listener ends the
+    # connection in time
+    after 3: finish("connection still open after the listener closed")
+    net.TLSListener(net.TCPListenCap(tcp_cap), "127.0.0.1", 0, SERVER_CERT_PEM, SERVER_KEY_PEM, on_listen, on_accept, handshake_timeout=60.0)

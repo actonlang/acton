@@ -1487,11 +1487,17 @@ struct tls_listener_conn {
     uv_timer_t *timer; // handshake timeout, NULL for none
     bool timed_out;
     char peer[NET_ADDRPORTSTRLEN];
+    // In the listener's list of handshakes in progress
+    struct tls_listener_conn *prev;
+    struct tls_listener_conn *next;
 };
 
 struct tls_listener_server_state {
     _Atomic int refs;
     netQ_TLSListener actor;
+    // Handshakes in progress, which closing the listener aborts. Only used
+    // in the listener's loop.
+    struct tls_listener_conn *handshakes;
 };
 
 // A TLS context with its own certificate and key, which every engine created
@@ -1538,6 +1544,7 @@ static void tls_listener_release_connection_owner(netQ_TLSListenConnection self)
 static struct tls_listener_server_state *tls_listener_server_state_new(netQ_TLSListener actor);
 static void tls_listener_server_state_retain(struct tls_listener_server_state *state);
 static void tls_listener_server_state_release(struct tls_listener_server_state *state);
+static void tls_listener_close_stream(tlsuv_stream_t *stream);
 static struct tls_client_state *tls_client_state_new(netQ_TLSConnection actor);
 static void tls_client_state_free(struct tls_client_state *state);
 static struct tls_write_req_state *tls_write_req_state_new(B_bytes data);
@@ -1746,7 +1753,32 @@ static struct tls_listener_server_state *tls_listener_server_state_new(netQ_TLSL
     }
     atomic_init(&state->refs, 1);
     state->actor = actor;
+    state->handshakes = NULL;
     return state;
+}
+
+static void tls_listener_add_handshake(struct tls_listener_conn *conn) {
+    struct tls_listener_server_state *state = conn->listener_state;
+    conn->prev = NULL;
+    conn->next = state->handshakes;
+    if (state->handshakes != NULL) {
+        state->handshakes->prev = conn;
+    }
+    state->handshakes = conn;
+}
+
+static void tls_listener_remove_handshake(struct tls_listener_conn *conn) {
+    struct tls_listener_server_state *state = conn->listener_state;
+    if (conn->prev != NULL) {
+        conn->prev->next = conn->next;
+    } else if (state != NULL && state->handshakes == conn) {
+        state->handshakes = conn->next;
+    }
+    if (conn->next != NULL) {
+        conn->next->prev = conn->prev;
+    }
+    conn->prev = NULL;
+    conn->next = NULL;
 }
 
 static void tls_listener_server_state_retain(struct tls_listener_server_state *state) {
@@ -1845,6 +1877,14 @@ static void tls_listener_close_server(netQ_TLSListener self) {
         struct tls_listener_server_state *state = (struct tls_listener_server_state *)server->data;
         if (state != NULL) {
             state->actor = NULL;
+            // Abort the handshakes in progress. Closing a stream completes its
+            // handshake with an error later, see tls_listener_on_connect.
+            struct tls_listener_conn *conn = state->handshakes;
+            while (conn != NULL) {
+                struct tls_listener_conn *next = conn->next;
+                tls_listener_close_stream(conn->stream);
+                conn = next;
+            }
         }
         if (uv_is_closing((uv_handle_t *)server) == 0) {
             uv_close((uv_handle_t *)server, tls_listener_server_on_close);
@@ -2054,6 +2094,7 @@ static void tls_listener_on_connect(uv_connect_t *creq, int status) {
     tlsuv_stream_t *stream = conn->stream;
     struct tls_listener_stream_state *state = conn->state;
     struct tls_owner *owner = state != NULL ? state->owner : NULL;
+    tls_listener_remove_handshake(conn);
     tls_listener_close_conn_timer(conn);
 
     if (listener == NULL) {
@@ -2373,6 +2414,8 @@ static void on_new_tls_connection(uv_stream_t *server, int status) {
     conn->timer = NULL;
     conn->timed_out = false;
     snprintf(conn->peer, sizeof(conn->peer), "%s", peer);
+    conn->prev = NULL;
+    conn->next = NULL;
 
     uv_connect_t *connect_req = (uv_connect_t *)calloc(1, sizeof(uv_connect_t));
     if (connect_req == NULL) {
@@ -2403,6 +2446,7 @@ static void on_new_tls_connection(uv_stream_t *server, int status) {
         }
     }
 
+    tls_listener_add_handshake(conn);
     r = tlsuv_stream_open(connect_req, stream, sock, tls_listener_on_connect);
     if (r != 0) {
         char errmsg[1024] = "Failed to start TLS handshake: ";
@@ -2415,6 +2459,7 @@ static void on_new_tls_connection(uv_stream_t *server, int status) {
         // tlsuv only adopts the fd once its poll watcher is initialized; on
         // failure the dup'd socket is still ours to close.
         close_uv_socket(sock);
+        tls_listener_remove_handshake(conn);
         tls_listener_close_conn_timer(conn);
         tls_listener_close_stream(stream);
         tls_listener_server_state_release(listener_state);

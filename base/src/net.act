@@ -788,15 +788,23 @@ actor TLSListener(cap: TCPListenCap, address: str, port: int, cert_pem: bytes, k
     also called with an error for each failed handshake, for example a
     client without an acceptable certificate.
     """
-    _stream = -1
-    _tls_owner = -1
+    var _stream = -1
+    var _tls_owner = -1
     def create_tls_listen_connection(cap: _TCPListenConnectCap, stream: int, tls_owner: int, worker_id: int):
         """Implementation internal"""
         c = TLSListenConnection(cap, stream, tls_owner, worker_id)
+        if _stream == -1:
+            # The handshake completed just as the listener was closed
+            c.close()
+            return
         on_accept(c)
 
     action def close() -> None:
-        """Stop listening, connections already accepted stay open"""
+        """Stop listening
+
+        Handshakes in progress are aborted, connections already accepted
+        stay open.
+        """
         NotImplemented
 
     action def local_address() -> str:
