@@ -1493,12 +1493,15 @@ struct tls_listener_server_state {
 
 // A TLS context with its own certificate and key, which every engine created
 // from the context refers to. Shared by a listener and the connections it
-// accepted, or owned by a client connection that brings its own CA.
+// accepted, or owned by a client connection that brings its own CA or
+// certificate.
 struct tls_owner {
     _Atomic int refs;
     tls_context *tls;
     tlsuv_private_key_t key;
     tlsuv_certificate_t cert;
+    // Listener settings for accepted streams
+    int authmode;
 };
 
 struct tls_listener_stream_state {
@@ -1597,34 +1600,68 @@ static struct tls_owner *tls_owner_new(tls_context *tls,
     owner->tls = tls;
     owner->key = key;
     owner->cert = cert;
+    owner->authmode = 0;
     return owner;
 }
 
-// Creates a TLS context that trusts the CA certificates in ca_pem
-static struct tls_owner *tls_owner_from_ca(B_bytes ca_pem, char *errmsg, size_t errmsg_len) {
-    tls_context *tls = default_tls_context((const char *)ca_pem->str, ca_pem->nbytes);
+// Creates a TLS context that trusts the CA certificates in ca_pem, or the
+// system CA bundle without it, and presents cert_pem and key_pem if given
+static struct tls_owner *tls_owner_from_pem(B_bytes ca_pem, B_bytes cert_pem, B_bytes key_pem, char *errmsg, size_t errmsg_len) {
+    tls_context *tls = ca_pem != NULL
+        ? default_tls_context((const char *)ca_pem->str, ca_pem->nbytes)
+        : default_tls_context(NULL, 0);
+    tlsuv_private_key_t key = NULL;
+    tlsuv_certificate_t cert = NULL;
     if (tls == NULL) {
         snprintf(errmsg, errmsg_len, "Failed to initialize TLS context");
         return NULL;
     }
 
-    // The CA bundle is parsed again for every connection, check it once here
-    // rather than fail every handshake
-    tlsuv_certificate_t ca = NULL;
-    int rc = tls->load_cert(&ca, (const char *)ca_pem->str, ca_pem->nbytes);
-    if (ca != NULL) {
-        ca->free(ca);
-    }
-    if (rc < 0) {
-        snprintf(errmsg, errmsg_len, "Failed to load TLS CA certificates: %s", tls->strerror(rc));
-        tls_release_resources(tls, NULL, NULL);
-        return NULL;
+    if (ca_pem != NULL) {
+        // The CA bundle is parsed again for every connection, check it once
+        // here rather than fail every handshake
+        tlsuv_certificate_t ca = NULL;
+        int rc = tls->load_cert(&ca, (const char *)ca_pem->str, ca_pem->nbytes);
+        if (ca != NULL) {
+            ca->free(ca);
+        }
+        if (rc < 0) {
+            snprintf(errmsg, errmsg_len, "Failed to load TLS CA certificates: %s", tls->strerror(rc));
+            tls_release_resources(tls, key, cert);
+            return NULL;
+        }
     }
 
-    struct tls_owner *owner = tls_owner_new(tls, NULL, NULL);
+    if (cert_pem != NULL || key_pem != NULL) {
+        if (cert_pem == NULL || key_pem == NULL) {
+            snprintf(errmsg, errmsg_len, "A TLS certificate needs both cert_pem and key_pem");
+            tls_release_resources(tls, key, cert);
+            return NULL;
+        }
+        int rc = tls->load_key(&key, (const char *)key_pem->str, key_pem->nbytes);
+        if (rc != 0) {
+            snprintf(errmsg, errmsg_len, "Failed to load TLS key: %s", tls->strerror(rc));
+            tls_release_resources(tls, key, cert);
+            return NULL;
+        }
+        rc = tls->load_cert(&cert, (const char *)cert_pem->str, cert_pem->nbytes);
+        if (rc != 0) {
+            snprintf(errmsg, errmsg_len, "Failed to load TLS cert: %s", tls->strerror(rc));
+            tls_release_resources(tls, key, cert);
+            return NULL;
+        }
+        rc = tls->set_own_cert(tls, key, cert);
+        if (rc != 0) {
+            snprintf(errmsg, errmsg_len, "Failed to set TLS certificate, does it match the key?");
+            tls_release_resources(tls, key, cert);
+            return NULL;
+        }
+    }
+
+    struct tls_owner *owner = tls_owner_new(tls, key, cert);
     if (owner == NULL) {
         snprintf(errmsg, errmsg_len, "Failed to allocate TLS context owner");
-        tls_release_resources(tls, NULL, NULL);
+        tls_release_resources(tls, key, cert);
     }
     return owner;
 }
@@ -2073,7 +2110,7 @@ static void on_new_tls_connection(uv_stream_t *server, int status) {
         return;
     }
     tlsuv_stream_set_server(stream, 1);
-    stream->authmode = 0;
+    stream->authmode = owner->authmode;
     stream->data = state;
 
     struct tls_listener_conn *conn = (struct tls_listener_conn *)malloc(sizeof(*conn));
@@ -2131,98 +2168,55 @@ static void on_new_tls_connection(uv_stream_t *server, int status) {
     }
 }
 
+static void tls_listener_report_listen_error(netQ_TLSListener self, const char *errmsg) {
+    log_warn("%s", errmsg);
+    $action2 f = ($action2)self->on_listen;
+    f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
+}
+
 $R netQ_TLSListenerD__initG_local (netQ_TLSListener self, $Cont c$cont) {
     pin_actor_affinity();
 
-    tls_context *tls = default_tls_context(NULL, 0);
-    tlsuv_private_key_t key = NULL;
-    tlsuv_certificate_t cert = NULL;
-    struct tls_owner *owner = NULL;
-    uv_tcp_t *server = NULL;
-    int r;
-    if (tls == NULL) {
-        $action2 f = ($action2)self->on_listen;
-        f->$class->__asyn__(f, self, actStrFromCString("Failed to initialize TLS context"));
-        return $R_CONT(c$cont, B_None);
-    }
-
-    int rc = tls->load_key(&key, (const char *)self->key_pem->str, self->key_pem->nbytes);
-    if (rc != 0) {
-        const char *err = tls->strerror(rc);
-        B_str errmsg = $FORMAT("Failed to load TLS key: %s", err);
-        log_warn((const char *)fromB_str(errmsg));
-        $action2 f = ($action2)self->on_listen;
-        f->$class->__asyn__(f, self, errmsg);
-        tls_release_resources(tls, key, cert);
-        return $R_CONT(c$cont, B_None);
-    }
-
-    rc = tls->load_cert(&cert, (const char *)self->cert_pem->str, self->cert_pem->nbytes);
-    if (rc != 0) {
-        const char *err = tls->strerror(rc);
-        B_str errmsg = $FORMAT("Failed to load TLS cert: %s", err);
-        log_warn((const char *)fromB_str(errmsg));
-        $action2 f = ($action2)self->on_listen;
-        f->$class->__asyn__(f, self, errmsg);
-        tls_release_resources(tls, key, cert);
-        return $R_CONT(c$cont, B_None);
-    }
-
-    rc = tls->set_own_cert(tls, key, cert);
-    if (rc != 0) {
-        $action2 f = ($action2)self->on_listen;
-        f->$class->__asyn__(f, self, actStrFromCString("Failed to set TLS certificate"));
-        tls_release_resources(tls, key, cert);
-        return $R_CONT(c$cont, B_None);
-    }
-
-    owner = tls_owner_new(tls, key, cert);
+    char errmsg[1024];
+    struct tls_owner *owner = tls_owner_from_pem(self->ca_pem, self->cert_pem, self->key_pem, errmsg, sizeof(errmsg));
     if (owner == NULL) {
-        $action2 f = ($action2)self->on_listen;
-        f->$class->__asyn__(f, self, actStrFromCString("Failed to allocate TLS listener owner"));
-        tls_release_resources(tls, key, cert);
+        tls_listener_report_listen_error(self, errmsg);
         return $R_CONT(c$cont, B_None);
     }
+    // 0=none, 2=require (mbedtls specific)
+    owner->authmode = self->client_auth ? 2 : 0;
 
     struct tls_listener_server_state *server_state = tls_listener_server_state_new(self);
     if (server_state == NULL) {
-        $action2 f = ($action2)self->on_listen;
-        f->$class->__asyn__(f, self, actStrFromCString("Failed to allocate TLS listener server state"));
         tls_owner_release(owner);
+        tls_listener_report_listen_error(self, "Failed to allocate TLS listener server state");
         return $R_CONT(c$cont, B_None);
     }
 
-    server = (uv_tcp_t *)malloc(sizeof(uv_tcp_t));
+    uv_tcp_t *server = (uv_tcp_t *)malloc(sizeof(uv_tcp_t));
     if (server == NULL) {
-        $action2 f = ($action2)self->on_listen;
-        f->$class->__asyn__(f, self, actStrFromCString("Failed to allocate TLS listener server handle"));
         free(server_state);
         tls_owner_release(owner);
+        tls_listener_report_listen_error(self, "Failed to allocate TLS listener server handle");
         return $R_CONT(c$cont, B_None);
     }
 
-    r = uv_tcp_init(get_uv_loop(), server);
+    int r = uv_tcp_init(get_uv_loop(), server);
     if (r != 0) {
-        char errmsg[1024] = "Failed to initialize TLS listener server handle: ";
-        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
-        log_warn("%s", errmsg);
-        $action2 f = ($action2)self->on_listen;
-        f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
+        snprintf(errmsg, sizeof(errmsg), "Failed to initialize TLS listener server handle: %s", uv_strerror(r));
         free(server_state);
         free(server);
         tls_owner_release(owner);
+        tls_listener_report_listen_error(self, errmsg);
         return $R_CONT(c$cont, B_None);
     }
     server->data = (void *)server_state;
 
-    char errmsg[1024];
     r = tcp_listen(server, self->address, self->port, on_new_tls_connection, "TLS", errmsg, sizeof(errmsg));
     if (r != 0) {
-        log_warn(errmsg);
-        $action2 f = ($action2)self->on_listen;
-        f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
         uv_close((uv_handle_t *)server, tls_listener_server_on_close);
         tls_owner_release(owner);
+        tls_listener_report_listen_error(self, errmsg);
         return $R_CONT(c$cont, B_None);
     }
 
@@ -2644,10 +2638,11 @@ void tlsuv_logger(int level, const char *file, unsigned int line, const char *ms
 
 $R netQ_TLSConnectionD__connect_tlsG_local (netQ_TLSConnection self, $Cont c$cont) {
     char errmsg[1024];
-    // A context of our own for a private CA, else tlsuv's default context
+    // A context of our own for a private CA or a client certificate, else
+    // tlsuv's default context
     struct tls_owner *owner = NULL;
-    if (self->ca_pem != NULL) {
-        owner = tls_owner_from_ca(self->ca_pem, errmsg, sizeof(errmsg));
+    if (self->ca_pem != NULL || self->cert_pem != NULL || self->key_pem != NULL) {
+        owner = tls_owner_from_pem(self->ca_pem, self->cert_pem, self->key_pem, errmsg, sizeof(errmsg));
         if (owner == NULL) {
             if (self->on_error != NULL) {
                 self->$class->_on_tls_error(self, -1LL, (int64_t)UV_EINVAL, actStrFromCStringCopy(errmsg));

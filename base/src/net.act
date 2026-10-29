@@ -725,13 +725,21 @@ actor TLSListenConnection(cap: _TCPListenConnectCap, server_stream: int, tls_own
         NotImplemented
     _init()
 
-actor TLSListener(cap: TCPListenCap, address: str, port: int, cert_pem: bytes, key_pem: bytes, on_listen: action(TLSListener, ?str) -> None, on_accept: action(TLSListenConnection) -> None):
+actor TLSListener(cap: TCPListenCap, address: str, port: int, cert_pem: bytes, key_pem: bytes, on_listen: action(TLSListener, ?str) -> None, on_accept: action(TLSListenConnection) -> None, client_auth: bool=False, ca_pem: ?bytes=None):
     """TLS Listener
 
     Listens on address and port, where port 0 picks a free port, see
     local_port(). Each connection that completes the TLS handshake is passed
-    to on_accept. on_listen is called with None once listening, or with an
-    error. It is also called with an error for each failed handshake.
+    to on_accept.
+
+    client_auth=True asks clients for a certificate, and the handshake fails
+    unless the client presents one issued by a CA in ca_pem, which holds one
+    or more PEM certificates (the system CA bundle without it). By default
+    the listener does not ask.
+
+    on_listen is called with None once listening, or with an error. It is
+    also called with an error for each failed handshake, for example a
+    client without an acceptable certificate.
     """
     _stream = -1
     _tls_owner = -1
@@ -763,18 +771,22 @@ actor TLSListener(cap: TCPListenCap, address: str, port: int, cert_pem: bytes, k
         NotImplemented
     _init()
 
-actor TLSConnection(cap: TCPConnectCap, address: str, port: int, on_connect: action(TLSConnection) -> None, on_receive: action(TLSConnection, bytes) -> None, on_error: action(TLSConnection, str) -> None, on_remote_close: ?action(TLSConnection) -> None=None, verify_tls: bool=True, protocols: list[str]=[], ca_pem: ?bytes=None, server_name: ?str=None):
+actor TLSConnection(cap: TCPConnectCap, address: str, port: int, on_connect: action(TLSConnection) -> None, on_receive: action(TLSConnection, bytes) -> None, on_error: action(TLSConnection, str) -> None, on_remote_close: ?action(TLSConnection) -> None=None, verify_tls: bool=True, protocols: list[str]=[], ca_pem: ?bytes=None, cert_pem: ?bytes=None, key_pem: ?bytes=None, server_name: ?str=None):
     """TLS connection
 
     The server certificate is verified against the CA certificates in ca_pem
     (PEM, one or more), or the system CA bundle without it, and against
     server_name, which is also sent as SNI. server_name defaults to address,
     "" sends no SNI and skips the name check. The handshake fails unless the
-    certificate verifies, verify_tls=False skips the verification. protocols
-    lists ALPN protocols to offer.
+    certificate verifies, verify_tls=False skips the verification.
+
+    cert_pem and key_pem give a client certificate and its key (PEM), for
+    servers that ask for one. With TLS 1.3 the server checks the client
+    certificate after the client has completed the handshake, so a rejected
+    certificate shows as on_error after on_connect. protocols lists ALPN
+    protocols to offer.
     """
     # TODO: do DNS lookup in Acton
-    # TODO: support client certificates
     # TODO: implement state machine
     # TODO: support timeout
     # TODO: do Happy Eyeballs

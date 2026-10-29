@@ -1,4 +1,4 @@
-# TLS certificate verification
+# TLS certificate verification and client certificates
 #
 # The certificates were made with openssl for these tests, valid for 100
 # years: a test CA, a server certificate for localhost, 127.0.0.1 and ::1 and
@@ -84,7 +84,9 @@ def pem_to_der(pem: bytes) -> bytes:
 
 actor tls_handshake(t: testing.EnvT, what: str,
                     check: action(tls_handshake, ?net.TLSConnection, ?net.TLSListenConnection, list[str], list[str]) -> None,
-                    ca_pem: ?bytes=None, server_name: ?str=None):
+                    client_auth: bool=False, server_ca_pem: ?bytes=None,
+                    ca_pem: ?bytes=None, cert_pem: ?bytes=None, key_pem: ?bytes=None,
+                    server_name: ?str=None):
     """A TLS handshake between a listener and a client with the given settings
 
     Calls check with the connected client and the accepted connection, None
@@ -133,7 +135,8 @@ actor tls_handshake(t: testing.EnvT, what: str,
         listener = l
         port = l.local_port()
         net.TLSConnection(connect_cap, "127.0.0.1", port, on_connect, on_receive, on_error, None,
-                          ca_pem=ca_pem, server_name=server_name)
+                          ca_pem=ca_pem, cert_pem=cert_pem, key_pem=key_pem,
+                          server_name=server_name)
 
     def on_accept(s: net.TLSListenConnection):
         server_conn = s
@@ -147,8 +150,10 @@ actor tls_handshake(t: testing.EnvT, what: str,
 
     def on_connect(c: net.TLSConnection):
         client = c
-        # Let the listener side settle
-        after 0.3: finish()
+        # Let the listener side settle. With TLS 1.3 the server checks a
+        # client certificate after the client completed the handshake, so
+        # a rejection arrives as on_error after on_connect.
+        after 0.5: finish()
 
     def on_receive(c: net.TLSConnection, data: bytes):
         pass
@@ -158,7 +163,8 @@ actor tls_handshake(t: testing.EnvT, what: str,
         after 0.3: finish()
 
     after 8: finish()
-    net.TLSListener(listen_cap, "127.0.0.1", 0, SERVER_CERT_PEM, SERVER_KEY_PEM, on_listen, on_accept)
+    net.TLSListener(listen_cap, "127.0.0.1", 0, SERVER_CERT_PEM, SERVER_KEY_PEM, on_listen, on_accept,
+                    client_auth=client_auth, ca_pem=server_ca_pem)
 
 
 def find_error(errors: list[str], text: str) -> bool:
@@ -166,6 +172,47 @@ def find_error(errors: list[str], text: str) -> bool:
         if e.find(text) != -1:
             return True
     return False
+
+
+actor _test_TLSMutualAuth(t: testing.EnvT):
+    """Both ends present a certificate from a private CA"""
+    def check(h: tls_handshake, c: ?net.TLSConnection, s: ?net.TLSListenConnection, client_errors: list[str], server_errors: list[str]):
+        if c is None or s is None:
+            h.failure("handshake failed: %s %s" % (str(client_errors), str(server_errors)))
+        elif client_errors != [] or server_errors != []:
+            h.failure("errors: %s %s" % (str(client_errors), str(server_errors)))
+        else:
+            h.success()
+
+    tls_handshake(t, "mutual TLS", check, client_auth=True, server_ca_pem=CA_PEM,
+                  ca_pem=CA_PEM, cert_pem=CLIENT_CERT_PEM, key_pem=CLIENT_KEY_PEM)
+
+
+actor _test_TLSMissingClientCert(t: testing.EnvT):
+    """A client without a certificate is rejected when the server requires one"""
+    def check(h: tls_handshake, c: ?net.TLSConnection, s: ?net.TLSListenConnection, client_errors: list[str], server_errors: list[str]):
+        if s is not None:
+            h.failure("server accepted a client without a certificate")
+        elif len(client_errors) != 1 or len(server_errors) != 1:
+            h.failure("errors: %s %s" % (str(client_errors), str(server_errors)))
+        else:
+            h.success()
+
+    tls_handshake(t, "missing client certificate", check, client_auth=True, server_ca_pem=CA_PEM, ca_pem=CA_PEM)
+
+
+actor _test_TLSClientCertUnknownCA(t: testing.EnvT):
+    """A client certificate from a CA the server does not trust is rejected"""
+    def check(h: tls_handshake, c: ?net.TLSConnection, s: ?net.TLSListenConnection, client_errors: list[str], server_errors: list[str]):
+        if s is not None:
+            h.failure("server accepted an untrusted client certificate")
+        elif len(client_errors) != 1 or len(server_errors) != 1:
+            h.failure("errors: %s %s" % (str(client_errors), str(server_errors)))
+        else:
+            h.success()
+
+    tls_handshake(t, "untrusted client certificate", check, client_auth=True, server_ca_pem=OTHER_CA_PEM,
+                  ca_pem=CA_PEM, cert_pem=CLIENT_CERT_PEM, key_pem=CLIENT_KEY_PEM)
 
 
 actor _test_TLSServerCertUnknownCA(t: testing.EnvT):

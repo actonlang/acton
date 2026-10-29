@@ -175,8 +175,8 @@ When several native objects alias one resource — the TLS listener's
 give the resource an atomically refcounted owner struct. The listener holds
 one reference, each in-flight handshake and each accepted connection holds
 one; the last release frees in dependency order. A `TLSConnection` with its
-own CA owns a context through the same struct, and releases it once its
-stream, and so the engine, is gone. Make every error path
+own CA or client certificate owns a context through the same struct, and
+releases it once its stream, and so the engine, is gone. Make every error path
 release exactly what it retained; an unpaired release (or a missing one) is a
 heap corruption or a permanent leak under real frees.
 
