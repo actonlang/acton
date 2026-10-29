@@ -13,12 +13,12 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts #-}
 
--- Witness descriptions and sharing. The sections below contain structural
--- keys, the binding-aware registry and local sharing. They describe and reuse
--- ordinary witness objects; there is no runtime registry or alternate
--- serialization.
+-- Witness descriptions and placement. The sections below contain structural
+-- keys, the binding-aware registry, local sharing and module pooling. They
+-- describe and reuse ordinary witness objects; there is no runtime registry
+-- or alternate serialization.
 --
--- Sharing finds construction sites by their spelling within a declaration.
+-- Both passes find construction sites by their spelling within a declaration.
 -- Equal spellings can read different bindings: a default argument expanded at
 -- several call sites assigns its witness names once per expansion, with the
 -- types of that call. They still denote interchangeable witnesses. A
@@ -33,23 +33,26 @@ module Acton.WitnessSharing
     , Capture(..), CaptureKind(..), Binding(..), Site(..)
     , buildRegistry, buildFunctionRegistry
     , shareWitnesses, shareFunction, constructorHeads, witnessConstructors
+    , poolWitnesses, poolModule
     ) where
 
-import Control.Monad (foldM, forM, forM_)
+import Control.Monad (foldM, forM, forM_, when)
 import Control.Monad.State.Strict
 import Data.Functor.Identity
+import Data.Graph (SCC(..), stronglyConnComp)
 import Data.Hashable (hash)
 import Data.List (foldl')
-import Data.Maybe (isJust)
+import Data.Maybe (mapMaybe, isJust)
 import qualified Data.IntMap.Strict as IM
 import qualified Data.Map.Strict as M
 import qualified Data.Set as S
 import Acton.Syntax hiding (expr, comp, target)
 import Acton.Builtin (initKW)
-import Acton.Names (bound, free, isWitness, altInit)
+import Acton.Names (assigned, bound, free, isWitness, altInit)
 import Acton.Env (Env0, lookupName, lookupModuleInfo, moduleLookupName, moduleName, thismod, setMod, define)
 import Acton.NameInfo (NameInfo(..))
 import Acton.QuickType (envOf)
+import Utils (SrcLoc(..), prstr)
 
 -- Structural keys ---------------------------------------------------------
 
@@ -141,7 +144,7 @@ data Binding = Binding
 
 data Site = Site
     { siteRecipe :: Int, siteScope :: Int, siteStatic :: Bool
-    , siteExpression :: Expr
+    , siteExpression :: Expr, siteContext :: [Name]
     } deriving (Show)
 
 data WitnessRegistry = WitnessRegistry
@@ -152,10 +155,12 @@ data WitnessRegistry = WitnessRegistry
 data Term = WitnessValue Int | CapturedValue Capture
 data Lex = Lex
     { scope :: Int, terms :: M.Map Name Term
+    , placementContext :: [Name]
     }
 data Build = Build
     { graph :: WitnessRegistry, buckets :: IM.IntMap [Int], serial :: Int
     , constructor :: QName -> Maybe QName, staticRecipe :: Expr -> Bool
+    , currentModule :: Maybe ModName, globalWitnesses :: M.Map Name Int
     }
 type BuildM = State Build
 
@@ -164,20 +169,20 @@ type BuildM = State Build
 -- Types stay on binding records. Constructor keys retain their explicit type
 -- applications; type variables and dependency witnesses have binding identities.
 buildRegistry :: (QName -> Maybe QName) -> (Expr -> Bool) -> Module -> WitnessRegistry
-buildRegistry resolve isStatic m = build resolve isStatic $ suite initialLex (mbody m) >> return ()
+buildRegistry resolve isStatic m = build (Just $ modname m) resolve isStatic $ suite initialLex (mbody m) >> return ()
 
 -- Scope 1 is the function itself. Nested declarations/lambdas get other IDs;
 -- their parameters and construction sites remain separate from this frame.
 buildFunctionRegistry :: (QName -> Maybe QName) -> (Expr -> Bool) -> Decl -> WitnessRegistry
-buildFunctionRegistry resolve isStatic d = build resolve isStatic $ decl initialLex d
+buildFunctionRegistry resolve isStatic d = build Nothing resolve isStatic $ decl initialLex d
 
 initialLex :: Lex
-initialLex = Lex 0 M.empty
+initialLex = Lex 0 M.empty []
 
-build :: (QName -> Maybe QName) -> (Expr -> Bool) -> BuildM () -> WitnessRegistry
-build resolve isStatic action = finish $ execState action initial
+build :: Maybe ModName -> (QName -> Maybe QName) -> (Expr -> Bool) -> BuildM () -> WitnessRegistry
+build mn resolve isStatic action = finish $ execState action initial
   where
-    initial = Build (WitnessRegistry IM.empty [] []) IM.empty 0 resolve isStatic
+    initial = Build (WitnessRegistry IM.empty [] []) IM.empty 0 resolve isStatic mn M.empty
     finish s = let g = graph s in g
         { registryBindings = reverse (registryBindings g)
         , registrySites = reverse (registrySites g) }
@@ -203,6 +208,7 @@ capture _ k n = do i <- fresh; return (Capture i n k)
 bindValues :: Lex -> [Name] -> BuildM Lex
 bindValues = foldM $ \env n -> do
     c <- capture env UntrackedValue n
+    when (scope env == 0) $ modify $ \s -> s{globalWitnesses = M.delete n (globalWitnesses s)}
     return env{terms = M.insert n (CapturedValue c) (terms env)}
 
 bindParameters :: Lex -> [Name] -> BuildM Lex
@@ -294,8 +300,20 @@ expr env e@(Var _ (NoQ n)) = case M.lookup n (terms env) of
         c <- capture env UntrackedValue n
         return (Resolved e S.empty (S.singleton c) Nothing)
 expr env e@Var{} = do
-    c <- capture env UntrackedValue (noq $ var e)
-    return (Resolved e S.empty (S.singleton c) Nothing)
+    mn <- gets currentModule
+    global <- case var e of
+      GName m n | Just m == mn -> do
+        found <- gets (M.lookup n . globalWitnesses)
+        return $ case (scope env,found,M.lookup n $ terms env) of
+          (0,Just i,Just (WitnessValue j)) | i == j -> Just i
+          (0,_,_) -> Nothing
+          _ -> found
+      _ -> return Nothing
+    case global of
+      Just i -> fromNode i
+      Nothing -> do
+        c <- capture env UntrackedValue (noq $ var e)
+        return (Resolved e S.empty (S.singleton c) Nothing)
 expr env e@(Call l f p k) = do
     ctor <- constructorHead f
     (p',ps) <- positional env p
@@ -305,7 +323,7 @@ expr env e@(Call l f p k) = do
         r <- makeNode (Constructor q) (Call l (constructorFun q f) p' k') (ps++ks) S.empty
         let i = case node r of Just i -> i; Nothing -> error "registry: constructor without node"
         isStatic <- gets (($ e) . staticRecipe)
-        modifyGraph $ \g -> g{registrySites = Site i (scope env) isStatic e : registrySites g}
+        modifyGraph $ \g -> g{registrySites = Site i (scope env) isStatic e (placementContext env) : registrySites g}
         return r
       Nothing -> do
         f' <- expr env f
@@ -369,6 +387,7 @@ stmt env (Assign _ [PVar _ n t] e) | isWitness n = do
       Just i -> return i
       Nothing -> intern Opaque (canonical r) (dependencies r) (captures r)
     modifyGraph $ \g -> g{registryBindings = Binding n t i (scope env) : registryBindings g}
+    when (scope env == 0) $ modify $ \s -> s{globalWitnesses = M.insert n i (globalWitnesses s)}
     return env{terms = M.insert n (WitnessValue i) (terms env)}
 stmt env s = case s of
     Assign _ ps e -> mapM_ (patternExprs env) ps >> expr env e >> bindValues env (bound ps)
@@ -427,7 +446,7 @@ patternExprs env p = case p of
 decl :: Lex -> Decl -> BuildM ()
 decl _ Typedef{} = return ()
 decl env d = do
-    inner <- newScope env
+    inner <- newScope env{placementContext = dname d : placementContext env}
     case d of
       Def{pos=p,kwd=k} -> bindParameters inner (bound p ++ bound k) >>= body
       Actor{pos=p,kwd=k} -> bindParameters inner (bound p ++ bound k) >>= body
@@ -741,3 +760,169 @@ walkExpr e x = case x of
     elem (Star x) = Star <$> e x
     assoc (Assoc x y) = Assoc <$> e x <*> e y
     assoc (StarStar x) = StarStar <$> e x
+
+-- Module pooling ----------------------------------------------------------
+
+-- Materialize eligible closed DAGs after imports and local tables are ready.
+type Constructors = M.Map QName QName
+
+-- A pool dependency: a witness recipe, or the initializer of a class of the
+-- module.
+data PoolNode = RecipeNode Int | Initializer Name
+    deriving (Eq, Ord)
+
+poolWitnesses :: Env0 -> S.Set QName -> (Expr -> Maybe Expr) -> Module -> Module
+poolWitnesses env known staticValue m = poolModule (witnessConstructors env known m) staticValue m
+
+poolModule :: Constructors -> (Expr -> Maybe Expr) -> Module -> Module
+poolModule constructors staticValue m
+    | IM.null globals = m
+    | otherwise = m{mbody = initializers ++ rewrite (mbody m)}
+  where
+    isStatic = isJust . staticValue
+    resolve q = M.lookup q constructors
+    registry = buildRegistry resolve isStatic m
+    recipes = registryRecipes registry
+    at i = recipes IM.! i
+    -- Equal spellings in different declarations can refer to different
+    -- bindings, notably a closed outer witness and a lifted helper parameter,
+    -- so closed sites are indexed per declaration.
+    index = M.fromListWith (IM.unionWith (++))
+        [(siteContext s, IM.singleton (expressionHash e) [(e,siteRecipe s)])
+        | s <- registrySites registry, let e = siteExpression s
+        , recipeLifetime (at $ siteRecipe s) == Closed, not (siteStatic s)]
+    lookupSite context e = lookup e (IM.findWithDefault [] (expressionHash e) (M.findWithDefault IM.empty context index))
+
+    localClasses = M.fromList [(n,d) | Decl _ ds <- mbody m, d@Class{dname=n} <- ds]
+    moduleNames = S.fromList (bound (mbody m))
+    localName (NoQ n) = Just n
+    localName (GName mn n) | mn == modname m = Just n
+    localName _ = Nothing
+    topNames = S.fromList [n | Assign _ [PVar _ n (Just _)] _ <- mbody m, isWitness n]
+    bindingGroups = M.fromListWith (++) [(bindingName b,[b]) | b <- registryBindings registry
+                     , bindingScope b == 0, S.member (bindingName b) topNames]
+    topBindings = M.mapMaybe one bindingGroups
+    one [b] | recipeLifetime (at $ bindingRecipe b) == Closed = Just b
+    one _ = Nothing
+
+    -- The pool runs before the module's statements, so a construction must
+    -- follow everything it reads: the witnesses it is built from and, for a
+    -- class of this module, what its initializer reads. A witness class is
+    -- generated from a protocol or extension declaration. Its initializer
+    -- stores its arguments, calls its parent's initializer and constructs its
+    -- sibling witnesses. The module state it reads is the module's witnesses,
+    -- the initializers of the module's classes, and the pooled witnesses
+    -- that replace constructions in it.
+    edges (RecipeNode i)
+      | isStatic (recipeExpression r) = []
+      | otherwise = map RecipeNode (S.toList $ recipeDependencies r) ++ owner (recipeKind r)
+      where r = at i
+            owner (Constructor q) | Just n <- localName q, M.member n localClasses = [Initializer n]
+            owner _ = []
+    edges (Initializer c) = map reads (S.toList $ S.intersection names moduleNames) ++
+                            map RecipeNode (S.toList $ M.findWithDefault S.empty c initializerUses)
+      where names = S.unions [runtimeNames f | Decl _ fs <- dbody (localClasses M.! c), f@Def{dname=k} <- fs, k `elem` [initKW,altInit]]
+            reads n | M.member n localClasses = Initializer n
+                    | Just b <- M.lookup n topBindings = RecipeNode (bindingRecipe b)
+                    | otherwise = error ("witness pool: the initializer of " ++ prstr c ++ " reads " ++ prstr n)
+    runtimeNames d = S.fromList $ mapMaybe runtimeName $ S.toList qs
+      where qs = execState (mapM_ statement $ dbody d) S.empty
+            locals = S.fromList (bound (pos d) ++ bound (kwd d) ++ assigned (dbody d))
+            runtimeName (NoQ n) | S.member n locals = Nothing
+            runtimeName q = case localName q of
+              Just (Derived c k) | k `elem` [initKW,altInit], M.member c localClasses -> Just c
+              n -> n
+            statement s = walkStmt expression (mapM statement) s
+            expression e = do
+              case e of Var _ q -> modify (S.insert q); _ -> return ()
+              walkExpr expression e
+
+    -- First discover actual eligible occurrences.
+    (_, (requested,initializerUses)) = runState (walkModule find (mbody m)) (S.empty,M.empty)
+    find context e = do
+      case lookupSite context e of
+        Just i -> modify $ \(rs,uses) ->
+          (S.insert i rs, case context of
+             [k,c] | k `elem` [initKW,altInit], M.member c localClasses -> M.insertWith S.union c (S.singleton i) uses
+             _ -> uses)
+        _ -> return ()
+      walkExpr (find context) e
+    -- Pooled witnesses are initialized in dependency order. Initializers can
+    -- depend on each other in a cycle: two extensions whose witnesses need
+    -- each other construct the other with themselves as an argument. A cycle
+    -- through a witness would need that witness for its own construction.
+    reachable = closure S.empty (map RecipeNode $ S.toList requested)
+    closure seen [] = seen
+    closure seen (n:ns) | S.member n seen = closure seen ns
+                        | otherwise = closure (S.insert n seen) (edges n ++ ns)
+    order = concatMap component $ stronglyConnComp [(n, n, edges n) | n <- S.toList reachable]
+    component (AcyclicSCC n) = [n]
+    component (CyclicSCC ns)
+      | null [i | RecipeNode i <- ns] = ns
+      | otherwise = error ("witness pool: cyclic witness construction in " ++ prstr (modname m))
+    -- Static dependencies also need named witness bindings: C generation turns
+    -- their RHS into an existing builtin object. Inlining Ctor() as an argument
+    -- would instead call its allocator, even for a builtin static witness.
+    recipeOrder = [i | RecipeNode i <- order]
+    pooled = [i | i <- recipeOrder, Constructor{} <- [recipeKind $ at i]]
+    bindings = IM.fromListWith (++) [(bindingRecipe b,[b]) | b <- M.elems topBindings]
+    reserved = S.fromList (free (mbody m) ++ bound (mbody m) ++ map bindingName (registryBindings registry))
+    (_,globals) = foldl' allocate (reserved,IM.empty) pooled
+    allocate (used,gs) i = (S.insert n used,IM.insert i (n,t) gs)
+      -- Preserve the concrete constructor type: callers can project embedded
+      -- super-witness fields which are absent from a protocol-typed alias.
+      where candidates = filter ((== Just (concrete i)) . bindingType) (IM.findWithDefault [] i bindings)
+            (n,t) = case candidates of
+              b:_ -> (bindingName b, maybe (error "pool: missing type") id (bindingType b))
+              [] -> (head [n | k <- [i..], let n = Internal Witness "module" k, S.notMember n used], concrete i)
+    concrete i = case constructorCall (recipeExpression $ at i) of
+      Just (q,ts) -> tCon (TC q ts)
+      _ -> error "pool: constructor recipe without call"
+    global i = eQVar $ GName (modname m) (fst $ globals IM.! i)
+    reference (Var _ (NoQ (Internal Witness "registry-recipe" i))) = Just i
+    reference _ = Nothing
+    expand useGlobals e
+      | Just i <- reference e = case IM.lookup i globals of
+          Just _ | useGlobals -> global i
+          _ -> materialize useGlobals i
+      | otherwise = runIdentity $ walkExpr (Identity . expand useGlobals) e
+    materialize useGlobals i
+      | Just e' <- staticValue e = e'
+      | otherwise = expand (useGlobals && not (isStatic e)) e
+      where e = recipeExpression (at i)
+    value i | IM.member i globals = global i
+            | otherwise = materialize True i
+    declarations i = ctor ++ aliases
+      where ctor = case IM.lookup i globals of
+              Just (n,t) -> [Assign NoLoc [pVar n t] (materialize True i)]
+              Nothing -> []
+            aliases = [Assign NoLoc [pVar (bindingName b) t] (value i)
+                       | b <- IM.findWithDefault [] i bindings, Just t <- [bindingType b]
+                       , maybe True ((/= bindingName b) . fst) (IM.lookup i globals)]
+    initializers = concatMap declarations recipeOrder
+    moved = S.fromList [n | Assign _ [PVar _ n _] _ <- initializers]
+    rewrite ss = filter (not . movedStmt) $ runIdentity $ walkModule (\context e -> Identity $ replace context e) ss
+    movedStmt (Assign _ [PVar _ n _] _) = S.member n moved
+    movedStmt _ = False
+    replace context e | Just i <- lookupSite context e, IM.member i globals = global i
+    replace context e = runIdentity $ walkExpr (Identity . replace context) e
+
+    -- Closed initializer sites use the same binding-aware lookup as other
+    -- functions. Their pool reads have explicit dependency edges above; the
+    -- graph must be valid before either a use or its constructor is rewritten.
+    walkModule :: Monad f => ([Name] -> Expr -> f Expr) -> Suite -> f Suite
+    walkModule = walkSuite []
+    walkSuite :: Monad f => [Name] -> ([Name] -> Expr -> f Expr) -> Suite -> f Suite
+    walkSuite context f = mapM statement
+      where statement (Decl l ds) = Decl l <$> mapM (walkDecl context f) ds
+            statement s = walkStmt (f context) (walkSuite context f) s
+    walkDecl :: Monad f => [Name] -> ([Name] -> Expr -> f Expr) -> Decl -> f Decl
+    walkDecl context f d@Class{} = do
+      b <- mapM classBody (dbody d)
+      return d{dbody=b}
+      where classBody (Decl l ds) = Decl l <$> mapM (walkDecl (dname d:context) f) ds
+            classBody s = return s
+    walkDecl context f d@Def{} = do
+      b <- walkSuite (dname d:context) f (dbody d)
+      return d{dbody=b}
+    walkDecl _ _ d = return d

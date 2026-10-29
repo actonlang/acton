@@ -10,6 +10,7 @@ import qualified Acton.Parser as P
 import qualified Acton.Syntax as S
 import qualified Acton.Builtin as Builtin
 import qualified Acton.NameInfo as I
+import qualified Acton.Names as Names
 import qualified Acton.Printer as AP
 import qualified Acton.DocPrinter as DocP
 import qualified Acton.Env
@@ -547,6 +548,207 @@ main = do
             after = Witness.shareFunction info' (const False) d
             rs = Witness.buildFunctionRegistry info' (const False) after
         length (Witness.registrySites rs) `shouldBe` 2
+
+    describe "Module-wide witness placement" $ do
+      let mn = S.modName ["pool_fixture"]
+          q = S.qName ["pool_impl"] "Ctor"
+          other = S.qName ["pool_impl"] "Other"
+          info = M.fromList [(q,q),(other,other)]
+          ctor = S.eCall (S.eQVar q)
+          wt = S.tCon (S.TC q [])
+          w i = S.Internal S.Witness "global" i
+          emit x = S.Expr NoLoc x
+          bind i e = S.Assign NoLoc [S.pVar (w i) wt] e
+          fun n p b = S.Def NoLoc (S.name n) [] p S.KwdNIL (Just S.tNone) b S.NoDec S.fxPure Nothing
+          plain n e = S.sDecl [fun n S.PosNIL [emit e]]
+          modul = S.Module mn [] Nothing
+          optimize = Witness.poolModule info (const Nothing)
+          graph m = Witness.buildRegistry (`M.lookup` info) (const False) m
+          sites = Witness.registrySites . graph
+          count = length . sites
+          globals m = [n | S.Assign _ [S.PVar _ n _] _ <- S.mbody m]
+          firstCtor m = [q' | S.Assign _ _ (S.Call _ (S.Var _ q') _ _) <- S.mbody m]
+          localQName n = S.GName mn (S.name n)
+          localMake n = S.eCall (S.eQVar $ localQName n) []
+          localInfo ns = M.union (M.fromList [(localQName n,localQName n) | n <- ns]) info
+          localClass n b = S.sDecl [S.Class NoLoc (S.name n) [] [] [S.sDecl [initializer]] Nothing]
+            where initializer = (fun "__init__" S.PosNIL b){S.dname=Builtin.initKW}
+          poolError infos m = do
+            r <- E.try (E.evaluate (length (S.mbody (Witness.poolModule infos (const Nothing) m))))
+            case r of
+              Left (E.ErrorCall msg) -> return msg
+              Right _ -> expectationFailure "expected witness pooling to fail" >> return ""
+      it "shares closed witnesses across functions and repeated invocations" $ do
+        let m = modul [plain "first" (ctor []),plain "second" (ctor [])]
+            after = optimize m
+        count m `shouldBe` 2
+        count after `shouldBe` 1
+        map Witness.siteScope (sites after) `shouldBe` [0]
+      it "promotes a single function site instead of allocating on every call" $ do
+        let m = modul [plain "first" (ctor [])]
+        map Witness.siteScope (sites $ optimize m) `shouldBe` [0]
+      it "merges existing module bindings while retaining their global names" $ do
+        let m = modul [bind 1 (ctor []),bind 2 (ctor []),plain "f" (S.eVar $ w 2)]
+            after = optimize m
+        count after `shouldBe` 1
+        Set.fromList (globals after) `shouldBe` Set.fromList [w 1,w 2]
+      it "keeps generic witnesses dependent on their invocation" $ do
+        let f = fun "f" (S.pospar [(w 0,wt)]) [emit (ctor [S.eVar $ w 0])]
+            m = modul [S.sDecl [f]]
+        optimize m `shouldBe` m
+      it "pools closed occurrences without rewriting a lifted witness parameter" $ do
+        let make = S.eCall (S.eQVar other) [S.eVar $ w 0]
+            closed = fun "closed" S.PosNIL [bind 0 (ctor []),emit make]
+            generic = fun "lifted" (S.pospar [(w 0,wt)]) [emit make]
+        forM_ [[closed,generic],[generic,closed]] $ \ds -> do
+          let after = optimize (modul [S.sDecl ds])
+              g = graph after
+          firstCtor after `shouldBe` [q,other]
+          [Witness.recipeLifetime (Witness.registryRecipes g IM.! Witness.siteRecipe site)
+            | site <- Witness.registrySites g, Witness.siteScope site /= 0]
+            `shouldBe` [Witness.ParameterDependent]
+          [d | S.Decl _ ds' <- S.mbody after, d <- ds', S.dname d == S.name "lifted"]
+            `shouldBe` [generic]
+      it "distinguishes identically named methods in different classes" $ do
+        let make = S.eCall (S.eQVar other) [S.eVar $ w 0]
+            method p b = S.sDecl [fun "method" p b]
+            cls n b = S.sDecl [S.Class NoLoc (S.name n) [] [] b Nothing]
+            closed = cls "First" [method S.PosNIL [bind 0 (ctor []),emit make]]
+            generic = cls "Second" [method (S.pospar [(w 0,wt)]) [emit make]]
+            after = optimize (modul [closed,generic])
+        firstCtor after `shouldBe` [q,other]
+        (generic `elem` S.mbody after) `shouldBe` True
+      it "distinguishes a nested function's shadowing witness parameter" $ do
+        let make = S.eCall (S.eQVar other) [S.eVar $ w 0]
+            inner = S.sDecl [fun "inner" (S.pospar [(w 0,wt)]) [emit make]]
+            outer = fun "outer" S.PosNIL [bind 0 (ctor []),inner,emit make]
+            after = optimize (modul [S.sDecl [outer]])
+            g = graph after
+        firstCtor after `shouldBe` [q,other]
+        [Witness.recipeLifetime (Witness.registryRecipes g IM.! Witness.siteRecipe site)
+          | site <- Witness.registrySites g, Witness.siteScope site /= 0]
+          `shouldBe` [Witness.ParameterDependent]
+      it "pools actor-identity witnesses" $ do
+        let identity = S.GName (S.modName ["$"]) (S.name "IdentityActor")
+            known = Set.singleton identity
+            m = modul [plain "f" (S.eCall (S.eQVar identity) []),plain "g" (S.eCall (S.eQVar identity) [])]
+            infos = Witness.witnessConstructors env0 known m
+            after = Witness.poolWitnesses env0 known (const Nothing) m
+            g = Witness.buildRegistry (`M.lookup` infos) (const False) after
+        M.lookup identity infos `shouldBe` Just identity
+        map Witness.siteScope (Witness.registrySites g) `shouldBe` [0]
+      it "orders nested constructor dependencies before their users" $ do
+        let m = modul [plain "f" (S.eCall (S.eQVar other) [ctor []])]
+            after = optimize m
+        firstCtor after `shouldBe` [q,other]
+        map Witness.recipeLifetime (IM.elems $ Witness.registryRecipes $ graph after)
+          `shouldSatisfy` all (== Witness.Closed)
+      it "distinguishes selected implementations" $ do
+        let m = modul [plain "f" (ctor []),plain "g" (S.eCall (S.eQVar other) [])]
+        count (optimize m) `shouldBe` 2
+      it "pools closed constructor fields inside witness initializers" $ do
+        let m = modul [localClass "Owner" [emit (ctor [])]]
+            after = Witness.poolModule (localInfo ["Owner"]) (const Nothing) m
+        count after `shouldBe` 1
+        map Witness.siteScope (sites after) `shouldBe` [0]
+      it "initializes pooled fields before their containing witness" $ do
+        let infos = localInfo ["Owner"]
+            m = modul [plain "first" (localMake "Owner"),localClass "Owner" [emit (ctor [])]]
+            after = Witness.poolModule infos (const Nothing) m
+        firstCtor after `shouldBe` [q,localQName "Owner"]
+        Witness.poolModule infos (const Nothing) after `shouldBe` after
+      it "orders initializer dependencies through an explicit parent init call" $ do
+        let parent = S.Derived (S.name "Parent") Names.altInit
+            m = modul [plain "first" (localMake "Child"),
+                       localClass "Child" [emit (S.eCall (S.eVar parent) [])],
+                       localClass "Parent" [emit (ctor [])]]
+            after = Witness.poolModule (localInfo ["Child","Parent"]) (const Nothing) m
+        firstCtor after `shouldBe` [q,localQName "Child"]
+      it "keeps receiver-dependent fields local inside an initializer" $ do
+        let init = (fun "__init__" (S.pospar [(w 0,wt)])
+                     [emit (ctor [S.eVar $ w 0]),emit (ctor [S.eDot (S.eVar $ w 0) (S.name "field")])])
+                     {S.dname=Builtin.initKW}
+            cls = S.sDecl [S.Class NoLoc (S.name "Owner") [] [] [S.sDecl [init]] Nothing]
+            m = modul [cls]
+        Witness.poolModule (localInfo ["Owner"]) (const Nothing) m `shouldBe` m
+      it "reports a witness needed for its own construction" $ do
+        let direct = modul [localClass "Owner" [emit (localMake "Owner")]]
+            mutual = modul [localClass "First" [emit (localMake "Second")],
+                            localClass "Second" [emit (localMake "First")],plain "cycle" (localMake "First")]
+        forM_ [(["Owner"],direct),(["First","Second"],mutual)] $ \(ns,m) -> do
+          msg <- poolError (localInfo ns) m
+          msg `shouldContain` "cyclic witness construction"
+      it "orders initializers that depend on each other" $ do
+        let made n = S.eCall (S.eQVar $ localQName n) [S.eVar selfW]
+            selfW = S.Internal S.Witness "self" 0
+            knot n other = S.sDecl [S.Class NoLoc (S.name n) [] [] [S.sDecl [initializer]] Nothing]
+              where initializer = (fun "__init__" (S.pospar [(selfW,wt)]) [emit (made other),emit (ctor [])]){S.dname=Builtin.initKW}
+            m = modul [knot "First" "Second",knot "Second" "First",plain "f" (localMake "First")]
+            after = Witness.poolModule (localInfo ["First","Second"]) (const Nothing) m
+        firstCtor after `shouldBe` [q,localQName "First"]
+      it "orders long initializer chains without expanding transitive requirements" $ do
+        let names = ["Link" ++ show i | i <- [0..499::Int]]
+            bodies = [[emit (localMake n)] | n <- tail names] ++ [[S.sPass]]
+            m = modul (plain "first" (localMake $ head names) : zipWith localClass names bodies)
+            after = Witness.poolModule (localInfo names) (const Nothing) m
+        firstCtor after `shouldBe` map localQName (reverse names)
+      it "handles globals read by witness initializers before constructing them" $ do
+        let cn = S.name "LocalCtor"
+            qc = S.GName mn cn
+            init = (fun "__init__" S.PosNIL [emit (S.eVar $ w 1)]){S.dname=Builtin.initKW}
+            cls = S.Class NoLoc cn [] [] [S.sDecl [init]] Nothing
+            infos = M.insert qc qc info
+            m = modul [S.sDecl [cls],plain "f" (S.eCall (S.eQVar qc) []),bind 1 (ctor [])]
+            after = Witness.poolModule infos (const Nothing) m
+        firstCtor after `shouldBe` [q,qc]
+        (w 1 `elem` globals after) `shouldBe` True
+      it "pools a constructor whose initializer is implemented in C" $ do
+        let cn = S.name "LocalCtor"
+            qc = S.GName mn cn
+            init = (fun "__init__" S.PosNIL [emit S.eNotImpl]){S.dname=Builtin.initKW}
+            cls = S.Class NoLoc cn [] [] [S.sDecl [init]] Nothing
+            infos = M.insert qc qc info
+            m = modul [S.sDecl [cls],plain "f" (S.eCall (S.eQVar qc) [])]
+        firstCtor (Witness.poolModule infos (const Nothing) m) `shouldBe` [qc]
+      it "reports a witness initializer that reads the witness it constructs" $ do
+        let cn = S.name "LocalCtor"
+            qc = S.GName mn cn
+            init = (fun "__init__" S.PosNIL [emit (S.eVar $ w 1)]){S.dname=Builtin.initKW}
+            cls = S.Class NoLoc cn [] [] [S.sDecl [init]] Nothing
+            infos = M.insert qc qc info
+            m = modul [S.sDecl [cls],bind 1 (S.eCall (S.eQVar qc) [])]
+        msg <- poolError infos m
+        msg `shouldContain` "cyclic witness construction"
+      it "reports a witness initializer that reads other module state" $ do
+        let cn = S.name "LocalCtor"
+            qc = S.GName mn cn
+            n = S.name "config"
+            init = (fun "__init__" S.PosNIL [emit (S.eVar n)]){S.dname=Builtin.initKW}
+            cls = S.Class NoLoc cn [] [] [S.sDecl [init]] Nothing
+            infos = M.insert qc qc info
+            m = modul [S.sDecl [cls],S.Assign NoLoc [S.pVar n Builtin.tInt] (S.eInt 1),plain "f" (S.eCall (S.eQVar qc) [])]
+        msg <- poolError infos m
+        msg `shouldContain` "reads config"
+      it "pools function constructions in modules with a C extension" $ do
+        let external = S.sDecl [fun "external" S.PosNIL [emit S.eNotImpl]]
+            m = modul [external,plain "f" (ctor [])]
+        map Witness.siteScope (sites $ optimize m) `shouldBe` [0]
+      it "keeps documentation strings in class bodies" $ do
+        let doc = emit (S.mkStringLit "class documentation after a method")
+            method = S.sDecl [fun "method" S.PosNIL [S.sPass]]
+            cls = S.sDecl [S.Class NoLoc (S.name "Data") [] [] [method,doc] Nothing]
+            after = optimize (modul [cls,plain "f" (ctor [])])
+        map Witness.siteScope (sites after) `shouldBe` [0]
+        (cls `elem` S.mbody after) `shouldBe` True
+      it "uses qualified globals when a function shadows their original name" $ do
+        let f = fun "f" (S.pospar [(w 1,wt)]) [emit (ctor [])]
+            m = modul [bind 1 (ctor []),S.sDecl [f]]
+            after = optimize m
+        Set.member (S.GName mn $ w 1) (Set.fromList $ Names.freeQ (S.mbody after)) `shouldBe` True
+      it "is idempotent" $ do
+        let m = modul [bind 1 (ctor []),plain "f" (S.eCall (S.eQVar other) [ctor []])]
+            after = optimize m
+        optimize after `shouldBe` after
 
     describe "Zon (build.zig.zon)" $ do
       let deps src = case Zon.parseZon src of

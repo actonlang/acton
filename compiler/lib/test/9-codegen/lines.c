@@ -7,7 +7,9 @@ static $R linesQ_V_1closure_adapter ($action V_adapter, $Cont V_1adapter, $WORD 
 static $R linesQ_V_2closure_adapter ($action V_adapter, $Cont V_1adapter, $WORD V_2adapter) {
     return $R_CONT(V_1adapter, ((B_value)((B_Msg (*) ($WORD, $WORD))(($action)(V_adapter))->$class->__asyn__)(V_adapter, V_2adapter)));
 }
+B_OrdD_int linesQ_W_1module;
 B_Eq linesQ_W_Apa_1097;
+$EqOpt linesQ_W_2module;
 B_Eq linesQ_W_Apa_759;
 $R linesQ_L_1C_1cont (linesQ_Apa self, $Cont C_cont, B_NoneType C_2res) {
     #line 18 "test/src/lines.act"
@@ -823,8 +825,10 @@ $R linesQ_mainG_newact ($Cont C_cont, B_Env env) {
     return $AWAIT($SKIPRES($CONSTCONT(G_act, C_cont)), $ASYNC((($Actor)G_act), (($Cont)linesQ_L_31procG_new(G_act, env))));
 }
 static void linesQ___init__$g0 () {
-    linesQ_W_Apa_1097 = (B_Eq)B_OrdD_intG_witness;
-    linesQ_W_Apa_759 = ((B_Eq)$EqOptG_new(linesQ_W_Apa_1097));
+    linesQ_W_1module = (B_OrdD_int)B_OrdD_intG_witness;
+    linesQ_W_Apa_1097 = ((B_Eq)linesQ_W_1module);
+    linesQ_W_2module = $EqOptG_new(((B_Eq)linesQ_W_1module));
+    linesQ_W_Apa_759 = ((B_Eq)linesQ_W_2module);
 }
 int linesQ_done$ = 0;
 void linesQ___init__ () {

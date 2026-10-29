@@ -24,7 +24,8 @@ doBoxing                           :: Acton.Env.Env0 -> Module -> IO Module
 doBoxing env m                     = do
     (_,ss) <- boxing (boxEnv env) (mbody m)
     let (known, staticValue) = sharingInputs env m
-    return $ WitnessSharing.shareWitnesses env known (isJust . staticValue) m{mbody = ss}
+        shared = WitnessSharing.shareWitnesses env known (isJust . staticValue) m{mbody = ss}
+    return $ WitnessSharing.poolWitnesses env known staticValue shared
 
 -- Sharing trusts the constructors of the module's witness equations, taken
 -- before boxing, and recognizes static witnesses, which can be the module's
@@ -112,13 +113,21 @@ staticWitnessOf env (Call _ f p KwdNil)
                                          return StaticWitness{ swBaseClass = TC qn' ts, swObjectName = obj, swObjectPath = [] }
         staticWitnessRoot' _ _ _ _  = Nothing
 
-        builtinWitnessClass env qn  = case unalias env qn of
+        -- Placement also asks about ordinary/generated calls. A generated
+        -- method symbol need not be exported as an interface item; it is not
+        -- a class, and must not make unalias/tryQName throw NoItem here.
+        builtinWitnessClass env qn
+          | not (knownName qn)      = Nothing
+          | otherwise              = case unalias env qn of
                                         qn'@(GName m n)
                                           | m == mBuiltin,
                                             not (isInternal n),
                                             isClass env qn'
                                               -> Just qn'
                                         _ -> Nothing
+          where knownName (NoQ n) = isJust (lookupName n env)
+                knownName (GName m n) | Just m == thismod env = isJust (lookupName n env)
+                knownName q = isJust (lookupModuleInfo (mname q) env >>= (\mi -> moduleLookupName mi (noq q)))
 
         staticWitnessObject env qn@(GName m n) ts p
           | Just key <- specialStaticKey env n ts
