@@ -1,0 +1,8 @@
+class Bag[T]:
+    n: int
+    def __init__(self, n: int):
+        self.n = n
+
+extension Bag[T] (Eq):
+    def __eq__(a, b) -> bool:
+        return a.n == b.n

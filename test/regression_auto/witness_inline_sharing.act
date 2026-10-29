@@ -1,0 +1,62 @@
+# Repeated elaborated default expressions contain equal witness constructors.
+# Share the witnesses within an invocation, while keeping user objects distinct.
+class Bucket[T(Eq)](object):
+    marker: int
+    def __init__(self):
+        self.marker = 0
+    def same(self, x: T, y: T) -> bool:
+        return x == y
+
+def take(b: Bucket[list[int]] = Bucket()) -> Bucket[list[int]]:
+    return b
+
+def take_generic[T(Eq)](b: Bucket[list[T]] = Bucket()) -> Bucket[list[T]]:
+    return b
+
+def compare_generic[T(Eq)](xs: list[T], ys: list[T]) -> bool:
+    return take_generic().same(xs, ys) and take_generic().same(xs, ys)
+
+def compare(xs: list[int], ys: list[int]) -> bool:
+    return take().same(xs, ys) and take().same(xs, ys)
+
+class Pair(object):
+    left: Bucket[list[int]]
+    right: Bucket[list[int]]
+    def __init__(self, left: Bucket[list[int]], right: Bucket[list[int]]):
+        self.left = left
+        self.right = right
+
+def pair(flag: bool) -> Pair:
+    left = take()
+    if flag:
+        right = take()
+    else:
+        right = take()
+    return Pair(left, right)
+
+actor main(env):
+    n = int(env.argv[1]) if len(env.argv) > 1 else 20
+    xs = [1, 2, 3]
+    ys = [1, 2, 3]
+    assert compare_generic(xs, ys)
+    assert compare_generic(["x"], ["x"])
+    assert not compare_generic(["x"], ["y"])
+    assert not compare(xs, [9])
+    original = pair(True)
+    second = pair(False)
+    assert second.left.same(xs, ys) and second.right.same(xs, ys)
+    payload = serialize(original)
+    restored = deserialize(payload)
+    assert serialize(restored) == payload
+    assert isinstance(restored, Pair)
+    if isinstance(restored, Pair):
+        assert restored.left.same(xs, ys)
+        assert not restored.right.same(xs, [9])
+        restored.left.marker = 17
+        assert restored.right.marker == 0
+    ok = True
+    for _ in range(n):
+        ok = compare(xs, ys) and ok
+    assert ok
+    print("OK")
+    env.exit(0)

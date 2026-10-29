@@ -1,0 +1,23 @@
+# same compares through Eq[Bag[T]]. Its witness is built from the type
+# parameter T alone, so it is the same object on every call.
+
+class Bag[T]:
+    n: int
+    def __init__(self, n: int):
+        self.n = n
+
+extension Bag[T] (Eq):
+    def __eq__(a, b) -> bool:
+        return a.n == b.n
+
+def same[T](a: Bag[T], b: Bag[T]) -> bool:
+    return a == b
+
+actor main(env):
+    i: Bag[int] = Bag(1)
+    s: Bag[str] = Bag(1)
+    if same(i, Bag(1)) and same(s, Bag(1)) and not same(i, Bag(2)):
+        env.exit(0)
+    else:
+        print("A witness built from a type parameter compared bags wrongly")
+        env.exit(1)

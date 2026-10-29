@@ -3109,6 +3109,7 @@ main = do
     describe "Pass 8: Boxing" $ do
       testBoxing env0 ["deact"]
       testBoxing env0 ["boxparam"]
+      testBoxing env0 ["witness_type_params"]
 
     describe "Pass 9: CodeGen" $ do
       it "escapes C keywords" $
