@@ -54,13 +54,13 @@ class SubD_Foo (Sub[Foo, Bar], Keyed[Foo, Bar], __builtin__.Eq[Foo], __builtin__
         Sub.__init__@[Foo, Bar](W_self, W_Keyed_38)
     pass
     pure def __eq__ (W_self : Self, G_1p : Foo, G_2p : Foo) -> __builtin__.bool:
-        W_Keyed_41: __builtin__.Eq[Foo] = KeyedD_Foo()
+        W_Keyed_41: __builtin__.Eq[Foo] = KeyedD_Foo(None)
         return W_Keyed_41.__eq__(G_1p, G_2p)
 class TaggedD_Foo (Tagged[Foo], __builtin__.value):
     pure def __init__ (W_self : Self) -> None:
         Tagged.__init__@[Foo](W_self)
     pure def tag (W_self : Self, self : Foo) -> __builtin__.int:
-        W_Keyed_61: __builtin__.Eq[Bar] = KeyedD_Bar()
+        W_Keyed_61: __builtin__.Eq[Bar] = KeyedD_Bar(None)
         W_Keyed_63: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
         return W_Keyed_63.__fromatom__(7) if W_Keyed_61.__eq__(Bar(n = self.n), Bar(n = self.n)) else W_Keyed_63.__fromatom__(0)
 # (recursive group)

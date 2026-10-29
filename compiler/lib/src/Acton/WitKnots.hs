@@ -169,7 +169,7 @@ tieknots cycledeps dec
     generics                    = qbound (qbinds dec)
     cyclic                      = (`elem` (dom cycledeps))
 
-    tie (Decl l ds)             = Decl l (map tieI ds)
+    tie (Decl l ds)             = Decl l (map (tieknots cycledeps . tieI) ds)
     tie s@Assign{}              = s{ expr = tieE (expr s) }
     tie s                       = s
 
