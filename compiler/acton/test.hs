@@ -3386,6 +3386,14 @@ rtsTests =
           assertEqual "RTS wthreads error retCode" (ExitFailure 1) returnCode
           assertEqual "RTS wthreads error cmdErr" "ERROR: --rts-wthreads requires an argument.\n" cmdErr
 
+  ,   testCase "arg parsing: --rts-wthreads below 1 or not a number" $ do
+          testBuildThing "" ExitSuccess False "../../test/rts/argv8.act"
+          forM_ ["0", "-1", "foo", "4x"] $ \n -> do
+              (returnCode, cmdOut, cmdErr) <- runThing ("--rts-wthreads " ++ n) "../../test/rts/argv8.act"
+              assertEqual ("RTS wthreads " ++ n ++ " error retCode") (ExitFailure 1) returnCode
+              assertEqual ("RTS wthreads " ++ n ++ " error cmdErr")
+                          ("ERROR: --rts-wthreads requires a whole number of at least 1, got '" ++ n ++ "'.\n") cmdErr
+
   ,   testCase "raise the open file limit" $ do
           testBuildThing "" ExitSuccess False "../../test/rts/wthreads1.act"
           -- Each worker thread has a libuv loop with file descriptors of its
