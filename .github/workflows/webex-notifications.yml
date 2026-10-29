@@ -12,25 +12,99 @@ jobs:
 
     steps:
     - name: Prepare notification message
-      id: message
+      shell: python
       env:
         PR_NUMBER: ${{ github.event.pull_request.number }}
         PR_URL: ${{ github.event.pull_request.html_url }}
         PR_TITLE: ${{ github.event.pull_request.title }}
         PR_BODY: ${{ github.event.pull_request.body }}
       run: |
-        MESSAGE="### PR [#${PR_NUMBER}](${PR_URL}) merged: ${PR_TITLE}"
+        import os
+        import re
+        from pathlib import Path
 
-        if [ -n "$PR_BODY" ]; then
-          #MESSAGE="${MESSAGE}"$'\n'$'\n''```'
-          # TODO: does this contain an extra newline?
-          MESSAGE="${MESSAGE}"$'\n'"${PR_BODY}"
-          #MESSAGE="${MESSAGE}"$'\n''```'
-        fi
+        def cells(line):
+            # Split on unescaped pipes, including pipes escaped inside inline code.
+            line = line.strip()
+            parts = []
+            start = 0
+            for match in re.finditer(r"\\.|\|", line):
+                if match[0] == "|":
+                    parts.append(line[start:match.start()].strip())
+                    start = match.end()
+            if not parts:
+                return []
+            parts.append(line[start:].strip())
+            if not parts[0]:
+                parts.pop(0)
+            if parts and not parts[-1]:
+                parts.pop()
+            return parts
 
-        echo "message<<EOF" >> $GITHUB_OUTPUT
-        echo "$MESSAGE" >> $GITHUB_OUTPUT
-        echo "EOF" >> $GITHUB_OUTPUT
+        def format_table(rows, separator):
+            rows = [[cell.replace(r"\|", "|") for cell in row] for row in rows]
+            widths = [max(len(row[col]) for row in rows) for col in range(len(separator))]
+            # Use a fence longer than any backtick run in a cell.
+            ticks = max((len(m[0]) for row in rows for cell in row
+                         for m in re.finditer(r"`+", cell)), default=0)
+            fence = "`" * max(3, ticks + 1)
+            result = ["\n", fence + "\n"]
+            for n, row in enumerate(rows):
+                padded = []
+                for cell, width, align in zip(row, widths, separator):
+                    if align.startswith(":") and align.endswith(":"):
+                        padded.append(cell.center(width))
+                    elif align.endswith(":"):
+                        padded.append(cell.rjust(width))
+                    else:
+                        padded.append(cell.ljust(width))
+                result.append(" | ".join(padded) + "\n")
+                if n == 0:
+                    result.append("-+-".join("-" * width for width in widths) + "\n")
+            result.append(fence + "\n\n")
+            return "".join(result)
+
+        # Webex supports Markdown, but not GitHub tables. Preserve other Markdown
+        # and existing code blocks while converting tables to fixed-width text.
+        lines = os.environ["PR_BODY"].splitlines(keepends=True)
+        output = []
+        fence = None
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+            marker = re.match(r" {0,3}(`{3,}|~{3,})", line)
+            if fence:
+                closing = rf" {{0,3}}{fence[0]}{{{len(fence)},}}[ \t]*"
+                if re.fullmatch(closing, line.rstrip("\r\n")):
+                    fence = None
+            elif marker:
+                fence = marker[1]
+            elif not line.startswith(("    ", "\t")) and i + 1 < len(lines):
+                header = cells(line)
+                separator = cells(lines[i + 1])
+                if (header and len(header) == len(separator)
+                        and not lines[i + 1].startswith(("    ", "\t"))
+                        and all(re.fullmatch(r":?-+:?", cell) for cell in separator)):
+                    rows = [header]
+                    i += 2
+                    while i < len(lines) and not lines[i].startswith(("    ", "\t")):
+                        if re.match(r" {0,3}(`{3,}|~{3,}|#{1,6} |>|[-+*] |\d+[.)] )", lines[i]):
+                            break
+                        row = cells(lines[i])
+                        if not row:
+                            break
+                        # GitHub pads missing cells and ignores excess cells.
+                        rows.append((row + [""] * len(header))[:len(header)])
+                        i += 1
+                    output.append(format_table(rows, separator))
+                    continue
+            output.append(line)
+            i += 1
+
+        message = f'### PR [#{os.environ["PR_NUMBER"]}]({os.environ["PR_URL"]}) merged: {os.environ["PR_TITLE"]}'
+        if output:
+            message += "\n\n" + "".join(output)
+        Path("message.txt").write_text(message, encoding="utf-8")
 
     - name: Send Webex notification
       env:
@@ -38,11 +112,6 @@ jobs:
         WEBEX_ROOM_ID: ${{ secrets.WEBEX_ROOM_ID }}
       run: |
         set -euo pipefail
-
-        # Write the prepared message to a file verbatim to avoid shell quoting issues
-        cat > message.txt <<'__WEBEX_MSG__'
-        ${{ steps.message.outputs.message }}
-        __WEBEX_MSG__
 
         # Build JSON payload safely; jq will handle JSON escaping
         JSON_PAYLOAD=$(jq -n \
