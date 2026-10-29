@@ -223,6 +223,46 @@ main = do
   env0 <- Acton.Env.initEnv sysTypesPath False
 
   sydTest $ do
+    describe "Static builtin witness stores" $ do
+      let wit = S.Internal S.Witness "static-store" 0
+          ord = S.Derived Builtin.nOrd Builtin.nInt
+          sequence = S.Derived Builtin.nSequence Builtin.nList
+          call n ts = S.eCall (S.tApp (S.eVar n) ts) []
+          canonical n ts = S.eCall (S.tApp (S.eQVar (Builtin.gBuiltin n)) ts) []
+          local = Acton.Env.define [(ord,I.NClass [] [] [] Nothing),
+                                    (sequence,I.NClass [] [] [] Nothing)]
+                    (Acton.Env.setMod Builtin.mBuiltin env0)
+          env = Acton.Boxing.boxEnv local
+          rhs = Acton.Boxing.staticWitnessRHS env wit
+      it "qualifies local builtin constructor names in witness bindings" $ do
+        rhs (call ord []) `shouldBe` canonical ord []
+      it "retains erased type arguments when qualifying a static sequence witness" $ do
+        let ts = [S.tVar (S.TV S.KType (S.name "A"))]
+        rhs (call sequence ts) `shouldBe` canonical sequence ts
+      it "qualifies static super-witness projections stored in fields" $ do
+        let field = S.Internal S.Witness "Collection" 0
+            value = S.Dot NoLoc (call sequence [S.tNone]) field
+            target = S.Dot NoLoc (S.eVar (S.name "self")) wit
+        Acton.Boxing.staticWitnessTargetRHS env target value
+          `shouldBe` S.Dot NoLoc (canonical sequence [S.tNone]) field
+      it "keeps ordinary construction and shadowed constructor values unchanged" $ do
+        let value = call ord []
+            shadow = Acton.Env.define [(ord, I.NVar S.tNone)] env
+        Acton.Boxing.staticWitnessRHS env (S.name "ordinary") value `shouldBe` value
+        Acton.Boxing.staticWitnessRHS shadow wit value `shouldBe` value
+      it "emits static pointers for witness field assignments" $ do
+        let holder = S.name "Holder"
+            self = S.name "self"
+            t = S.tCon (S.TC (Builtin.gBuiltin ord) [])
+            te = [(holder,I.NClass [] [] [(wit,I.NVar t)] Nothing),
+                  (self,I.NVar (S.tCon (S.TC (S.NoQ holder) [])))]
+            target = S.Dot NoLoc (S.eVar self) wit
+            stmt = S.MutAssign NoLoc target (rhs (call ord []))
+            genenv = Acton.CodeGen.genEnv (Acton.Env.define te local)
+            code = Pretty.render (fst (Acton.CodeGen.genV genenv stmt))
+        code `shouldContain` "B_OrdD_intG_witness"
+        ("B_OrdD_intG_new(" `isInfixOf` code) `shouldBe` False
+
     describe "Zon (build.zig.zon)" $ do
       let deps src = case Zon.parseZon src of
                        Left e  -> error ("parse failed: " ++ e)
@@ -3091,6 +3131,15 @@ main = do
     describe "Pass 4: Normalizer" $ do
       testNorm env0 ["deact"]
       testNorm env0 ["norm_comprehension_condition"]
+      testCodeGenContains env0 "normalizer_static_witnesses"
+        [ "B_SequenceD_listG_witness"
+        , "B_MappingD_dictD_strG_witness"
+        , "B_MappingD_dictD_intG_witness"
+        , "B_MappingD_dictD_u64G_witness"
+        , "B_MappingD_dictD_bytesG_witness"
+        ]
+      testCodeGenDoesNotContain env0 "normalizer_static_witnesses"
+        [ "B_SequenceD_listG_new(", "B_MappingD_dictG_new(" ]
 
     describe "Pass 5: Deactorizer" $ do
       testDeact env0 ["deact", "deact_from_import"]

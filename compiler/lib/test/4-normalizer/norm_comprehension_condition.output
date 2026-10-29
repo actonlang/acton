@@ -6,7 +6,7 @@ pure def check (l : __builtin__.list[__builtin__.int]) -> __builtin__.bool:
     W_check_6: __builtin__.Iterable[__builtin__.list[__builtin__.int], __builtin__.int] = __builtin__.SequenceD_list@[__builtin__.int]().W_Collection
     W_check_21: __builtin__.Eq[__builtin__.list[__builtin__.int]] = __builtin__.EqD_list@[__builtin__.int](W_check_26)
     pure def N_compfun () -> __builtin__.list[__builtin__.int]:
-        N_1w: __builtin__.Sequence[__builtin__.list[__builtin__.int], __builtin__.int] = __builtin__.SequenceD_list@[__builtin__.int]()
+        W_N_1w: __builtin__.Sequence[__builtin__.list[__builtin__.int], __builtin__.int] = __builtin__.SequenceD_list@[__builtin__.int]()
         N_2res: __builtin__.list[__builtin__.int] = []
         N_3iter: __builtin__.Iterator[__builtin__.int] = W_check_6.__iter__(l)
         while True:
@@ -17,7 +17,7 @@ pure def check (l : __builtin__.list[__builtin__.int]) -> __builtin__.bool:
             N_4maybe: __builtin__.maybe[__builtin__.int] = N_3iter.__next__()
             if isinstance(N_4maybe, __builtin__.just):
                 x: __builtin__.int = $CAST@[__builtin__.maybe[__builtin__.int], __builtin__.just[__builtin__.int]](N_4maybe).val
-                N_1w.append(N_2res, x)
+                W_N_1w.append(N_2res, x)
             else:
                 break
         return N_2res
@@ -39,7 +39,7 @@ W_main_12: __builtin__.Iterable[__builtin__.list[__builtin__.int], __builtin__.i
 
 actor main (env : __builtin__.Env):
     pure def N_7compfun () -> __builtin__.list[__builtin__.int]:
-        N_8w: __builtin__.Sequence[__builtin__.list[__builtin__.int], __builtin__.int] = __builtin__.SequenceD_list@[__builtin__.int]()
+        W_N_8w: __builtin__.Sequence[__builtin__.list[__builtin__.int], __builtin__.int] = __builtin__.SequenceD_list@[__builtin__.int]()
         N_9res: __builtin__.list[__builtin__.int] = []
         N_10iter: __builtin__.Iterator[__builtin__.int] = W_main_12.__iter__([W_main_43.__fromatom__(1), W_main_43.__fromatom__(2)])
         while True:
@@ -50,7 +50,7 @@ actor main (env : __builtin__.Env):
             N_11maybe: __builtin__.maybe[__builtin__.int] = N_10iter.__next__()
             if isinstance(N_11maybe, __builtin__.just):
                 x: __builtin__.int = $CAST@[__builtin__.maybe[__builtin__.int], __builtin__.just[__builtin__.int]](N_11maybe).val
-                N_8w.append(N_9res, W_main_20.__mul__(x, W_main_43.__fromatom__(2)))
+                W_N_8w.append(N_9res, W_main_20.__mul__(x, W_main_43.__fromatom__(2)))
             else:
                 break
         return N_9res

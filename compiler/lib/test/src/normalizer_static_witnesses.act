@@ -1,0 +1,14 @@
+def copy_list(xs: list[int]) -> list[int]:
+    return [x for x in xs]
+
+def string_keys(xs: list[str]) -> dict[str, int]:
+    return {x: 1 for x in xs}
+
+def integer_keys(xs: list[int]) -> dict[int, int]:
+    return {x: 1 for x in xs}
+
+def unsigned_keys(xs: list[u64]) -> dict[u64, int]:
+    return {x: 1 for x in xs}
+
+def bytes_keys(xs: list[bytes]) -> dict[bytes, int]:
+    return {x: 1 for x in xs}
