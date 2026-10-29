@@ -768,7 +768,7 @@ actor TLSListenConnection(cap: _TCPListenConnectCap, server_stream: int, tls_own
         NotImplemented
     _init()
 
-actor TLSListener(cap: TCPListenCap, address: str, port: int, cert_pem: bytes, key_pem: bytes, on_listen: action(TLSListener, ?str) -> None, on_accept: action(TLSListenConnection) -> None, client_auth: bool=False, ca_pem: ?bytes=None):
+actor TLSListener(cap: TCPListenCap, address: str, port: int, cert_pem: bytes, key_pem: bytes, on_listen: action(TLSListener, ?str) -> None, on_accept: action(TLSListenConnection) -> None, client_auth: bool=False, ca_pem: ?bytes=None, protocols: list[str]=[]):
     """TLS Listener
 
     Listens on address and port, where port 0 picks a free port, see
@@ -779,6 +779,9 @@ actor TLSListener(cap: TCPListenCap, address: str, port: int, cert_pem: bytes, k
     unless the client presents one issued by a CA in ca_pem, which holds one
     or more PEM certificates (the system CA bundle without it). By default
     the listener does not ask.
+
+    protocols lists the ALPN protocols the listener supports, in order of
+    preference.
 
     on_listen is called with None once listening, or with an error. It is
     also called with an error for each failed handshake, for example a

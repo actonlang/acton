@@ -1502,6 +1502,8 @@ struct tls_owner {
     tlsuv_certificate_t cert;
     // Listener settings for accepted streams
     int authmode;
+    int alpn_count;
+    char **alpn_protocols;
 };
 
 struct tls_listener_stream_state {
@@ -1601,7 +1603,43 @@ static struct tls_owner *tls_owner_new(tls_context *tls,
     owner->key = key;
     owner->cert = cert;
     owner->authmode = 0;
+    owner->alpn_count = 0;
+    owner->alpn_protocols = NULL;
     return owner;
+}
+
+static void tls_alpn_free(int count, char **protocols) {
+    if (protocols != NULL) {
+        for (int i = 0; i < count; i++) {
+            free(protocols[i]);
+        }
+        free(protocols);
+    }
+}
+
+// Copies a list of ALPN protocol names into libc memory, which tlsuv keeps
+// referring to
+static int tls_alpn_new(B_list protocols, int *count, char ***out) {
+    *count = 0;
+    *out = NULL;
+    int n = (int)protocols->length;
+    if (n == 0) {
+        return 0;
+    }
+    char **alpn = calloc((size_t)n, sizeof(char *));
+    if (alpn == NULL) {
+        return UV_ENOMEM;
+    }
+    for (int i = 0; i < n; i++) {
+        alpn[i] = strdup((const char *)fromB_str(protocols->data[i]));
+        if (alpn[i] == NULL) {
+            tls_alpn_free(n, alpn);
+            return UV_ENOMEM;
+        }
+    }
+    *count = n;
+    *out = alpn;
+    return 0;
 }
 
 // Creates a TLS context that trusts the CA certificates in ca_pem, or the
@@ -1679,6 +1717,7 @@ static void tls_owner_release(struct tls_owner *owner) {
     int prev = atomic_fetch_sub(&owner->refs, 1);
     if (prev == 1) {
         tls_release_resources(owner->tls, owner->key, owner->cert);
+        tls_alpn_free(owner->alpn_count, owner->alpn_protocols);
         GC_free(owner);
     }
 }
@@ -1739,12 +1778,7 @@ static void tls_client_state_free(struct tls_client_state *state) {
         return;
     }
 
-    if (state->alpn_protocols != NULL) {
-        for (int i = 0; i < state->alpn_count; i++) {
-            free(state->alpn_protocols[i]);
-        }
-        free(state->alpn_protocols);
-    }
+    tls_alpn_free(state->alpn_count, state->alpn_protocols);
     tls_owner_release(state->owner);
     free(state);
 }
@@ -2167,6 +2201,9 @@ static void on_new_tls_connection(uv_stream_t *server, int status) {
     }
     tlsuv_stream_set_server(stream, 1);
     stream->authmode = owner->authmode;
+    if (owner->alpn_count > 0) {
+        tlsuv_stream_set_protocols(stream, owner->alpn_count, (const char **)owner->alpn_protocols);
+    }
     stream->data = state;
 
     struct tls_listener_conn *conn = (struct tls_listener_conn *)malloc(sizeof(*conn));
@@ -2241,6 +2278,11 @@ $R netQ_TLSListenerD__initG_local (netQ_TLSListener self, $Cont c$cont) {
     }
     // 0=none, 2=require (mbedtls specific)
     owner->authmode = self->client_auth ? 2 : 0;
+    if (tls_alpn_new(self->protocols, &owner->alpn_count, &owner->alpn_protocols) != 0) {
+        tls_owner_release(owner);
+        tls_listener_report_listen_error(self, "Failed to allocate TLS ALPN protocol list");
+        return $R_CONT(c$cont, B_None);
+    }
 
     struct tls_listener_server_state *server_state = tls_listener_server_state_new(self);
     if (server_state == NULL) {
@@ -2778,38 +2820,17 @@ $R netQ_TLSConnectionD__connect_tlsG_local (netQ_TLSConnection self, $Cont c$con
         stream->authmode = 0; // 0=none, 2=require (mbedtls specific)
     }
 
-    // TODO: take ALPN as input to TLSConnection actor
-    //const char *alpn[] = { "http/1.1" };
-    int num_protocols = self->protocols->length;
-
-    if (num_protocols > 0) {
-        state->alpn_protocols = calloc((size_t)num_protocols, sizeof(char *));
-        if (state->alpn_protocols == NULL) {
-            tls_client_state_free(state);
-            free(stream);
-            free(connect_req);
-            if (self->on_error != NULL) {
-                self->$class->_on_tls_error(self, -1LL, (int64_t)UV_ENOMEM, actStrFromCString("Failed to allocate TLS ALPN protocol list"));
-            }
-            return $R_CONT(c$cont, B_None);
+    r = tls_alpn_new(self->protocols, &state->alpn_count, &state->alpn_protocols);
+    if (r != 0) {
+        tls_client_state_free(state);
+        free(stream);
+        free(connect_req);
+        if (self->on_error != NULL) {
+            self->$class->_on_tls_error(self, -1LL, (int64_t)r, actStrFromCString("Failed to allocate TLS ALPN protocol list"));
         }
-        // Count covers the whole zero-filled array from the start so a
-        // partial strdup failure still frees the strings already duplicated.
-        state->alpn_count = num_protocols;
-
-        for (int i = 0; i < num_protocols; ++i) {
-            const char *proto = (const char *)fromB_str(self->protocols->data[i]);
-            state->alpn_protocols[i] = strdup(proto);
-            if (state->alpn_protocols[i] == NULL) {
-                tls_client_state_free(state);
-                free(stream);
-                free(connect_req);
-                if (self->on_error != NULL) {
-                    self->$class->_on_tls_error(self, -1LL, (int64_t)UV_ENOMEM, actStrFromCString("Failed to allocate TLS ALPN protocol"));
-                }
-                return $R_CONT(c$cont, B_None);
-            }
-        }
+        return $R_CONT(c$cont, B_None);
+    }
+    if (state->alpn_count > 0) {
         tlsuv_stream_set_protocols(stream, state->alpn_count, (const char **)state->alpn_protocols);
     }
     stream->data = (void *)state;
