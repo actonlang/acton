@@ -697,6 +697,28 @@ actor TCPListener(cap: TCPListenCap, address: str, port: int, on_listen: action(
         NotImplemented
     _init()
 
+def _addr_port(address: str, port: int) -> str:
+    if ":" in address:
+        return "[%s]:%d" % (address, port)
+    return "%s:%d" % (address, port)
+
+
+actor _TLSVerifier():
+    """Calls a verify_peer callback
+
+    The connection or listener must not wait for the callback itself: the
+    callback may call it, which would deadlock.
+    """
+    action def check(verify: action(list[bytes], int) -> bool, certs: list[bytes], result: int, done: action(bool) -> None):
+        ok = False
+        try:
+            ok = verify(certs, result)
+        except Exception:
+            # A failing callback rejects the certificate
+            pass
+        done(ok)
+
+
 actor TLSListenConnection(cap: _TCPListenConnectCap, server_stream: int, tls_owner: int, worker_id: int):
     """TLS Listener Connection
 
@@ -768,17 +790,29 @@ actor TLSListenConnection(cap: _TCPListenConnectCap, server_stream: int, tls_own
         NotImplemented
     _init()
 
-actor TLSListener(cap: TCPListenCap, address: str, port: int, cert_pem: bytes, key_pem: bytes, on_listen: action(TLSListener, ?str) -> None, on_accept: action(TLSListenConnection) -> None, client_auth: bool=False, ca_pem: ?bytes=None, protocols: list[str]=[], handshake_timeout: float=60.0):
+actor TLSListener(cap: TCPListenCap, address: str, port: int, cert_pem: bytes, key_pem: bytes, on_listen: action(TLSListener, ?str) -> None, on_accept: action(TLSListenConnection) -> None, client_auth: bool=False, verify_tls: bool=True, ca_pem: ?bytes=None, verify_peer: ?action(list[bytes], int) -> bool=None, protocols: list[str]=[], handshake_timeout: float=60.0):
     """TLS Listener
 
     Listens on address and port, where port 0 picks a free port, see
     local_port(). Each connection that completes the TLS handshake is passed
     to on_accept.
 
-    client_auth=True asks clients for a certificate, and the handshake fails
-    unless the client presents one issued by a CA in ca_pem, which holds one
-    or more PEM certificates (the system CA bundle without it). By default
-    the listener does not ask.
+    client_auth=True asks clients for a certificate, which the listener does
+    not by default. The client certificate is verified against the CA
+    certificates in ca_pem (PEM, one or more), or the system CA bundle
+    without it, and the handshake fails unless it verifies. verify_tls=False
+    skips the verification.
+
+    verify_peer checks the client certificate in code. Once the handshake is
+    done, it gets the certificate chain the client presented (DER, leaf
+    first, empty if none) and the verification result as CERT_* flags, and
+    the connection is only passed to on_accept if it returns True. With
+    verify_tls=True it can only reject a certificate that verified, for
+    example to allow only some of the clients of a CA. With verify_tls=False
+    it decides alone, for example to accept a self-signed certificate by its
+    fingerprint. verify_peer needs client_auth=True. With client_auth=True,
+    verify_tls=False needs verify_peer, as the listener would otherwise
+    accept any client.
 
     protocols lists the ALPN protocols the listener supports, in order of
     preference. handshake_timeout limits the time a client may take to
@@ -796,6 +830,23 @@ actor TLSListener(cap: TCPListenCap, address: str, port: int, cert_pem: bytes, k
         if _stream == -1:
             # The handshake completed just as the listener was closed
             c.close()
+            return
+        v = verify_peer
+        if v is not None:
+            info = c.tls_info()
+            verifier = _TLSVerifier()
+            async verifier.check(v, info.peer_certificates, info.verify_result, lambda ok: _client_verified(c, ok))
+            return
+        on_accept(c)
+
+    def _client_verified(c: TLSListenConnection, ok: bool):
+        if _stream == -1:
+            c.close()
+            return
+        if not ok:
+            ep = c.endpoints()
+            c.close()
+            on_listen(self, "TLS handshake with client %s failed: client certificate rejected by verify_peer" % _addr_port(ep.remote_address, ep.remote_port))
             return
         on_accept(c)
 
@@ -824,9 +875,15 @@ actor TLSListener(cap: TCPListenCap, address: str, port: int, cert_pem: bytes, k
     proc def _init():
         """Implementation internal"""
         NotImplemented
-    _init()
 
-actor TLSConnection(cap: TCPConnectCap, address: str, port: int, on_connect: action(TLSConnection) -> None, on_receive: action(TLSConnection, bytes) -> None, on_error: action(TLSConnection, str) -> None, on_remote_close: ?action(TLSConnection) -> None=None, verify_tls: bool=True, protocols: list[str]=[], ca_pem: ?bytes=None, cert_pem: ?bytes=None, key_pem: ?bytes=None, server_name: ?str=None, connect_timeout: float=10.0):
+    if verify_peer is not None and not client_auth:
+        async on_listen(self, "TLSListener: verify_peer needs client_auth=True")
+    elif client_auth and not verify_tls and verify_peer is None:
+        async on_listen(self, "TLSListener: client_auth=True with verify_tls=False needs verify_peer")
+    else:
+        _init()
+
+actor TLSConnection(cap: TCPConnectCap, address: str, port: int, on_connect: action(TLSConnection) -> None, on_receive: action(TLSConnection, bytes) -> None, on_error: action(TLSConnection, str) -> None, on_remote_close: ?action(TLSConnection) -> None=None, verify_tls: bool=True, protocols: list[str]=[], ca_pem: ?bytes=None, cert_pem: ?bytes=None, key_pem: ?bytes=None, server_name: ?str=None, verify_peer: ?action(list[bytes], int) -> bool=None, connect_timeout: float=10.0):
     """TLS connection
 
     Connects to address and port and performs a TLS handshake. Each
@@ -839,6 +896,14 @@ actor TLSConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
     server_name, which is also sent as SNI. server_name defaults to address,
     "" sends no SNI and skips the name check. The handshake fails unless the
     certificate verifies, verify_tls=False skips the verification.
+
+    verify_peer checks the server certificate in code. Once the handshake is
+    done, it gets the certificate chain (DER, leaf first) and the
+    verification result as CERT_* flags, and the connection fails unless it
+    returns True. With verify_tls=True it can only reject a certificate that
+    verified, for example to pin one certificate. With verify_tls=False it
+    decides alone, for example to accept a self-signed certificate by its
+    fingerprint. connect_timeout includes the time verify_peer takes.
 
     cert_pem and key_pem give a client certificate and its key (PEM), for
     servers that ask for one. With TLS 1.3 the server checks the client
@@ -882,6 +947,39 @@ actor TLSConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
     action def _on_tls_connect(attempt: int):
         if attempt != _attempt or _state != STATE_CONNECTING:
             return
+        v = verify_peer
+        if v is not None:
+            verifier = _TLSVerifier()
+            async verifier.check(v, _peer_certificates, _verify_result, lambda ok: _peer_verified(attempt, ok))
+            return
+        _connected()
+
+    action def _peer_verified(attempt: int, ok: bool):
+        if attempt != _attempt or _state != STATE_CONNECTING:
+            return
+        if not ok:
+            _abandon_handshake()
+            _attempt += 1
+            _state = STATE_CLOSED
+            _consecutive_connect_errors += 1
+            on_error(self, "TLS handshake failed: server certificate rejected by verify_peer")
+            return
+        _connected()
+
+    # Starts reading after verify_peer accepted the server, the error if that
+    # fails
+    proc def _start_reading() -> ?str:
+        NotImplemented
+
+    proc def _connected():
+        if verify_peer is not None:
+            error = _start_reading()
+            if error is not None:
+                _attempt += 1
+                _state = STATE_CLOSED
+                _consecutive_connect_errors += 1
+                on_error(self, error)
+                return
         _state = STATE_CONNECTED
         _connections += 1
         _consecutive_connect_errors = 0
@@ -919,10 +1017,10 @@ actor TLSConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
         peer_certificates is the certificate chain the server presented, DER
         encoded, leaf first. verify_result is 0 if the server certificate
         was verified, otherwise a combination of CERT_* flags, like
-        CERT_NOT_TRUSTED, or CERT_SKIP_VERIFY with verify_tls=False, and -1
-        before the first connection. alpn is the ALPN protocol agreed with
-        the server, None if none, and version the TLS version, like
-        "TLSv1.3".
+        CERT_NOT_TRUSTED, or CERT_SKIP_VERIFY with verify_tls=False and no
+        verify_peer, and -1 before the first connection. alpn is the ALPN
+        protocol agreed with the server, None if none, and version the TLS
+        version, like "TLSv1.3".
         """
         return (peer_certificates=_peer_certificates, verify_result=_verify_result, alpn=_alpn, version=_tls_version)
 

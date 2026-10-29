@@ -2484,8 +2484,9 @@ $R netQ_TLSListenerD__initG_local (netQ_TLSListener self, $Cont c$cont) {
         tls_listener_report_listen_error(self, errmsg);
         return $R_CONT(c$cont, B_None);
     }
-    // 0=none, 2=require (mbedtls specific)
-    owner->authmode = self->client_auth ? 2 : 0;
+    // 0=none, 1=optional, 2=require (mbedtls specific). With verify_tls=False
+    // verify_peer decides alone, but still gets the verification result
+    owner->authmode = !self->client_auth ? 0 : self->verify_tls ? 2 : 1;
     owner->handshake_timeout_ms = self->handshake_timeout > 0.0 ? (uint64_t)(self->handshake_timeout * 1000.0) : 0;
     if (owner->handshake_timeout_ms == 0 && self->handshake_timeout > 0.0) {
         owner->handshake_timeout_ms = 1;
@@ -2841,6 +2842,23 @@ $R netQ_TLSConnectionD__closeG_local (netQ_TLSConnection self, $Cont c$cont, $ac
     return $R_CONT(c$cont, B_None);
 }
 
+$R netQ_TLSConnectionD__start_readingG_local (netQ_TLSConnection self, $Cont c$cont) {
+    tlsuv_stream_t *stream = (tlsuv_stream_t *)(intptr_t)self->_stream;
+    if ((intptr_t)stream == -1) {
+        return $R_CONT(c$cont, actStrFromCString("TLS connection closed"));
+    }
+    int r = tlsuv_stream_read_start(stream, alloc_buffer, tls_on_receive);
+    if (r < 0) {
+        char errmsg[1024] = "Failed to start reading from TLS TCP socket: ";
+        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        log_debug(errmsg);
+        self->_on_close = NULL;
+        tls_close(stream);
+        return $R_CONT(c$cont, actStrFromCStringCopy(errmsg));
+    }
+    return $R_CONT(c$cont, B_None);
+}
+
 $R netQ_TLSConnectionD__abandon_handshakeG_local (netQ_TLSConnection self, $Cont c$cont) {
     tlsuv_stream_t *stream = (tlsuv_stream_t *)(intptr_t)self->_stream;
     bool handshaking = false;
@@ -2938,7 +2956,9 @@ static void tls_on_connect(uv_connect_t *creq, int status) {
         return;
     }
 
-    int r = tlsuv_stream_read_start(stream, alloc_buffer, tls_on_receive);
+    // With verify_peer, reading starts once it accepts the server, so that
+    // nothing is received from a server it rejects
+    int r = self->verify_peer == NULL ? tlsuv_stream_read_start(stream, alloc_buffer, tls_on_receive) : 0;
     if (r < 0) {
         char errmsg[1024] = "Failed to start reading from TLS TCP socket: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
@@ -3053,7 +3073,9 @@ $R netQ_TLSConnectionD__connect_tlsG_local (netQ_TLSConnection self, $Cont c$con
     // Default is to verify TLS certificate. Should we disable verification?
     if (self->verify_tls == false) {
         log_debug("TLS certificate verification disabled");
-        stream->authmode = 0; // 0=none, 2=require (mbedtls specific)
+        // verify_peer then decides alone, but still gets the verification
+        // result: 0=none, 1=optional, 2=require (mbedtls specific)
+        stream->authmode = self->verify_peer != NULL ? 1 : 0;
     }
 
     r = tls_alpn_new(self->protocols, &state->alpn_count, &state->alpn_protocols);
