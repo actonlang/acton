@@ -45,6 +45,18 @@ class _TCPListenConnectCap():
     """Internal use only"""
     pass
 
+# Bits in the verify_result of tls_info() of TLS connections
+CERT_EXPIRED = 0x0001           # Validity period has ended
+CERT_REVOKED = 0x0002           # Certificate is revoked
+CERT_NAME_MISMATCH = 0x0004     # Does not match the expected server name
+CERT_NOT_TRUSTED = 0x0008       # Not issued by a trusted CA
+CERT_MISSING = 0x0040           # Peer did not present a certificate
+CERT_SKIP_VERIFY = 0x0080       # Certificate was not verified
+CERT_OTHER = 0x0100             # Failed verification for another reason
+CERT_FUTURE = 0x0200            # Validity period has not started
+CERT_KEY_USAGE = 0x0800         # Key usage does not allow this use
+CERT_BAD_KEY = 0x4000           # Unacceptable key or signature algorithm
+
 def is_ipv4(address: str) -> bool:
     NotImplemented
 
@@ -686,12 +698,25 @@ actor TCPListener(cap: TCPListenCap, address: str, port: int, on_listen: action(
     _init()
 
 actor TLSListenConnection(cap: _TCPListenConnectCap, server_stream: int, tls_owner: int, worker_id: int):
-    """TLS Listener Connection"""
+    """TLS Listener Connection
+
+    A connection accepted by a TLSListener, after a completed handshake. For
+    a listener that asks for client certificates, tls_info() tells who the
+    client is.
+    """
     var _stream = -1
     var on_receive: ?action(TLSListenConnection, bytes) -> None = None
     var on_error: ?action(TLSListenConnection, str) -> None = None
     var on_remote_close: ?action(TLSListenConnection) -> None = None
     var _initialized = False
+    var _local_address = ""
+    var _local_port = 0
+    var _remote_address = ""
+    var _remote_port = 0
+    var _peer_certificates: list[bytes] = []
+    var _verify_result = -1
+    var _alpn: ?str = None
+    var _tls_version = ""
 
     proc def _read_start():
         """Implementation internal"""
@@ -713,6 +738,24 @@ actor TLSListenConnection(cap: _TCPListenConnectCap, server_stream: int, tls_own
     action def write(data: bytes) -> None:
         """Write data to remote"""
         NotImplemented
+
+    action def tls_info() -> (peer_certificates: list[bytes], verify_result: int, alpn: ?str, version: str):
+        """TLS details of the connection
+
+        peer_certificates is the certificate chain the client presented, DER
+        encoded, leaf first, empty if the client presented none or the
+        listener did not ask for one. verify_result is 0 if the client
+        certificate was verified, otherwise a combination of CERT_* flags,
+        like CERT_MISSING when the client presented no certificate or
+        CERT_SKIP_VERIFY when the listener did not ask for one. alpn is the
+        ALPN protocol agreed with the client, None if none, and version the
+        TLS version, like "TLSv1.3".
+        """
+        return (peer_certificates=_peer_certificates, verify_result=_verify_result, alpn=_alpn, version=_tls_version)
+
+    action def endpoints() -> (local_address: str, local_port: int, remote_address: str, remote_port: int):
+        """Local and remote address and port of the connection"""
+        return (local_address=_local_address, local_port=_local_port, remote_address=_remote_address, remote_port=_remote_port)
 
     action def __cleanup__() -> None:
         NotImplemented
@@ -784,7 +827,7 @@ actor TLSConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
     servers that ask for one. With TLS 1.3 the server checks the client
     certificate after the client has completed the handshake, so a rejected
     certificate shows as on_error after on_connect. protocols lists ALPN
-    protocols to offer.
+    protocols to offer, see tls_info().
     """
     # TODO: do DNS lookup in Acton
     # TODO: implement state machine
@@ -793,6 +836,15 @@ actor TLSConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
     var _stream = -1
 
     var _on_close: ?action(TLSConnection) -> None = None
+
+    var _local_address = ""
+    var _local_port = 0
+    var _remote_address = ""
+    var _remote_port = 0
+    var _peer_certificates: list[bytes] = []
+    var _verify_result = -1
+    var _alpn: ?str = None
+    var _tls_version = ""
 
     var _connections = 0
     var _consecutive_connect_errors = 0
@@ -817,6 +869,26 @@ actor TLSConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
     action def write(data: bytes) -> None:
         """Write data to remote"""
         NotImplemented
+
+    action def tls_info() -> (peer_certificates: list[bytes], verify_result: int, alpn: ?str, version: str):
+        """TLS details of the current or most recent connection
+
+        peer_certificates is the certificate chain the server presented, DER
+        encoded, leaf first. verify_result is 0 if the server certificate
+        was verified, otherwise a combination of CERT_* flags, like
+        CERT_NOT_TRUSTED, or CERT_SKIP_VERIFY with verify_tls=False, and -1
+        before the first connection. alpn is the ALPN protocol agreed with
+        the server, None if none, and version the TLS version, like
+        "TLSv1.3".
+        """
+        return (peer_certificates=_peer_certificates, verify_result=_verify_result, alpn=_alpn, version=_tls_version)
+
+    action def endpoints() -> (local_address: str, local_port: int, remote_address: str, remote_port: int):
+        """Local and remote address and port of the current or most recent connection
+
+        Empty addresses and port 0 before the first connection.
+        """
+        return (local_address=_local_address, local_port=_local_port, remote_address=_remote_address, remote_port=_remote_port)
 
     action def __cleanup__() -> None:
         NotImplemented

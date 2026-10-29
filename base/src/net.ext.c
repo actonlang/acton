@@ -1822,6 +1822,62 @@ static void tls_listener_close_stream(tlsuv_stream_t *stream) {
     tlsuv_stream_close(stream, tls_listener_on_close);
 }
 
+// Local and remote names of the TCP connection under a TLS stream
+static void tls_stream_names(tlsuv_stream_t *stream, struct tcp_names *names) {
+    memset(names, 0, sizeof(*names));
+    uv_os_fd_t fd;
+    if (uv_fileno((const uv_handle_t *)&stream->watcher, &fd) != 0) {
+        return;
+    }
+    struct sockaddr_storage name;
+    socklen_t namelen = sizeof(name);
+    if (getsockname((uv_os_sock_t)fd, (struct sockaddr *)&name, &namelen) == 0) {
+        sockaddr_to_addr_port((struct sockaddr *)&name, names->local_address, sizeof(names->local_address), &names->local_port);
+    }
+    namelen = sizeof(name);
+    if (getpeername((uv_os_sock_t)fd, (struct sockaddr *)&name, &namelen) == 0) {
+        sockaddr_to_addr_port((struct sockaddr *)&name, names->remote_address, sizeof(names->remote_address), &names->remote_port);
+        names->family = name.ss_family == AF_INET6 ? 6 : 4;
+    }
+}
+
+// The peer certificate chain (DER, leaf first) of a completed handshake
+static B_list tls_peer_certificates(tlsuv_stream_t *stream) {
+    B_list certs = B_listG_new(NULL, NULL);
+    tlsuv_engine_t engine = stream->tls_engine;
+    if (engine == NULL || engine->get_peer_cert == NULL) {
+        return certs;
+    }
+    const unsigned char *der;
+    size_t der_len;
+    for (int i = 0; engine->get_peer_cert(engine, i, &der, &der_len) == 0; i++) {
+        B_SequenceD_listG_witness->$class->append(B_SequenceD_listG_witness, certs, actBytesFromCStringLengthCopy((const char *)der, (int64_t)der_len));
+    }
+    return certs;
+}
+
+static int64_t tls_verify_result(tlsuv_stream_t *stream) {
+    tlsuv_engine_t engine = stream->tls_engine;
+    if (engine == NULL || engine->verify_result == NULL) {
+        return -1;
+    }
+    return engine->verify_result(engine);
+}
+
+static B_str tls_alpn(tlsuv_stream_t *stream) {
+    const char *alpn = tlsuv_stream_get_protocol(stream);
+    return alpn != NULL ? actStrFromCStringCopy(alpn) : NULL;
+}
+
+static B_str tls_version(tlsuv_stream_t *stream) {
+    tlsuv_engine_t engine = stream->tls_engine;
+    const char *version = NULL;
+    if (engine != NULL && engine->get_tls_version != NULL) {
+        version = engine->get_tls_version(engine);
+    }
+    return actStrFromCStringCopy(version != NULL ? version : "");
+}
+
 static void tls_listener_on_connect(uv_connect_t *creq, int status) {
     struct tls_listener_conn *conn = (struct tls_listener_conn *)creq->data;
     if (conn == NULL) {
@@ -2275,6 +2331,16 @@ $R netQ_TLSListenConnectionD__initG_local (netQ_TLSListenConnection self, $Cont 
         if (state != NULL) {
             state->actor = self;
             self->_stream = (int64_t)(intptr_t)stream;
+            struct tcp_names names;
+            tls_stream_names(stream, &names);
+            self->_local_address = actStrFromCStringCopy(names.local_address);
+            self->_local_port = names.local_port;
+            self->_remote_address = actStrFromCStringCopy(names.remote_address);
+            self->_remote_port = names.remote_port;
+            self->_peer_certificates = tls_peer_certificates(stream);
+            self->_verify_result = tls_verify_result(stream);
+            self->_alpn = tls_alpn(stream);
+            self->_tls_version = tls_version(stream);
         } else {
             self->server_stream = -1LL;
             self->_stream = -1LL;
@@ -2605,6 +2671,16 @@ static void tls_on_connect(uv_connect_t *creq, int status) {
     }
 
     state->connected = true;
+    struct tcp_names names;
+    tls_stream_names(stream, &names);
+    self->_local_address = actStrFromCStringCopy(names.local_address);
+    self->_local_port = names.local_port;
+    self->_remote_address = actStrFromCStringCopy(names.remote_address);
+    self->_remote_port = names.remote_port;
+    self->_peer_certificates = tls_peer_certificates(stream);
+    self->_verify_result = tls_verify_result(stream);
+    self->_alpn = tls_alpn(stream);
+    self->_tls_version = tls_version(stream);
     if (self->on_connect != NULL) {
         self->$class->_on_tls_connect(self);
     } else {

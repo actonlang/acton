@@ -175,17 +175,37 @@ def find_error(errors: list[str], text: str) -> bool:
 
 
 actor _test_TLSMutualAuth(t: testing.EnvT):
-    """Both ends present a certificate from a private CA"""
+    """Both ends present a certificate from a private CA and see the other's"""
     def check(h: tls_handshake, c: ?net.TLSConnection, s: ?net.TLSListenConnection, client_errors: list[str], server_errors: list[str]):
-        if c is None or s is None:
-            h.failure("handshake failed: %s %s" % (str(client_errors), str(server_errors)))
-        elif client_errors != [] or server_errors != []:
-            h.failure("errors: %s %s" % (str(client_errors), str(server_errors)))
+        if c is not None and s is not None:
+            mutual_auth_check(h, c, s, server_errors)
         else:
-            h.success()
+            h.failure("handshake failed: %s %s" % (str(client_errors), str(server_errors)))
 
     tls_handshake(t, "mutual TLS", check, client_auth=True, server_ca_pem=CA_PEM,
                   ca_pem=CA_PEM, cert_pem=CLIENT_CERT_PEM, key_pem=CLIENT_KEY_PEM)
+
+
+def mutual_auth_check(h: tls_handshake, c: net.TLSConnection, s: net.TLSListenConnection, server_errors: list[str]):
+    client_tls = c.tls_info()
+    server_tls = s.tls_info()
+    client_ep = c.endpoints()
+    server_ep = s.endpoints()
+    try:
+        testing.assertEqual(client_tls.verify_result, 0, "client verify result")
+        testing.assertEqual(client_tls.peer_certificates, [pem_to_der(SERVER_CERT_PEM)], "server certificate chain")
+        testing.assertEqual(server_tls.verify_result, 0, "server verify result")
+        testing.assertEqual(server_tls.peer_certificates, [pem_to_der(CLIENT_CERT_PEM)], "client certificate chain")
+        testing.assertEqual(client_tls.version, "TLSv1.3", "client TLS version")
+        testing.assertEqual(server_tls.version, "TLSv1.3", "server TLS version")
+        testing.assertEqual(server_ep.remote_address, "127.0.0.1", "accepted connection remote address")
+        testing.assertEqual(server_ep.remote_port, client_ep.local_port, "accepted connection remote port")
+        testing.assertEqual(client_ep.remote_port, server_ep.local_port, "client remote port")
+        testing.assertEqual(server_errors, [], "server errors")
+    except AssertionError as e:
+        h.failure(str(e))
+        return
+    h.success()
 
 
 actor _test_TLSMissingClientCert(t: testing.EnvT):
@@ -245,7 +265,11 @@ actor tls_server_name_ok(t: testing.EnvT, server_name: str):
     """The server certificate verifies with server_name"""
     def check(h: tls_handshake, c: ?net.TLSConnection, s: ?net.TLSListenConnection, client_errors: list[str], server_errors: list[str]):
         if c is not None:
-            h.success()
+            result = c.tls_info().verify_result
+            if result != 0:
+                h.failure("verify result %d" % result)
+            else:
+                h.success()
         else:
             h.failure("client errors: " + str(client_errors))
 
