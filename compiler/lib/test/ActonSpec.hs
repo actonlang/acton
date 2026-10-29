@@ -2234,6 +2234,7 @@ main = do
       testTypes env0 ["deact"]
       testTypes env0 ["test_discovery"]
       testTypes env0 ["witness_forward"]
+      testTypes env0 ["witness_knot_methods"]
 
       it "discovers functions with each testing context" $ do
         let src = unlines

@@ -1,0 +1,66 @@
+# recursive group:
+class Keyed[G_self, K] (__builtin__.Eq[G_self], __builtin__.value):
+    @property
+    W_EqD_KD_Keyed : __builtin__.Eq[K]
+    pure def __init__ (W_self : Self, W_EqD_K : __builtin__.Eq[K]) -> None:
+        __builtin__.Eq.__init__@[G_self](W_self)
+        W_self.W_EqD_KD_Keyed = W_EqD_K
+    pass
+class Sub[G_self, K] (Keyed[G_self, K], __builtin__.Eq[G_self], __builtin__.value):
+    @property
+    W_EqD_KD_Sub : __builtin__.Eq[K]
+    pure def __init__ (W_self : Self, W_EqD_K : __builtin__.Eq[K]) -> None:
+        Keyed.__init__@[G_self, K](W_self, W_EqD_K)
+        W_self.W_EqD_KD_Sub = W_EqD_K
+    pass
+class Tagged[G_self] (__builtin__.value):
+    pure def __init__ (W_self : Self) -> None:
+    tag : (G_self) -> __builtin__.int
+class Foo (__builtin__.object, __builtin__.value):
+    pure def __get_attr__ (self : Self, name : __builtin__.str) -> ?__builtin__.value:
+        return None
+    pure def G_init (self : Self) -> None:
+        pass
+    @property
+    n : __builtin__.int
+    pure def __init__ (self : Self, n : __builtin__.int) -> None:
+        self.n = n
+class Bar (__builtin__.object, __builtin__.value):
+    pure def __get_attr__ (self : Self, name : __builtin__.str) -> ?__builtin__.value:
+        return None
+    pure def G_init (self : Self) -> None:
+        pass
+    @property
+    n : __builtin__.int
+    pure def __init__ (self : Self, n : __builtin__.int) -> None:
+        self.n = n
+class KeyedD_Foo (Keyed[Foo, Bar], __builtin__.Eq[Foo], __builtin__.value):
+    W_Keyed_23: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
+    W_Keyed_14: __builtin__.Eq[Bar] = $CAST@[?KeyedD_Bar, KeyedD_Bar](W_KeyedD_Bar) if $ISNOTNONE@[KeyedD_Bar](W_KeyedD_Bar) else KeyedD_Bar(W_self)
+    pure def __init__ (W_self : Self, W_KeyedD_Bar : ?KeyedD_Bar) -> None:
+        Keyed.__init__@[Foo, Bar](W_self, W_Keyed_14)
+    pure def __eq__ (W_self : Self, self : Foo, other : Foo) -> __builtin__.bool:
+        return W_Keyed_23.__eq__(self.n, other.n)
+class KeyedD_Bar (Keyed[Bar, Foo], __builtin__.Eq[Bar], __builtin__.value):
+    W_Keyed_35: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
+    W_Keyed_26: __builtin__.Eq[Foo] = $CAST@[?KeyedD_Foo, KeyedD_Foo](W_KeyedD_Foo) if $ISNOTNONE@[KeyedD_Foo](W_KeyedD_Foo) else KeyedD_Foo(W_self)
+    pure def __init__ (W_self : Self, W_KeyedD_Foo : ?KeyedD_Foo) -> None:
+        Keyed.__init__@[Bar, Foo](W_self, W_Keyed_26)
+    pure def __eq__ (W_self : Self, self : Bar, other : Bar) -> __builtin__.bool:
+        return W_Keyed_35.__eq__(self.n, other.n)
+class SubD_Foo (Sub[Foo, Bar], Keyed[Foo, Bar], __builtin__.Eq[Foo], __builtin__.value):
+    W_Keyed_38: __builtin__.Eq[Bar] = KeyedD_Bar(None)
+    pure def __init__ (W_self : Self) -> None:
+        Sub.__init__@[Foo, Bar](W_self, W_Keyed_38)
+    pass
+    pure def __eq__ (W_self : Self, G_1p : Foo, G_2p : Foo) -> __builtin__.bool:
+        W_Keyed_41: __builtin__.Eq[Foo] = KeyedD_Foo()
+        return W_Keyed_41.__eq__(G_1p, G_2p)
+class TaggedD_Foo (Tagged[Foo], __builtin__.value):
+    pure def __init__ (W_self : Self) -> None:
+        Tagged.__init__@[Foo](W_self)
+    pure def tag (W_self : Self, self : Foo) -> __builtin__.int:
+        W_Keyed_61: __builtin__.Eq[Bar] = KeyedD_Bar()
+        W_Keyed_63: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+        return W_Keyed_63.__fromatom__(7) if W_Keyed_61.__eq__(Bar(n = self.n), Bar(n = self.n)) else W_Keyed_63.__fromatom__(0)
+# (recursive group)

@@ -1,0 +1,27 @@
+# recursive group:
+protocol Keyed[K(__builtin__.Eq)] (__builtin__.Eq):
+    pass
+protocol Sub[K(__builtin__.Eq)] (Keyed[K]):
+    pass
+protocol Tagged:
+    tag : () -> __builtin__.int
+class Foo (__builtin__.object):
+    n : __builtin__.int
+    T_21w def __init__ (self : T_13w, n : __builtin__.int) -> T_17w:
+        self.n = n
+class Bar (__builtin__.object):
+    n : __builtin__.int
+    T_33w def __init__ (self : T_25w, n : __builtin__.int) -> T_29w:
+        self.n = n
+extension Foo (Keyed[Bar]):
+    T_43w def __eq__ (self : T_39w, other : Foo) -> __builtin__.bool:
+        return self.n == other.n
+extension Bar (Keyed[Foo]):
+    T_53w def __eq__ (self : T_49w, other : Bar) -> __builtin__.bool:
+        return self.n == other.n
+extension Foo (Sub[Bar]):
+    pass
+extension Foo (Tagged):
+    T_63w def tag (self : T_59w) -> __builtin__.int:
+        return 7 if Bar(self.n) == Bar(self.n) else 0
+# (recursive group)
