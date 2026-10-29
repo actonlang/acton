@@ -1,4 +1,4 @@
-# TLS certificate verification and client certificates
+# TLS certificate verification, client certificates and handshake errors
 #
 # The certificates were made with openssl for these tests, valid for 100
 # years: a test CA, a server certificate for localhost, 127.0.0.1 and ::1 and
@@ -167,6 +167,14 @@ actor tls_handshake(t: testing.EnvT, what: str,
                     client_auth=client_auth, ca_pem=server_ca_pem, protocols=server_protocols)
 
 
+# With TLS 1.3 the server checks a client certificate after the client has
+# completed the handshake. An mbedtls server then still encrypts its alert
+# with the handshake keys, while the client already reads with the
+# application keys, so the client sees a failed record MAC rather than the
+# alert. Only the server side can tell why.
+CLIENT_REJECTED_TLS13 = "Verification of the message MAC failed"
+
+
 def find_error(errors: list[str], text: str) -> bool:
     for e in errors:
         if e.find(text) != -1:
@@ -211,12 +219,14 @@ def mutual_auth_check(h: tls_handshake, c: net.TLSConnection, s: net.TLSListenCo
 
 
 actor _test_TLSMissingClientCert(t: testing.EnvT):
-    """A client without a certificate is rejected when the server requires one"""
+    """A client without a certificate learns that the server requires one"""
     def check(h: tls_handshake, c: ?net.TLSConnection, s: ?net.TLSListenConnection, client_errors: list[str], server_errors: list[str]):
         if s is not None:
             h.failure("server accepted a client without a certificate")
-        elif len(client_errors) != 1 or len(server_errors) != 1:
-            h.failure("errors: %s %s" % (str(client_errors), str(server_errors)))
+        elif len(client_errors) != 1 or not (find_error(client_errors, "client certificate") or find_error(client_errors, CLIENT_REJECTED_TLS13)):
+            h.failure("client errors: " + str(client_errors))
+        elif not find_error(server_errors, "client did not present a certificate"):
+            h.failure("server errors: " + str(server_errors))
         else:
             h.success()
 
@@ -228,8 +238,10 @@ actor _test_TLSClientCertUnknownCA(t: testing.EnvT):
     def check(h: tls_handshake, c: ?net.TLSConnection, s: ?net.TLSListenConnection, client_errors: list[str], server_errors: list[str]):
         if s is not None:
             h.failure("server accepted an untrusted client certificate")
-        elif len(client_errors) != 1 or len(server_errors) != 1:
-            h.failure("errors: %s %s" % (str(client_errors), str(server_errors)))
+        elif len(client_errors) != 1 or not (find_error(client_errors, "server does not trust our certificate") or find_error(client_errors, CLIENT_REJECTED_TLS13)):
+            h.failure("client errors: " + str(client_errors))
+        elif not find_error(server_errors, "client certificate is not trusted (unknown CA)"):
+            h.failure("server errors: " + str(server_errors))
         else:
             h.success()
 
@@ -242,8 +254,10 @@ actor _test_TLSServerCertUnknownCA(t: testing.EnvT):
     def check(h: tls_handshake, c: ?net.TLSConnection, s: ?net.TLSListenConnection, client_errors: list[str], server_errors: list[str]):
         if c is not None:
             h.failure("client connected to an untrusted server")
-        elif len(client_errors) != 1:
+        elif len(client_errors) != 1 or not find_error(client_errors, "server certificate is not trusted (unknown CA)"):
             h.failure("client errors: " + str(client_errors))
+        elif not find_error(server_errors, "client does not trust our certificate"):
+            h.failure("server errors: " + str(server_errors))
         else:
             h.success()
 
@@ -255,7 +269,7 @@ actor _test_TLSServerNameMismatch(t: testing.EnvT):
     def check(h: tls_handshake, c: ?net.TLSConnection, s: ?net.TLSListenConnection, client_errors: list[str], server_errors: list[str]):
         if c is not None:
             h.failure("client connected to a server with the wrong name")
-        elif len(client_errors) != 1:
+        elif len(client_errors) != 1 or not find_error(client_errors, "does not match the server name wrong.example"):
             h.failure("client errors: " + str(client_errors))
         else:
             h.success()

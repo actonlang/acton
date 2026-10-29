@@ -1519,6 +1519,7 @@ struct tls_client_state {
     netQ_TLSConnection actor;
     int64_t attempt;
     bool connected;
+    bool has_cert;
     struct tls_owner *owner; // NULL for the default TLS context
     int alpn_count;
     char **alpn_protocols;
@@ -1772,6 +1773,7 @@ static struct tls_client_state *tls_client_state_new(netQ_TLSConnection actor) {
     state->actor = actor;
     state->attempt = actor->_attempt;
     state->connected = false;
+    state->has_cert = false;
     state->owner = NULL;
     state->alpn_count = 0;
     state->alpn_protocols = NULL;
@@ -1861,6 +1863,113 @@ static void tls_listener_close_stream(tlsuv_stream_t *stream) {
     }
     tlsuv_stream_read_stop(stream);
     tlsuv_stream_close(stream, tls_listener_on_close);
+}
+
+static const char *tls_alert_name(int alert) {
+    switch (alert) {
+    case 10: return "unexpected_message";
+    case 20: return "bad_record_mac";
+    case 22: return "record_overflow";
+    case 40: return "handshake_failure";
+    case 42: return "bad_certificate";
+    case 43: return "unsupported_certificate";
+    case 44: return "certificate_revoked";
+    case 45: return "certificate_expired";
+    case 46: return "certificate_unknown";
+    case 47: return "illegal_parameter";
+    case 48: return "unknown_ca";
+    case 49: return "access_denied";
+    case 50: return "decode_error";
+    case 51: return "decrypt_error";
+    case 70: return "protocol_version";
+    case 71: return "insufficient_security";
+    case 80: return "internal_error";
+    case 86: return "inappropriate_fallback";
+    case 90: return "user_canceled";
+    case 109: return "missing_extension";
+    case 110: return "unsupported_extension";
+    case 112: return "unrecognized_name";
+    case 116: return "certificate_required";
+    case 120: return "no_application_protocol";
+    default: return NULL;
+    }
+}
+
+// Describes why a TLS handshake failed: an alert from the peer, or the
+// reason we rejected the peer certificate, or else the TLS engine's error.
+// is_server tells which end we are, has_cert whether we presented a
+// certificate.
+static void tls_describe_failure(tlsuv_stream_t *stream, bool is_server, bool has_cert, char *buf, size_t len) {
+    tlsuv_engine_t engine = stream->tls_engine;
+    const char *peer = is_server ? "client" : "server";
+    if (engine == NULL) {
+        snprintf(buf, len, "unable to set up TLS");
+        return;
+    }
+
+    int alert = engine->peer_alert != NULL ? engine->peer_alert(engine) : -1;
+    if (alert >= 0) {
+        const char *name = tls_alert_name(alert);
+        char alert_name[32];
+        if (name == NULL) {
+            snprintf(alert_name, sizeof(alert_name), "%d", alert);
+            name = alert_name;
+        }
+        switch (alert) {
+        case 116:
+            snprintf(buf, len, "%s requires a client certificate (alert %s)", peer, name);
+            break;
+        case 48:
+            snprintf(buf, len, "%s does not trust our certificate (alert %s)", peer, name);
+            break;
+        case 42: case 43: case 44: case 45: case 46:
+            snprintf(buf, len, "%s rejected our certificate (alert %s)", peer, name);
+            break;
+        case 40:
+            if (!is_server && !has_cert) {
+                snprintf(buf, len, "%s rejected the handshake (alert %s), it may require a client certificate", peer, name);
+            } else {
+                snprintf(buf, len, "%s rejected the handshake (alert %s)", peer, name);
+            }
+            break;
+        default:
+            snprintf(buf, len, "%s sent alert %s", peer, name);
+        }
+        return;
+    }
+
+    long flags = engine->verify_result != NULL ? engine->verify_result(engine) : -1;
+    if (flags > 0 && (flags & ~TLSUV_CERT_SKIP_VERIFY) != 0) {
+        if (flags & TLSUV_CERT_MISSING) {
+            snprintf(buf, len, "%s did not present a certificate", peer);
+            return;
+        }
+        static const struct { long flag; const char *text; } reasons[] = {
+            { TLSUV_CERT_NOT_TRUSTED, "is not trusted (unknown CA)" },
+            { TLSUV_CERT_NAME_MISMATCH, "does not match the server name" },
+            { TLSUV_CERT_EXPIRED, "has expired" },
+            { TLSUV_CERT_FUTURE, "is not valid yet" },
+            { TLSUV_CERT_REVOKED, "is revoked" },
+            { TLSUV_CERT_KEY_USAGE, "does not allow this use" },
+            { TLSUV_CERT_BAD_KEY, "uses an unacceptable key or signature algorithm" },
+            { TLSUV_CERT_OTHER, "failed verification" },
+        };
+        size_t used = (size_t)snprintf(buf, len, "%s certificate", peer);
+        const char *sep = " ";
+        for (size_t i = 0; i < sizeof(reasons) / sizeof(reasons[0]) && used < len; i++) {
+            if (flags & reasons[i].flag) {
+                used += (size_t)snprintf(buf + used, len - used, "%s%s", sep, reasons[i].text);
+                if (reasons[i].flag == TLSUV_CERT_NAME_MISMATCH && stream->host != NULL && used < len) {
+                    used += (size_t)snprintf(buf + used, len - used, " %s", stream->host);
+                }
+                sep = ", ";
+            }
+        }
+        return;
+    }
+
+    const char *err = tlsuv_stream_get_error(stream);
+    snprintf(buf, len, "%s", err != NULL && err[0] != '\0' ? err : uv_strerror(UV_ECONNABORTED));
 }
 
 // Local and remote names of the TCP connection under a TLS stream
@@ -1959,8 +2068,12 @@ static void tls_listener_on_connect(uv_connect_t *creq, int status) {
         char errmsg[1024];
         if (conn->timed_out) {
             snprintf(errmsg, sizeof(errmsg), "TLS handshake with client %s timed out", conn->peer);
+        } else if (status == UV_ECONNABORTED) {
+            char reason[768];
+            tls_describe_failure(stream, true, true, reason, sizeof(reason));
+            snprintf(errmsg, sizeof(errmsg), "TLS handshake with client %s failed: %s", conn->peer, reason);
         } else {
-            snprintf(errmsg, sizeof(errmsg), "TLS handshake failed: %s", uv_strerror(status));
+            snprintf(errmsg, sizeof(errmsg), "TLS handshake with client %s failed: %s", conn->peer, uv_strerror(status));
         }
         log_warn(errmsg);
         if (listener->on_listen != NULL) {
@@ -2628,7 +2741,12 @@ void tls_on_receive(uv_stream_t *stream, ssize_t nread, const uv_buf_t* buf) {
     }
     else if (nread < 0) {
         char errmsg[1024] = "TLS read error: ";
-        uv_strerror_r((int)nread, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        if (nread == UV_ECONNABORTED) {
+            // A TLS error rather than a socket error
+            tls_describe_failure((tlsuv_stream_t *)stream, false, state->has_cert, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        } else {
+            uv_strerror_r((int)nread, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        }
         log_debug("%s", errmsg);
         int64_t attempt = state->attempt;
         tls_close((tlsuv_stream_t *)stream);
@@ -2756,8 +2874,15 @@ static void tls_on_connect(uv_connect_t *creq, int status) {
     }
 
     if (status != 0) {
-        char errmsg[1024] = "Error in TLS TCP connect: ";
-        uv_strerror_r(status, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        char errmsg[1024];
+        if (status == UV_ECONNABORTED) {
+            // The TCP connection was up, the TLS handshake failed
+            char reason[768];
+            tls_describe_failure(stream, false, state->has_cert, reason, sizeof(reason));
+            snprintf(errmsg, sizeof(errmsg), "TLS handshake failed: %s", reason);
+        } else {
+            snprintf(errmsg, sizeof(errmsg), "Error in TLS TCP connect: %s", uv_strerror(status));
+        }
         log_debug(errmsg);
         int64_t attempt = state->attempt;
         tls_close(stream);
@@ -2868,6 +2993,7 @@ $R netQ_TLSConnectionD__connect_tlsG_local (netQ_TLSConnection self, $Cont c$con
         return $R_CONT(c$cont, B_None);
     }
     state->owner = owner;
+    state->has_cert = self->cert_pem != NULL;
     connect_req->data = (void *)state;
     int r = tlsuv_stream_init(get_uv_loop(), stream, owner != NULL ? owner->tls : NULL);
     if (r != 0) {
