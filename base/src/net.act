@@ -763,11 +763,17 @@ actor TLSListener(cap: TCPListenCap, address: str, port: int, cert_pem: bytes, k
         NotImplemented
     _init()
 
-actor TLSConnection(cap: TCPConnectCap, address: str, port: int, on_connect: action(TLSConnection) -> None, on_receive: action(TLSConnection, bytes) -> None, on_error: action(TLSConnection, str) -> None, on_remote_close: ?action(TLSConnection) -> None=None, verify_tls: bool=True, protocols: list[str]=[]):
-    # TODO: support hostname/CN mismatch, good when connecting with IP address?
+actor TLSConnection(cap: TCPConnectCap, address: str, port: int, on_connect: action(TLSConnection) -> None, on_receive: action(TLSConnection, bytes) -> None, on_error: action(TLSConnection, str) -> None, on_remote_close: ?action(TLSConnection) -> None=None, verify_tls: bool=True, protocols: list[str]=[], ca_pem: ?bytes=None, server_name: ?str=None):
+    """TLS connection
+
+    The server certificate is verified against the CA certificates in ca_pem
+    (PEM, one or more), or the system CA bundle without it, and against
+    server_name, which is also sent as SNI. server_name defaults to address,
+    "" sends no SNI and skips the name check. The handshake fails unless the
+    certificate verifies, verify_tls=False skips the verification. protocols
+    lists ALPN protocols to offer.
+    """
     # TODO: do DNS lookup in Acton
-    # TODO: support ALPN
-    # TODO: support SNI
     # TODO: support client certificates
     # TODO: implement state machine
     # TODO: support timeout

@@ -1,0 +1,213 @@
+# TLS certificate verification
+#
+# The certificates were made with openssl for these tests, valid for 100
+# years: a test CA, a server certificate for localhost, 127.0.0.1 and ::1 and
+# a client certificate both from the test CA, and an unrelated other CA.
+
+import base64
+import net
+import testing
+
+
+CA_PEM = b"""-----BEGIN CERTIFICATE-----
+MIIBlzCCAT2gAwIBAgIUdwvsQxTwYxPSupxT1FyxFZ6GG0QwCgYIKoZIzj0EAwIw
+GDEWMBQGA1UEAwwNQWN0b24gVGVzdCBDQTAgFw0yNjEwMTIwNTU0MTVaGA8yMTI2
+MDkxODA1NTQxNVowGDEWMBQGA1UEAwwNQWN0b24gVGVzdCBDQTBZMBMGByqGSM49
+AgEGCCqGSM49AwEHA0IABOLkoR9R8YmsIqyYOH0TFo36aBPERRvOF7kiWtrHnttD
+rGMH4kPHYPMSXjLjq2eGqwB7j9cjeX3flbJ55gkEbkejYzBhMB0GA1UdDgQWBBRO
+8x+h+NSp8aw20It8sgYJ5iNxITAfBgNVHSMEGDAWgBRO8x+h+NSp8aw20It8sgYJ
+5iNxITAPBgNVHRMBAf8EBTADAQH/MA4GA1UdDwEB/wQEAwIBBjAKBggqhkjOPQQD
+AgNIADBFAiEA3zzCO3P1Kig0dk1RssKItCVhw5eBfM483ENfcU3b1zgCIF0CzBp1
+SQCGpWq+ru4e665uoGUHz/AmVx4YARw16iSL
+-----END CERTIFICATE-----
+"""
+
+OTHER_CA_PEM = b"""-----BEGIN CERTIFICATE-----
+MIIBozCCAUmgAwIBAgIUJiEpIPxo7ugkE2MAbxW35l4hlMwwCgYIKoZIzj0EAwIw
+HjEcMBoGA1UEAwwTQWN0b24gT3RoZXIgVGVzdCBDQTAgFw0yNjEwMTIwNTU0MTVa
+GA8yMTI2MDkxODA1NTQxNVowHjEcMBoGA1UEAwwTQWN0b24gT3RoZXIgVGVzdCBD
+QTBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABKfEf90ShdA5qV74eVtoSn7y28ge
+n/FOu4Yfjg4onYHTy8xOTwyFDOLkYIXz7Jup+sVK6KvHeOKV9aYkKiWMFKGjYzBh
+MB0GA1UdDgQWBBRR4l4cnGeTf+LjYX8V+OZC8FRQgTAfBgNVHSMEGDAWgBRR4l4c
+nGeTf+LjYX8V+OZC8FRQgTAPBgNVHRMBAf8EBTADAQH/MA4GA1UdDwEB/wQEAwIB
+BjAKBggqhkjOPQQDAgNIADBFAiEAiACYdhmpIsO1snfP4SeAkbQyp4hvULR+CHzI
+evo1/sICIHeG9VENhQWsM91l0Iy2NcL6sTb0q/OjjT7E0YMrkVNa
+-----END CERTIFICATE-----
+"""
+
+SERVER_CERT_PEM = b"""-----BEGIN CERTIFICATE-----
+MIIBvzCCAWWgAwIBAgIBAjAKBggqhkjOPQQDAjAYMRYwFAYDVQQDDA1BY3RvbiBU
+ZXN0IENBMCAXDTI2MTAxMjA1NTQxNVoYDzIxMjYwOTE4MDU1NDE1WjAUMRIwEAYD
+VQQDDAlsb2NhbGhvc3QwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAATo8/pUtL54
+lzPAptLChWNNrUwkF7DXhSehxYBdH8JG7tj9Zf/hSvimR8zwZfKxaZweUl5xou57
+/diXS30lNmqeo4GhMIGeMAkGA1UdEwQCMAAwDgYDVR0PAQH/BAQDAgeAMBMGA1Ud
+JQQMMAoGCCsGAQUFBwMBMCwGA1UdEQQlMCOCCWxvY2FsaG9zdIcEfwAAAYcQAAAA
+AAAAAAAAAAAAAAAAATAdBgNVHQ4EFgQUa3HzsvHphLVU8FTsvqubEhddWtwwHwYD
+VR0jBBgwFoAUTvMfofjUqfGsNtCLfLIGCeYjcSEwCgYIKoZIzj0EAwIDSAAwRQIg
+b//gZKVmb+SMi33ttyt82cfuiXQHB3wKQPo1LKGJ/FUCIQDWq1IjsZn+lgICSHR8
+JNBEtQru68GV9TZ/ml1Z3L618g==
+-----END CERTIFICATE-----
+"""
+
+SERVER_KEY_PEM = b"""-----BEGIN PRIVATE KEY-----
+MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgz3KphyBfmdQhLB6G
+D3C6n8puE7czBJUWG5c0LIYnbxihRANCAATo8/pUtL54lzPAptLChWNNrUwkF7DX
+hSehxYBdH8JG7tj9Zf/hSvimR8zwZfKxaZweUl5xou57/diXS30lNmqe
+-----END PRIVATE KEY-----
+"""
+
+CLIENT_CERT_PEM = b"""-----BEGIN CERTIFICATE-----
+MIIBlzCCAT2gAwIBAgIBAzAKBggqhkjOPQQDAjAYMRYwFAYDVQQDDA1BY3RvbiBU
+ZXN0IENBMCAXDTI2MTAxMjA1NTQxNVoYDzIxMjYwOTE4MDU1NDE1WjAcMRowGAYD
+VQQDDBFBY3RvbiBUZXN0IENsaWVudDBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IA
+BCM/nvgzfaLxQgGcEc9ICmj0rAcE1ZmiL49N24nX4d1Uhff3dhQIf0C9Iv0UErNL
+PisFcdt3wW8qVe1gA4GlDtmjcjBwMAkGA1UdEwQCMAAwDgYDVR0PAQH/BAQDAgeA
+MBMGA1UdJQQMMAoGCCsGAQUFBwMCMB0GA1UdDgQWBBTQZqrgrfHu4xMsORivJFNX
+X/8eCDAfBgNVHSMEGDAWgBRO8x+h+NSp8aw20It8sgYJ5iNxITAKBggqhkjOPQQD
+AgNIADBFAiEAuV3nudga09i+a0VxDR/v8GtGzn258k8Fva0wEo8EQ4QCIH30HkE4
+dz97dl+y6qnxu3LJrUorA0UIxXP6ayLPaClE
+-----END CERTIFICATE-----
+"""
+
+CLIENT_KEY_PEM = b"""-----BEGIN PRIVATE KEY-----
+MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgE6ccjOQFOIDMOIDP
+0PNUFrzEqGnUVT+eK/04yVRr+jihRANCAAQjP574M32i8UIBnBHPSApo9KwHBNWZ
+oi+PTduJ1+HdVIX393YUCH9AvSL9FBKzSz4rBXHbd8FvKlXtYAOBpQ7Z
+-----END PRIVATE KEY-----
+"""
+
+
+def pem_to_der(pem: bytes) -> bytes:
+    body = [line for line in pem.splitlines() if not line.startswith(b"-----")]
+    return base64.decode(b"".join(body))
+
+
+actor tls_handshake(t: testing.EnvT, what: str,
+                    check: action(tls_handshake, ?net.TLSConnection, ?net.TLSListenConnection, list[str], list[str]) -> None,
+                    ca_pem: ?bytes=None, server_name: ?str=None):
+    """A TLS handshake between a listener and a client with the given settings
+
+    Calls check with the connected client and the accepted connection, None
+    for those that failed, and the errors of the client and the listener.
+    """
+    listen_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+    connect_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
+    var done = False
+    var listener: ?net.TLSListener = None
+    var client: ?net.TLSConnection = None
+    var server_conn: ?net.TLSListenConnection = None
+    var client_errors: list[str] = []
+    var server_errors: list[str] = []
+    var port = 0
+
+    def finish():
+        if done:
+            return
+        done = True
+        check(self, client, server_conn, client_errors, server_errors)
+
+    def success():
+        _close()
+        t.success()
+
+    def failure(msg: str):
+        _close()
+        t.failure(AssertionError(what + ": " + msg))
+
+    def _close():
+        if listener is not None:
+            listener.close()
+        if server_conn is not None:
+            server_conn.close()
+        if client is not None:
+            client.close(lambda c: None)
+
+    def on_listen(l: net.TLSListener, error: ?str):
+        if error is not None:
+            if listener is None:
+                failure("listen error: " + error)
+            else:
+                # A failed handshake
+                server_errors.append(error)
+            return
+        listener = l
+        port = l.local_port()
+        net.TLSConnection(connect_cap, "127.0.0.1", port, on_connect, on_receive, on_error, None,
+                          ca_pem=ca_pem, server_name=server_name)
+
+    def on_accept(s: net.TLSListenConnection):
+        server_conn = s
+        s.cb_install(on_server_receive, on_server_error, None)
+
+    def on_server_receive(s: net.TLSListenConnection, data: bytes):
+        pass
+
+    def on_server_error(s: net.TLSListenConnection, error: str):
+        server_errors.append(error)
+
+    def on_connect(c: net.TLSConnection):
+        client = c
+        # Let the listener side settle
+        after 0.3: finish()
+
+    def on_receive(c: net.TLSConnection, data: bytes):
+        pass
+
+    def on_error(c: net.TLSConnection, error: str):
+        client_errors.append(error)
+        after 0.3: finish()
+
+    after 8: finish()
+    net.TLSListener(listen_cap, "127.0.0.1", 0, SERVER_CERT_PEM, SERVER_KEY_PEM, on_listen, on_accept)
+
+
+def find_error(errors: list[str], text: str) -> bool:
+    for e in errors:
+        if e.find(text) != -1:
+            return True
+    return False
+
+
+actor _test_TLSServerCertUnknownCA(t: testing.EnvT):
+    """A server certificate from a CA the client does not trust is rejected"""
+    def check(h: tls_handshake, c: ?net.TLSConnection, s: ?net.TLSListenConnection, client_errors: list[str], server_errors: list[str]):
+        if c is not None:
+            h.failure("client connected to an untrusted server")
+        elif len(client_errors) != 1:
+            h.failure("client errors: " + str(client_errors))
+        else:
+            h.success()
+
+    tls_handshake(t, "untrusted server certificate", check, ca_pem=OTHER_CA_PEM)
+
+
+actor _test_TLSServerNameMismatch(t: testing.EnvT):
+    """A server certificate that does not match server_name is rejected"""
+    def check(h: tls_handshake, c: ?net.TLSConnection, s: ?net.TLSListenConnection, client_errors: list[str], server_errors: list[str]):
+        if c is not None:
+            h.failure("client connected to a server with the wrong name")
+        elif len(client_errors) != 1:
+            h.failure("client errors: " + str(client_errors))
+        else:
+            h.success()
+
+    tls_handshake(t, "server name mismatch", check, ca_pem=CA_PEM, server_name="wrong.example")
+
+
+actor tls_server_name_ok(t: testing.EnvT, server_name: str):
+    """The server certificate verifies with server_name"""
+    def check(h: tls_handshake, c: ?net.TLSConnection, s: ?net.TLSListenConnection, client_errors: list[str], server_errors: list[str]):
+        if c is not None:
+            h.success()
+        else:
+            h.failure("client errors: " + str(client_errors))
+
+    tls_handshake(t, "server name '" + server_name + "'", check, ca_pem=CA_PEM, server_name=server_name)
+
+
+actor _test_TLSServerNameLocalhost(t: testing.EnvT):
+    tls_server_name_ok(t, "localhost")
+
+
+actor _test_TLSServerNameNone(t: testing.EnvT):
+    tls_server_name_ok(t, "")
