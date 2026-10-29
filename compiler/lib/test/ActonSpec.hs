@@ -75,6 +75,7 @@ import qualified Acton.BuildSpec as BuildSpec
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Char8 as B8
 import qualified Data.Aeson as Ae
+import qualified Data.Aeson.Types as AeTypes
 import qualified System.IO.Unsafe
 
 
@@ -749,6 +750,22 @@ main = do
         let m = modul [bind 1 (ctor []),plain "f" (S.eCall (S.eQVar other) [ctor []])]
             after = optimize m
         optimize after `shouldBe` after
+
+    describe "Witness statistics" $ do
+      it "reports constructions at module level and left in functions" $ do
+        let q = S.qName ["stats_impl"] "Ctor"
+            resolve n = if n == q then Just q else Nothing
+            ctor = S.eCall (S.eQVar q)
+            w = S.Internal S.Witness "stats"
+            fun n ps b = S.Def NoLoc (S.name n) [] ps S.KwdNIL (Just S.tNone) b S.NoDec S.fxPure Nothing
+            m = S.Module (S.modName ["stats_test"]) [] Nothing
+                  [S.Assign NoLoc [S.pVar (w 1) S.tNone] (ctor []),
+                   S.sDecl [fun "f" S.PosNIL [S.Expr NoLoc (ctor [])],
+                            fun "g" (S.pospar [(w 0,S.tNone)]) [S.Expr NoLoc (ctor [S.eVar (w 0)])]]]
+            stats = Witness.sharingStats resolve (const False) m
+            number key = AeTypes.parseMaybe (Ae.withObject "stats" (Ae..: key)) stats :: Maybe Int
+        map number ["module_level","functions_closed","functions_parameter_dependent","functions_untracked"]
+          `shouldBe` map Just [1,1,1,0]
 
     describe "Zon (build.zig.zon)" $ do
       let deps src = case Zon.parseZon src of

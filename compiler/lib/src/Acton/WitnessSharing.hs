@@ -14,9 +14,9 @@
 {-# LANGUAGE FlexibleContexts #-}
 
 -- Witness descriptions and placement. The sections below contain structural
--- keys, the binding-aware registry, local sharing and module pooling. They
--- describe and reuse ordinary witness objects; there is no runtime registry
--- or alternate serialization.
+-- keys, the binding-aware registry, local sharing, module pooling and opt-in
+-- diagnostics. They describe and reuse ordinary witness objects; there is no
+-- runtime registry or alternate serialization.
 --
 -- Both passes find construction sites by their spelling within a declaration.
 -- Equal spellings can read different bindings: a default argument expanded at
@@ -33,15 +33,16 @@ module Acton.WitnessSharing
     , Capture(..), CaptureKind(..), Binding(..), Site(..)
     , buildRegistry, buildFunctionRegistry
     , shareWitnesses, shareFunction, constructorHeads, witnessConstructors
-    , poolWitnesses, poolModule
+    , poolWitnesses, poolModule, sharingStats
     ) where
 
 import Control.Monad (foldM, forM, forM_, when)
 import Control.Monad.State.Strict
+import Data.Aeson (Value, object, (.=))
 import Data.Functor.Identity
 import Data.Graph (SCC(..), stronglyConnComp)
 import Data.Hashable (hash)
-import Data.List (foldl')
+import Data.List (foldl', partition)
 import Data.Maybe (mapMaybe, isJust)
 import qualified Data.IntMap.Strict as IM
 import qualified Data.Map.Strict as M
@@ -926,3 +927,21 @@ poolModule constructors staticValue m
       b <- walkSuite (dname d:context) f (dbody d)
       return d{dbody=b}
     walkDecl _ _ d = return d
+
+-- Diagnostics -------------------------------------------------------------
+
+-- For --witness-stats: the witness constructions of a module after sharing.
+-- Those at module level run once. Those left in functions and methods run on
+-- every call, and are counted by what they depend on.
+sharingStats :: (QName -> Maybe QName) -> (Expr -> Bool) -> Module -> Value
+sharingStats resolve isStatic m = object
+    [ "module" .= prstr (modname m)
+    , "module_level" .= length moduleLevel
+    , "functions_closed" .= count Closed
+    , "functions_parameter_dependent" .= count ParameterDependent
+    , "functions_untracked" .= count Untracked
+    ]
+  where
+    g = buildRegistry resolve isStatic m
+    (moduleLevel, functions) = partition ((== 0) . siteScope) $ filter (not . siteStatic) (registrySites g)
+    count l = length [() | s <- functions, recipeLifetime (registryRecipes g IM.! siteRecipe s) == l]

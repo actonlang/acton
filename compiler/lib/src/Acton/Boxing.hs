@@ -14,6 +14,8 @@ import Pretty
 import Utils
 import Debug.Trace
 import Data.Maybe (isJust)
+import Data.Aeson (Value)
+import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import qualified Data.HashSet as HashSet
 import Control.Monad.State.Strict
@@ -26,6 +28,12 @@ doBoxing env m                     = do
     let (known, staticValue) = sharingInputs env m
         shared = WitnessSharing.shareWitnesses env known (isJust . staticValue) m{mbody = ss}
     return $ WitnessSharing.poolWitnesses env known staticValue shared
+
+-- Witness constructions in the boxed module, for --witness-stats.
+witnessStats                       :: Acton.Env.Env0 -> Module -> Module -> Value
+witnessStats env m boxed           = WitnessSharing.sharingStats (`Map.lookup` constructors) (isJust . staticValue) boxed
+  where (known, staticValue)       = sharingInputs env m
+        constructors               = WitnessSharing.witnessConstructors env known boxed
 
 -- Sharing trusts the constructors of the module's witness equations, taken
 -- before boxing, and recognizes static witnesses, which can be the module's
