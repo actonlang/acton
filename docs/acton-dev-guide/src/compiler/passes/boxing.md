@@ -10,6 +10,8 @@ Values in Acton are mostly boxed. The boxing pass can unbox values in certain si
   codegen can emit efficient C operations.
 - Rewrites selected builtin operations (arithmetic/comparisons, math functions,
   and some builtin methods) to operate on unboxed values and then re-box results.
+- Ends with [witness sharing](../witnesses.md), which shares protocol witness
+  constructions within a call and across a module.
 
 The pass keeps a map from boxed names to their unboxed counterparts in its
 environment and generates internal names using the `BoxPass` prefix. It also

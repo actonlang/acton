@@ -71,6 +71,17 @@ exhaustion bugs fixed in #3104. Before that fix, `StopIteration` escapes the
 operation and the completion checks fail. Report a failed baseline rather than
 treating the failure time as an operation latency or speedup.
 
+## Witness construction
+
+`witnesses` measures repeated nested-list equality with concrete and generic
+helpers. Each body makes three comparisons that can share the same witness
+recipes. Two further concrete/generic cases exercise inline witnesses in
+expanded default arguments while retaining distinct user objects. Inputs are
+prepared before `t.loop()`. These are fixed workloads; use
+`acton test perf --module witnesses --scale 1`. See the compiler developer
+guide's [witness sharing](../../docs/acton-dev-guide/src/compiler/witnesses.md)
+page for the rules and for `--witness-stats`.
+
 ## Exceptions
 
 `exceptions` measures a fixed builtin error, a fixed Acton error, and a formatted
