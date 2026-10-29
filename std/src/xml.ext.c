@@ -231,7 +231,9 @@ stdQ_xmlQ_Node stdQ_xmlQ_decode(B_str data) {
         if (!ctxt)
             RAISE_EXC(&stdQ_xmlQ_parse_error);
         // With XML_PARSE_NOERROR we suppress printing error and warning reports to stderr
-        xmlCtxtUseOptions(ctxt, XML_PARSE_NOERROR | XML_PARSE_NO_GLOBAL_ERROR);
+        // Support CDATA sections larger than libxml2's default 10 MB limit.
+        // XML_PARSE_HUGE raises the limit to 1 GB.
+        xmlCtxtUseOptions(ctxt, XML_PARSE_NOERROR | XML_PARSE_NO_GLOBAL_ERROR | XML_PARSE_HUGE);
         // Parse the str's bytes where they are instead of copying them: str
         // memory never changes and ends in a NUL byte. libxml2 keeps the only
         // pointer to it in memory the GC doesn't scan, so data must stay

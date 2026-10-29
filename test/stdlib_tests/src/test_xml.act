@@ -251,6 +251,13 @@ def _test_xml_cdata_multiple():
     d = xml.decode(test_xml)
     testing.assertEqual(d.text, "First middle Second", "CDATA: multiple sections failed")
 
+def _test_xml_cdata_large():
+    """Device replies can contain a single CDATA section larger than 10 MB"""
+    payload = "<raw> & text\n" * 1700000
+    document = '<rpc-reply xmlns="urn:ietf:params:xml:ns:netconf:base:1.0"><output><![CDATA[' + payload + ']]></output></rpc-reply>'
+    testing.assertEqual(xml.decode(document).children[0].text, payload)
+    testing.assertEqual(std_xml.decode(document).children[0].text, payload)
+
 def _test_xml_cdata_utf8():
     """Test CDATA with UTF-8 character"""
     test_xml = "<data>100 <![CDATA[㏀]]></data>"
@@ -356,11 +363,11 @@ def _std_xml_error(doc: str) -> str:
 def _test_xml_decode_errors():
     """Errors from parsing and from converting the parsed document
 
-    libxml2 limits nesting to 256 elements. The unsupported node comes after
-    attributes and elements have been converted.
+    With XML_PARSE_HUGE, libxml2 limits nesting to 2048 elements. The unsupported
+    node comes after attributes and elements have been converted.
     """
     cases = [
-        ("<a>" * 257 + "</a>" * 257, "Excessive depth in document: 256, use XML_PARSE_HUGE option @1:771"),
+        ("<a>" * 2049 + "</a>" * 2049, "Excessive depth in document: 2048, use XML_PARSE_HUGE option @1:6147"),
         ('<a k="1" k="2"/>', "Attribute k redefined @1:15"),
         ("<a>&foo;</a>", "Entity 'foo' not defined @1:9"),
         ("<a>garbage", "Premature end of data in tag a line 1 @1:11"),
@@ -370,6 +377,6 @@ def _test_xml_decode_errors():
     for doc, expected in cases:
         testing.assertEqual(_xml_error(doc), expected)
         testing.assertEqual(_std_xml_error(doc), expected)
-    deepest = "<a>" * 255 + "<a/>" + "</a>" * 255
-    testing.assertEqual(xml.encode(xml.decode("<a>" * 256 + "</a>" * 256)), deepest)
-    testing.assertEqual(std_xml.encode(std_xml.decode("<a>" * 256 + "</a>" * 256)), deepest)
+    deepest = "<a>" * 2047 + "<a/>" + "</a>" * 2047
+    testing.assertEqual(xml.encode(xml.decode("<a>" * 2048 + "</a>" * 2048)), deepest)
+    testing.assertEqual(std_xml.encode(std_xml.decode("<a>" * 2048 + "</a>" * 2048)), deepest)
