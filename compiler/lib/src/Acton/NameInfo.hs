@@ -71,6 +71,10 @@ typeDecl _              = True
 
 type HTEnv            =  M.HashMap Name NameInfo
 
+-- | Evaluate every NameInfo of an environment to weak head normal form.
+forceHTEnv            :: HTEnv -> ()
+forceHTEnv            = M.foldl' (\() nameInfo -> nameInfo `seq` ()) ()
+
 instance Data.Binary.Binary NameInfo
 instance Persist NameInfo
 

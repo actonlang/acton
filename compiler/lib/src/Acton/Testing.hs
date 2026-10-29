@@ -30,9 +30,9 @@ module Acton.Testing
   , buildTestHashInfo
   ) where
 
-import qualified Acton.Compile as Compile
 import qualified Acton.Env
 import qualified Acton.Hashing as Hashing
+import qualified Acton.Project as Project
 import qualified Acton.Syntax as A
 import qualified InterfaceFiles
 import Utils (prstr)
@@ -44,7 +44,6 @@ import qualified Crypto.Hash.SHA256 as SHA256
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Key as AesonKey
 import qualified Data.ByteString.Char8 as B
-import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Lazy as BL
 import Data.Either (partitionEithers)
 import Data.IORef
@@ -262,8 +261,8 @@ emptyTestCache ctx = TestCache
   }
 
 -- | Resolve the on-disk test cache path for a project.
-testCachePath :: Compile.Paths -> FilePath
-testCachePath paths = Compile.projPath paths </> "out" </> "test" </> "cache.json"
+testCachePath :: Project.Paths -> FilePath
+testCachePath paths = Project.projOut paths </> "test" </> "cache.json"
 
 -- | Read the cache file, returning an empty cache on error/mismatch.
 readTestCache :: FilePath -> TestRunContext -> IO TestCache
@@ -292,13 +291,9 @@ writeTestCache path tc = do
 contextHashBytes :: TestRunContext -> B.ByteString
 contextHashBytes ctx = SHA256.hash (BL.toStrict (Aeson.encode ctx))
 
--- | Hex-encode a hash.
-toHex :: B.ByteString -> String
-toHex = B.unpack . Base16.encode
-
 -- | Hash impl/deps/context into a cache run hash string.
 hashRun :: B.ByteString -> B.ByteString -> B.ByteString -> String
-hashRun implHash depsHash ctxHash = toHex (SHA256.hash (B.concat [implHash, depsHash, ctxHash]))
+hashRun implHash depsHash ctxHash = Hashing.hashHex (SHA256.hash (B.concat [implHash, depsHash, ctxHash]))
 
 -- | Hash a dependency list with a stable ordering.
 hashDeps :: [(A.QName, B.ByteString)] -> B.ByteString
@@ -306,23 +301,15 @@ hashDeps deps =
     let sorted = Data.List.sortOn (Hashing.qnameKey . fst) deps
     in SHA256.hash (BL.toStrict (encode sorted))
 
--- | Shorten a hash to 8 hex characters.
-shortHash :: B.ByteString -> String
-shortHash bs = take 8 (toHex bs)
-
--- | Shorten a hex hash string to 8 characters.
-shortHashStr :: String -> String
-shortHashStr s = take 8 s
-
 -- | Format the verbose test cache context header.
 formatTestCacheContext :: B.ByteString -> FilePath -> String
 formatTestCacheContext ctxHash cachePath =
-    "[test-cache] context=" ++ shortHash ctxHash ++ " path=" ++ cachePath
+    "[test-cache] context=" ++ Hashing.shortHash ctxHash ++ " path=" ++ cachePath
 
 -- | Format a dependency list with shortened hashes.
 formatDepsShort :: [(A.QName, B.ByteString)] -> String
 formatDepsShort deps =
-    let entries = [ prstr qn ++ ":" ++ shortHash h | (qn, h) <- deps ]
+    let entries = [ prstr qn ++ ":" ++ Hashing.shortHash h | (qn, h) <- deps ]
         shown = take 6 entries
         suffix = if length entries > 6 then " +" ++ show (length entries - 6) ++ " more" else ""
     in "[" ++ intercalate ", " shown ++ suffix ++ "]"
@@ -344,8 +331,8 @@ formatTestCacheLog modName testName info entry =
          TestHashInfo (Just implHash) (Just runHash) resolved _ ->
            base
              ++ " name=" ++ maybe "?" id resolved
-             ++ " impl=" ++ shortHash implHash
-             ++ " run=" ++ shortHashStr runHash
+             ++ " impl=" ++ Hashing.shortHash implHash
+             ++ " run=" ++ Hashing.shortHex runHash
              ++ implDeps
              ++ " cache=" ++ cacheStatus
          _ ->
@@ -355,7 +342,7 @@ formatTestCacheLog modName testName info entry =
              ++ " cache=" ++ cacheStatus
 
 -- | Build TestHashInfo records for a list of tests.
-buildTestHashInfos :: Compile.Paths
+buildTestHashInfos :: Project.Paths
                    -> B.ByteString
                    -> [(String, [String])]
                    -> IO (M.Map String TestHashInfo)
@@ -365,7 +352,7 @@ buildTestHashInfos paths ctxHash testsByModule = do
       return (modName, nameHashes)
     let nameHashesByModule = M.fromList moduleHashes
         seedCache = M.fromList
-          [ (A.modName (splitOnDot modName), nameMap)
+          [ (A.dottedModName modName, nameMap)
           | (modName, nameMap) <- M.toList nameHashesByModule
           ]
         allTests =
@@ -432,36 +419,24 @@ lookupTestInfo nameMap testName =
                 ]
 
 -- | Read the name hash map for a module name string.
-readModuleNameHashes :: Compile.Paths -> String -> IO (M.Map String InterfaceFiles.NameHashInfo)
+readModuleNameHashes :: Project.Paths -> String -> IO (M.Map String InterfaceFiles.NameHashInfo)
 readModuleNameHashes paths modName =
-    readModuleNameHashesByModName paths (A.modName (splitOnDot modName))
-
--- | Split a module name string on dots.
-splitOnDot :: String -> [String]
-splitOnDot = splitOnChar '.'
-
--- | Split a string on a single delimiter character.
-splitOnChar :: Char -> String -> [String]
-splitOnChar ch input = case break (== ch) input of
-  (chunk, []) -> [chunk]
-  (chunk, _ : rest) -> chunk : splitOnChar ch rest
+    readModuleNameHashesByModName paths (A.dottedModName modName)
 
 -- | Read the name hash map for a module name.
-readModuleNameHashesByModName :: Compile.Paths -> A.ModName -> IO (M.Map String InterfaceFiles.NameHashInfo)
+readModuleNameHashesByModName :: Project.Paths -> A.ModName -> IO (M.Map String InterfaceFiles.NameHashInfo)
 readModuleNameHashesByModName paths mn = do
-    mty <- Acton.Env.findTyFile (Compile.searchPath paths) mn
+    mty <- Acton.Env.findTyFile (Project.searchPath paths) mn
     case mty of
       Nothing -> return M.empty
-      Just tyFile -> do
-        hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader tyFile
-        case hdrE of
-          Left _ -> return M.empty
-          Right (_sourceMeta, _srcH, _ih, _implH, _imps, _depModules, nameHashes, _roots, _tests, _doc) ->
-            return $ M.fromList [ (A.nstr (InterfaceFiles.nhName nh), nh) | nh <- nameHashes ]
+      Just tyFile ->
+        either (const M.empty) nameMap <$> (try :: IO a -> IO (Either SomeException a)) (InterfaceFiles.readNameHashes tyFile)
+  where
+    nameMap nameHashes = M.fromList [ (A.nstr (InterfaceFiles.nhName nh), nh) | nh <- nameHashes ]
 
 -- | Cache-aware wrapper for reading name hashes.
 readModuleNameHashesCached :: IORef (M.Map A.ModName (M.Map String InterfaceFiles.NameHashInfo))
-                           -> Compile.Paths
+                           -> Project.Paths
                            -> A.ModName
                            -> IO (M.Map String InterfaceFiles.NameHashInfo)
 readModuleNameHashesCached cacheRef paths mn = do
@@ -475,7 +450,7 @@ readModuleNameHashesCached cacheRef paths mn = do
 
 -- | Resolve a dependency QName to its current impl hash, if any.
 resolveDepImplHash :: IORef (M.Map A.ModName (M.Map String InterfaceFiles.NameHashInfo))
-                   -> Compile.Paths
+                   -> Project.Paths
                    -> A.QName
                    -> IO (Maybe (A.QName, B.ByteString))
 resolveDepImplHash cacheRef paths qn =
@@ -490,7 +465,7 @@ resolveDepImplHash cacheRef paths qn =
 
 -- | Resolve recorded impl deps to current hashes, preserving fallbacks.
 resolveTestImplDeps :: IORef (M.Map A.ModName (M.Map String InterfaceFiles.NameHashInfo))
-                    -> Compile.Paths
+                    -> Project.Paths
                     -> InterfaceFiles.NameHashInfo
                     -> IO [(A.QName, B.ByteString)]
 resolveTestImplDeps cacheRef paths info = do
@@ -501,7 +476,7 @@ resolveTestImplDeps cacheRef paths info = do
 
 -- | Build the hash info for a single test name.
 buildTestHashInfo :: IORef (M.Map A.ModName (M.Map String InterfaceFiles.NameHashInfo))
-                  -> Compile.Paths
+                  -> Project.Paths
                   -> B.ByteString
                   -> M.Map String InterfaceFiles.NameHashInfo
                   -> String
@@ -525,7 +500,7 @@ updateTestCacheEntry testHashInfos acc res =
     let key = mkTestKey (trModule res) (trName res)
         info = M.lookup key testHashInfos
         runHash = maybe "" (\ti -> fromMaybe "" (thiRunHash ti)) info
-        implHashHex = info >>= fmap toHex . thiImplHash
+        implHashHex = info >>= fmap Hashing.hashHex . thiImplHash
         entry = TestCacheEntry
           { tceRunHash = runHash
           , tceImplHash = implHashHex

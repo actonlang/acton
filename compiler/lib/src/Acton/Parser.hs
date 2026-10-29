@@ -1492,27 +1492,12 @@ scanTopLevelChunks src start emit
              }
 
 parseTopLevelChunk :: String -> String -> TopLevelChunk -> IO (Either Control.Exception.SomeException [S.Stmt])
-parseTopLevelChunk fileName fileContent chunk = do
-  parsed <- tryNonAsync $
-    Control.Exception.evaluate $
-      runParser (St.evalStateT (top_chunk_input fileName chunk) initState) fileName fileContent
+parseTopLevelChunk fileName fileContent chunk = trySync $ do
+  parsed <- Control.Exception.evaluate $
+    runParser (St.evalStateT (top_chunk_input fileName chunk) initState) fileName fileContent
   case parsed of
-    Left err -> return (Left err)
-    Right (Left bundle) -> return (Left (Control.Exception.toException bundle))
-    Right (Right stmts) -> do
-      forced <- tryNonAsync (Control.Exception.evaluate (rnf stmts))
-      case forced of
-        Left err -> return (Left err)
-        Right () -> return (Right stmts)
-  where
-    tryNonAsync action = do
-      result <- Control.Exception.try action
-      case result of
-        Left err ->
-          case Control.Exception.fromException err :: Maybe Control.Exception.SomeAsyncException of
-            Just _  -> Control.Exception.throwIO err
-            Nothing -> return (Left err)
-        Right ok -> return (Right ok)
+    Left bundle -> Control.Exception.throwIO bundle
+    Right stmts -> stmts <$ Control.Exception.evaluate (rnf stmts)
 
 data ChunkProgressEvent = ChunkProgressDone Int | ChunkProgressStop
 
@@ -1559,9 +1544,7 @@ parseTopLevelChunks fileName fileContent bodyStart mReportProgress = do
       case parsed of
         Left err -> do
           putMVar result (Left err)
-          case Control.Exception.fromException err :: Maybe Control.Exception.SomeAsyncException of
-            Just _  -> Control.Exception.throwIO err
-            Nothing -> return ()
+          when (isAsyncException err) (Control.Exception.throwIO err)
         Right chunkResult -> do
           putMVar result chunkResult
           reportChunkDone progress chunk

@@ -28,17 +28,19 @@ for later compilation work.
 ### Shared module cache
 
 During a compile run, the scheduler keeps an accumulated environment snapshot of
-finished modules. In `Acton.Compile.compileTasks`, each completed module extends
-that snapshot with:
+finished modules. In `Acton.Compile`, each module whose front stage succeeds
+extends that snapshot (`frontSucceeded`):
 
 ```haskell
-Acton.Env.addModuleInfo (tkMod keyDone) (frontResultModuleInfo (tkMod keyDone) fr) envAcc
+Acton.Env.addModuleInfo (tkMod k) (frModuleInfo fr) (accumulatedEnv state)
 ```
 
 This shared cache stores loaded module interfaces in
 `modules :: Map ModName ModuleInfo`. It does not store the current module's
 local names, and it should not be thought of as "the current type-checker env".
-It is a shared cache of interfaces that later tasks start from.
+It is a shared cache of interfaces that later tasks start from. It is separate
+from the scheduler's `ModuleCache`, which remembers `.tydb` paths and module and
+name hashes, not interfaces.
 
 `ModuleInfo` is the only Env-side representation of dependency modules. A local
 module backs it with an in-memory `TEnv`; an imported module backs it with a
@@ -72,7 +74,8 @@ Instead it does header-first discovery:
 
 - `readModuleTask` reads the `.tydb` header when possible and produces a cheap
   `TyTask`
-- otherwise it parses the source and produces an `ActonTask`
+- otherwise it parses only the import header of the source and produces a
+  `ParseTask`, whose parse stage parses the whole module later
 - `buildGlobalTasks` uses the task's direct imports to build provider edges
 
 Those provider edges only cover imports that can be resolved to modules inside
@@ -96,24 +99,34 @@ Header summary reads are used for cheap decisions:
 - module public and implementation hashes and the stored name count
 - roots, tests, and docstrings
 
-This is the path used by `readModuleTask` and the various cache lookups in
-`Acton.Compile`. Per-name dependency hashes are no longer part of the header
-read; stale checks and DBP selection read exact `name-hash` rows on demand.
+`readModuleTask` uses this read (`reusableHeader`), and so do the CLI's import,
+root and test lookups. The module cache's single lookups read less:
+`lookupModuleHash` reads only the meta row, and `lookupNameHash` one
+`name-hash` row. Stale checks and DBP selection read exact `name-hash` rows on
+demand. `readNameHashes` reads every `name-hash` row. The module cache's
+`lookupNameMap` uses it, behind the `--verbose` hash-delta line, and
+`acton test` calls it directly.
 
 ### Full `.tydb` reads
 
 Full reads are used when the compiler needs the full typed payload, not for
 normal imported-name lookup:
 
-- implementation-hash refresh
+- implementation-hash refresh of a module whose back passes are not deferred,
+  because its back job needs the typed module
 - codegen refresh
-- DBP back-pass fallback when selected statements cannot be reconstructed
 - tools that intentionally inspect a whole interface
 - completion fallback when the normal import environment cannot be restored
 
 Reading a full `.tydb` does not by itself reconstruct the import closure in the
 active environment. It only gives the caller the stored interface and typed
 module payload.
+
+A deferred back job never reads the whole module. It reads only the statements
+of its selected names (`readSelectedModule`). A `.tydb` written by the same
+compiler version always has those statement rows, so when they cannot be read
+the file is corrupt, and the build stops with an internal error instead of
+reading the whole module.
 
 DBP interest is also scheduler metadata, not an import overlay. Each completed
 front result contributes external dependency names into an `InterestMap`; for
@@ -135,7 +148,7 @@ Read/decode failure aborts the compilation like any other corrupt interface
 cache error.
 
 Passes that rewrite imported names do not materialize the module either. They
-wrap `moduleLookupHName` with their conversion function (`convertModules`), so
+wrap `moduleLookupName` with their conversion function (`convertModules`), so
 Normalizer, Converter, Deactorizer, CPS, and LambdaLifter convert only names
 that are actually demanded. Generated names map back to their source name
 before lookup when necessary.
@@ -157,7 +170,7 @@ lookup.
 ## How transitive imports become available
 
 The transitive import closure is reconstructed through `Acton.Env.mkEnv`,
-`impModule`, `doImp`, and `subImp`.
+`impModule` and `doImp`.
 
 When a module imports another module:
 
@@ -184,9 +197,10 @@ its imports, and then adds the module shell to the shared cache.
 The boundary is important: `.tydb` is a persistent cache and cross-process
 interface artifact, not an IPC mechanism between front stages in one compiler
 run. If a module was just compiled by the current process, dependent front
-passes should use the front result already in memory. This keeps front-stage
-scheduling independent from any asynchronous `.tydb` writer still flushing that
-same interface to disk.
+passes should use the front result already in memory. The `.tydb` itself is
+written synchronously: a module's front stage reports done only after its
+`.tydb` is on disk, so the readers that do open it within a run, such as the
+module's deferred back job, never wait for a write.
 
 Without restoring the transitive imports, the compiler can end up in a state
 where:

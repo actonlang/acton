@@ -17,6 +17,7 @@ module Main where
 import Prelude hiding (readFile, writeFile)
 
 import qualified Acton.Syntax as A
+import Acton.Syntax (modNameToString)
 import qualified Acton.NameInfo as I
 import qualified Acton.Names
 import Text.Megaparsec.Error (ParseErrorBundle)
@@ -43,6 +44,9 @@ import qualified Acton.Fingerprint as Fingerprint
 import qualified Acton.SourceProvider as Source
 import qualified Acton.Zon as Zon
 import Acton.Compile
+import Acton.Fetch
+import Acton.Graph (closure)
+import Acton.Project
 import Utils
 import  Pretty
 import qualified InterfaceFiles
@@ -65,7 +69,6 @@ import Data.IORef
 import Data.Maybe (catMaybes, isJust, isNothing, maybeToList)
 import Data.Monoid ((<>))
 import Data.Word (Word32)
-import Data.Graph
 import Data.String.Utils (replace)
 import Data.Version (showVersion)
 import Data.Char (toLower)
@@ -204,9 +207,6 @@ optimizeModeToZig C.Debug        = "debug"
 optimizeModeToZig C.ReleaseSafe  = "safe"
 optimizeModeToZig C.ReleaseSmall = "small"
 optimizeModeToZig C.ReleaseFast  = "fast"
-
-zig :: Paths -> FilePath
-zig paths = sysPath paths ++ "/zig/zig"
 
 
 -- Try to acquire a lock, return Nothing if failed, Just (FileLock, FilePath) if succeeded
@@ -405,8 +405,8 @@ createProject name = do
         printErrorAndExit ("Unable to create project " ++ name ++ ", directory already exists.")
     fp <- generateFingerprint name
     let projDir = joinPath [curDir, name]
-        srcRoot = joinPath [projDir, "src"]
-        buildActPath = joinPath [projDir, "Build.act"]
+        srcRoot = projectSrcDir projDir
+        buildActPath = projectBuildAct projDir
         buildSpec = BuildSpec.BuildSpec
           { BuildSpec.specName = name
           , BuildSpec.specDescription = Nothing
@@ -418,7 +418,7 @@ createProject name = do
           }
     createDirectoryIfMissing True srcRoot
     writeFile buildActPath (BuildSpec.renderBuildAct buildSpec)
-    paths <- findPaths buildActPath defaultCompileOptions
+    (paths, _) <- findPaths buildActPath C.defaultCompileOptions
     writeFile (joinPath [ projDir, ".gitignore" ]) (
       ".acton.compile.lock\n" ++
       ".acton.lock\n" ++
@@ -482,9 +482,9 @@ buildFiles gopts opts files =
       _ -> do
         when (C.watch opts) $
           printErrorAndExit "Cannot use --watch with multiple files. Use `acton build --watch` for projects or `acton build FILE --watch` (or `acton FILE --watch`) for a single file."
-        mapM_ requireSourceFile (filter ((== ".act") . takeExtension) files)
+        mapM_ requireSourceFile (filter isActFile files)
         absFiles <- mapM canonicalizePath files
-        let onlyAct = all ((== ".act") . takeExtension) files
+        let onlyAct = all isActFile files
         projDirs <- mapM findProjectDir absFiles
         let projRoots = nub (catMaybes projDirs)
         case projRoots of
@@ -492,7 +492,7 @@ buildFiles gopts opts files =
             let sp = Source.diskSourceProvider
                 runBuild opts' =
                   withProjectLockNotice gopts proj $
-                    compileFiles sp gopts opts' absFiles False
+                    compileFiles sp gopts opts' absFiles SelectedFiles
             runBuild opts
           _ -> mapM_ (runFile gopts opts) files
 
@@ -500,14 +500,11 @@ buildFiles gopts opts files =
 projectSourceFiles :: Paths -> IO [FilePath]
 projectSourceFiles paths = do
     allFiles <- getFilesRecursive (srcDir paths)
-    return (catMaybes (map filterActFile allFiles))
+    return (filter isActFile allFiles)
 
 withBackgroundCompilerLockOrExit :: FilePath -> String -> IO a -> IO a
-withBackgroundCompilerLockOrExit projDir msg action = do
-    mlock <- tryBackgroundCompilerLock projDir
-    case mlock of
-      Nothing -> printErrorAndExit msg
-      Just lock -> action `finally` releaseBackgroundCompilerLock lock
+withBackgroundCompilerLockOrExit projDir msg =
+    withBackgroundCompilerLock projDir (printErrorAndExit msg)
 
 withProjectLockNotice :: C.GlobalOptions -> FilePath -> IO a -> IO a
 withProjectLockNotice gopts projDir action =
@@ -517,30 +514,29 @@ withProjectLockNotice gopts projDir action =
       unless (C.quiet gopts) $
         putStrLn ("Waiting for compiler lock in " ++ projDir)
 
-withProjectLockForGen :: C.GlobalOptions -> CompileScheduler -> Int -> FilePath -> IO Bool -> IO Bool
-withProjectLockForGen gopts sched gen projDir action = do
-    completed <- newIORef False
-    whenCurrentGen sched gen $
-      withProjectLockNotice gopts projDir $
-        whenCurrentGen sched gen (action >>= writeIORef completed)
-    readIORef completed
+-- | Run the action under the project lock if the generation is current
+-- both before and after waiting for the lock: the action's result, or
+-- False when the generation went stale first.
+withProjectLockForGen :: C.GlobalOptions -> Generation -> FilePath -> IO Bool -> IO Bool
+withProjectLockForGen gopts gen projDir action =
+    ifCurrent gen False (withProjectLockNotice gopts projDir (ifCurrent gen False action))
 
-requireProjectLayout :: Paths -> IO ()
-requireProjectLayout paths = do
-    exists <- doesDirectoryExist (srcDir paths)
-    unless exists $
+-- | Require a project in the given directory: exit with an error unless it
+-- holds Build.act and src/, else return the Build.act path.
+requireProjectAt :: FilePath -> IO FilePath
+requireProjectAt curDir = do
+    actPath <- requireProjectConfigPath curDir
+    let projDir = takeDirectory actPath
+    srcExists <- doesDirectoryExist (projectSrcDir projDir)
+    unless srcExists $
       printErrorAndExit "Missing src/ directory"
+    return actPath
+
 -- | Strict path resolution: require a project config in the given directory.
 loadProjectPathsAt :: FilePath -> C.CompileOptions -> IO Paths
 loadProjectPathsAt curDir opts = do
-    actPath <- requireProjectConfigPath curDir
-    let projDir = takeDirectory actPath
-    srcExists <- doesDirectoryExist (joinPath [projDir, "src"])
-    unless srcExists $
-      printErrorAndExit "Missing src/ directory"
-    paths <- findPaths actPath opts
-    requireProjectLayout paths
-    return paths
+    actPath <- requireProjectAt curDir
+    fst <$> findPaths actPath opts
 
 loadProjectPaths :: C.CompileOptions -> IO Paths
 loadProjectPaths opts = do
@@ -550,7 +546,7 @@ loadProjectPaths opts = do
 requireProjectConfigPath :: FilePath -> IO FilePath
 requireProjectConfigPath curDir = do
     let candidates =
-          [ joinPath [curDir, "Build.act"]
+          [ projectBuildAct curDir
           ]
     mpath <- firstExisting candidates
     case mpath of
@@ -568,7 +564,7 @@ ignoreNotExists _ = return ()
 actonCacheDir :: IO FilePath
 actonCacheDir = do
     home <- getHomeDirectory
-    let basePath = joinPath [home, ".cache", "acton"]
+    let basePath = actonCacheRoot home
     createDirectoryIfMissing True basePath
     return basePath
 
@@ -615,14 +611,9 @@ withCompileWatchContext gopts action = do
             (\previous -> void (installHandler sigTERM previous Nothing)) $ \_ ->
       bracket create cleanup action
   where
-    create = do
-      maxParallel <- compileMaxParallel gopts
-      CliWatchContext <$> newCompileScheduler gopts maxParallel <*> initProgressUI gopts maxParallel
-                      <*> newProgressState
+    create = CliWatchContext <$> newCompileScheduler gopts <*> initProgressUI gopts <*> newProgressState
     cleanup ctx = do
-      modifyMVar_ (csAsyncRef (cwScheduler ctx)) $ \running -> do
-        mapM_ Async.cancel running
-        return Nothing
+      stopCompile (cwScheduler ctx)
       progressReset (cwProgressUI ctx) (cwProgressState ctx)
 
 logProjectBuild :: C.GlobalOptions -> ProgressUI -> ProgressState -> FilePath -> IO ()
@@ -640,7 +631,7 @@ buildProjectOnce gopts opts = do
                 let projDir = projPath paths
                     runBuild opts' = withProjectLockNotice gopts projDir $ do
                       srcFiles <- projectSourceFiles paths
-                      compileFiles sp gopts opts' srcFiles True
+                      compileFiles sp gopts opts' srcFiles WholeProject
                       generateProjectDocIndex sp gopts opts' paths srcFiles
                 runBuild opts
 
@@ -713,8 +704,14 @@ buildTestModules gopts opts paths topts = do
     srcFiles <- projectSourceFiles paths
     selected <- selectTestSources gopts opts paths topts srcFiles
     unless (null selected) $
-      compileFiles Source.diskSourceProvider gopts opts selected (selected == srcFiles)
+      compileFiles Source.diskSourceProvider gopts opts selected (testBuildScope srcFiles selected)
     mapM (fmap modNameToString . moduleNameFromFile (srcDir paths) (projName paths)) selected
+
+-- | A test build that selects every project source builds the whole project.
+testBuildScope :: [FilePath] -> [FilePath] -> Scope
+testBuildScope srcFiles selected
+  | selected == srcFiles = WholeProject
+  | otherwise            = SelectedFiles
 
 -- Build both revisions before timing. Each mode then owns its sampling policy.
 runGitTestComparison :: C.GlobalOptions -> C.CompileOptions -> C.TestOptions -> TestMode -> Paths -> String -> IO Int
@@ -734,12 +731,11 @@ runGitTestComparison gopts opts topts mode paths ref = do
                                    , C.dep_overrides = [(name, rebase path) | (name, path) <- overrides] }
                 studyOpts = topts { C.testCompile = compileOpts, C.testCompare = Nothing }
             withCurrentDirectory project $ do
-              clearModuleCaches
               treePaths <- loadProjectPathsAt project compileOpts
               modules <- buildTestModules gopts compileOpts treePaths studyOpts
               names <- selectedTestNames compileOpts treePaths studyOpts modules
               return (treePaths, compileOpts, modules, [(modName, name) | (modName, tests) <- names, name <- tests])
-      valid <- (&&) <$> doesFileExist (oldProject </> "Build.act") <*> doesDirectoryExist (oldProject </> "src")
+      valid <- (&&) <$> doesFileExist (projectBuildAct oldProject) <*> doesDirectoryExist (projectSrcDir oldProject)
       unless valid $ printErrorAndExit ("The Git snapshot has no Acton project at " ++ makeRelative root (projPath paths))
       announce ("Preparing Git baseline " ++ show ref)
       (oldPaths, oldOpts, oldModules, oldTests) <-
@@ -793,20 +789,20 @@ runTestsWatch gopts opts topts mode paths = do
         testParallel0 <- testMaxParallel gopts
         let testParallel = if mode `elem` [TestModePerf, TestModeScale, TestModeStress] then 1 else testParallel0
         let runOnce gen mChanged = do
-              withProjectLockForGen gopts sched gen projDir $ do
+              withProjectLockForGen gopts gen projDir $ do
                 logProjectBuild gopts progressUI progressState projDir
                 srcFiles <- projectSourceFiles paths
                 selected <- selectTestSources gopts opts paths topts srcFiles
                 -- Link the complete selected closure; cached modules still skip
                 -- unchanged compiler passes.
                 hadErrors <- if null selected then return False else
-                  compileFilesChanged sp gopts opts selected (selected == srcFiles) Nothing (Just (watchCtx, gen))
-                unless hadErrors $ whenCurrentGen sched gen $ do
+                  compileFilesChanged sp gopts opts selected (testBuildScope srcFiles selected) Nothing (Just (watchCtx, gen))
+                unless hadErrors $ whenCurrent gen $ do
                   selectStart <- getTime Monotonic
                   testModules <- mapM (fmap modNameToString . moduleNameFromFile (srcDir paths) (projName paths)) selected
                   modulesToTest <- selectTestModules paths srcFiles mChanged testModules
                   logTiming gopts opts (progressLogLine progressUI) "affected test selection" selectStart
-                  unless (null modulesToTest) $ whenCurrentGen sched gen $
+                  unless (null modulesToTest) $ whenCurrent gen $
                     do
                       useColorOut <- useColor gopts
                       testStart <- getTime Monotonic
@@ -844,16 +840,9 @@ changedModulesFromPaths paths files = do
     return (Data.List.sort (nub mods))
 
 readModuleImports :: Paths -> A.ModName -> IO [A.ModName]
-readModuleImports paths mn = do
-    let tyFile = tyDbPath paths mn
-    exists <- InterfaceFiles.interfaceExists tyFile
-    if not exists
-      then return []
-      else do
-        hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeaderSummary tyFile
-        case hdrE of
-          Left _ -> return []
-          Right (_sourceMeta, _hash, _ih, _implH, imps, _depModules, _nameCount, _roots, _tests, _doc) -> return (map fst imps)
+readModuleImports paths mn =
+    maybe [] (map fst . InterfaceFiles.summaryImports)
+      <$> InterfaceFiles.tryReadHeaderSummary (tyDbPath paths mn)
 
 dependentTestModulesFromHeaders :: Paths -> [FilePath] -> [String] -> IO [String]
 dependentTestModulesFromHeaders paths srcFiles changedModules = do
@@ -861,21 +850,11 @@ dependentTestModulesFromHeaders paths srcFiles changedModules = do
       mn <- moduleNameFromFile (srcDir paths) (projName paths) file
       imps <- readModuleImports paths mn
       return (modNameToString mn, map modNameToString imps)
-    let revMap = foldl'
-          (\acc (mn, deps) -> foldl' (\a dep -> M.insertWith (++) dep [mn] a) acc deps)
-          M.empty
-          depsByMod
-        affected = reverseClosure revMap (Data.Set.fromList changedModules)
+    -- importers keeps edges to modules outside the source list: a deleted
+    -- module is a changed module whose importers are affected.
+    let importers = M.fromListWith (++) [ (dep, [mn]) | (mn, deps) <- depsByMod, dep <- deps ]
+        affected = closure (\m -> M.findWithDefault [] m importers) changedModules
     return (Data.List.sort (Data.Set.toList affected))
-  where
-    reverseClosure revMap start = go start (Data.Set.toList start)
-      where
-        go seen [] = seen
-        go seen (k:ks) =
-          let ds = M.findWithDefault [] k revMap
-              new = filter (`Data.Set.notMember` seen) ds
-              seen' = foldl' (flip Data.Set.insert) seen new
-          in go seen' (ks ++ new)
 
 -- | Watch a project directory and rebuild on source or build spec changes.
 watchProjectAt :: C.GlobalOptions -> C.CompileOptions -> FilePath -> IO ()
@@ -889,10 +868,10 @@ watchProjectAt gopts opts projDir = do
                         progressUI = cwProgressUI watchCtx
                         progressState = cwProgressState watchCtx
                     let runOnce gen mChanged =
-                          withProjectLockForGen gopts sched gen (projPath paths) $ do
+                          withProjectLockForGen gopts gen (projPath paths) $ do
                             logProjectBuild gopts progressUI progressState (projPath paths)
                             srcFiles <- projectSourceFiles paths
-                            hadErrors <- compileFilesChanged sp gopts opts srcFiles True mChanged (Just (watchCtx, gen))
+                            hadErrors <- compileFilesChanged sp gopts opts srcFiles WholeProject mChanged (Just (watchCtx, gen))
                             when (not hadErrors && isNothing mChanged) $
                               generateProjectDocIndex sp gopts opts paths srcFiles
                             return (not hadErrors)
@@ -929,7 +908,7 @@ buildFileOnce gopts opts file = do
           putStrLn("Building file " ++ file ++ " in project " ++ relProj)
         let runBuild opts' =
               withProjectLockNotice gopts proj $
-                compileFiles sp gopts opts' [file] False
+                compileFiles sp gopts opts' [file] SelectedFiles
         runBuild opts
       Nothing -> do
         -- Not in a project, use scratch directory for compilation unless
@@ -942,7 +921,7 @@ buildFileOnce gopts opts file = do
                 putStrLn("Building file " ++ file ++ " using temporary scratch directory" ++ scratch_dir)
               else
                 putStrLn("Building file " ++ file ++ " using temporary directory " ++ C.tempdir opts')
-          compileFiles sp gopts opts' [file] False
+          compileFiles sp gopts opts' [file] SelectedFiles
 
 -- | Watch a single file and rebuild on changes.
 watchFile :: C.GlobalOptions -> C.CompileOptions -> FilePath -> IO ()
@@ -956,8 +935,8 @@ watchFile gopts opts file = do
         withTempDirOpts opts $ \opts' _ ->
           withCompileWatchContext gopts $ \watchCtx -> do
             let sched = cwScheduler watchCtx
-                runOnce gen mChanged = whenCurrentGen sched gen $
-                  void $ compileFilesChanged sp gopts opts' [absFile] False mChanged (Just (watchCtx, gen))
+                runOnce gen mChanged =
+                  void $ compileFilesChanged sp gopts opts' [absFile] SelectedFiles mChanged (Just (watchCtx, gen))
             runWatchFile gopts absFile sched runOnce
 
 data WatchTrigger = WatchFull | WatchIncremental FilePath deriving (Eq, Show)
@@ -1009,7 +988,7 @@ actWatchTrigger ev =
           FS.Unknown{} -> Just WatchFull
           _ -> Nothing
       FS.IsFile ->
-        if takeExtension (FS.eventPath ev) /= ".act"
+        if not (isActFile (FS.eventPath ev))
           then Nothing
           else case ev of
                  FS.ModifiedAttributes{} -> Nothing
@@ -1034,7 +1013,7 @@ runWatchProject :: C.GlobalOptions
                 -> FilePath
                 -> FilePath
                 -> CompileScheduler
-                -> (Int -> Maybe [FilePath] -> IO Bool)
+                -> (Generation -> Maybe [FilePath] -> IO Bool)
                 -> IO ()
 runWatchProject gopts projDir srcRoot sched runOnce = do
     stampsRef <- newIORef M.empty
@@ -1077,7 +1056,7 @@ runWatchProject gopts projDir srcRoot sched runOnce = do
 runWatchFile :: C.GlobalOptions
              -> FilePath
              -> CompileScheduler
-             -> (Int -> Maybe [FilePath] -> IO ())
+             -> (Generation -> Maybe [FilePath] -> IO ())
              -> IO ()
 runWatchFile gopts absFile sched runOnce = do
     stampsRef <- newIORef M.empty
@@ -1103,7 +1082,7 @@ runWatchFile gopts absFile sched runOnce = do
 -- | Fetch dependencies for the current project without compiling.
 fetchCommand :: C.GlobalOptions -> IO ()
 fetchCommand gopts = do
-    paths <- loadProjectPaths defaultCompileOptions
+    paths <- loadProjectPaths C.defaultCompileOptions
     res <- try (fetchDependencies gopts paths []) :: IO (Either ProjectError ())
     case res of
       Left (ProjectError msg) -> printErrorAndExit msg
@@ -1123,19 +1102,19 @@ sigCommand gopts sigOpts = do
           , C.sigs = False
           }
         queryGopts = if C.verbose gopts then gopts else gopts { C.quiet = True }
-    paths0 <- loadProjectPaths opts0
-    depOverrides <- normalizeDepOverrides (projPath paths0) (C.dep_overrides opts0)
-    let opts = opts0 { C.dep_overrides = depOverrides }
-    paths <- loadProjectPaths opts
-    rootProj <- normalizePathSafe (projPath paths)
-    sysAbs <- normalizePathSafe (sysPath paths)
+    actPath <- requireProjectAt =<< getCurrentDirectory
+    cctx <- prepareCompileContext opts0 [actPath]
+    let opts = ccOpts cctx
+        paths = ccPathsRoot cctx
+        depOverrides = C.dep_overrides opts
+        rootProj = ccRootProj cctx
     withProjectLockNotice queryGopts rootProj $ do
       fetchDependencies queryGopts paths depOverrides
-      projMap <- discoverProjects queryGopts sysAbs rootProj depOverrides
+      projMap <- discoverProjects queryGopts (ccSysAbs cctx) rootProj depOverrides
       target <- resolveSigTarget opts paths rootProj projMap (C.sigTarget sigOpts)
       tyFile <- case target of
         SigSourceTarget ctx mn _ srcPath ->
-          compileSigTarget gopts queryGopts opts paths rootProj sysAbs depOverrides ctx mn srcPath
+          compileSigTarget gopts queryGopts cctx ctx mn srcPath
         SigTyTarget _ _ tyPath ->
           return tyPath
       case target of
@@ -1144,43 +1123,22 @@ sigCommand gopts sigOpts = do
 
 compileSigTarget :: C.GlobalOptions
                  -> C.GlobalOptions
-                 -> C.CompileOptions
-                 -> Paths
-                 -> FilePath
-                 -> FilePath
-                 -> [(String, FilePath)]
+                 -> CompileContext
                  -> ProjCtx
                  -> A.ModName
                  -> FilePath
                  -> IO FilePath
-compileSigTarget gopts queryGopts opts paths rootProj sysAbs depOverrides targetCtx mn srcPath = do
-    buildStamp <- readBuildSpecStamp (projPath paths)
+compileSigTarget gopts queryGopts cctx targetCtx mn srcPath = do
     let sp = Source.diskSourceProvider
-        cctx = CompileContext
-          { ccOpts = opts
-          , ccDepOverrides = depOverrides
-          , ccPathsRoot = paths
-          , ccRootProj = rootProj
-          , ccSysAbs = sysAbs
-          , ccBuildStamp = buildStamp
-          }
-    plan <- prepareCompilePlanFromContext sp queryGopts cctx [srcPath] False Nothing
-    let cctx' = cpContext plan
-        opts' = ccOpts cctx'
-        callbacks = defaultCompileCallbacks
-          { ccOnDiagnostics = \_ optsT diags -> printDiagnostics gopts optsT diags
-          , ccOnInfo = \msg -> when (C.verbose gopts) $ putStrLn msg
-          , ccOnBackJob = \_ -> return ()
-          }
-    compileRes <- compileTasks sp queryGopts opts' (ccPathsRoot cctx') (ccRootProj cctx') (cpNeededTasks plan) (cpDbpBlocked plan) callbacks
+    plan <- planFetched sp queryGopts cctx (PlanRequest [srcPath] SelectedFiles Nothing)
+    let onEvent (Diagnostics _ diags) = printDiagnostics gopts diags
+        onEvent (Info msg)            = putStrLn msg      -- Info lines arrive only under --verbose
+        onEvent _                     = return ()
+    compileRes <- runStandalonePlan sp queryGopts plan onEvent
     case compileRes of
       Left err -> printErrorAndExit (compileFailureMessage err)
       Right (_, hadErrors) -> when hadErrors System.Exit.exitFailure
-    let targetCtx' = case M.lookup (projRoot targetCtx) (cpProjMap plan) of
-                       Just ctx -> ctx
-                       Nothing  -> targetCtx
-    targetPaths <- pathsForModule opts' (cpProjMap plan) targetCtx' mn
-    return (tyDbPath targetPaths mn)
+    return (tyDbPath (projectPaths (ccOpts cctx) (cpProjMap plan) targetCtx) mn)
 
 fixupTarget locals deps paths mn
   | mn `elem` locals            = return $ addProjPrefix paths mn
@@ -1255,10 +1213,10 @@ sigProjectSearchOrder projMap rootProj =
 sigTySearchPath :: C.CompileOptions -> Paths -> FilePath -> M.Map FilePath ProjCtx -> [FilePath]
 sigTySearchPath opts paths rootProj projMap =
     case M.lookup rootProj projMap of
-      Just rootCtx -> let ps = [ projTypesDir ctx | root <- sigProjectSearchOrder projMap rootProj
-                                                        , Just ctx <- [M.lookup root projMap] ]
-                              ++ C.searchpath opts ++ systemTypePaths (sysPath paths) (sysTypes paths)
-                      in ps ++ [projTypesDir rootCtx </> projName paths]        -- Add the prefixed type-dir as a last resort in case the source has been deleted
+      Just _       -> let ps = [ projectTypesDir root | root <- sigProjectSearchOrder projMap rootProj
+                                                            , M.member root projMap ]
+                              ++ C.searchpath opts ++ systemTypePaths (sysPath paths)
+                      in ps ++ [projectTypesDir rootProj </> projName paths]        -- Add the prefixed type-dir as a last resort in case the source has been deleted
       Nothing      -> searchPath paths
 
 findSigTyFile :: [FilePath] -> A.ModName -> IO (Maybe FilePath)
@@ -1273,10 +1231,9 @@ printSigInterface paths mn mName tyFile = do
     case tyRes of
       Left err ->
         printErrorAndExit ("Could not read type interface for " ++ modNameToString mn ++ ": " ++ show err)
-      Right (ms, nmod) -> do
+      Right (I.NModule imps te _) -> do
         env0 <- Acton.Env.initEnv (sysTypes paths) False
-        let I.NModule imps te _ = nmod
-            envImports = foldr Acton.Env.addImport env0 ms
+        let envImports = foldr Acton.Env.addImport env0 imps
             selected = case mName of
               Nothing -> te
               Just n  -> filter ((== n) . fst) te
@@ -1286,7 +1243,7 @@ printSigInterface paths mn mName tyFile = do
             dropPrefix = dropProjPrefixOrLib paths
         case mName of
           Just n | null selected ->
-            printErrorAndExit ("Name not found: " ++ modNameToString mn ++ "." ++ nameToString n)
+            printErrorAndExit ("Name not found: " ++ modNameToString mn ++ "." ++ A.nstr n)
           _ ->
             putStrLn (Acton.Types.prettySigs envForPrint mn (map dropPrefix imps) (Acton.Names.nmap dropPrefix selected))
 
@@ -1296,27 +1253,19 @@ pkgShow gopts = do
     curDir <- getCurrentDirectory
     _ <- requireProjectConfigPath curDir
     spec <- loadBuildSpec curDir
-    let rootPins = M.map (rebaseDepPath curDir) (BuildSpec.concreteDependencies spec)
     unless (C.quiet gopts) $
       putStrLn "Dependency tree (hash overrides shown):"
-    partial <- showTree rootPins curDir spec 0
+    partial <- showTree (rootPins curDir spec) curDir spec 0
     when (partial && not (C.quiet gopts)) $
       putStrLn "Note: dependency tree is partial; some dependencies are not fetched yet. Run 'acton fetch'."
   where
     describeDep dep =
       (case BuildSpec.hash dep of
         Just h -> "hash=" ++ h
-        Nothing -> case BuildSpec.path dep of
-                     Just p | not (null p) -> "path=" ++ p
-                     _ -> "unversioned")
+        Nothing -> case localPath dep of
+                     Just p  -> "path=" ++ p
+                     Nothing -> "unversioned")
       ++ maybe "" (\dir -> ", subdir=" ++ dir) (BuildSpec.subdir dep)
-
-    isHashDep dep =
-      case BuildSpec.path dep of
-        Just p | not (null p) -> False
-        _ -> case BuildSpec.hash dep of
-               Just _ -> True
-               Nothing -> False
 
     showTree pins dir spec depth = do
       let deps = M.toList (BuildSpec.dependencies spec)
@@ -1329,26 +1278,14 @@ pkgShow gopts = do
       | otherwise = showConcrete pins dir depth partial depName dep
 
     showConcrete pins dir depth partial depName dep = do
-      let (chosen, conflict) =
-            case M.lookup depName pins of
-              Nothing -> (dep, False)
-              Just pinDep -> (pinDep, pinDep /= rebaseDepPath dir dep)
-      depBase <- resolveDepBase dir depName chosen
-      depExists <- doesDirectoryExist depBase
-      let notFetched = isHashDep chosen && not depExists
-          prefix = replicate (2*depth) ' ' ++ "- "
-          suffix = if notFetched then " (not fetched)" else ""
-          line = prefix ++ depName ++ " (" ++ describeDep dep ++
-                 (if conflict then " overridden -> " ++ describeDep chosen else "") ++ ")" ++ suffix
-      putStrLn line
-      if not depExists
-        then if notFetched
-          then return (partial || True)
-          else do
-            throwProjectError ("Dependency " ++ depName ++ " path does not exist: " ++ depBase ++ "\n"
-                               ++ "Hint: Local dependency paths must point to an Acton project root\n"
-                               ++ "(directory with src/ and Build.act).")
-        else do
+      let (chosen, conflict) = selectDep pins dir depName dep
+      found <- existingDependencyDir dir depName chosen
+      putStrLn (replicate (2*depth) ' ' ++ "- " ++ depName ++ " (" ++ describeDep dep
+                ++ (if conflict then " overridden -> " ++ describeDep chosen else "") ++ ")"
+                ++ maybe " (not fetched)" (const "") found)
+      case found of
+        Nothing      -> return True
+        Just depBase -> do
           spec' <- loadBuildSpec depBase
           childPartial <- showTree pins depBase spec' (depth + 1)
           return (partial || childPartial)
@@ -1427,17 +1364,17 @@ printDocs gopts opts = do
 
         case fileExt of
           ".tydb" -> do
-            paths <- findPaths filename defaultCompileOptions
+            (paths, mn) <- findPaths filename C.defaultCompileOptions
             env0 <- Acton.Env.initEnv (sysTypes paths) False
-            Acton.Types.showTyFile env0 (modName paths) filename (C.verbose gopts)
+            Acton.Types.showTyFile env0 mn filename (C.verbose gopts)
 
           ".act" -> do
             let modname = A.modName $ map (replace ".act" "") $ splitOn "/" $ fileBody
-            paths <- findPaths filename defaultCompileOptions
-            parsedRes <- parseActFile defaultCompileOptions Source.diskSourceProvider modname filename Nothing
+            (paths, _) <- findPaths filename C.defaultCompileOptions
+            parsedRes <- parseActFile C.defaultCompileOptions Source.diskSourceProvider modname filename Nothing
             (_snap, parsed) <- case parsedRes of
               Left diags -> do
-                printDiagnostics gopts defaultCompileOptions diags
+                printDiagnostics gopts diags
                 System.Exit.exitFailure
               Right res -> return res
 
@@ -1445,7 +1382,7 @@ printDocs gopts opts = do
             env0 <- Acton.Env.initEnv (sysTypes paths) False
             env <- Acton.Env.mkEnv (searchPath paths) env0 parsed
             kchecked <- Acton.Kinds.check env parsed
-            (nmod, _, env', _) <- Acton.Types.reconstruct Nothing Nothing env kchecked (Just (modNameToString (dropProjPrefix paths modname)))
+            (nmod, _, env', _) <- Acton.Types.reconstruct Nothing Nothing env kchecked (Just (moduleLabel paths modname))
             let I.NModule _ tenv mdoc = nmod
 
             -- 1. If format is explicitly set (via -t, --html, --markdown), use it
@@ -1509,51 +1446,46 @@ printDocs gopts opts = do
 compileReplHook :: C.GlobalOptions -> C.CompileOptions -> FilePath -> [FilePath] -> IO Bool
 compileReplHook gopts opts projDir srcFiles =
     withProjectLockNotice gopts projDir $
-      compileFilesChanged Source.diskSourceProvider gopts opts srcFiles False Nothing Nothing
+      compileFilesChanged Source.diskSourceProvider gopts opts srcFiles SelectedFiles Nothing Nothing
 
 -- Compile Acton files ---------------------------------------------------------------------------------------------
 
--- | Compute parallelism for compilation based on jobs or cores.
-compileMaxParallel :: C.GlobalOptions -> IO Int
-compileMaxParallel gopts = do
-    nCaps <- getNumCapabilities
-    return (max 1 (if C.jobs gopts > 0 then C.jobs gopts else nCaps))
-
 -- | Compile a set of files in a single-shot build.
-compileFiles :: Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -> [String] -> Bool -> IO ()
-compileFiles sp gopts opts srcFiles allowPrune =
-    void $ compileFilesChanged sp gopts opts srcFiles allowPrune Nothing Nothing
+compileFiles :: Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -> [String] -> Scope -> IO ()
+compileFiles sp gopts opts srcFiles scope =
+    void $ compileFilesChanged sp gopts opts srcFiles scope Nothing Nothing
 
 -- | Compile with optional change set, wiring progress UI and back jobs.
 compileFilesChanged :: Source.SourceProvider
                     -> C.GlobalOptions
                     -> C.CompileOptions
                     -> [String]
-                    -> Bool
+                    -> Scope
                     -> Maybe [FilePath]
-                    -> Maybe (CliWatchContext, Int)
+                    -> Maybe (CliWatchContext, Generation)
                     -> IO Bool
-compileFilesChanged sp gopts opts srcFiles allowPrune mChangedPaths mWatch = do
-    maxParallel <- compileMaxParallel gopts
+compileFilesChanged sp gopts opts srcFiles scope mChangedPaths mWatch = do
     (progressUI, progressState) <- case mWatch of
       Just (ctx, _) -> return (cwProgressUI ctx, cwProgressState ctx)
       Nothing -> do
-        ui <- initProgressUI gopts maxParallel
+        ui <- initProgressUI gopts
         st <- newProgressState
         return (ui, st)
     let logLine = progressLogLine progressUI
     (sched, gen) <- case mWatch of
       Just (ctx, gen) -> return (cwScheduler ctx, gen)
       Nothing -> do
-        sched' <- newCompileScheduler gopts maxParallel
-        return (sched', 0)
-    let cleanupProgress = whenCurrentGen sched gen (progressReset progressUI progressState)
+        sched' <- newCompileScheduler gopts
+        gen' <- currentGeneration sched'
+        return (sched', gen')
+    let cleanupProgress = whenCurrent gen (progressReset progressUI progressState)
     cleanupProgress
     let runCompile = do
           sp' <- overlayChangedPaths sp mChangedPaths
           planStart <- getTime Monotonic
           planRes <- try $
-            prepareCompilePlan sp' gopts sched opts srcFiles allowPrune mChangedPaths
+            prepareCompileContext opts srcFiles >>= \ctx ->
+              prepareCompilePlan sp' gopts sched ctx (PlanRequest srcFiles scope mChangedPaths)
           logTiming gopts opts logLine "compile planning" planStart
           let reportPlanError (ProjectError msg) = do
                 if C.watch opts
@@ -1564,10 +1496,9 @@ compileFilesChanged sp gopts opts srcFiles allowPrune mChangedPaths mWatch = do
                 let cctx = cpContext plan
                     opts' = ccOpts cctx
                     watchMode = C.watch opts'
-                cliHooks <- initCliCompileHooks progressUI progressState gopts sched gen plan
-                let clearProgress = whenCurrentGen sched gen (cchClearProgress cliHooks)
-                    finalizeCompile onError = do
-                      clearProgress
+                reporter <- newCliReporter progressUI progressState gopts gen plan
+                let finalizeCompile onError = do
+                      cleanupProgress
                       onError
                       return True
                     reportCompileError msg =
@@ -1579,10 +1510,10 @@ compileFilesChanged sp gopts opts srcFiles allowPrune mChangedPaths mWatch = do
                       finalizeCompile $
                         unless watchMode System.Exit.exitFailure
                 compileStart <- getTime Monotonic
-                compileRes <- runCompilePlan sp gopts plan sched gen (cchHooks cliHooks)
+                compileRes <- runCompilePlan sp gopts sched gen plan (reportEvent reporter)
                 backFailure <- case compileRes of
-                  Right _ | not (C.only_build opts') -> backQueueWait (csBackQueue sched) gen
-                  _ -> return Nothing
+                  Right _ -> waitBackJobs sched gen
+                  Left _ -> return Nothing
                 logTiming gopts opts' logLine "Acton compilation" compileStart
                 case compileRes of
                   Left err ->
@@ -1595,12 +1526,8 @@ compileFilesChanged sp gopts opts srcFiles allowPrune mChangedPaths mWatch = do
                         if hadErrors
                           then reportCompileErrors
                           else do
-                            clearProgress
-                            result <- newIORef False
-                            whenCurrentGen sched gen $ do
-                              success <- runCliPostCompile cliHooks gopts plan env
-                              writeIORef result success
-                            not <$> readIORef result
+                            cleanupProgress
+                            not <$> ifCurrent gen False (runCliPostCompile reporter gopts plan env)
           either reportPlanError runPlan planRes
     runCompile `finally` cleanupProgress
 
@@ -1626,41 +1553,34 @@ overlayChangedPaths sp mPaths = do
         Right snap ->
           return (Just (normalise path, snap { Source.ssIsOverlay = True }))
 
-data CliCompileHooks = CliCompileHooks
-  { cchHooks :: CompileHooks
-  , cchLogLine :: String -> IO ()
-  , cchClearProgress :: IO ()
-  , cchFinalStart :: IO ()
-  , cchFinalDone :: Bool -> IO ()
-  , cchProgressUI :: ProgressUI
+-- | How the CLI reports one build: its events, its log lines and the final
+-- step, on the progress UI.
+data CliReporter = CliReporter
+  { reportEvent        :: BuildEvent -> IO ()
+  , reportLine         :: String -> IO ()
+  , startFinal         :: IO ()
+  , finishFinal        :: Bool -> IO ()       -- whether the final step succeeded
+  , reporterProgressUI :: ProgressUI
   }
 
--- | Build compile hooks and state for CLI progress and completion logs.
-initCliCompileHooks :: ProgressUI
-                    -> ProgressState
-                    -> C.GlobalOptions
-                    -> CompileScheduler
-                    -> Int
-                    -> CompilePlan
-                    -> IO CliCompileHooks
-initCliCompileHooks progressUI progressState gopts sched gen plan = do
+-- | The phases of a module that the CLI's progress percentage credits.
+data ProgressPhase = ParsePhase | FrontPhase | BackPhase deriving (Eq, Ord)
+
+-- | Build the compile event handler and state for CLI progress and
+-- completion logs.
+newCliReporter :: ProgressUI
+               -> ProgressState
+               -> C.GlobalOptions
+               -> Generation
+               -> CompilePlan
+               -> IO CliReporter
+newCliReporter progressUI progressState gopts gen plan = do
     let neededTasks = cpNeededTasks plan
         rootProj = ccRootProj (cpContext plan)
         rootPaths = ccPathsRoot (cpContext plan)
         optsPlan = ccOpts (cpContext plan)
-        isBuiltinTask t = tkMod (gtKey t) == A.modName ["__builtin__"]
-        parseNeeded t =
-          case gtTask t of
-            ParseTask{} -> not (isBuiltinTask t) && not (C.only_build optsPlan)
-            _ -> False
-    sizeEntries <- forM neededTasks $ \t -> do
-      let key = gtKey t
-          path = srcFile (gtPaths t) (tkMod key)
-      exists <- doesFileExist path
-      sz <- if exists then getFileSize path else return 0
-      return (key, sz)
     progressRef <- newIORef (0 :: Double)
-    marksRef <- newIORef (M.empty :: M.Map TaskKey (Double, Double, Bool))
+    marksRef <- newIORef (M.empty :: M.Map (TaskKey, ProgressPhase) Double)
     -- sizeMap is used for the progress bar indicator to determine how much a
     -- modules compilation should contribute to the overall progress. We use
     -- file size as a heuristic for this, but if all sizes are zero (e.g. due to
@@ -1669,8 +1589,8 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
     -- back passes, we also compute a share for each task that determines how
     -- much of the total progress it should contribute to, which is used to give
     -- a more accurate progress indication during the compile.
-    let sizeMap = M.fromList sizeEntries
-        totalSize = sum (map snd sizeEntries)
+    let sizeMap = cpSourceSizes plan
+        totalSize = sum (M.elems sizeMap)
         useEqual = totalSize <= 0
         totalWeight :: Double
         totalWeight =
@@ -1680,14 +1600,18 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
         weightFor key =
           if useEqual
             then 1 / totalWeight
-            else fromIntegral (M.findWithDefault 0 key sizeMap) / totalWeight
+            else fromIntegral (sizeMap M.! key) / totalWeight
         compilePhaseTotal = 85.0
-        parseRatio = 0.1
-        frontRatio = 0.6
-        backRatio = 0.3
+        -- The part of a module's weight that each phase carries. A module
+        -- without a parse stage has no parse part.
+        phaseRatio t ParsePhase
+          | hasParseStage (cpContext plan) t = 0.1
+          | otherwise                        = 0
+        phaseRatio _ FrontPhase              = 0.6
+        phaseRatio _ BackPhase               = 0.3
         totalPhaseWeight =
           sum
-            [ weightFor (gtKey t) * (frontRatio + backRatio + if parseNeeded t then parseRatio else 0)
+            [ weightFor (gtKey t) * (phaseRatio t FrontPhase + phaseRatio t BackPhase + phaseRatio t ParsePhase)
             | t <- neededTasks
             ]
         shareForPhase t ratio =
@@ -1696,31 +1620,29 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
             else compilePhaseTotal * weightFor (gtKey t) * ratio / totalPhaseWeight
         shareMap =
           M.fromList
-            [ (gtKey t, (shareForPhase t (if parseNeeded t then parseRatio else 0)
-                        , shareForPhase t frontRatio
-                        , shareForPhase t backRatio))
+            [ ((gtKey t, phase), shareForPhase t (phaseRatio t phase))
             | t <- neededTasks
+            , phase <- [ParsePhase, FrontPhase, BackPhase]
             ]
-    let gate = whenCurrentGen sched gen
-        logLine msg = gate $ do
+    -- runCompilePlan calls onEvent only while gen is current, so the event
+    -- arms and the helpers only they use do not check the generation.
+    -- logLine, logRendered and withTerm are also called outside onEvent (by
+    -- the final step, by runCliPostCompile and by the initial setPercent),
+    -- so they check it themselves.
+    let logLine msg = whenCurrent gen $ do
           progressLogLine progressUI msg
-        logRendered render = gate $ do
+        logRendered render = whenCurrent gen $ do
           if puWidthAware progressUI
             then do
               (_, cols) <- termSizeRead (puTermSize progressUI)
               progressLogLine progressUI (render (safeLiveWidth cols))
             else progressLogLine progressUI (render plainLogWidth)
-        logDiagnostics optsT diags =
-          gate (progressWithLog progressUI (printDiagnostics gopts optsT diags))
+        logDiagnostics diags =
+          progressWithLog progressUI (printDiagnostics gopts diags)
         termProgress = puTermProgress progressUI
         termEnabled = termProgressEnabled termProgress
-        modLabel mn = modNameToString (dropProjPrefix rootPaths mn)
         timeSep = "    "
-        parseDoneStatus = "Parse done"
-        frontDoneStatus = "Type check done"
-        backDoneStatus = "Compilation done"
         backFailStatus msg = "Compilation failed: " ++ msg
-        finalDoneStatus = "Final compilation done"
         frontOutputActiveStatus kind =
           case kind of
             FrontOutputTydb -> "Preparing .tydb"
@@ -1739,15 +1661,15 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
         frontOutputProgressShortStatus kind p =
           case kind of
             FrontOutputTydb
-              | "Preparing" `isPrefixOf` fopLabel p -> "Prep .tydb"
-              | "Writing" `isPrefixOf` fopLabel p -> "Write .tydb"
+              | "Preparing" `isPrefixOf` InterfaceFiles.tyDbWriteProgressLabel p -> "Prep .tydb"
+              | "Writing" `isPrefixOf` InterfaceFiles.tyDbWriteProgressLabel p -> "Write .tydb"
             _ -> frontOutputShortStatus kind
         projMap = cpProjMap plan
         depNameMap =
           let rootDeps = maybe [] projDeps (M.lookup rootProj projMap)
               otherDeps = concatMap projDeps (M.elems projMap)
           in M.fromListWith (\_ old -> old) [ (p, n) | (n, p) <- rootDeps ++ otherDeps ]
-        labelWidth = maximum (0 : [ length (modLabel (tkMod (gtKey t))) | t <- neededTasks ])
+        labelWidth = maximum (0 : [ length (moduleLabel rootPaths (tkMod (gtKey t))) | t <- neededTasks ])
         statusWidth = 68
         nameWidth = labelWidth + 2 + statusWidth
         timePadWidth = nameWidth + length timeSep
@@ -1836,65 +1758,25 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
           "binds: " ++ intercalate ", " (tstNames st)
         inferredSignatureLine sig =
           "Non-total inferred signature: " ++ intercalate ", " (isigNames sig)
-        backTimingLine bt =
-          "Back timing: normalize " ++ fmtTimePrecise (btNormalize bt)
-          ++ ", deactorize " ++ fmtTimePrecise (btDeactorize bt)
-          ++ ", cps " ++ fmtTimePrecise (btCPS bt)
-          ++ ", llift " ++ fmtTimePrecise (btLLift bt)
-          ++ ", boxing " ++ fmtTimePrecise (btBoxing bt)
-          ++ ", codegen " ++ fmtTimePrecise (btCodeGen bt)
-          ++ ", render " ++ fmtTimePrecise (btRender bt)
-          ++ maybe "" (\t -> ", write " ++ fmtTimePrecise t) (btWrite bt)
-        parseDoneRenderer =
-          staticStatusRenderer parseDoneStatus "Parsed"
-        frontDoneRenderer =
-          staticStatusRenderer frontDoneStatus "Typed"
-        backDoneRenderer =
-          staticStatusRenderer backDoneStatus "Built"
+        backTimingLine timing =
+          "Back timing: " ++ intercalate ", " [ backPassName pass ++ " " ++ fmtTimePrecise t | (pass, t) <- timing ]
         backFailRenderer msg =
           \budget ->
             if budget < 10
               then Nothing
               else Just (abbreviateRight budget (backFailStatus msg))
-        finalDoneRenderer =
-          staticStatusRenderer finalDoneStatus "Final"
-        parseDoneLine width mn t =
-          if puWidthAware progressUI
-            then doneStatusLine width (modLabel mn) parseDoneRenderer "Parsed" (Just t)
-            else plainDoneTimedLine (modLabel mn) parseDoneStatus t
-        frontDoneLine width mn t =
-          if puWidthAware progressUI
-            then doneStatusLine width (modLabel mn) frontDoneRenderer "Typed" (Just t)
-            else plainDoneTimedLine (modLabel mn) frontDoneStatus t
-        backDoneLine width mn mt =
-          if puWidthAware progressUI
-            then
-              case mt of
-                Just t -> doneStatusLine width (modLabel mn) backDoneRenderer "Built" (Just t)
-                Nothing -> doneStatusLine width (modLabel mn) backDoneRenderer "Built" Nothing
-            else
-              case mt of
-                Just t -> plainDoneTimedLine (modLabel mn) backDoneStatus t
-                Nothing -> plainDoneLine (modLabel mn) backDoneStatus
+        -- The line of a finished step: its label, its status, or the short
+        -- status where the status does not fit, and the time it took when
+        -- that is known.
+        doneLine width label status short mt
+          | puWidthAware progressUI = doneStatusLine width label (staticStatusRenderer status short) short mt
+          | otherwise               = maybe (plainDoneLine label status) (plainDoneTimedLine label status) mt
         backFailLine width mn msg =
           if puWidthAware progressUI
-            then doneStatusLine width (modLabel mn) (backFailRenderer msg) "Failed" Nothing
-            else plainDoneLine (modLabel mn) (backFailStatus msg)
-        finalDoneLine width t =
-          if puWidthAware progressUI
-            then doneStatusLine width "" finalDoneRenderer "Final" (Just t)
-            else plainDoneTimedLine "" finalDoneStatus t
-        frontOutputDoneLine width key kind t =
-          let mn = tkMod key
-              status = frontOutputDoneStatus kind
-              short = frontOutputShortStatus kind
-              renderer = staticStatusRenderer status short
-          in if puWidthAware progressUI
-               then doneStatusLine width (modLabel mn) renderer short (Just t)
-               else plainDoneTimedLine (modLabel mn) status t
+            then doneStatusLine width (moduleLabel rootPaths mn) (backFailRenderer msg) "Failed" Nothing
+            else plainDoneLine (moduleLabel rootPaths mn) (backFailStatus msg)
         renderProjectLine mn statusRender width =
-          let modLbl = modLabel mn
-          in fitBuildLineLayout width labelWidth statusWidth False modLbl statusRender
+          fitBuildLineLayout width labelWidth statusWidth False (moduleLabel rootPaths mn) statusRender
         parseActiveLine mn =
           renderProjectLine mn (staticStatusRenderer "Parsing" "Parse")
         parseProgressLine mn p =
@@ -1906,7 +1788,7 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
             (staticStatusRenderer (frontOutputActiveStatus kind) (frontOutputShortStatus kind))
         frontOutputProgressLine key kind p =
           renderProjectLine (tkMod key)
-            (staticStatusRenderer (fopLabel p) (frontOutputProgressShortStatus kind p))
+            (staticStatusRenderer (InterfaceFiles.tyDbWriteProgressLabel p) (frontOutputProgressShortStatus kind p))
         frontOutputInitialProgress kind =
           case kind of
             FrontOutputTydb -> Just 0
@@ -1918,21 +1800,18 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
         finalActiveLine width =
           fitBuildLineLayout width labelWidth statusWidth True "" (staticStatusRenderer "Final compilation" "Final")
         clamp01 x = max 0 (min 1 x)
-        parseProgressRatio p =
-          let total = ppTotal p
-          in if total <= 0
-               then 1
-               else clamp01 (fromIntegral (ppCompleted p) / fromIntegral total)
-        progressRatio p =
-          let total = fppTotal p
-          in if total <= 0
-               then 1
-               else clamp01 (fromIntegral (fppCompleted p) / fromIntegral total)
+        -- The completed part of a total, between 0 and 1, and 1 when the
+        -- total is not positive.
+        ratio completed total
+          | total <= 0 = 1
+          | otherwise  = clamp01 (fromIntegral completed / fromIntegral total)
+        parseProgressRatio p = ratio (ppCompleted p) (ppTotal p)
         frontPassFraction p =
           case fppPass p of
-            FrontPassKinds -> 0.05 * progressRatio p
-            FrontPassTypes -> 0.05 + 0.85 * progressRatio p
-            FrontPassHash  -> 0.90 + 0.10 * progressRatio p
+            FrontPassKinds -> 0.05 * passRatio
+            FrontPassTypes -> 0.05 + 0.85 * passRatio
+            FrontPassHash  -> 0.90 + 0.10 * passRatio
+          where passRatio = ratio (fppCompleted p) (fppTotal p)
         frontStatusRenderer p budget
           | budget < 10 = Nothing
           | otherwise =
@@ -1941,37 +1820,23 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
                   countPart
                     | total > 0 = " " ++ show completed ++ "/" ++ show total
                     | otherwise = ""
-                  compact =
-                    let base = if total > 0 then "Types" ++ countPart else "Types"
-                    in if length base <= budget then base else "Types"
-                  fullTypeStatus mCurrent =
-                    let prefix = "Type checking "
-                        staticLen = length prefix + length countPart
-                    in if staticLen < budget
-                         then case mCurrent of
-                                Just nm -> prefix ++ abbreviateRight (budget - staticLen) nm ++ countPart
-                                Nothing -> "Type checking" ++ countPart
-                         else compact
-                  fullHashStatus mCurrent =
-                    let prefix = "Hashing "
-                        staticLen = length prefix + length countPart
-                    in if staticLen < budget
-                         then case mCurrent of
-                                Just label -> prefix ++ abbreviateRight (budget - staticLen) label ++ countPart
-                                Nothing -> "Hashing" ++ countPart
-                         else
-                           let base = if total > 0 then "Hash" ++ countPart else "Hash"
-                           in if length base <= budget then base else "Hash"
+                  -- The pass's word, the current name if any, abbreviated
+                  -- to the room left, and the count. Where the word, a
+                  -- space and the count fill the budget, the short word
+                  -- and the count if they fit, else the short word.
+                  passStatus word short current
+                    | staticLen < budget                    = maybe word (\name -> word ++ " " ++ abbreviateRight (budget - staticLen) name) current ++ countPart
+                    | length (short ++ countPart) <= budget = short ++ countPart
+                    | otherwise                             = short
+                    where staticLen = length word + 1 + length countPart
               in case fppPass p of
                    FrontPassKinds -> staticStatusRenderer "Kinds check" "Kinds" budget
-                   FrontPassTypes -> Just (fullTypeStatus (fppCurrent p))
-                   FrontPassHash  -> Just (fullHashStatus (fppCurrent p))
-        backPassStatusRenderer (BackPassSkipped pass _ _) =
-          let passName = backPassName pass
-          in staticStatusRenderer ("Back " ++ passName ++ " skipped") (passName ++ " skipped")
-        backPassStatusRenderer p =
-          let passName = backPassName (backProgressPass p)
-          in staticStatusRenderer ("Back " ++ passName) passName
+                   FrontPassTypes -> Just (passStatus "Type checking" "Types" (fppCurrent p))
+                   FrontPassHash  -> Just (passStatus "Hashing" "Hash" (fppCurrent p))
+        backPassStatusRenderer p
+          | bppEvent p == BackPassSkipped = staticStatusRenderer ("Back " ++ passName ++ " skipped") (passName ++ " skipped")
+          | otherwise                     = staticStatusRenderer ("Back " ++ passName) passName
+          where passName = backPassName (bppPass p)
         parseStatusRenderer p budget
           | budget < 10 = Nothing
           | otherwise =
@@ -1985,112 +1850,58 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
                           else Just (show pct ++ "%")
         frontProgressLine mn p =
           renderProjectLine mn (frontStatusRenderer p)
-        backProgressPass (BackPassStarted pass _ _) = pass
-        backProgressPass (BackPassFinished pass _ _ _) = pass
-        backProgressPass (BackPassSkipped pass _ _) = pass
-        backProgressCompleted (BackPassStarted _ completed _) = completed
-        backProgressCompleted (BackPassFinished _ completed _ _) = completed
-        backProgressCompleted (BackPassSkipped _ completed _) = completed
-        backProgressTotal (BackPassStarted _ _ total) = total
-        backProgressTotal (BackPassFinished _ _ total _) = total
-        backProgressTotal (BackPassSkipped _ _ total) = total
         backProgressRatio p =
-          let total = backProgressTotal p
-          in if total <= 0
-               then 1
-               else clamp01 (fromIntegral (backProgressCompleted p) / fromIntegral total)
+          fromIntegral (bppCompleted p) / fromIntegral (bppTotal p)
         backPassDoneLine mn pass =
-          "Back " ++ backPassName pass ++ " done: " ++ modLabel mn
+          "Back " ++ backPassName pass ++ " done: " ++ moduleLabel rootPaths mn
         finalKey = ProgressTaskKey (TaskKey rootProj (A.modName ["__final__"]))
-        taskProgressKey = ProgressTaskKey
-        frontOutputTaskKey = ProgressFrontOutputKey
-        withTerm action = when termEnabled $ gate (withProgressLock progressUI action)
+        -- A progress row: started with its line and ratio, updated, and
+        -- ended, which gives its elapsed time.
+        startRow row line ratio = progressStartTask progressUI progressState row line ratio
+        updateRow row line ratio = progressUpdateTask progressUI progressState row line (Just ratio)
+        endRow row = progressDoneTask progressUI progressState row
+        showDoneLines = not (quiet gopts optsPlan)
+        withTerm action = when termEnabled $ whenCurrent gen (withProgressLock progressUI action)
         setPercent pct = withTerm (termProgressPercent termProgress pct)
         addProgress delta =
           when (termEnabled && delta > 0) $ do
             new <- atomicModifyIORef' progressRef (\x -> let x' = min compilePhaseTotal (x + delta) in (x', x'))
             setPercent (floor new)
-        shareFor key = M.findWithDefault (0, 0, 0) key shareMap
-        creditParseTo key parseFrac = gate $ do
-          let (parseShare, _, _) = shareFor key
-          delta <- atomicModifyIORef' marksRef $ \m ->
-            let (parseDoneFrac, frontDoneFrac, backDone) = M.findWithDefault (0, 0, False) key m
-                parseDoneFrac' = max parseDoneFrac (clamp01 parseFrac)
-                deltaFrac = max 0 (parseDoneFrac' - parseDoneFrac)
-            in (M.insert key (parseDoneFrac', frontDoneFrac, backDone) m, parseShare * deltaFrac)
-          addProgress delta
-        creditFrontTo key frontFrac = gate $ do
-          let (_, frontShare, _) = shareFor key
-          delta <- atomicModifyIORef' marksRef $ \m ->
-            let (parseDoneFrac, frontDoneFrac, backDone) = M.findWithDefault (0, 0, False) key m
-                frontDoneFrac' = max frontDoneFrac (clamp01 frontFrac)
-                deltaFrac = max 0 (frontDoneFrac' - frontDoneFrac)
-            in (M.insert key (parseDoneFrac, frontDoneFrac', backDone) m, frontShare * deltaFrac)
-          addProgress delta
-        creditParse key = creditParseTo key 1
-        creditParseProgress key p = creditParseTo key (parseProgressRatio p)
-        creditFront key = creditFrontTo key 1
-        creditFrontProgress key p = creditFrontTo key (frontPassFraction p)
-        creditBack key = gate $ do
-          let (_, _, backShare) = shareFor key
-          delta <- atomicModifyIORef' marksRef $ \m ->
-            let (parseDoneFrac, frontDoneFrac, backDone) = M.findWithDefault (0, 0, False) key m
-            in if backDone
-                 then (m, 0)
-                 else (M.insert key (parseDoneFrac, frontDoneFrac, True) m, backShare)
+        -- Credit a module's phase as done up to the fraction: the phase's
+        -- share times the part of it not credited before. A smaller
+        -- fraction than one credited before adds nothing.
+        credit phase key fraction = do
+          let share = M.findWithDefault 0 (key, phase) shareMap
+          delta <- atomicModifyIORef' marksRef $ \marks ->
+            let done  = M.findWithDefault 0 (key, phase) marks
+                done' = max done (clamp01 fraction)
+            in (M.insert (key, phase) done' marks, share * (done' - done))
           addProgress delta
     setPercent 0
-    let backJobKey job =
-          TaskKey (projPath (bjPaths job)) (A.modname (biTypedMod (bjInput job)))
-        onBackStart job =
-          let mn = A.modname (biTypedMod (bjInput job))
-          in do
-            gate (progressStartTask progressUI progressState (taskProgressKey (backJobKey job)) (backActiveLine mn) (Just 0))
-        onBackProgress job p = do
-          let mn = A.modname (biTypedMod (bjInput job))
-          gate (progressUpdateTask progressUI progressState (taskProgressKey (backJobKey job))
-                  (backProgressLine mn p) (Just (backProgressRatio p)))
-          when (not (quiet gopts optsPlan) && (C.timing gopts || C.verbose gopts)) $
-            case p of
-              BackPassFinished pass _ _ elapsed ->
-                logRendered (\cols ->
-                  detailTimedLine cols detailStmtIndentWide detailStmtIndentNarrow
-                    (backPassDoneLine mn pass) elapsed)
-              _ -> return ()
-        onBackDone job result = do
-          gate (void $ progressDoneTask progressUI progressState (taskProgressKey (backJobKey job)))
-          creditBack (backJobKey job)
-          when (not (quiet gopts optsPlan)) $
-            case result of
-              BackJobOk mtime mtiming -> do
-                logRendered (\cols -> backDoneLine cols (A.modname (biTypedMod (bjInput job))) mtime)
-                when (C.timing gopts) $
-                  forM_ mtiming $ \bt ->
-                    logRendered (\cols -> detailLine cols detailStmtIndentWide detailStmtIndentNarrow (backTimingLine bt))
-              BackJobFailed failure ->
-                logRendered (\cols -> backFailLine cols (A.modname (biTypedMod (bjInput job))) (bpfMessage failure))
-        hooks = defaultCompileHooks
-          { chOnDiagnostics = \t optsT diags -> do
-              gate (void $ progressDoneTask progressUI progressState (taskProgressKey (gtKey t)))
-              logDiagnostics optsT diags
-          , chOnParseStart = \t ->
-              let key = gtKey t
-                  mn = tkMod key
-              in gate (progressStartTask progressUI progressState (taskProgressKey key) (parseActiveLine mn) (Just 0))
-          , chOnParseProgress = \t p ->
-              let key = gtKey t
-                  mn = tkMod key
-              in do
-                gate (progressUpdateTask progressUI progressState (taskProgressKey key) (parseProgressLine mn p) (Just (parseProgressRatio p)))
-                creditParseProgress key p
-          , chOnParseDone = \t mtime -> do
-              gate (void $ progressDoneTask progressUI progressState (taskProgressKey (gtKey t)))
-              creditParse (gtKey t)
-              when (not (quiet gopts optsPlan)) $
-                forM_ mtime $ \tParse -> do
-                  let mn = tkMod (gtKey t)
-                  logRendered (\cols -> parseDoneLine cols mn tParse)
-          , chOnFrontResult = \t fr -> do
+    let onEvent event = case event of
+          Diagnostics t diags -> do
+            void (endRow (ProgressTaskKey (gtKey t)))
+            logDiagnostics diags
+          ParseStarted t ->
+            startRow (ProgressTaskKey (gtKey t)) (parseActiveLine (tkMod (gtKey t))) (Just 0)
+          ParseProgressed t p -> do
+            updateRow (ProgressTaskKey (gtKey t)) (parseProgressLine (tkMod (gtKey t)) p) (parseProgressRatio p)
+            credit ParsePhase (gtKey t) (parseProgressRatio p)
+          ParseFinished t mtime -> do
+            void (endRow (ProgressTaskKey (gtKey t)))
+            credit ParsePhase (gtKey t) 1
+            when showDoneLines $
+              forM_ mtime $ \tParse ->
+                logRendered (\cols -> doneLine cols (moduleLabel rootPaths (tkMod (gtKey t))) "Parse done" "Parsed" (Just tParse))
+          FrontStarted t ->
+            startRow (ProgressTaskKey (gtKey t)) (frontInitialLine (tkMod (gtKey t))) (Just 0)
+          FrontProgressed t p -> do
+            updateRow (ProgressTaskKey (gtKey t)) (frontProgressLine (tkMod (gtKey t)) p) (frontPassFraction p)
+            credit FrontPhase (gtKey t) (frontPassFraction p)
+          FrontFinished t result -> do
+            void (endRow (ProgressTaskKey (gtKey t)))
+            credit FrontPhase (gtKey t) 1
+            forM_ result $ \fr -> do
               forM_ (frFrontTime fr) $ \tFront -> do
                 let mn = tkMod (gtKey t)
                     -- Render the whole front-result block (the module's "Type
@@ -2119,79 +1930,80 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
                                    | line <- lines (isigSignature sig) ]
                                  | sig <- frInferredSigs fr ]
                       | otherwise = []
-                logRendered (\cols -> intercalate "\n" (frontDoneLine cols mn tFront : (timingLines cols ++ sigLines cols)))
-              case (frBackJob fr, frDeferredBackJob fr) of
-                (Nothing, Nothing) -> creditBack (gtKey t)
+                logRendered (\cols -> intercalate "\n" (doneLine cols (moduleLabel rootPaths mn) "Type check done" "Typed" (Just tFront) : (timingLines cols ++ sigLines cols)))
+              case frBack fr of
+                NoBack -> credit BackPhase (gtKey t) 1
+                _      -> return ()
+          OutputStarted key kind ->
+            startRow (ProgressFrontOutputKey key kind) (frontOutputActiveLine key kind) (frontOutputInitialProgress kind)
+          OutputProgressed key kind p ->
+            updateRow (ProgressFrontOutputKey key kind) (frontOutputProgressLine key kind p) (clamp01 (InterfaceFiles.tyDbWriteProgressRatio p))
+          OutputFinished key kind melapsed -> do
+            void (endRow (ProgressFrontOutputKey key kind))
+            when showDoneLines $
+              forM_ melapsed $ \elapsed ->
+                logRendered (\cols -> doneLine cols (moduleLabel rootPaths (tkMod key)) (frontOutputDoneStatus kind) (frontOutputShortStatus kind) (Just elapsed))
+          BackReady _ -> return ()
+          BackSkipped key -> credit BackPhase key 1
+          BackStarted job ->
+            startRow (ProgressTaskKey (bjKey job)) (backActiveLine (tkMod (bjKey job))) (Just 0)
+          BackProgressed job p -> do
+            updateRow (ProgressTaskKey (bjKey job)) (backProgressLine (tkMod (bjKey job)) p) (backProgressRatio p)
+            when (showDoneLines && (C.timing gopts || C.verbose gopts)) $
+              case bppEvent p of
+                BackPassFinished elapsed ->
+                  logRendered (\cols ->
+                    detailTimedLine cols detailStmtIndentWide detailStmtIndentNarrow
+                      (backPassDoneLine (tkMod (bjKey job)) (bppPass p)) elapsed)
                 _ -> return ()
-          , chOnFrontStart = \t ->
-              let key = gtKey t
-                  mn = tkMod key
-              in gate (progressStartTask progressUI progressState (taskProgressKey key) (frontInitialLine mn) (Just 0))
-          , chOnFrontProgress = \t p ->
-              let key = gtKey t
-                  mn = tkMod key
-              in do
-                gate (progressUpdateTask progressUI progressState (taskProgressKey key) (frontProgressLine mn p) (Just (frontPassFraction p)))
-                creditFrontProgress key p
-          , chOnFrontDone = \t -> do
-              gate (void $ progressDoneTask progressUI progressState (taskProgressKey (gtKey t)))
-              creditFront (gtKey t)
-          , chOnFrontOutputStart = \key kind ->
-              gate (progressStartTask progressUI progressState (frontOutputTaskKey key kind)
-                      (frontOutputActiveLine key kind) (frontOutputInitialProgress kind))
-          , chOnFrontOutputProgress = \key kind p ->
-              gate (progressUpdateTask progressUI progressState (frontOutputTaskKey key kind)
-                      (frontOutputProgressLine key kind p) (Just (clamp01 (fopRatio p))))
-          , chOnFrontOutputDone = \key kind melapsed -> do
-              gate (void $ progressDoneTask progressUI progressState (frontOutputTaskKey key kind))
-              when (not (quiet gopts optsPlan)) $
-                forM_ melapsed $ \elapsed ->
-                  logRendered (\cols -> frontOutputDoneLine cols key kind elapsed)
-          , chOnBackQueued = \_ _ -> return ()
-          , chOnBackSkipped = creditBack
-          , chOnBackStart = onBackStart
-          , chOnBackProgress = onBackProgress
-          , chOnBackDone = onBackDone
-          , chOnInfo = logLine
-          }
+          BackFinished job result -> do
+            void (endRow (ProgressTaskKey (bjKey job)))
+            credit BackPhase (bjKey job) 1
+            when showDoneLines $
+              case result of
+                BackJobOk mtime mtiming -> do
+                  logRendered (\cols -> doneLine cols (moduleLabel rootPaths (tkMod (bjKey job))) "Compilation done" "Built" mtime)
+                  when (C.timing gopts) $
+                    forM_ mtiming $ \timing ->
+                      logRendered (\cols -> detailLine cols detailStmtIndentWide detailStmtIndentNarrow (backTimingLine timing))
+                BackJobFailed failure ->
+                  logRendered (\cols -> backFailLine cols (tkMod (bjKey job)) (bpfMessage failure))
+          Info msg -> logLine msg
         onFinalStart = do
-          gate (progressStartTask progressUI progressState finalKey finalActiveLine Nothing)
+          whenCurrent gen (startRow finalKey finalActiveLine Nothing)
           setPercent 85
-        onFinalDone success = do
-          current <- readIORef (csGenRef sched)
-          when (current == gen) $ do
-            mElapsed <- progressDoneTask progressUI progressState finalKey
+        onFinalDone success =
+          whenCurrent gen $ do
+            mElapsed <- endRow finalKey
             setPercent 100
             when success $
               forM_ mElapsed $ \tFinal ->
-                when (not (quiet gopts optsPlan)) $
-                  logRendered (\cols -> finalDoneLine cols tFinal)
-    return CliCompileHooks
-      { cchHooks = hooks
-      , cchLogLine = logLine
-      , cchClearProgress = progressReset progressUI progressState
-      , cchFinalStart = onFinalStart
-      , cchFinalDone = onFinalDone
-      , cchProgressUI = progressUI
+                when showDoneLines $
+                  logRendered (\cols -> doneLine cols "" "Final compilation done" "Final" (Just tFinal))
+    return CliReporter
+      { reportEvent = onEvent
+      , reportLine = logLine
+      , startFinal = onFinalStart
+      , finishFinal = onFinalDone
+      , reporterProgressUI = progressUI
       }
 
 -- | Run CLI-only post-compile steps.
-runCliPostCompile :: CliCompileHooks
+runCliPostCompile :: CliReporter
                   -> C.GlobalOptions
                   -> CompilePlan
                   -> Acton.Env.Env0
                   -> IO Bool
-runCliPostCompile cliHooks gopts plan env = do
+runCliPostCompile reporter gopts plan env = do
     prepStart <- getTime Monotonic
-    let logLine = cchLogLine cliHooks
+    let logLine = reportLine reporter
     let cctx = cpContext plan
         opts' = ccOpts cctx
         pathsRoot = ccPathsRoot cctx
         rootProj = ccRootProj cctx
         sysAbs = ccSysAbs cctx
-        rootTasks = cpRootTasks plan
-        allowPrune' = cpAllowPrune plan
-        globalTasks = cpGlobalTasks plan
+        rootModules = cpRootModules plan
+        allowPrune = cpAllowPrune plan
         neededTasks = cpNeededTasks plan
         projMap = cpProjMap plan
         proj = projName pathsRoot
@@ -2199,20 +2011,19 @@ runCliPostCompile cliHooks gopts plan env = do
                   Just ctx -> return (projBuildSpec ctx)
                   Nothing -> throwProjectError ("Missing root project context for " ++ rootProj)
     let rootParts = splitOn "." (C.root opts')
-        rootMod   = if proj `elem` special_projects then init rootParts else proj : init rootParts
-        guessMod  = if length rootParts == 1 then modName pathsRoot else A.modName rootMod
+        guessMod  = if length rootParts == 1 then ccRootModule cctx else addProjPrefix pathsRoot (A.modName (init rootParts))
         binTask   = BinTask (A.GName guessMod (A.name $ last rootParts)) False
         preBinTasks
-          | null (C.root opts') = map (\t -> BinTask (A.GName (name t) (A.name "main")) False) rootTasks
+          | null (C.root opts') = map (\mn -> BinTask (A.GName mn (A.name "main")) False) rootModules
           | otherwise        = [binTask]
-    requestedModules <- mapM (moduleNameFromFile (srcDir pathsRoot) proj) (cpSrcFiles plan)
-    let preTestBinTasks = [ BinTask (A.GName (name t) (A.name "test_main")) True
-                          | t <- rootTasks, name t `elem` requestedModules ]
-        selectedTasksByProj = selectedTasksWithProvidersByProj globalTasks neededTasks
+    requestedModules <- mapM (moduleNameFromFile (srcDir pathsRoot) proj) (requestFiles (cpRequest plan))
+    let preTestBinTasks = [ BinTask (A.GName mn (A.name "test_main")) True
+                          | mn <- rootModules, mn `elem` requestedModules ]
+        selectedTasksByProj = M.fromListWith (++) [ (tkProj (gtKey t), [t]) | t <- neededTasks ]
         depModuleOptsByProj = depModuleOptionsByProj selectedTasksByProj projMap
-        rootSelectedModuleEntries = selectedCSourceEntriesForProj rootProj (M.findWithDefault [] rootProj selectedTasksByProj)
-        rootBuildLibraries = explicitBuildLibraries rootSelectedModuleEntries rootSpec
-        rootModuleEntries = excludeLibrarySources rootBuildLibraries rootSelectedModuleEntries
+        selectedModuleSources = selectedCSourceEntriesForProj rootProj (M.findWithDefault [] rootProj selectedTasksByProj)
+        rootBuildLibraries = explicitBuildLibraries selectedModuleSources rootSpec
+        rootModuleSources = excludeLibrarySources rootBuildLibraries selectedModuleSources
         rootDepModuleOpts = M.findWithDefault M.empty rootProj depModuleOptsByProj
         rootDepPathOverrides = projectDepPathOverrides projMap rootProj
 
@@ -2224,45 +2035,44 @@ runCliPostCompile cliHooks gopts plan env = do
       unless (isRootProj || isSysProject sysAbs p) $ do
         when (C.verbose gopts) $
           logLine ("Generating build.zig for dependency project " ++ p)
-        dummyPaths <- pathsForModule opts' projMap pctx (A.modName ["__gen_build__"])
-        let depOpts = M.findWithDefault M.empty p depModuleOptsByProj
+        let depPaths = projectPaths opts' projMap pctx
+            depOpts = M.findWithDefault M.empty p depModuleOptsByProj
             depPathOverrides = projectDepPathOverrides projMap p
-        genBuildZigFiles (projBuildSpec pctx) dummyPaths depOpts depPathOverrides
+        createProjectDirectories depPaths
+        genBuildZigFiles (projBuildSpec pctx) depPaths depOpts depPathOverrides
     logTiming gopts opts' logLine "dependency build preparation" prepStart
     let runFinal action = do
-          cchFinalStart cliHooks
-          success <- action `onException` cchFinalDone cliHooks False
-          cchFinalDone cliHooks success
+          startFinal reporter
+          success <- action `onException` finishFinal reporter False
+          finishFinal reporter success
           return success
     if C.skip_build opts'
       then
         logLine "  Skipping final build step" >> return True
-      else
-        if C.test opts'
-          then do
-            testBinTasks <- catMaybes <$> mapM (filterMainActor env pathsRoot) preTestBinTasks
-            if altOutput opts' then return True else
-              runFinal (compileBins gopts opts' pathsRoot env rootSpec rootTasks testBinTasks allowPrune' rootModuleEntries rootBuildLibraries rootDepModuleOpts rootDepPathOverrides (Just (cchProgressUI cliHooks)))
-          else do
-            if altOutput opts' then return True else
-              runFinal (compileBins gopts opts' pathsRoot env rootSpec rootTasks preBinTasks allowPrune' rootModuleEntries rootBuildLibraries rootDepModuleOpts rootDepPathOverrides (Just (cchProgressUI cliHooks)))
+      else do
+        binTasks <- if C.test opts'
+                      then catMaybes <$> mapM (filterMainActor env pathsRoot) preTestBinTasks
+                      else return preBinTasks
+        if C.altOutput opts' then return True else
+          runFinal (zigBuild env gopts opts' pathsRoot rootSpec rootModules binTasks allowPrune rootModuleSources rootBuildLibraries rootDepModuleOpts rootDepPathOverrides (Just (reporterProgressUI reporter)))
+
 -- Generate documentation index for a project build by reading module names and
 -- docstrings from cached .tydb headers or source headers.
 generateProjectDocIndex :: Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -> Paths -> [String] -> IO ()
 generateProjectDocIndex sp gopts opts paths srcFiles = do
     unless (C.skip_build opts || C.only_build opts || isTmp paths) $ do
-        let docDir = joinPath [projPath paths, "out", "doc"]
+        let docDir = projectDocDir (projPath paths)
         createDirectoryIfMissing True docDir
         entries <- catMaybes <$> forM srcFiles (\f -> do
-                     p <- findPaths f opts
-                     readModuleDocIndexEntry sp gopts opts p f)
+                     (p, mn) <- findPaths f opts
+                     docIndexEntry opts p mn <$> readModuleTask sp gopts opts p mn f)
         DocP.generateDocIndex docDir entries
 
 -- | Relative C source paths for selected tasks in one project.
 selectedCSourceEntriesForProj :: FilePath -> [GlobalTask] -> [FilePath]
 selectedCSourceEntriesForProj proj tasks =
     nub
-      [ collapseDots (makeRelativeOrAbsolute proj (outBase (gtPaths t) (name (gtTask t)) ++ ".c"))
+      [ collapseDots (makeRelativeOrAbsolute proj (generatedPath (gtPaths t) (tkMod (gtKey t)) cFile))
       | t <- tasks
       ]
 
@@ -2286,30 +2096,6 @@ excludeLibrarySources libs sources =
     filter (`Data.Set.notMember` libSourceSet) sources
   where
     libSourceSet = Data.Set.fromList (concatMap buildLibSources libs)
-
--- | For incremental builds, include providers so link inputs stay complete.
-selectedTasksWithProvidersByProj :: [GlobalTask] -> [GlobalTask] -> M.Map FilePath [GlobalTask]
-selectedTasksWithProvidersByProj globalTasks neededTasks =
-    M.fromListWith (++) [ (tkProj (gtKey t), [t]) | t <- selectedTasks ]
-  where
-    taskKeys = Data.Set.fromList (map gtKey globalTasks)
-    depMap = M.fromList
-      [ (gtKey t, Data.Set.fromList (filter (`Data.Set.member` taskKeys) (M.elems (gtImportProviders t))))
-      | t <- globalTasks
-      ]
-    start = Data.Set.fromList (map gtKey neededTasks)
-    selectedKeys = reachable depMap start
-    selectedTasks = [ t | t <- globalTasks, Data.Set.member (gtKey t) selectedKeys ]
-
-    reachable deps startKeys = go (Data.Set.toList startKeys) Data.Set.empty
-      where
-        go [] seen = seen
-        go (k:ks) seen =
-          if Data.Set.member k seen
-            then go ks seen
-            else
-              let ds = Data.Set.toList (M.findWithDefault Data.Set.empty k deps)
-              in go (ds ++ ks) (Data.Set.insert k seen)
 
 -- | Relative root-stub C paths for selected binaries.
 selectedRootStubEntriesForBins :: Paths -> [BinTask] -> [FilePath]
@@ -2358,13 +2144,13 @@ projectDepPathOverrides projMap rootProj = snd (go Data.Set.empty rootProj M.emp
 -- so a module that loses its root actor loses its stub and its binary in
 -- out/bin, while those of other build modes stay (e.g. the .root.c during
 -- `acton test`). Roots built in this run stay too.
-removeUndeclaredRoots :: Paths -> [CompileTask] -> [BinTask] -> IO ()
-removeUndeclaredRoots paths tasks bins = do
-    declared <- concat <$> mapM headerRoots tasks
+removeUndeclaredRoots :: Paths -> [A.ModName] -> [BinTask] -> IO ()
+removeUndeclaredRoots paths modules bins = do
+    declared <- concat <$> mapM headerRoots modules
     let live f = Data.Set.fromList [ f test mn | (test, mn) <- declared ++ map binTaskModule bins ]
         liveStubs = live (rootStubPath paths)
         liveBinaries = live (rootBinaryName paths)
-        stubs = [ rootStubPath paths test (name t) | t <- tasks, test <- [False, True] ]
+        stubs = [ rootStubPath paths test mn | mn <- modules, test <- [False, True] ]
     mapM_ removePathForcibly (filter (`Data.Set.notMember` liveStubs) stubs)
     -- A scratch build's binDir is the source directory, so leave it alone.
     binDirExists <- doesDirectoryExist (binDir paths)
@@ -2372,12 +2158,9 @@ removeUndeclaredRoots paths tasks bins = do
       files <- filterM doesFileExist . map (binDir paths </>) =<< listDirectory (binDir paths)
       mapM_ removeFile (filter ((`Data.Set.notMember` liveBinaries) . binaryOf . takeFileName) files)
   where
-    headerRoots t = do
-      hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeaderSummary (tyDbPath paths (name t))
-      return $ case hdrE of
-        Right (_sourceMeta, _, _, _implH, _imps, _depModules, _nameCount, rs, _tests, _) ->
-          [ (nameToString n == "test_main", name t) | n <- rs ]
-        Left _ -> []
+    headerRoots mn =
+      maybe [] (\header -> [ (A.nstr n == "test_main", mn) | n <- InterfaceFiles.summaryRoots header ])
+        <$> InterfaceFiles.tryReadHeaderSummary (tyDbPath paths mn)
     -- Windows binaries end in .exe, and their debug info in .pdb.
     binaryOf f | takeExtension f `elem` [".exe", ".pdb"] = dropExtension f
                | otherwise = f
@@ -2400,113 +2183,21 @@ binTaskModule binTask = (isTest binTask, m)
 binTaskRoot :: Paths -> BinTask -> FilePath
 binTaskRoot paths = uncurry (rootStubPath paths) . binTaskModule
 
-{-
-================================================================================
-Build Pipeline Overview
-================================================================================
-
-We want the compiler to be fast. The primary principle by which to achieve this
-is to avoid doing unnecessary work. Practically, this happens by caching
-information in .tydb files and only selectively reading what we need. We do not
-eagerly load whole .tydb files but rather read the header fields: moduleSrcBytesHash,
-modulePubHash, moduleImplHash, imports, per-name hashes (src/pub/impl + deps),
-roots, tests, and docstrings. This lets us quickly decide which passes to rerun and
-reuse work from previous compilations.
-
-Public hashing: each top-level name gets a pubHash computed from its doc-free
-signature plus the pub hashes of its public dependencies. The modulePubHash is
-then the hash of pubHash values for exported names. Doc-only edits do not affect
-pubHash, and a downstream module only needs front passes when a pubHash changes.
-
-Implementation hashing: each top-level name gets an implHash computed from its
-source hash plus the impl hashes of its dependencies. The moduleImplHash is the
-hash of all per-name impl hashes. We embed moduleImplHash into generated .c/.h
-files so we can skip back passes when codegen is already up to date, and we use
-it (with impl deps) to drive the test cache.
-
-Terminology
-- ParseTask: a source-backed module whose imports are known but whose full AST
-  has not been materialized yet
-- ActonTask: a fully parsed source module ready for front passes
-- TyTask: a module loaded from the cached .tydb file on disk. Note how there are
-  two variants, a stubbed TyTask where only header fields are loaded and the
-  full TyTask where all module content is available.
-
-High-level Steps
-1) Discover and read tasks using header-first strategy (readModuleTask)
-   - For each module, try to use its .tydb header to avoid parsing:
-     - If .tydb is missing/unreadable → read source and parse only the import
-       header (ParseTask).
-     - If the compiler compatibility guard says the cache is stale
-       → read source and parse the import header now (ParseTask).
-     - If source metadata in the .tydb header still matches the current .act and
-       the source mtime is strictly older than the .tydb mtime
-       → trust .tydb header imports and create a TyTask stub (no heavy decode)
-       for graph building.
-     - If metadata differs, or source/.tydb mtimes are equal, verify by content
-       hash:
-       – If stored moduleSrcBytesHash == current bytes hash → header is still
-         valid (TyTask) and refresh cached source metadata.
-       – Else → read source and parse the import header now (ParseTask)
-     - Equal source/.tydb mtimes are treated as ambiguous because coarse-mtime
-       filesystems can assign the same visible timestamp to a changed source
-       and the cached .tydb written from an earlier version of that source.
-   - This ensures that .tydb is up to date with the .act source and lets us
-     read module imports/roots/docstring from the header, which is much faster
-     than parsing the full .act file.
-
-2) Expand to include transitive project imports (readImports)
-   - For project builds, we enumerate all modules under src/ upfront, so chasing
-     is typically a no-op.
-   - For single-file builds (or partial sets), we chase imports from the seeded
-     tasks to ensure all project-local dependencies are included. We prefer .tydb
-     headers to avoid parsing; we parse only when a .tydb is missing/unreadable.
-
-3) Compile and build
-   - compileTasks builds a stage graph and prefers front work over parse work:
-     - ParseTask stages have no dependencies and can run opportunistically.
-     - Front stages depend on the module's parse stage (if any) plus provider
-       front stages.
-   - Front-stage rebuild decisions are then made per module:
-     - Source changed (ParseTask/ActonTask) → run front passes
-     - Otherwise, compare each used pub dependency hash from the dependent’s
-       .tydb header with the provider’s current pub hash. If any differ → front.
-     - Otherwise, compare each used impl dependency hash from the dependent’s
-       .tydb header with the provider’s current impl hash. If any differ → refresh
-       impl hashes and run back passes.
-     - Otherwise, if generated .c/.h hashes do not match moduleImplHash → run
-       back passes.
-     - Otherwise → module is fresh (no work).
-   - We maintain a pubMap while walking modules in topological order. After a
-     module compiles, we insert its freshly computed public hash; when a
-     module is fresh (TyTask), we insert the recorded header hash. Dependents
-     then consult pubMap to detect public deltas among their imports.
-   - TyTask items remain lazy; code that needs only small bits (e.g., writeRootC)
-     reads roots/doc from the header instead of forcing heavy loads.
-   - Final Zig C compilation...
-
-================================================================================
--}
-
-compileBins:: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> BuildSpec.BuildSpec -> [CompileTask] -> [BinTask] -> Bool -> [FilePath] -> [BuildLibrary] -> M.Map String String -> M.Map String FilePath -> Maybe ProgressUI -> IO Bool
-compileBins gopts opts paths env rootSpec tasks binTasks allowPrune rootModules buildLibraries depModuleOpts depPathOverrides mProgressUI =
-    zigBuild env gopts opts paths rootSpec tasks binTasks allowPrune rootModules buildLibraries depModuleOpts depPathOverrides mProgressUI
-
-printDiag :: C.GlobalOptions -> C.CompileOptions -> Diagnostic String -> IO ()
-printDiag gopts opts d = do
+printDiag :: C.GlobalOptions -> Diagnostic String -> IO ()
+printDiag gopts d = do
     -- TODO: change to print to stderr! current tests presume stdout so we print to stdout for now..
     shouldColor <- useColor gopts
     if shouldColor
       then printDiagnostic stdout WithUnicode (TabSize 4) defaultStyle d
       else hPutDoc stdout $ unAnnotate (prettyDiagnostic WithoutUnicode (TabSize 4) d)
 
-printDiagnostics :: C.GlobalOptions -> C.CompileOptions -> [Diagnostic String] -> IO ()
-printDiagnostics gopts opts diags =
-    mapM_ (printDiag gopts opts) diags
+printDiagnostics :: C.GlobalOptions -> [Diagnostic String] -> IO ()
+printDiagnostics gopts diags =
+    mapM_ (printDiag gopts) diags
 
 -- | Generate a root actor C file when a root is still declared.
-writeRootC :: Acton.Env.Env0 -> C.GlobalOptions -> C.CompileOptions -> Paths -> [CompileTask] -> BinTask -> IO (Maybe BinTask)
-writeRootC env gopts opts paths tasks binTask = do
+writeRootC :: Acton.Env.Env0 -> C.GlobalOptions -> C.CompileOptions -> Paths -> BinTask -> IO (Maybe BinTask)
+writeRootC env gopts opts paths binTask = do
     let qn@(A.GName mn n) = rootActor binTask
         rootFile = binTaskRoot paths binTask
     -- In --only-build mode, reuse existing root stubs; generate only if missing.
@@ -2519,7 +2210,7 @@ writeRootC env gopts opts paths tasks binTask = do
         -- was rebuilt during this run.
         tyPath <- Acton.Env.findTyFile (searchPath paths) mn
         rootsHeader <- case tyPath of
-                         Just ty -> do (_sourceMeta, _, _, _implH, _imps, _depModules, _nameCount, roots, _tests, _) <- InterfaceFiles.readHeaderSummary ty; return roots
+                         Just ty -> InterfaceFiles.summaryRoots <$> InterfaceFiles.readHeaderSummary ty
                          Nothing -> throwProjectError ("Root module " ++ prstr (dropProjPrefix paths mn) ++ " not found")
         let rootsEnv = case Acton.Env.lookupModuleInfo mn env of
                          Nothing -> []
@@ -2612,8 +2303,8 @@ runZig gopts opts zigExe zigArgs paths wd mProgressUI = do
               takeMVar doneVar
         return (Just ("ZIG_PROGRESS", envVal), onStart', onStop', False)
     homeDir <- getHomeDirectory
-    let zigEnv = [ ("ZIG_LOCAL_CACHE_DIR", joinPath [homeDir, ".cache", "acton", "zig-local-cache"])
-                 , ("ZIG_GLOBAL_CACHE_DIR", joinPath [homeDir, ".cache", "acton", "zig-global-cache"])
+    let zigEnv = [ ("ZIG_LOCAL_CACHE_DIR", zigLocalCacheDir homeDir)
+                 , ("ZIG_GLOBAL_CACHE_DIR", zigGlobalCacheDir homeDir)
                  ]
         envWithZigCache = foldr (\(k, v) acc -> (k, v) : filter ((/= k) . fst) acc) env0 zigEnv
         env2 = case envOverride of
@@ -2660,7 +2351,7 @@ isSysProject sysAbs projAbs =
 zigBuildDir :: FilePath -> FilePath -> FilePath
 zigBuildDir sysAbs projAbs
   | isSysProject sysAbs projAbs = projAbs
-  | otherwise                   = joinPath [projAbs, "out", "zig"]
+  | otherwise                   = projectOutDir projAbs </> "zig"
 
 -- Render build.zig and build.zig.zon from templates and BuildSpec.
 -- Dependency paths come from the selected, deduplicated project graph.
@@ -2680,7 +2371,7 @@ genBuildZigFiles spec paths depModuleOpts depPathOverrides = do
     let buildDir = zigBuildDir absSys projAbs
         relSys = relativeViaRoot buildDir absSys
     homeDir <- getHomeDirectory
-    depsRootAbs <- normalizePathSafe (joinPath [homeDir, ".cache", "acton", "deps"])
+    depsRootAbs <- normalizePathSafe (depCacheDir homeDir)
     normalizedSpec <- normalizeSpecPaths proj spec
     let directZigs = [ ZigDepRef depName (rebaseZigDep projAbs proj dep)
                      | (depName, dep) <- M.toList (BuildSpec.zig_dependencies normalizedSpec)
@@ -2733,9 +2424,9 @@ data ZigDepIdentity
 
 zigDepIdentity :: BuildSpec.ZigDep -> ZigDepIdentity
 zigDepIdentity dep =
-  case BuildSpec.zpath dep of
-    Just p | not (null p) -> ZigDepPathIdentity p (BuildSpec.options dep)
-    _ -> case BuildSpec.zhash dep of
+  case localZigPath dep of
+    Just p  -> ZigDepPathIdentity p (BuildSpec.options dep)
+    Nothing -> case BuildSpec.zhash dep of
            Just h | not (null h) -> ZigDepHashIdentity h (BuildSpec.options dep)
            _ -> ZigDepUrlIdentity (BuildSpec.zurl dep) (BuildSpec.options dep)
 
@@ -2918,10 +2609,10 @@ genBuildZigZon template relSys depsRootAbs sysAbs projAbs buildDir fingerprint z
     in unlines $ header ++ concatMap inject replaced
   where
     pkgToZon projRoot depsRoot (name, dep) =
-      let rawPath = case BuildSpec.path dep of
-                      Just p | not (null p) -> p
-                      _ -> case BuildSpec.hash dep of
-                             Just h -> joinPath ([depsRoot, name ++ "-" ++ h] ++ maybeToList (BuildSpec.subdir dep))
+      let rawPath = case localPath dep of
+                      Just p  -> p
+                      Nothing -> case BuildSpec.hash dep of
+                             Just h -> joinPath (depCacheEntry depsRoot name h : maybeToList (BuildSpec.subdir dep))
                              Nothing -> errorWithoutStackTrace ("Dependency " ++ name ++ " has no path or hash")
           pathAbs = collapseDots $
                       if isAbsolutePath rawPath
@@ -2965,15 +2656,15 @@ defCpuFlag = ["-Dcpu=x86_64_v2+aes"]
 #endif
 
 -- | Run zig build for generated artifacts and prune stale outputs.
-zigBuild :: Acton.Env.Env0 -> C.GlobalOptions -> C.CompileOptions -> Paths -> BuildSpec.BuildSpec -> [CompileTask] -> [BinTask] -> Bool -> [FilePath] -> [BuildLibrary] -> M.Map String String -> M.Map String FilePath -> Maybe ProgressUI -> IO Bool
-zigBuild env gopts opts paths rootSpec tasks binTasks allowPrune rootModules buildLibraries depModuleOpts depPathOverrides mProgressUI = do
+zigBuild :: Acton.Env.Env0 -> C.GlobalOptions -> C.CompileOptions -> Paths -> BuildSpec.BuildSpec -> [A.ModName] -> [BinTask] -> Bool -> [FilePath] -> [BuildLibrary] -> M.Map String String -> M.Map String FilePath -> Maybe ProgressUI -> IO Bool
+zigBuild env gopts opts paths rootSpec rootModules binTasks allowPrune moduleSources buildLibraries depModuleOpts depPathOverrides mProgressUI = do
     prepStart <- getTime Monotonic
-    allBinTasks <- mapM (writeRootC env gopts opts paths tasks) binTasks
+    allBinTasks <- mapM (writeRootC env gopts opts paths) binTasks
     let realBinTasks = catMaybes allBinTasks
 
     let pruningAllowed = allowPrune && not (C.only_build opts)
     when pruningAllowed $
-      removeUndeclaredRoots paths tasks realBinTasks
+      removeUndeclaredRoots paths rootModules realBinTasks
 
     let no_threads = if isWindowsOS (C.target opts) then True else C.no_threads opts
     projAbs <- normalizePathSafe (projPath paths)
@@ -2983,7 +2674,7 @@ zigBuild env gopts opts paths rootSpec tasks binTasks allowPrune rootModules bui
     iff (not (isSysProject sysAbs projAbs)) $
       genBuildZigFiles rootSpec paths depModuleOpts depPathOverrides
 
-    let zigExe = zig paths
+    let zigExe = zigExecutable (sysPath paths)
         buildFile = zigBuildDir sysAbs projAbs </> "build.zig"
         baseArgs = ["build","--build-file", buildFile] ++
                    (if (C.verboseZig gopts) then ["--verbose"] else []) ++
@@ -3001,10 +2692,10 @@ zigBuild env gopts opts paths rootSpec tasks binTasks allowPrune rootModules bui
                    (_:_)                   -> defCpuFlag
                    []                      -> defCpuFlag
         optArgs = ["-Doptimize=" ++ optimizeModeToZig (C.optimize opts)]
-        rootModulesCsv = intercalate "," rootModules
+        moduleSourcesCsv = intercalate "," moduleSources
         rootStubsCsv = intercalate "," (selectedRootStubEntriesForBins paths realBinTasks)
         buildLibrariesSpec = encodeBuildLibraries buildLibraries
-        moduleArgs = [ "-Dacton_modules=" ++ rootModulesCsv
+        moduleArgs = [ "-Dacton_modules=" ++ moduleSourcesCsv
                      , "-Dacton_root_stubs=" ++ rootStubsCsv
                      , "-Dacton_libraries=" ++ buildLibrariesSpec
                      -- Zig keys the configure cache on -D options and on
@@ -3025,7 +2716,7 @@ zigBuild env gopts opts paths rootSpec tasks binTasks allowPrune rootModules bui
       then do
         let baseName   = uncurry (rootBinaryName paths) (binTaskModule (head binTasks))
             exeName    = if isWindowsOS (C.target opts) then baseName ++ ".exe" else baseName
-            srcBinFile = joinPath [ projOut paths, "bin", exeName ]
+            srcBinFile = projectBinDir (projPath paths) </> exeName
             dstBinFile = joinPath [ binDir paths, exeName ]
         copyFile srcBinFile dstBinFile
       else return ()
@@ -3098,12 +2789,12 @@ collectDepsRecursive rootSpec projDir depPaths = do
 
 rebaseZigDep :: FilePath -> FilePath -> BuildSpec.ZigDep -> BuildSpec.ZigDep
 rebaseZigDep root base dep =
-  case BuildSpec.zpath dep of
-    Just p | not (null p) ->
+  case localZigPath dep of
+    Just p ->
       let absP = rebasePath base p
           relP = makeRelativeOrAbsolute root absP
       in dep { BuildSpec.zpath = Just (collapseDots relP) }
-    _ -> dep
+    Nothing -> dep
 
 -- | Normalize dependency paths in a BuildSpec.
 normalizeSpecPaths :: FilePath -> BuildSpec.BuildSpec -> IO BuildSpec.BuildSpec
@@ -3115,26 +2806,26 @@ normalizeSpecPaths base spec = do
   where
     normalizePkgDeps b = fmap M.fromList . mapM (\(k,v) -> do v' <- normalizePkgDep b v; return (k,v')) . M.toList
     normalizePkgDep b dep =
-      case BuildSpec.path dep of
-        Just p | not (null p) -> do
+      case localPath dep of
+        Just p -> do
           if isAbsolutePath p
             then do p' <- normalizePathSafe p
                     return dep { BuildSpec.path = Just p' }
             else return dep { BuildSpec.path = Just (collapseDots (normalise p)) }
-        _ -> return dep
+        Nothing -> return dep
 
     normalizeZigDeps b = fmap M.fromList . mapM (\(k,v) -> do v' <- normalizeZigDep b v; return (k,v')) . M.toList
 
 -- | Normalize a zig dependency path entry.
 normalizeZigDep :: FilePath -> BuildSpec.ZigDep -> IO BuildSpec.ZigDep
 normalizeZigDep b dep =
-  case BuildSpec.zpath dep of
-    Just p | not (null p) -> do
+  case localZigPath dep of
+    Just p -> do
       if isAbsolutePath p
         then do p' <- normalizePathSafe p
                 return dep { BuildSpec.zpath = Just p' }
         else return dep { BuildSpec.zpath = Just (collapseDots (normalise p)) }
-    _ -> return dep
+    Nothing -> return dep
 
 -- | Filter bin tasks to those with a valid root actor.
 filterMainActor :: Acton.Env.Env0 -> Paths -> BinTask -> IO (Maybe BinTask)
@@ -3148,9 +2839,9 @@ filterMainActor env paths binTask = do
     mty <- Acton.Env.findTyFile (searchPath paths) m
     case mty of
       Just ty -> do
-        hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeaderSummary ty
-        case hdrE of
-          Right (_sourceMeta, _, _, _implH, _imps, _depModules, _nameCount, roots, _tests, _) | n `elem` roots -> return (Just binTask)
+        header <- InterfaceFiles.tryReadHeaderSummary ty
+        case header of
+          Just h | n `elem` InterfaceFiles.summaryRoots h -> return (Just binTask)
           _ -> checkEnv
       Nothing -> checkEnv
 
@@ -3205,9 +2896,11 @@ data ProgressTask = ProgressTask
   , ptProgress :: Maybe Double
   }
 
--- | Initialize terminal progress UI state and enablement.
-initProgressUI :: C.GlobalOptions -> Int -> IO ProgressUI
-initProgressUI gopts maxLines = do
+-- | Initialize terminal progress UI state and enablement.  It shows at most
+-- compileParallelism gopts live lines.
+initProgressUI :: C.GlobalOptions -> IO ProgressUI
+initProgressUI gopts = do
+    maxLines <- compileParallelism gopts
     tty <- hIsTerminalDevice stdout
     let widthAware = (tty || C.tty gopts) && not (C.quiet gopts)
         enabled = widthAware && not (C.noProgress gopts)
@@ -3223,7 +2916,7 @@ initProgressUI gopts maxLines = do
     return ProgressUI
       { puEnabled = enabled
       , puWidthAware = widthAware
-      , puMaxLines = max 1 maxLines
+      , puMaxLines = maxLines
       , puLinesRef = linesRef
       , puVisibleRef = visibleRef
       , puSpinnerRef = spinnerRef

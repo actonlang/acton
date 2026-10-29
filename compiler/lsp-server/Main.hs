@@ -18,12 +18,10 @@ import qualified Data.Map.Strict as M
 import Data.Maybe (fromMaybe, listToMaybe)
 import Data.Sequence (Seq, ViewL(..), (|>))
 import qualified Data.Sequence as Seq
-import qualified Data.Set
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
-import GHC.Conc (getNumCapabilities)
-import System.Directory (doesDirectoryExist)
-import System.FilePath ((</>), takeExtension, takeFileName)
+import System.Directory (doesDirectoryExist, doesFileExist)
+import System.FilePath ((</>), takeFileName)
 import qualified System.FSNotify as FS
 import System.IO.Unsafe (unsafePerformIO)
 
@@ -36,6 +34,7 @@ import qualified Acton.Compile as Compile
 import qualified Acton.CommandLineParser as C
 import qualified Acton.Completion as Completion
 import qualified Acton.Env as Env
+import qualified Acton.Project as Project
 import qualified Acton.SourceProvider as Source
 import qualified Acton.Syntax as S
 
@@ -47,7 +46,7 @@ import Error.Diagnose.Position (Position(..))
 
 type OverlayMap = HM.HashMap FilePath Source.SourceSnapshot
 type UriMap = HM.HashMap FilePath Uri
-type BackgroundCompilerLockMap = HM.HashMap FilePath Compile.BackgroundCompilerLock
+type BackgroundCompilerLockMap = HM.HashMap FilePath Project.BackgroundCompilerLock
 type BackgroundCompilerWarned = HM.HashMap FilePath ()
 type CompletionStateMap = HM.HashMap FilePath CompletionState
 type CompletionEnvCacheMap = HM.HashMap FilePath CompletionEnvCache
@@ -69,10 +68,8 @@ data CompletionEnvCache = CompletionEnvCache
 
 data ProjectBuildCache = ProjectBuildCache
   { cachedCompileContext :: Compile.CompileContext
-  , cachedProjectMap :: M.Map FilePath Compile.ProjCtx
+  , cachedProjectMap :: M.Map FilePath Project.ProjCtx
   , cachedGlobalTasks :: [Compile.GlobalTask]
-  , cachedDbpBlocked :: Data.Set.Set Compile.TaskKey
-  , cachedImportKeys :: HM.HashMap FilePath String
   }
 
 data PlanOrigin = PlanFromCache | PlanFromDiscovery deriving (Eq, Show)
@@ -132,31 +129,28 @@ projectWatchersRef :: IORef ProjectWatcherMap
 projectWatchersRef = unsafePerformIO (newIORef HM.empty)
 
 {-# NOINLINE compileScheduler #-}
--- | Shared compile scheduler for LSP events and back jobs.
+-- | Shared compile scheduler for LSP events and back jobs.  One scheduler
+-- builds every project root this server serves: they share one module
+-- cache and one Build.act stamp.  So two checkouts of one project read
+-- each other's remembered hashes, and a fresh plan of one root fetches
+-- the dependencies again and plans in full after a plan of another root
+-- that completed a fetch of a Build.act with a different modification time.
 compileScheduler :: Compile.CompileScheduler
-compileScheduler = unsafePerformIO $ do
-  nCaps <- getNumCapabilities
-  let maxParallel = max 1 (if C.jobs lspGlobalOpts > 0 then C.jobs lspGlobalOpts else nCaps)
-  Compile.newCompileScheduler lspGlobalOpts maxParallel
+compileScheduler = unsafePerformIO (Compile.newCompileScheduler lspGlobalOpts)
 
 -- | Global compiler options for the LSP server (quiet, no color).
 lspGlobalOpts :: C.GlobalOptions
 lspGlobalOpts =
-  C.GlobalOptions
-    { color = C.Never
-    , quiet = True
-    , noProgress = True
-    , timing = False
-    , tty = False
-    , verbose = False
-    , verboseZig = False
-    , jobs = 0
+  C.defaultGlobalOptions
+    { C.color = C.Never
+    , C.quiet = True
+    , C.noProgress = True
     }
 
 -- | Compile options for LSP runs (front passes only, no final build).
 lspCompileOpts :: C.CompileOptions
 lspCompileOpts =
-  Compile.defaultCompileOptions
+  C.defaultCompileOptions
     { C.skip_build = True
     , C.only_build = False
     , C.test = False
@@ -212,7 +206,7 @@ ensureBackgroundCompilerLock projRoot = do
   case HM.lookup projRoot locks of
     Just _ -> return True
     Nothing -> do
-      mlock <- Compile.tryBackgroundCompilerLock projRoot
+      mlock <- Project.tryBackgroundCompilerLock projRoot
       case mlock of
         Nothing -> return False
         Just lock -> do
@@ -223,17 +217,16 @@ ensureBackgroundCompilerLock projRoot = do
 releaseBackgroundCompilerLocks :: IO ()
 releaseBackgroundCompilerLocks = do
   locks <- readIORef backgroundCompilerLocksRef
-  forM_ (HM.elems locks) Compile.releaseBackgroundCompilerLock
+  forM_ (HM.elems locks) Project.releaseBackgroundCompilerLock
   writeIORef backgroundCompilerLocksRef HM.empty
 
 rememberCompletionStates :: Int -> Compile.CompilePlan -> Env.Env0 -> IO ()
 rememberCompletionStates gen plan env = do
   entries <- forM (Compile.cpGlobalTasks plan) $ \t -> do
-    let key = Compile.gtKey t
-        paths = Compile.gtPaths t
-        mn = Compile.tkMod key
-    path <- Compile.normalizePathSafe (Compile.srcFile paths mn)
-    return (path, CompletionState env (Compile.searchPath paths) mn gen)
+    let paths = Compile.gtPaths t
+        mn = Compile.tkMod (Compile.gtKey t)
+    path <- Project.normalizePathSafe (Compile.taskSourceFile t)
+    return (path, CompletionState env (Project.searchPath paths) mn gen)
   atomicModifyIORef' completionStatesRef $ \m ->
     (foldr (uncurry HM.insert) m entries, ())
 
@@ -246,12 +239,12 @@ cacheCompletionState path state =
 
 loadDiskCompletionState :: FilePath -> IO CompletionState
 loadDiskCompletionState path = do
-  paths <- Compile.findPaths path lspCompileOpts
-  env <- Env.initEnv (Compile.sysTypes paths) False
+  (paths, mn) <- Project.findPaths path lspCompileOpts
+  env <- Env.initEnv (Project.sysTypes paths) False
   return CompletionState
     { completionEnv = env
-    , completionSearchPath = Compile.searchPath paths
-    , completionModuleName = Compile.modName paths
+    , completionSearchPath = Project.searchPath paths
+    , completionModuleName = mn
     , completionStateGen = 0
     }
 
@@ -271,33 +264,16 @@ loadCompletionStateFor path = do
 
 cacheCompilePlan :: Compile.CompilePlan -> IO ()
 cacheCompilePlan plan = do
-  importKeys <- globalTaskImportKeys (Compile.cpGlobalTasks plan)
   let ctx = Compile.cpContext plan
       rootProj = Compile.ccRootProj ctx
       cache = ProjectBuildCache
         { cachedCompileContext = ctx
         , cachedProjectMap = Compile.cpProjMap plan
         , cachedGlobalTasks = Compile.cpGlobalTasks plan
-        , cachedDbpBlocked = Compile.cpDbpBlocked plan
-        , cachedImportKeys = importKeys
         }
   atomicModifyIORef' projectBuildCachesRef $ \m ->
     (HM.insert rootProj cache m, ())
   ensureProjectWatchers rootProj (M.keys (Compile.cpProjMap plan))
-
-globalTaskImportKeys :: [Compile.GlobalTask] -> IO (HM.HashMap FilePath String)
-globalTaskImportKeys tasks =
-  HM.fromList <$> mapM taskImportKeyEntry tasks
-
-taskImportKeyEntry :: Compile.GlobalTask -> IO (FilePath, String)
-taskImportKeyEntry task = do
-  path <- Compile.normalizePathSafe $
-    Compile.srcFile (Compile.gtPaths task) (Compile.tkMod (Compile.gtKey task))
-  return (path, taskImportKey task)
-
-taskImportKey :: Compile.GlobalTask -> String
-taskImportKey task =
-  show (Compile.importsOf (Compile.gtTask task))
 
 invalidateProjectCache :: FilePath -> IO ()
 invalidateProjectCache rootProj = do
@@ -320,9 +296,9 @@ ensureProjectWatchers rootProj roots =
 watchProjectShape :: FilePath -> FilePath -> IO ()
 watchProjectShape rootProj watchedRoot =
   FS.withManager $ \mgr -> do
-    let srcRoot = watchedRoot </> "src"
+    let srcRoot = Project.projectSrcDir watchedRoot
         invalidate _ = invalidateProjectCache rootProj
-        isActEvent ev = takeExtension (FS.eventPath ev) == ".act"
+        isActEvent ev = Project.isActFile (FS.eventPath ev)
         isBuildActEvent ev = takeFileName (FS.eventPath ev) == "Build.act"
     srcExists <- doesDirectoryExist srcRoot
     when srcExists $
@@ -339,74 +315,59 @@ prepareLspCompilePlan
 prepareLspCompilePlan sp gopts opts path = do
   planE <- liftIO ((try $ do
     ctx <- Compile.prepareCompileContext opts [path]
-    path' <- Compile.normalizePathSafe path
+    path' <- Project.normalizePathSafe path
     mcache <- HM.lookup (Compile.ccRootProj ctx) <$> readIORef projectBuildCachesRef
     case mcache of
       Just cache
         | Compile.ccBuildStamp (cachedCompileContext cache) == Compile.ccBuildStamp ctx -> do
-            mplan <- compilePlanFromCache ctx path' cache
+            mplan <- compilePlanFromCache ctx request path' cache
             case mplan of
               Just plan -> return (PlanFromCache, plan)
-              Nothing -> freshPlan
-      _ -> freshPlan
+              Nothing -> freshPlan ctx
+      _ -> freshPlan ctx
     ) :: IO (Either SomeException (PlanOrigin, Compile.CompilePlan)))
   case planE of
     Left err ->
       case fromException err of
-        Just (Compile.ProjectError msg) -> return (Left msg)
+        Just (Project.ProjectError msg) -> return (Left msg)
         Nothing -> return (Left (displayException err))
     Right plan -> return (Right plan)
   where
-    freshPlan = do
-      plan <- Compile.prepareCompilePlan sp gopts compileScheduler opts [path] False (Just [path])
+    request = Compile.PlanRequest [path] Compile.SelectedFiles (Just [path])
+    freshPlan ctx = do
+      plan <- Compile.prepareCompilePlan sp gopts compileScheduler ctx request
       cacheCompilePlan plan
       return (PlanFromDiscovery, plan)
 
-compilePlanFromCache :: Compile.CompileContext -> FilePath -> ProjectBuildCache -> IO (Maybe Compile.CompilePlan)
-compilePlanFromCache ctx changedPath cache = do
-  refreshed <- refreshChangedGlobalTask changedPath (Compile.ccOpts ctx) cache
+-- | Plan an edit from the cached project: the edited module is read again
+-- and every other module is taken from the cache.  Nothing when the edited
+-- source file no longer exists, when the cache does not hold the module or
+-- when the module's imports changed.  The plan made then prunes the outputs
+-- of a deleted source before it discovers the modules again.
+compilePlanFromCache :: Compile.CompileContext -> Compile.PlanRequest -> FilePath -> ProjectBuildCache -> IO (Maybe Compile.CompilePlan)
+compilePlanFromCache ctx request changedPath cache = do
+  exists <- doesFileExist changedPath
+  refreshed <- if exists
+    then refreshChangedGlobalTask changedPath (Compile.ccOpts ctx) cache
+    else return Nothing
   case refreshed of
     Nothing -> return Nothing
-    Just (globalTasks, importKeys) -> do
-      let dbpBlocked = Compile.libraryBoundaryTasks (cachedProjectMap cache) globalTasks
-      neededTasks <- Compile.selectAffectedTasks
-        (Compile.ccRootProj ctx)
-        (Compile.ccOpts ctx)
-        globalTasks
-        dbpBlocked
-        [changedPath]
-      let rootProj = Compile.ccRootProj ctx
-          rootTasks =
-            [ Compile.gtTask t
-            | t <- neededTasks
-            , Compile.tkProj (Compile.gtKey t) == rootProj
-            ]
+    Just globalTasks -> do
+      let projects = cachedProjectMap cache
           cache' = cache
             { cachedCompileContext = ctx
             , cachedGlobalTasks = globalTasks
-            , cachedDbpBlocked = dbpBlocked
-            , cachedImportKeys = importKeys
             }
+      plan <- Compile.selectPlan ctx projects globalTasks request
       atomicModifyIORef' projectBuildCachesRef $ \m ->
-        (HM.insert rootProj cache' m, ())
-      return $ Just Compile.CompilePlan
-        { Compile.cpContext = ctx
-        , Compile.cpProjMap = cachedProjectMap cache
-        , Compile.cpGlobalTasks = globalTasks
-        , Compile.cpNeededTasks = neededTasks
-        , Compile.cpDbpBlocked = dbpBlocked
-        , Compile.cpRootTasks = rootTasks
-        , Compile.cpIncremental = True
-        , Compile.cpAllowPrune = False
-        , Compile.cpChangedPaths = Just [changedPath]
-        , Compile.cpSrcFiles = [changedPath]
-        }
+        (HM.insert (Compile.ccRootProj ctx) cache' m, ())
+      return (Just plan)
 
 refreshChangedGlobalTask
   :: FilePath
   -> C.CompileOptions
   -> ProjectBuildCache
-  -> IO (Maybe ([Compile.GlobalTask], HM.HashMap FilePath String))
+  -> IO (Maybe [Compile.GlobalTask])
 refreshChangedGlobalTask changedPath opts cache =
   case find isChanged (cachedGlobalTasks cache) of
     Nothing -> return Nothing
@@ -416,22 +377,14 @@ refreshChangedGlobalTask changedPath opts cache =
         lspGlobalOpts
         opts
         (Compile.gtPaths old)
+        (Compile.tkMod (Compile.gtKey old))
         changedPath
       let new = old { Compile.gtTask = newTask }
-          newKey = taskImportKey new
-      case HM.lookup changedPath (cachedImportKeys cache) of
-        Just oldKey | oldKey /= newKey ->
-          return Nothing
-        _ -> do
-          let tasks' =
-                [ if Compile.gtKey t == Compile.gtKey old then new else t
-                | t <- cachedGlobalTasks cache
-                ]
-              importKeys' = HM.insert changedPath newKey (cachedImportKeys cache)
-          return (Just (tasks', importKeys'))
+      if Compile.importsOf newTask /= Compile.importsOf (Compile.gtTask old)
+        then return Nothing
+        else return (Just [ if Compile.gtKey t == Compile.gtKey old then new else t | t <- cachedGlobalTasks cache ])
   where
-    isChanged t =
-      Compile.srcFile (Compile.gtPaths t) (Compile.tkMod (Compile.gtKey t)) == changedPath
+    isChanged t = Compile.taskSourceFile t == changedPath
 
 progressToken :: Int -> FilePath -> ProgressToken
 progressToken gen path =
@@ -517,17 +470,14 @@ finishProgressOnce finished progress msg = do
     liftIO $ killThread (lspProgressWorker progress)
     progressEnd progress msg
 
-moduleLabel :: Compile.GlobalTask -> String
-moduleLabel task = Compile.modNameToString (Compile.tkMod (Compile.gtKey task))
-
-backJobLabel :: Compile.BackJob -> String
-backJobLabel job =
-  Compile.modNameToString (S.modname (Compile.biTypedMod (Compile.bjInput job)))
+-- | The key's full module name, its project's name in front included.
+keyModuleName :: Compile.TaskKey -> String
+keyModuleName = S.modNameToString . Compile.tkMod
 
 frontProgressMessage :: Compile.GlobalTask -> Compile.FrontPassProgress -> T.Text
 frontProgressMessage task p =
   T.pack $
-    passName (Compile.fppPass p) ++ " " ++ moduleLabel task ++ current
+    passName (Compile.fppPass p) ++ " " ++ keyModuleName (Compile.gtKey task) ++ current
   where
     current =
       case Compile.fppCurrent p of
@@ -541,14 +491,15 @@ backProgressMessage :: Compile.BackJob -> Compile.BackJobResult -> T.Text
 backProgressMessage job result =
   T.pack $
     case result of
-      Compile.BackJobOk{} -> "Generated " ++ backJobLabel job
-      Compile.BackJobFailed{} -> "Codegen failed for " ++ backJobLabel job
+      Compile.BackJobOk{} -> "Generated " ++ keyModuleName (Compile.bjKey job)
+      Compile.BackJobFailed{} -> "Codegen failed for " ++ keyModuleName (Compile.bjKey job)
 
 backPassProgressMessage :: Compile.BackJob -> Compile.BackPassProgress -> Maybe T.Text
-backPassProgressMessage job (Compile.BackPassStarted pass _ _) =
-  Just $
-    T.pack ("Generating " ++ backJobLabel job ++ " (" ++ Compile.backPassName pass ++ ")")
-backPassProgressMessage _ _ = Nothing
+backPassProgressMessage job p
+  | Compile.bppEvent p == Compile.BackPassStarted =
+      Just $
+        T.pack ("Generating " ++ keyModuleName (Compile.bjKey job) ++ " (" ++ Compile.backPassName (Compile.bppPass p) ++ ")")
+  | otherwise = Nothing
 
 warnBackgroundCompilerLocked :: FilePath -> LspM () ()
 warnBackgroundCompilerLocked projRoot = do
@@ -563,13 +514,13 @@ warnBackgroundCompilerLocked projRoot = do
                  "; LSP compilation is disabled until it exits.")))
 
 -- | Run an action only if the compile generation is current.
-whenCurrentGen :: Int -> LspM () () -> LspM () ()
+whenCurrentGen :: Compile.Generation -> LspM () () -> LspM () ()
 whenCurrentGen gen action = do
-  current <- liftIO $ readIORef (Compile.csGenRef compileScheduler)
-  when (current == gen) action
+  current <- liftIO $ Compile.isCurrent gen
+  when current action
 
 -- | Notify the client of a compile error for the current generation.
-notifyCompileError :: Int -> String -> LspM () ()
+notifyCompileError :: Compile.Generation -> String -> LspM () ()
 notifyCompileError gen msg =
   whenCurrentGen gen $
     sendNotification SMethod_WindowShowMessage
@@ -626,10 +577,10 @@ lspDiagnosticsFrom :: [Diagnostic String] -> [LSP.Diagnostic]
 lspDiagnosticsFrom diags = concatMap (map reportToLsp . reportsOf) diags
 
 -- | Prepare a compile plan for a file, run it, and publish diagnostics.
-runCompile :: Int -> FilePath -> LspM () ()
+runCompile :: Compile.Generation -> FilePath -> LspM () ()
 runCompile gen path = do
   env <- getLspEnv
-  progress <- startLspProgress gen path
+  progress <- startLspProgress (Compile.generationNumber gen) path
   finished <- liftIO $ newIORef False
   let finish = finishProgressOnce finished progress
       body = do
@@ -641,7 +592,7 @@ runCompile gen path = do
         if lockOk
           then do
             progressReportImmediate progress "Running Acton front passes" Nothing
-            ok <- runCompilePlanWithHooks gen rootProj path sp gopts opts progress
+            ok <- planAndCompile gen rootProj path sp gopts opts progress
             if ok
               then finish "Acton ready"
               else finish "Acton failed"
@@ -655,52 +606,54 @@ runCompile gen path = do
 -- | Resolve the project root used for compile locking.
 resolveCompileRoot :: FilePath -> C.CompileOptions -> IO FilePath
 resolveCompileRoot path opts = do
-  mproj <- Compile.findProjectDir path
+  mproj <- Project.findProjectDir path
   case mproj of
-    Just proj -> Compile.normalizePathSafe proj
+    Just proj -> Project.normalizePathSafe proj
     Nothing -> do
-      paths <- Compile.findPaths path opts
-      Compile.normalizePathSafe (Compile.projPath paths)
+      (paths, _) <- Project.findPaths path opts
+      Project.normalizePathSafe (Project.projPath paths)
 
 -- | Prepare and run a compile while holding the per-run project work lock.
-runCompilePlanWithHooks :: Int -> FilePath -> FilePath -> Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -> LspProgress -> LspM () Bool
-runCompilePlanWithHooks gen rootProj path sp gopts opts progress = do
+planAndCompile :: Compile.Generation -> FilePath -> FilePath -> Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -> LspProgress -> LspM () Bool
+planAndCompile gen rootProj path sp gopts opts progress = do
   env <- getLspEnv
-  let taskPath t = Compile.srcFile (Compile.gtPaths t) (Compile.tkMod (Compile.gtKey t))
-      publishFor t diags =
-        runLspT env $ whenCurrentGen gen $
-          publishDiagnosticsFor (taskPath t) diags
+  -- runCompilePlan calls onEvent only while gen is current, so publishFor
+  -- and progressForQueued, which only onEvent uses, do not check it.
+  -- progressFor also reports the plan and completion state, so it does.
+  let publishFor t diags =
+        runLspT env $
+          publishDiagnosticsFor (Compile.taskSourceFile t) diags
       progressFor msg =
         runLspT env $ whenCurrentGen gen $
           progressReportImmediate progress msg Nothing
       progressForQueued msg =
-        runLspT env $ whenCurrentGen gen $
+        runLspT env $
           progressReportQueued progress msg
-      hooks = Compile.defaultCompileHooks
-        { Compile.chOnDiagnostics = \t _ diags ->
-            publishFor t (lspDiagnosticsFrom diags)
-        , Compile.chOnParseStart = \t ->
-            progressForQueued (T.pack ("Parsing " ++ moduleLabel t))
-        , Compile.chOnParseDone = \t _ ->
-            progressForQueued (T.pack ("Parsed " ++ moduleLabel t))
-        , Compile.chOnFrontStart = \t ->
-            progressFor (T.pack ("Checking " ++ moduleLabel t))
-        , Compile.chOnFrontProgress = \t p ->
-            progressForQueued (frontProgressMessage t p)
-        , Compile.chOnFrontResult = \t _ ->
-            publishFor t [] >>
-            progressForQueued (T.pack ("Checked " ++ moduleLabel t))
-        , Compile.chOnBackStart = \job ->
-            progressForQueued (T.pack ("Generating " ++ backJobLabel job))
-        , Compile.chOnBackProgress = \job p ->
-            forM_ (backPassProgressMessage job p) progressForQueued
-        , Compile.chOnBackDone = \job result ->
-            progressForQueued (backProgressMessage job result)
-        , Compile.chOnInfo = \_ -> return ()
-        }
+      onEvent event = case event of
+        Compile.Diagnostics t diags ->
+          publishFor t (lspDiagnosticsFrom diags)
+        Compile.ParseStarted t ->
+          progressForQueued (T.pack ("Parsing " ++ keyModuleName (Compile.gtKey t)))
+        Compile.ParseFinished t _ ->
+          progressForQueued (T.pack ("Parsed " ++ keyModuleName (Compile.gtKey t)))
+        -- Reported at once, which also drops the queued messages.
+        Compile.FrontStarted t ->
+          progressFor (T.pack ("Checking " ++ keyModuleName (Compile.gtKey t)))
+        Compile.FrontProgressed t p ->
+          progressForQueued (frontProgressMessage t p)
+        Compile.FrontFinished t (Just _) ->
+          publishFor t [] >>
+          progressForQueued (T.pack ("Checked " ++ keyModuleName (Compile.gtKey t)))
+        Compile.BackStarted job ->
+          progressForQueued (T.pack ("Generating " ++ keyModuleName (Compile.bjKey job)))
+        Compile.BackProgressed job p ->
+          forM_ (backPassProgressMessage job p) progressForQueued
+        Compile.BackFinished job result ->
+          progressForQueued (backProgressMessage job result)
+        _ -> return ()
   progressReportImmediate progress "Preparing Acton project" Nothing
   compileRes <- liftIO $
-    Compile.withProjectLock rootProj $
+    Project.withProjectLock rootProj $
       do
         planE <- runLspT env $
           prepareLspCompilePlan sp gopts opts path
@@ -712,18 +665,14 @@ runCompilePlanWithHooks gen rootProj path sp gopts opts progress = do
               case origin of
                 PlanFromCache -> "Acton cached project ready"
                 PlanFromDiscovery -> "Acton compile plan ready"
-            runRes <- Compile.runCompilePlan sp gopts plan compileScheduler gen hooks
+            runRes <- Compile.runCompilePlan sp gopts compileScheduler gen plan onEvent
             case runRes of
               Left err ->
                 return (Left (Compile.compileFailureMessage err))
               Right (envAcc, _) -> do
-                rememberCompletionStates gen plan envAcc
+                rememberCompletionStates (Compile.generationNumber gen) plan envAcc
                 progressFor "Completion ready"
-                let opts' = Compile.ccOpts (Compile.cpContext plan)
-                backFailure <-
-                  if C.only_build opts'
-                    then return Nothing
-                    else Compile.backQueueWait (Compile.csBackQueue compileScheduler) gen
+                backFailure <- Compile.waitBackJobs compileScheduler gen
                 case backFailure of
                   Just failure ->
                     return (Left (Compile.backPassFailureMessage failure))
@@ -1025,7 +974,7 @@ resolvePath uri =
   case uriToFilePath uri of
     Nothing -> return Nothing
     Just path -> liftIO $ do
-      tryLspIO (Compile.normalizePathSafe path)
+      tryLspIO (Project.normalizePathSafe path)
 
 -- | LSP notification handlers for open/change/close events.
 handlers :: Handlers (LspM ())

@@ -3,8 +3,8 @@
 --
 -- A background sampler thread snapshots cumulative compiler progress and RTS
 -- memory at a fixed time cadence and writes one machine-readable line per tick.
--- It is pass-agnostic: any compiler pass that reports through the progress
--- callbacks feeds the same counters, so the same log covers parse, type check
+-- It is pass-agnostic: any compiler pass that reports its progress as build
+-- events feeds the same counters, so the same log covers parse, type check
 -- and the back passes. Unlike the human progress UI (which shows an instant),
 -- this is an append-only event log meant to be plotted or diffed after the run.
 --
@@ -140,8 +140,8 @@ readMem = do
 showF :: Int -> Double -> String
 showF prec x = showFFloat (Just prec) x ""
 
--- Record helpers. Cheap no-ops when analytics is off, so the instrumented
--- callbacks add nothing measurable to a normal build.
+-- Record helpers. Cheap no-ops when analytics is off, so recording every
+-- build event adds nothing measurable to a normal build.
 
 recordParseDone :: Analytics -> String -> IO ()
 recordParseDone AnalyticsOff      _ = return ()

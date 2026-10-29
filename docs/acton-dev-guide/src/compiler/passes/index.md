@@ -1,10 +1,8 @@
 # Passes
 
 The compiler runs a fixed sequence of AST-to-AST transforms before finally
-generating C. The main entry point is `compiler/acton/Main.hs`, which wires
-the stages together via the `compiler/lib` modules listed below. All the real
-logic is contained in these modules and is thus accessible and usable as a
-library.
+generating C. Each stage is implemented in the `compiler/lib` modules listed
+below, so the stages are usable as a library.
 
 The same AST data type is used throughout all compiler passes, making it easy to
 read and understand what each transformation does.
@@ -31,20 +29,28 @@ For how imports are loaded before these passes run, see
 ## Front vs back passes
 
 The pipeline is split into a front end and a back end. The scheduler runs front
-passes across the dependency graph, then queues back-pass work once type
-checking succeeds for a module. Normal modules queue their back job immediately.
-DBP candidates hold a deferred back job until all reverse-dependent front passes
-that can add interest have completed.
+passes across the dependency graph, and a module whose front passes succeed gets
+a back job. A module's back job is deferred until every module being compiled
+that depends on it, directly or not, has completed its front passes, except for
+the modules listed under [Deferred Back
+Passes](../incremental_compilation.md#deferred-back-passes), which queue it as
+soon as their own front passes finish.
 
 Front passes (1–3) are:
 - Parse
 - Kinds check
 - Type check
 
-These passes produce all user-facing diagnostics, write the module interface
-cache (`.tydb`), and compute public hashes used for incremental rebuilds. They
-also define the cross-module dependency edges: a module can only start once its
-imports have completed the front passes.
+After type checking, the front stage also runs escape analysis
+(`compiler/lib/src/Acton/EscapeAnalysis.hs`), which can fail the module, and
+hashing (`compiler/lib/src/Acton/Hashing.hs`), which computes the hashes written
+to the `.tydb`.
+
+The front stage reports the diagnostics of a module's source, writes the module
+interface cache (`.tydb`), and computes the hashes used for incremental
+rebuilds. The front passes also define the cross-module dependency edges: a
+module's front passes after parsing start only once its imports have completed
+theirs, while its parse can run alongside them.
 
 Back passes (4–9) are:
 - Normalize
@@ -57,8 +63,9 @@ Back passes (4–9) are:
 The back end consumes the typed module from the front end and emits C, header
 and closure support files (`.c`, `.h`, `.closures.inc`). It does not introduce
 new user errors, so it can run after front completion and even in the
-background. The CLI waits for all back jobs to finish before invoking Zig; the
-LSP enqueues back jobs in the background and does not wait for them or run Zig.
+background. The CLI waits for all back jobs to finish before invoking Zig. The
+LSP server reports its checked modules first, then waits for its back jobs so
+that it can report a back-pass failure, and does not run Zig.
 
 DBP still runs the same back-pass sequence once it is ready. The difference is
 that it may prune the typed module to the selected top-level declarations before

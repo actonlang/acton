@@ -487,14 +487,13 @@ initEnvWithEscapeSummaries _ path True
 initEnvWithEscapeSummaries includeEscape path False
                             = do
                                 let ifacePath = InterfaceFiles.interfacePath path (modName ["__builtin__"])
-                                (_,nmod) <- InterfaceFiles.readModuleIface ifacePath
+                                NModule _ envBuiltin builtinDocstring <- InterfaceFiles.readModuleIface ifacePath
                                 escapeSummaries <-
                                   if includeEscape
                                     then do db <- InterfaceFiles.openInterfaceDB ifacePath
                                             InterfaceFiles.readInterfaceDBEscapeSummaries db
                                     else return []
-                                let NModule _ envBuiltin builtinDocstring = nmod
-                                    envBuiltinPublic = publicTEnv envBuiltin
+                                let envBuiltinPublic = publicTEnv envBuiltin
                                     attachEscape
                                       | includeEscape = withEscapeSummaries escapeSummaries
                                       | otherwise = id

@@ -19,7 +19,7 @@ import System.Process
 import qualified System.Timeout as Timeout
 import Text.Read (readMaybe)
 
-import Acton.Compile (withProjectLock)
+import Acton.Project (withProjectLock)
 import qualified Acton.Fingerprint as Fingerprint
 import ProcessUtil (stopProcessGroup)
 import Test.Tasty

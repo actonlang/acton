@@ -16,15 +16,17 @@ read API for imported-module lookup:
 
 - `writeFile` writes the cache for one module.
 - `readHeaderSummary` reads metadata, imports, the stored name count, roots,
-  tests, and docstring; `readHeader` additionally decodes every per-name hash
-  record.
+  tests, and docstring; `readNameHashes` decodes every per-name hash record of
+  the module.
+- `tryReadHeaderSummary` gives `Nothing` when `readHeaderSummary` throws a
+  synchronous exception, a missing `.tydb` included. A cancel propagates.
 - `readExtensionsByClass` and `readExtensionsByProtocol` read exact extension
   index entries without decoding `NameInfo` entries or typed
   statements.
 - `readFile` reconstructs the full cached payload: imports, `NameInfo`, typed
   module, metadata, module hashes, per-name hashes, roots, tests, and docstring.
-- `readHeaderMaybe`, `readHeaderSummaryMaybe`, and `readFileMaybe` turn
-  missing, corrupt, unreadable, or version-mismatched caches into cache misses.
+- `readNameHashesMaybe` and `readFileMaybe` turn missing, corrupt, unreadable,
+  or version-mismatched caches into cache misses.
 - `openInterfaceDB` validates a `.tydb` for selective reads on the shared
   per-path environment; `openInterfaceDBMaybe` is its cache-miss form.
 - `readInterfaceDBModuleInfo` reads only import/doc metadata.
@@ -190,9 +192,12 @@ they use per-name dependency rows to decide which local names are affected.
 DBP reads `roots` and exact `name-hash/<suffix>` entries while expanding the
 selected local dependency closure. When the selected codegen hash is stale,
 `readSelectedModule` reconstructs a pruned typed module from only the selected
-`stmt/<index>` records; it falls back to `readFile` when statement ownership
-is missing or the module contains NotImplemented hooks, whose
-native-extension pairing needs the whole module.
+`stmt/<index>` records. It returns nothing when statement ownership is missing
+or the module contains NotImplemented hooks, whose native-extension pairing
+needs the whole module. DBP never reads the whole module instead: a module
+with NotImplemented hooks is not deferred, and a `.tydb` written by the same
+compiler version always records statement ownership, so missing ownership
+means a corrupt file and stops the build with an internal error.
 
 `readExtensionsByClass` and `readExtensionsByProtocol` read one class or
 protocol key directly. DBP uses these exact lookups while expanding the selected
@@ -201,9 +206,8 @@ extension names that the typed module can actually retain.
 
 `readFile` opens a read-only transaction and reconstructs the full payload by
 following the explicit order keys for ordered sections. It does not depend on
-LMDB cursor order for `TEnv` or typed statement reconstruction. DBP calls this
-only when selected statement reconstruction cannot serve a stale
-selection-sensitive codegen output.
+LMDB cursor order for `TEnv` or typed statement reconstruction. DBP never
+calls it.
 
 All readers share one cached read-only LMDB environment per `.tydb` path,
 opened with the normal reader lock table so concurrent writers in other
@@ -232,9 +236,12 @@ The read transactions themselves are still independent.
 Within a single compiler process, completed front results are the authoritative
 interface source for downstream front passes. The import loader should prefer
 the in-memory `Env.modules` entry when a module has already been loaded, and use
-`.tydb` only for modules absent from that environment. This lets `.tydb` writes
-run asynchronously without making dependent front stages wait for the LMDB
-directory to become readable.
+`.tydb` only for modules absent from that environment. The `.tydb` write itself
+is synchronous: a module's front stage reports done only after the write
+transaction has committed, so a reader that opens the file later in the same
+run, such as the module's deferred back job, never waits for it. The
+documentation page and the `--tydb` copy are written in the background, and the
+run waits for them before it ends.
 
 `copyInterface` uses LMDB's environment copy API. It copies durable data without
 copying a stale `lock.mdb`, so copied `--tydb` artifacts reopen with fresh LMDB

@@ -23,11 +23,15 @@ module Acton.Hashing
   , mergeSortedDistinct
   , nameInfoHashes
   , nameInfoHashesWithProgress
+  , withEscapeBits
   , nameHashesFromItemsWithProgress
   , pubSigSplitDepsFromNameInfoMapWithProgress
   , implSplitDepsFromItemsWithProgress
   , buildNameHashes
   , qnameKey
+  , hashHex
+  , shortHex
+  , shortHash
   ) where
 
 import qualified Acton.Env as Env
@@ -40,6 +44,7 @@ import qualified InterfaceFiles
 import Utils (chunksOf)
 
 import qualified Crypto.Hash.SHA256 as SHA256
+import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Unsafe as BU
 import qualified Data.ByteString.Short as SBS
@@ -56,7 +61,7 @@ import qualified Data.HashSet as HashSet
 import Data.IORef (IORef, newIORef, readIORef, writeIORef, atomicModifyIORef')
 import Control.Concurrent.Async (mapConcurrently)
 import GHC.Conc (getNumCapabilities)
-import Data.List (foldl', intercalate, nub)
+import Data.List (foldl', nub)
 import qualified Data.List
 import qualified Data.Map as M
 import Data.Maybe (catMaybes, fromMaybe, mapMaybe)
@@ -87,13 +92,21 @@ data NameHashInputs = NameHashInputs
 -- | Render a qualified name as a stable string key.
 qnameKey :: A.QName -> String
 qnameKey qn = case qn of
-  A.GName m n -> modNameToString m ++ "." ++ A.nstr n
-  A.QName m n -> modNameToString m ++ "." ++ A.nstr n
+  A.GName m n -> A.modNameToString m ++ "." ++ A.nstr n
+  A.QName m n -> A.modNameToString m ++ "." ++ A.nstr n
   A.NoQ n -> A.nstr n
 
--- | Render a module name as dot-separated text.
-modNameToString :: A.ModName -> String
-modNameToString m = intercalate "." (A.modPath m)
+-- | A hash in lowercase hex.
+hashHex :: B.ByteString -> String
+hashHex = B.unpack . Base16.encode
+
+-- | The first eight digits of a hex hash, as verbose lines show it.
+shortHex :: String -> String
+shortHex = take 8
+
+-- | The first eight hex digits of a hash.
+shortHash :: B.ByteString -> String
+shortHash = shortHex . hashHex
 
 -- | Extract hashable top-level items from a module.
 topLevelItems :: A.Module -> [TopLevelItem]
@@ -1671,6 +1684,17 @@ nameInfoHashesWithProgress onProgress infos = do
       done <- atomicModifyIORef' doneRef $ \d -> (d + 1, d + 1)
       onProgress done
       pure (n, h)
+
+-- | Fold each top-level function's escape summary into its own public hash,
+-- as SHA256 of the hash, "escape:" and one '1' (may escape) or '0' per
+-- parameter.  Importers check their Hashable.hash implementations against
+-- the summary, so it is part of the function's public interface: a summary
+-- change is a public change for exactly the dependents that use the name.
+withEscapeBits :: InterfaceFiles.EscapeSummaries -> M.Map A.Name B.ByteString -> M.Map A.Name B.ByteString
+withEscapeBits summaries = M.mapWithKey addBits
+  where
+    bits = M.fromList [ (n, B.pack [ if mayEscape then '1' else '0' | (_, mayEscape) <- ps ]) | ([n], ps) <- summaries ]
+    addBits n h = maybe h (\b -> SHA256.hash (h <> B.pack "escape:" <> b)) (M.lookup n bits)
 
 prepareNameHashInputs :: A.ModName
                       -> Env.Env0

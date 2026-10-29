@@ -26,6 +26,8 @@ import qualified Acton.Boxing
 import qualified Acton.CodeGen
 import qualified Acton.Diagnostics as Diag
 import qualified Acton.Compile as Compile
+import qualified Acton.Graph as Graph
+import qualified Acton.Project as Project
 import qualified Acton.Zon as Zon
 import qualified Acton.CommandLineParser as C
 import qualified Acton.Fingerprint as Fingerprint
@@ -43,7 +45,7 @@ import Text.Megaparsec (ParseErrorBundle, PosState(..), bundleErrors, bundlePosS
 import Text.Megaparsec.Pos (sourceLine, unPos)
 import qualified Data.Text as T
 import qualified Data.Text.Short as TS
-import Data.List (isInfixOf, isPrefixOf, nub, sort)
+import Data.List (foldl', isInfixOf, isPrefixOf, nub, sort, subsequences)
 import Data.Maybe (listToMaybe)
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as M
@@ -56,7 +58,7 @@ import Error.Diagnose (printDiagnostic, prettyDiagnostic, WithUnicode(..), TabSi
 import Error.Diagnose.Report (Report(..))
 import Prettyprinter (unAnnotate, layoutPretty, defaultLayoutOptions)
 import Prettyprinter.Render.Text (renderStrict)
-import System.FilePath ((</>), joinPath, takeFileName, takeBaseName, takeDirectory, splitDirectories, takeExtension)
+import System.FilePath ((</>), joinPath, takeFileName, takeBaseName, takeDirectory, splitDirectories)
 import System.Directory (createDirectoryIfMissing, getCurrentDirectory, setCurrentDirectory, listDirectory, doesDirectoryExist, doesFileExist, removeFile)
 import System.IO.Temp (withSystemTempDirectory)
 import qualified System.IO.Unsafe
@@ -86,6 +88,10 @@ nameHash n src pub impl =
     , InterfaceFiles.nhImplDeps = []
     , InterfaceFiles.nhStmtIndices = []
     }
+
+-- | A module's source, pub and impl hash from its .tydb header summary.
+moduleHashes :: InterfaceFiles.HeaderSummary -> (B8.ByteString, B8.ByteString, B8.ByteString)
+moduleHashes h = (InterfaceFiles.summarySourceHash h, InterfaceFiles.summaryPubHash h, InterfaceFiles.summaryImplHash h)
 
 hashTestName :: S.Name
 hashTestName = S.name "value"
@@ -147,6 +153,54 @@ implSplitDepSetMapsSlow env mn localNames items =
 
 locatedType :: SrcLoc -> S.Type
 locatedType l = S.TVar l (S.TV S.KType (S.Name l "T"))
+
+-- | Import graphs for the selection test: a chain, diamonds, cycles (one
+-- through a diamond, one through stacked diamonds), a module imported from
+-- two separate chains, a self-import, and disconnected parts with an import
+-- of a module outside the graph.
+selectionGraphs :: [[(Int, [Int])]]
+selectionGraphs =
+  [ [(1, [2]), (2, [3]), (3, [4]), (4, [])]
+  , [(1, [2, 3]), (2, [4]), (3, [4]), (4, [])]
+  , [(1, [2, 3]), (2, [4]), (3, [4, 5]), (4, [5]), (5, [])]
+  , [(1, [2]), (2, [3]), (3, [4]), (4, [2, 5]), (5, [])]
+  , [(1, [2, 3]), (2, [4]), (3, [4]), (4, [1, 5]), (5, [])]
+  , [(1, [2, 3]), (2, [4]), (3, [4]), (4, [5, 6]), (5, [6]), (6, [3])]
+  , [(1, [3]), (2, [3]), (3, [4]), (4, []), (5, [2])]
+  , [(1, [1, 2]), (2, [3]), (3, [])]
+  , [(1, [2, 9]), (2, []), (3, [4]), (4, [3]), (5, [])]
+  ]
+
+-- | The modules an edit selects, found by hand-written searches over a
+-- dependency map and a reverse-dependency map: the edited modules and their
+-- dependents; the modules reachable from those through at least one import
+-- that lead to a DBP provider; and the dependents of the providers among the
+-- latter, the providers included.
+searchedSelection :: [(Int, [Int])] -> (Int -> Bool) -> [Int] -> Set.Set Int
+searchedSelection adjacency isProvider changed = Set.unions [affected, pathKeys, providerDependents]
+  where
+    known    = Set.fromList (map fst adjacency)
+    depMap   = M.fromList [ (k, filter (`Set.member` known) ds) | (k, ds) <- adjacency ]
+    revMap   = foldl' (\acc (k, ds) -> foldl' (\m d -> M.insertWith (++) d [k] m) acc ds) M.empty (M.toList depMap)
+    affected = go start (Set.toList start)
+      where start            = Set.fromList changed
+            go seen []       = seen
+            go seen (k : ks) = let new = filter (`Set.notMember` seen) (M.findWithDefault [] k revMap)
+                               in go (foldl' (flip Set.insert) seen new) (ks ++ new)
+    reachesProvider = reaches Set.empty
+      where reaches seen k
+              | Set.member k seen = False
+              | isProvider k      = True
+              | otherwise         = any (reaches (Set.insert k seen)) (M.findWithDefault [] k depMap)
+    pathKeys = go Set.empty (Set.toList affected)
+      where go seen []       = seen
+            go seen (k : ks) = let new = filter (`Set.notMember` seen) [ d | d <- M.findWithDefault [] k depMap, reachesProvider d ]
+                               in go (foldl' (flip Set.insert) seen new) (ks ++ new)
+    providerDependents = go Set.empty (Set.toList (Set.filter isProvider pathKeys))
+      where go seen [] = seen
+            go seen (k : ks)
+              | Set.member k seen = go seen ks
+              | otherwise         = go (Set.insert k seen) (ks ++ M.findWithDefault [] k revMap)
 
 hashDecl :: SrcLoc -> Maybe String -> S.Decl
 hashDecl l doc =
@@ -314,32 +368,32 @@ main = do
             , "name-hash/p/W_"
             , "name-hash/h/d411b79b67e5851ef731f1c9af75432996298398b69493e8bbcd0d9e9e7e5ce9"
             ]
-          (_mods, I.NModule _ te mdoc, tmod', sourceMeta, srcHash, pubHash, implHash, imps, depModules, nameHashes', roots', tests', doc') <-
-            InterfaceFiles.readFile tyPath
+          stored <- InterfaceFiles.readFile tyPath
+          let I.NModule _ te mdoc = InterfaceFiles.storedInterface stored
           te `shouldBe` iface
           mdoc `shouldBe` Just "module docs"
-          tmod' `shouldBe` tmod
-          sourceMeta `shouldBe` Nothing
-          (srcHash, pubHash, implHash) `shouldBe` ("src", "pub", "impl")
-          imps `shouldBe` []
-          depModules `shouldBe` []
-          nameHashes' `shouldBe` nameHashes
-          roots' `shouldBe` roots
-          tests' `shouldBe` tests
-          doc' `shouldBe` Just "module docs"
+          InterfaceFiles.storedTyped stored `shouldBe` tmod
+          InterfaceFiles.storedSourceMeta stored `shouldBe` Nothing
+          (InterfaceFiles.storedSourceHash stored, InterfaceFiles.storedPubHash stored, InterfaceFiles.storedImplHash stored)
+            `shouldBe` ("src", "pub", "impl")
+          InterfaceFiles.storedImports stored `shouldBe` []
+          InterfaceFiles.storedDepModules stored `shouldBe` []
+          InterfaceFiles.storedNames stored `shouldBe` nameHashes
+          InterfaceFiles.storedRoots stored `shouldBe` roots
+          InterfaceFiles.storedTests stored `shouldBe` tests
+          InterfaceFiles.storedDoc stored `shouldBe` Just "module docs"
           db <- InterfaceFiles.openInterfaceDB tyPath
           InterfaceFiles.readInterfaceDBEscapeSummaries db `shouldReturn` escapeSummaries
 
-          (sourceMetaH, srcHashH, pubHashH, implHashH, impsH, depModulesH, nameHashesH, rootsH, testsH, docH) <-
-            InterfaceFiles.readHeader tyPath
-          sourceMetaH `shouldBe` Nothing
-          (srcHashH, pubHashH, implHashH) `shouldBe` ("src", "pub", "impl")
-          impsH `shouldBe` []
-          depModulesH `shouldBe` []
-          nameHashesH `shouldBe` nameHashes
-          rootsH `shouldBe` roots
-          testsH `shouldBe` tests
-          docH `shouldBe` Just "module docs"
+          header <- InterfaceFiles.readHeaderSummary tyPath
+          InterfaceFiles.summarySourceMeta header `shouldBe` Nothing
+          moduleHashes header `shouldBe` ("src", "pub", "impl")
+          InterfaceFiles.summaryImports header `shouldBe` []
+          InterfaceFiles.summaryDepModules header `shouldBe` []
+          InterfaceFiles.summaryRoots header `shouldBe` roots
+          InterfaceFiles.summaryTests header `shouldBe` tests
+          InterfaceFiles.summaryDoc header `shouldBe` Just "module docs"
+          InterfaceFiles.readNameHashes tyPath `shouldReturn` nameHashes
 
       it "retains builtin escape summaries only in the opt-in base environment" $ do
         withSystemTempDirectory "acton-iface-builtin-escape" $ \dir -> do
@@ -452,8 +506,7 @@ main = do
               nmod = I.NModule [] iface Nothing
               tmod = S.Module mn [] Nothing body
           InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] nameHashes0 [] [] [] Nothing nmod tmod
-          (_sourceMetaH, _srcH, _pubH, _implH, _impsH, _depModulesH, nameHashesH, _rootsH, _testsH, _docH) <-
-            InterfaceFiles.readHeader tyPath
+          nameHashesH <- InterfaceFiles.readNameHashes tyPath
           [ InterfaceFiles.nhStmtIndices nh | nh <- nameHashesH, InterfaceFiles.nhName nh == bName ]
             `shouldBe` [[1]]
           selected <- InterfaceFiles.readSelectedModule tyPath nameHashesH (Set.fromList [aName, cName])
@@ -475,10 +528,8 @@ main = do
           InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] nameHashes [] [] [] Nothing nmod tmod
           mapConcurrently_
             (\_ -> do
-                (_sourceMetaH, srcHashH, pubHashH, implHashH, _impsH, _depModulesH, nameHashesH, _rootsH, _testsH, _docH) <-
-                  InterfaceFiles.readHeader tyPath
-                (srcHashH, pubHashH, implHashH) `shouldBe` ("src", "pub", "impl")
-                nameHashesH `shouldBe` nameHashes)
+                moduleHashes <$> InterfaceFiles.readHeaderSummary tyPath `shouldReturn` ("src", "pub", "impl")
+                InterfaceFiles.readNameHashes tyPath `shouldReturn` nameHashes)
             [1..64 :: Int]
 
       it "copies interface data without carrying LMDB lock state" $ do
@@ -495,10 +546,8 @@ main = do
           InterfaceFiles.copyInterface srcPath dstPath
           doesFileExist (dstPath </> "data.mdb") `shouldReturn` True
           doesFileExist (dstPath </> "lock.mdb") `shouldReturn` False
-          (_sourceMetaH, srcHashH, pubHashH, implHashH, _impsH, _depModulesH, nameHashesH, _rootsH, _testsH, _docH) <-
-            InterfaceFiles.readHeader dstPath
-          (srcHashH, pubHashH, implHashH) `shouldBe` ("src", "pub", "impl")
-          nameHashesH `shouldBe` nameHashes
+          moduleHashes <$> InterfaceFiles.readHeaderSummary dstPath `shouldReturn` ("src", "pub", "impl")
+          InterfaceFiles.readNameHashes dstPath `shouldReturn` nameHashes
 
       it "does not create lock files when reading registered system roots" $ do
         withSystemTempDirectory "acton-iface-syspath" $ \dir -> do
@@ -514,16 +563,14 @@ main = do
           InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] nameHashes [] [] [] Nothing nmod tmod
           removeFile lockPath
           InterfaceFiles.registerSystemTypeRoots [typesRoot]
-          (_sourceMetaH, srcHashH, pubHashH, implHashH, _impsH, _depModulesH, nameHashesH, _rootsH, _testsH, _docH) <-
-            InterfaceFiles.readHeader tyPath
-          (srcHashH, pubHashH, implHashH) `shouldBe` ("src", "pub", "impl")
-          nameHashesH `shouldBe` nameHashes
+          moduleHashes <$> InterfaceFiles.readHeaderSummary tyPath `shouldReturn` ("src", "pub", "impl")
+          InterfaceFiles.readNameHashes tyPath `shouldReturn` nameHashes
           doesFileExist lockPath `shouldReturn` False
 
       it "treats missing .tydb directories as cache misses" $ do
         withSystemTempDirectory "acton-iface-missing" $ \dir -> do
           let tyPath = dir </> "missing.tydb"
-          InterfaceFiles.readHeaderMaybe tyPath `shouldReturn` Nothing
+          InterfaceFiles.readNameHashesMaybe tyPath `shouldReturn` Nothing
           InterfaceFiles.readFileMaybe tyPath `shouldReturn` Nothing
 
       it "treats corrupt .tydb directories as cache misses" $ do
@@ -531,7 +578,7 @@ main = do
           let tyPath = dir </> "corrupt.tydb"
           createDirectoryIfMissing True tyPath
           B8.writeFile (tyPath </> "data.mdb") "garbage"
-          InterfaceFiles.readHeaderMaybe tyPath `shouldReturn` Nothing
+          InterfaceFiles.readNameHashesMaybe tyPath `shouldReturn` Nothing
           InterfaceFiles.readFileMaybe tyPath `shouldReturn` Nothing
 
       it "treats version mismatches as cache misses" $ do
@@ -541,7 +588,7 @@ main = do
               nmod = I.NModule [] [] Nothing
               tmod = S.Module mn [] Nothing []
           InterfaceFiles.writeFileWithVersion (map (+ 1) S.version) tyPath "" "" "" Nothing [] [] [] [] [] [] Nothing nmod tmod
-          InterfaceFiles.readHeaderMaybe tyPath `shouldReturn` Nothing
+          InterfaceFiles.readNameHashesMaybe tyPath `shouldReturn` Nothing
           InterfaceFiles.readFileMaybe tyPath `shouldReturn` Nothing
 
     describe "Names" $ do
@@ -1130,17 +1177,8 @@ main = do
 
     describe "CompileScheduler" $ do
       it "waits for canceled generation cleanup before launching the replacement" $ do
-        let gopts = C.GlobalOptions
-              { C.color = C.Never
-              , C.quiet = True
-              , C.noProgress = False
-              , C.timing = False
-              , C.tty = False
-              , C.verbose = False
-              , C.verboseZig = False
-              , C.jobs = 1
-              }
-        sched <- Compile.newCompileScheduler gopts 1
+        let gopts = C.defaultGlobalOptions { C.color = C.Never, C.quiet = True, C.jobs = 1 }
+        sched <- Compile.newCompileScheduler gopts
         oldStarted <- newEmptyMVar
         oldCleanupStarted <- newEmptyMVar
         releaseOldCleanup <- newEmptyMVar
@@ -1158,6 +1196,64 @@ main = do
           (putMVar releaseOldCleanup ())
         _ <- wait nextCompile
         timeout 1000000 (takeMVar newStarted) `shouldReturn` Just ()
+
+    describe "Graph" $ do
+      -- 1 imports 2 and 3, which both import 4.  9 is outside the graph.
+      let diamond  = Graph.graph [(1, [2, 3, 9]), (2, [4]), (3, [4, 4]), (4, [])] :: Graph.Graph Int
+          -- 2, 3 and 4 form a cycle that 1 enters and that leads to 5.
+          cyclic   = Graph.graph [(1, [2]), (2, [3]), (3, [4]), (4, [2, 5]), (5, [])] :: Graph.Graph Int
+          -- 1 imports itself.
+          selfLoop = Graph.graph [(1, [1, 2]), (2, [])] :: Graph.Graph Int
+      it "keeps the node order and each node's distinct dependencies inside the graph" $ do
+        Graph.nodes diamond `shouldBe` [1, 2, 3, 4]
+        map (Graph.depsOf diamond) [1, 3, 4, 9] `shouldBe` [[2, 3], [4], [], []]
+        sort (Graph.usersOf diamond 4) `shouldBe` [2, 3]
+        map (Graph.usersOf diamond) [1, 9] `shouldBe` [[], []]
+      it "lists the reachable nodes once each in depth-first preorder" $ do
+        Graph.preorder (Graph.depsOf diamond) [1] `shouldBe` [1, 2, 4, 3]
+        Graph.preorder (Graph.depsOf diamond) [3, 1] `shouldBe` [3, 4, 1, 2]
+        Graph.preorder (Graph.depsOf cyclic) [3] `shouldBe` [3, 4, 2, 5]
+      it "closes over a step function, start nodes included" $ do
+        Graph.closure (Graph.depsOf diamond) [2] `shouldBe` Set.fromList [2, 4]
+        Graph.closure (Graph.depsOf cyclic) [3] `shouldBe` Set.fromList [2, 3, 4, 5]
+        Graph.closure (Graph.depsOf cyclic) [] `shouldBe` Set.empty
+      it "finds the dependents of nodes, the nodes included" $ do
+        Graph.dependents diamond [4] `shouldBe` Set.fromList [1, 2, 3, 4]
+        Graph.dependents diamond [2, 3] `shouldBe` Set.fromList [1, 2, 3]
+        Graph.dependents cyclic [5] `shouldBe` Set.fromList [1, 2, 3, 4, 5]
+      it "finds the strict dependents of a node, the node itself only on a cycle" $ do
+        Graph.strictDependents diamond 4 `shouldBe` Set.fromList [1, 2, 3]
+        Graph.strictDependents diamond 1 `shouldBe` Set.empty
+        Graph.strictDependents cyclic 3 `shouldBe` Set.fromList [1, 2, 3, 4]
+        Graph.strictDependents cyclic 5 `shouldBe` Set.fromList [1, 2, 3, 4]
+        Graph.strictDependents selfLoop 1 `shouldBe` Set.fromList [1]
+        Graph.strictDependents selfLoop 2 `shouldBe` Set.fromList [1]
+      it "reports each cycle, a self-import included, dependencies first" $ do
+        Graph.cycles diamond `shouldBe` []
+        map sort (Graph.cycles cyclic) `shouldBe` [[2, 3, 4]]
+        Graph.cycles selfLoop `shouldBe` [[1]]
+        map sort (Graph.cycles (Graph.graph [(1, [2, 3]), (2, [1]), (3, [4]), (4, [3])]))
+          `shouldBe` [[3, 4], [1, 2 :: Int]]
+      it "finds the nodes on paths from start nodes to targets" $ do
+        Graph.pathsTo diamond (== 4) [2] `shouldBe` Set.fromList [2, 4]
+        Graph.pathsTo diamond (== 2) [1] `shouldBe` Set.fromList [1, 2]
+        Graph.pathsTo diamond (== 1) [2] `shouldBe` Set.empty
+        Graph.pathsTo diamond (const False) [1] `shouldBe` Set.empty
+        Graph.pathsTo cyclic (== 5) [1] `shouldBe` Set.fromList [1, 2, 3, 4, 5]
+        Graph.pathsTo cyclic (== 3) [4] `shouldBe` Set.fromList [2, 3, 4]
+      it "selects for an edit what the hand-written searches select" $ do
+        -- Every set of DBP providers and every non-empty set of edited modules.
+        let mismatches =
+              [ (adjacency, providers, changed)
+              | adjacency <- selectionGraphs
+              , let g    = Graph.graph adjacency
+                    keys = map fst adjacency
+              , providers <- subsequences keys
+              , changed <- filter (not . null) (subsequences keys)
+              , let isProvider = (`elem` providers)
+              , Graph.affectedBy g isProvider changed /= searchedSelection adjacency isProvider changed
+              ]
+        mismatches `shouldBe` []
 
     describe "Environment" $ do
       it "forgets defaults when row expressions are no longer available" $ do
@@ -1195,24 +1291,23 @@ main = do
             Nothing
             directIface
             directModule
-          (_mods, nmod, tmod, sourceMeta, srcHash, pubHash, implHash, imps, depModules, nameHashes, roots, tests, mdoc) <-
-            InterfaceFiles.readFile directTy
+          stored <- InterfaceFiles.readFile directTy
           InterfaceFiles.writeFileWithVersion
             (map (+ 1) S.version)
             directTy
-            srcHash
-            pubHash
-            implHash
-            sourceMeta
-            imps
-            depModules
-            nameHashes
+            (InterfaceFiles.storedSourceHash stored)
+            (InterfaceFiles.storedPubHash stored)
+            (InterfaceFiles.storedImplHash stored)
+            (InterfaceFiles.storedSourceMeta stored)
+            (InterfaceFiles.storedImports stored)
+            (InterfaceFiles.storedDepModules stored)
+            (InterfaceFiles.storedNames stored)
             []
-            roots
-            tests
-            mdoc
-            nmod
-            tmod
+            (InterfaceFiles.storedRoots stored)
+            (InterfaceFiles.storedTests stored)
+            (InterfaceFiles.storedDoc stored)
+            (InterfaceFiles.storedInterface stored)
+            (InterfaceFiles.storedTyped stored)
           (_env2, mi) <- Acton.Env.doImp [dir] env1 directMod
           map fst (Acton.Env.modulePublicTEnv mi) `shouldBe` [valueName]
 
@@ -1381,7 +1476,7 @@ main = do
           it "returns diagnostics for chunk scanner failures" $ do
             let input = "    pass\n"
                 moduleName = S.modName ["chunked"]
-            result <- Compile.parseActSource Compile.defaultCompileOptions moduleName "chunked.act" input Nothing
+            result <- Compile.parseActSource C.defaultCompileOptions moduleName "chunked.act" input Nothing
             case result of
               Left [diagnostic] ->
                 renderDiagnosticText diagnostic `shouldContain` "non-top-level text before first chunk"
@@ -3605,9 +3700,9 @@ main = do
                 , ""
                 ]
           writeFile (dir </> "Build.act") buildAct
-          res <- (E.try (Compile.loadBuildSpec dir) :: IO (Either Compile.ProjectError BuildSpec.BuildSpec))
+          res <- (E.try (Project.loadBuildSpec dir) :: IO (Either Project.ProjectError BuildSpec.BuildSpec))
           case res of
-            Left (Compile.ProjectError msg) ->
+            Left (Project.ProjectError msg) ->
               msg `shouldSatisfy` (isInfixOf "Fingerprint mismatch")
             Right _ ->
               expectationFailure "Expected fingerprint mismatch error"
@@ -3622,9 +3717,9 @@ main = do
                 , ""
                 ]
           writeFile (dir </> "Build.act") buildAct
-          res <- (E.try (Compile.loadBuildSpec dir) :: IO (Either Compile.ProjectError BuildSpec.BuildSpec))
+          res <- (E.try (Project.loadBuildSpec dir) :: IO (Either Project.ProjectError BuildSpec.BuildSpec))
           case res of
-            Left (Compile.ProjectError msg) ->
+            Left (Project.ProjectError msg) ->
               expectationFailure ("Unexpected fingerprint error: " ++ msg)
             Right spec ->
               BuildSpec.fingerprint spec `shouldBe` fp
@@ -3637,9 +3732,9 @@ main = do
                 , ""
                 ]
           writeFile (dir </> "Build.act") buildAct
-          res <- (E.try (Compile.loadBuildSpec dir) :: IO (Either Compile.ProjectError BuildSpec.BuildSpec))
+          res <- (E.try (Project.loadBuildSpec dir) :: IO (Either Project.ProjectError BuildSpec.BuildSpec))
           case res of
-            Left (Compile.ProjectError msg) ->
+            Left (Project.ProjectError msg) ->
               msg `shouldSatisfy` (isInfixOf "Invalid fingerprint")
             Right _ ->
               expectationFailure "Expected invalid fingerprint error"
@@ -3652,9 +3747,9 @@ main = do
                 , ""
                 ]
           writeFile (dir </> "Build.act") buildAct
-          res <- (E.try (Compile.loadBuildSpec dir) :: IO (Either Compile.ProjectError BuildSpec.BuildSpec))
+          res <- (E.try (Project.loadBuildSpec dir) :: IO (Either Project.ProjectError BuildSpec.BuildSpec))
           case res of
-            Left (Compile.ProjectError msg) ->
+            Left (Project.ProjectError msg) ->
               msg `shouldSatisfy` (isInfixOf "Invalid fingerprint")
             Right _ ->
               expectationFailure "Expected invalid fingerprint error"
@@ -3667,9 +3762,9 @@ main = do
                 , ""
                 ]
           writeFile (dir </> "Build.act") buildAct
-          res <- (E.try (Compile.loadBuildSpec dir) :: IO (Either Compile.ProjectError BuildSpec.BuildSpec))
+          res <- (E.try (Project.loadBuildSpec dir) :: IO (Either Project.ProjectError BuildSpec.BuildSpec))
           case res of
-            Left (Compile.ProjectError msg) ->
+            Left (Project.ProjectError msg) ->
               msg `shouldSatisfy` (isInfixOf "Invalid fingerprint")
             Right _ ->
               expectationFailure "Expected invalid fingerprint error"
@@ -3681,9 +3776,9 @@ main = do
                 , ""
                 ]
           writeFile (dir </> "Build.act") buildAct
-          res <- (E.try (Compile.loadBuildSpec dir) :: IO (Either Compile.ProjectError BuildSpec.BuildSpec))
+          res <- (E.try (Project.loadBuildSpec dir) :: IO (Either Project.ProjectError BuildSpec.BuildSpec))
           case res of
-            Left (Compile.ProjectError msg) ->
+            Left (Project.ProjectError msg) ->
               msg `shouldSatisfy` (isInfixOf "Missing project name")
             Right _ ->
               expectationFailure "Expected missing project name error"
@@ -3695,9 +3790,9 @@ main = do
                 , ""
                 ]
           writeFile (dir </> "Build.act") buildAct
-          res <- (E.try (Compile.loadBuildSpec dir) :: IO (Either Compile.ProjectError BuildSpec.BuildSpec))
+          res <- (E.try (Project.loadBuildSpec dir) :: IO (Either Project.ProjectError BuildSpec.BuildSpec))
           case res of
-            Left (Compile.ProjectError msg) ->
+            Left (Project.ProjectError msg) ->
               msg `shouldSatisfy` (isInfixOf "Missing fingerprint")
             Right _ ->
               expectationFailure "Expected missing fingerprint error"
@@ -4127,7 +4222,7 @@ actFilesUnder root = do
     isDir <- doesDirectoryExist path
     if isDir
       then actFilesUnder path
-      else return [path | takeExtension path == ".act"]
+      else return [path | Project.isActFile path]
     ) entries
 
 expectModuleParseSuccess :: String -> IO ()

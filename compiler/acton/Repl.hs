@@ -29,7 +29,7 @@ import qualified Acton.Parser
 import qualified Acton.Syntax as A
 import qualified Acton.BuildSpec as BuildSpec
 import qualified Acton.CommandLineParser as C
-import Acton.Compile (ProjectError(..), findProjectDir)
+import Acton.Project (ProjectError(..), findProjectDir, projectBinDir, projectBuildAct, projectSrcDir)
 import qualified Acton.Fingerprint as Fingerprint
 import qualified PkgCommands
 import FileUtil (readFile, writeFile, writeFileChanged, writeFileIfChanged)
@@ -102,7 +102,7 @@ runRepl hooks gopts opts = do
     withReplRoot hooks opts mproj $ \scratchDir -> do
       interactive <- hIsTerminalDevice stdin
       warmup <- newEmptyMVar
-      let srcRoot = scratchDir </> "src"
+      let srcRoot = projectSrcDir scratchDir
           mainSrcFile = srcRoot </> replMainModuleName <.> "act"
           sessionSrcFile = srcRoot </> replSessionModuleName <.> "act"
           evalSrcFile = srcRoot </> replEvalModuleName <.> "act"
@@ -117,7 +117,7 @@ runRepl hooks gopts opts = do
                 , replMainSrcFile = mainSrcFile
                 , replSessionSrcFile = sessionSrcFile
                 , replEvalSrcFile = evalSrcFile
-                , replBinFile = scratchDir </> "out" </> "bin" </> binBase
+                , replBinFile = projectBinDir scratchDir </> binBase
                 , replGopts = gopts'
                 , replOpts = opts'
                 , replWarmup = warmup
@@ -511,7 +511,7 @@ compileReplRunnerNow ctx st eval = do
 
 ensureReplBuildAct :: ReplContext -> ReplState -> IO ()
 ensureReplBuildAct ctx st =
-    writeFileIfChanged (replRoot ctx </> "Build.act") (renderReplBuildAct (replDeps st) mproj)
+    writeFileIfChanged (projectBuildAct (replRoot ctx)) (renderReplBuildAct (replDeps st) mproj)
   where
     mproj
       | replUseProject st = replProject ctx

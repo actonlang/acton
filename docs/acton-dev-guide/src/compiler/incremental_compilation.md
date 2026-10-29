@@ -6,16 +6,19 @@ the type-checker environment.
 
 Acton compiles a whole program by walking a dependency graph that spans the
 root project and all of its dependencies. The scheduler in `Acton.Compile`
-builds this total graph, runs the front passes (parse, kinds, types) in
-topological order, and normally queues back passes as soon as a module's front
-passes finish. Deferred back pass (DBP) candidates are held until all modules
-that can add interest for that candidate have completed their front passes.
-Front work gates downstream modules, while ready back jobs overlap ongoing front
-work. The scheduler runs tasks concurrently with async jobs across worker
-threads. In watch/LSP mode, each change event bumps a generation id, cancels
-in-flight tasks, and drops stale diagnostics or back jobs that still carry the
-old generation, so we can react to new changes without waiting for obsolete
-work to finish.
+builds this total graph and runs the front passes (parse, kinds, types, escape
+analysis, hashing). A module's parse runs at once. Its later front passes wait
+for the front stages of its imports. Back passes are deferred (DBP, deferred
+back passes): a module's back job waits until every module of the run that
+depends on it, directly or not, has finished its front stage. The exceptions
+are listed under [Deferred Back Passes](#deferred-back-passes) below. A module
+among them queues its back job as soon as its own front stage finishes. Front
+work gates downstream modules, while ready back jobs overlap ongoing front work.
+The scheduler runs tasks concurrently with async jobs across worker threads. In
+watch/LSP mode, each change event bumps a generation id, cancels in-flight
+tasks, and drops stale diagnostics or back jobs that still carry the old
+generation, so we can react to new changes without waiting for obsolete work to
+finish.
 
 Interface files and content hashes tell the scheduler what work it can safely
 reuse. `.tydb` interface headers store hashes and snapshots of dependencies and
@@ -63,15 +66,9 @@ Because we hash pretty-printed source, docstrings currently influence
 `implHash`; we can tighten the normalization later without changing the overall
 model.
 
-Name hashes depend on `NameInfo`. The type checker environment (`teAll`) is
-authoritative for user-facing declarations, but it does not include compiler-
-generated names (for example, protocol lowering emits classes such as
-`MinusD_Number`). The typed AST does include those generated names, so we derive
-their `NameInfo` with `QuickType.envOf`. Conversely, `envOf` omits `Protocol`
-and `Extension` entries because type inference translates them away. To cover
-both, hashing uses the union of `teAll` and `QuickType.envOf` as its name-info
-map, ensuring generated names appear in `.tydb` and still keeping protocol and
-extension hashes intact.
+Name hashes depend on `NameInfo`. The hash pass takes the `NameInfo` of the
+module's names from the interface that `Acton.Types.reconstruct` returns, the
+one stored in `.tydb`.
 
 To detect changes without recompiling, each per-name entry in `.tydb` stores
 dependency snapshots. **pubDeps** is a list of `(QName, pubHash)` for external
@@ -88,8 +85,9 @@ We compute `selfPubHash`/`selfImplHash` for each unit, compute a `groupHash`
 from the sorted self-hashes plus all external dependency hashes of the group,
 and then finalize each unit as `H(selfHash || groupHash || unitKey)`.
 
-Header reads return the per-name hashes in deterministic name order. See
-[Interface caches](interface_caches.md) for the exact LMDB key layout.
+`readNameHashes` returns a module's per-name hashes in deterministic name
+order. See [Interface caches](interface_caches.md) for the exact LMDB key
+layout.
 
 ```
 version
@@ -110,20 +108,22 @@ prints docs for the requested file.
 
 ## Deferred Back Passes
 
-DBP is selected after type checking, when the full `NameHashInfo` list is
-available. A module becomes a DBP candidate when its top-level name count is at
-least the internal threshold (`1000` today), or when it is forced with
-`--dbp MOD[:name,...]`. The option can be repeated, and explicit seed names are
-unioned per module. DBP is disabled for `__builtin__`, `--only-build`,
-alternate-output modes such as `--cgen`/`--hgen`, and whenever `--no-dbp` is
-set. `--no-dbp` is a hard kill switch: it disables both the name-count
-heuristic and explicit `--dbp` module requests.
+DBP is decided when a module's front stage finishes. Every module's back passes
+are deferred, except those of:
 
-Modules at an explicit `Build.act` library boundary are also excluded from DBP.
-A boundary module is a member of a declared library that is imported by any
-module outside that same library. The library boundary needs the full generated
-C/H surface, so even an explicit `--dbp` request compiles that module normally
-and emits an info message. Internal library modules remain DBP-eligible.
+- `__builtin__`
+- a module with `NotImplemented` bodies, whose code a hand-written `.ext.c`
+  provides
+- a module at a library boundary (below)
+- every module under `--only-build`, under alternate-output modes such as
+  `--cgen`/`--hgen`, or under `--no-dbp`
+
+A module whose back passes are not deferred is generated whole.
+
+A module at a library boundary is a member of a library declared in `Build.act`
+that is imported by any module outside that same library. The library boundary
+needs the full generated C/H surface, so that module is compiled normally.
+Internal library modules remain DBP-eligible.
 
 When a fresh front pass produces a DBP candidate, the scheduler stores a
 `DeferredBackJob` instead of queueing a normal `BackJob`. Cached `TyTask`
@@ -135,19 +135,18 @@ external dependency facts they just computed; cached modules reconstruct the
 same interest set from the `.tydb` dependency rows.
 
 Deferred jobs do not wait for every front pass in the project. Their wait set is
-the reverse dependency closure of the deferred module in the total build graph.
-After each front stage completes, the scheduler flushes any deferred job whose
-wait set is now contained in the completed-front set. If a module in that wait
-set fails front passes, the normal failed-build path prevents the deferred back
-job from running.
+the reverse dependency closure of the deferred module among the modules the run
+compiles. After each front stage completes, the scheduler flushes any deferred
+job whose wait set is now contained in the completed-front set. If a module in
+that wait set fails front passes, the normal failed-build path prevents the
+deferred back job from running.
 
-When a deferred job is ready, DBP first reads the candidate's `.tydb` header.
-It uses the header's `NameHashInfo` list and cached root actor names without
-decoding the typed module. The initial selection seeds are:
+When a deferred job is ready, DBP reads the module's root actor names from its
+`.tydb`, then the `name-hash` rows of the names it selects, one name at a time,
+without decoding the typed module. The selection seeds are:
 
-- explicit `--dbp MOD:name,...` names, when present; otherwise the collected
-  `InterestMap` names for the module
-- cached root actor names from the `.tydb` header
+- the collected `InterestMap` names for the module
+- the module's root actor names
 
 An empty interested-name set is valid; if the module has no root actors, DBP can
 produce an effectively empty module body. DBP maps derived names back to their
@@ -155,9 +154,9 @@ owning top-level name, closes over `nhPubLocalDeps` and `nhImplLocalDeps`, and
 uses exact `readExtensionsByClass` / `readExtensionsByProtocol`
 lookups to keep top-level extension declarations required by selected classes
 or protocols. Selection metadata that cannot map a seed, local dependency, or
-extension back to a top-level name is a compiler error. DBP should not silently
-fall back to full-module compilation except for modules that contain
-`NotImplemented`/native hooks.
+extension back to a top-level name is a compiler error. DBP never falls back to
+full-module compilation: a module that contains `NotImplemented`/native hooks
+is not deferred in the first place.
 
 Pruning happens on the typed module immediately before the normal back-pass
 chain. Selected declarations, signatures, assignments, and compiler-introduced
@@ -165,24 +164,30 @@ chain. Selected declarations, signatures, assignments, and compiler-introduced
 dropped. Other source-level top-level statements are not a fallback case because
 the parser rejects them before type checking.
 
-Before decoding the full typed module, DBP computes a codegen hash from the
-module implementation hash and the sorted selected top-level names. If the
-existing `.c`, `.h` and `.closures.inc` files already carry that hash in their
-generated "Acton impl hash" tag, the deferred job is skipped. Otherwise DBP
-reads the full typed module with `readFile`, prunes it to the selected
-top-level declarations, runs the normal back-pass chain, and writes all three
-files tagged with that DBP codegen hash. A later consumer change that selects a
-different provider name therefore makes the provider's DBP output stale even
-when the provider source did not change.
+Before reading any statement, DBP computes a codegen hash from the module
+implementation hash and the sorted selected top-level names. If the existing
+`.c`, `.h` and `.closures.inc` files already carry that hash in their generated
+"Acton impl hash" tag, the deferred job is skipped. Otherwise DBP reads only the
+statements of the selected names (`readSelectedModule`), prunes them to the
+selected top-level declarations, runs the normal back-pass chain, and writes all
+three files tagged with that DBP codegen hash. A `.tydb` written by the same
+compiler version always has those statement rows, so when they cannot be read
+the file is corrupt, and the build stops with an internal error instead of
+reading the whole module. A later consumer change that selects a different
+provider name makes the provider's DBP output stale even when the provider
+source did not change.
 
 A source change always re-runs front passes for that module. Downstream modules
 compare recorded `pubDeps` against current provider hashes; any delta triggers
 re-typechecking. Separately, `implDeps` changes cause back passes and tests to
 rerun even when public hashes are stable. Missing or stale `.c`, `.h` or
 `.closures.inc` outputs also force back passes so codegen can recover. To see
-the decisions, run `acton build --verbose`; it prints stale reasons and
-per-name hash deltas. The snippets below abbreviate hashes to 8 hex digits for
-readability.
+the decisions, run `acton build --verbose`. It prints why a module is stale or
+fresh, how the public name hashes of a module that ran its front passes changed
+(`Hash deltas`), and the selection of each deferred back job (`DBP`), with every
+hash shortened to its first 8 hex digits. The transcripts below come from a
+project named `proj` with the modules `a` and `b`. They show only those lines:
+the progress, timing and dependency lines are left out.
 
 **Implementation-only change.** Before:
 
@@ -212,15 +217,17 @@ but they do rerun back passes:
 
 ```text
 $ acton build --verbose
-Building project in /path/proj
-Resolving dependencies (fetching if missing)...
   Stale a: source changed
-  Hash deltas a: ~foo{src 12fa0b1c -> 3e3485be, impl 4bf97616 -> f736da16}
-   Finished type check of     /path/proj/a      0.004 s
-  Stale b: impl changes in a.foo 4bf97616 -> f736da16 (used by bar)
-   Finished compilation of    /path/proj/a      0.002 s
-   Finished compilation of    /path/proj/b      0.003 s
+  Hash deltas a: ~foo{src 0282e373 -> 57c201c1, impl 9bf0a12c -> 6db1246d}
+  Stale b: impl changes in proj.a.foo 9bf0a12c → 6db1246d (used by bar)
+  DBP a: total names 1, interested names 1, root names 0, selected closure 1, generated code out of date
+  DBP b: total names 1, interested names 0, root names 0, selected closure 0, generated code out of date
 ```
+
+`b` computes its impl hashes again from its stored rows. Both deferred back
+jobs find their generated code out of date, because their codegen hashes cover
+their modules' impl hashes. The job of `a` selects `foo`, the one name `b`
+uses. `b` has neither dependents nor root actors, so its job selects no names.
 
 **Public signature change.** Before:
 
@@ -236,49 +243,54 @@ def bar() -> int:
     return a.foo(1)
 ```
 
-After changing the signature of `foo`:
+After changing the signature of `foo`, with `b.act` unchanged:
 
 ```acton
 # a.act
-def foo(x: int) -> float:
-    return float(x)
-
-# b.act
-import a
-
-def bar() -> float:
-    return a.foo(1)
+def foo(x: int, y: int = 1) -> int:
+    return x + y
 ```
 
 Here `pubHash(foo)` changes, so `modulePubHash(a)` changes and any dependent
-that recorded `a.foo` in `pubDeps` must re-typecheck:
+that recorded `a.foo` in `pubDeps` must re-typecheck. The call `a.foo(1)` in
+`b` still type-checks:
 
 ```text
 $ acton build --verbose
-Building project in /path/proj
-Resolving dependencies (fetching if missing)...
   Stale a: source changed
-  Hash deltas a: ~foo{src 2f1a8c9b -> 3a7bb6e1, pub 91c2efb8 -> 5e7d9b02, impl 11c0aa34 -> 6b3e42f1}
-   Finished type check of     /path/proj/a      0.004 s
-  Stale b: pub changes in a.foo 91c2efb8 -> 5e7d9b02 (used by bar)
-   Finished type check of     /path/proj/b      0.005 s
-   Finished compilation of    /path/proj/a      0.002 s
-   Finished compilation of    /path/proj/b      0.003 s
+  Hash deltas a: ~foo{src 0282e373 -> 1970c99d, pub 806d27dd -> 8059e53d, impl 9bf0a12c -> 25383777}
+  Stale b: pub changes in proj.a.foo 806d27dd → 8059e53d (used by bar)
+  Hash deltas b: ~bar{impl 228413ba -> a779705a}
+  DBP a: total names 1, interested names 1, root names 0, selected closure 1, generated code out of date
+  DBP b: total names 1, interested names 0, root names 0, selected closure 0, generated code out of date
 ```
+
+The impl hash of `bar` covers the impl hash of `foo`, so it changes too. Its
+pub hash stays the same, because the signature of `bar` uses no name of `a`.
 
 **Codegen-only staleness.** If generated output is missing or mismatched, we
 rerun back passes even when hashes are unchanged. For example, deleting the
-outputs forces codegen to refresh. This build uses `--no-dbp`. With DBP, the
-default, the deferred back job reports `DBP b: ..., generated code out of date`
-instead:
+generated files of `b` makes its deferred back job generate them again:
+
+```text
+$ rm out/types/proj/b.c out/types/proj/b.h out/types/proj/b.closures.inc
+$ acton build --verbose
+  Fresh a: using cached .tydb
+  Fresh b: using cached .tydb
+  DBP a: total names 1, interested names 1, root names 0, selected closure 1, generated code up to date
+  DBP b: total names 1, interested names 0, root names 0, selected closure 0, generated code out of date
+```
+
+A module whose code is generated whole, for example every module under
+`--no-dbp`, compares the tags of its `.c`, `.h` and `.closures.inc` with its
+impl hash in its front stage and reports a mismatch as a stale reason. After a
+`--no-dbp` build, the same deletion shows:
 
 ```text
 $ rm out/types/proj/b.c out/types/proj/b.h out/types/proj/b.closures.inc
 $ acton build --verbose --no-dbp
-Building project in /path/proj
-Resolving dependencies (fetching if missing)...
-  Stale b: generated code out of date {impl c missing -> 7aa13f90, h missing -> 7aa13f90, support missing -> 7aa13f90}
-   Finished compilation of    /path/proj/b      0.003 s
+  Fresh a: using cached .tydb
+  Stale b: generated code out of date {impl c missing -> 176042b0, h missing -> 176042b0, support missing -> 176042b0}
 ```
 
 **Non-propagating change.** Adding an unused import changes the module source

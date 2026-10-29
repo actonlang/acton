@@ -1,10 +1,11 @@
 # Compiler
 
 The compiler runs a fixed sequence of AST-to-AST transforms before finally
-generating C. The main entry point is `compiler/acton/Main.hs`, which wires
-the stages together via the `compiler/lib` modules listed below. All the real
-logic is contained in these modules and is thus accessible and usable as a
-library.
+generating C. `Acton.Compile` (`compiler/lib/src/Acton/Compile.hs`) wires the
+stages together, and the `acton` CLI (`compiler/acton/Main.hs`) and the LSP
+server (`compiler/lsp-server/Main.hs`) drive it. [Passes](passes/index.md)
+lists the stages and their modules. The stages and `Acton.Compile` are
+`compiler/lib` modules, so they are usable as a library.
 
 The same AST data type is used throughout all compiler passes, making it easy to
 read and understand what each transformation does.

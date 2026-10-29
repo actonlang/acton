@@ -43,26 +43,27 @@ import qualified Data.IntMap.Strict as IM
 
 generate                            :: Acton.Env.Env0 -> FilePath -> String -> Bool -> Module -> String -> IO (String,String,String)
 generate env srcbase srcText emitLines m hash = do
-    (n,h,c,_) <- generateCode False env srcbase srcText emitLines m hash
+    (n,h,c,_) <- generateCode Nothing env srcbase srcText emitLines m hash
     return (n,h,c)
 
--- A file build's support fragment sits next to the module's .c, which includes
--- it.
-supportFile                         :: FilePath -> FilePath
-supportFile outbase                 = outbase ++ ".closures.inc"
+-- File builds keep mechanical support in a fragment of its own, which the .c
+-- includes by the name 'supportInclude' gives.  Diagnostics and golden tests
+-- request a complete listing with Nothing.
+generateCode                        :: Maybe FilePath -> Acton.Env.Env0 -> FilePath -> String -> Bool -> Module -> String -> IO (String,String,String,String)
+generateCode supportInclude env srcbase srcText emitLines m hash = return (n,h,c,support)
 
--- File builds keep mechanical support in an included fragment; diagnostics and
--- golden tests request a complete listing with split=False.
-generateCode                        :: Bool -> Acton.Env.Env0 -> FilePath -> String -> Bool -> Module -> String -> IO (String,String,String,String)
-generateCode split env srcbase srcText emitLines m hash = return (n,h,c,support)
-
-  where n                           = concat (Data.List.intersperse "." (modPath (modname m))) --render $ quotes $ gen env0 (modname m)
-        hashComment                 = text "/* Acton impl hash:" <+> text hash <+> text "*/"
+  where n                           = modNameToString (modname m)
+        hashComment                 = text implHashTag <+> text hash <+> text "*/"
         h                           = render $ hashComment $+$ hModule env0 m
-        (cDoc,supportDoc)            = cModuleParts split env0 srcbase srcText emitLines m
+        (cDoc,supportDoc)            = cModuleParts supportInclude env0 srcbase srcText emitLines m
         c                           = render $ hashComment $+$ cDoc
         support                     = render $ hashComment $+$ supportDoc
         env0                        = genEnv $ setMod (modname m) env
+
+-- | The first line of a generated .c, .h and closure support file starts with
+-- this tag, followed by the hash that generateCode is given, in hex.
+implHashTag                         :: String
+implHashTag                         = "/* Acton impl hash:"
 
 genRoot                            :: Acton.Env.Env0 -> QName -> IO String
 genRoot env0 qn@(GName m n)         = do return $ render (cInclude $+$ cIncludeMods $+$ cInit $+$ cRoot)
@@ -660,18 +661,18 @@ primNEWTUPLE0                       = gPrim "NEWTUPLE0"
 
 -- Implementation -----------------------------------------------------------------------------------
 
-cModule env srcbase srcText emitLines m = fst $ cModuleParts False env srcbase srcText emitLines m
+cModule env srcbase srcText emitLines m = fst $ cModuleParts Nothing env srcbase srcText emitLines m
 
-cModuleParts split env srcbase srcText emitLines (Module m imps _ stmts)
+cModuleParts supportInclude env srcbase srcText emitLines (Module m imps _ stmts)
                                     = (mainDoc,supportDoc)
-  where mainDoc                     = (if inBuiltin env then text "#include \"builtin/builtin.c\"" else empty) $+$
+  where split                       = isJust supportInclude
+        mainDoc                     = (if inBuiltin env then text "#include \"builtin/builtin.c\"" else empty) $+$
                                       text "#include \"rts/common.h\"" $+$
                                       include env (if inBuiltin env then "" else "out/types") m $+$
                                       ext_include $+$
                                       (if split then empty else adapterDocs) $+$
                                       declModuleSelect (\d -> not split || not (closureDecl d)) True envWithLine stmts $+$
-                                      (if split then text "#include" <+> doubleQuotes (text (supportFile (last (modPath m))))
-                                                else globalChunkDefs) $+$
+                                      maybe globalChunkDefs (\file -> text "#include" <+> doubleQuotes (text file)) supportInclude $+$
                                       text "int" <+> genTopName env initFlag <+> equals <+> text "0" <> semi $+$
                                       (text "void" <+> genTopName env initKW <+> parens empty <+> char '{') $+$
                                       nest 4 (text "if" <+> parens (genTopName env initFlag) <+> text "return" <> semi $+$

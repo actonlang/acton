@@ -4,15 +4,18 @@ module Main (main) where
 
 import           Control.Monad (foldM, forM, forM_, unless, when)
 import qualified Data.ByteString as B
+import qualified Data.ByteString.Lazy as BL
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import qualified Data.Text.Encoding as TE
-import           Data.Char (isHexDigit, isSpace, toLower)
+import           Data.Char (isAlphaNum, isHexDigit, isSpace, toLower)
 import           Data.Bits (shiftL, (.|.))
 import           Data.Word (Word64)
 import qualified Acton.Fingerprint as Fingerprint
 import qualified Crypto.Hash.SHA256 as SHA256
-import           Data.List (elemIndex, find, isPrefixOf, partition, sort, sortOn)
+import           Data.Function (on)
+import           Data.IORef (IORef, atomicModifyIORef', newIORef)
+import           Data.List (elemIndex, find, groupBy, intercalate, isInfixOf, isPrefixOf, partition, sort, sortOn)
 import qualified Data.Map.Strict as M
 import           Data.Maybe (isJust)
 import           System.Directory
@@ -20,6 +23,7 @@ import           System.Environment (getEnvironment)
 import           System.Exit
 import           System.FilePath
 import           System.IO (Handle)
+import           System.IO.Temp (withSystemTempDirectory)
 import           System.Posix.Files (deviceID, fileID, fileSize, getFileStatus, modificationTimeHiRes, statusChangeTimeHiRes)
 import           System.Process
 import           System.Timeout (timeout)
@@ -28,16 +32,20 @@ import           Data.Time.Clock.POSIX  (posixSecondsToUTCTime)
 import           System.Directory       (setModificationTime)
 import qualified Control.Exception as E
 import           Control.Concurrent     (threadDelay)
+import           Error.Diagnose (TabSize(..), WithUnicode(..), prettyDiagnostic)
+import           Prettyprinter (unAnnotate)
 
 import           Test.Tasty
 import           Test.Tasty.Runners (NumThreads(..))
 import           Test.Tasty (DependencyType(..), after, TestName)
+import           Test.Tasty.Golden (goldenVsString)
 import           Test.Tasty.HUnit
 import qualified Acton.Compile as Compile
 import qualified Acton.CommandLineParser as C
 import qualified Acton.DocPrinter as DocP
 import qualified Acton.SourceProvider as Source
 import qualified Acton.NameInfo as I
+import qualified Acton.Project as Project
 import qualified Acton.Syntax as A
 import qualified InterfaceFiles
 import           Utils (SrcLoc(NoLoc), prstr, prstrs)
@@ -67,6 +75,51 @@ actonExe = ".." </> ".." </> ".." </> ".." </> "dist" </> "bin" </> "acton"
 -- | Build an acton command line with fixed job count.
 actonCmd :: String -> String
 actonCmd args = actonExe ++ " " ++ args ++ " --jobs 1"
+
+-- | The global options of the builds a test runs in process through the
+-- library: no colour, quiet, one job.
+quietGlobalOptions :: C.GlobalOptions
+quietGlobalOptions = C.defaultGlobalOptions { C.color = C.Never, C.quiet = True, C.jobs = 1 }
+
+-- | The compile options of a full build a test runs in process. The build
+-- reads the system types of the dist tree that holds the suite's acton
+-- binary. The modification time of the test binary must not decide reuse,
+-- so the build ignores the compiler version.
+inProcessCompileOptions :: IO C.CompileOptions
+inProcessCompileOptions = do
+  distDir <- distPath
+  return C.defaultCompileOptions { C.syspath = distDir, C.ignore_compiler_version = True }
+
+-- | Plan a build of the requested files on a scheduler, as acton build and
+-- watch mode do.
+planBuild :: C.GlobalOptions -> Compile.CompileScheduler -> C.CompileOptions -> Compile.PlanRequest -> IO Compile.CompilePlan
+planBuild gopts sched opts request = do
+  ctx <- Compile.prepareCompileContext opts (Compile.requestFiles request)
+  Compile.prepareCompilePlan Source.diskSourceProvider gopts sched ctx request
+
+-- | Plan and run one full build of every module of the project on a
+-- scheduler, as `acton build` does, with the given global options and event
+-- handler, then wait for its back jobs. Returns the result line.
+buildOnScheduler :: C.GlobalOptions -> (Compile.BuildEvent -> IO ()) -> Compile.CompileScheduler -> FilePath -> C.CompileOptions -> IO String
+buildOnScheduler gopts onEvent sched proj opts = do
+  names <- sort . map dropExtension . filter Project.isActFile <$> listDirectory (proj </> "src")
+  let srcFiles = map (sourcePath proj) names
+  plan <- planBuild gopts sched opts (Compile.PlanRequest srcFiles Compile.WholeProject Nothing)
+  gen <- Compile.currentGeneration sched
+  res <- Compile.runCompilePlan Source.diskSourceProvider gopts sched gen plan onEvent
+  backFailure <- Compile.waitBackJobs sched gen
+  return (buildResult res backFailure)
+
+-- | How a build ended, in one line.
+buildResult :: Either Compile.CompileFailure (a, Bool) -> Maybe Compile.BackPassFailure -> String
+buildResult res backFailure =
+  case (res, backFailure) of
+    (Left failure, _)           -> "result failed: " ++ oneLine (Compile.compileFailureMessage failure)
+    (Right _, Just failure)     -> "result failed: " ++ oneLine (Compile.backPassFailureMessage failure)
+    (Right (_, True), Nothing)  -> "result errors"
+    (Right (_, False), Nothing) -> "result ok"
+  where
+    oneLine = unwords . words
 
 -- Utils ----------------------------------------------------------------------
 
@@ -148,21 +201,16 @@ buildOutFile = do
 
 -- | Check whether build output reports typechecking for a module.
 typechecked :: T.Text -> T.Text -> Bool
-typechecked out modName =
-  any (\line -> isTypecheckLine line && matchesModule line modName) (T.lines out)
-  where
-    isTypecheckLine line =
-      "Finished type check of" `T.isInfixOf` line ||
-      "Type check done" `T.isInfixOf` line
+typechecked = doneReported "Type check done"
 
 -- | Check whether build output reports compilation for a module.
 compiled :: T.Text -> T.Text -> Bool
-compiled out modName =
-  any (\line -> isCompiledLine line && matchesModule line modName) (T.lines out)
-  where
-    isCompiledLine line =
-      "Finished compilation of" `T.isInfixOf` line ||
-      "Compilation done" `T.isInfixOf` line
+compiled = doneReported "Compilation done"
+
+-- | Whether a line of the output reports the given done status for the module.
+doneReported :: T.Text -> T.Text -> T.Text -> Bool
+doneReported status out modName =
+  any (\line -> status `T.isInfixOf` line && matchesModule line modName) (T.lines out)
 
 -- | Check whether build output reports a module as fresh (hash matched, so the
 -- cached .tydb is reused and nothing is rebuilt).
@@ -236,21 +284,22 @@ ensureCleanProjectAt proj = do
   removeIfExists (proj </> ".acton.lock")
 
 withBackgroundCompilerLockHeld :: FilePath -> IO a -> IO a
-withBackgroundCompilerLockHeld proj action = do
-  mlock <- Compile.tryBackgroundCompilerLock proj
-  case mlock of
-    Nothing ->
-      assertFailure ("failed to acquire .acton.compile.lock in " ++ proj)
-    Just lock ->
-      action `E.finally` Compile.releaseBackgroundCompilerLock lock
+withBackgroundCompilerLockHeld proj =
+  Project.withBackgroundCompilerLock proj
+    (assertFailure ("failed to acquire .acton.compile.lock in " ++ proj))
+
+-- | The name and fingerprint lines that start the Build.act of the project
+-- 'name'.
+buildActHeader :: String -> [T.Text]
+buildActHeader name =
+  [ T.pack ("name = \"" ++ name ++ "\"")
+  , T.pack ("fingerprint = " ++ fingerprintForName name)
+  ]
 
 -- | Write a Build.act file with optional path deps.
 writeBuildAct :: FilePath -> String -> [(String, FilePath)] -> IO ()
 writeBuildAct proj name deps = do
-  let header = [ T.pack ("name = \"" ++ name ++ "\"")
-               , T.pack ("fingerprint = " ++ fingerprintForName name)
-               ]
-      depLines
+  let depLines
         | null deps = []
         | otherwise =
             [ ""
@@ -261,7 +310,7 @@ writeBuildAct proj name deps = do
             ] ++
             [ "}"
             ]
-  writeFileUtf8 (proj </> "Build.act") (T.unlines (header ++ depLines))
+  writeFileUtf8 (proj </> "Build.act") (T.unlines (buildActHeader name ++ depLines))
 
 -- | Create a dependency project under deps/.
 ensureDepProject :: FilePath -> String -> IO FilePath
@@ -286,9 +335,13 @@ rewriteFirstLine path newLine = do
   let rest = snd (T.breakOn "\n" content)
   T.writeFile path (T.pack newLine <> rest)
 
+-- | Resolve the dist tree that holds the acton binary.
+distPath :: IO FilePath
+distPath = canonicalizePath (".." </> ".." </> "dist")
+
 -- | Resolve the acton binary path.
 actonPath :: IO FilePath
-actonPath = canonicalizePath (".." </> ".." </> "dist" </> "bin" </> "acton")
+actonPath = (</> "bin" </> "acton") <$> distPath
 
 -- | Run acton in a directory with fixed job count.
 runActonIn :: FilePath -> [String] -> IO (ExitCode, T.Text)
@@ -383,21 +436,19 @@ buildProject = do
 
 -- | Read name hashes from a .tydb file.
 readTyNameHashes :: FilePath -> IO [InterfaceFiles.NameHashInfo]
-readTyNameHashes tyPath = do
-  (_, _, _, _, _, _, _, _, _, nameHashes, _, _, _) <- InterfaceFiles.readFile tyPath
-  pure nameHashes
+readTyNameHashes tyPath = InterfaceFiles.storedNames <$> InterfaceFiles.readFile tyPath
 
 -- | Read pub/impl dependency names for a binding in a .tydb file.
 readTyDeps :: FilePath -> String -> IO ([String], [String])
 readTyDeps tyPath nameLabel = do
-  (_, _, _, _, _, _, _, _, depModules, nameHashes, _, _, _) <- InterfaceFiles.readFile tyPath
+  stored <- InterfaceFiles.readFile tyPath
   let matchName nh = prstr (InterfaceFiles.nhName nh) == nameLabel
-  case find matchName nameHashes of
+  case find matchName (InterfaceFiles.storedNames stored) of
     Nothing -> do
       assertFailure ("missing name " ++ nameLabel ++ " in " ++ tyPath)
       pure ([], [])
     Just nh -> do
-      deps <- forM depModules $ \depInfo -> do
+      deps <- forM (InterfaceFiles.storedDepModules stored) $ \depInfo -> do
         let depMn = InterfaceFiles.dmiModule depInfo
         depNames <- InterfaceFiles.readDepNames tyPath depMn
         forM depNames $ \depNameInfo -> do
@@ -512,32 +563,37 @@ readTyEscapeSummaries :: FilePath -> IO InterfaceFiles.EscapeSummaries
 readTyEscapeSummaries tyPath =
   InterfaceFiles.openInterfaceDB tyPath >>= InterfaceFiles.readInterfaceDBEscapeSummaries
 
+-- | Rewrite a .tydb file whole, in the given interface version, after a
+-- change to its stored module.  The change sees each name's dependencies on
+-- other modules restored from the dependency rows, and the escape summaries
+-- are kept.
+rewriteTy :: [Int] -> FilePath -> (InterfaceFiles.StoredModule -> InterfaceFiles.StoredModule) -> IO ()
+rewriteTy version tyPath change = do
+  stored <- InterfaceFiles.readFile tyPath
+  nameHashes <- restoreExternalDeps tyPath (InterfaceFiles.storedDepModules stored) (InterfaceFiles.storedNames stored)
+  escapeSummaries <- readTyEscapeSummaries tyPath
+  let updated = change stored { InterfaceFiles.storedNames = nameHashes }
+  InterfaceFiles.writeFileWithVersion version tyPath
+    (InterfaceFiles.storedSourceHash updated) (InterfaceFiles.storedPubHash updated) (InterfaceFiles.storedImplHash updated)
+    (InterfaceFiles.storedSourceMeta updated) (InterfaceFiles.storedImports updated) (InterfaceFiles.storedDepModules updated)
+    (InterfaceFiles.storedNames updated) escapeSummaries (InterfaceFiles.storedRoots updated) (InterfaceFiles.storedTests updated)
+    (InterfaceFiles.storedDoc updated) (InterfaceFiles.storedInterface updated) (InterfaceFiles.storedTyped updated)
+
 -- | Rewrite source hash and name-hash section of a .tydb file.
 rewriteTySrcHashAndNameHashes :: FilePath -> B.ByteString -> ([InterfaceFiles.NameHashInfo] -> [InterfaceFiles.NameHashInfo]) -> IO ()
-rewriteTySrcHashAndNameHashes tyPath srcHash' f = do
-  (_mods, nmod, tmod, sourceMeta, _srcHash, pubHash, implHash, imps, depModules, nameHashes, roots, tests, mdoc) <- InterfaceFiles.readFile tyPath
-  nameHashes' <- restoreExternalDeps tyPath depModules nameHashes
-  escapeSummaries <- readTyEscapeSummaries tyPath
-  InterfaceFiles.writeFile tyPath srcHash' pubHash implHash sourceMeta imps depModules (f nameHashes') escapeSummaries roots tests mdoc nmod tmod
+rewriteTySrcHashAndNameHashes tyPath srcHash' f =
+  rewriteTy A.version tyPath $ \stored ->
+    stored { InterfaceFiles.storedSourceHash = srcHash', InterfaceFiles.storedNames = f (InterfaceFiles.storedNames stored) }
 
 rewriteTySourceMeta :: FilePath -> Maybe InterfaceFiles.SourceFileMeta -> IO ()
-rewriteTySourceMeta tyPath sourceMeta' = do
-  (_mods, nmod, tmod, _sourceMeta, srcHash, pubHash, implHash, imps, depModules, nameHashes, roots, tests, mdoc) <- InterfaceFiles.readFile tyPath
-  nameHashes' <- restoreExternalDeps tyPath depModules nameHashes
-  escapeSummaries <- readTyEscapeSummaries tyPath
-  InterfaceFiles.writeFile tyPath srcHash pubHash implHash sourceMeta' imps depModules nameHashes' escapeSummaries roots tests mdoc nmod tmod
+rewriteTySourceMeta tyPath sourceMeta' =
+  rewriteTy A.version tyPath $ \stored -> stored { InterfaceFiles.storedSourceMeta = sourceMeta' }
 
 rewriteTyVersion :: FilePath -> [Int] -> IO ()
-rewriteTyVersion tyPath version' = do
-  (_mods, nmod, tmod, sourceMeta, srcHash, pubHash, implHash, imps, depModules, nameHashes, roots, tests, mdoc) <- InterfaceFiles.readFile tyPath
-  nameHashes' <- restoreExternalDeps tyPath depModules nameHashes
-  escapeSummaries <- readTyEscapeSummaries tyPath
-  InterfaceFiles.writeFileWithVersion version' tyPath srcHash pubHash implHash sourceMeta imps depModules nameHashes' escapeSummaries roots tests mdoc nmod tmod
+rewriteTyVersion tyPath version' = rewriteTy version' tyPath id
 
 readTySourceMeta :: FilePath -> IO (Maybe InterfaceFiles.SourceFileMeta)
-readTySourceMeta tyPath = do
-  (sourceMeta, _srcHash, _pubHash, _implHash, _imps, _depModules, _nameHashes, _roots, _tests, _doc) <- InterfaceFiles.readHeader tyPath
-  pure sourceMeta
+readTySourceMeta tyPath = InterfaceFiles.summarySourceMeta <$> InterfaceFiles.readHeaderSummary tyPath
 
 restoreExternalDeps :: FilePath -> [InterfaceFiles.DepModuleInfo] -> [InterfaceFiles.NameHashInfo] -> IO [InterfaceFiles.NameHashInfo]
 restoreExternalDeps tyPath depModules nameHashes = do
@@ -570,11 +626,9 @@ restoreExternalDeps tyPath depModules nameHashes = do
 sourceFileMetaForPath :: FilePath -> IO InterfaceFiles.SourceFileMeta
 sourceFileMetaForPath path = do
   st <- getFileStatus path
-  let mtimeNs = floor (toRational (modificationTimeHiRes st) * 1000000000)
-      ctimeNs = floor (toRational (statusChangeTimeHiRes st) * 1000000000)
   pure InterfaceFiles.SourceFileMeta
-    { InterfaceFiles.sfmMTimeNs = mtimeNs
-    , InterfaceFiles.sfmCTimeNs = ctimeNs
+    { InterfaceFiles.sfmMTimeNs = InterfaceFiles.posixNanoseconds (modificationTimeHiRes st)
+    , InterfaceFiles.sfmCTimeNs = InterfaceFiles.posixNanoseconds (statusChangeTimeHiRes st)
     , InterfaceFiles.sfmSize = fromIntegral (fileSize st)
     , InterfaceFiles.sfmDevice = Just (fromIntegral (deviceID st))
     , InterfaceFiles.sfmInode = Just (fromIntegral (fileID st))
@@ -1582,20 +1636,10 @@ p27_overlay_source_provider = testCase "27-overlay snapshots drive readModuleTas
         }
       disk = Source.diskSourceProvider
       spSame = disk { Source.spReadOverlay = \path -> return (if path == actAAbs then Just snapSame else Nothing) }
-      gopts = C.GlobalOptions
-        { C.color = C.Never
-        , C.quiet = True
-        , C.noProgress = False
-        , C.timing = False
-        , C.tty = False
-        , C.verbose = False
-        , C.verboseZig = False
-        , C.jobs = 1
-        }
-  paths <- Compile.findPaths actAAbs Compile.defaultCompileOptions
-  taskSame <- Compile.readModuleTask spSame gopts Compile.defaultCompileOptions paths actAAbs
+  (paths, moduleA) <- Project.findPaths actAAbs C.defaultCompileOptions
+  taskSame <- Compile.readModuleTask spSame quietGlobalOptions C.defaultCompileOptions paths moduleA actAAbs
   case taskSame of
-    Compile.TyTask{} -> pure ()
+    Compile.TyTask _ -> pure ()
     _ -> assertFailure "expected TyTask when overlay matches header"
   let textDiff = "\"\"\"Overlay doc\"\"\"\naaa = 2\n"
       bytesDiff = TE.encodeUtf8 (T.pack textDiff)
@@ -1605,15 +1649,15 @@ p27_overlay_source_provider = testCase "27-overlay snapshots drive readModuleTas
         , Source.ssIsOverlay = True
         }
       spDiff = disk { Source.spReadOverlay = \path -> return (if path == actAAbs then Just snapDiff else Nothing) }
-  taskDiff <- Compile.readModuleTask spDiff gopts Compile.defaultCompileOptions paths actAAbs
+  taskDiff <- Compile.readModuleTask spDiff quietGlobalOptions C.defaultCompileOptions paths moduleA actAAbs
   case taskDiff of
-    Compile.ParseTask{ Compile.src = srcText, Compile.srcBytes = srcBytes } -> do
-      srcText @?= textDiff
-      srcBytes @?= bytesDiff
+    Compile.ParseTask source _ doc -> do
+      Compile.sourceText source @?= textDiff
+      Compile.sourceBytes source @?= bytesDiff
+      doc @?= Just "Overlay doc"
     _ -> assertFailure "expected ParseTask when overlay differs from header"
-  docDiff <- Compile.readModuleDoc spDiff gopts Compile.defaultCompileOptions paths actAAbs
-  case docDiff of
-    Just (mn, Just doc) -> do
+  case Compile.docIndexEntry C.defaultCompileOptions paths moduleA taskDiff of
+    Just (mn, Just doc, _) -> do
       mn @?= A.modName ["incremental_cases", "a"]
       doc @?= "Overlay doc"
     _ -> assertFailure "expected module doc from overlay header"
@@ -1679,8 +1723,8 @@ p28_protocol_extension_deps = testCase "28-protocol/extension deps are recorded 
   assertEqual "exact extensions by class" ["BarProtoD_Widget"] (sort (map prstr extensionsForWidget))
   assertEqual "exact extensions by protocol" ["BarProtoD_Widget"] (sort (map prstr extensionsForBarProto))
   assertEqual "exact extensions by inherited protocol" ["BarProtoD_Widget"] (sort (map prstr extensionsForFooProto))
-  (_, nmod, _, _, _, _, _, _, _, _, _, _, _) <- InterfaceFiles.readFile tyA
-  let I.NModule _ iface _ = nmod
+  stored <- InterfaceFiles.readFile tyA
+  let I.NModule _ iface _ = InterfaceFiles.storedInterface stored
       extMatch (n, _) = prstr n == "BarProtoD_Widget"
   case find extMatch iface of
     Just (_, I.NExt _ _ ps _ _ _) -> do
@@ -2053,17 +2097,7 @@ p35_changed_path_keeps_unaffected_provider =
         actB = src </> "b.act"
         actC = src </> "c.act"
         actMain = src </> "main.act"
-        gopts = C.GlobalOptions
-          { C.color = C.Never
-          , C.quiet = True
-          , C.noProgress = False
-          , C.timing = False
-          , C.tty = False
-          , C.verbose = False
-          , C.verboseZig = False
-          , C.jobs = 1
-          }
-        opts = Compile.defaultCompileOptions { C.only_build = True }
+        opts = C.defaultCompileOptions { C.only_build = True }
     ensureCasesProject
     writeFileUtf8 actA "aaa = 1\n"
     writeFileUtf8 actC "ccc = 10\n"
@@ -2085,16 +2119,9 @@ p35_changed_path_keeps_unaffected_provider =
     writeFileUtf8 actA "aaa = 2\n"
     actAAbs <- canonicalizePath actA
     actMainAbs <- canonicalizePath actMain
-    sched <- Compile.newCompileScheduler gopts 1
-    plan <- Compile.prepareCompilePlan
-      Source.diskSourceProvider
-      gopts
-      sched
-      opts
-      [actMainAbs]
-      False
-      (Just [actAAbs])
-    bTask <- case find (\t -> Compile.name (Compile.gtTask t) == A.modName ["incremental_cases","b"]) (Compile.cpNeededTasks plan) of
+    sched <- Compile.newCompileScheduler quietGlobalOptions
+    plan <- planBuild quietGlobalOptions sched opts (Compile.PlanRequest [actMainAbs] Compile.SelectedFiles (Just [actAAbs]))
+    bTask <- case find (\t -> Compile.tkMod (Compile.gtKey t) == A.modName ["incremental_cases","b"]) (Compile.cpNeededTasks plan) of
       Just t -> pure t
       Nothing -> assertFailure "expected b in changed-path compile plan" >> fail "missing b task"
     let bProviders = Compile.gtImportProviders bTask
@@ -2110,17 +2137,7 @@ p35_dbp_changed_path_includes_provider =
         actA = src </> "a.act"
         actB = src </> "b.act"
         actMain = src </> "main.act"
-        gopts = C.GlobalOptions
-          { C.color = C.Never
-          , C.quiet = True
-          , C.noProgress = False
-          , C.timing = False
-          , C.tty = False
-          , C.verbose = False
-          , C.verboseZig = False
-          , C.jobs = 1
-          }
-        opts = Compile.defaultCompileOptions
+        opts = C.defaultCompileOptions
           { C.skip_build = True
           }
     ensureCasesProject
@@ -2160,16 +2177,9 @@ p35_dbp_changed_path_includes_provider =
       ]
     actAAbs <- canonicalizePath actA
     actMainAbs <- canonicalizePath actMain
-    sched <- Compile.newCompileScheduler gopts 1
-    plan <- Compile.prepareCompilePlan
-      Source.diskSourceProvider
-      gopts
-      sched
-      opts
-      [actMainAbs]
-      False
-      (Just [actAAbs])
-    let selectedMods = [ Compile.name (Compile.gtTask t) | t <- Compile.cpNeededTasks plan ]
+    sched <- Compile.newCompileScheduler quietGlobalOptions
+    plan <- planBuild quietGlobalOptions sched opts (Compile.PlanRequest [actMainAbs] Compile.SelectedFiles (Just [actAAbs]))
+    let selectedMods = [ Compile.tkMod (Compile.gtKey t) | t <- Compile.cpNeededTasks plan ]
     assertBool "expected changed-path plan to include DBP provider"
       (A.modName ["incremental_cases","provider"] `elem` selectedMods)
     assertBool "expected unchanged sibling consumer to register DBP interest"
@@ -2206,6 +2216,79 @@ p36_removed_dep_name_triggers_front_refresh =
       (T.isInfixOf "missing dep hashes in" out2 && T.isInfixOf "libfoo.lib.foo" out2)
     assertBool "did not expect internal hash-missing diagnostic"
       (not (T.isInfixOf "Hash info missing for libfoo.lib.foo" out2))
+
+-- | Module a with one public name, the function x, and module b that calls
+-- it. x is a function because a module-level variable also gives its
+-- module a public name of its own (W_x_3 for x = 1), so a would not end up
+-- without public names.
+writeOnePublicNameFixture :: IO ()
+writeOnePublicNameFixture = do
+  ensureCasesProject
+  writeFileUtf8 (casesSrcDir </> "a.act") $ T.unlines
+    [ "def x() -> int:"
+    , "    return 1"
+    ]
+  writeFileUtf8 (casesSrcDir </> "b.act") $ T.unlines
+    [ "import a"
+    , ""
+    , "def fb() -> int:"
+    , "    return a.x()"
+    ]
+
+-- | Rename a's only public name to a private one, which leaves a without
+-- public names and b with a use of a name a no longer exports.
+makeOnlyPublicNamePrivate :: IO ()
+makeOnlyPublicNamePrivate =
+  writeFileUtf8 (casesSrcDir </> "a.act") $ T.unlines
+    [ "def _x() -> int:"
+    , "    return 1"
+    ]
+
+p36b_private_name_rechecks_dependent :: TestTree
+p36b_private_name_rechecks_dependent =
+  testCase "36b-name made private rechecks its dependent" $ do
+    let modB = modLabel casesProjDir "b"
+    writeOnePublicNameFixture
+    res1 <- runActonIn casesProjDir ["build", "--color", "never", "--skip-build"]
+    assertExitSuccess "initial build" res1
+    makeOnlyPublicNamePrivate
+    -- --verbose reads a's name map from its old .tydb before a is checked
+    -- again, to report a's hash deltas.
+    res2@(_ec2, out2) <- runActonIn casesProjDir ["build", "--color", "never", "--verbose", "--skip-build"]
+    assertExitFailure "rebuild after making a.x private" 1 res2
+    assertBool ("expected b to find a.x missing\n" ++ T.unpack out2)
+      (T.isInfixOf "missing dep hashes in pub incremental_cases.a.x" out2)
+    assertBool ("did not expect b to reuse its .tydb\n" ++ T.unpack out2)
+      (not (fresh out2 modB))
+    assertBool ("expected b's type error\n" ++ T.unpack out2)
+      (T.isInfixOf "Module a does not export x" out2)
+
+p36c_private_name_rechecks_dependent_on_one_scheduler :: TestTree
+p36c_private_name_rechecks_dependent_on_one_scheduler =
+  testCase "36c-name made private rechecks its dependent on one scheduler" $ do
+    writeOnePublicNameFixture
+    proj <- canonicalizePath casesProjDir
+    opts <- inProcessCompileOptions
+    -- The diagnostics b reports, rendered. A build that ends ok reports
+    -- none, so after the second build these are that build's.
+    reportedByB <- newIORef []
+    let onEvent (Compile.Diagnostics t diags)
+          | Compile.tkMod (Compile.gtKey t) == A.modName ["incremental_cases", "b"] =
+              mapM_ (logLine reportedByB . renderDiagnostic) diags
+        onEvent _ = return ()
+        renderDiagnostic d = show (unAnnotate (prettyDiagnostic WithoutUnicode (TabSize 4) d))
+    -- The first build checks a and leaves a's name map in the scheduler's
+    -- module cache, where the second build finds it.
+    sched <- Compile.newCompileScheduler quietGlobalOptions
+    let build = buildOnScheduler quietGlobalOptions onEvent sched proj opts
+    first <- build
+    assertEqual "first build" "result ok" first
+    makeOnlyPublicNamePrivate
+    second <- build
+    diagnostics <- takeLines reportedByB
+    assertEqual ("second build\n" ++ unlines diagnostics) "result errors" second
+    assertBool ("expected b's type error\n" ++ unlines diagnostics)
+      (any ("Module a does not export x" `isInfixOf`) diagnostics)
 
 p37_impl_refresh_missing_dep_hashes_reruns_front :: TestTree
 p37_impl_refresh_missing_dep_hashes_reruns_front =
@@ -2275,7 +2358,7 @@ p38_project_lock_blocks_build =
       , "    env.exit(0)"
       ]
     actonExe <- actonPath
-    res <- Compile.withProjectLock proj $ do
+    res <- Project.withProjectLock proj $ do
       (_, mOut, mErr, ph) <- createProcess
         (proc actonExe ["build", "--color", "never", "--jobs", "1"])
           { cwd = Just proj
@@ -2465,7 +2548,7 @@ p43_equal_act_ty_mtime_hashes_source =
       ]
     rewriteTySourceMeta tyB Nothing
     tyStatus <- getFileStatus tyBData
-    let tyMTimeNs = floor (toRational (modificationTimeHiRes tyStatus) * 1000000000)
+    let tyMTimeNs = InterfaceFiles.posixNanoseconds (modificationTimeHiRes tyStatus)
     setFileMTimeNs actB tyMTimeNs
     currentMeta <- sourceFileMetaForPath actB
     rewriteTySourceMeta tyB (Just currentMeta)
@@ -2602,7 +2685,7 @@ p45_tydb_records_local_name_dependencies =
 p46_huge_module_skips_doc_output :: TestTree
 p46_huge_module_skips_doc_output =
   testCase "46-huge module skips doc output" $ do
-    let opts = Compile.defaultCompileOptions
+    let opts = C.defaultCompileOptions
         docDir = casesProjDir </> "doc-index"
     assertBool "doc output should run at the threshold"
       (Compile.shouldGenerateDocOutput opts False Compile.docNameCountThreshold)
@@ -3063,17 +3146,7 @@ p56_changed_path_prunes_removed_module =
           [ "actor main(env: Env):"
           , "    env.exit(0)"
           ]
-        gopts = C.GlobalOptions
-          { C.color = C.Never
-          , C.quiet = True
-          , C.noProgress = False
-          , C.timing = False
-          , C.tty = False
-          , C.verbose = False
-          , C.verboseZig = False
-          , C.jobs = 1
-          }
-        opts = Compile.defaultCompileOptions
+        opts = C.defaultCompileOptions
     ensureCasesProject
     writeFileUtf8 actA rootActor
     writeFileUtf8 actMain rootActor
@@ -3081,13 +3154,13 @@ p56_changed_path_prunes_removed_module =
     assertArtifactsExist (rootMain : supportMain : outsA)
     actAAbs <- canonicalizePath actA
     actMainAbs <- canonicalizePath actMain
-    sched <- Compile.newCompileScheduler gopts 1
+    sched <- Compile.newCompileScheduler quietGlobalOptions
     -- The first plan records the build spec, so the next plan follows the
     -- changed paths, as in watch mode and the LSP server.
-    _ <- Compile.prepareCompilePlan Source.diskSourceProvider gopts sched opts [actMainAbs] False (Just [])
+    _ <- planBuild quietGlobalOptions sched opts (Compile.PlanRequest [actMainAbs] Compile.SelectedFiles (Just []))
     removeFile actA
-    plan <- Compile.prepareCompilePlan Source.diskSourceProvider gopts sched opts [actMainAbs] False (Just [actAAbs])
-    assertBool "expected a changed-path plan" (Compile.cpIncremental plan)
+    plan <- planBuild quietGlobalOptions sched opts (Compile.PlanRequest [actMainAbs] Compile.SelectedFiles (Just [actAAbs]))
+    assertBool "expected a changed-path plan" (isJust (Compile.requestChanged (Compile.cpRequest plan)))
     assertArtifactsGone outsA
     assertArtifactsExist [rootMain, supportMain]
 
@@ -3167,12 +3240,266 @@ p59_full_build_keeps_nested_module_binary =
     assertArtifactsGone [binSub]
     assertArtifactsExist [binMain]
 
+p60_plan_after_failed_fetch_fetches_again :: TestTree
+p60_plan_after_failed_fetch_fetches_again =
+  testCase "60-plan after a failed fetch fetches again" $ withSystemTempDirectory "failed-fetch" $ \tmp -> do
+    proj <- canonicalizePath tmp
+    let actMain = proj </> "src" </> "main.act"
+        fetchError = "Zig dependency remote is missing hash" :: String
+        -- The fetch of a zig dependency without a hash fails before it
+        -- reaches the network, and planning reads no zig dependency, so
+        -- only the fetch can fail a plan.
+        buildAct = T.unlines $ buildActHeader "failed_fetch" ++
+          [ ""
+          , "zig_dependencies = {"
+          , "  \"remote\": (url=\"https://example.invalid/remote.tar.gz\")"
+          , "}"
+          ]
+    createDirectoryIfMissing True (proj </> "src")
+    writeFileUtf8 (proj </> "Build.act") buildAct
+    writeFileUtf8 actMain "x = 1\n"
+    sched <- Compile.newCompileScheduler quietGlobalOptions
+    -- Build.act is the same for both plans, so the second plan fetches
+    -- only because the first fetch did not complete.
+    forM_ ["first", "second" :: String] $ \which -> do
+      res <- E.try (planBuild quietGlobalOptions sched C.defaultCompileOptions
+                      (Compile.PlanRequest [actMain] Compile.SelectedFiles (Just [actMain])))
+      case res of
+        Left (Project.ProjectError msg) ->
+          assertBool ("expected the " ++ which ++ " plan to fail in the fetch, got: " ++ msg)
+            (fetchError `isInfixOf` msg)
+        Right _ -> assertFailure ("expected the " ++ which ++ " plan to fetch and fail")
+
+-- Compile events -------------------------------------------------------------
+
+-- | The events the compiler library reports while it rebuilds a small module
+-- graph through a series of edits, one line per event. Each build runs in
+-- process with one job. A scenario lists the events of its build in three
+-- parts, each in a deterministic order:
+--
+-- * The events of the stage coordinator and of the stage it runs, in
+--   reporting order. The coordinator starts one stage and waits for it, so
+--   the two take turns. A stage commits the .tydb of its module before it
+--   reports its front done, so the completion of that commit is part of
+--   this order.
+-- * The completions of the doc and .tydb copy outputs, sorted. These outputs
+--   run on threads of their own, alongside the stages, and every one of them
+--   has finished when the build returns.
+-- * The events of the back jobs, in reporting order. The back queue has one
+--   worker, which runs its jobs one at a time in queue order, and each build
+--   waits for all of its jobs.
+--
+-- Parse, front and output progress events depend on timing and on thread
+-- scheduling, so the recorder leaves them out. It records no times either.
+compileEventsGolden :: TestTree
+compileEventsGolden =
+  goldenVsString "compile events across rebuilds" "test/compile_events.golden" $
+    BL.fromStrict . TE.encodeUtf8 . T.pack . unlines <$> recordCompileEvents
+
+-- | The name of the project the scenarios build.
+eventsProjName :: String
+eventsProjName = "events"
+
+-- | Run every scenario in order on a fresh project in a new temporary
+-- directory, with one scheduler for the whole series.
+recordCompileEvents :: IO [String]
+recordCompileEvents = do
+  options <- inProcessCompileOptions
+  withSystemTempDirectory "compile-events" $ \tmp -> do
+    proj <- canonicalizePath tmp
+    createDirectoryIfMissing True (proj </> "src")
+    writeBuildAct proj eventsProjName []
+    sched <- Compile.newCompileScheduler eventsGlobalOptions
+    eventLog <- EventLog <$> newIORef [] <*> newIORef [] <*> newIORef []
+    let runScenario (title, edit, adjust) = do
+          edit proj
+          result <- buildOnScheduler eventsGlobalOptions (recordEvent eventLog) sched proj (adjust options)
+          stage <- takeLines (stageLines eventLog)
+          outputs <- takeLines (outputLines eventLog)
+          back <- takeLines (backLines eventLog)
+          return $ concat
+            [ ["== " ++ title]
+            , stage
+            , part "background outputs, sorted" (sort outputs)
+            , part "back jobs" back
+            , [result]
+            ]
+        part _ []           = []
+        part header entries = ("-- " ++ header) : entries
+    scenarios <- mapM runScenario eventScenarios
+    return (map (maskHashes . maskPath proj) (intercalate [""] scenarios))
+
+-- | The lines a build records, one list for each part of a scenario, newest
+-- first.
+data EventLog = EventLog
+  { stageLines  :: IORef [String]
+  , outputLines :: IORef [String]
+  , backLines   :: IORef [String]
+  }
+
+-- | Add a line to one part of the log.
+logLine :: IORef [String] -> String -> IO ()
+logLine part line = atomicModifyIORef' part (\entries -> (line : entries, ()))
+
+-- | Take the lines of one part of the log, oldest first, and empty it.
+takeLines :: IORef [String] -> IO [String]
+takeLines part = atomicModifyIORef' part (\entries -> ([], reverse entries))
+
+-- | The library reports info lines only in verbose mode.
+eventsGlobalOptions :: C.GlobalOptions
+eventsGlobalOptions =
+  C.defaultGlobalOptions
+    { C.color = C.Never
+    , C.quiet = True
+    , C.noProgress = True
+    , C.verbose = True
+    , C.jobs = 1
+    }
+
+-- | Record one line per event that compileEventsGolden pins, in the part of
+-- the log the event belongs to. A finished front stage records its done
+-- line, then its result line when it succeeded.
+recordEvent :: EventLog -> Compile.BuildEvent -> IO ()
+recordEvent eventLog event =
+  case event of
+    Compile.ParseStarted t               -> stage ("parse-start " ++ taskName t)
+    Compile.ParseFinished t _            -> stage ("parse-done " ++ taskName t)
+    Compile.FrontStarted t               -> stage ("front-start " ++ taskName t)
+    Compile.FrontFinished t result       -> do stage ("front-done " ++ taskName t)
+                                               forM_ result $ \fr -> stage ("front-result " ++ taskName t ++ " " ++ backPlanKind (Compile.frBack fr))
+    Compile.Diagnostics t diags          -> stage ("diagnostics " ++ taskName t ++ " " ++ show (length diags))
+    Compile.BackReady job                -> stage ("back-queued " ++ jobName job)
+    Compile.BackSkipped key              -> stage ("back-skipped " ++ keyName key)
+    Compile.OutputStarted key kind       -> stage (outputLine "output-start" key kind)
+    Compile.OutputFinished key kind time -> outputDone kind (outputLine "output-done" key kind ++ " " ++ maybe "failed" (const "ok") time)
+    Compile.BackStarted job              -> back ("back-start " ++ jobName job)
+    Compile.BackProgressed job progress  -> back ("back-pass " ++ jobName job ++ " " ++ backPassLine progress)
+    Compile.BackFinished job result      -> back ("back-done " ++ jobName job ++ " " ++ backJobOutcome result)
+    Compile.Info msg                     -> stage ("info " ++ msg)
+    Compile.ParseProgressed _ _          -> return ()
+    Compile.FrontProgressed _ _          -> return ()
+    Compile.OutputProgressed _ _ _       -> return ()
+  where
+    stage      = logLine (stageLines eventLog)
+    background = logLine (outputLines eventLog)
+    back       = logLine (backLines eventLog)
+
+    -- The .tydb commit finishes on the stage thread, the other outputs on
+    -- threads of their own.
+    outputDone Compile.FrontOutputTydb     = stage
+    outputDone Compile.FrontOutputTydbCopy = background
+    outputDone Compile.FrontOutputDoc      = background
+
+    outputLine event key kind = unwords [event, keyName key, outputKindName kind]
+    taskName = keyName . Compile.gtKey
+    keyName  = prstr . Compile.tkMod
+    jobName  = keyName . Compile.bjKey
+
+backPlanKind :: Compile.BackPlan -> String
+backPlanKind Compile.NoBack           = "none"
+backPlanKind (Compile.EagerBack _)    = "eager"
+backPlanKind (Compile.DeferredBack _) = "deferred"
+
+outputKindName :: Compile.FrontOutputKind -> String
+outputKindName Compile.FrontOutputTydb     = "tydb"
+outputKindName Compile.FrontOutputTydbCopy = "tydb-copy"
+outputKindName Compile.FrontOutputDoc      = "doc"
+
+-- | A back pass event: the pass, what happened to it, and the number of
+-- passes of the job completed out of its total.
+backPassLine :: Compile.BackPassProgress -> String
+backPassLine progress =
+  unwords [ Compile.backPassName (Compile.bppPass progress)
+          , eventName (Compile.bppEvent progress)
+          , show (Compile.bppCompleted progress) ++ "/" ++ show (Compile.bppTotal progress)
+          ]
+  where
+    eventName Compile.BackPassStarted      = "started"
+    eventName (Compile.BackPassFinished _) = "finished"
+    eventName Compile.BackPassSkipped      = "skipped"
+
+backJobOutcome :: Compile.BackJobResult -> String
+backJobOutcome Compile.BackJobOk{}     = "ok"
+backJobOutcome Compile.BackJobFailed{} = "failed"
+
+-- | Replace the project directory with <proj>.
+maskPath :: FilePath -> String -> String
+maskPath proj = T.unpack . T.replace (T.pack proj) "<proj>" . T.pack
+
+-- | Replace every hash, a word of exactly eight hexadecimal digits, with
+-- <hash>.
+maskHashes :: String -> String
+maskHashes = concatMap mask . groupBy ((==) `on` isAlphaNum)
+  where
+    mask word
+      | length word == 8 && all isHexDigit word = "<hash>"
+      | otherwise                               = word
+
+-- | The scenarios in build order. Each edits the project and then builds it
+-- with its options. A module stays broken until a later scenario restores it.
+eventScenarios :: [(String, FilePath -> IO (), C.CompileOptions -> C.CompileOptions)]
+eventScenarios =
+  [ ("clean build",                               writeSources [("a", aFirst), ("b", bUsesFoo), ("c", cUsesB)], id)
+  , ("no change",                                 noEdit,                                           id)
+  , ("touched source reuses its interface",       touchSource "a",                                  id)
+  , ("comment-only source change",                writeSources [("a", aCommented)],                 id)
+  , ("pub change",                                writeSources [("a", aPubChanged)],                id)
+  , ("impl-only change",                          writeSources [("a", aImplChanged)],               id)
+  , ("new interest prepares DBP of a provider",   writeSources [("c", cUsesBar)],                   id)
+  , ("parse error",                               writeSources [("c", cParseError)],                id)
+  , ("restored source reuses its interface",      writeSources [("c", cUsesBar)],                   id)
+  , ("type error with a blocked dependent",       writeSources [("b", bTypeError)],                 id)
+  , ("import cycle",                              writeSources [("b", bUsesFoo), ("a", aImportsC)], id)
+  , ("always build",                              writeSources [("a", aImplChanged)],               alwaysBuild)
+  , ("only build",                                noEdit,                                           onlyBuild)
+  , ("tydb copies",                               noEdit,                                           tydbCopies)
+  , ("no DBP refreshes generated code",           noEdit,                                           noDbp)
+  , ("codegen tag tampered",                      tamperCodegenTag "a",                             noDbp)
+  , ("impl-only change with tydb copies",         writeSources [("a", aImplChangedAgain)],          tydbCopies)
+  , ("impl-only change with tydb copies, no DBP", writeSources [("a", aImplChanged)],               tydbCopies . noDbp)
+  ]
+  where
+    noEdit _      = return ()
+    alwaysBuild o = o { C.alwaysbuild = True }
+    onlyBuild o   = o { C.only_build = True }
+    tydbCopies o  = o { C.tydb = True }
+    noDbp o       = o { C.no_dbp = True }
+
+    aFirst            = unlines ["def foo() -> int:", "    return 1", "", "def bar() -> int:", "    return 2"]
+    aCommented        = aFirst ++ "\n# a comment\n"
+    aPubChanged       = unlines ["def foo(x: int = 0) -> int:", "    return 1", "", "def bar() -> int:", "    return 2"]
+    aImplChanged      = unlines ["def foo(x: int = 0) -> int:", "    return 3", "", "def bar() -> int:", "    return 2"]
+    aImplChangedAgain = unlines ["def foo(x: int = 0) -> int:", "    return 4", "", "def bar() -> int:", "    return 2"]
+    aImportsC         = "import c\n\n" ++ aImplChanged
+    bUsesFoo          = unlines ["import a", "", "def fb() -> int:", "    return a.foo()"]
+    bTypeError        = unlines ["import a", "", "def fb() -> int:", "    return a.foo() + \"x\""]
+    cUsesB            = unlines ["import b", "", "def fc() -> int:", "    return b.fb()"]
+    cUsesBar          = unlines ["import a", "import b", "", "def fc() -> int:", "    return b.fb() + a.bar()"]
+    cParseError       = unlines ["import a", "import b", "", "def fc( -> int:", "    return b.fb() + a.bar()"]
+
+-- | Write the given text to the source file of each named module.
+writeSources :: [(String, String)] -> FilePath -> IO ()
+writeSources modules proj =
+  forM_ modules $ \(name, text) -> writeFileUtf8 (sourcePath proj name) (T.pack text)
+
+touchSource :: String -> FilePath -> IO ()
+touchSource name proj = touch (sourcePath proj name)
+
+sourcePath :: FilePath -> String -> FilePath
+sourcePath proj name = proj </> "src" </> name <.> "act"
+
+-- | Overwrite the impl hash tag of a module's generated .c file.
+tamperCodegenTag :: String -> FilePath -> IO ()
+tamperCodegenTag name proj =
+  rewriteFirstLine (proj </> "out" </> "types" </> eventsProjName </> name <.> "c") "/* Acton impl hash: decade */"
+
 -- Main -----------------------------------------------------------------------
 
 -- | Tasty entry point for incremental tests.
 main :: IO ()
 main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
-  [ sequentialTestGroup "incremental-project" AllSucceed
+  [ testGroup "compile-events" [ compileEventsGolden ]
+  , sequentialTestGroup "incremental-project" AllSucceed
       [ p01_init
       , p02_initial_build
       , p03_up_to_date
@@ -3199,7 +3526,9 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
       , f09_run_124
       , f10_alt_output
       ]
-  , sequentialTestGroup "incremental-project-cases" AllSucceed
+  , -- Every test of this group writes a fresh fixture project first, so a
+    -- failing test does not keep the tests after it from running.
+    sequentialTestGroup "incremental-project-cases" AllFinish
       [ p14_partial_rebuild
       , p15_rebuild_import
       , p15b_transitive_stdlib_import
@@ -3230,6 +3559,8 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
       , p35_changed_path_keeps_unaffected_provider
       , p35_dbp_changed_path_includes_provider
       , p36_removed_dep_name_triggers_front_refresh
+      , p36b_private_name_rechecks_dependent
+      , p36c_private_name_rechecks_dependent_on_one_scheduler
       , p37_impl_refresh_missing_dep_hashes_reruns_front
       , p38_project_lock_blocks_build
       , p39_background_lock_does_not_block_build
@@ -3258,4 +3589,5 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
       , p58_full_build_drops_undeclared_root_stub
       , p59_full_build_keeps_nested_module_binary
       ]
+  , testGroup "incremental-fetch-cases" [ p60_plan_after_failed_fetch_fetches_again ]
   ]

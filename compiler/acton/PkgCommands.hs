@@ -26,7 +26,7 @@ import Acton.ArchiveDownload (downloadArchive)
 import Acton.HttpFetch (httpGetBytes, isHttpUrl, newProxyManager)
 import qualified Acton.BuildSpec as BuildSpec
 import qualified Acton.CommandLineParser as C
-import Acton.Compile (loadBuildSpec, throwProjectError)
+import Acton.Project (actonCacheRoot, loadBuildSpec, projectBinDir, throwProjectError, zigExecutable, zigGlobalCacheDir)
 import Acton.ZigFetch (fetchZigPackage)
 
 import Control.Exception (IOException, SomeException, try, displayException, evaluate)
@@ -297,7 +297,7 @@ pkgUpdateCommand _ = do
     manager <- newProxyManager
     body <- requireRightWith ("ERROR: Failed to download package index from " ++ indexUrl ++ ": ") =<< httpGetBytes manager [] indexUrl
     home <- getHomeDirectory
-    let indexDir = home </> ".cache" </> "acton"
+    let indexDir = actonCacheRoot home
         indexPath = indexDir </> "package-index.json"
     createDirectoryIfMissing True indexDir
     BL.writeFile indexPath body
@@ -306,7 +306,7 @@ pkgUpdateCommand _ = do
 pkgSearchCommand :: C.GlobalOptions -> C.PkgSearchOptions -> IO ()
 pkgSearchCommand _ opts = do
     home <- getHomeDirectory
-    let indexPath = home </> ".cache" </> "acton" </> "package-index.json"
+    let indexPath = actonCacheRoot home </> "package-index.json"
     exists <- doesFileExist indexPath
     unless exists $
       throwProjectError ("No package index found at " ++ indexPath ++ "\nHINT: Run 'acton pkg update' to create or refresh it.")
@@ -355,7 +355,7 @@ zigPkgRemoveCommand _ opts = do
 prepareInstallSource :: String -> String -> String -> IO FilePath
 prepareInstallSource appName repoUrl commitSha = do
     home <- getHomeDirectory
-    let appsDir = home </> ".cache" </> "acton" </> "apps"
+    let appsDir = actonCacheRoot home </> "apps"
         sourceDir = appsDir </> appName ++ "-" ++ take 12 commitSha
         cloneUrl = githubCloneUrl repoUrl
     createDirectoryIfMissing True appsDir
@@ -372,7 +372,7 @@ githubCloneUrl = takeWhile (/= '#')
 
 discoverBuiltBinaries :: FilePath -> IO [(FilePath, String, Permissions)]
 discoverBuiltBinaries sourceDir = do
-    let binDir = sourceDir </> "out" </> "bin"
+    let binDir = projectBinDir sourceDir
     exists <- doesDirectoryExist binDir
     unless exists $
       throwProjectError ("ERROR: Build produced no out/bin directory in " ++ sourceDir)
@@ -594,7 +594,7 @@ lookupRepoUrlFromIndex = lookupRepoUrlFromIndexByKind "library"
 lookupRepoUrlFromIndexByKind :: String -> String -> String -> IO String
 lookupRepoUrlFromIndexByKind wantedKind depName pkgNameArg = do
     home <- getHomeDirectory
-    let indexPath = home </> ".cache" </> "acton" </> "package-index.json"
+    let indexPath = actonCacheRoot home </> "package-index.json"
     exists <- doesFileExist indexPath
     unless exists $
       throwProjectError ("ERROR: Package index not found at " ++ indexPath ++ "\nHINT: Run: acton pkg update")
@@ -934,7 +934,7 @@ zigFetchHash zigExe depUrl
 zigFetchLocalHash :: FilePath -> String -> IO (Either String String)
 zigFetchLocalHash zigExe target = do
     home <- getHomeDirectory
-    let globalCache = home </> ".cache" </> "acton" </> "zig-global-cache"
+    let globalCache = zigGlobalCacheDir home
     res <- fetchZigPackage zigExe globalCache target
     return (either (Left . ("Error hashing archive: " ++) . trim) Right res)
 
@@ -960,8 +960,7 @@ runProcessChecked cwdOpt exe args = do
 getZigExe :: IO FilePath
 getZigExe = do
     execDir <- takeDirectory <$> getExecutablePath
-    sysPath <- canonicalizePath (execDir </> "..")
-    return (sysPath </> "zig" </> "zig")
+    zigExecutable <$> canonicalizePath (execDir </> "..")
 
 validateDepName :: String -> IO ()
 validateDepName name =

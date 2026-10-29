@@ -5,6 +5,8 @@ import qualified Acton.Hashing as Hashing
 import qualified Acton.Kinds as Kinds
 import qualified Acton.NameInfo as NameInfo
 import qualified Acton.Parser as Parser
+import qualified Acton.Project as Project
+import qualified Acton.SourceProvider as Source
 import qualified Acton.Syntax as Syntax
 import qualified Acton.Types as Types
 
@@ -13,7 +15,6 @@ import qualified Control.Exception as E
 import Control.Monad (forM_)
 import qualified Data.ByteString.Char8 as B
 import Data.Graph (SCC(..), stronglyConnComp)
-import qualified Data.HashMap.Strict as HashMap
 import Data.IORef (newIORef, readIORef)
 import qualified Data.Map as Map
 import qualified Data.Set as Set
@@ -101,9 +102,6 @@ measureRepeated statsEnabled label reps action = do
       let total' = total + count
       total' `seq` loop (n - 1) total'
 
-forceHTEnv = HashMap.foldl' forceNameInfo () where
-    forceNameInfo () ni                          = ni `seq` ()
-
 forceModuleInfos = Map.foldl' forceModuleInfo () where
     forceModuleInfo () mi = rnf (Env.modulePublicTEnv mi)
 
@@ -123,60 +121,40 @@ printFrontTiming ft =
             ++ " hash " ++ fmtTime (Compile.ftTypeHash ft)
 
 printBackTiming :: Compile.BackTiming -> IO ()
-printBackTiming bt =
-    putStrLn $ "back_timing normalize " ++ fmtTime (Compile.btNormalize bt)
-            ++ " deactorize " ++ fmtTime (Compile.btDeactorize bt)
-            ++ " cps " ++ fmtTime (Compile.btCPS bt)
-            ++ " llift " ++ fmtTime (Compile.btLLift bt)
-            ++ " boxing " ++ fmtTime (Compile.btBoxing bt)
-            ++ " codegen " ++ fmtTime (Compile.btCodeGen bt)
-            ++ " render " ++ fmtTime (Compile.btRender bt)
-            ++ maybe "" (\t -> " write " ++ fmtTime t) (Compile.btWrite bt)
+printBackTiming timing =
+    putStrLn $ "back_timing" ++ concat [ " " ++ Compile.backPassName pass ++ " " ++ fmtTime t | (pass, t) <- timing ]
 
 sysRootFromTypesPath :: FilePath -> FilePath
 sysRootFromTypesPath = takeDirectory . takeDirectory . takeDirectory
 
 benchGopts :: C.GlobalOptions
-benchGopts = C.GlobalOptions
+benchGopts = C.defaultGlobalOptions
     { C.color = C.Never
-    , C.quiet = False
     , C.noProgress = True
     , C.timing = True
-    , C.tty = False
-    , C.verbose = False
-    , C.verboseZig = False
-    , C.jobs = 0
     }
 
 benchOpts :: FilePath -> Bool -> C.CompileOptions
 benchOpts typesPath skipBuild =
-    Compile.defaultCompileOptions
+    C.defaultCompileOptions
       { C.ignore_compiler_version = True
       , C.skip_build = skipBuild
       , C.syspath = sysRootFromTypesPath typesPath
+      -- A benchmark checks one module alone, with no dependents to gather
+      -- names for it, so its back job is whole.
+      , C.no_dbp = True
       }
 
-nameHashMapFromHeader :: [InterfaceFiles.NameHashInfo] -> Map.Map Syntax.Name InterfaceFiles.NameHashInfo
-nameHashMapFromHeader infos =
+nameHashMap :: [InterfaceFiles.NameHashInfo] -> Map.Map Syntax.Name InterfaceFiles.NameHashInfo
+nameHashMap infos =
     Map.fromList [ (InterfaceFiles.nhName info, info) | info <- infos ]
 
-resolveNameHashMap :: Compile.Paths -> Syntax.ModName -> IO (Maybe (Map.Map Syntax.Name InterfaceFiles.NameHashInfo))
+resolveNameHashMap :: Project.Paths -> Syntax.ModName -> IO (Maybe (Map.Map Syntax.Name InterfaceFiles.NameHashInfo))
 resolveNameHashMap paths mn = do
-    mty <- Env.findTyFile (Compile.searchPath paths) mn
+    mty <- Env.findTyFile (Project.searchPath paths) mn
     case mty of
       Nothing -> return Nothing
-      Just ty -> do
-        mh <- InterfaceFiles.readHeaderMaybe ty
-        return $ case mh of
-          Just (_, _, _, _, _, _, nameHashes, _, _, _) -> Just (nameHashMapFromHeader nameHashes)
-          Nothing -> Nothing
-
-resolveNameHash :: Compile.Paths -> Syntax.ModName -> Syntax.Name -> IO (Maybe InterfaceFiles.NameHashInfo)
-resolveNameHash paths mn n = do
-    mty <- Env.findTyFile (Compile.searchPath paths) mn
-    case mty of
-      Nothing -> return Nothing
-      Just ty -> InterfaceFiles.readNameHashMaybe ty n
+      Just ty -> fmap nameHashMap <$> InterfaceFiles.readNameHashesMaybe ty
 
 resolveDepHashMap :: String
                   -> (InterfaceFiles.NameHashInfo -> B.ByteString)
@@ -216,21 +194,20 @@ prepareHashBench :: FilePath -> FilePath -> IO HashBenchState
 prepareHashBench typesPath sourcePath = do
     src <- readFile sourcePath
     let opts = benchOpts typesPath True
-    paths <- Compile.findPaths sourcePath opts
+    (paths, modName) <- Project.findPaths sourcePath opts
     env0 <- Env.initEnv typesPath False
-    let modName = Compile.modName paths
 
     parsed <- Parser.parseModule modName sourcePath src Nothing
     E.evaluate (rnf parsed)
-    env <- Env.mkEnv (Compile.searchPath paths) env0 parsed
-    E.evaluate (forceHTEnv (Env.hnames env))
+    env <- Env.mkEnv (Project.searchPath paths) env0 parsed
+    E.evaluate (NameInfo.forceHTEnv (Env.hnames env))
     E.evaluate (forceModuleInfos (Env.modules env))
     kchecked <- Kinds.check env parsed
     E.evaluate (rnf kchecked)
     (nmod, tchecked, typeEnv, tests) <- Types.reconstruct Nothing Nothing env kchecked Nothing
     E.evaluate (rnf nmod)
     E.evaluate (rnf tchecked)
-    E.evaluate (forceHTEnv (Env.hnames typeEnv))
+    E.evaluate (NameInfo.forceHTEnv (Env.hnames typeEnv))
     E.evaluate (forceModuleInfos (Env.modules typeEnv))
     E.evaluate (length tests)
 
@@ -702,9 +679,8 @@ runDirect mode typesPath sourcePath = do
     statsEnabled <- getRTSStatsEnabled
     src <- readFile sourcePath
     let opts = benchOpts typesPath True
-    paths <- Compile.findPaths sourcePath opts
+    (_, modName) <- Project.findPaths sourcePath opts
     env0 <- Env.initEnv typesPath False
-    let modName = Compile.modName paths
 
     s0 <- getStats statsEnabled
     t0 <- getCurrentTime
@@ -719,7 +695,7 @@ runDirect mode typesPath sourcePath = do
       ParseOnly -> return ()
       _ -> do
         env <- Env.mkEnv [typesPath] env0 parsed
-        E.evaluate (forceHTEnv (Env.hnames env))
+        E.evaluate (NameInfo.forceHTEnv (Env.hnames env))
         E.evaluate (forceModuleInfos (Env.modules env))
         t2 <- getCurrentTime
         s2 <- getStats statsEnabled
@@ -739,7 +715,7 @@ runDirect mode typesPath sourcePath = do
             (nmod, tchecked, typeEnv, tests) <- Types.reconstruct Nothing Nothing env kchecked Nothing
             E.evaluate (rnf nmod)
             E.evaluate (rnf tchecked)
-            E.evaluate (forceHTEnv (Env.hnames typeEnv))
+            E.evaluate (NameInfo.forceHTEnv (Env.hnames typeEnv))
             E.evaluate (forceModuleInfos (Env.modules typeEnv))
             E.evaluate (length tests)
             t4 <- getCurrentTime
@@ -753,9 +729,8 @@ runCompilerFront buildFront runBack typesPath sourcePath = do
     src <- readFile sourcePath
     srcBytes <- B.readFile sourcePath
     let opts = benchOpts typesPath (not buildFront)
-    paths <- Compile.findPaths sourcePath opts
+    (paths, modName) <- Project.findPaths sourcePath opts
     env0 <- Env.initEnv typesPath False
-    let modName = Compile.modName paths
 
     s0 <- getStats statsEnabled
     t0 <- getCurrentTime
@@ -766,50 +741,38 @@ runCompilerFront buildFront runBack typesPath sourcePath = do
     elapsed "parse" t0 t1
     printStatsMaybe "parse_stats" s0 s1
 
-    res <- Compile.runFrontPasses
-      benchGopts
-      opts
-      False
-      paths
-      env0
-      parsed
-      src
-      srcBytes
-      Nothing
-      (Compile.getPubHashCached paths)
-      (Compile.getImplHashCached paths)
-      (resolveNameHash paths)
-      (\_ -> return ())
-      (\_ _ -> return ())
-      (\_ _ _ -> return ())
-      (\_ _ _ -> return ())
-      (return True)
-      (\_ -> return ())
+    build <- Compile.standaloneBuild Source.diskSourceProvider benchGopts (\_ -> return ())
+    let source = Compile.ModuleSource src srcBytes Nothing
+        task = Compile.GlobalTask (Compile.TaskKey (Project.projPath paths) modName) paths (Compile.ParseTask source [] Nothing) Map.empty
+        -- A failed background output fails the benchmark.
+        awaitOutputs = Compile.awaitOutputs build >>= mapM_ (ioError . userError . Compile.compileFailureMessage)
+    res <- Compile.checkModule build task opts env0 source parsed
     fr <- case res of
             Left diags -> error ("front pass failed with " ++ show (length diags) ++ " diagnostics")
             Right fr -> return fr
-    if runBack then return () else Compile.waitFrontOutputJobs fr
-    E.evaluate (length (Compile.frIfaceTE fr) + length (Compile.frImps fr) + length (Compile.frNameHashes fr))
+    if runBack then return () else awaitOutputs
+    let info = Compile.frModuleInfo fr
+    E.evaluate (length (Env.modulePublicNames info) + length (Env.moduleImports info) + maybe 0 Map.size (Compile.mhNames (Compile.frHashes fr)))
     t2 <- getCurrentTime
     s2 <- getStats statsEnabled
     elapsed "front" t1 t2
     printStatsMaybe "front_stats" s1 s2
     forM_ (Compile.frFrontTiming fr) printFrontTiming
 
-    case (runBack, Compile.frBackJob fr) of
-      (True, Just job) -> do
+    case (runBack, Compile.frBack fr) of
+      (True, Compile.EagerBack job) -> do
         (do
             s3 <- getStats statsEnabled
             t3 <- getCurrentTime
-            (_mtime, mtiming) <- Compile.runBackPasses benchGopts (Compile.bjOpts job) (Compile.bjPaths job) (Compile.bjInput job) (return True)
+            (_mtime, mtiming) <- Compile.runBackPasses benchGopts job (return True) (\_ -> return ())
             t4 <- getCurrentTime
             s4 <- getStats statsEnabled
             elapsed "back" t3 t4
             printStatsMaybe "back_stats" s3 s4
             forM_ mtiming printBackTiming)
-          `E.finally` Compile.waitFrontOutputJobs fr
-      (True, Nothing) -> do
-        Compile.waitFrontOutputJobs fr
+          `E.finally` awaitOutputs
+      (True, _) -> do
+        awaitOutputs
         error "front pass did not return a back job"
       (False, _) -> return ()
 

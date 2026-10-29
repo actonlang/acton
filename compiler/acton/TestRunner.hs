@@ -9,9 +9,12 @@ module TestRunner
 
 import qualified Acton.CommandLineParser as C
 import qualified Acton.BuildSpec as BuildSpec
+import qualified Acton.Hashing as Hashing
 import Acton.Testing
 import Acton.Compile
+import Acton.Project
 import qualified Acton.Syntax as A
+import Acton.Syntax (modNameToString)
 import qualified Acton.SourceProvider as Source
 import qualified InterfaceFiles
 import qualified FileUtil
@@ -50,7 +53,6 @@ import qualified Data.Aeson.Key as AesonKey
 import qualified Data.Aeson.KeyMap as AesonKM
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Char8 as BS
-import qualified Data.ByteString.Base16 as Base16
 import qualified Crypto.Hash.SHA256 as SHA256
 import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
@@ -115,7 +117,7 @@ withPerfWorktree cache project ref action = do
     root <- git project ["rev-parse", "--show-toplevel"] >>= canonicalizePath . unlinesTrimmed
     common <- git root ["rev-parse", "--git-common-dir"] >>= canonicalizePath . (root </>) . unlinesTrimmed
     previous <- unlinesTrimmed <$> git root ["rev-parse", "--verify", ref ++ "^{commit}"]
-    let key = BS.unpack (Base16.encode (SHA256.hash (BL.toStrict (Aeson.encode common))))
+    let key = Hashing.hashHex (SHA256.hash (BL.toStrict (Aeson.encode common)))
         directory = cache </> "worktrees" </> key
     createDirectoryIfMissing True directory
     baseline <- (</> previous) <$> canonicalizePath directory
@@ -158,7 +160,7 @@ printErrorAndExit msg = do
 -- | Compute the test binary path for a module and target.
 testBinaryPath :: C.CompileOptions -> Paths -> String -> FilePath
 testBinaryPath opts paths modName =
-    let base = rootBinaryName paths True (modNameFromString modName)
+    let base = rootBinaryName paths True (A.dottedModName modName)
         exe = if isWindowsTarget (C.target opts) then base <.> "exe" else base
     in binDir paths </> exe
 
@@ -229,11 +231,11 @@ selectTestSources gopts opts paths topts files = do
         else if null (C.testNames topts)
           then return True
           else do
-            task <- readModuleTask sp gopts opts paths { modName = mn } file
+            task <- readModuleTask sp gopts opts paths mn file
             case task of
-              TyTask{ tyTests = names } | matches names -> return True
-              ParseTask{ src = source } -> fromSource mn matches file source
-              ParseErrorTask{} -> return True
+              TyTask h | matches (InterfaceFiles.summaryTests h) -> return True
+              ParseTask source _ _ -> fromSource mn matches file (sourceText source)
+              ParseErrorTask _ -> return True
               _ -> Source.spReadFile sp file >>= fromSource mn matches file . Source.ssText
     fromSource mn matches file source = do
       parsed <- parseActSource opts mn file source Nothing
@@ -331,7 +333,7 @@ runScalingTests useColorOut gopts opts paths topts modules directory sourceInfo 
       let provenance = AesonKM.union host sourceInfo
       tests <- forM testsByModule $ \(modName, names) -> do
         hashes <- readModuleNameHashes paths modName
-        return [(modName, name, fmap (BS.unpack . Base16.encode . InterfaceFiles.nhImplHash . snd) (lookupTestInfo hashes name)) | name <- names]
+        return [(modName, name, fmap (Hashing.hashHex . InterfaceFiles.nhImplHash . snd) (lookupTestInfo hashes name)) | name <- names]
       let callbacks = TestProgressCallbacks (const (return ())) (const (return ())) (const (return ()))
           runSample limits scale modName testName = do
             now <- getTime Monotonic
@@ -877,30 +879,19 @@ regexMatches re text = isJust (TDFA.matchOnceText re text)
 -- | Read the discovered tests for a module from its .tydb header.
 listModuleTests :: C.CompileOptions -> Paths -> String -> IO [String]
 listModuleTests _opts paths modName =
-    readModuleTests paths (modNameFromString modName)
+    readModuleTests paths (A.dottedModName modName)
 
--- | Read tests from a module's .tydb header, returning [] on any error.
+-- | Read tests from a module's .tydb header, or [] when the header cannot
+-- be read.
 readModuleTests :: Paths -> A.ModName -> IO [String]
-readModuleTests paths mn = do
-    let tyFile = tyDbPath paths mn
-    exists <- InterfaceFiles.interfaceExists tyFile
-    if not exists
-      then return []
-      else do
-        hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeaderSummary tyFile
-        case hdrE of
-          Left _ -> return []
-          Right (_sourceMeta, _srcH, _ih, _implH, _imps, _depModules, _nameCount, _roots, tests, _doc) ->
-            return tests
-
-modNameFromString :: String -> A.ModName
-modNameFromString s = A.modName (splitOnChar '.' s)
+readModuleTests paths mn =
+    maybe [] InterfaceFiles.summaryTests <$> InterfaceFiles.tryReadHeaderSummary (tyDbPath paths mn)
 
 -- | Render a module name for user-facing output, dropping the project-name
 -- prefix so consumers (the VS Code extension, the --module flag, the on-disk
 -- src/ layout) see the bare module name instead of e.g. "proj.mod".
 displayModName :: Paths -> String -> String
-displayModName paths = modNameToString . dropProjPrefix paths . modNameFromString
+displayModName paths = moduleLabel paths . A.dottedModName
 
 splitOnChar :: Char -> String -> [String]
 splitOnChar ch input = case break (== ch) input of
@@ -1657,7 +1648,7 @@ readPerfHostInfo :: C.CompileOptions -> C.TestOptions -> M.Map String String -> 
 readPerfHostInfo opts topts buildOptions = do
     identity <- try readIdentity :: IO (Either IOException (Maybe String))
     let machine = case identity of
-          Right (Just raw) -> Just (BS.unpack (Base16.encode (SHA256.hash (BS.pack ("acton-perf-machine-v1:" ++ raw)))))
+          Right (Just raw) -> Just (Hashing.hashHex (SHA256.hash (BS.pack ("acton-perf-machine-v1:" ++ raw))))
           _ -> Nothing
     return $ AesonKM.fromList $
       [ (AesonKey.fromString "machine", Aeson.toJSON machine)

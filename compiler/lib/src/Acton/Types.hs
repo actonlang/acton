@@ -45,7 +45,7 @@ import qualified InterfaceFiles
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.Set as Set
-import Data.List (foldl', intersperse, isPrefixOf, partition)
+import Data.List (foldl', isPrefixOf, partition)
 import Data.Maybe (mapMaybe, fromMaybe)
 import GHC.Conc (getNumCapabilities)
 
@@ -73,7 +73,7 @@ reconstruct progressCb inferredCb env0 (Module m i mdoc ss) bareMod = do --trace
                                              let env2 = defineClosed te (setMod m env0)
                                                  (teT,ssT,tests) =
                                                    if hasTesting i
-                                                     then let (testSs, discovered) = testStmts env2 (fromMaybe (modNameStr m) bareMod) ss1
+                                                     then let (testSs, discovered) = testStmts env2 (fromMaybe (modNameToString m) bareMod) ss1
                                                           in (te ++ testEnv, ss1 ++ testSs, discovered)
                                                      else (te, ss1, [])
                                                  -- Defaults are evaluated at call sites, so every free
@@ -97,9 +97,6 @@ reconstruct progressCb inferredCb env0 (Module m i mdoc ss) bareMod = do --trace
           | nstr n == "test_main"       = rmTests ss
         rmTests (s : ss)                = s : rmTests ss
         rmTests []                      = []
-
-        -- Convert the module name (ModName) to a string, e.g. "foo.bar"
-        modNameStr (ModName ns) = concat (intersperse "." (map nstr ns))
 
 qualifyInterfaceDefaults env          = map qualifyBinding
   where qualifyBinding (n,i)           = (n, qualifyInfo i)
@@ -201,22 +198,22 @@ freshDefaultWits s e                    = return (termsubst s e)
 
 -- | Print a .tydb header and interface; include name hashes when verbose.
 showTyFile env0 m fname verbose = do
-                                     (_,nmod,_,sourceMeta,srcH,pubH,implH,imps,depModules,nameHashes,roots,tests,mdocH) <- InterfaceFiles.readFile fname
+                                     stored <- InterfaceFiles.readFile fname
                                      putStrLn ("\n############### Header ###############")
-                                     putStrLn ("Imports: " ++ (show [ (prstr mn, take 16 (B.unpack $ Base16.encode h)) | (mn,h) <- imps ]))
-                                     putStrLn ("Deps   : " ++ (show [ (prstr mn, take 16 (B.unpack $ Base16.encode pubH'), take 16 (B.unpack $ Base16.encode implH')) | InterfaceFiles.DepModuleInfo mn pubH' implH' <- depModules ]))
-                                     putStrLn ("Roots  : " ++ (show (map prstr roots)))
-                                     putStrLn ("Tests  : " ++ (show tests))
-                                     case mdocH of
+                                     putStrLn ("Imports: " ++ (show [ (prstr mn, take 16 (B.unpack $ Base16.encode h)) | (mn,h) <- InterfaceFiles.storedImports stored ]))
+                                     putStrLn ("Deps   : " ++ (show [ (prstr mn, take 16 (B.unpack $ Base16.encode pubH'), take 16 (B.unpack $ Base16.encode implH')) | InterfaceFiles.DepModuleInfo mn pubH' implH' <- InterfaceFiles.storedDepModules stored ]))
+                                     putStrLn ("Roots  : " ++ (show (map prstr (InterfaceFiles.storedRoots stored))))
+                                     putStrLn ("Tests  : " ++ (show (InterfaceFiles.storedTests stored)))
+                                     case InterfaceFiles.storedDoc stored of
                                        Just ds -> putStrLn ("Doc    : \"\"\"" ++ ds ++ "\"\"\"")
                                        Nothing -> return ()
-                                     putStrLn ("ModuleSrcBytesHash: 0x" ++ (B.unpack $ Base16.encode srcH))
-                                     putStrLn ("ModulePubHash     : 0x" ++ (B.unpack $ Base16.encode pubH))
-                                     putStrLn ("ModuleImplHash    : 0x" ++ (B.unpack $ Base16.encode implH))
+                                     putStrLn ("ModuleSrcBytesHash: 0x" ++ (B.unpack $ Base16.encode (InterfaceFiles.storedSourceHash stored)))
+                                     putStrLn ("ModulePubHash     : 0x" ++ (B.unpack $ Base16.encode (InterfaceFiles.storedPubHash stored)))
+                                     putStrLn ("ModuleImplHash    : 0x" ++ (B.unpack $ Base16.encode (InterfaceFiles.storedImplHash stored)))
 
                                      when verbose $ do
                                        putStrLn ("\n############### Source Meta ############")
-                                       case sourceMeta of
+                                       case InterfaceFiles.storedSourceMeta stored of
                                          Nothing -> putStrLn "None"
                                          Just meta -> do
                                            putStrLn ("mtimeNs: " ++ show (InterfaceFiles.sfmMTimeNs meta))
@@ -225,7 +222,7 @@ showTyFile env0 m fname verbose = do
                                            putStrLn ("device : " ++ maybe "-" show (InterfaceFiles.sfmDevice meta))
                                            putStrLn ("inode  : " ++ maybe "-" show (InterfaceFiles.sfmInode meta))
                                        putStrLn ("\n############### Name Hashes ############")
-                                       forM_ nameHashes $ \nh -> do
+                                       forM_ (InterfaceFiles.storedNames stored) $ \nh -> do
                                          let formatHash h =
                                                if B.null h
                                                  then ""
@@ -248,7 +245,7 @@ showTyFile env0 m fname verbose = do
                                            putStrLn ("  implDeps: " ++ show (map showDep (InterfaceFiles.nhImplDeps nh)))
 
                                      putStrLn ("\n############### Interface ############")
-                                     let NModule imps te mdoc = nmod
+                                     let NModule imps te mdoc = InterfaceFiles.storedInterface stored
                                      forM_ mdoc $ \docstring ->
                                        putStrLn $ "\"\"\"" ++ docstring ++ "\"\"\""
 
@@ -389,8 +386,8 @@ infTop progressCb inferredCb env ss     = do -- The scanner itself is sequential
                                                      [ e | Left e <- xs ])
         -- Scanner/checker front door for one statement. Ordinary exceptions
         -- become Left values so infTop can collect multiple errors; async
-        -- exceptions still escape through tryTop.
-        scanOrCheck env s item q        = tryTop $ do
+        -- exceptions still escape through trySync.
+        scanOrCheck env s item q        = trySync $ do
                                              let p = nameText $ uniqPrefix s
                                              ((total,te1,s1),st) <- runTypeFromState p (initTypeState p) $ do
                                                pushFX fxPure tNone
@@ -414,7 +411,7 @@ infTop progressCb inferredCb env ss     = do -- The scanner itself is sequential
                                                    (writeChan q (TopProgressFinished item))
         -- Background worker body for a total statement.  It receives exactly
         -- the scanned env and scanned statement returned by scanTopStmt.
-        checkTotal env te s             = tryTop $ do
+        checkTotal env te s             = trySync $ do
                                              (te1,ss1) <- runType (nameText $ uniqPrefix s) $ do
                                                pushFX fxPure tNone
                                                checkTopStmt env te s
@@ -429,7 +426,7 @@ infTop progressCb inferredCb env ss     = do -- The scanner itself is sequential
                                                               when (isAsyncException err) (Control.Exception.throwIO err)
                                                Right x -> putMVar result x
         -- Run a TypeM action and convert TypeM's Either error into the IO
-        -- exception path used by tryTop.
+        -- exception path used by trySync.
         runType p m                     = do r <- Control.Exception.evaluate (runTypeMState p m)
                                              case r of
                                                Left err -> Control.Exception.throwIO err
@@ -488,15 +485,6 @@ activeProgressLabel active              = Just (formatActive active)
         formatNames [n1,n2]             = n1 ++ ", " ++ n2
         formatNames (n1:n2:rest)        = n1 ++ ", " ++ n2 ++ " (+" ++ show (length rest) ++ " others)"
         formatNames []                  = ""
-
-tryTop                                  :: IO a -> IO (Either Control.Exception.SomeException a)
-tryTop m                                = do r <- Control.Exception.try m
-                                             case r of
-                                               Left err | isAsyncException err -> Control.Exception.throwIO err
-                                               _ -> return r
-
-isAsyncException                        :: Control.Exception.SomeException -> Bool
-isAsyncException err                    = isJust (Control.Exception.fromException err :: Maybe Control.Exception.SomeAsyncException)
 
 throwTopErrors                          :: [Control.Exception.SomeException] -> IO a
 throwTopErrors errs                     = case others of

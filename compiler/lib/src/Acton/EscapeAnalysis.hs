@@ -21,6 +21,7 @@ module Acton.EscapeAnalysis
     , analyzeModule
     , analyzeModuleWithImports
     , interfaceSummaries
+    , contractViolation
     , renderEscapeReport
     ) where
 
@@ -178,6 +179,30 @@ interfaceSummaries report =
     | (FunctionId path@[_], ps) <- reportFunctions report
     ]
 
+-- | The first Hashable.hash implementation whose hasher parameter may
+-- escape, as an error location and message.  The location is that of the
+-- parameter's first direct escaping use that has one, else the parameter's
+-- own.
+contractViolation :: EscapeReport -> Maybe (SrcLoc, String)
+contractViolation report = case reportContractViolations report of
+    []                   -> Nothing
+    (fid, parameter) : _ -> Just (location fid parameter, message fid parameter)
+  where
+    location fid parameter = fromMaybe (loc parameter) $ listToMaybe
+        [ l
+        | (fid', ps) <- reportFunctions report
+        , fid' == fid
+        , p <- ps
+        , parameterName p == parameter
+        , reason <- parameterDirectUses p
+        , let l = reasonLoc reason
+        , l /= NoLoc
+        ]
+    message fid parameter =
+        "Hashable.hash implementation " ++ renderFunctionId fid ++
+        " may let its hasher parameter '" ++ nstr parameter ++
+        "' escape; Hashable.hash must consume the hasher only during the call"
+
 
 renderEscapeReport :: EscapeReport -> String
 renderEscapeReport report = unlines (header ++ concatMap renderFunction interestingFunctions ++ contractLines)
@@ -256,6 +281,17 @@ reasonName (Asynchronous _) = "asynchronous"
 reasonName (ImportedCall _)  = "escaping imported call"
 reasonName (UnknownCall _)  = "unknown call"
 reasonName (UnavailableBody _) = "unavailable body"
+
+reasonLoc :: EscapeReason -> SrcLoc
+reasonLoc (Returned l)        = l
+reasonLoc (Stored l)          = l
+reasonLoc (Raised l)          = l
+reasonLoc (Yielded l)         = l
+reasonLoc (Captured l)        = l
+reasonLoc (Asynchronous l)    = l
+reasonLoc (ImportedCall l)    = l
+reasonLoc (UnknownCall l)     = l
+reasonLoc (UnavailableBody l) = l
 
 
 summarize :: Facts -> S.Set Node -> FunctionInfo -> (FunctionId, [ParameterSummary])

@@ -3323,6 +3323,18 @@ dependencyDeclarationTests =
       expectFailure "cyclic follows" "follows" result
       assertBool "diagnostic should identify the cycle"
         (any (`isInfixOf` map toLower (out ++ err)) ["cycle", "cyclic"])
+
+  , testCase "pkg show with a missing local dependency" $ withFixture $ \acton tmp app _ _ -> do
+      writeProject app "app" [platformDep, ("widgets", pathDep "../nowhere/widgets")]
+      result@(_, out, _) <- readCreateProcessWithExitCode (proc acton ["pkg", "show"]){ cwd = Just app } ""
+      root <- canonicalizePath tmp
+      expectFailure "pkg show with a missing local dependency"
+        ("Dependency widgets path does not exist: " ++ root </> "nowhere" </> "widgets" ++ "\n") result
+      assertEqual "pkg show output" (unlines
+        [ "Dependency tree (hash overrides shown):"
+        , "- platform (path=../deps/platform)"
+        , "  - yang (path=../../shared/yang)"
+        ]) out
   ]
   where
     platformDep = ("platform", pathDep "../deps/platform")
