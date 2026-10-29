@@ -1,0 +1,50 @@
+# The Keyed witnesses for Foo and Bar construct each other, a witness knot
+# that WitKnots ties with an optional partner parameter. Two extensions in the
+# same declaration group construct those witnesses inside methods: Tagged in
+# an ordinary method, and Sub in the __eq__ slot it forwards to Keyed.
+
+protocol Keyed[K (Eq)] (Eq):
+    pass
+
+protocol Sub[K (Eq)] (Keyed[K]):
+    pass
+
+protocol Tagged:
+    tag : () -> int
+
+class Foo(object):
+    n: int
+    def __init__(self, n: int):
+        self.n = n
+
+class Bar(object):
+    n: int
+    def __init__(self, n: int):
+        self.n = n
+
+extension Foo (Keyed[Bar]):
+    def __eq__(self, other: Foo) -> bool:
+        return self.n == other.n
+
+extension Bar (Keyed[Foo]):
+    def __eq__(self, other: Bar) -> bool:
+        return self.n == other.n
+
+extension Foo (Sub[Bar]):
+    pass
+
+extension Foo (Tagged):
+    def tag(self) -> int:
+        return 7 if Bar(self.n) == Bar(self.n) else 0
+
+def same[T(Sub[Bar])](a: T, b: T) -> bool:
+    return a == b
+
+actor main(env):
+    if Foo(1).tag() != 7:
+        print("FAIL: knot witness built in a method")
+        env.exit(1)
+    if not same(Foo(1), Foo(1)) or same(Foo(1), Foo(2)):
+        print("FAIL: knot witness built in a forwarded slot")
+        env.exit(1)
+    env.exit(0)
