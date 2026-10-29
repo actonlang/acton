@@ -123,7 +123,14 @@ struct B_ISliceableD_bytes B_ISliceableD_bytesG_instance = {
     (B_Eq)&B_OrdD_intG_instance
 };
 struct B_OrdD_bytes B_OrdD_bytesG_instance = {&B_OrdD_bytesG_methods};
-struct B_ContainerD_bytearray B_ContainerD_bytearrayG_instance = {&B_ContainerD_bytearrayG_methods};
+// The last two fields both hold the Collection witness of bytearray
+// (Sequence[int]), which the forwarded __iter__, __len__ and __fromiter__ call.
+struct B_ContainerD_bytearray B_ContainerD_bytearrayG_instance = {
+    &B_ContainerD_bytearrayG_methods,
+    (B_Eq)&B_OrdD_intG_instance,
+    (B_Iterable)&B_CollectionD_SequenceD_bytearrayG_instance,
+    (B_Collection)&B_CollectionD_SequenceD_bytearrayG_instance
+};
 struct B_TimesD_SequenceD_bytearray B_TimesD_SequenceD_bytearrayG_instance = {
     &B_TimesD_SequenceD_bytearrayG_methods,
     (B_ISequence)&B_SequenceD_bytearrayG_instance,
