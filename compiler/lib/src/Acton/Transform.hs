@@ -15,6 +15,10 @@
 module Acton.Transform where
 
 import qualified Data.HashMap.Strict as M
+import qualified Data.IntMap.Strict as IM
+import qualified Data.HashSet as HS
+import Acton.Subst (vfree)
+import Acton.WitnessSharing (witnessHash)
 
 import Utils
 import Acton.Syntax
@@ -42,11 +46,12 @@ type TSubst                             = M.HashMap Name (Maybe Expr)
 data TransEnv                           = TransEnv {
                                             eqns     :: Equations,                  -- Top-level constraint solutions
                                             trsubst  :: TSubst,                     -- Inlineable assignments and scope blockers
-                                            witscope :: [(Name,Type,Expr)],         -- Preserved witness bindings in scope, for the purpose of duplicate removals
+                                            witscope :: IM.IntMap [(Name,Type,Expr)], -- Preserved witness bindings in scope, for the purpose of duplicate removals
+                                            witnames :: HS.HashSet Name,            -- Names whose shadowing invalidates the witness index
                                             final    :: Bool
                                           }
 
-env0                                    = TransEnv{ eqns = [], trsubst = M.empty, witscope = [], final = False }
+env0                                    = TransEnv{ eqns = [], trsubst = M.empty, witscope = IM.empty, witnames = HS.empty, final = False }
 
 blockscope ns env                       = env{ trsubst = foldr (`M.insert` Nothing) (trsubst env) ns }
 
@@ -61,11 +66,25 @@ trfind n env                            = case M.lookup n (trsubst env) of
 trfinds ns env                          = [ e | n <- ns, Just e <- [trfind n env] ]
 
 
-extscope n t e env                      = env{ witscope = (n,t,e) : witscope env }
+-- Witnesses have no observable identity. Compare their alias-expanded recipes
+-- and result types, including the selected constructor and dependency witnesses.
+-- Fingerprints select a small bucket; exact equality still decides sharing.
+-- The persistent index follows the lexical environment, never hoisting a binding.
+extscope n t e env                      = env{ witscope = IM.insertWith (++) (witnessHash t e) [(n,t,e)] (witscope env),
+                                              witnames = foldr HS.insert (witnames env) (n : free e ++ typeNames) }
+  where typeNames                       = [ n | TV _ n <- vfree t ++ vfree e ]
 
-equalwit env e t                        = listToMaybe [ eVar w | (w,t',e') <- witscope env, e' == e, t' == t ]
+equalwit env e t                        = listToMaybe [ eVar w | (w,t',e') <- IM.findWithDefault [] (witnessHash t e) (witscope env), e' == e, t' == t ]
 
 finalize env                            = env{ final = True }
+
+-- Usually a binder cannot affect a witness recipe already in scope. Record
+-- recipe dependencies once, so entering another declaration needs only a few
+-- set lookups. Clear the index conservatively if a term/type name is shadowed.
+freshscope env                          = env{ witscope = IM.empty, witnames = HS.empty }
+checkscope ns env                       = if any (`HS.member` witnames env) ns then freshscope env else env
+bindscope ns env                        = blockscope ns (checkscope ns env)
+typescope q env                         = checkscope [ n | QBind (TV _ n) _ <- q ] env
 
 
 instance Pretty (Name,Expr) where
@@ -78,11 +97,11 @@ wtrans env (Signature _ ws (TSchema _ [] (TWild _)) NoDec : ss)
   where eq                              = findeqns ws (eqns env)
 wtrans env (s@(Assign l p@[PVar _ w (Just t)] e) : ss)
   | not (isWitness w)                   = trans env s : wtrans env ss
-  | Lambda{} <- e                       = wtrans (extsubst [(w,e1)] env) ss
-  | TApp _ Var{} _ <- e                 = wtrans (extsubst [(w,e1)] env) ss
-  | Var{} <- e                          = wtrans (extsubst [(w,e1)] env) ss
-  | Dot _ Var{} _ <- e                  = wtrans (extsubst [(w,e1)] env) ss
-  | Just e' <- equalwit env e t         = wtrans (extsubst [(w,e')] env) ss
+  | Lambda{} <- e1                      = wtrans (extsubst [(w,e1)] env) ss
+  | TApp _ Var{} _ <- e1                = wtrans (extsubst [(w,e1)] env) ss
+  | Var{} <- e1                         = wtrans (extsubst [(w,e1)] env) ss
+  | Dot _ Var{} _ <- e1                 = wtrans (extsubst [(w,e1)] env) ss
+  | Just e' <- equalwit env e1 t        = wtrans (extsubst [(w,e')] env) ss
   | otherwise                           = Assign l p e1 : wtrans (extscope w t e1 env) ss
   where e1                              = trans env e
 wtrans env (s:ss)                       = trans env s : wtrans env ss
@@ -106,10 +125,10 @@ instance Transform Stmt where
     trans env (If l bs els)             = If l (trans env bs) (trans env els)
     trans env (While l e b els)         = While l (trans env e) (trans env b) (trans env els)
     trans env (For l p e b els)         = For l p (trans env e) (trans env1 b) (trans env els)
-      where env1                        = blockscope (bound p) env
+      where env1                        = bindscope (bound p) env
     trans env (Try l b hs els fin)      = Try l (trans env b) (trans env hs) (trans env els) (trans env fin)
     trans env (With l is b)             = With l (trans env1 is) (wtrans env1 b)
-      where env1                        = blockscope (bound is) env
+      where env1                        = bindscope (bound is) env
     trans env (Data l mbp ss)           = Data l mbp (trans env ss)
     trans env (VarAssign l ps e)        = VarAssign l ps (trans env e)
     trans env (After l now e e')        = After l now (trans env e) (trans env e')
@@ -119,13 +138,13 @@ instance Transform Stmt where
 instance Transform Decl where
     trans env (Def l n q p k t b d fx doc)
                                         = Def l n q (trans env1 p) (trans env1 k) t (wtrans env1 b) d fx doc
-      where env1                        = blockscope (bound p ++ bound k) env
+      where env1                        = bindscope (bound p ++ bound k) (typescope q env)
     trans env (Actor l n q p k b doc)   = Actor l n q (trans env1 p) (trans env1 k) (wtrans env1 b) doc
-      where env1                        = blockscope (bound p ++ bound k) env
-    trans env (Class l n q us b doc)    = Class l n q us (wtrans env b) doc
-    trans env (Protocol l n q us b doc) = Protocol l n q us (wtrans env b) doc
+      where env1                        = bindscope (bound p ++ bound k) (typescope q env)
+    trans env (Class l n q us b doc)    = Class l n q us (wtrans (checkscope [nSelf] (typescope q env)) b) doc
+    trans env (Protocol l n q us b doc) = Protocol l n q us (wtrans (checkscope [nSelf] (typescope q env)) b) doc
     trans env (Typedef l n q t doc)     = Typedef l n q t doc
-    trans env (Extension l n q us b doc)= Extension l n q us (wtrans env b) doc
+    trans env (Extension l q c us b doc)= Extension l q c us (wtrans (checkscope [nSelf] (typescope q env)) b) doc
 
 transCall (Dot _ (Var _ n) m) ts [e1,e2]
   | n == primWrapProc,  m == attrWrap   = Just e2
@@ -188,7 +207,7 @@ instance Transform Expr where
       | otherwise                       = eta $ Lambda l (trans env1 $ prename s p) (trans env1 $ krename s k) (trans env1 $ erename s e) fx
       where fvs                         = free e
             bvs                         = bound p ++ bound k
-            env1                        = limsubst bvs env
+            env1                        = checkscope bvs (limsubst bvs env)
             clash                       = bvs `intersect` free (trfinds fvs env1)
             s                           = clash `zip` (yNames \\ (fvs++bvs))
             e1                          = Lambda l (prename s p) (krename s k) (erename s e) fx
@@ -197,15 +216,15 @@ instance Transform Expr where
     trans env (Tuple l p k)             = Tuple l (trans env p) (trans env k)
     trans env (List l es)               = List l (trans env es)
     trans env (ListComp l e c)          = ListComp l (trans env1 e) (trans env1 c)
-      where env1                        = blockscope (bound c) env
+      where env1                        = bindscope (bound c) env
     trans env (Dict l as)               = Dict l (trans env as)
     trans env (DictComp l a c)          = DictComp l (trans env1 a) (trans env1 c)
-      where env1                        = blockscope (bound c) env
+      where env1                        = bindscope (bound c) env
     trans env (Set l es)                = Set l (trans env es)
     trans env (SetComp l e c)           = SetComp l (trans env1 e) (trans env1 c)
-      where env1                        = blockscope (bound c) env
+      where env1                        = bindscope (bound c) env
     trans env (GeneratorExpr l e c)     = GeneratorExpr l (trans env1 e) (trans env1 c)
-      where env1                        = blockscope (bound c) env
+      where env1                        = bindscope (bound c) env
 --    trans env (Paren l e)               = Paren l (trans env e)
     trans env (Paren l e)               = trans env e
     trans env e                         = e
@@ -287,7 +306,7 @@ instance Transform Branch where
 
 instance Transform Handler where
     trans env (Handler ex b)            = Handler ex (trans env1 b)
-      where env1                        = blockscope (bound ex) env
+      where env1                        = bindscope (bound ex) env
 
 instance Transform PosPar where
     trans env (PosPar n t e p)          = PosPar n t (trans env e) (trans env p)

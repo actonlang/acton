@@ -9,18 +9,30 @@ import Acton.QuickType
 import Acton.Prim
 import Acton.Builtin
 import Acton.Subst
+import qualified Acton.WitnessSharing as WitnessSharing
 import Pretty
 import Utils
 import Debug.Trace
 import Data.Maybe (isJust)
+import qualified Data.Set as Set
 import qualified Data.HashSet as HashSet
 import Control.Monad.State.Strict
 import Control.Monad.Except
 import qualified Data.HashMap.Strict as M
 
 doBoxing                           :: Acton.Env.Env0 -> Module -> IO Module
-doBoxing env m                     = do (_,ss) <- boxing (boxEnv env) (mbody m)
-                                        return m{mbody = ss}   
+doBoxing env m                     = do
+    (_,ss) <- boxing (boxEnv env) (mbody m)
+    let (known, staticValue) = sharingInputs env m
+    return $ WitnessSharing.shareWitnesses env known (isJust . staticValue) m{mbody = ss}
+
+-- Sharing trusts the constructors of the module's witness equations, taken
+-- before boxing, and recognizes static witnesses, which can be the module's
+-- own, as in __builtin__.
+sharingInputs                      :: Acton.Env.Env0 -> Module -> (Set.Set QName, Expr -> Maybe Expr)
+sharingInputs env m                = (WitnessSharing.constructorHeads (mbody m), static)
+  where own                        = boxEnv (define (envOf (mbody m)) (setMod (modname m) env))
+        static e                   = staticWitnessExpr <$> staticWitnessOf own e
 
 type BoxEnv                        = EnvF BoxX
 

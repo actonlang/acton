@@ -571,6 +571,4 @@ B_Msg linesQ_mainD_myproc(linesQ_main self, int64_t i);
 B_Msg linesQ_mainD_nop(linesQ_main self);
 extern B_Eq linesQ_W_Apa_1097;
 extern B_Eq linesQ_W_Apa_759;
-extern B_Eq linesQ_W_Apa_331;
-extern B_Eq linesQ_W_Apa_785;
 void linesQ___init__ ();

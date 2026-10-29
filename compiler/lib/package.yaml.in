@@ -99,6 +99,8 @@ library:
     - Acton.Testing
     - Acton.Types
     - Acton.TypeEnv
+    - Acton.WitnessSharing
+    - Acton.Transform
     - Acton.WitKnots
     - Acton.ZigFetch
     - Acton.Zon
