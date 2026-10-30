@@ -1,0 +1,154 @@
+import argparse
+import testing
+
+
+def _test_non_gc_memory_samples():
+    for rss, gc, expected in [(0, 10, -10), (10, 20, -10), (10, 10, 0), (30, 10, 20)]:
+        testing.assertEqual(testing.non_gc_mem_usage(u64(rss), u64(gc)), expected)
+    limit: u64 = 0x7fffffffffffffff
+    testing.assertEqual(testing.non_gc_mem_usage(limit, limit), 0)
+    testing.assertEqual(testing.non_gc_mem_usage(limit - 10, limit), -10)
+    testing.assertEqual(testing.non_gc_mem_usage(limit, limit - 10), 10)
+
+    info = testing.TestInfo(testing.Test("memory", "", "executor"))
+    for before, end in [(-20, -10), (-10, 0), (0, -10)]:
+        delta = testing.non_gc_mem_usage(u64(30 + end), u64(30)) - testing.non_gc_mem_usage(u64(30 + before), u64(30))
+        result = testing.TestResult(True, None, None, 1.0, 0, delta)
+        testing.assertEqual(testing.TestResult.from_json(result.to_json()).non_gc_mem_usage_delta, delta)
+        info.update(True, result)
+    testing.assertEqual(info.non_gc_mem_inc_count, 2)
+    testing.assertTrue(info.leaky)
+    expected_avg: float = 10.0 / 3.0
+    testing.assertEqual(info.non_gc_mem_usage_delta_avg, expected_avg)
+
+
+def config(performance: bool) -> testing.TestRunnerConfig:
+    parser = argparse.Parser()
+    parser.add_bool("no_output", "")
+    parser.add_bool("scaling", "")
+    parser.add_option("tag", "strlist", default=[])
+    for name, default in [("min-iter", 1), ("max-iter", 1), ("min-time", 0), ("max-time", 10000),
+                          ("stress-workers", 0), ("time", 10), ("scale", 1)]:
+        parser.add_option(name, "int", default=default)
+    return testing.TestRunnerConfig(performance, False, parser.parse(["executor"]))
+
+
+class BrokenSnapshot(testing.AsyncTest):
+    def display_name(self) -> str:
+        raise ValueError("executor snapshot failure")
+
+
+proc def success(t: testing.AsyncT):
+    for scale in t.loop():
+        pass
+    t.success()
+    t.failure(AssertionError("duplicate result"))
+
+
+proc def failure(t: testing.AsyncT):
+    t.failure(AssertionError("test body failure"))
+
+
+proc def error(t: testing.AsyncT):
+    raise ValueError("test body error")
+
+
+proc def skip(t: testing.AsyncT):
+    t.skip("test body skip")
+    raise AssertionError("skip did not abort")
+
+
+proc def snapshot(t: testing.AsyncT):
+    t.success("snapshot")
+    t.success()
+
+
+proc def measurement_failure(t: testing.AsyncT):
+    for scale in t.loop():
+        pass
+    # A counter that cannot fit the result's int field fails during executor
+    # measurement processing, after the test has already reported success.
+    t._loop._allocated_bytes = 0xffffffffffffffff
+    t.success()
+
+
+actor _test_executor_completes(t: testing.EnvT):
+    var pending = 0
+    var completed: set[int] = set()
+
+    def run(performance: bool, fn: proc(testing.AsyncT) -> None, outcome: str):
+        executor_id = pending
+        pending += 1
+        definition = BrokenSnapshot(fn, outcome, "", "executor") if outcome == "internal" else testing.AsyncTest(fn, outcome, "", "executor")
+        cfg = config(performance)
+        cfg.output_enabled = False
+        if outcome == "success" and not performance:
+            cfg.max_iter = 2
+
+        def complete(received_id: int, received_test: testing.Test, info: ?testing.TestInfo):
+            try:
+                testing.assertEqual(received_id, executor_id)
+                testing.assertEqual(received_test, definition)
+                testing.assertNotIn(received_id, completed)
+                if info is not None:
+                    testing.assertTrue(info.complete)
+                    if outcome == "internal":
+                        testing.assertNone(info.success)
+                        testing.assertEqual(info.num_errors, 1)
+                        testing.assertEqual(info.exception, "ValueError: executor snapshot failure")
+                        testing.assertEqual(info.results[0].non_gc_mem_usage_delta, 0)
+                    elif outcome == "measurement":
+                        testing.assertNone(info.success)
+                        testing.assertEqual(info.num_errors, 1)
+                        testing.assertEqual(info.exception, "ValueError: int(): value 18446744073709551615 out of range for type int")
+                        testing.assertEqual(info.results[0].mem_usage_delta, 0)
+                    elif outcome == "failure":
+                        testing.assertEqual(info.success, False)
+                        testing.assertEqual(info.num_failures, 1)
+                        testing.assertEqual(info.exception, "AssertionError: test body failure")
+                    elif outcome == "error":
+                        testing.assertNone(info.success)
+                        testing.assertEqual(info.num_errors, 1)
+                        testing.assertEqual(info.exception, "ValueError: test body error")
+                    elif outcome == "skip":
+                        testing.assertEqual(info.success, True)
+                        testing.assertTrue(info.skipped)
+                        testing.assertEqual(info.skip_reason, "testing.SkipTest: test body skip")
+                    else:
+                        testing.assertEqual(info.success, True)
+                        testing.assertEqual(info.num_errors, 0)
+                        testing.assertEqual(info.num_failures, 0)
+                        testing.assertTrue(info.num_iterations >= 1)
+                        if not performance:
+                            testing.assertEqual(info.num_iterations, 2)
+                    if performance:
+                        testing.assertEqual(info.non_gc_mem_usage_delta_avg, 0.0)
+                else:
+                    raise AssertionError("Executor did not provide a result")
+                completed.add(received_id)
+            except Exception as e:
+                t.failure(e)
+
+        def progress(executor_id: int, iterations: int, drift_us: int, drift_total_us: int, est_iter_ms: float, phase_resolution_us: int, target_sweep_iters: int, calibrating: bool):
+            t.failure(AssertionError("Unexpected stress progress"))
+
+        executor = testing.TestExecutor(t.env.syscap, cfg, definition, complete, progress, t.env, executor_id, 1, 1)
+
+    for performance in [False, True]:
+        run(performance, success, "success")
+        run(performance, failure, "failure")
+        run(performance, error, "error")
+        run(performance, skip, "skip")
+        run(performance, snapshot, "internal")
+    run(True, measurement_failure, "measurement")
+
+    def check():
+        # This deadline is far below the executors' ten-second budget. A lost
+        # result must fail here instead of relying on the runner's watchdog.
+        try:
+            testing.assertEqual(len(completed), pending)
+            t.success()
+        except Exception as e:
+            t.failure(e)
+
+    after 1: check()

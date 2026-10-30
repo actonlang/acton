@@ -1414,7 +1414,12 @@ def perf_delta(before: (user_ns: ?u64, system_ns: ?u64, instructions: ?u64, cycl
             counters["ipc"] = float(instructions) / float(cycles)
     return counters
 
-actor TestExecutor(syscap, config, t: Test, report_complete, report_progress, env, executor_id: int, stress_workers: int, stress_nodrift_workers: int, request_timeout: ?action(float) -> None=None):
+def non_gc_mem_usage(rss: u64, gc_usage: u64) -> int:
+    # GC usage can include nonresident pages. Keep the estimate signed, as
+    # clamping samples to zero would hide changes while RSS is below GC usage.
+    return int(rss) - int(gc_usage)
+
+actor TestExecutor(syscap: SysCap, config: TestRunnerConfig, t: Test, report_complete, report_progress, env: Env, executor_id: int, stress_workers: int, stress_nodrift_workers: int, request_timeout: ?action(float) -> None=None):
     """The actual executor of tests
     """
     log_handler = logging.Handler()
@@ -1425,11 +1430,12 @@ actor TestExecutor(syscap, config, t: Test, report_complete, report_progress, en
     var test_sw = time.Stopwatch()
     var last_report = time.Stopwatch()
     var progress_report_sw = time.Stopwatch()
-    var test_info = None
+    var test_info: ?TestInfo = None
     var iteration = 0
     var invocation = 0
     var accepting_result = False
-    perf_run = PerfRun(config.time_ms, config.scale, config.scaling) if config.perf_mode else None
+    var finished = False
+    perf_run: ?PerfRun = PerfRun(config.time_ms, config.scale, config.scaling) if config.perf_mode else None
     perf_phase_sw = time.Stopwatch()
     var stress_drift_rank = max([0, executor_id - stress_nodrift_workers])
     var stress_drift_workers = max([1, stress_workers - stress_nodrift_workers])
@@ -1610,19 +1616,43 @@ actor TestExecutor(syscap, config, t: Test, report_complete, report_progress, en
             print("\n" + json.encode({"test_info": payload}), err=True)
         last_report.reset()
 
+    def _complete():
+        finished = True
+        accepting_result = False
+        report_complete(executor_id, t, test_info)
+
+    def _report_error(exception: Exception):
+        if finished:
+            return
+        accepting_result = False
+        # Result processing may itself have failed. Use a fresh error result,
+        # without repeating measurements, snapshots or performance metadata.
+        info = TestInfo(t)
+        info.update(True, TestResult(None, str(exception), None, 0.0, 0, 0))
+        test_info = info
+        if config.output_enabled:
+            print("\n" + json.encode({"test_info": info.to_json()}), err=True)
+        _complete()
+
     def _finish_budget():
         if test_info is not None:
             test_info.complete = True
             test_info.test_duration = test_sw.elapsed().to_float() * 1000.0
         _emit_result(True)
-        report_complete(executor_id, t, test_info)
+        _complete()
 
     action def _report_result(test: Test, invocation_id: int, loop: PerfLoop, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, counter_start, success: ?bool, exception: ?Exception, val: ?str):
         # The executor accepts exactly one completion for the active invocation.
         # Late callbacks cannot update a subsequent invocation's measurements.
-        if invocation_id != invocation or not accepting_result:
+        if finished or invocation_id != invocation or not accepting_result:
             return
         accepting_result = False
+        try:
+            _process_result(test, loop, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, counter_start, success, exception, val)
+        except Exception as e:
+            _report_error(e)
+
+    def _process_result(test: Test, loop: PerfLoop, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, counter_start, success: ?bool, exception: ?Exception, val: ?str):
         full_dur = sw.elapsed().to_float() * 1000.0
         gc_time_end = acton.rts.get_gc_time(syscap).total
         gc_dur = float(gc_time_end - gc_time_start)
@@ -1643,7 +1673,7 @@ actor TestExecutor(syscap, config, t: Test, report_complete, report_progress, en
                 stress_calib_samples += 1
                 if stress_calib_samples >= stress_calib_target_samples:
                     _finalize_stress_calibration()
-        non_gc_mem_usage_after = 0 if config.perf_mode else int(acton.rts.get_rss(syscap) - acton.rts.get_mem_usage(syscap))
+        non_gc_mem_usage_after = 0 if config.perf_mode else non_gc_mem_usage(acton.rts.get_rss(syscap), acton.rts.get_mem_usage(syscap))
         non_gc_mem_usage_delta = non_gc_mem_usage_after - non_gc_mem_usage_before
         #print(f"non-GC memory before: {non_gc_mem_usage_before}  after: {non_gc_mem_usage_after}  delta: {non_gc_mem_usage_delta}")
 
@@ -1701,7 +1731,7 @@ actor TestExecutor(syscap, config, t: Test, report_complete, report_progress, en
                 test_info.num_failures += 1 if success == False else 0
                 test_info.num_errors += 1 if success is None else 0
             _emit_result(True)
-            report_complete(executor_id, t, test_info)
+            _complete()
             return
 
         loop_iterations = 1
@@ -1753,47 +1783,57 @@ actor TestExecutor(syscap, config, t: Test, report_complete, report_progress, en
             # workers stop promptly once they cross the time budget.
             after 0: _run_fn(test)
         else:
-            report_complete(executor_id, t, test_info)
+            _complete()
 
     def _run_fn(t: Test):
-        if perf_run is not None and iteration > 0 and perf_run.remaining_ms() <= 0.0:
-            _finish_budget()
+        if finished:
             return
-        _stress_drift_delay()
-        invocation += 1
-        invocation_id = invocation
-        accepting_result = True
-        print("\n== Running test, iteration:", invocation_id)
-        print("\n== Running test, iteration:", invocation_id, err=True)
-        non_gc_mem_usage_before = 0 if config.perf_mode else int(acton.rts.get_rss(syscap) - acton.rts.get_mem_usage(syscap))
-        loop = perf_run.next_loop(iteration) if perf_run is not None else PerfLoop()
-        counter_start = acton.rts.perf_snapshot(syscap) if config.perf_mode else None
-        gc_total_bytes_start = int(acton.rts.get_gc_total_bytes(syscap))
-        gc_time_start = acton.rts.get_gc_time(syscap).total
-        sw = time.Stopwatch()
-
-        def repres(s: ?bool, e: ?Exception, val: ?str) -> None:
-            _report_result(t, invocation_id, loop, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, counter_start, s, e, val)
-
-        loop._report_result = repres
-        report = loop._report
         try:
-            t.run(report, env, log_handler, config.tags, loop, request_timeout)
-        except SkipTest as e:
-            report(True, e, None)
-        except AssertionError as e:
-            report(False, e, None)
+            if perf_run is not None and iteration > 0 and perf_run.remaining_ms() <= 0.0:
+                _finish_budget()
+                return
+            _stress_drift_delay()
+            invocation += 1
+            invocation_id = invocation
+            accepting_result = True
+            print("\n== Running test, iteration:", invocation_id)
+            print("\n== Running test, iteration:", invocation_id, err=True)
+            non_gc_mem_usage_before = 0 if config.perf_mode else non_gc_mem_usage(acton.rts.get_rss(syscap), acton.rts.get_mem_usage(syscap))
+            loop = perf_run.next_loop(iteration) if perf_run is not None else PerfLoop()
+            counter_start = acton.rts.perf_snapshot(syscap) if config.perf_mode else None
+            gc_total_bytes_start = int(acton.rts.get_gc_total_bytes(syscap))
+            gc_time_start = acton.rts.get_gc_time(syscap).total
+            sw = time.Stopwatch()
+
+            def repres(s: ?bool, e: ?Exception, val: ?str) -> None:
+                _report_result(t, invocation_id, loop, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, counter_start, s, e, val)
+
+            loop._report_result = repres
+            report = loop._report
+            try:
+                t.run(report, env, log_handler, config.tags, loop, request_timeout)
+            except SkipTest as e:
+                report(True, e, None)
+            except AssertionError as e:
+                report(False, e, None)
+            except Exception as e:
+                report(None, e, None)
         except Exception as e:
-            report(None, e, None)
+            _report_error(e)
 
     def _run_test():
         """Get the next available test and run it"""
-        test_sw = time.Stopwatch()
-        test_info = TestInfo(t, counter_info=acton.rts.perf_info(syscap) if config.perf_mode else None)
-        perf_phase_sw.reset()
-        if perf_run is not None:
-            perf_run._sw.reset()
-        _run_fn(t)
+        if finished:
+            return
+        try:
+            test_sw = time.Stopwatch()
+            test_info = TestInfo(t, counter_info=acton.rts.perf_info(syscap) if config.perf_mode else None)
+            perf_phase_sw.reset()
+            if perf_run is not None:
+                perf_run._sw.reset()
+            _run_fn(t)
+        except Exception as e:
+            _report_error(e)
 
     after 0: _run_test()
 
