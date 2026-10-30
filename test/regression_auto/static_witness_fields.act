@@ -1,0 +1,24 @@
+# A generic function over Container[int] called with a bytearray gets the
+# preallocated static witness for bytearray (Container[int]). That witness
+# forwards __len__, __iter__ and __fromiter__ to the Collection witness of
+# bytearray (Sequence[int]), which it holds in instance fields, so the static
+# witness must have those fields set just like a witness made by __init__.
+
+def size[T(Container[int])](c: T) -> int:
+    return len(c)
+
+def total[T(Container[int])](c: T) -> int:
+    s = 0
+    for x in c:
+        s += x
+    return s
+
+actor main(env):
+    b = bytearray(b"abc")
+    if size(b) != 3:
+        print("FAIL: len through Container[int] witness for bytearray")
+        await async env.exit(1)
+    if total(b) != 294:
+        print("FAIL: iteration through Container[int] witness for bytearray")
+        await async env.exit(1)
+    await async env.exit(0)
