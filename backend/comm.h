@@ -50,7 +50,6 @@ typedef struct remote_server
     pthread_mutex_t* sockfd_lock;
     struct sockaddr_in serveraddr;
     struct sockaddr_in client_socket_addr;
-    struct hostent *server;
     char id[262];
     int status;
     char in_buf[BUFSIZE];

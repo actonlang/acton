@@ -2625,15 +2625,21 @@ int main(int argc, char **argv) {
 
   for(int i=0;i<arguments.no_seeds;i++)
   {
-      struct hostent * host = gethostbyname(arguments.seeds[i]);
-      if (host == NULL)
+      struct addrinfo hints = {0}, * addresses;
+      hints.ai_family = AF_INET;
+      hints.ai_socktype = SOCK_STREAM;
+      hints.ai_flags = AI_CANONNAME;
+      int result = getaddrinfo(arguments.seeds[i], NULL, &hints, &addresses);
+      if (result != 0)
       {
-          log_error("ERROR, no such host %s", arguments.seeds[i]);
+          log_error("ERROR resolving host %s: %s", arguments.seeds[i], gai_strerror(result));
           return -1;
       }
 
+      char * hostname = strdup(addresses->ai_canonname != NULL ? addresses->ai_canonname : arguments.seeds[i]);
+      freeaddrinfo(addresses);
       free(arguments.seeds[i]);
-      arguments.seeds[i] = strdup(host->h_name);
+      arguments.seeds[i] = hostname;
 
       log_info("%s:%d", arguments.seeds[i], arguments.seed_ports[i]);
   }
@@ -2660,7 +2666,17 @@ int main(int argc, char **argv) {
       log_fatal("Failed to create queue schema");
   }
 
-  struct hostent * local_iface_hostent = gethostbyname(arguments.local_iface);
+  struct addrinfo hints = {0}, * addresses;
+  hints.ai_family = AF_INET;
+  hints.ai_socktype = SOCK_STREAM;
+  int result = getaddrinfo(arguments.local_iface, NULL, &hints, &addresses);
+  if (result != 0)
+  {
+      log_error("ERROR resolving host %s: %s", arguments.local_iface, gai_strerror(result));
+      return -1;
+  }
+  memcpy(&gserveraddr, addresses->ai_addr, sizeof(gserveraddr));
+  freeaddrinfo(addresses);
 
   // Set up main data socket:
 
@@ -2682,9 +2698,6 @@ int main(int argc, char **argv) {
     error("ERROR opening gossip socket");
 
   setsockopt(gparentfd, SOL_SOCKET, SO_REUSEADDR, (const void *)&optval , sizeof(int));
-  bzero((char *) &gserveraddr, sizeof(serveraddr));
-  gserveraddr.sin_family = AF_INET;
-  bcopy(local_iface_hostent->h_addr_list[0], (char *)&(gserveraddr.sin_addr.s_addr), local_iface_hostent->h_length);
 //  gserveraddr.sin_addr.s_addr = htonl(INADDR_ANY);
   gserveraddr.sin_port = htons((uint16_t) gportno);
 

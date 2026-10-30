@@ -486,23 +486,23 @@ remote_server * get_remote_server(char *hostname, unsigned short portno,
     {
             memcpy(&(rs->serveraddr), &serveraddr, sizeof(struct sockaddr_in));
             rs->sockfd = serverfd;
-            rs->server = gethostbyname(hostname);
-            assert(rs->server != NULL);
             rs->status = NODE_LIVE;
     }
     else
     {
-            rs->server = gethostbyname(hostname);
-        if (rs->server == NULL)
+        struct addrinfo hints = {0}, * addresses;
+        hints.ai_family = AF_INET;
+        hints.ai_socktype = SOCK_STREAM;
+        int status = getaddrinfo(hostname, NULL, &hints, &addresses);
+        if (status != 0)
         {
-            log_error("ERROR, no such host %s", hostname);
+            log_error("ERROR resolving host %s: %s", hostname, gai_strerror(status));
             free_remote_server(rs);
             return NULL;
         }
 
-        bzero((void *) &rs->serveraddr, sizeof(struct sockaddr_in));
-        rs->serveraddr.sin_family = AF_INET;
-        bcopy((char *)rs->server->h_addr_list[0], (char *)&(rs->serveraddr.sin_addr.s_addr), rs->server->h_length);
+        memcpy(&rs->serveraddr, addresses->ai_addr, sizeof(rs->serveraddr));
+        freeaddrinfo(addresses);
         rs->serveraddr.sin_port = htons(portno);
 
         if(do_connect)
@@ -546,19 +546,18 @@ remote_server * get_remote_server(char *hostname, unsigned short portno,
 
 int update_listen_socket(remote_server * rs, char *hostname, unsigned short portno, int do_connect)
 {
-    struct hostent * old_hostent = rs->server;
-
-    rs->server = gethostbyname(hostname);
-    if (rs->server == NULL)
+    struct addrinfo hints = {0}, * addresses;
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+    int status = getaddrinfo(hostname, NULL, &hints, &addresses);
+    if (status != 0)
     {
-        log_error("ERROR, no such host %s", hostname);
-        rs->server = old_hostent;
+        log_error("ERROR resolving host %s: %s", hostname, gai_strerror(status));
         return -1;
     }
 
-    bzero((void *) &rs->serveraddr, sizeof(struct sockaddr_in));
-    rs->serveraddr.sin_family = AF_INET;
-    bcopy((char *)rs->server->h_addr_list[0], (char *)&(rs->serveraddr.sin_addr.s_addr), rs->server->h_length);
+    memcpy(&rs->serveraddr, addresses->ai_addr, sizeof(rs->serveraddr));
+    freeaddrinfo(addresses);
     rs->serveraddr.sin_port = htons(portno);
 
     if(do_connect)
