@@ -3651,6 +3651,7 @@ main = do
     describe "Pass 6: CPS" $ do
       testCps env0 ["cps_andor"]
       testCps env0 ["cps_volatiles"]
+      testCps env0 ["cps_captured_cells"]
       testCps env0 ["cps_optchain"]
       testCps env0 ["cps_nested_try"]
       testCps env0 ["cps_forwarding"]

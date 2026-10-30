@@ -278,8 +278,10 @@ instance CPS Decl where
       | otherwise                       = do --traceM ("#### Preserving " ++ prstr n)
                                              b' <- cps env1 b
                                              return $ Def l n q' p' KwdNIL (Just t') b' dec fx ddoc
-      where env2                        = setVolatiles volvs $ Meth contKW t' +: env1
-            env1                        = localValues (map fst $ nvarsOf (envOf p ++ envOf b)) $
+      where env2                        = setVolatiles (nub $ volvs ++ volatiles env1) $ Meth contKW t' +: env1
+            -- Captures keep their cells; parameters and locals start a new binding.
+            env1                        = setVolatiles (volatiles env \\ (bound p ++ assigned b)) $
+                                            localValues (map fst $ nvarsOf (envOf p ++ envOf b)) $
                                             define (envOf p) $ defineTVars q $ clearCtxt $ setInDef env
             volvs                       = volatileVars env2 b
             volinits                    = [ sAssign (pVar v (tCell t)) (eCall (tApp (eQVar primCell) [t]) [eVar v])
@@ -659,7 +661,8 @@ instance Conv Expr where
     conv env (Dot l e n)                = Dot l (conv env e) n
     conv env (DotI l e i)               = DotI l (conv env e) i
     conv env (RestI l e i)              = RestI l (conv env e) i
-    conv env (Lambda l p KwdNIL e fx)   = Lambda l (conv env p) KwdNIL (conv env e) fx
+    conv env (Lambda l p KwdNIL e fx)   = Lambda l (conv env p) KwdNIL (conv env1 e) fx
+      where env1                        = setVolatiles (volatiles env \\ bound p) env
     conv env (Yield l e)                = Yield l (conv env e)
     conv env (YieldFrom l e)            = YieldFrom l (conv env e)
     conv env (Tuple l es ks)            = Tuple l (conv env es) (conv env ks)

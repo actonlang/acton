@@ -1,0 +1,17 @@
+import json
+
+proc def capture() -> None:
+    value: ?str = None
+
+    proc def callback() -> None:
+        print(type(value))
+        print(value)
+        print(value is None)
+        print(value is not None)
+        print(json.encode({"value": value}))
+
+    try:
+        value = "world"
+    except:
+        return
+    callback()
