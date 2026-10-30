@@ -1,0 +1,829 @@
+# TLS certificate verification, client certificates and handshake errors
+#
+# The certificates were made with openssl for these tests, valid for 100
+# years: a test CA, a server certificate for localhost, 127.0.0.1 and ::1 and
+# a client certificate both from the test CA, and an unrelated other CA.
+
+import base64
+import net
+import testing
+
+
+CA_PEM = b"""-----BEGIN CERTIFICATE-----
+MIIBlzCCAT2gAwIBAgIUdwvsQxTwYxPSupxT1FyxFZ6GG0QwCgYIKoZIzj0EAwIw
+GDEWMBQGA1UEAwwNQWN0b24gVGVzdCBDQTAgFw0yNjEwMTIwNTU0MTVaGA8yMTI2
+MDkxODA1NTQxNVowGDEWMBQGA1UEAwwNQWN0b24gVGVzdCBDQTBZMBMGByqGSM49
+AgEGCCqGSM49AwEHA0IABOLkoR9R8YmsIqyYOH0TFo36aBPERRvOF7kiWtrHnttD
+rGMH4kPHYPMSXjLjq2eGqwB7j9cjeX3flbJ55gkEbkejYzBhMB0GA1UdDgQWBBRO
+8x+h+NSp8aw20It8sgYJ5iNxITAfBgNVHSMEGDAWgBRO8x+h+NSp8aw20It8sgYJ
+5iNxITAPBgNVHRMBAf8EBTADAQH/MA4GA1UdDwEB/wQEAwIBBjAKBggqhkjOPQQD
+AgNIADBFAiEA3zzCO3P1Kig0dk1RssKItCVhw5eBfM483ENfcU3b1zgCIF0CzBp1
+SQCGpWq+ru4e665uoGUHz/AmVx4YARw16iSL
+-----END CERTIFICATE-----
+"""
+
+OTHER_CA_PEM = b"""-----BEGIN CERTIFICATE-----
+MIIBozCCAUmgAwIBAgIUJiEpIPxo7ugkE2MAbxW35l4hlMwwCgYIKoZIzj0EAwIw
+HjEcMBoGA1UEAwwTQWN0b24gT3RoZXIgVGVzdCBDQTAgFw0yNjEwMTIwNTU0MTVa
+GA8yMTI2MDkxODA1NTQxNVowHjEcMBoGA1UEAwwTQWN0b24gT3RoZXIgVGVzdCBD
+QTBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABKfEf90ShdA5qV74eVtoSn7y28ge
+n/FOu4Yfjg4onYHTy8xOTwyFDOLkYIXz7Jup+sVK6KvHeOKV9aYkKiWMFKGjYzBh
+MB0GA1UdDgQWBBRR4l4cnGeTf+LjYX8V+OZC8FRQgTAfBgNVHSMEGDAWgBRR4l4c
+nGeTf+LjYX8V+OZC8FRQgTAPBgNVHRMBAf8EBTADAQH/MA4GA1UdDwEB/wQEAwIB
+BjAKBggqhkjOPQQDAgNIADBFAiEAiACYdhmpIsO1snfP4SeAkbQyp4hvULR+CHzI
+evo1/sICIHeG9VENhQWsM91l0Iy2NcL6sTb0q/OjjT7E0YMrkVNa
+-----END CERTIFICATE-----
+"""
+
+SERVER_CERT_PEM = b"""-----BEGIN CERTIFICATE-----
+MIIBvzCCAWWgAwIBAgIBAjAKBggqhkjOPQQDAjAYMRYwFAYDVQQDDA1BY3RvbiBU
+ZXN0IENBMCAXDTI2MTAxMjA1NTQxNVoYDzIxMjYwOTE4MDU1NDE1WjAUMRIwEAYD
+VQQDDAlsb2NhbGhvc3QwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAATo8/pUtL54
+lzPAptLChWNNrUwkF7DXhSehxYBdH8JG7tj9Zf/hSvimR8zwZfKxaZweUl5xou57
+/diXS30lNmqeo4GhMIGeMAkGA1UdEwQCMAAwDgYDVR0PAQH/BAQDAgeAMBMGA1Ud
+JQQMMAoGCCsGAQUFBwMBMCwGA1UdEQQlMCOCCWxvY2FsaG9zdIcEfwAAAYcQAAAA
+AAAAAAAAAAAAAAAAATAdBgNVHQ4EFgQUa3HzsvHphLVU8FTsvqubEhddWtwwHwYD
+VR0jBBgwFoAUTvMfofjUqfGsNtCLfLIGCeYjcSEwCgYIKoZIzj0EAwIDSAAwRQIg
+b//gZKVmb+SMi33ttyt82cfuiXQHB3wKQPo1LKGJ/FUCIQDWq1IjsZn+lgICSHR8
+JNBEtQru68GV9TZ/ml1Z3L618g==
+-----END CERTIFICATE-----
+"""
+
+SERVER_KEY_PEM = b"""-----BEGIN PRIVATE KEY-----
+MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgz3KphyBfmdQhLB6G
+D3C6n8puE7czBJUWG5c0LIYnbxihRANCAATo8/pUtL54lzPAptLChWNNrUwkF7DX
+hSehxYBdH8JG7tj9Zf/hSvimR8zwZfKxaZweUl5xou57/diXS30lNmqe
+-----END PRIVATE KEY-----
+"""
+
+CLIENT_CERT_PEM = b"""-----BEGIN CERTIFICATE-----
+MIIBlzCCAT2gAwIBAgIBAzAKBggqhkjOPQQDAjAYMRYwFAYDVQQDDA1BY3RvbiBU
+ZXN0IENBMCAXDTI2MTAxMjA1NTQxNVoYDzIxMjYwOTE4MDU1NDE1WjAcMRowGAYD
+VQQDDBFBY3RvbiBUZXN0IENsaWVudDBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IA
+BCM/nvgzfaLxQgGcEc9ICmj0rAcE1ZmiL49N24nX4d1Uhff3dhQIf0C9Iv0UErNL
+PisFcdt3wW8qVe1gA4GlDtmjcjBwMAkGA1UdEwQCMAAwDgYDVR0PAQH/BAQDAgeA
+MBMGA1UdJQQMMAoGCCsGAQUFBwMCMB0GA1UdDgQWBBTQZqrgrfHu4xMsORivJFNX
+X/8eCDAfBgNVHSMEGDAWgBRO8x+h+NSp8aw20It8sgYJ5iNxITAKBggqhkjOPQQD
+AgNIADBFAiEAuV3nudga09i+a0VxDR/v8GtGzn258k8Fva0wEo8EQ4QCIH30HkE4
+dz97dl+y6qnxu3LJrUorA0UIxXP6ayLPaClE
+-----END CERTIFICATE-----
+"""
+
+CLIENT_KEY_PEM = b"""-----BEGIN PRIVATE KEY-----
+MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgE6ccjOQFOIDMOIDP
+0PNUFrzEqGnUVT+eK/04yVRr+jihRANCAAQjP574M32i8UIBnBHPSApo9KwHBNWZ
+oi+PTduJ1+HdVIX393YUCH9AvSL9FBKzSz4rBXHbd8FvKlXtYAOBpQ7Z
+-----END PRIVATE KEY-----
+"""
+
+
+def pem_to_der(pem: bytes) -> bytes:
+    body = [line for line in pem.splitlines() if not line.startswith(b"-----")]
+    return base64.decode(b"".join(body))
+
+
+actor tls_handshake(t: testing.EnvT, what: str,
+                    check: action(tls_handshake, ?net.TLSConnection, ?net.TLSListenConnection, list[str], list[str]) -> None,
+                    client_auth: bool=False, server_verify_tls: bool=True, server_ca_pem: ?bytes=None,
+                    server_protocols: list[str]=[], server_verify_peer: ?action(list[bytes], int) -> bool=None,
+                    ca_pem: ?bytes=None, cert_pem: ?bytes=None, key_pem: ?bytes=None,
+                    server_name: ?str=None, protocols: list[str]=[],
+                    verify_tls: bool=True, verify_peer: ?action(list[bytes], int) -> bool=None):
+    """A TLS handshake between a listener and a client with the given settings
+
+    Calls check with the connected client and the accepted connection, None
+    for those that failed, and the errors of the client and the listener.
+    """
+    listen_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+    connect_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
+    var done = False
+    var listener: ?net.TLSListener = None
+    var client: ?net.TLSConnection = None
+    var server_conn: ?net.TLSListenConnection = None
+    var client_errors: list[str] = []
+    var server_errors: list[str] = []
+    var port = 0
+
+    def finish():
+        if done:
+            return
+        done = True
+        check(self, client, server_conn, client_errors, server_errors)
+
+    def success():
+        _close()
+        t.success()
+
+    def failure(msg: str):
+        _close()
+        t.failure(AssertionError(what + ": " + msg))
+
+    def _close():
+        if listener is not None:
+            listener.close()
+        if server_conn is not None:
+            server_conn.close()
+        if client is not None:
+            client.close(lambda c: None)
+
+    def on_listen(l: net.TLSListener, error: ?str):
+        if error is not None:
+            if listener is None:
+                failure("listen error: " + error)
+            else:
+                # A failed handshake
+                server_errors.append(error)
+            return
+        listener = l
+        port = l.local_port()
+        net.TLSConnection(connect_cap, "127.0.0.1", port, on_connect, on_receive, on_error, None,
+                          verify_tls=verify_tls, protocols=protocols, ca_pem=ca_pem, cert_pem=cert_pem, key_pem=key_pem,
+                          server_name=server_name, verify_peer=verify_peer, connect_timeout=5.0)
+
+    def on_accept(s: net.TLSListenConnection):
+        server_conn = s
+        s.cb_install(on_server_receive, on_server_error, None)
+
+    def on_server_receive(s: net.TLSListenConnection, data: bytes):
+        pass
+
+    def on_server_error(s: net.TLSListenConnection, error: str):
+        server_errors.append(error)
+
+    def on_connect(c: net.TLSConnection):
+        client = c
+        # Let the listener side settle. With TLS 1.3 the server checks a
+        # client certificate after the client completed the handshake, so
+        # a rejection arrives as on_error after on_connect.
+        after 0.5: finish()
+
+    def on_receive(c: net.TLSConnection, data: bytes):
+        pass
+
+    def on_error(c: net.TLSConnection, error: str):
+        client_errors.append(error)
+        after 0.3: finish()
+
+    after 8: finish()
+    net.TLSListener(listen_cap, "127.0.0.1", 0, SERVER_CERT_PEM, SERVER_KEY_PEM, on_listen, on_accept,
+                    client_auth=client_auth, verify_tls=server_verify_tls, ca_pem=server_ca_pem, protocols=server_protocols,
+                    verify_peer=server_verify_peer)
+
+
+# With TLS 1.3 the server checks a client certificate after the client has
+# completed the handshake. An mbedtls server then still encrypts its alert
+# with the handshake keys, while the client already reads with the
+# application keys, so the client sees a failed record MAC rather than the
+# alert. Only the server side can tell why.
+CLIENT_REJECTED_TLS13 = "Verification of the message MAC failed"
+
+
+def find_error(errors: list[str], text: str) -> bool:
+    for e in errors:
+        if e.find(text) != -1:
+            return True
+    return False
+
+
+actor _test_TLSMutualAuth(t: testing.EnvT):
+    """Both ends present a certificate from a private CA and see the other's"""
+    def check(h: tls_handshake, c: ?net.TLSConnection, s: ?net.TLSListenConnection, client_errors: list[str], server_errors: list[str]):
+        if c is not None and s is not None:
+            mutual_auth_check(h, c, s, server_errors)
+        else:
+            h.failure("handshake failed: %s %s" % (str(client_errors), str(server_errors)))
+
+    tls_handshake(t, "mutual TLS", check, client_auth=True, server_ca_pem=CA_PEM, server_protocols=["h2", "http/1.1"],
+                  ca_pem=CA_PEM, cert_pem=CLIENT_CERT_PEM, key_pem=CLIENT_KEY_PEM, protocols=["http/1.1"])
+
+
+def mutual_auth_check(h: tls_handshake, c: net.TLSConnection, s: net.TLSListenConnection, server_errors: list[str]):
+    client_tls = c.tls_info()
+    server_tls = s.tls_info()
+    client_ep = c.endpoints()
+    server_ep = s.endpoints()
+    try:
+        testing.assertEqual(client_tls.verify_result, 0, "client verify result")
+        testing.assertEqual(client_tls.peer_certificates, [pem_to_der(SERVER_CERT_PEM)], "server certificate chain")
+        testing.assertEqual(server_tls.verify_result, 0, "server verify result")
+        testing.assertEqual(server_tls.peer_certificates, [pem_to_der(CLIENT_CERT_PEM)], "client certificate chain")
+        testing.assertEqual(client_tls.alpn, "http/1.1", "client ALPN")
+        testing.assertEqual(server_tls.alpn, "http/1.1", "server ALPN")
+        testing.assertEqual(client_tls.version, "TLSv1.3", "client TLS version")
+        testing.assertEqual(server_tls.version, "TLSv1.3", "server TLS version")
+        testing.assertEqual(server_ep.remote_address, "127.0.0.1", "accepted connection remote address")
+        testing.assertEqual(server_ep.remote_port, client_ep.local_port, "accepted connection remote port")
+        testing.assertEqual(client_ep.remote_port, server_ep.local_port, "client remote port")
+        testing.assertEqual(server_errors, [], "server errors")
+    except AssertionError as e:
+        h.failure(str(e))
+        return
+    h.success()
+
+
+actor _test_TLSMissingClientCert(t: testing.EnvT):
+    """A client without a certificate learns that the server requires one"""
+    def check(h: tls_handshake, c: ?net.TLSConnection, s: ?net.TLSListenConnection, client_errors: list[str], server_errors: list[str]):
+        if s is not None:
+            h.failure("server accepted a client without a certificate")
+        elif len(client_errors) != 1 or not (find_error(client_errors, "client certificate") or find_error(client_errors, CLIENT_REJECTED_TLS13)):
+            h.failure("client errors: " + str(client_errors))
+        elif not find_error(server_errors, "client did not present a certificate"):
+            h.failure("server errors: " + str(server_errors))
+        else:
+            h.success()
+
+    tls_handshake(t, "missing client certificate", check, client_auth=True, server_ca_pem=CA_PEM, ca_pem=CA_PEM)
+
+
+actor _test_TLSClientCertUnknownCA(t: testing.EnvT):
+    """A client certificate from a CA the server does not trust is rejected"""
+    def check(h: tls_handshake, c: ?net.TLSConnection, s: ?net.TLSListenConnection, client_errors: list[str], server_errors: list[str]):
+        if s is not None:
+            h.failure("server accepted an untrusted client certificate")
+        elif len(client_errors) != 1 or not (find_error(client_errors, "server does not trust our certificate") or find_error(client_errors, CLIENT_REJECTED_TLS13)):
+            h.failure("client errors: " + str(client_errors))
+        elif not find_error(server_errors, "client certificate is not trusted (unknown CA)"):
+            h.failure("server errors: " + str(server_errors))
+        else:
+            h.success()
+
+    tls_handshake(t, "untrusted client certificate", check, client_auth=True, server_ca_pem=OTHER_CA_PEM,
+                  ca_pem=CA_PEM, cert_pem=CLIENT_CERT_PEM, key_pem=CLIENT_KEY_PEM)
+
+
+actor _test_TLSServerCertUnknownCA(t: testing.EnvT):
+    """A server certificate from a CA the client does not trust is rejected"""
+    def check(h: tls_handshake, c: ?net.TLSConnection, s: ?net.TLSListenConnection, client_errors: list[str], server_errors: list[str]):
+        if c is not None:
+            h.failure("client connected to an untrusted server")
+        elif len(client_errors) != 1 or not find_error(client_errors, "server certificate is not trusted (unknown CA)"):
+            h.failure("client errors: " + str(client_errors))
+        elif not find_error(server_errors, "client does not trust our certificate"):
+            h.failure("server errors: " + str(server_errors))
+        else:
+            h.success()
+
+    tls_handshake(t, "untrusted server certificate", check, ca_pem=OTHER_CA_PEM)
+
+
+actor _test_TLSServerNameMismatch(t: testing.EnvT):
+    """A server certificate that does not match server_name is rejected"""
+    def check(h: tls_handshake, c: ?net.TLSConnection, s: ?net.TLSListenConnection, client_errors: list[str], server_errors: list[str]):
+        if c is not None:
+            h.failure("client connected to a server with the wrong name")
+        elif len(client_errors) != 1 or not find_error(client_errors, "does not match the server name wrong.example"):
+            h.failure("client errors: " + str(client_errors))
+        else:
+            h.success()
+
+    tls_handshake(t, "server name mismatch", check, ca_pem=CA_PEM, server_name="wrong.example")
+
+
+actor tls_server_name_ok(t: testing.EnvT, server_name: str):
+    """The server certificate verifies with server_name"""
+    def check(h: tls_handshake, c: ?net.TLSConnection, s: ?net.TLSListenConnection, client_errors: list[str], server_errors: list[str]):
+        if c is not None:
+            result = c.tls_info().verify_result
+            if result != 0:
+                h.failure("verify result %d" % result)
+            else:
+                h.success()
+        else:
+            h.failure("client errors: " + str(client_errors))
+
+    tls_handshake(t, "server name '" + server_name + "'", check, ca_pem=CA_PEM, server_name=server_name)
+
+
+actor _test_TLSServerNameLocalhost(t: testing.EnvT):
+    tls_server_name_ok(t, "localhost")
+
+
+actor _test_TLSServerNameNone(t: testing.EnvT):
+    tls_server_name_ok(t, "")
+
+
+actor _test_TLSVerifyPeerPins(t: testing.EnvT):
+    """verify_peer sees a verified server certificate and accepts it"""
+    var seen = -2
+
+    def verify(certs: list[bytes], result: int) -> bool:
+        seen = result
+        return certs == [pem_to_der(SERVER_CERT_PEM)]
+
+    def check(h: tls_handshake, c: ?net.TLSConnection, s: ?net.TLSListenConnection, client_errors: list[str], server_errors: list[str]):
+        if c is None:
+            h.failure("client errors: " + str(client_errors))
+        elif seen != 0:
+            h.failure("verify_peer saw verify result %d" % seen)
+        else:
+            h.success()
+
+    tls_handshake(t, "verify_peer pins", check, ca_pem=CA_PEM, verify_peer=verify)
+
+
+actor _test_TLSVerifyPeerRejects(t: testing.EnvT):
+    """verify_peer rejects a server certificate that verified"""
+    def verify(certs: list[bytes], result: int) -> bool:
+        return False
+
+    def check(h: tls_handshake, c: ?net.TLSConnection, s: ?net.TLSListenConnection, client_errors: list[str], server_errors: list[str]):
+        if c is not None:
+            h.failure("client connected although verify_peer rejected the server")
+        elif len(client_errors) != 1 or not find_error(client_errors, "rejected by verify_peer"):
+            h.failure("client errors: " + str(client_errors))
+        else:
+            h.success()
+
+    tls_handshake(t, "verify_peer rejects", check, ca_pem=CA_PEM, verify_peer=verify)
+
+
+actor _test_TLSVerifyPeerCannotOverride(t: testing.EnvT):
+    """With verify_tls=True, verify_peer cannot accept a certificate that failed verification"""
+    var called = False
+
+    def verify(certs: list[bytes], result: int) -> bool:
+        called = True
+        return True
+
+    def check(h: tls_handshake, c: ?net.TLSConnection, s: ?net.TLSListenConnection, client_errors: list[str], server_errors: list[str]):
+        if c is not None:
+            h.failure("client connected to an untrusted server")
+        elif called:
+            h.failure("verify_peer was asked about a certificate that failed verification")
+        elif len(client_errors) != 1 or not find_error(client_errors, "not trusted"):
+            h.failure("client errors: " + str(client_errors))
+        else:
+            h.success()
+
+    tls_handshake(t, "verify_peer cannot override", check, ca_pem=OTHER_CA_PEM, verify_peer=verify)
+
+
+actor _test_TLSVerifyPeerFingerprint(t: testing.EnvT):
+    """With verify_tls=False, verify_peer decides alone and sees why verification failed"""
+    var seen = -2
+
+    def verify(certs: list[bytes], result: int) -> bool:
+        seen = result
+        return certs == [pem_to_der(SERVER_CERT_PEM)]
+
+    def check(h: tls_handshake, c: ?net.TLSConnection, s: ?net.TLSListenConnection, client_errors: list[str], server_errors: list[str]):
+        if c is None:
+            h.failure("client errors: " + str(client_errors))
+        elif seen & net.CERT_NOT_TRUSTED == 0:
+            h.failure("verify_peer saw verify result %d, without CERT_NOT_TRUSTED" % seen)
+        else:
+            h.success()
+
+    tls_handshake(t, "verify_peer by fingerprint", check, ca_pem=OTHER_CA_PEM, verify_tls=False, verify_peer=verify)
+
+
+actor tls_writing_server(t: testing.EnvT, on_listening: action(tls_writing_server, int) -> None):
+    """A TLS listener that writes to each client as soon as it is accepted"""
+    tcp_cap = net.TCPCap(net.NetCap(t.env.cap))
+    var listener: ?net.TLSListener = None
+    var _written = False
+
+    def on_listen(l: net.TLSListener, error: ?str):
+        if listener is None and error is None:
+            listener = l
+            on_listening(self, l.local_port())
+
+    def on_accept(s: net.TLSListenConnection):
+        s.cb_install(on_receive, on_error)
+        s.write(b"hello")
+        _written = True
+
+    def written() -> bool:
+        return _written
+
+    def on_receive(s: net.TLSListenConnection, data: bytes):
+        pass
+
+    def on_error(s: net.TLSListenConnection, error: str):
+        pass
+
+    def close():
+        if listener is not None:
+            listener.close()
+
+    net.TLSListener(net.TCPListenCap(tcp_cap), "127.0.0.1", 0, SERVER_CERT_PEM, SERVER_KEY_PEM, on_listen, on_accept)
+
+
+actor tls_verify_peer_data(t: testing.EnvT, accept: bool):
+    """A server that writes at once reaches on_receive only after verify_peer accepted it"""
+    tcp_cap = net.TCPCap(net.NetCap(t.env.cap))
+    var server: ?tls_writing_server = None
+    var client: ?net.TLSConnection = None
+    var verified = False
+    var connected = False
+    var done = False
+
+    def finish(error: ?str):
+        if done:
+            return
+        done = True
+        if server is not None:
+            server.close()
+        if client is not None:
+            client.close(lambda c: None)
+        if error is not None:
+            t.failure(AssertionError(error))
+        else:
+            t.success()
+
+    def on_listening(s: tls_writing_server, port: int):
+        server = s
+        client = net.TLSConnection(net.TCPConnectCap(tcp_cap), "127.0.0.1", port, on_connect, on_receive, on_error, None,
+                                   ca_pem=CA_PEM, verify_peer=verify)
+
+    def verify(certs: list[bytes], result: int) -> bool:
+        # The connection may be called meanwhile, it does not wait for this
+        c = client
+        if c is not None:
+            c.endpoints()
+        # Wait until the server has written, and some more for its data to
+        # arrive, so that it would reach on_receive if reading had started.
+        # Each call to the server lets the loops run meanwhile.
+        s = server
+        if s is not None:
+            n = 0
+            while not s.written() and n < 10000:
+                n += 1
+            for i in range(200):
+                s.written()
+        verified = True
+        return accept
+
+    def on_connect(c: net.TLSConnection):
+        if not accept:
+            finish("connected although verify_peer rejected the server")
+        connected = True
+
+    def on_receive(c: net.TLSConnection, data: bytes):
+        if not verified or not connected:
+            finish("received data before verify_peer accepted the server")
+        elif not accept:
+            finish("received data from a server verify_peer rejected")
+        elif data == b"hello":
+            finish(None)
+
+    def on_error(c: net.TLSConnection, error: str):
+        if accept:
+            finish("client error: " + error)
+        elif error.find("rejected by verify_peer") == -1:
+            finish("client error: " + error)
+        else:
+            # Give data from the server time to show up, if it can
+            after 0.5: finish(None)
+
+    after 5: finish("no result")
+    tls_writing_server(t, on_listening)
+
+
+actor _test_TLSVerifyPeerAcceptedData(t: testing.EnvT):
+    tls_verify_peer_data(t, True)
+
+
+actor _test_TLSVerifyPeerRejectedNoData(t: testing.EnvT):
+    tls_verify_peer_data(t, False)
+
+
+actor _test_TLSListenerVerifyPeerAccepts(t: testing.EnvT):
+    """A listener's verify_peer accepts a client whose certificate verified"""
+    var seen = -2
+
+    def verify(certs: list[bytes], result: int) -> bool:
+        seen = result
+        return certs == [pem_to_der(CLIENT_CERT_PEM)]
+
+    def check(h: tls_handshake, c: ?net.TLSConnection, s: ?net.TLSListenConnection, client_errors: list[str], server_errors: list[str]):
+        if c is None or s is None:
+            h.failure("handshake failed: %s %s" % (str(client_errors), str(server_errors)))
+        elif seen != 0:
+            h.failure("verify_peer saw verify result %d, expected 0" % seen)
+        else:
+            h.success()
+
+    tls_handshake(t, "listener verify_peer accepts", check, client_auth=True, server_ca_pem=CA_PEM, server_verify_peer=verify,
+                  ca_pem=CA_PEM, cert_pem=CLIENT_CERT_PEM, key_pem=CLIENT_KEY_PEM)
+
+
+actor _test_TLSListenerVerifyPeerCannotOverride(t: testing.EnvT):
+    """With verify_tls=True, a listener's verify_peer cannot accept a client certificate that failed verification"""
+    var called = False
+
+    def verify(certs: list[bytes], result: int) -> bool:
+        called = True
+        return True
+
+    def check(h: tls_handshake, c: ?net.TLSConnection, s: ?net.TLSListenConnection, client_errors: list[str], server_errors: list[str]):
+        if s is not None:
+            h.failure("server accepted an untrusted client certificate")
+        elif called:
+            h.failure("verify_peer was asked about a certificate that failed verification")
+        elif not find_error(server_errors, "client certificate is not trusted (unknown CA)"):
+            h.failure("server errors: " + str(server_errors))
+        else:
+            h.success()
+
+    tls_handshake(t, "listener verify_peer cannot override", check, client_auth=True, server_ca_pem=OTHER_CA_PEM, server_verify_peer=verify,
+                  ca_pem=CA_PEM, cert_pem=CLIENT_CERT_PEM, key_pem=CLIENT_KEY_PEM)
+
+
+actor _test_TLSListenerVerifyPeerNoCert(t: testing.EnvT):
+    """With verify_tls=False, a listener's verify_peer can accept a client without a certificate"""
+    var seen = -2
+
+    def verify(certs: list[bytes], result: int) -> bool:
+        seen = result
+        return certs == []
+
+    def check(h: tls_handshake, c: ?net.TLSConnection, s: ?net.TLSListenConnection, client_errors: list[str], server_errors: list[str]):
+        if c is None or s is None:
+            h.failure("handshake failed: %s %s" % (str(client_errors), str(server_errors)))
+        elif seen & net.CERT_MISSING == 0:
+            h.failure("verify_peer saw verify result %d, without CERT_MISSING" % seen)
+        else:
+            h.success()
+
+    tls_handshake(t, "listener verify_peer without certificate", check, client_auth=True, server_verify_tls=False, server_ca_pem=CA_PEM,
+                  server_verify_peer=verify, ca_pem=CA_PEM)
+
+
+actor _test_TLSListenerVerifyPeerFingerprint(t: testing.EnvT):
+    """With verify_tls=False, a listener's verify_peer can accept an untrusted client certificate by its fingerprint"""
+    var seen = -2
+
+    def verify(certs: list[bytes], result: int) -> bool:
+        seen = result
+        return certs == [pem_to_der(CLIENT_CERT_PEM)]
+
+    def check(h: tls_handshake, c: ?net.TLSConnection, s: ?net.TLSListenConnection, client_errors: list[str], server_errors: list[str]):
+        if c is None or s is None:
+            h.failure("handshake failed: %s %s" % (str(client_errors), str(server_errors)))
+        elif seen & net.CERT_NOT_TRUSTED == 0:
+            h.failure("verify_peer saw verify result %d, without CERT_NOT_TRUSTED" % seen)
+        else:
+            h.success()
+
+    tls_handshake(t, "listener verify_peer by fingerprint", check, client_auth=True, server_verify_tls=False, server_ca_pem=OTHER_CA_PEM,
+                  server_verify_peer=verify, ca_pem=CA_PEM, cert_pem=CLIENT_CERT_PEM, key_pem=CLIENT_KEY_PEM)
+
+
+actor _test_TLSListenerVerifyPeerRejects(t: testing.EnvT):
+    """A listener's verify_peer rejects a client whose certificate verified"""
+    def verify(certs: list[bytes], result: int) -> bool:
+        return False
+
+    def check(h: tls_handshake, c: ?net.TLSConnection, s: ?net.TLSListenConnection, client_errors: list[str], server_errors: list[str]):
+        if s is not None:
+            h.failure("listener accepted a client that verify_peer rejected")
+        elif len(server_errors) != 1 or not find_error(server_errors, "client certificate rejected by verify_peer"):
+            h.failure("server errors: " + str(server_errors))
+        else:
+            h.success()
+
+    tls_handshake(t, "listener verify_peer rejects", check, client_auth=True, server_ca_pem=CA_PEM, server_verify_peer=verify,
+                  ca_pem=CA_PEM, cert_pem=CLIENT_CERT_PEM, key_pem=CLIENT_KEY_PEM)
+
+
+actor _test_TLSListenerVerifyPeerRaises(t: testing.EnvT):
+    """A listener's verify_peer that raises rejects the client rather than holding the connection"""
+    def verify(certs: list[bytes], result: int) -> bool:
+        raise ValueError("broken verify_peer")
+
+    def check(h: tls_handshake, c: ?net.TLSConnection, s: ?net.TLSListenConnection, client_errors: list[str], server_errors: list[str]):
+        if s is not None:
+            h.failure("listener accepted a client although verify_peer raised")
+        elif len(server_errors) != 1 or not find_error(server_errors, "client certificate rejected by verify_peer"):
+            h.failure("server errors: " + str(server_errors))
+        else:
+            h.success()
+
+    tls_handshake(t, "listener verify_peer raises", check, client_auth=True, server_ca_pem=CA_PEM, server_verify_peer=verify,
+                  ca_pem=CA_PEM, cert_pem=CLIENT_CERT_PEM, key_pem=CLIENT_KEY_PEM)
+
+
+actor tls_listener_config_error(t: testing.EnvT, client_auth: bool, verify_tls: bool, verify_peer: ?action(list[bytes], int) -> bool, expect: str):
+    """A listener with conflicting client_auth, verify_tls and verify_peer does not listen"""
+    tcp_cap = net.TCPCap(net.NetCap(t.env.cap))
+
+    def on_listen(l: net.TLSListener, error: ?str):
+        if error is not None:
+            if error.find(expect) == -1:
+                t.failure(AssertionError("expected '" + expect + "' in: " + error))
+            else:
+                t.success()
+        else:
+            l.close()
+            t.failure(AssertionError("listening, expected: " + expect))
+
+    def on_accept(s: net.TLSListenConnection):
+        pass
+
+    net.TLSListener(net.TCPListenCap(tcp_cap), "127.0.0.1", 0, SERVER_CERT_PEM, SERVER_KEY_PEM, on_listen, on_accept,
+                    client_auth=client_auth, verify_tls=verify_tls, verify_peer=verify_peer)
+
+
+actor _test_TLSListenerVerifyPeerNeedsClientAuth(t: testing.EnvT):
+    def verify(certs: list[bytes], result: int) -> bool:
+        return True
+
+    tls_listener_config_error(t, False, True, verify, "verify_peer needs client_auth=True")
+
+
+actor _test_TLSListenerNoVerifyNeedsVerifyPeer(t: testing.EnvT):
+    tls_listener_config_error(t, True, False, None, "client_auth=True with verify_tls=False needs verify_peer")
+
+
+actor _test_TLSClientHandshakeTimeout(t: testing.EnvT):
+    """connect_timeout covers a handshake the server never answers"""
+    tcp_cap = net.TCPCap(net.NetCap(t.env.cap))
+    var errors: list[str] = []
+    var connected = False
+    var listener: ?net.TCPListener = None
+
+    def on_listen(l: net.TCPListener, error: ?str):
+        if error is not None:
+            t.failure(AssertionError("listen error: " + error))
+            return
+        listener = l
+        net.TLSConnection(net.TCPConnectCap(tcp_cap), "127.0.0.1", l.local_port(), on_connect, on_receive, on_error, None,
+                          ca_pem=CA_PEM, connect_timeout=0.5)
+        after 1.5: check()
+
+    def check():
+        if listener is not None:
+            listener.close()
+        if connected:
+            t.failure(AssertionError("connected without a handshake"))
+        elif errors != ["TLS handshake timed out"]:
+            t.failure(AssertionError("errors: " + str(errors)))
+        else:
+            t.success()
+
+    def on_accept(s: net.TCPListenConnection):
+        # Read the client hello, never answer
+        s.cb_install(lambda s, d: None, lambda s, e: None, None)
+
+    def on_connect(c: net.TLSConnection):
+        connected = True
+
+    def on_receive(c: net.TLSConnection, data: bytes):
+        pass
+
+    def on_error(c: net.TLSConnection, error: str):
+        errors.append(error)
+
+    net.TCPListener(net.TCPListenCap(tcp_cap), "127.0.0.1", 0, on_listen, on_accept)
+
+
+actor _test_TLSServerHandshakeTimeout(t: testing.EnvT):
+    """handshake_timeout drops a client that never starts the handshake"""
+    tcp_cap = net.TCPCap(net.NetCap(t.env.cap))
+    var listener: ?net.TLSListener = None
+    var client: ?net.TCPConnection = None
+    var done = False
+
+    def finish(error: ?str):
+        if done:
+            return
+        done = True
+        if listener is not None:
+            listener.close()
+        if client is not None:
+            client.close(lambda c: None)
+        if error is not None:
+            t.failure(AssertionError(error))
+        else:
+            t.success()
+
+    def on_listen(l: net.TLSListener, error: ?str):
+        if listener is None:
+            if error is not None:
+                finish("listen error: " + error)
+                return
+            listener = l
+            client = net.TCPConnection(net.TCPConnectCap(tcp_cap), "127.0.0.1", l.local_port(), on_connect, on_receive, on_error)
+        elif error is not None and client is not None:
+            expected = "TLS handshake with client 127.0.0.1:%d timed out" % client.endpoints().local_port
+            if error != expected:
+                finish("expected '" + expected + "', got: " + error)
+            else:
+                finish(None)
+
+    def on_accept(s: net.TLSListenConnection):
+        finish("accepted a connection without a handshake")
+
+    def on_connect(c: net.TCPConnection):
+        pass
+
+    def on_receive(c: net.TCPConnection, data: bytes):
+        pass
+
+    def on_error(c: net.TCPConnection, error: str):
+        pass
+
+    after 3: finish("handshake timeout not reported")
+    net.TLSListener(net.TCPListenCap(tcp_cap), "127.0.0.1", 0, SERVER_CERT_PEM, SERVER_KEY_PEM, on_listen, on_accept, handshake_timeout=0.3)
+
+
+actor _test_TLSCloseWhileConnecting(t: testing.EnvT):
+    """close() right after creating a TLS connection cancels the attempt"""
+    tcp_cap = net.TCPCap(net.NetCap(t.env.cap))
+    var closes = 0
+    var events: list[str] = []
+
+    def on_listen(l: net.TLSListener, error: ?str):
+        if error is not None:
+            t.failure(AssertionError("listen error: " + error))
+            return
+        c = net.TLSConnection(net.TCPConnectCap(tcp_cap), "127.0.0.1", l.local_port(), on_connect, on_receive, on_error, None,
+                              ca_pem=CA_PEM, connect_timeout=0.3)
+        c.close(on_close)
+        after 0.6: check(l)
+
+    def check(l: net.TLSListener):
+        l.close()
+        if closes != 1:
+            t.failure(AssertionError("expected on_close once, got %d" % closes))
+        elif len(events) != 0:
+            t.failure(AssertionError("events after close: " + str(events)))
+        else:
+            t.success()
+
+    def on_accept(s: net.TLSListenConnection):
+        s.close()
+
+    def on_close(c: net.TLSConnection):
+        closes += 1
+
+    def on_connect(c: net.TLSConnection):
+        events.append("on_connect")
+
+    def on_receive(c: net.TLSConnection, data: bytes):
+        events.append("on_receive")
+
+    def on_error(c: net.TLSConnection, error: str):
+        events.append("on_error: " + error)
+
+    net.TLSListener(net.TCPListenCap(tcp_cap), "127.0.0.1", 0, SERVER_CERT_PEM, SERVER_KEY_PEM, on_listen, on_accept)
+
+
+actor _test_TLSListenerCloseAbortsHandshake(t: testing.EnvT):
+    """Closing the listener aborts a handshake in progress"""
+    tcp_cap = net.TCPCap(net.NetCap(t.env.cap))
+    var listener: ?net.TLSListener = None
+    var client: ?net.TCPConnection = None
+    var done = False
+
+    def finish(error: ?str):
+        if done:
+            return
+        done = True
+        if listener is not None:
+            listener.close()
+        if client is not None:
+            client.close(lambda c: None)
+        if error is not None:
+            t.failure(AssertionError(error))
+        else:
+            t.success()
+
+    def on_listen(l: net.TLSListener, error: ?str):
+        if listener is None:
+            if error is not None:
+                finish("listen error: " + error)
+                return
+            listener = l
+            # A client that never starts the handshake
+            client = net.TCPConnection(net.TCPConnectCap(tcp_cap), "127.0.0.1", l.local_port(), on_connect, on_receive, on_error, on_remote_close)
+        elif error is not None:
+            finish("unexpected listener error: " + error)
+
+    def on_accept(s: net.TLSListenConnection):
+        finish("accepted a connection without a handshake")
+
+    def on_connect(c: net.TCPConnection):
+        # Let the listener take the connection, then close the listener
+        after 0.2: close_listener()
+
+    def close_listener():
+        if listener is not None:
+            listener.close()
+
+    def on_receive(c: net.TCPConnection, data: bytes):
+        pass
+
+    def on_error(c: net.TCPConnection, error: str):
+        # A reset ends the connection too
+        finish(None)
+
+    def on_remote_close(c: net.TCPConnection):
+        finish(None)
+
+    # The handshake timeout is far off, so only closing the listener ends the
+    # connection in time
+    after 3: finish("connection still open after the listener closed")
+    net.TLSListener(net.TCPListenCap(tcp_cap), "127.0.0.1", 0, SERVER_CERT_PEM, SERVER_KEY_PEM, on_listen, on_accept, handshake_timeout=60.0)

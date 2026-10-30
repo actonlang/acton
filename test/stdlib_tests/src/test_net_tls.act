@@ -647,3 +647,52 @@ actor _TLSImmediateConnectError(t: testing.EnvT):
 
     after 0: _start_client()
     _watchdog()
+
+
+actor _TLSListenerPortZero(t: testing.EnvT):
+    """A TLS listener on port 0 reports the port it listens on"""
+    listen_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
+    var listener: ?net.TLSListener = None
+    var done = False
+
+    def finish(error: ?str):
+        if done:
+            return
+        done = True
+        if listener is not None:
+            listener.close()
+        if error is not None:
+            t.failure(AssertionError(error))
+        else:
+            t.success()
+
+    def _on_listen(l: net.TLSListener, err: ?str):
+        if err is not None:
+            finish("TLS listen failed: " + err)
+            return
+        listener = l
+        port = l.local_port()
+        if port <= 0:
+            finish("listener on port 0 reports port %d" % port)
+            return
+        if l.local_address() != "127.0.0.1":
+            finish("listener reports local address " + l.local_address())
+            return
+        net.TLSConnection(conn_cap, "127.0.0.1", port, _on_connect, _on_receive, _on_error, None, False)
+
+    def _on_accept(c: net.TLSListenConnection):
+        c.close()
+
+    def _on_connect(c: net.TLSConnection):
+        c.close(lambda c: None)
+        finish(None)
+
+    def _on_receive(c: net.TLSConnection, data: bytes):
+        pass
+
+    def _on_error(c: net.TLSConnection, msg: str):
+        finish("TLS client error: " + msg)
+
+    after 5: finish("timeout")
+    net.TLSListener(listen_cap, "127.0.0.1", 0, CERT_PEM.encode(), KEY_PEM.encode(), _on_listen, _on_accept)

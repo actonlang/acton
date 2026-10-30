@@ -432,7 +432,7 @@ dist/deps/libprotobuf_c: deps-download/$(LIBPROTOBUF_C_REF).tar.gz $(LIBPROTOBUF
 	touch "$(TD)/$@"
 
 # /deps/tlsuv ---------------------------------------------
-TLSUV_REF=e5765922d95c48937a5caecdd391ff0ad3bc16cd
+TLSUV_REF=e53aef2507d0221ef49668feeb9dc28d99593603
 TLSUV_BUILD_ZIG=deps/tlsuv/build.zig
 TLSUV_BUILD_ZON=deps/tlsuv/build.zig.zon
 deps-download/$(TLSUV_REF).tar.gz:

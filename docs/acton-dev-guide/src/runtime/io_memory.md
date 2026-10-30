@@ -76,7 +76,7 @@ no-op regime *masked* every lifetime bug: double frees, frees of objects still
 in use, leaks of caller-owned outputs. Real `free()` converts each of those
 into heap corruption or RSS growth. When converting a library to real frees,
 expect to surface latent bugs in both the library and our usage of it; the
-tlsuv fork's `harden` branch exists for exactly this reason.
+tlsuv fork's `acton` branch exists for exactly this reason.
 
 ## Hazard catalogue
 
@@ -174,7 +174,9 @@ When several native objects alias one resource — the TLS listener's
 `tls_context`/key/cert are wired into every accepted connection's engine —
 give the resource an atomically refcounted owner struct. The listener holds
 one reference, each in-flight handshake and each accepted connection holds
-one; the last release frees in dependency order. Make every error path
+one; the last release frees in dependency order. A `TLSConnection` with its
+own CA or client certificate owns a context through the same struct, and
+releases it once its stream, and so the engine, is gone. Make every error path
 release exactly what it retained; an unpaired release (or a missing one) is a
 heap corruption or a permanent leak under real frees.
 
