@@ -28,11 +28,6 @@ struct B_ContainerD_str B_ContainerD_strG_instance;
 struct B_OrdD_str B_OrdD_strG_instance;
 // struct B_IterableD_range B_IterableD_rangeG_instance;
 struct B_IterableD_Iterator B_IterableD_IteratorG_instance;
-struct B_SetD_set B_SetD_setG_instance;
-struct B_OrdD_dict B_OrdD_dictG_instance;
-struct B_MappingD_dict B_MappingD_dictG_instance;
-struct B_OrdD_list B_OrdD_listG_instance;
-struct B_ContainerD_list B_ContainerD_listG_instance;
 struct B_TimesD_SequenceD_list B_TimesD_SequenceD_listG_instance;
 struct B_CollectionD_SequenceD_list B_CollectionD_SequenceD_listG_instance;
 struct B_SliceableD_SequenceD_list B_SliceableD_SequenceD_listG_instance;
@@ -173,11 +168,6 @@ struct B_ContainerD_str B_ContainerD_strG_instance = {&B_ContainerD_strG_methods
 struct B_OrdD_str B_OrdD_strG_instance = {&B_OrdD_strG_methods};
 //struct B_IterableD_range B_IterableD_rangeG_instance = {&B_IterableD_rangeG_methods};
 struct B_IterableD_Iterator B_IterableD_IteratorG_instance = {&B_IterableD_IteratorG_methods};
-struct B_SetD_set B_SetD_setG_instance = {&B_SetD_setG_methods};
-struct B_OrdD_dict B_OrdD_dictG_instance = {&B_OrdD_dictG_methods};
-struct B_MappingD_dict B_MappingD_dictG_instance = {&B_MappingD_dictG_methods};
-struct B_OrdD_list B_OrdD_listG_instance = {&B_OrdD_listG_methods};
-struct B_ContainerD_list B_ContainerD_listG_instance = {&B_ContainerD_listG_methods};
 struct B_TimesD_SequenceD_list B_TimesD_SequenceD_listG_instance = {
     &B_TimesD_SequenceD_listG_methods,
     (B_ISequence)&B_SequenceD_listG_instance,
@@ -460,12 +450,7 @@ B_IterableD_Iterator B_IterableD_IteratorG_witness = &B_IterableD_IteratorG_inst
 //B_MinusD_SetD_set B_MinusD_SetD_setG_witness = &B_MinusD_SetD_setG_instance;
 //B_LogicalD_SetD_set B_LogicalD_SetD_setG_witness = &B_LogicalD_SetD_setG_instance;
 //B_OrdD_SetD_set B_OrdD_SetD_setG_witness = &B_OrdD_SetD_setG_instance;
-B_SetD_set B_SetD_setG_witness = &B_SetD_setG_instance;
-B_OrdD_dict B_OrdD_dictG_witness = &B_OrdD_dictG_instance;
 //B_IndexedD_MappingD_dict B_IndexedD_MappingD_dictG_witness = &B_IndexedD_MappingD_dictG_instance;
-B_MappingD_dict B_MappingD_dictG_witness = &B_MappingD_dictG_instance;
-B_OrdD_list B_OrdD_listG_witness = &B_OrdD_listG_instance;
-B_ContainerD_list B_ContainerD_listG_witness = &B_ContainerD_listG_instance;
 B_TimesD_SequenceD_list B_TimesD_SequenceD_listG_witness = &B_TimesD_SequenceD_listG_instance;
 B_CollectionD_SequenceD_list B_CollectionD_SequenceD_listG_witness = &B_CollectionD_SequenceD_listG_instance;
 B_SequenceD_list B_SequenceD_listG_witness = &B_SequenceD_listG_instance;
