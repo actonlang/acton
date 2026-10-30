@@ -28,16 +28,22 @@ extension Node (Hashable):
     def hash(self, h):
         self.v.hash(h)
 
-actor main(env):
+def check() -> bool:
     a = Node(1, Edge(2, None))
     b = Node(1, Edge(2, None))
     c = Node(1, Edge(3, None))
     if a != b or a == c:
         print("FAIL: cyclic Eq witnesses")
-        await async env.exit(1)
+        return False
     d: dict[Node, str] = {}
     d[a] = "hit"
     if b not in d or c in d:
         print("FAIL: dict through __eq__ forwarded into a cyclic witness")
-        await async env.exit(1)
-    await async env.exit(0)
+        return False
+    return True
+
+actor main(env):
+    if check():
+        env.exit(0)
+    else:
+        env.exit(1)

@@ -47,117 +47,117 @@ def test_list_index_errs():
     raise testing.NotRaisesError("expected ValueError for l.index(...)")
     return
 
-actor main(env):
+def check() -> bool:
     try:
         test_list_index()
         test_list_index_empty()
         test_list_index_errs()
     except Exception as e:
         print("Unexpected exception", e)
-        await async env.exit(1)
+        return False
     l: list[int] = [1, 2]
 
     l.append(3)
     if l != [1, 2, 3]:
         print("Unexpected result of list.append(3):", l)
-        await async env.exit(1)
+        return False
 
     l.insert(0, 0)
     if l != [0, 1, 2, 3]:
         print("Unexpected result of list.insert(0, 0):", l)
-        await async env.exit(1)
+        return False
 
     l.insert(2, 37)
     if l != [0, 1, 37, 2, 3]:
         print("Unexpected result of list.insert(2, 37):", l)
-        await async env.exit(1)
+        return False
 
     v: int = 37
     if l.index(v) != 2:
         print("Unexpected result of list.index(37):", l)
-        await async env.exit(1)
+        return False
 
     l2 = l.copy()
     if l2 != [0, 1, 37, 2, 3]:
         print("Unexpected result of list.copy():", l2)
-        await async env.exit(1)
+        return False
 
     c = l.count(37)
     if c != 1:
         print("Unexpected result of list.count(37):", c)
-        await async env.exit(1)
+        return False
 
     c = l.count(999)
     if c != 0:
         print("Unexpected result of list.count(999):", c)
-        await async env.exit(1)
+        return False
 
     l_multi = [1, 2, 3, 2, 2, 4, 2]
     c = l_multi.count(2)
     if c != 4:
         print("Unexpected result of list.count(2) in", l_multi, ":", c)
-        await async env.exit(1)
+        return False
 
     l.extend([45, 56])
     if l != [0, 1, 37, 2, 3, 45, 56]:
         print("Unexpected result of list.extend([45, 56]):", l)
-        await async env.exit(1)
+        return False
 
     l.reverse()
     if l != [56, 45, 3, 2, 37, 1, 0]:
         print("Unexpected result of list.reverse():", l)
-        await async env.exit(1)
+        return False
 
     lr = list(reversed([]))
     if lr != []:
         print("Unexpected result of reversed([]):", lr)
-        await async env.exit(1)
+        return False
 
     lr2 = list(reversed([1]))
     if lr2 != [1]:
         print("Unexpected result of reversed([]):", lr2)
-        await async env.exit(1)
+        return False
 
     lr3 = list(reversed([1,2,3]))
     if lr3 != [3,2,1]:
         print("Unexpected result of reversed([1,2,3]):", lr3)
-        await async env.exit(1)
+        return False
 
     del l[1]
     if l != [56, 3, 2, 37, 1, 0]:
         print("Unexpected result of del list[1]:", l)
-        await async env.exit(1)
+        return False
 
     l.pop(-1)
     if l != [56, 3, 2, 37, 1]:
         print("Unexpected result of list.pop():", l)
-        await async env.exit(1)
+        return False
 
 #    l.remove(37)
 #    if l != [3, 1]:
 #        print("Unexpected result of list.remove(37):", l)
-#        await async env.exit(1)
+#        return False
 
 
     l.clear()
     if l != []:
         print("Unexpected result of list.clear():", l)
-        await async env.exit(1)
+        return False
 
 #    sorted
     l = [56, 3, 2, 37, 1]
     if sorted(l) != [1, 2, 3, 37, 56]:
         print("Unexpected result of sorted(l):", sorted(l))
-        await async env.exit(1)
+        return False
 
     if [].__bool__():
         print("Unexpected result of [].__bool__():", l)
-        await async env.exit(1)
+        return False
 
     opt: list[?str] = ["a", None, "b"]
     if opt.__str__() != "['a', None, 'b']":
         print("Unexpected result of list.__str__() with None:", opt)
-        await async env.exit(1)
+        return False
 
 #shrinking
     l = list(range(30))
@@ -165,7 +165,7 @@ actor main(env):
         l.pop(-1)
     if len(l) != 10 or l[4] != 4:
         print("Unexpected shrinking of list")
-        await async env.exit(1)
+        return False
 
     print([1] + [])
     if [1] + [2] != [1,2]:
@@ -181,4 +181,10 @@ actor main(env):
     l2 = []
     l1.extend(l2)
 
-    await async env.exit(0)
+    return True
+
+actor main(env):
+    if check():
+        env.exit(0)
+    else:
+        env.exit(1)

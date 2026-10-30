@@ -201,7 +201,7 @@ actor main(env):
         assert action_three_probe(three)
         assert three(5, "abc", 2.5) == 40
         assert snapshot(7) + 1 == 8
+        env.exit(0)
     except Exception as e:
         print("closure serialization check failed:", e)
-        await async env.exit(1)
-    await async env.exit(0)
+        env.exit(1)

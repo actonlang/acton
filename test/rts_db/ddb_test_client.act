@@ -13,6 +13,7 @@ actor main(env):
             print("Got a 0, doing noooothing...")
 
         if data == b"1":
+            # Park this client until shutdown so queued errors cannot reconnect it.
             if attempts > 1:
                 print("Got a 1, I'm happy, exiting...")
                 await async env.exit(0)

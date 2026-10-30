@@ -67,6 +67,7 @@ actor Client(name, rts_monitor, env: Env, port: int, on_success):
                 await async c.close(on_close)
         else:
             print("Got bad response, exiting with error..")
+            # Park this client so queued replies cannot report success.
             await async env.exit(1)
 
     def on_error(c, msg):
@@ -74,7 +75,7 @@ actor Client(name, rts_monitor, env: Env, port: int, on_success):
 
     def _exit():
         print("exiting..")
-        await async env.exit(0)
+        env.exit(0)
 
     connect_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(env.cap)))
     client = net.TCPConnection(connect_cap, "localhost", port, on_connect, on_receive, on_error)
@@ -83,6 +84,7 @@ actor Client(name, rts_monitor, env: Env, port: int, on_success):
 actor main(env):
     def timeout_error():
         print("Timeout reached, exiting with error...")
+        # Park main so queued connection callbacks cannot report success.
         await async env.exit(1)
 
     after 2: timeout_error()
@@ -127,7 +129,7 @@ actor main(env):
         if len(tcp_handles) <= expected_tcp_handles:
             # Only TCP listening sockets left...
             print("TCP client properly cleaned from IO loop, exiting...")
-            await async env.exit(0)
+            env.exit(0)
         else:
             print("TCP client not properly cleaned from IO loop, waiting...")
             after 0.8: check_io()

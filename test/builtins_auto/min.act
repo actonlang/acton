@@ -3,6 +3,6 @@ actor main(env):
     l = [4, 9, 7, 1]
     if min_def(l, 1000) != 1:
         print("min_def() incorrectly returned:", min_def(l, 1000))
-        await async env.exit(1)
-
-    await async env.exit(0)
+        env.exit(1)
+    else:
+        env.exit(0)
