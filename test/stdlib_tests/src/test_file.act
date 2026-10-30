@@ -28,6 +28,107 @@ actor _test_rmdir_idempotent(t: testing.EnvT):
     fs.rmdir(tmpdir + "/foo")
     t.success()
 
+actor _test_rmtree_empty_directory(t: testing.EnvT):
+    try:
+        fc = file.FileCap(t.env.cap)
+        fs = file.FS(fc)
+        tmpdir = fs.mktmpdir()
+        try:
+            await async fs.mkdir(tmpdir + "/victim")
+            await async fs.rmtree(tmpdir + "/victim")
+            testing.assertEqual([], fs.listdir(tmpdir))
+        finally:
+            await async fs.rmtree(tmpdir)
+        t.success()
+    except AssertionError as exc:
+        t.failure(exc)
+    except Exception as exc:
+        t.error(exc)
+
+actor _test_rmtree_nested_directory(t: testing.EnvT):
+    try:
+        fc = file.FileCap(t.env.cap)
+        fs = file.FS(fc)
+        tmpdir = fs.mktmpdir()
+        try:
+            for path in ["victim", "victim/empty", "victim/child", "victim/child/grandchild"]:
+                await async fs.mkdir(tmpdir + "/" + path)
+            for path in ["victim/file", "victim/child/file", "victim/child/grandchild/file"]:
+                wf = file.WriteFile(file.WriteFileCap(fc), tmpdir + "/" + path)
+                await async wf.write(b"data")
+                await async wf.close()
+            await async fs.rmtree(tmpdir + "/victim")
+            testing.assertEqual([], fs.listdir(tmpdir))
+        finally:
+            await async fs.rmtree(tmpdir)
+        t.success()
+    except AssertionError as exc:
+        t.failure(exc)
+    except Exception as exc:
+        t.error(exc)
+
+actor _test_rmtree_non_directories(t: testing.EnvT):
+    """Missing paths and regular files are left alone without raising."""
+    try:
+        fc = file.FileCap(t.env.cap)
+        fs = file.FS(fc)
+        tmpdir = fs.mktmpdir()
+        try:
+            await async fs.rmtree(tmpdir + "/missing")
+            wf = file.WriteFile(file.WriteFileCap(fc), tmpdir + "/file")
+            await async wf.write(b"data")
+            await async wf.close()
+            await async fs.rmtree(tmpdir + "/file")
+            testing.assertEqual(["file"], fs.listdir(tmpdir))
+            await async fs.rmtree(tmpdir)
+            await async fs.rmtree(tmpdir)
+        finally:
+            await async fs.rmtree(tmpdir)
+        t.success()
+    except AssertionError as exc:
+        t.failure(exc)
+    except Exception as exc:
+        t.error(exc)
+
+actor _test_rmtree_child_symlinks(t: testing.EnvT):
+    fc = file.FileCap(t.env.cap)
+    fs = file.FS(fc)
+    tmpdir = fs.mktmpdir()
+
+    action def on_exit(p: Process, code: int, sig: int, stdout: bytes, stderr: bytes) -> None:
+        try:
+            try:
+                testing.assertEqual(0, code, stderr.decode())
+                testing.assertEqual(0, sig)
+                testing.assertTrue(fs.lstat(tmpdir + "/victim/dir-link").is_symlink())
+                testing.assertTrue(fs.lstat(tmpdir + "/victim/file-link").is_symlink())
+                testing.assertTrue(fs.lstat(tmpdir + "/victim/dangling-link").is_symlink())
+                await async fs.rmtree(tmpdir + "/victim")
+                testing.assertEqual(["kept"], fs.listdir(tmpdir))
+                testing.assertEqual(["file"], fs.listdir(tmpdir + "/kept"))
+                rf = file.ReadFile(file.ReadFileCap(fc), tmpdir + "/kept/file")
+                testing.assertEqual(b"data", rf.read())
+                await async rf.close()
+            finally:
+                await async fs.rmtree(tmpdir)
+            t.success()
+        except AssertionError as exc:
+            t.failure(exc)
+        except Exception as exc:
+            t.error(exc)
+
+    action def on_error(p: Process, error: str) -> None:
+        await async fs.rmtree(tmpdir)
+        t.error(OSError(error))
+
+    await async fs.mkdir(tmpdir + "/victim")
+    await async fs.mkdir(tmpdir + "/kept")
+    wf = file.WriteFile(file.WriteFileCap(fc), tmpdir + "/kept/file")
+    await async wf.write(b"data")
+    await async wf.close()
+    t.env.process.run(["sh", "-c", "ln -s ../kept victim/dir-link && ln -s ../kept/file victim/file-link && ln -s ../missing victim/dangling-link"],
+                      on_exit, on_error, workdir=tmpdir)
+
 actor _test_file_walk(t: testing.EnvT):
     try:
         fc = file.FileCap(t.env.cap)
@@ -89,6 +190,10 @@ actor _test_path_with_nul(t: testing.EnvT):
         except ValueError:
             raised += 1
         try:
+            await async fs.rmtree(tmpdir + chr(0))
+        except ValueError:
+            raised += 1
+        try:
             await async fs.listdir(tmpdir + chr(0))
         except ValueError:
             raised += 1
@@ -104,7 +209,7 @@ actor _test_path_with_nul(t: testing.EnvT):
             file.WriteFile(file.WriteFileCap(fc), nul_name)
         except ValueError:
             raised += 1
-        testing.assertEqual(11, raised)
+        testing.assertEqual(12, raised)
         # The file named by the part before the NUL is untouched
         testing.assertEqual(["a"], fs.listdir(tmpdir))
         rf = file.ReadFile(file.ReadFileCap(fc), name)
