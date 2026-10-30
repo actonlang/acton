@@ -3527,6 +3527,10 @@ crossCompileTests =
         runActon "build --target x86_64-linux-musl --db" ExitSuccess False "../../test/compiler/hello/"
   , testCase "build helloworld --target x86_64-windows-gnu --no-threads" $ do
         runActon "build --target x86_64-windows-gnu --no-threads" ExitSuccess False "../../test/compiler/hello/"
+  , testCase "build C header names --target x86_64-linux-musl" $ do
+        testBuildThing "--target x86_64-linux-musl" ExitSuccess False "../../test/regression_auto/c_header_names.act"
+  , testCase "build C header names --target x86_64-windows-gnu --no-threads" $ do
+        testBuildThing "--target x86_64-windows-gnu --no-threads" ExitSuccess False "../../test/regression_auto/c_header_names.act"
   ]
 
 archiveDependencyTests =

@@ -3665,9 +3665,16 @@ main = do
       testBoxing env0 ["witness_type_params"]
 
     describe "Pass 9: CodeGen" $ do
-      it "escapes C keywords" $
-        map Acton.CodeGen.unCkeyword ["switch", "typeof_unqual", "_Alignas"] `shouldBe`
-          ["A_switch", "A_typeof_unqual", "A__Alignas"]
+      it "escapes C keywords and header macros" $
+        map Acton.CodeGen.unCreserved ["switch", "typeof_unqual", "_Alignas", "stdin", "stdout", "stderr", "ERROR"] `shouldBe`
+          ["A_switch", "A_typeof_unqual", "A__Alignas", "A_stdin", "A_stdout", "A_stderr", "A_ERROR"]
+      it "keeps reserved C names distinct from their escaped spellings" $ do
+        let names = [ S.name (prefix ++ n) | n <- ["int", "stdin", "stdout", "stderr", "ERROR"]
+                                          , prefix <- ["", "A_", "A_A_"] ]
+            cnames = map (Pretty.render . Acton.CodeGen.gen (error "unused GenEnv")) names
+        length (nub cnames) `shouldBe` length names
+        map Acton.CodeGen.unCreserved ["A_stdout", "A_A_stdout", "A_ERROR", "A_int", "A_value"] `shouldBe`
+          ["A_A_stdout", "A_A_A_stdout", "A_A_ERROR", "A_A_int", "A_value"]
       testCodeGen env0 ["ints"]
       testCodeGen env0 ["deact"]
       testCodeGen env0 ["lines"]

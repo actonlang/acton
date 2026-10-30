@@ -1100,7 +1100,7 @@ instance Gen QName where
       | otherwise                   = gen env (unalias env n)
 
 instance Gen Name where
-    gen env nm                      = text $ unCkeyword $ mkCident $ nstr nm
+    gen env nm                      = text $ unCreserved $ mkCident $ nstr nm
 
 genTopName env n                    = gen env (gname env n)
 
@@ -1126,10 +1126,17 @@ mkCident (c:s)
         esc ""                      = ""
         hex c                       = "X_" ++ showHex (fromEnum c) "_"
 
-unCkeyword str
-  | str `Data.Set.member` rws       = preEscape str
+-- Reserve the escaped spellings too, so stdout and A_stdout stay distinct.
+unCreserved str
+  | reserved str                    = preEscape str
   | otherwise                       = str
-  where rws                         = Data.Set.fromList [
+  where reserved ('A':'_':s)         = reserved s
+        reserved s                  = s `Data.Set.member` rws
+        rws                         = Data.Set.fromList [
+                                        "stdin",
+                                        "stdout",
+                                        "stderr",
+                                        "ERROR",
                                         "alignas",
                                         "alignof",
                                         "auto",
