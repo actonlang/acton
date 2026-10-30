@@ -276,21 +276,25 @@ actor FS(cap: FileCap):
         NotImplemented
 
     action def rmtree(d: str) -> None:
-        """Recursively remove a directory tree"""
+        """Recursively remove a directory and its contents.
+
+        Missing paths and other OS errors are ignored. Child symlinks are
+        removed without following them.
+        """
         try:
             for entry in listdir(d):
                 try:
                     s = lstat(d + "/" + entry)
                     if s.is_dir():
                         rmtree(d + "/" + entry)
-                        rmdir(d + "/" + entry)
                     else:
                         remove(d + "/" + entry)
                 except OSError:
                     # probably a symlink or permission denied
                     pass
+            rmdir(d)
         except OSError:
-            # dir doesn't exist
+            # missing directory or removal failed
             pass
 
     action def tmpdir() -> str:

@@ -232,7 +232,6 @@ actor _test_comparison_preserves_checkout(t: testing.EnvT):
         finished = True
         pending = None
         await async fs.rmtree(temporary)
-        await async fs.rmdir(temporary)
 
     proc def fail(error: Exception) -> None:
         if finished:

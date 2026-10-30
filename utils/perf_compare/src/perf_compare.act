@@ -260,7 +260,6 @@ actor main(env: Env):
         try:
             if temporary:
                 await async fs.rmtree(temporary)
-                await async fs.rmdir(temporary)
         except Exception as error:
             print("perf-compare: " + str(error), err=True)
             code = 1

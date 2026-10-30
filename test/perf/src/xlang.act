@@ -579,7 +579,6 @@ actor main(env: Env):
         if tmp != "":
             try:
                 await async fs.rmtree(tmp)
-                await async fs.rmdir(tmp)
             except Exception as error:
                 print("xlang: " + str(error), err=True)
         env.exit(code)
