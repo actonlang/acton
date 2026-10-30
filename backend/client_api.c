@@ -637,22 +637,22 @@ rts_descriptor * get_rts_descriptor(int rack_id, int dc_id, char *hostname, int 
     rts_d->local_rts_id = local_rts_id;
     rts_d->status = status;
 
-    struct hostent * host = gethostbyname(hostname);
-    if (host == NULL)
+    struct addrinfo hints = {0}, * addresses;
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+    int result = getaddrinfo(hostname, NULL, &hints, &addresses);
+    if (result != 0)
     {
-        log_error("ERROR, no such host %s", hostname);
+        log_error("ERROR resolving host %s: %s", hostname, gai_strerror(result));
         free_rts_descriptor(rts_d);
         return NULL;
     }
 
-    bzero((void *) &rts_d->addr, sizeof(struct sockaddr_in));
-    rts_d->addr.sin_family = AF_INET;
-    bcopy((char *) host->h_addr_list[0], (char *)&(rts_d->addr.sin_addr.s_addr), host->h_length);
+    memcpy(&rts_d->addr, addresses->ai_addr, sizeof(rts_d->addr));
+    freeaddrinfo(addresses);
     rts_d->addr.sin_port = htons(local_rts_id);
 
     rts_d->hostname = strndup(hostname, strnlen(hostname, 256) + 1);
-
-//  free(host);
 
     return rts_d;
 }

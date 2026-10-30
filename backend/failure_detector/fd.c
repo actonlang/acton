@@ -60,16 +60,19 @@ int copy_node_description(node_description * nd, int status, int node_id, int ra
 
     if(hostname != NULL)
     {
-        struct hostent * host = gethostbyname(hostname);
-        if (host == NULL)
+        struct addrinfo hints = {0}, * addresses;
+        hints.ai_family = AF_INET;
+        hints.ai_socktype = SOCK_STREAM;
+        int result = getaddrinfo(hostname, NULL, &hints, &addresses);
+        if (result != 0)
         {
-            log_error("ERROR, no such host %s", hostname);
+            log_error("ERROR resolving host %s: %s", hostname, gai_strerror(result));
             assert(0);
             return -1;
         }
 
-        nd->address.sin_family = AF_INET;
-        bcopy((char *)host->h_addr, (char *)&(nd->address.sin_addr.s_addr), host->h_length);
+        memcpy(&nd->address, addresses->ai_addr, sizeof(nd->address));
+        freeaddrinfo(addresses);
         nd->address.sin_port = htons(portno);
 
         nd->hostname = strndup(hostname, strnlen(hostname, 256) + 1);
