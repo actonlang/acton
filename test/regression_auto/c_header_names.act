@@ -1,0 +1,101 @@
+# C header macros and their escaped spellings must remain distinct in fields,
+# method slots, parameters and locals. The cross-compilation suite builds this
+# against musl and Windows headers as well as running it on the host.
+ERROR: int = 17
+
+def arguments(stdin: bytes, stdout: bytes, stderr: bytes, ERROR: bytes,
+              A_stdout: bytes, A_A_stdout: bytes, A_ERROR: bytes, A_A_ERROR: bytes) -> bytes:
+    return stdin + stdout + stderr + ERROR + A_stdout + A_A_stdout + A_ERROR + A_A_ERROR
+
+def locals(value: bytes) -> bytes:
+    stdin = value + b"i"
+    stdout = value + b"o"
+    stderr = value + b"e"
+    ERROR = value + b"E"
+    A_stdout = value + b"a"
+    A_A_stdout = value + b"b"
+    A_ERROR = value + b"c"
+    A_A_ERROR = value + b"d"
+    return stdin + stdout + stderr + ERROR + A_stdout + A_A_stdout + A_ERROR + A_A_ERROR
+
+class Fields:
+    stdin: bytes
+    stdout: bytes
+    stderr: bytes
+    ERROR: bytes
+    A_stdout: bytes
+    A_A_stdout: bytes
+    A_ERROR: bytes
+    A_A_ERROR: bytes
+
+    def __init__(self):
+        self.stdin = b"i"
+        self.stdout = b"o"
+        self.stderr = b"e"
+        self.ERROR = b"E"
+        self.A_stdout = b"a"
+        self.A_A_stdout = b"b"
+        self.A_ERROR = b"c"
+        self.A_A_ERROR = b"d"
+
+    def values(self) -> bytes:
+        return self.stdin + self.stdout + self.stderr + self.ERROR + self.A_stdout + self.A_A_stdout + self.A_ERROR + self.A_A_ERROR
+
+class Methods:
+    def __init__(self):
+        pass
+
+    def stdout(self, stderr: bytes) -> bytes:
+        return stderr
+
+    def A_stdout(self, A_ERROR: bytes) -> bytes:
+        return A_ERROR
+
+    def ERROR(self, stdout: bytes) -> bytes:
+        return stdout
+
+class Derived(Methods):
+    def ERROR(self, stdout: bytes) -> bytes:
+        return stdout + b"!"
+
+actor ActorFields():
+    var stdin = b"i"
+    var stdout = b"o"
+    var stderr = b"e"
+    var ERROR = b"E"
+    var A_stdout = b"a"
+    var A_A_stdout = b"b"
+    var A_ERROR = b"c"
+    var A_A_ERROR = b"d"
+
+    def values() -> bytes:
+        stdout += b"!"
+        return stdin + stdout + stderr + ERROR + A_stdout + A_A_stdout + A_ERROR + A_A_ERROR
+
+actor Captured(stdout: bytes, A_stdout: bytes, A_A_stdout: bytes):
+    def values() -> bytes:
+        return stdout + A_stdout + A_A_stdout
+
+actor main(env):
+    try:
+        assert ERROR == 17
+        assert arguments(b"i", b"o", b"e", b"E", b"a", b"b", b"c", b"d") == b"ioeEabcd"
+        assert locals(b"x") == b"xixoxexExaxbxcxd"
+        fields = Fields()
+        assert fields.values() == b"ioeEabcd"
+        reflected = fields.__get_attr__("stdout")
+        assert isinstance(reflected, bytes) and reflected == b"o"
+        reflected_prefix = fields.__get_attr__("A_stdout")
+        assert isinstance(reflected_prefix, bytes) and reflected_prefix == b"a"
+        methods: Methods = Derived()
+        assert methods.stdout(b"stdout") == b"stdout"
+        assert methods.A_stdout(b"A_stdout") == b"A_stdout"
+        assert methods.ERROR(b"ERROR") == b"ERROR!"
+        actor_fields = ActorFields()
+        assert actor_fields.values() == b"io!eEabcd"
+        captured = Captured(b"o", b"a", b"b")
+        assert captured.values() == b"oab"
+        env.exit(0)
+    except Exception as exc:
+        print("C header names failed:", exc)
+        env.exit(1)

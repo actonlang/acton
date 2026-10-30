@@ -92,7 +92,6 @@ OFF       = -1
 EMERGENCY = 0
 ALERT     = 1
 CRITICAL  = 2
-# TODO: 'ERROR' name conflicts on Windows as it is some macro on C-level
 ERR       = 3
 WARNING   = 4
 INFO      = 5
