@@ -30,6 +30,12 @@
   Content hashes and generated C are unchanged. Existing cached module
   interfaces (`.tydb`) are rebuilt for the new name encoding. [#3282] [#3284]
   [#3286]
+- Reduce allocation in generic code by sharing protocol witnesses, the objects
+  that supply operations such as equality and hashing for a type. Build reusable
+  witnesses once per module and share repeated constructions within a function
+  call when they depend on its protocol arguments, including those introduced
+  by default arguments. Use `--witness-stats` to report the constructions left
+  after sharing as one JSON line per compiled module. [#3354]
 - Generate less C and smaller binaries for programs with many closures by
   sharing equivalent closure classes, call adapters, and serialization code.
   Avoid redundant boxing in identity lambdas and unnecessary forwarding
@@ -393,7 +399,7 @@
 ### Documentation
 - Update the compiler developer guide to describe the compile pipeline,
   incremental builds, project and dependency discovery, and cached module
-  interfaces. [#3325]
+  interfaces, plus protocol witness sharing. [#3325] [#3354]
 - Document module initialization and the C extension `__ext_init__` contract.
   The hook sets up C state before the module initializes its imports, classes,
   and module-level values; it must not call Acton code or construct objects
@@ -402,6 +408,9 @@
   capture timing, purity requirements, and callback behavior. [#3242]
 
 ### Testing & CI
+- Preserve expected snapshots and legacy golden files in `utils/perf_compare`
+  comparisons, giving both compilers identical test inputs and including those
+  inputs in benchmark hashes. [#3354]
 - Cover types and protocol extensions reached through transitive imports in
   compiler regressions, including cached modules and dependency APIs. [#3352]
 - Render tables in Webex merge notifications as aligned text in code blocks,
@@ -5941,6 +5950,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#3351]: https://github.com/actonlang/acton/pull/3351
 [#3352]: https://github.com/actonlang/acton/pull/3352
 [#3353]: https://github.com/actonlang/acton/pull/3353
+[#3354]: https://github.com/actonlang/acton/pull/3354
 [#3355]: https://github.com/actonlang/acton/pull/3355
 [#3356]: https://github.com/actonlang/acton/pull/3356
 
