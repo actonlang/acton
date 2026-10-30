@@ -2301,7 +2301,7 @@ unboxedVar env n                    = case findQName n env of
                                         _       -> False
   where isRawVar TUnboxed{}         = True
         isRawVar t                  = isGlobalVar n && B.isUnboxable t
-        isGlobalVar (NoQ n)         = isGlobal env n
+        isGlobalVar (NoQ n)         = isGlobal env n || isAlias n env
         isGlobalVar GName{}         = True
         isGlobalVar QName{}         = True
 

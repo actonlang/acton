@@ -1,0 +1,5 @@
+from constants import *
+
+def values():
+    return (MY_INT, MIN_INT, MY_I32, MY_I16, MY_I8, MY_U64, MY_U32,
+            MY_U16, MY_U8, MY_U1, MY_BOOL, MY_FLOAT, MY_STR, MY_SET, MY_BIGINT)
