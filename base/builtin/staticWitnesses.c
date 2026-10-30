@@ -1,115 +1,122 @@
-struct B_HashableD_bytes B_HashableD_bytesG_instance;
-struct B_MutIndexedD_array B_MutIndexedD_arrayD_intG_instance;
-struct B_MutIndexedD_array B_MutIndexedD_arrayD_floatG_instance;
-struct B_ContainerD_array B_ContainerD_arrayD_intG_instance;
-struct B_ContainerD_array B_ContainerD_arrayD_floatG_instance;
-struct B_MutIndexedD_bitarray B_MutIndexedD_bitarrayG_instance;
-struct B_ContainerD_bitarray B_ContainerD_bitarrayG_instance;
-struct B_LogicalD_bitarray B_LogicalD_bitarrayG_instance;
-struct B_SetD_bitset B_SetD_bitsetG_instance;
-struct B_OrdD_SetD_bitset B_OrdD_SetD_bitsetG_instance;
-struct B_LogicalD_SetD_bitset B_LogicalD_SetD_bitsetG_instance;
-struct B_MinusD_SetD_bitset B_MinusD_SetD_bitsetG_instance;
-struct B_TimesD_bytes B_TimesD_bytesG_instance;
-struct B_ContainerD_bytes B_ContainerD_bytesG_instance;
-struct B_ISliceableD_bytes B_ISliceableD_bytesG_instance;
-struct B_OrdD_bytes B_OrdD_bytesG_instance;
-struct B_ContainerD_bytearray B_ContainerD_bytearrayG_instance;
-struct B_TimesD_SequenceD_bytearray B_TimesD_SequenceD_bytearrayG_instance;
-struct B_CollectionD_SequenceD_bytearray B_CollectionD_SequenceD_bytearrayG_instance;
-struct B_SliceableD_SequenceD_bytearray B_SliceableD_SequenceD_bytearrayG_instance;
-struct B_IndexedD_SliceableD_SequenceD_bytearray B_IndexedD_SliceableD_SequenceD_bytearrayG_instance;
-struct B_SequenceD_bytearray B_SequenceD_bytearrayG_instance;
-struct B_OrdD_bytearray B_OrdD_bytearrayG_instance;
-struct B_HashableD_str B_HashableD_strG_instance;
-struct B_TimesD_str B_TimesD_strG_instance;
-struct B_ISliceableD_str B_ISliceableD_strG_instance;
-struct B_ContainerD_str B_ContainerD_strG_instance;
-struct B_OrdD_str B_OrdD_strG_instance;
+// Each object below stands in for the witness that __init__ of its class
+// would build, so its initializer must set every field. Leaving out a field
+// is a compile error, and an object that is declared but not defined is a
+// link error.
+#pragma clang diagnostic push
+#pragma clang diagnostic error "-Wmissing-field-initializers"
+
+extern struct B_HashableD_bytes B_HashableD_bytesG_instance;
+extern struct B_MutIndexedD_array B_MutIndexedD_arrayD_intG_instance;
+extern struct B_MutIndexedD_array B_MutIndexedD_arrayD_floatG_instance;
+extern struct B_ContainerD_array B_ContainerD_arrayD_intG_instance;
+extern struct B_ContainerD_array B_ContainerD_arrayD_floatG_instance;
+extern struct B_MutIndexedD_bitarray B_MutIndexedD_bitarrayG_instance;
+extern struct B_ContainerD_bitarray B_ContainerD_bitarrayG_instance;
+extern struct B_LogicalD_bitarray B_LogicalD_bitarrayG_instance;
+extern struct B_SetD_bitset B_SetD_bitsetG_instance;
+extern struct B_OrdD_SetD_bitset B_OrdD_SetD_bitsetG_instance;
+extern struct B_LogicalD_SetD_bitset B_LogicalD_SetD_bitsetG_instance;
+extern struct B_MinusD_SetD_bitset B_MinusD_SetD_bitsetG_instance;
+extern struct B_TimesD_bytes B_TimesD_bytesG_instance;
+extern struct B_ContainerD_bytes B_ContainerD_bytesG_instance;
+extern struct B_ISliceableD_bytes B_ISliceableD_bytesG_instance;
+extern struct B_OrdD_bytes B_OrdD_bytesG_instance;
+extern struct B_ContainerD_bytearray B_ContainerD_bytearrayG_instance;
+extern struct B_TimesD_SequenceD_bytearray B_TimesD_SequenceD_bytearrayG_instance;
+extern struct B_CollectionD_SequenceD_bytearray B_CollectionD_SequenceD_bytearrayG_instance;
+extern struct B_SliceableD_SequenceD_bytearray B_SliceableD_SequenceD_bytearrayG_instance;
+extern struct B_IndexedD_SliceableD_SequenceD_bytearray B_IndexedD_SliceableD_SequenceD_bytearrayG_instance;
+extern struct B_SequenceD_bytearray B_SequenceD_bytearrayG_instance;
+extern struct B_OrdD_bytearray B_OrdD_bytearrayG_instance;
+extern struct B_HashableD_str B_HashableD_strG_instance;
+extern struct B_TimesD_str B_TimesD_strG_instance;
+extern struct B_ISliceableD_str B_ISliceableD_strG_instance;
+extern struct B_ContainerD_str B_ContainerD_strG_instance;
+extern struct B_OrdD_str B_OrdD_strG_instance;
 // struct B_IterableD_range B_IterableD_rangeG_instance;
-struct B_IterableD_Iterator B_IterableD_IteratorG_instance;
-struct B_TimesD_SequenceD_list B_TimesD_SequenceD_listG_instance;
-struct B_CollectionD_SequenceD_list B_CollectionD_SequenceD_listG_instance;
-struct B_SliceableD_SequenceD_list B_SliceableD_SequenceD_listG_instance;
-struct B_IndexedD_SliceableD_SequenceD_list B_IndexedD_SliceableD_SequenceD_listG_instance;
-struct B_SequenceD_list B_SequenceD_listG_instance;
-struct B_FreezeD_list B_FreezeD_listG_instance;
-struct B_TimesD_ISequenceD_ilist B_TimesD_ISequenceD_ilistG_instance;
-struct B_CollectionD_ISequenceD_ilist B_CollectionD_ISequenceD_ilistG_instance;
-struct B_ISequenceD_ilist B_ISequenceD_ilistG_instance;
-struct B_HashableD_complex B_HashableD_complexG_instance;
-struct B_EqD_complex B_EqD_complexG_instance;
-struct B_DivD_complex B_DivD_complexG_instance;
-struct B_MinusD_NumberD_complex B_MinusD_NumberD_complexG_instance;
-struct B_NumberD_complex B_NumberD_complexG_instance;
-struct B_HashableD_float B_HashableD_floatG_instance;
-struct B_ArrayElementD_float B_ArrayElementD_floatG_instance;
-struct B_OrdD_float B_OrdD_floatG_instance;
-struct B_DivD_float B_DivD_floatG_instance;
-struct B_MinusD_RealFloatD_float B_MinusD_RealFloatD_floatG_instance;
-struct B_RealFloatD_float B_RealFloatD_floatG_instance;
-struct B_HashableD_u1 B_HashableD_u1G_instance;
-struct B_OrdD_u1 B_OrdD_u1G_instance;
-struct B_DivD_u1 B_DivD_u1G_instance;
-struct B_LogicalD_IntegralD_u1 B_LogicalD_IntegralD_u1G_instance;
-struct B_MinusD_IntegralD_u1 B_MinusD_IntegralD_u1G_instance;
-struct B_IntegralD_u1 B_IntegralD_u1G_instance;
-struct B_HashableD_u8 B_HashableD_u8G_instance;
-struct B_OrdD_u8 B_OrdD_u8G_instance;
-struct B_DivD_u8 B_DivD_u8G_instance;
-struct B_LogicalD_IntegralD_u8 B_LogicalD_IntegralD_u8G_instance;
-struct B_MinusD_IntegralD_u8 B_MinusD_IntegralD_u8G_instance;
-struct B_IntegralD_u8 B_IntegralD_u8G_instance;
-struct B_HashableD_u16 B_HashableD_u16G_instance;
-struct B_OrdD_u16 B_OrdD_u16G_instance;
-struct B_DivD_u16 B_DivD_u16G_instance;
-struct B_LogicalD_IntegralD_u16 B_LogicalD_IntegralD_u16G_instance;
-struct B_MinusD_IntegralD_u16 B_MinusD_IntegralD_u16G_instance;
-struct B_IntegralD_u16 B_IntegralD_u16G_instance;
-struct B_HashableD_u32 B_HashableD_u32G_instance;
-struct B_OrdD_u32 B_OrdD_u32G_instance;
-struct B_DivD_u32 B_DivD_u32G_instance;
-struct B_LogicalD_IntegralD_u32 B_LogicalD_IntegralD_u32G_instance;
-struct B_MinusD_IntegralD_u32 B_MinusD_IntegralD_u32G_instance;
-struct B_IntegralD_u32 B_IntegralD_u32G_instance;
-struct B_HashableD_u64 B_HashableD_u64G_instance;
-struct B_OrdD_u64 B_OrdD_u64G_instance;
-struct B_DivD_u64 B_DivD_u64G_instance;
-struct B_LogicalD_IntegralD_u64 B_LogicalD_IntegralD_u64G_instance;
-struct B_MinusD_IntegralD_u64 B_MinusD_IntegralD_u64G_instance;
-struct B_IntegralD_u64 B_IntegralD_u64G_instance;
-struct B_HashableD_i8 B_HashableD_i8G_instance;
-struct B_OrdD_i8 B_OrdD_i8G_instance;
-struct B_DivD_i8 B_DivD_i8G_instance;
-struct B_LogicalD_IntegralD_i8 B_LogicalD_IntegralD_i8G_instance;
-struct B_MinusD_IntegralD_i8 B_MinusD_IntegralD_i8G_instance;
-struct B_IntegralD_i8 B_IntegralD_i8G_instance;
-struct B_HashableD_i16 B_HashableD_i16G_instance;
-struct B_OrdD_i16 B_OrdD_i16G_instance;
-struct B_DivD_i16 B_DivD_i16G_instance;
-struct B_LogicalD_IntegralD_i16 B_LogicalD_IntegralD_i16G_instance;
-struct B_MinusD_IntegralD_i16 B_MinusD_IntegralD_i16G_instance;
-struct B_IntegralD_i16 B_IntegralD_i16G_instance;
-struct B_HashableD_i32 B_HashableD_i32G_instance;
-struct B_OrdD_i32 B_OrdD_i32G_instance;
-struct B_DivD_i32 B_DivD_i32G_instance;
-struct B_LogicalD_IntegralD_i32 B_LogicalD_IntegralD_i32G_instance;
-struct B_MinusD_IntegralD_i32 B_MinusD_IntegralD_i32G_instance;
-struct B_IntegralD_i32 B_IntegralD_i32G_instance;
-struct B_HashableD_int B_HashableD_intG_instance;
-struct B_ArrayElementD_int B_ArrayElementD_intG_instance;
-struct B_OrdD_int B_OrdD_intG_instance;
-struct B_DivD_int B_DivD_intG_instance;
-struct B_LogicalD_IntegralD_int B_LogicalD_IntegralD_intG_instance;
-struct B_MinusD_IntegralD_int B_MinusD_IntegralD_intG_instance;
-struct B_IntegralD_int B_IntegralD_intG_instance;
-struct B_HashableD_bigint B_HashableD_bigintG_instance;
-struct B_OrdD_bigint B_OrdD_bigintG_instance;
-struct B_DivD_bigint B_DivD_bigintG_instance;
-struct B_LogicalD_IntegralD_bigint B_LogicalD_IntegralD_bigintG_instance;
-struct B_MinusD_IntegralD_bigint B_MinusD_IntegralD_bigintG_instance;
-struct B_IntegralD_bigint B_IntegralD_bigintG_instance;
-struct B_HashableD_bool B_HashableD_boolG_instance;
+extern struct B_IterableD_Iterator B_IterableD_IteratorG_instance;
+extern struct B_TimesD_SequenceD_list B_TimesD_SequenceD_listG_instance;
+extern struct B_CollectionD_SequenceD_list B_CollectionD_SequenceD_listG_instance;
+extern struct B_SliceableD_SequenceD_list B_SliceableD_SequenceD_listG_instance;
+extern struct B_IndexedD_SliceableD_SequenceD_list B_IndexedD_SliceableD_SequenceD_listG_instance;
+extern struct B_SequenceD_list B_SequenceD_listG_instance;
+extern struct B_FreezeD_list B_FreezeD_listG_instance;
+extern struct B_TimesD_ISequenceD_ilist B_TimesD_ISequenceD_ilistG_instance;
+extern struct B_CollectionD_ISequenceD_ilist B_CollectionD_ISequenceD_ilistG_instance;
+extern struct B_ISequenceD_ilist B_ISequenceD_ilistG_instance;
+extern struct B_HashableD_complex B_HashableD_complexG_instance;
+extern struct B_EqD_complex B_EqD_complexG_instance;
+extern struct B_DivD_complex B_DivD_complexG_instance;
+extern struct B_MinusD_NumberD_complex B_MinusD_NumberD_complexG_instance;
+extern struct B_NumberD_complex B_NumberD_complexG_instance;
+extern struct B_HashableD_float B_HashableD_floatG_instance;
+extern struct B_ArrayElementD_float B_ArrayElementD_floatG_instance;
+extern struct B_OrdD_float B_OrdD_floatG_instance;
+extern struct B_DivD_float B_DivD_floatG_instance;
+extern struct B_MinusD_RealFloatD_float B_MinusD_RealFloatD_floatG_instance;
+extern struct B_RealFloatD_float B_RealFloatD_floatG_instance;
+extern struct B_HashableD_u1 B_HashableD_u1G_instance;
+extern struct B_OrdD_u1 B_OrdD_u1G_instance;
+extern struct B_DivD_u1 B_DivD_u1G_instance;
+extern struct B_LogicalD_IntegralD_u1 B_LogicalD_IntegralD_u1G_instance;
+extern struct B_MinusD_IntegralD_u1 B_MinusD_IntegralD_u1G_instance;
+extern struct B_IntegralD_u1 B_IntegralD_u1G_instance;
+extern struct B_HashableD_u8 B_HashableD_u8G_instance;
+extern struct B_OrdD_u8 B_OrdD_u8G_instance;
+extern struct B_DivD_u8 B_DivD_u8G_instance;
+extern struct B_LogicalD_IntegralD_u8 B_LogicalD_IntegralD_u8G_instance;
+extern struct B_MinusD_IntegralD_u8 B_MinusD_IntegralD_u8G_instance;
+extern struct B_IntegralD_u8 B_IntegralD_u8G_instance;
+extern struct B_HashableD_u16 B_HashableD_u16G_instance;
+extern struct B_OrdD_u16 B_OrdD_u16G_instance;
+extern struct B_DivD_u16 B_DivD_u16G_instance;
+extern struct B_LogicalD_IntegralD_u16 B_LogicalD_IntegralD_u16G_instance;
+extern struct B_MinusD_IntegralD_u16 B_MinusD_IntegralD_u16G_instance;
+extern struct B_IntegralD_u16 B_IntegralD_u16G_instance;
+extern struct B_HashableD_u32 B_HashableD_u32G_instance;
+extern struct B_OrdD_u32 B_OrdD_u32G_instance;
+extern struct B_DivD_u32 B_DivD_u32G_instance;
+extern struct B_LogicalD_IntegralD_u32 B_LogicalD_IntegralD_u32G_instance;
+extern struct B_MinusD_IntegralD_u32 B_MinusD_IntegralD_u32G_instance;
+extern struct B_IntegralD_u32 B_IntegralD_u32G_instance;
+extern struct B_HashableD_u64 B_HashableD_u64G_instance;
+extern struct B_OrdD_u64 B_OrdD_u64G_instance;
+extern struct B_DivD_u64 B_DivD_u64G_instance;
+extern struct B_LogicalD_IntegralD_u64 B_LogicalD_IntegralD_u64G_instance;
+extern struct B_MinusD_IntegralD_u64 B_MinusD_IntegralD_u64G_instance;
+extern struct B_IntegralD_u64 B_IntegralD_u64G_instance;
+extern struct B_HashableD_i8 B_HashableD_i8G_instance;
+extern struct B_OrdD_i8 B_OrdD_i8G_instance;
+extern struct B_DivD_i8 B_DivD_i8G_instance;
+extern struct B_LogicalD_IntegralD_i8 B_LogicalD_IntegralD_i8G_instance;
+extern struct B_MinusD_IntegralD_i8 B_MinusD_IntegralD_i8G_instance;
+extern struct B_IntegralD_i8 B_IntegralD_i8G_instance;
+extern struct B_HashableD_i16 B_HashableD_i16G_instance;
+extern struct B_OrdD_i16 B_OrdD_i16G_instance;
+extern struct B_DivD_i16 B_DivD_i16G_instance;
+extern struct B_LogicalD_IntegralD_i16 B_LogicalD_IntegralD_i16G_instance;
+extern struct B_MinusD_IntegralD_i16 B_MinusD_IntegralD_i16G_instance;
+extern struct B_IntegralD_i16 B_IntegralD_i16G_instance;
+extern struct B_HashableD_i32 B_HashableD_i32G_instance;
+extern struct B_OrdD_i32 B_OrdD_i32G_instance;
+extern struct B_DivD_i32 B_DivD_i32G_instance;
+extern struct B_LogicalD_IntegralD_i32 B_LogicalD_IntegralD_i32G_instance;
+extern struct B_MinusD_IntegralD_i32 B_MinusD_IntegralD_i32G_instance;
+extern struct B_IntegralD_i32 B_IntegralD_i32G_instance;
+extern struct B_HashableD_int B_HashableD_intG_instance;
+extern struct B_ArrayElementD_int B_ArrayElementD_intG_instance;
+extern struct B_OrdD_int B_OrdD_intG_instance;
+extern struct B_DivD_int B_DivD_intG_instance;
+extern struct B_LogicalD_IntegralD_int B_LogicalD_IntegralD_intG_instance;
+extern struct B_MinusD_IntegralD_int B_MinusD_IntegralD_intG_instance;
+extern struct B_IntegralD_int B_IntegralD_intG_instance;
+extern struct B_HashableD_bigint B_HashableD_bigintG_instance;
+extern struct B_OrdD_bigint B_OrdD_bigintG_instance;
+extern struct B_DivD_bigint B_DivD_bigintG_instance;
+extern struct B_LogicalD_IntegralD_bigint B_LogicalD_IntegralD_bigintG_instance;
+extern struct B_MinusD_IntegralD_bigint B_MinusD_IntegralD_bigintG_instance;
+extern struct B_IntegralD_bigint B_IntegralD_bigintG_instance;
+extern struct B_HashableD_bool B_HashableD_boolG_instance;
 struct B_HashableD_bytes B_HashableD_bytesG_instance = {&B_HashableD_bytesG_methods};
 struct B_TimesD_bytes B_TimesD_bytesG_instance = {&B_TimesD_bytesG_methods};
 struct B_ContainerD_bytes B_ContainerD_bytesG_instance = {&B_ContainerD_bytesG_methods, (B_Eq)&B_OrdD_intG_instance};
@@ -535,8 +542,8 @@ B_HashableD_bool B_HashableD_boolG_witness = &B_HashableD_boolG_instance;
 struct B_OrdD_list B_OrdD_listD_bytesG_instance = {&B_OrdD_listG_methods, (B_Ord)&B_OrdD_bytesG_instance};
 B_OrdD_list B_OrdD_listD_bytesG_witness = &B_OrdD_listD_bytesG_instance;
 
-struct B_IndexedD_MappingD_dict B_IndexedD_MappingD_dictD_strG_instance;
-struct B_IIndexedD_MappingD_dict B_IIndexedD_MappingD_dictD_strG_instance;
+extern struct B_IndexedD_MappingD_dict B_IndexedD_MappingD_dictD_strG_instance;
+extern struct B_IIndexedD_MappingD_dict B_IIndexedD_MappingD_dictD_strG_instance;
 struct B_MappingD_dict B_MappingD_dictD_strG_instance = {
     &B_MappingD_dictG_methods,
     (B_Eq)&B_HashableD_strG_instance, (B_Eq)&B_HashableD_strG_instance,
@@ -560,8 +567,8 @@ struct B_IIndexedD_MappingD_dict B_IIndexedD_MappingD_dictD_strG_instance = {
 B_MappingD_dict B_MappingD_dictD_strG_witness = &B_MappingD_dictD_strG_instance;
 
 
-struct B_IndexedD_MappingD_dict B_IndexedD_MappingD_dictD_intG_instance;
-struct B_IIndexedD_MappingD_dict B_IIndexedD_MappingD_dictD_intG_instance;
+extern struct B_IndexedD_MappingD_dict B_IndexedD_MappingD_dictD_intG_instance;
+extern struct B_IIndexedD_MappingD_dict B_IIndexedD_MappingD_dictD_intG_instance;
 struct B_MappingD_dict B_MappingD_dictD_intG_instance = {
     &B_MappingD_dictG_methods,
     (B_Eq)&B_HashableD_intG_instance, (B_Eq)&B_HashableD_intG_instance,
@@ -585,8 +592,8 @@ struct B_IIndexedD_MappingD_dict B_IIndexedD_MappingD_dictD_intG_instance = {
 B_MappingD_dict B_MappingD_dictD_intG_witness = &B_MappingD_dictD_intG_instance;
 
 
-struct B_IndexedD_MappingD_dict B_IndexedD_MappingD_dictD_u64G_instance;
-struct B_IIndexedD_MappingD_dict B_IIndexedD_MappingD_dictD_u64G_instance;
+extern struct B_IndexedD_MappingD_dict B_IndexedD_MappingD_dictD_u64G_instance;
+extern struct B_IIndexedD_MappingD_dict B_IIndexedD_MappingD_dictD_u64G_instance;
 struct B_MappingD_dict B_MappingD_dictD_u64G_instance = {
     &B_MappingD_dictG_methods,
     (B_Eq)&B_HashableD_u64G_instance, (B_Eq)&B_HashableD_u64G_instance,
@@ -610,8 +617,8 @@ struct B_IIndexedD_MappingD_dict B_IIndexedD_MappingD_dictD_u64G_instance = {
 B_MappingD_dict B_MappingD_dictD_u64G_witness = &B_MappingD_dictD_u64G_instance;
 
 
-struct B_IndexedD_MappingD_dict B_IndexedD_MappingD_dictD_bytesG_instance;
-struct B_IIndexedD_MappingD_dict B_IIndexedD_MappingD_dictD_bytesG_instance;
+extern struct B_IndexedD_MappingD_dict B_IndexedD_MappingD_dictD_bytesG_instance;
+extern struct B_IIndexedD_MappingD_dict B_IIndexedD_MappingD_dictD_bytesG_instance;
 struct B_MappingD_dict B_MappingD_dictD_bytesG_instance = {
     &B_MappingD_dictG_methods,
     (B_Eq)&B_HashableD_bytesG_instance, (B_Eq)&B_HashableD_bytesG_instance,
@@ -636,9 +643,9 @@ B_MappingD_dict B_MappingD_dictD_bytesG_witness = &B_MappingD_dictD_bytesG_insta
 
 ///
 
-struct B_OrdD_SetD_set B_OrdD_SetD_setD_strG_instance;
-struct B_LogicalD_SetD_set B_LogicalD_SetD_setD_strG_instance;
-struct B_MinusD_SetD_set B_MinusD_SetD_setD_strG_instance;
+extern struct B_OrdD_SetD_set B_OrdD_SetD_setD_strG_instance;
+extern struct B_LogicalD_SetD_set B_LogicalD_SetD_setD_strG_instance;
+extern struct B_MinusD_SetD_set B_MinusD_SetD_setD_strG_instance;
 
 struct B_SetD_set B_SetD_setD_strG_instance = {&B_SetD_setG_methods, (B_Eq)&B_HashableD_strG_instance, (B_Eq)&B_HashableD_strG_instance,
                                                (B_Ord)&B_OrdD_SetD_setD_strG_instance, (B_Logical)&B_LogicalD_SetD_setD_strG_instance,
@@ -659,9 +666,9 @@ B_SetD_set B_SetD_SetD_strG_witness = &B_SetD_setD_strG_instance;
 
 ///
 
-struct B_OrdD_SetD_set B_OrdD_SetD_setD_intG_instance;
-struct B_LogicalD_SetD_set B_LogicalD_SetD_setD_intG_instance;
-struct B_MinusD_SetD_set B_MinusD_SetD_setD_intG_instance;
+extern struct B_OrdD_SetD_set B_OrdD_SetD_setD_intG_instance;
+extern struct B_LogicalD_SetD_set B_LogicalD_SetD_setD_intG_instance;
+extern struct B_MinusD_SetD_set B_MinusD_SetD_setD_intG_instance;
 
 struct B_SetD_set B_SetD_setD_intG_instance = {&B_SetD_setG_methods, (B_Eq)&B_HashableD_intG_instance, (B_Eq)&B_HashableD_intG_instance,
                                                (B_Ord)&B_OrdD_SetD_setD_intG_instance, (B_Logical)&B_LogicalD_SetD_setD_intG_instance,
@@ -683,9 +690,9 @@ B_SetD_set B_SetD_SetD_intG_witness = &B_SetD_setD_intG_instance;
 
 ///
 
-struct B_OrdD_SetD_set B_OrdD_SetD_setD_u64G_instance;
-struct B_LogicalD_SetD_set B_LogicalD_SetD_setD_u64G_instance;
-struct B_MinusD_SetD_set B_MinusD_SetD_setD_u64G_instance;
+extern struct B_OrdD_SetD_set B_OrdD_SetD_setD_u64G_instance;
+extern struct B_LogicalD_SetD_set B_LogicalD_SetD_setD_u64G_instance;
+extern struct B_MinusD_SetD_set B_MinusD_SetD_setD_u64G_instance;
 
 struct B_SetD_set B_SetD_setD_u64G_instance = {&B_SetD_setG_methods, (B_Eq)&B_HashableD_u64G_instance, (B_Eq)&B_HashableD_u64G_instance,
                                                (B_Ord)&B_OrdD_SetD_setD_u64G_instance, (B_Logical)&B_LogicalD_SetD_setD_u64G_instance,
@@ -707,9 +714,9 @@ B_SetD_set B_SetD_SetD_u64G_witness = &B_SetD_setD_u64G_instance;
 
 ///
 
-struct B_OrdD_SetD_set B_OrdD_SetD_setD_bytesG_instance;
-struct B_LogicalD_SetD_set B_LogicalD_SetD_setD_bytesG_instance;
-struct B_MinusD_SetD_set B_MinusD_SetD_setD_bytesG_instance;
+extern struct B_OrdD_SetD_set B_OrdD_SetD_setD_bytesG_instance;
+extern struct B_LogicalD_SetD_set B_LogicalD_SetD_setD_bytesG_instance;
+extern struct B_MinusD_SetD_set B_MinusD_SetD_setD_bytesG_instance;
 
 struct B_SetD_set B_SetD_setD_bytesG_instance = {&B_SetD_setG_methods, (B_Eq)&B_HashableD_bytesG_instance, (B_Eq)&B_HashableD_bytesG_instance,
                                                (B_Ord)&B_OrdD_SetD_setD_bytesG_instance, (B_Logical)&B_LogicalD_SetD_setD_bytesG_instance,
@@ -728,3 +735,5 @@ struct B_MinusD_SetD_set B_MinusD_SetD_setD_bytesG_instance = {&B_MinusD_SetD_se
                                                          (B_Set)&B_SetD_setD_bytesG_instance, (B_Hashable)&B_HashableD_bytesG_instance};
 
 B_SetD_set B_SetD_SetD_bytesG_witness = &B_SetD_setD_bytesG_instance;
+
+#pragma clang diagnostic pop
