@@ -1,0 +1,70 @@
+import json
+
+# A nested procedure must read the payload of a captured CPS cell, including
+# when the payload stays None or is reset to None (issue #2494).
+proc def check_optional(mode: int, expected: ?str) -> None:
+    value: ?str = None
+
+    proc def callback() -> None:
+        assert type(value) == type(expected)
+        assert (value is None) == (expected is None)
+        assert (value is not None) == (expected is not None)
+        if value is not None:
+            assert value + "!" == "world!"
+        else:
+            assert expected is None
+        assert json.encode({"value": value}) == json.encode({"value": expected})
+
+    try:
+        if mode == 3:
+            raise ValueError("before assignment")
+        if mode != 0:
+            value = "world"
+        if mode == 2:
+            value = None
+        if mode == 4:
+            raise ValueError("after assignment")
+    except ValueError:
+        if mode < 3:
+            return
+    callback()
+
+
+actor Caller():
+    def call(cb):
+        cb()
+
+
+actor main(env):
+    caller = Caller()
+
+    def run():
+        var1 = None
+        var2 = None
+
+        def callback():
+            try:
+                assert type(var1) == "str"
+                assert type(var2) == "str"
+                assert var1 == "hello"
+                assert var2 == "world"
+                assert json.encode({"var1": var1, "var2": var2}) == json.encode({"var1": "hello", "var2": "world"})
+                check_optional(0, None)
+                check_optional(1, "world")
+                check_optional(2, None)
+                check_optional(3, None)
+                check_optional(4, "world")
+                print("Captured cells passed")
+                env.exit(0)
+            except Exception as exc:
+                print("Captured cells failed:", exc)
+                env.exit(1)
+
+        var1 = "hello"
+        try:
+            var2 = "world"
+        except:
+            return
+        caller.call(callback)
+
+    run()
