@@ -117,7 +117,7 @@ struct B_IntegralD_bigint B_IntegralD_bigintG_instance;
 struct B_HashableD_bool B_HashableD_boolG_instance;
 struct B_HashableD_bytes B_HashableD_bytesG_instance = {&B_HashableD_bytesG_methods};
 struct B_TimesD_bytes B_TimesD_bytesG_instance = {&B_TimesD_bytesG_methods};
-struct B_ContainerD_bytes B_ContainerD_bytesG_instance = {&B_ContainerD_bytesG_methods};
+struct B_ContainerD_bytes B_ContainerD_bytesG_instance = {&B_ContainerD_bytesG_methods, (B_Eq)&B_OrdD_intG_instance};
 struct B_ISliceableD_bytes B_ISliceableD_bytesG_instance = {
     &B_ISliceableD_bytesG_methods,
     (B_Eq)&B_OrdD_intG_instance
@@ -169,7 +169,7 @@ struct B_ISliceableD_str B_ISliceableD_strG_instance = {
     &B_ISliceableD_strG_methods,
     (B_Eq)&B_OrdD_intG_instance
 };
-struct B_ContainerD_str B_ContainerD_strG_instance = {&B_ContainerD_strG_methods};
+struct B_ContainerD_str B_ContainerD_strG_instance = {&B_ContainerD_strG_methods, (B_Eq)&B_OrdD_strG_instance};
 struct B_OrdD_str B_OrdD_strG_instance = {&B_OrdD_strG_methods};
 //struct B_IterableD_range B_IterableD_rangeG_instance = {&B_IterableD_rangeG_methods};
 struct B_IterableD_Iterator B_IterableD_IteratorG_instance = {&B_IterableD_IteratorG_methods};
@@ -234,56 +234,109 @@ struct B_HashableD_float B_HashableD_floatG_instance = {&B_HashableD_floatG_meth
 struct B_ArrayElementD_float B_ArrayElementD_floatG_instance = {&B_ArrayElementD_floatG_methods};
 struct B_OrdD_float B_OrdD_floatG_instance = {&B_OrdD_floatG_methods};
 struct B_DivD_float B_DivD_floatG_instance = {&B_DivD_floatG_methods};
-struct B_MinusD_RealFloatD_float B_MinusD_RealFloatD_floatG_instance = {&B_MinusD_RealFloatD_floatG_methods, (B_Number)&B_RealFloatD_floatG_instance};
+struct B_MinusD_RealFloatD_float B_MinusD_RealFloatD_floatG_instance = {
+    &B_MinusD_RealFloatD_floatG_methods,
+    (B_Number)&B_RealFloatD_floatG_instance,
+    (B_Real)&B_RealFloatD_floatG_instance,
+    (B_RealFloat)&B_RealFloatD_floatG_instance
+};
 struct B_RealFloatD_float B_RealFloatD_floatG_instance = {&B_RealFloatD_floatG_methods, (B_Minus)&B_MinusD_RealFloatD_floatG_instance};
 struct B_HashableD_u1 B_HashableD_u1G_instance = {&B_HashableD_u1G_methods};
 struct B_OrdD_u1 B_OrdD_u1G_instance = {&B_OrdD_u1G_methods};
 struct B_DivD_u1 B_DivD_u1G_instance = {&B_DivD_u1G_methods};
 struct B_LogicalD_IntegralD_u1 B_LogicalD_IntegralD_u1G_instance = {&B_LogicalD_IntegralD_u1G_methods, (B_Integral)&B_IntegralD_u1G_instance};
-struct B_MinusD_IntegralD_u1 B_MinusD_IntegralD_u1G_instance = {&B_MinusD_IntegralD_u1G_methods, (B_Number)&B_IntegralD_u1G_instance};
+struct B_MinusD_IntegralD_u1 B_MinusD_IntegralD_u1G_instance = {
+    &B_MinusD_IntegralD_u1G_methods,
+    (B_Number)&B_IntegralD_u1G_instance,
+    (B_Real)&B_IntegralD_u1G_instance,
+    (B_Rational)&B_IntegralD_u1G_instance,
+    (B_Integral)&B_IntegralD_u1G_instance
+};
 struct B_IntegralD_u1 B_IntegralD_u1G_instance = {&B_IntegralD_u1G_methods, (B_Minus)&B_MinusD_IntegralD_u1G_instance, (B_Logical)&B_LogicalD_IntegralD_u1G_instance};
 
 struct B_HashableD_u8 B_HashableD_u8G_instance = {&B_HashableD_u8G_methods};
 struct B_OrdD_u8 B_OrdD_u8G_instance = {&B_OrdD_u8G_methods};
 struct B_DivD_u8 B_DivD_u8G_instance = {&B_DivD_u8G_methods};
 struct B_LogicalD_IntegralD_u8 B_LogicalD_IntegralD_u8G_instance = {&B_LogicalD_IntegralD_u8G_methods, (B_Integral)&B_IntegralD_u8G_instance};
-struct B_MinusD_IntegralD_u8 B_MinusD_IntegralD_u8G_instance = {&B_MinusD_IntegralD_u8G_methods, (B_Number)&B_IntegralD_u8G_instance};
+struct B_MinusD_IntegralD_u8 B_MinusD_IntegralD_u8G_instance = {
+    &B_MinusD_IntegralD_u8G_methods,
+    (B_Number)&B_IntegralD_u8G_instance,
+    (B_Real)&B_IntegralD_u8G_instance,
+    (B_Rational)&B_IntegralD_u8G_instance,
+    (B_Integral)&B_IntegralD_u8G_instance
+};
 struct B_IntegralD_u8 B_IntegralD_u8G_instance = {&B_IntegralD_u8G_methods, (B_Minus)&B_MinusD_IntegralD_u8G_instance, (B_Logical)&B_LogicalD_IntegralD_u8G_instance};
 struct B_HashableD_u16 B_HashableD_u16G_instance = {&B_HashableD_u16G_methods};
 struct B_OrdD_u16 B_OrdD_u16G_instance = {&B_OrdD_u16G_methods};
 struct B_DivD_u16 B_DivD_u16G_instance = {&B_DivD_u16G_methods};
 struct B_LogicalD_IntegralD_u16 B_LogicalD_IntegralD_u16G_instance = {&B_LogicalD_IntegralD_u16G_methods, (B_Integral)&B_IntegralD_u16G_instance};
-struct B_MinusD_IntegralD_u16 B_MinusD_IntegralD_u16G_instance = {&B_MinusD_IntegralD_u16G_methods, (B_Number)&B_IntegralD_u16G_instance};
+struct B_MinusD_IntegralD_u16 B_MinusD_IntegralD_u16G_instance = {
+    &B_MinusD_IntegralD_u16G_methods,
+    (B_Number)&B_IntegralD_u16G_instance,
+    (B_Real)&B_IntegralD_u16G_instance,
+    (B_Rational)&B_IntegralD_u16G_instance,
+    (B_Integral)&B_IntegralD_u16G_instance
+};
 struct B_IntegralD_u16 B_IntegralD_u16G_instance = {&B_IntegralD_u16G_methods, (B_Minus)&B_MinusD_IntegralD_u16G_instance, (B_Logical)&B_LogicalD_IntegralD_u16G_instance};
 struct B_HashableD_u32 B_HashableD_u32G_instance = {&B_HashableD_u32G_methods};
 struct B_OrdD_u32 B_OrdD_u32G_instance = {&B_OrdD_u32G_methods};
 struct B_DivD_u32 B_DivD_u32G_instance = {&B_DivD_u32G_methods};
 struct B_LogicalD_IntegralD_u32 B_LogicalD_IntegralD_u32G_instance = {&B_LogicalD_IntegralD_u32G_methods, (B_Integral)&B_IntegralD_u32G_instance};
-struct B_MinusD_IntegralD_u32 B_MinusD_IntegralD_u32G_instance = {&B_MinusD_IntegralD_u32G_methods, (B_Number)&B_IntegralD_u32G_instance};
+struct B_MinusD_IntegralD_u32 B_MinusD_IntegralD_u32G_instance = {
+    &B_MinusD_IntegralD_u32G_methods,
+    (B_Number)&B_IntegralD_u32G_instance,
+    (B_Real)&B_IntegralD_u32G_instance,
+    (B_Rational)&B_IntegralD_u32G_instance,
+    (B_Integral)&B_IntegralD_u32G_instance
+};
 struct B_IntegralD_u32 B_IntegralD_u32G_instance = {&B_IntegralD_u32G_methods, (B_Minus)&B_MinusD_IntegralD_u32G_instance, (B_Logical)&B_LogicalD_IntegralD_u32G_instance};
 struct B_HashableD_u64 B_HashableD_u64G_instance = {&B_HashableD_u64G_methods};
 struct B_OrdD_u64 B_OrdD_u64G_instance = {&B_OrdD_u64G_methods};
 struct B_DivD_u64 B_DivD_u64G_instance = {&B_DivD_u64G_methods};
 struct B_LogicalD_IntegralD_u64 B_LogicalD_IntegralD_u64G_instance = {&B_LogicalD_IntegralD_u64G_methods, (B_Integral)&B_IntegralD_u64G_instance};
-struct B_MinusD_IntegralD_u64 B_MinusD_IntegralD_u64G_instance = {&B_MinusD_IntegralD_u64G_methods, (B_Number)&B_IntegralD_u64G_instance};
+struct B_MinusD_IntegralD_u64 B_MinusD_IntegralD_u64G_instance = {
+    &B_MinusD_IntegralD_u64G_methods,
+    (B_Number)&B_IntegralD_u64G_instance,
+    (B_Real)&B_IntegralD_u64G_instance,
+    (B_Rational)&B_IntegralD_u64G_instance,
+    (B_Integral)&B_IntegralD_u64G_instance
+};
 struct B_IntegralD_u64 B_IntegralD_u64G_instance = {&B_IntegralD_u64G_methods, (B_Minus)&B_MinusD_IntegralD_u64G_instance, (B_Logical)&B_LogicalD_IntegralD_u64G_instance};
 struct B_HashableD_i8 B_HashableD_i8G_instance = {&B_HashableD_i8G_methods};
 struct B_OrdD_i8 B_OrdD_i8G_instance = {&B_OrdD_i8G_methods};
 struct B_DivD_i8 B_DivD_i8G_instance = {&B_DivD_i8G_methods};
 struct B_LogicalD_IntegralD_i8 B_LogicalD_IntegralD_i8G_instance = {&B_LogicalD_IntegralD_i8G_methods, (B_Integral)&B_IntegralD_i8G_instance};
-struct B_MinusD_IntegralD_i8 B_MinusD_IntegralD_i8G_instance = {&B_MinusD_IntegralD_i8G_methods, (B_Number)&B_IntegralD_i8G_instance};
+struct B_MinusD_IntegralD_i8 B_MinusD_IntegralD_i8G_instance = {
+    &B_MinusD_IntegralD_i8G_methods,
+    (B_Number)&B_IntegralD_i8G_instance,
+    (B_Real)&B_IntegralD_i8G_instance,
+    (B_Rational)&B_IntegralD_i8G_instance,
+    (B_Integral)&B_IntegralD_i8G_instance
+};
 struct B_IntegralD_i8 B_IntegralD_i8G_instance = {&B_IntegralD_i8G_methods, (B_Minus)&B_MinusD_IntegralD_i8G_instance, (B_Logical)&B_LogicalD_IntegralD_i8G_instance};
 struct B_HashableD_i16 B_HashableD_i16G_instance = {&B_HashableD_i16G_methods};
 struct B_OrdD_i16 B_OrdD_i16G_instance = {&B_OrdD_i16G_methods};
 struct B_DivD_i16 B_DivD_i16G_instance = {&B_DivD_i16G_methods};
 struct B_LogicalD_IntegralD_i16 B_LogicalD_IntegralD_i16G_instance = {&B_LogicalD_IntegralD_i16G_methods, (B_Integral)&B_IntegralD_i16G_instance};
-struct B_MinusD_IntegralD_i16 B_MinusD_IntegralD_i16G_instance = {&B_MinusD_IntegralD_i16G_methods, (B_Number)&B_IntegralD_i16G_instance};
+struct B_MinusD_IntegralD_i16 B_MinusD_IntegralD_i16G_instance = {
+    &B_MinusD_IntegralD_i16G_methods,
+    (B_Number)&B_IntegralD_i16G_instance,
+    (B_Real)&B_IntegralD_i16G_instance,
+    (B_Rational)&B_IntegralD_i16G_instance,
+    (B_Integral)&B_IntegralD_i16G_instance
+};
 struct B_IntegralD_i16 B_IntegralD_i16G_instance = {&B_IntegralD_i16G_methods, (B_Minus)&B_MinusD_IntegralD_i16G_instance, (B_Logical)&B_LogicalD_IntegralD_i16G_instance};
 struct B_HashableD_i32 B_HashableD_i32G_instance = {&B_HashableD_i32G_methods};
 struct B_OrdD_i32 B_OrdD_i32G_instance = {&B_OrdD_i32G_methods};
 struct B_DivD_i32 B_DivD_i32G_instance = {&B_DivD_i32G_methods};
 struct B_LogicalD_IntegralD_i32 B_LogicalD_IntegralD_i32G_instance = {&B_LogicalD_IntegralD_i32G_methods, (B_Integral)&B_IntegralD_i32G_instance};
-struct B_MinusD_IntegralD_i32 B_MinusD_IntegralD_i32G_instance = {&B_MinusD_IntegralD_i32G_methods, (B_Number)&B_IntegralD_i32G_instance};
+struct B_MinusD_IntegralD_i32 B_MinusD_IntegralD_i32G_instance = {
+    &B_MinusD_IntegralD_i32G_methods,
+    (B_Number)&B_IntegralD_i32G_instance,
+    (B_Real)&B_IntegralD_i32G_instance,
+    (B_Rational)&B_IntegralD_i32G_instance,
+    (B_Integral)&B_IntegralD_i32G_instance
+};
 struct B_IntegralD_i32 B_IntegralD_i32G_instance = {&B_IntegralD_i32G_methods, (B_Minus)&B_MinusD_IntegralD_i32G_instance, (B_Logical)&B_LogicalD_IntegralD_i32G_instance};
 struct B_HashableD_int B_HashableD_intG_instance = {&B_HashableD_intG_methods};
 struct B_ArrayElementD_int B_ArrayElementD_intG_instance = {&B_ArrayElementD_intG_methods};
@@ -356,13 +409,25 @@ struct B_MinusD_SetD_bitset B_MinusD_SetD_bitsetG_instance = {
 };
 struct B_DivD_int B_DivD_intG_instance = {&B_DivD_intG_methods};
 struct B_LogicalD_IntegralD_int B_LogicalD_IntegralD_intG_instance = {&B_LogicalD_IntegralD_intG_methods, (B_Integral)&B_IntegralD_intG_instance};
-struct B_MinusD_IntegralD_int B_MinusD_IntegralD_intG_instance = {&B_MinusD_IntegralD_intG_methods, (B_Number)&B_IntegralD_intG_instance};
+struct B_MinusD_IntegralD_int B_MinusD_IntegralD_intG_instance = {
+    &B_MinusD_IntegralD_intG_methods,
+    (B_Number)&B_IntegralD_intG_instance,
+    (B_Real)&B_IntegralD_intG_instance,
+    (B_Rational)&B_IntegralD_intG_instance,
+    (B_Integral)&B_IntegralD_intG_instance
+};
 struct B_IntegralD_int B_IntegralD_intG_instance = {&B_IntegralD_intG_methods, (B_Minus)&B_MinusD_IntegralD_intG_instance, (B_Logical)&B_LogicalD_IntegralD_intG_instance};
 struct B_HashableD_bigint B_HashableD_bigintG_instance = {&B_HashableD_bigintG_methods};
 struct B_OrdD_bigint B_OrdD_bigintG_instance = {&B_OrdD_bigintG_methods};
 struct B_DivD_bigint B_DivD_bigintG_instance = {&B_DivD_bigintG_methods};
 struct B_LogicalD_IntegralD_bigint B_LogicalD_IntegralD_bigintG_instance = {&B_LogicalD_IntegralD_bigintG_methods, (B_Integral)&B_IntegralD_bigintG_instance};
-struct B_MinusD_IntegralD_bigint B_MinusD_IntegralD_bigintG_instance = {&B_MinusD_IntegralD_bigintG_methods, (B_Number)&B_IntegralD_bigintG_instance};
+struct B_MinusD_IntegralD_bigint B_MinusD_IntegralD_bigintG_instance = {
+    &B_MinusD_IntegralD_bigintG_methods,
+    (B_Number)&B_IntegralD_bigintG_instance,
+    (B_Real)&B_IntegralD_bigintG_instance,
+    (B_Rational)&B_IntegralD_bigintG_instance,
+    (B_Integral)&B_IntegralD_bigintG_instance
+};
 struct B_IntegralD_bigint B_IntegralD_bigintG_instance = {&B_IntegralD_bigintG_methods, (B_Minus)&B_MinusD_IntegralD_bigintG_instance, (B_Logical)&B_LogicalD_IntegralD_bigintG_instance};
 struct B_HashableD_bool  B_HashableD_boolG_instance = {&B_HashableD_boolG_methods};
 
