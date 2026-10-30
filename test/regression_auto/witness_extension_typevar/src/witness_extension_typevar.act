@@ -1,0 +1,34 @@
+# Box's witness for Container[bag.Bag[T]] needs an Eq[bag.Bag[T]]. That
+# witness is a module-level value typed with the extension's type variable,
+# and the initializer of Box's witness reads it. Module initialization must
+# build it before the shared Container[Box[int]] witness that f uses.
+
+import bag
+
+protocol Container[A(Eq)]:
+    size: () -> int
+    same: (A, A) -> bool
+    def same(self, a: A, b: A) -> bool:
+        return a == b
+
+class Box[T]:
+    k: int
+    def __init__(self, k: int):
+        self.k = k
+
+extension Box[T] (Container[bag.Bag[T]]):
+    def size(self) -> int:
+        return self.k
+
+def check[A(Eq), C(Container[A])](c: C, a: A) -> bool:
+    return c.same(a, a)
+
+def f(b: Box[int]) -> bool:
+    return check(b, bag.Bag(1))
+
+actor main(env):
+    if f(Box(3)):
+        env.exit(0)
+    else:
+        print("The shared Container witness compared two equal bags as different")
+        env.exit(1)

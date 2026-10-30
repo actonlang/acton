@@ -1,0 +1,32 @@
+# The witnesses of Foo and Bar need each other: each one's initializer builds
+# the other from itself. The shared Keyed[Bar] witness that run uses is built
+# at module initialization.
+
+protocol Keyed[K (Eq)] (Eq):
+    pass
+
+class Foo(object):
+    def __init__(self):
+        pass
+
+class Bar(object):
+    def __init__(self):
+        pass
+
+extension Foo (Keyed[Bar]):
+    def __eq__(self, other: Foo) -> bool:
+        return True
+
+extension Bar (Keyed[Foo]):
+    def __eq__(self, other: Bar) -> bool:
+        return True
+
+def run() -> bool:
+    return Foo() == Foo() and Bar() == Bar()
+
+actor main(env):
+    if run():
+        env.exit(0)
+    else:
+        print("Mutually dependent witnesses compared equal values as different")
+        env.exit(1)

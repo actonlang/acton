@@ -1,0 +1,27 @@
+W_Bag_15: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
+
+# recursive group:
+class Bag[T] (__builtin__.value):
+    pure def __get_attr__ (self : Self, name : __builtin__.str) -> ?__builtin__.value:
+        return None
+    pure def G_init (self : Self) -> None:
+        pass
+        return None
+    @property
+    n : __builtin__.int
+    pure def __init__ (self : Self, n : __builtin__.int) -> None:
+        self.n = n
+        return None
+class EqD_Bag[T] (__builtin__.Eq[Bag[T]], __builtin__.value):
+    pure def __init__ (W_self : Self) -> None:
+        __builtin__.Eq.__init__@[Bag[T]](W_self)
+        return None
+    pure def __eq__ (W_self : Self, a : Bag[T], b : Bag[T]) -> __builtin__.bool:
+        N_tmp: __builtin__.bool = W_Bag_15.__eq__(a.n, b.n)
+        return N_tmp
+# (recursive group)
+
+pure def same[T] (a : Bag[T], b : Bag[T]) -> __builtin__.bool:
+    W_same_5: __builtin__.Eq[Bag[T]] = EqD_Bag@[T]()
+    N_1tmp: __builtin__.bool = W_same_5.__eq__(a, b)
+    return N_1tmp

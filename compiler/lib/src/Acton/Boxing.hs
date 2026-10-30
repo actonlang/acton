@@ -9,18 +9,39 @@ import Acton.QuickType
 import Acton.Prim
 import Acton.Builtin
 import Acton.Subst
+import qualified Acton.WitnessSharing as WitnessSharing
 import Pretty
 import Utils
 import Debug.Trace
 import Data.Maybe (isJust)
+import Data.Aeson (Value)
+import qualified Data.Map.Strict as Map
+import qualified Data.Set as Set
 import qualified Data.HashSet as HashSet
 import Control.Monad.State.Strict
 import Control.Monad.Except
 import qualified Data.HashMap.Strict as M
 
 doBoxing                           :: Acton.Env.Env0 -> Module -> IO Module
-doBoxing env m                     = do (_,ss) <- boxing (boxEnv env) (mbody m)
-                                        return m{mbody = ss}   
+doBoxing env m                     = do
+    (_,ss) <- boxing (boxEnv env) (mbody m)
+    let (known, staticValue) = sharingInputs env m
+        shared = WitnessSharing.shareWitnesses env known (isJust . staticValue) m{mbody = ss}
+    return $ WitnessSharing.poolWitnesses env known staticValue shared
+
+-- Witness constructions in the boxed module, for --witness-stats.
+witnessStats                       :: Acton.Env.Env0 -> Module -> Module -> Value
+witnessStats env m boxed           = WitnessSharing.sharingStats (`Map.lookup` constructors) (isJust . staticValue) boxed
+  where (known, staticValue)       = sharingInputs env m
+        constructors               = WitnessSharing.witnessConstructors env known boxed
+
+-- Sharing trusts the constructors of the module's witness equations, taken
+-- before boxing, and recognizes static witnesses, which can be the module's
+-- own, as in __builtin__.
+sharingInputs                      :: Acton.Env.Env0 -> Module -> (Set.Set QName, Expr -> Maybe Expr)
+sharingInputs env m                = (WitnessSharing.constructorHeads (mbody m), static)
+  where own                        = boxEnv (define (envOf (mbody m)) (setMod (modname m) env))
+        static e                   = staticWitnessExpr <$> staticWitnessOf own e
 
 type BoxEnv                        = EnvF BoxX
 
@@ -100,13 +121,21 @@ staticWitnessOf env (Call _ f p KwdNil)
                                          return StaticWitness{ swBaseClass = TC qn' ts, swObjectName = obj, swObjectPath = [] }
         staticWitnessRoot' _ _ _ _  = Nothing
 
-        builtinWitnessClass env qn  = case unalias env qn of
+        -- Placement also asks about ordinary/generated calls. A generated
+        -- method symbol need not be exported as an interface item; it is not
+        -- a class, and must not make unalias/tryQName throw NoItem here.
+        builtinWitnessClass env qn
+          | not (knownName qn)      = Nothing
+          | otherwise              = case unalias env qn of
                                         qn'@(GName m n)
                                           | m == mBuiltin,
                                             not (isInternal n),
                                             isClass env qn'
                                               -> Just qn'
                                         _ -> Nothing
+          where knownName (NoQ n) = isJust (lookupName n env)
+                knownName (GName m n) | Just m == thismod env = isJust (lookupName n env)
+                knownName q = isJust (lookupModuleInfo (mname q) env >>= (\mi -> moduleLookupName mi (noq q)))
 
         staticWitnessObject env qn@(GName m n) ts p
           | Just key <- specialStaticKey env n ts
@@ -168,6 +197,19 @@ staticWitnessExpr w                 = foldl (Dot NoLoc) (eCallP root PosNil) (sw
           | swObjectName w == tcname (swBaseClass w)
                                     = tApp (eQVar (swObjectName w)) (tcargs (swBaseClass w))
           | otherwise               = eQVar (swObjectName w)
+
+-- Keep static witness RHSs qualified, including inside the builtin module.
+-- Local constructor names otherwise survive to C generation as allocator
+-- calls. Restrict this to witness stores: ordinary class construction must
+-- still create a fresh value. Field stores occur in witness initializers.
+staticWitnessRHS env n e
+  | isWitness n, Just w <- staticWitnessOf env e
+                                    = staticWitnessExpr w
+  | otherwise                       = e
+
+staticWitnessTargetRHS env (Dot _ _ n) e = staticWitnessRHS env n e
+staticWitnessTargetRHS env (Var _ (NoQ n)) e = staticWitnessRHS env n e
+staticWitnessTargetRHS _ _ e         = e
 
 methodQName (TC (GName m c) _) n    = GName m (Derived c n)
 methodQName (TC (QName m c) _) n    = GName m (Derived c n)
@@ -987,13 +1029,13 @@ instance Boxing Stmt where
     boxing env (Assign l [p@(PVar _ n (Just t))] e)
                                     = do (ws1,p') <- boxing env p
                                          (ws2, e') <- boxing env e
-                                         return (HashSet.union ws1 ws2, Assign l [pvar p'] (fixassign env (asUnboxedRep t) e'))
+                                         return (HashSet.union ws1 ws2, Assign l [pvar p'] (staticWitnessRHS env n (fixassign env (asUnboxedRep t) e')))
       where pvar (PVar l n _)       = PVar l n (Just (asUnboxedRep t))
             pvar p                  = p
     boxing env s@(Assign l [pt@(PVar _ n Nothing)] e)
                                    = do (ws1,pt1) <- boxing env pt
                                         (ws2,e2) <- boxing env e
-                                        return (HashSet.union ws1 ws2,Assign l [pt1] (fixassign env t e2))
+                                        return (HashSet.union ws1 ws2,Assign l [pt1] (staticWitnessRHS env n (fixassign env t e2)))
              where t               = assignTargetType env s n e
 
 
@@ -1015,7 +1057,7 @@ instance Boxing Stmt where
                 binop               = bin2Binary (incr2bin attr)
     boxing env (MutAssign l tg e)   = do (ws0,tg1) <- boxingTarget env tg
                                          (ws1,e1) <- boxing env e
-                                         return (HashSet.union ws0 ws1, MutAssign l tg1 (fixassign env t e1))
+                                         return (HashSet.union ws0 ws1, MutAssign l tg1 (staticWitnessTargetRHS env tg (fixassign env t e1)))
           where t                   = targetType env tg
     boxing env (Pass l)             = return (HashSet.empty, Pass l)
     boxing env (Delete l t)         = return (HashSet.empty, Delete l t)

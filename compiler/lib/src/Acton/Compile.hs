@@ -342,6 +342,7 @@ import Text.Show.Pretty (ppDoc)
 
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy as BL
+import qualified Data.Aeson as Aeson
 import qualified Crypto.Hash.SHA256 as SHA256
 
 
@@ -2912,7 +2913,7 @@ runBackPasses gopts job shouldWrite onProgress = do
       (deactorized, env2) <- transform BackPassDeactorize fst (Acton.Deactorizer.deactorize env1 normalized)
       (converted, env3)   <- transform BackPassCPS        fst (Acton.CPS.convert env2 deactorized)
       (lifted, env4)      <- transform BackPassLLift      fst (Acton.LambdaLifter.liftModule env3 converted)
-      boxed               <- transform BackPassBoxing     id  (Acton.Boxing.doBoxing env4 lifted)
+      boxed               <- transform BackPassBoxing     id  (Acton.Boxing.doBoxing env4 lifted >>= witnessStats env4 lifted)
       (_, h, c, support)  <- pass BackPassCodeGen             (Acton.CodeGen.generateCode supportInclude env4 relSrcBase (bjSource job) (not (C.dbg_no_lines opts)) boxed (Hashing.hashHex (bjCodegenHash job)))
       case output of
         PrintHeader -> pass BackPassRender (render h) >> putStrLn h
@@ -2938,6 +2939,10 @@ runBackPasses gopts job shouldWrite onProgress = do
     relSrcBase     = makeRelative (projPath paths) (srcBase paths mn)
     total          = fromEnum (maxBound :: BackPass) + (if output == WriteFiles then 1 else 0)
     writeGenerated (file, text) = writeFileUtf8Atomic (generatedPath paths mn file) text
+    -- --witness-stats reports the module after sharing inside the boxing
+    -- pass, before its dump.
+    witnessStats :: Acton.Env.Env0 -> A.Module -> A.Module -> IO A.Module
+    witnessStats env lifted boxed = boxed <$ when (C.witness_stats opts) (emitWitnessStats (Acton.Boxing.witnessStats env lifted boxed))
 
 
 -- The run ------------------------------------------------------------------------------------------
@@ -3298,3 +3303,8 @@ formatCodegenDelta status = case nub (map snd tags) of
     _              -> " {impl " ++ intercalate ", " [ generatedLabel file ++ " " ++ delta tag | (file, tag) <- tags ] ++ "}"
   where tags      = csTags status
         delta tag = maybe "missing" Hashing.shortHex tag ++ " -> " ++ Hashing.shortHex (csExpected status)
+
+-- One JSON line per module, written by a single strict hPut so that lines
+-- from modules compiled in parallel do not interleave.
+emitWitnessStats :: Aeson.Value -> IO ()
+emitWitnessStats v = B.hPut stdout (B.snoc (BL.toStrict $ Aeson.encode v) '\n')

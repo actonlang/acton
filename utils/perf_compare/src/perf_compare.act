@@ -363,6 +363,12 @@ actor main(env: Env):
         await async fs.copyfile(benchmark + "/Build.act", snapshot + "/Build.act")
         await async fs.mkdir(snapshot + "/src")
         await async fs.copytree(benchmark + "/src", snapshot + "/src")
+        # Snapshot expectations are test inputs, shared by both compilers and
+        # included in the input digest. Previous output is deliberately omitted.
+        for relative in ["snapshots/expected", "test/golden"]:
+            if exists(benchmark + "/" + relative):
+                mkdirs(snapshot + "/" + relative)
+                await async fs.copytree(benchmark + "/" + relative, snapshot + "/" + relative)
         manifest["benchmark_hash"] = source_hash(snapshot)
         manifest["benchmark_hash_algorithm"] = "md5"
         save()

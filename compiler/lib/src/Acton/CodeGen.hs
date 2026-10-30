@@ -138,7 +138,8 @@ genEnv env0                         = setX env0 GenX{ globalX = HashSet.empty,
                                                       closureFieldsX = Map.empty,
                                                       closureAdaptersX = Map.empty,
                                                       closureAdapterDocsX = [],
-                                                      stackIteratorsX = [], iteratorWitnessesX = [] }
+                                                      stackIteratorsX = [], iteratorWitnessesX = [],
+                                                      moduleWitnessesX = Map.empty }
 
 type GenEnv                         = EnvF GenX
 
@@ -173,6 +174,7 @@ data GenX                           = GenX { globalX :: HashSet.HashSet Name
                                            , closureAdapterDocsX :: [Doc]
                                            , stackIteratorsX :: [(Name, StackIteratorSpec)]
                                            , iteratorWitnessesX :: [(Name, Expr)]
+                                           , moduleWitnessesX :: Map.Map QName Expr
                                            }
 
 gdefine te env                      = modX env1 $ \x -> x{ globalX = foldr HashSet.insert (globalX x) (dom te) }
@@ -713,7 +715,11 @@ cModuleParts supportInclude env srcbase srcText emitLines (Module m imps _ stmts
         emitLine NoLoc              = empty
         emitLine (Loc startOffset _) =
             text "#line" <+> pretty (offsetToLine startOffset) <+> doubleQuotes (text actFile)
-        envWithFields               = shareClosureFields (shareClosureAdapters env1 stmts) stmts
+        envWithFields               = modX (shareClosureFields (shareClosureAdapters env1 stmts) stmts) $ \x -> x
+                                        { moduleWitnessesX = Map.mapMaybe unique $ Map.fromListWith (++)
+                                            [(GName m n,[e]) | Assign _ [PVar _ n _] e <- stmts, isWitness n] }
+        unique [e]                  = Just e
+        unique _                    = Nothing
         adapterDocs                 = vcat (closureAdapterDocsX $ envX envWithFields)
         envWithLine                 = if emitLines then setLineEmit emitLine envWithFields else envWithFields
 
@@ -1412,6 +1418,23 @@ builtinIteratorWitness env seen (Var _ (NoQ n))
   | n `notElem` seen,
     Just e <- lookup n (iteratorWitnessesX $ envX env)
                                     = builtinIteratorWitness env (n:seen) e
+builtinIteratorWitness env seen (Var _ (NoQ n))
+  | isGlobal env n, Just mn <- thismod env
+                                    = builtinIteratorWitness env seen (eQVar $ GName mn n)
+builtinIteratorWitness env seen (Var _ q@(GName mn n))
+  | n `notElem` seen,
+    Just e <- Map.lookup q (moduleWitnessesX $ envX env)
+                                    = builtinIteratorWitness env (n:seen) (qualify e)
+  where -- Aliases in a module initializer refer to module globals even when
+        -- a function parameter happens to shadow their original spelling.
+        qualify (Var l (NoQ n))     = Var l (GName mn n)
+        qualify (Paren l e)         = Paren l (qualify e)
+        qualify (Box t e)           = Box t (qualify e)
+        qualify (Dot l e n)         = Dot l (qualify e) n
+        qualify (Call l f (PosArg e PosNil) KwdNil)
+          | Var _ q <- stripTApp f, q == primCAST
+                                    = Call l f (PosArg (qualify e) PosNil) KwdNil
+        qualify e                  = e
 builtinIteratorWitness env seen (Paren _ e)
                                     = builtinIteratorWitness env seen e
 builtinIteratorWitness env seen (Box _ e)
@@ -1737,8 +1760,14 @@ instance Gen Stmt where
                                     = (genTarget env tg <+> equals <+> d <> semi, [])
     genV env (AugAssign _ tg op e)  = (genTarget env tg <+> augPretty op <+> genExp env t e <> semi, [])
       where t                       = targetType env tg
-    genV env (MutAssign _ tg e)     = (genTarget env tg <+> equals <+> genExp env t e <> semi, [])
+    genV env (MutAssign _ tg e)     = (genTarget env tg <+> equals <+> rhs <> semi, [])
       where t                       = targetType env tg
+            -- Lifted witness initializers store super-witnesses in fields.
+            -- Apply the same static substitution as for a local witness.
+            rhs                     = case tg of
+                                        Dot _ _ n -> assignRHS env n t e
+                                        Var _ (NoQ n) -> assignRHS env n t e
+                                        _ -> genExp env t e
     genV env (Pass _)               = (empty, [])
     genV env (Return _ Nothing)     = (text "return" <+> gen env eNone <> semi, [])
     genV env (Return _ (Just e))

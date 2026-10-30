@@ -7,10 +7,10 @@ static $R linesQ_V_1closure_adapter ($action V_adapter, $Cont V_1adapter, $WORD 
 static $R linesQ_V_2closure_adapter ($action V_adapter, $Cont V_1adapter, $WORD V_2adapter) {
     return $R_CONT(V_1adapter, ((B_value)((B_Msg (*) ($WORD, $WORD))(($action)(V_adapter))->$class->__asyn__)(V_adapter, V_2adapter)));
 }
+B_OrdD_int linesQ_W_1module;
 B_Eq linesQ_W_Apa_1097;
+$EqOpt linesQ_W_2module;
 B_Eq linesQ_W_Apa_759;
-B_Eq linesQ_W_Apa_331;
-B_Eq linesQ_W_Apa_785;
 $R linesQ_L_1C_1cont (linesQ_Apa self, $Cont C_cont, B_NoneType C_2res) {
     #line 18 "test/src/lines.act"
     ((linesQ_Apa)(self))->z = 1LL;
@@ -377,7 +377,7 @@ $R linesQ_L_17C_9cont (linesQ_main self, $Cont C_cont, int64_t C_10res) {
                 struct JumpBuf $frame;
                 if ($PUSH(&$frame)) {
                     #line 80 "test/src/lines.act"
-                    if (((bool (*) ($WORD, B_int, B_int))((B_Eq)(linesQ_W_Apa_785))->$class->__eq__)(linesQ_W_Apa_785, toB_int(((int64_t)((linesQ_main)(self))->v)), toB_int(0LL))) {
+                    if (((bool (*) ($WORD, B_int, B_int))((B_Eq)(linesQ_W_Apa_759))->$class->__eq__)(linesQ_W_Apa_759, toB_int(((int64_t)((linesQ_main)(self))->v)), toB_int(0LL))) {
                         #line 81 "test/src/lines.act"
                         $RAISE(((B_BaseException)B_ValueErrorG_new(actStrFromLiteral("boom", 4, 4))));
                         __builtin_unreachable();
@@ -749,7 +749,7 @@ $R linesQ_mainD_myprocG_local (linesQ_main self, $Cont C_cont, int64_t i) {
     #line 29 "test/src/lines.act"
     ((B_NoneType (*) (B_tuple, B_str, B_str, bool, bool))B_print)($NEWTUPLE(2, actStrFromLiteral("myproc", 6, 6), toB_int(i)), actStrFromLiteral(" ", 1, 1), actStrFromLiteral("\n", 1, 1), false, false);
     #line 30 "test/src/lines.act"
-    if (((bool (*) ($WORD, B_int, B_int))((B_Eq)(linesQ_W_Apa_331))->$class->__eq__)(linesQ_W_Apa_331, toB_int(i), toB_int(2LL))) {
+    if (((bool (*) ($WORD, B_int, B_int))((B_Eq)(linesQ_W_Apa_759))->$class->__eq__)(linesQ_W_Apa_759, toB_int(i), toB_int(2LL))) {
         #line 31 "test/src/lines.act"
         ((B_Msg (*) ($WORD, int64_t))((B_Env)(((linesQ_main)(self))->env))->$class->exit)(((linesQ_main)(self))->env, 0LL);
     }
@@ -825,10 +825,10 @@ $R linesQ_mainG_newact ($Cont C_cont, B_Env env) {
     return $AWAIT($SKIPRES($CONSTCONT(G_act, C_cont)), $ASYNC((($Actor)G_act), (($Cont)linesQ_L_31procG_new(G_act, env))));
 }
 static void linesQ___init__$g0 () {
-    linesQ_W_Apa_1097 = (B_Eq)B_OrdD_intG_witness;
-    linesQ_W_Apa_759 = ((B_Eq)$EqOptG_new(linesQ_W_Apa_1097));
-    linesQ_W_Apa_331 = ((B_Eq)$EqOptG_new(linesQ_W_Apa_1097));
-    linesQ_W_Apa_785 = ((B_Eq)$EqOptG_new(linesQ_W_Apa_1097));
+    linesQ_W_1module = (B_OrdD_int)B_OrdD_intG_witness;
+    linesQ_W_Apa_1097 = ((B_Eq)linesQ_W_1module);
+    linesQ_W_2module = $EqOptG_new(((B_Eq)linesQ_W_1module));
+    linesQ_W_Apa_759 = ((B_Eq)linesQ_W_2module);
 }
 int linesQ_done$ = 0;
 void linesQ___init__ () {

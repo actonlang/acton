@@ -1,0 +1,31 @@
+# A class implemented in C has a class-level NotImplemented. Witnesses used by
+# this module's functions, methods and module-level values are still shared,
+# and module initialization builds them before any of those run.
+
+TABLE: dict[(int, str), list[int]] = {(1, "a"): [1]}
+EQUAL = [[1]] == [[1]]
+
+class Native(object):
+    v: int
+    def __init__(self, v: int):
+        self.v = v
+    get : () -> int
+    NotImplemented
+
+class Holder(object):
+    ok: bool
+    def __init__(self, v: int):
+        self.ok = [(v, "x")] == [(v, "x")] and (1, "a") in TABLE
+
+NATIVE = Native(2)
+HOLDER = Holder(1)
+
+def same(n: int) -> bool:
+    return [(n, [n])] == [(n, [n])] and [[n]] != [[n + 1]]
+
+actor main(env):
+    if EQUAL and HOLDER.ok and same(3) and NATIVE.get() == 2:
+        env.exit(0)
+    else:
+        print("Witnesses in a module with a class implemented in C are wrong")
+        env.exit(1)

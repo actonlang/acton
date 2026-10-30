@@ -1,0 +1,27 @@
+W_31module: witness_type_params.EqD_Bag[T] = witness_type_params.EqD_Bag@[T]()
+
+# recursive group:
+class Bag[T] (__builtin__.value):
+    pure def __get_attr__ (self : Bag[T], name : __builtin__.str) -> ?__builtin__.value:
+        return None
+    pure def G_init (self : Bag[T]) -> None:
+        pass
+        return None
+    @property
+    n : __builtin__.int
+    pure def __init__ (self : Bag[T], n : UNBOXED __builtin__.int) -> None:
+        self.n = (UNBOX __builtin__.int n)
+        return None
+class EqD_Bag[T] (__builtin__.Eq[Bag[T]], __builtin__.value):
+    pure def __init__ (W_self : EqD_Bag[T]) -> None:
+        __builtin__.Eq.__init__@[Bag[T]](W_self)
+        return None
+    pure def __eq__ (W_self : EqD_Bag[T], a : Bag[T], b : Bag[T]) -> UNBOXED __builtin__.bool:
+        N_tmp: UNBOXED __builtin__.bool = (a.n == b.n)
+        return (UNBOX __builtin__.bool N_tmp)
+# (recursive group)
+
+pure def same[T] (a : Bag[T], b : Bag[T]) -> UNBOXED __builtin__.bool:
+    W_same_5: __builtin__.Eq[Bag[T]] = witness_type_params.W_31module
+    N_1tmp: UNBOXED __builtin__.bool = W_same_5.__eq__(a, b)
+    return (UNBOX __builtin__.bool N_1tmp)

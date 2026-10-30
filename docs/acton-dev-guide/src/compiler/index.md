@@ -26,5 +26,8 @@ generated Zig build files.
 See [REPL implementation](repl.md) for how `acton repl` maps interactive input
 onto generated Acton modules and dynamic-library builds.
 
+See [Witness sharing](witnesses.md) for how the compiler shares protocol
+witness constructions within a call and across a module.
+
 See [Passes](passes/index.md) for the stage-by-stage pipeline and how front and
 back passes split the work.

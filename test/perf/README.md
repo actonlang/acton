@@ -71,6 +71,17 @@ exhaustion bugs fixed in #3104. Before that fix, `StopIteration` escapes the
 operation and the completion checks fail. Report a failed baseline rather than
 treating the failure time as an operation latency or speedup.
 
+## Witness construction
+
+`witnesses` measures repeated nested-list equality with concrete and generic
+helpers. Each body makes three comparisons that can share the same witness
+recipes. Two further concrete/generic cases exercise inline witnesses in
+expanded default arguments while retaining distinct user objects. Inputs are
+prepared before `t.loop()`. These are fixed workloads; use
+`acton test perf --module witnesses --scale 1`. See the compiler developer
+guide's [witness sharing](../../docs/acton-dev-guide/src/compiler/witnesses.md)
+page for the rules and for `--witness-stats`.
+
 ## Exceptions
 
 `exceptions` measures a fixed builtin error, a fixed Acton error, and a formatted
@@ -482,10 +493,12 @@ cd /path/to/my-app
 The revision defaults to the local `main` branch. The utility builds that revision
 and the current Acton checkout with `make`, including local changes to builtins,
 the runtime or compiler. Both installations compile the same snapshot of the
-selected project's `Build.act` and `src`, with separate generated outputs. The
+selected project's `Build.act`, `src`, and any `snapshots/expected` or legacy
+`test/golden` expectations, with separate generated outputs. The expected snapshots
+are included in the input hash; previous snapshot output is not copied. The
 old compiler must support these benchmarks and their performance measurement format.
-The benchmark project must be self-contained: files outside `Build.act` and
-`src`, including relative local dependencies, are not copied into the snapshot.
+Other inputs, including relative local dependencies, are not copied into the
+snapshot, so the selected tests must be self-contained within these paths.
 
 Each benchmark runs in four pairs of fresh processes. Two pairs run baseline
 first and two run current first, in shuffled order. Without `--scale`, an excluded
