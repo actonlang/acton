@@ -25,11 +25,17 @@ extension Thing (AlphaBeta):
 def via_beta[T(Beta)](x: T, k: int) -> int:
     return Beta.f(x, k)
 
-actor main(env):
+def check() -> bool:
     if AlphaBeta.f(Thing(), 1) != 1:
         print("FAIL: forwarded diamond slot in the main witness class")
-        await async env.exit(1)
+        return False
     if via_beta(Thing(), 5) != 5:
         print("FAIL: forwarded diamond slot in the sibling witness class")
-        await async env.exit(1)
-    await async env.exit(0)
+        return False
+    return True
+
+actor main(env):
+    if check():
+        env.exit(0)
+    else:
+        env.exit(1)

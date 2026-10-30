@@ -201,21 +201,13 @@ def test_edge_cases() -> bool:
     return True
 
 actor main(env):
-    # Run all tests
-    if not test_basic_comprehensions():
-        await async env.exit(1)
-    if not test_comprehensions_with_expressions():
-        await async env.exit(1)
-    if not test_filtered_comprehensions():
-        await async env.exit(1)
-    if not test_nested_comprehensions():
-        await async env.exit(1)
-    if not test_variable_capture():
-        await async env.exit(1)
-    if not test_edge_cases():
-        await async env.exit(1)
-    #if not test_complex_types():
-    #    await async env.exit(1)
-
-    print("\n✓ All comprehension tests passed!")
-    env.exit(0)
+    if (test_basic_comprehensions() and
+        test_comprehensions_with_expressions() and
+        test_filtered_comprehensions() and
+        test_nested_comprehensions() and
+        test_variable_capture() and
+        test_edge_cases()):
+        print("\n✓ All comprehension tests passed!")
+        env.exit(0)
+    else:
+        env.exit(1)

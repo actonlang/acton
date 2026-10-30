@@ -6,7 +6,7 @@ actor sleeper(cap):
         acton.rts.sleep(cap, sleep_time)
 
 actor main(env):
-    def work():
+    def work() -> bool:
         s1 = sleeper(env.syscap)
         s2 = sleeper(env.syscap)
         s = time.Stopwatch()
@@ -19,7 +19,10 @@ actor main(env):
         print(d)
         if d.to_float() > 0.1:
             print("Diff (", d, ") is larger than expected")
-            await async env.exit(1)
+            return False
+        return True
 
-    work()
-    await async env.exit(0)
+    if work():
+        env.exit(0)
+    else:
+        env.exit(1)

@@ -6,22 +6,28 @@
 import points
 import hashpt
 
-actor main(env):
+def check() -> bool:
     a = points.Pt(1)
     b = points.Pt(1)
     if not (a == b) or a == points.Pt(2):
         print("FAIL: == through the imported Ord witness")
-        await async env.exit(1)
+        return False
     if not hashpt.same_here(a, b):
         print("FAIL: == inside the extending module")
-        await async env.exit(1)
+        return False
     d: dict[points.Pt, str] = {}
     d[a] = "one"
     if b not in d or points.Pt(7) in d:
         print("FAIL: dict through __eq__ forwarded to the imported witness")
-        await async env.exit(1)
+        return False
     l = sorted([points.Pt(3), points.Pt(1), points.Pt(2)])
     if l[0].x != 1 or l[1].x != 2 or l[2].x != 3:
         print("FAIL: sorted through the imported Ord witness")
-        await async env.exit(1)
-    await async env.exit(0)
+        return False
+    return True
+
+actor main(env):
+    if check():
+        env.exit(0)
+    else:
+        env.exit(1)

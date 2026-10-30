@@ -46,6 +46,7 @@ actor Tester(env, verbose, port_chunk):
     var combined_output = ""
     var p_alive = 0
     var error_encountered = False
+    var reported = False
     var tcp_client = None
     var tcp_expect = 0
     var state = 0
@@ -63,16 +64,19 @@ actor Tester(env, verbose, port_chunk):
         stop(True)
 
     def report():
+        if reported:
+            return
+        reported = True
         if error_encountered:
             print("There was an error :/")
             print(combined_output)
-            await async env.exit(1)
+            env.exit(1)
         else:
             print("Test success!")
             if verbose:
                 print("Combined DB & App output:")
                 print(combined_output)
-            await async env.exit(0)
+            env.exit(0)
 
     def are_we_done():
         if p_alive > 0 :
@@ -266,9 +270,10 @@ actor main(env):
         await async t.stop(True)
 
     def unconditional_exit():
+        # Request diagnostics without waiting: Tester may be stuck.
         t.error("Giving up...")
         t.report()
-        await async env.exit(1)
+        env.exit(1)
 
     after 2: test_timeout()
     after 4: unconditional_exit()

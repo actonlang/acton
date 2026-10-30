@@ -45,11 +45,17 @@ def use_cont[T(Cont)](x: T) -> int:
     y: T = Cont.make(x.total() + 1)
     return y.total()
 
-actor main(env):
+def check() -> bool:
     if use_cont(Vec(5)) != 6:
         print("FAIL: forwarded slots through generic Cont witness")
-        await async env.exit(1)
+        return False
     if Cont.make(3).total() != 3:
         print("FAIL: forwarded static make at concrete type")
-        await async env.exit(1)
-    await async env.exit(0)
+        return False
+    return True
+
+actor main(env):
+    if check():
+        env.exit(0)
+    else:
+        env.exit(1)

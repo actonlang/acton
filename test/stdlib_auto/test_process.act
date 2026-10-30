@@ -1,34 +1,52 @@
 actor main(env):
+    var done = False
+
+    def finish(code: int):
+        if done:
+            return
+        done = True
+        env.exit(code)
+
     def on_stderr(p, data):
+        if done:
+            return
         if data is not None:
             print("Received output on stderr:", data)
-            env.exit(0)
+            finish(0)
 
     def on_stdout(p, data: ?bytes):
+        if done:
+            return
         if data is not None:
             print("Received output on stdout:", data.decode())
             if data == b"HELLO\n":
                 print("All good, exiting..")
-                await async env.exit(0)
+                finish(0)
             else:
                 print("Unexpected output, blargh")
-                await async env.exit(1)
+                finish(1)
 
     def on_exit(p, exit_code, term_signal):
+        if done:
+            return
         print("Process exited with code: ", exit_code, " terminated with signal:", term_signal)
 
     def on_error(p, error):
+        if done:
+            return
         print("Error from process:", error)
-        await async env.exit(1)
+        finish(1)
 
     def test():
         print("Starting process..")
         p = env.process.spawn(["echo", "HELLO"], on_stdout, on_stderr, on_exit, on_error)
 
     def ex():
+        if done:
+            return
         print("Test timeout, should exit with error but not now... disabled due to faulty error")
         # TODO: fix on macos 10.15!?
-        env.exit(0)
+        finish(0)
 
     test()
     after 3: ex()

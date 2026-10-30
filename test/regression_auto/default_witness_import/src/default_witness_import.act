@@ -12,5 +12,6 @@ actor main(env):
     r = f()
     if r != [True, True, True, False]:
         print("FAIL: copied default witnesses", r)
-        await async env.exit(1)
-    await async env.exit(0)
+        env.exit(1)
+    else:
+        env.exit(0)

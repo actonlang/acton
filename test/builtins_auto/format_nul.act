@@ -45,7 +45,7 @@ actor main(env):
         check_nul()
         check_width()
         check_other_conversions()
+        env.exit(0)
     except AssertionError:
         print("formatting with NUL produced the wrong value")
-        await async env.exit(1)
-    await async env.exit(0)
+        env.exit(1)

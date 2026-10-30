@@ -14,20 +14,28 @@ actor main(env: Env):
     if len(env.argv) > 1:
         num = int(env.argv[1])
 
+    var done = False
     var exited = 0
     def on_exit(p, exit_code, term_signal, stdout_buf, stderr_buf):
+        if done:
+            return
         exited += 1
         print("Process exited with code: ", exit_code, " terminated with signal:", term_signal, "  exited:", exited)
         if stdout_buf != b"HELLO\n":
             print("stdout_buf is not correct, got:", stdout_buf)
+            done = True
             env.exit(1)
-        if exited == num:
+        elif exited == num:
             print("Enough...")
+            done = True
             env.exit(0)
 
     def on_error(p, error):
+        if done:
+            return
+        done = True
         print("Error from process:", error)
-        await async env.exit(1)
+        env.exit(1)
 
     def test():
         print("Starting process..")
@@ -37,7 +45,7 @@ actor main(env: Env):
 
     var i = 0
     def run_tests():
-        if i < num:
+        if not done and i < num:
             test()
             i += 1
             after 0: run_tests()

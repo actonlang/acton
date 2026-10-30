@@ -32,23 +32,29 @@ class Deriv(Base[int]):
             pass
         return x
 
-actor main(env):
+def check() -> bool:
     d = Deriv()
     l = [7]
     if d.bump(l[0]) != 48:
         print("FAIL: augmented assignment of a boxed parameter")
-        await async env.exit(1)
+        return False
     if l[0] != 7:
         print("FAIL: caller's box mutated by augmented assignment")
-        await async env.exit(1)
+        return False
     if d.get(1) != 2:
         print("FAIL: rebound boxed parameter")
-        await async env.exit(1)
+        return False
     if d.last(5) != 30:
         print("FAIL: for-loop rebinding of a boxed parameter")
-        await async env.exit(1)
+        return False
     b: Base[int] = d
     if b.get(5) != 6 or b.bump(1) != 42:
         print("FAIL: rebinding through the generic slot")
-        await async env.exit(1)
-    await async env.exit(0)
+        return False
+    return True
+
+actor main(env):
+    if check():
+        env.exit(0)
+    else:
+        env.exit(1)
