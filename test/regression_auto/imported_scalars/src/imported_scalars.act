@@ -1,0 +1,57 @@
+# Imported scalar globals use the same raw C storage as qualified access.
+# Printing forces the boxes to be consumed, exposing a raw value used as a pointer.
+import constants
+import wildcard
+from constants import MY_INT, MIN_INT, MY_I32, MY_I16, MY_I8, MY_U64, MY_U32, MY_U16, MY_U8, MY_U1, MY_BOOL, MY_FLOAT, MY_STR, MY_SET, MY_BIGINT
+from constants import MY_INT as RENAMED_INT, MY_U64 as RENAMED_U64, MY_FLOAT as RENAMED_FLOAT
+
+def consume_int(n: int) -> int:
+    return n + 1
+
+def consume_u64(n: u64) -> u64:
+    return n - 1
+
+def consume_float(n: float) -> float:
+    return n + 0.25
+
+def shadow(MY_INT: int, MY_U64: u64, MY_FLOAT: float):
+    return (MY_INT, MY_U64, MY_FLOAT)
+
+actor main(env):
+    print(MY_INT, MIN_INT, MY_I32, MY_I16, MY_I8, MY_U64, MY_U32,
+          MY_U16, MY_U8, MY_U1, MY_BOOL, MY_FLOAT, MY_STR, MY_SET, MY_BIGINT)
+    selected = (MY_INT, MIN_INT, MY_I32, MY_I16, MY_I8, MY_U64, MY_U32,
+                MY_U16, MY_U8, MY_U1, MY_BOOL, MY_FLOAT, MY_STR, MY_SET, MY_BIGINT)
+    qualified = (constants.MY_INT, constants.MIN_INT, constants.MY_I32,
+                 constants.MY_I16, constants.MY_I8, constants.MY_U64,
+                 constants.MY_U32, constants.MY_U16, constants.MY_U8,
+                 constants.MY_U1, constants.MY_BOOL, constants.MY_FLOAT,
+                 constants.MY_STR, constants.MY_SET, constants.MY_BIGINT)
+    print(qualified)
+    print(wildcard.values())
+    assert selected == qualified
+    assert wildcard.values() == qualified
+    assert MY_INT == 42
+    assert MIN_INT == -9223372036854775808
+    assert MY_I32 == -2147483647
+    assert MY_I16 == -32767
+    assert MY_I8 == 65
+    assert MY_U64 == 18446744073709551615
+    assert MY_U32 == 4294967295
+    assert MY_U16 == 65535
+    assert MY_U8 == 90
+    assert MY_U1 == 1
+    assert MY_BOOL
+    assert MY_FLOAT == 1.5
+    assert MY_STR == "scalar imports"
+    assert MY_SET == {1, 2, 3}
+    assert MY_BIGINT == 18446744073709551616
+    print(RENAMED_INT, RENAMED_U64, RENAMED_FLOAT)
+    assert RENAMED_INT == MY_INT
+    assert RENAMED_U64 == MY_U64
+    assert RENAMED_FLOAT == MY_FLOAT
+    assert consume_int(MY_INT) == 43
+    assert consume_u64(MY_U64) == 18446744073709551614
+    assert consume_float(MY_FLOAT) == 1.75
+    assert shadow(7, u64(9223372036854775808), 2.5) == (7, u64(9223372036854775808), 2.5)
+    env.exit(0)
