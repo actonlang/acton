@@ -25,13 +25,22 @@ class Pattern(object):
     pattern: str
     # TODO: A Pattern restored from the database keeps the address the code
     # had in the process that stored it. It needs a field type whose value is
-    # serialized as NULL, so that the code can be compiled again.
+    # serialized as NULL, so that _recompile can compile the code again.
     _code: u64
 
     def __init__(self, pattern: str) -> None:
         code = _compile(pattern)
         self.pattern = pattern
         self._code = code
+        self._register_finalizer()
+
+    def _recompile(self) -> None:
+        """Compile the pattern again and replace the compiled code
+
+        The previous code is released, so recompile a Pattern only before it
+        is shared with other actors.
+        """
+        self._code = _compile(self.pattern)
         self._register_finalizer()
 
     def _register_finalizer(self) -> None:
