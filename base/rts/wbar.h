@@ -50,8 +50,6 @@
 #include <stdint.h>
 #include <acton_gc_config.h>
 
-#if ACTON_GC_WRITE_BARRIER
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -139,12 +137,3 @@ static inline void acton_wbar_range(const void *obj, const void *dst, size_t n) 
         acton_store_r_->attr = acton_store_v_;                          \
         ACTON_WBAR(acton_store_r_, &acton_store_r_->attr, acton_store_v_); \
     } while (0)
-
-#else
-
-#define ACTON_WBAR(obj, slot, v) ((void)0)
-#define ACTON_WBAR_RANGE(obj, dst, n) ((void)0)
-#define ACTON_STORE(obj, lv, v) ((lv) = (v))
-#define ACTON_STORE_ATTR(recv, attr, v) ((recv)->attr = (v))
-
-#endif

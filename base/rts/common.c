@@ -9,10 +9,8 @@
 
 #include "rts/common.h"
 #include <acton_gc_config.h>
-#if ACTON_GC_WRITE_BARRIER
 #include <stdio.h>
 #include <gc/gc_mark.h>
-#endif
 
 #if defined(_WIN32) || defined(_WIN64)
 
@@ -62,7 +60,6 @@ static void *uv_gc_calloc(size_t count, size_t size) {
     return GC_malloc_uncollectable(count * size);
 }
 
-#if ACTON_GC_WRITE_BARRIER
 // The collector's dirty bits, set by acton_init_write_barrier(). The RTS
 // calls it right after GC_INIT, before it allocates a GC object, starts a
 // thread or initializes a module, so no barrier runs while this is NULL.
@@ -99,9 +96,7 @@ void acton_wbar_check(const void *obj, const void *slot) {
     }
 }
 #endif
-#endif
 
-#if ACTON_GC_WRITE_BARRIER
 // The collector reads the dirty bits only in incremental mode (generational
 // mode). There, memory that code without the write barrier writes pointers
 // into comes from a collector kind that every read rescans
@@ -153,7 +148,6 @@ static void *uv_gc_realloc(void *ptr, size_t size) {
         return gc_malloc_rescanned(size);
     return GC_realloc(ptr, size);
 }
-#endif
 
 void acton_init_alloc() {
     // Allocator regimes for the native IO stack:
@@ -192,18 +186,11 @@ void acton_init_alloc() {
                         calloc,
                         free);
 
-#if ACTON_GC_WRITE_BARRIER
     acton_init_rescanned_kind();
     uv_replace_allocator(uv_gc_malloc,
                          uv_gc_realloc,
                          uv_gc_calloc,
                          GC_free);
-#else
-    uv_replace_allocator(uv_gc_malloc,
-                         GC_realloc,
-                         uv_gc_calloc,
-                         GC_free);
-#endif
 }
 
 int acton_replace_allocator(acton_malloc_func malloc_func,

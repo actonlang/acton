@@ -41,11 +41,11 @@ memory, and explicit frees of GC memory would be double-management.
 
 ## Write barrier
 
-Builds with `gc_dirty_tracking_backend=write_barrier` (the default) compile
-the collector with its manual dirty-bit mode only and the program with a
-write barrier (`base/rts/wbar.h`). In generational mode
-(`ACTON_GC_MODE=generational`) the collector reads those bits instead of
-protecting pages or reading the kernel's dirty bits:
+Every build compiles the collector with its manual dirty-bit mode only and
+the program with a write barrier (`base/rts/wbar.h`). The collector refuses
+the manual mode without threads, so targets without threads (wasm) cannot be
+built. In generational mode (`ACTON_GC_MODE=generational`) the collector reads
+those bits:
 
 - a minor collection rescans the marked objects of the dirty blocks, pushes
   the roots and marks to the end;

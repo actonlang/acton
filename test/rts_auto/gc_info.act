@@ -4,7 +4,6 @@ import acton.rts
 actor main(env):
     before = acton.rts.get_gc_info(env.syscap)
     assert before.mode in ["ordinary", "generational", "incremental"]
-    assert before.configured_backend in ["write_barrier", "auto", "soft_dirty", "userfaultfd"]
     assert before.page_hash_table_log2 > 0
     assert before.block_size >= 4096
     assert (before.block_size & (before.block_size - 1)) == 0
@@ -36,7 +35,6 @@ actor main(env):
         acton.rts.gc(env.syscap)
         info = acton.rts.get_gc_info(env.syscap)
         assert info.mode == before.mode
-        assert info.configured_backend == before.configured_backend
         assert info.backend == before.backend
         assert info.supported_backends == before.supported_backends
         assert info.page_hash_table_log2 == before.page_hash_table_log2

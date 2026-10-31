@@ -35,13 +35,12 @@ def get_gc_time(cap: SysCap) -> (total: u64, mark: u64, sweep: u64):
     """Get GC time in milliseconds"""
     NotImplemented
 
-def get_gc_info(cap: SysCap) -> (mode: str, configured_backend: str, backend: str, supported_backends: list[str], page_hash_table_log2: u64, block_size: u64, end_padding: bool, thread_local_size_limit: u64, no_thread_local_warmup: bool, thread_local_refill_blocks: u64, realloc_no_free: bool, markers: u64, bytes_per_marker: u64, mark_range_stealing: bool, mark_bits: bool, initial_mark_stack_size: u64, pause_target_ms: ?float, free_space_divisor: u64, full_frequency: u64, heap_growth_divisor: u64, alloc_budget_percent: u64, memory_limit: u64, heap_ceiling_percent: u64, heap_size: u64, free_bytes: u64, unmapped_bytes: u64):
+def get_gc_info(cap: SysCap) -> (mode: str, backend: str, supported_backends: list[str], page_hash_table_log2: u64, block_size: u64, end_padding: bool, thread_local_size_limit: u64, no_thread_local_warmup: bool, thread_local_refill_blocks: u64, realloc_no_free: bool, markers: u64, bytes_per_marker: u64, mark_range_stealing: bool, mark_bits: bool, initial_mark_stack_size: u64, pause_target_ms: ?float, free_space_divisor: u64, full_frequency: u64, heap_growth_divisor: u64, alloc_budget_percent: u64, memory_limit: u64, heap_ceiling_percent: u64, heap_size: u64, free_bytes: u64, unmapped_bytes: u64):
     """Read the collector's build configuration and current policy and heap.
 
-    mode is ordinary, generational or incremental. configured_backend is the
-    build choice; backend is the active dirty-tracking backend, or none in
-    ordinary mode. supported_backends lists compiled capabilities, which do
-    not guarantee that the running kernel supports them.
+    mode is ordinary, generational or incremental. backend is the active
+    dirty-tracking backend, or none in ordinary mode. supported_backends
+    lists the mechanisms the collector is built with.
 
     page_hash_table_log2 describes 2**n page-hash bits per table, used by dirty
     tracking and blacklisting. block_size is the heap block size in bytes.

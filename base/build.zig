@@ -25,45 +25,6 @@ fn joinPath(allocator: std.mem.Allocator, base: []const u8, relative: []const u8
     return path;
 }
 
-// The ACTON_GC_REQUIRED_VDB value (a GC_VDB_* constant, or 0 for automatic
-// selection) for gc_dirty_tracking_backend, which must be supported by target.
-// write_barrier selects the collector's manual dirty-bit mode (GC_VDB_MANUAL),
-// in which the program's write barrier (rts/wbar.h) sets the dirty bits.
-fn gcRequiredVdb(t: std.Target, backend: []const u8) u8 {
-    const required_vdb: u8 = if (std.mem.eql(u8, backend, "write_barrier")) 0x2
-        else if (std.mem.eql(u8, backend, "auto")) 0
-        else if (std.mem.eql(u8, backend, "soft_dirty")) 0x40
-        else if (std.mem.eql(u8, backend, "userfaultfd")) 0x80
-        else {
-            std.log.err("gc_dirty_tracking_backend must be write_barrier, auto, soft_dirty or userfaultfd", .{});
-            std.process.exit(1);
-        };
-    if (required_vdb == 0x2) {
-        if (t.cpu.arch.isWasm()) {
-            std.log.err("gc_dirty_tracking_backend=write_barrier requires a target with threads", .{});
-            std.process.exit(1);
-        }
-        return required_vdb;
-    }
-    if (required_vdb != 0 and (t.os.tag != .linux or !t.abi.isGnu())) {
-        std.log.err("gc_dirty_tracking_backend={s} requires a Linux GNU target", .{backend});
-        std.process.exit(1);
-    }
-    if (required_vdb == 0x80) {
-        const supported_arch = switch (t.cpu.arch) {
-            .x86, .x86_64, .aarch64 => true,
-            else => false,
-        };
-        const glibc_version = t.os.versionRange().gnuLibCVersion() orelse
-            std.SemanticVersion{ .major = 0, .minor = 0, .patch = 0 };
-        if (!supported_arch or glibc_version.order(.{ .major = 2, .minor = 34, .patch = 0 }) == .lt) {
-            std.log.err("gc_dirty_tracking_backend=userfaultfd requires x86, x86_64 or aarch64 and glibc 2.34 or newer", .{});
-            std.process.exit(1);
-        }
-    }
-    return required_vdb;
-}
-
 // The C compiler flags of the collector sources in lib.
 fn cSourceFlags(lib: *std.Build.Step.Compile) []const []const u8 {
     for (lib.root_module.link_objects.items) |link_object| {
@@ -94,7 +55,6 @@ pub fn build(b: *std.Build) void {
     const no_threads = b.option(bool, "no_threads", "") orelse false;
     const gc_use_mark_bits = b.option(bool, "gc_use_mark_bits", "Use packed GC mark bits (default: true)") orelse true;
     const gc_mark_bit_per_object = b.option(bool, "gc_mark_bit_per_object", "Track GC marks per object") orelse false;
-    const gc_dirty_tracking_backend = b.option([]const u8, "gc_dirty_tracking_backend", "GC dirty tracking backend: write_barrier (default on targets with threads), auto, soft_dirty, userfaultfd") orelse gcDefaultDirtyTrackingBackend(target.result);
     const gc_mode = b.option([]const u8, "gc_mode", "Default GC mode, which the ACTON_GC_MODE environment variable overrides: ordinary (default) or generational") orelse "ordinary";
     const gc_page_hash_table_log2 = b.option(u8, "gc_page_hash_table_log2", "Log2 of GC page-hash entries (0 keeps the default)") orelse 0;
     const gc_heap_growth_divisor = b.option(u32, "gc_heap_growth_divisor", "Limit automatic GC heap growth to the heap size divided by this (default 4; 0 keeps the fixed increment)") orelse 4;
@@ -126,8 +86,6 @@ pub fn build(b: *std.Build) void {
     }
     // Validate here, before the collector's own option checks, so that the
     // diagnostics name the Build.act options.
-    const gc_required_vdb = gcRequiredVdb(target.result, gc_dirty_tracking_backend);
-    const gc_write_barrier = gc_required_vdb == 0x2;
     const gc_mode_generational = gcModeGenerational(gc_mode);
     if (gc_page_hash_table_log2 > 30) {
         std.log.err("gc_page_hash_table_log2 must be between 1 and 30, or 0 for the default", .{});
@@ -192,7 +150,6 @@ pub fn build(b: *std.Build) void {
         std.log.err("gc_no_thread_local_warmup requires a target with threads", .{});
         std.process.exit(1);
     }
-    const gc_enable_mprotect_vdb = gcEnableMprotectVdb(target.result);
     // The write barrier compiles in the block size and the number of dirty
     // bits, which the RTS checks against the collector when it starts:
     // LOG_PHT_ENTRIES of LARGE_CONFIG unless gc_page_hash_table_log2 sets it.
@@ -218,7 +175,10 @@ pub fn build(b: *std.Build) void {
         .enable_mmap = true,
         .enable_mark_bits = gc_use_mark_bits,
         .enable_mark_bit_per_obj = gc_mark_bit_per_object,
-        .dirty_tracking_backend = gcLibgcBackend(gc_dirty_tracking_backend),
+        // The program sets the dirty bits through its write barrier
+        // (rts/wbar.h): the collector's manual dirty-bit mode, which needs
+        // threads.
+        .dirty_tracking_backend = "manual",
         .page_hash_table_log2 = gc_page_hash_table_log2,
         .heap_growth_divisor = gc_heap_growth_divisor,
         .alloc_budget_percent = gc_alloc_budget_percent,
@@ -233,7 +193,6 @@ pub fn build(b: *std.Build) void {
         .disable_realloc_free = gc_realloc_no_free,
         .disable_thread_local_warmup = gc_no_thread_local_warmup,
         .tl_refill_max = gc_thread_local_refill_blocks,
-        .enable_mprotect_vdb = gc_enable_mprotect_vdb,
     });
     const libgc = dep_libgc.artifact("gc");
     if (enable_lto) libgc.lto = .thin;
@@ -245,10 +204,7 @@ pub fn build(b: *std.Build) void {
         \\#ifndef ACTON_GC_CONFIG_H
         \\#define ACTON_GC_CONFIG_H
         \\#include <gc.h>
-        \\#define ACTON_GC_DIRTY_TRACKING_BACKEND "{s}"
-        \\#define ACTON_GC_REQUIRED_VDB {d}
         \\#define ACTON_GC_THREADS {d}
-        \\#define ACTON_GC_WRITE_BARRIER {d}
         \\#define ACTON_GC_LOG_BLOCK {d}
         \\#define ACTON_GC_LOG_PHT {d}
         \\#define ACTON_GC_MODE_GENERATIONAL {d}
@@ -267,8 +223,7 @@ pub fn build(b: *std.Build) void {
         \\#endif
         \\#endif
         \\
-    , .{ gc_dirty_tracking_backend, gc_required_vdb, @intFromBool(gc_enable_threads),
-         @intFromBool(gc_write_barrier), gc_log_block, gc_log_pht, @intFromBool(gc_mode_generational) }));
+    , .{ @intFromBool(gc_enable_threads), gc_log_block, gc_log_pht, @intFromBool(gc_mode_generational) }));
     // The effective settings depend on the collector defaults and its
     // configuration macros, so read them from the collector's private header,
     // compiled with the C flags of libgc itself.
@@ -589,7 +544,6 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
             .gc_use_mark_bits = gc_use_mark_bits,
             .gc_mark_bit_per_object = gc_mark_bit_per_object,
-            .gc_dirty_tracking_backend = gc_dirty_tracking_backend,
             .gc_page_hash_table_log2 = gc_page_hash_table_log2,
             .gc_heap_growth_divisor = gc_heap_growth_divisor,
             .gc_alloc_budget_percent = gc_alloc_budget_percent,
@@ -649,18 +603,6 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&run_base_tests.step);
 }
 
-// The write barrier needs threads: the collector refuses the manual
-// dirty-bit mode without them.
-pub fn gcDefaultDirtyTrackingBackend(t: std.Target) []const u8 {
-    return if (t.cpu.arch.isWasm()) "auto" else "write_barrier";
-}
-
-// The collector's dirty_tracking_backend for gc_dirty_tracking_backend:
-// write_barrier builds the collector with the manual dirty-bit mode only.
-pub fn gcLibgcBackend(backend: []const u8) []const u8 {
-    return if (std.mem.eql(u8, backend, "write_barrier")) "manual" else backend;
-}
-
 pub fn gcModeGenerational(mode: []const u8) bool {
     if (std.mem.eql(u8, mode, "generational")) return true;
     if (!std.mem.eql(u8, mode, "ordinary")) {
@@ -668,14 +610,6 @@ pub fn gcModeGenerational(mode: []const u8) bool {
         std.process.exit(1);
     }
     return false;
-}
-
-// x86_64 macOS builds leave out mprotect-based dirty tracking. Under
-// Rosetta 2, incremental collection with it hangs when 12 or more threads
-// run; it is untested on Intel Macs. Incremental mode then treats every
-// page as dirty, as all macOS builds did before.
-pub fn gcEnableMprotectVdb(t: std.Target) bool {
-    return !(t.os.tag.isDarwin() and t.cpu.arch == .x86_64);
 }
 
 // The collector's GC_TINY_FREELISTS for gc_thread_local_size_limit (0 keeps

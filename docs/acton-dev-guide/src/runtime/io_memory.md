@@ -24,12 +24,13 @@ somebody must `free()` it on every path.
 | mbedtls (TLS state, X.509, bignums, ...) | libc `calloc`/`free` | mbedtls itself |
 | TLS-path native objects in `net.ext.c` (streams, requests, state structs, payload copies) | libc `malloc`/`free` | `net.ext.c`, in close/completion callbacks |
 | DNS `uv_getaddrinfo_t` requests in `net.ext.c` | libc `malloc`/`free` | the resolve callback |
-| Read buffers (`alloc_buffer`, `base/rts/io.c`) | `GC_malloc_atomic` | collector |
+| Read buffers (`alloc_buffer`, `base/rts/io.c`) | libc `malloc`, one per thread | never: the thread's next read reuses it |
 
-The rescanned kind, used in generational mode only, exists in `write_barrier`
-builds (see [Memory and GC](memory.md#write-barrier)). Every allocation from
-it takes the collector's allocator lock, so ordinary mode and other builds
-use ordinary GC memory instead.
+The rescanned kind, used in generational mode only, is a collector kind that
+every read of the dirty bits rescans (see [Memory and
+GC](memory.md#write-barrier)). Every allocation from it takes the collector's
+allocator lock, so ordinary mode, which never reads the dirty bits, uses
+ordinary GC memory instead.
 
 The wiring lives in `acton_init_alloc()` (`base/rts/common.c`), called from
 `main()` right after `GC_INIT()` and before any uv/tlsuv/mbedtls allocation.

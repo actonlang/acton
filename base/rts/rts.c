@@ -51,7 +51,6 @@
 #include <sys/resource.h>
 #endif
 #ifdef __APPLE__
-#include <fcntl.h>
 #include <mach/mach_time.h>
 #include <sys/sysctl.h>
 #endif
@@ -2712,11 +2711,7 @@ void wt_work_cb(uv_check_t *ev) {
 // SET_SELF stores the current actor into the worker context for every
 // continuation, without a write barrier.
 static WorkerCtx new_worker_ctx(void) {
-#if ACTON_GC_WRITE_BARRIER
     return acton_gc_malloc_rescanned_aligned(_Alignof(struct WorkerCtx), sizeof(struct WorkerCtx));
-#else
-    return GC_memalign(_Alignof(struct WorkerCtx), sizeof(struct WorkerCtx));
-#endif
 }
 
 void *main_loop(void *idx) {
@@ -3213,39 +3208,6 @@ static void get_exe_path(char *name_buf, size_t buf_size) {
     name_buf[buf_size - 1] = 0;
 }
 
-#ifdef __APPLE__
-// In incremental and generational mode, the collector's mprotect dirty
-// tracking makes other threads take write faults on protected heap pages
-// while lldb is attached. debugserver takes over the task's EXC_BAD_ACCESS
-// exception port when it attaches, so these faults reach lldb instead of
-// the collector's handler. lldb then reports a crash, --one-line-on-crash
-// exits before "thread backtrace all" runs, and on detach the fault is
-// delivered as SIGBUS. This setting makes debugserver leave EXC_BAD_ACCESS
-// to the task's own handler.
-#define LLDB_IGNORE_BAD_ACCESS "settings set platform.plugin.darwin.ignored-exceptions EXC_BAD_ACCESS"
-
-// Older lldb versions lack the setting, and lldb --batch stops at the first
-// failing command, before it attaches. Try the command on its own first.
-static bool lldb_can_ignore_bad_access() {
-    int probe_pid = fork();
-    if (probe_pid < 0)
-        return false;
-    if (!probe_pid) {
-        int devnull = open("/dev/null", O_WRONLY);
-        if (devnull >= 0) {
-            dup2(devnull, 1);
-            dup2(devnull, 2);
-        }
-        execlp("lldb", "lldb", "--batch", "-O", LLDB_IGNORE_BAD_ACCESS, NULL);
-        _exit(127);
-    }
-    int status;
-    if (waitpid(probe_pid, &status, 0) != probe_pid)
-        return false;
-    return WIFEXITED(status) && WEXITSTATUS(status) == 0;
-}
-#endif
-
 void print_trace() {
     char pid_buf[30];
     sprintf(pid_buf, "%d", getpid());
@@ -3257,10 +3219,6 @@ void print_trace() {
     int child_pid = fork();
     if (!child_pid) {
         dup2(2, 1); // redirect output to stderr
-#ifdef __APPLE__
-        if (lldb_can_ignore_bad_access())
-            execlp("lldb", "lldb", "-O", LLDB_IGNORE_BAD_ACCESS, "-p", pid_buf, "--batch", "-o", "thread backtrace all", "-o", "exit", "--one-line-on-crash", "exit", name_buf, NULL);
-#endif
         execlp("lldb", "lldb", "-p", pid_buf, "--batch", "-o", "thread backtrace all", "-o", "exit", "--one-line-on-crash", "exit", name_buf, NULL);
         execlp("gdb", "gdb", "--quiet", "--batch", "-n", "-ex", "set confirm off", "-ex", "set pagination off", "-ex", "set debuginfod enabled off", "-ex", "thread", "-ex", "thread apply all backtrace full", name_buf, pid_buf, NULL);
         fprintf(stderr, "Unable to get detailed backtrace using lldb or gdb\n");
@@ -3482,10 +3440,6 @@ static void gc_select_mode(void) {
         }
     }
     if (check) {
-#if !ACTON_GC_WRITE_BARRIER
-        fprintf(stderr, "Acton RTS: ACTON_GC_CHECK=1 needs a build with gc_dirty_tracking_backend=write_barrier\n");
-        exit(1);
-#endif
         if (mode != NULL && strcmp(mode, "ordinary") == 0) {
             fprintf(stderr, "Acton RTS: ACTON_GC_CHECK=1 needs generational mode\n");
             exit(1);
@@ -3511,7 +3465,6 @@ static void gc_select_mode(void) {
     }
 }
 
-#if ACTON_GC_WRITE_BARRIER
 #ifndef _WIN32
 #include <dlfcn.h>
 #endif
@@ -3532,7 +3485,6 @@ static const char *GC_CALLBACK gc_wbar_describe(const void *obj, size_t size) {
 #endif
     return NULL;
 }
-#endif
 
 #ifndef _WIN32
 // Raise the soft limit on open files to the hard limit. Systems set a low
@@ -3571,23 +3523,11 @@ int main(int argc, char **argv) {
     GC_set_on_os_get_mem(gc_disable_thp);
 #endif
     gc_select_mode();
-#if ACTON_GC_WRITE_BARRIER
     if (getenv("GC_WBAR_VERIFY") != NULL)
         GC_set_wbar_verify_describe(gc_wbar_describe);
-#endif
     GC_INIT();
-#if ACTON_GC_REQUIRED_VDB != 0
-    if (getenv("GC_ENABLE_INCREMENTAL") != NULL
-            && GC_get_actual_vdb() != ACTON_GC_REQUIRED_VDB) {
-        fprintf(stderr, "Acton RTS: requested GC dirty tracking backend %s is unavailable\n",
-                ACTON_GC_DIRTY_TRACKING_BACKEND);
-        exit(1);
-    }
-#endif
     gc_env_restore();
-#if ACTON_GC_WRITE_BARRIER
     acton_init_write_barrier();
-#endif
     GC_set_warn_proc(DaveNull);
     acton_init_alloc();
     acton_replace_allocator(GC_malloc, GC_malloc_atomic, GC_realloc, GC_calloc, acton_noop_free, GC_strdup, GC_strndup);
@@ -3981,11 +3921,7 @@ int main(int argc, char **argv) {
 
     for (int i=0; i <= num_wthreads; i++) {
         // libuv writes handle links and timers into the loop
-#if ACTON_GC_WRITE_BARRIER
         uv_loop_t *loop = acton_gc_malloc_rescanned_aligned(_Alignof(uv_loop_t), sizeof(uv_loop_t));
-#else
-        uv_loop_t *loop = GC_malloc(sizeof(uv_loop_t));
-#endif
         check_uv_fatal(uv_loop_init(loop), "Error initializing libuv loop: ");
         uv_loops[i] = loop;
 
