@@ -27,6 +27,7 @@ actor Tester(env, verbose, port_chunk, unresolvable_seed):
     var p_alive = 0
     var error_encountered = False
     var reported = False
+    var checker_report = False
     var state = 0
 
     def log(msg: str) -> None:
@@ -45,7 +46,11 @@ actor Tester(env, verbose, port_chunk, unresolvable_seed):
         if reported:
             return
         reported = True
-        if error_encountered:
+        if checker_report:
+            print("The write-barrier checker reported a store without its barrier:")
+            print(combined_output)
+            env.exit(70)
+        elif error_encountered:
             print("There was an error :/")
             print(combined_output)
             env.exit(1)
@@ -85,6 +90,8 @@ actor Tester(env, verbose, port_chunk, unresolvable_seed):
         are_we_done()
 
     def app_on_exit(p, exit_code, term_signal):
+        if exit_code == 70:
+            checker_report = True
         log("App Process exited with code: %d terminated with signal: %d" % (exit_code, term_signal))
         p_alive -= 1
         if exit_code == 0 and term_signal == 0:
