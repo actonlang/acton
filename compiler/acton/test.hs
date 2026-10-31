@@ -4081,7 +4081,7 @@ runThing opts thing = do
     let wd = if isProj then projBinPath else twd
     let exe = if isProj then binName else fileBody
     (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc ("./" ++ exe) (words opts)){ cwd = Just wd } ""
-    cmdErr' <- dropCheckerLines cmdErr
+    cmdErr' <- dropCheckerLines returnCode cmdErr
     return (returnCode, cmdOut, cmdErr')
   where (fileBody, fileExt) = splitExtension $ takeFileName thing
         fileParts = splitOn "__" fileBody
@@ -4103,14 +4103,15 @@ runThingBytes opts thing = do
                                                { cwd = Just wd, std_in = UseHandle hIn, std_out = UseHandle hOut, std_err = UseHandle hErr }
                           waitForProcess ph
         cmdOut <- BS.readFile outPath
-        cmdErr <- BS.readFile errPath >>= dropCheckerLinesBytes
+        cmdErr <- BS.readFile errPath >>= dropCheckerLinesBytes returnCode
         return (returnCode, cmdOut, cmdErr)
 
 -- In the write barrier's checker mode (ACTON_GC_CHECK=1) the collector of a
 -- program writes lines of its own to stderr: a line after a collection whose
 -- check was incomplete, and its reports before it exits with status 70. A
 -- store without its barrier fails a test through that exit status, so the
--- stderr the tests compare is taken without these lines.
+-- stderr the tests compare is taken without these lines. After exit status 70
+-- they stay, so that the output of the failed test shows the report.
 checkerLinePrefixes :: [String]
 checkerLinePrefixes = ["WBVERIFY ", "GC_WBAR_VERIFY: "]
 
@@ -4119,21 +4120,21 @@ checkerMode = do
     v <- lookupEnv "ACTON_GC_CHECK"
     return $ maybe False (\s -> s /= "" && s /= "0") v
 
-dropCheckerLines :: String -> IO String
-dropCheckerLines err = do
+dropCheckerLines :: ExitCode -> String -> IO String
+dropCheckerLines code err = do
     check <- checkerMode
     let ls = lines err
         isChecker l = any (`isPrefixOf` l) checkerLinePrefixes
-    return $ if check && any isChecker ls
+    return $ if check && code /= ExitFailure 70 && any isChecker ls
                then unlines (filter (not . isChecker) ls)
                else err
 
-dropCheckerLinesBytes :: BS.ByteString -> IO BS.ByteString
-dropCheckerLinesBytes err = do
+dropCheckerLinesBytes :: ExitCode -> BS.ByteString -> IO BS.ByteString
+dropCheckerLinesBytes code err = do
     check <- checkerMode
     let ls = BC.lines err
         isChecker l = any (`BC.isPrefixOf` l) (map BC.pack checkerLinePrefixes)
-    return $ if check && any isChecker ls
+    return $ if check && code /= ExitFailure 70 && any isChecker ls
                then BC.unlines (filter (not . isChecker) ls)
                else err
 
