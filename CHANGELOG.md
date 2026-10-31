@@ -76,6 +76,10 @@
 - Compile mutually dependent protocol extensions correctly when their
   implementations are used inside methods, including equality methods
   inherited through another protocol. [#3356]
+- Compile fields, methods, parameters, and local variables named `stdin`,
+  `stdout`, `stderr`, or `ERROR` without collisions with C header macros,
+  including musl and Windows headers. Names with `A_` prefixes remain distinct
+  from the compiler's escaped spellings. [#3364]
 - Recheck dependents when a module loses its last public name, reporting the
   missing export as a type error instead of failing during code generation.
   Reuse only a module's own cached interface, even when another module on the
@@ -139,6 +143,26 @@
   messages are reported and skipped. Use `frame()` and `StreamDecoder` for
   custom stream transports. The guide includes runnable UDP and TCP examples.
   TLS syslog transport is not yet supported. [#3323] [#3344]
+- Use private CAs and client certificates with `net.TLSConnection` and
+  `net.TLSListener` through `ca_pem`, `cert_pem`, and `key_pem`.
+  Listeners request client certificates with `client_auth=True`. Set
+  `server_name` to choose the name checked and sent as SNI independently of
+  the connection address.
+  Both ends support `verify_peer` for certificate pinning or custom trust
+  decisions: with the default `verify_tls=True`, it can only reject a verified
+  certificate; with `verify_tls=False`, it decides whether to accept the peer.
+  Connections expose the peer certificate chain, verification flags,
+  negotiated ALPN protocol, and TLS version through `tls_info()`, plus socket
+  addresses and ports through `endpoints()`. Listeners support ALPN and report
+  their bound address and port, including a port selected by listening on 0.
+  [#3346]
+- Bound TLS connection attempts, including the handshake and custom peer
+  verification, with `connect_timeout`, defaulting to 10 seconds. This default
+  also applies to HTTPS clients. Listeners limit handshakes to 60 seconds by
+  default with `handshake_timeout`; set it to 0 for no limit. Closing a client
+  cancels an attempt in progress, and closing a listener aborts unfinished
+  handshakes while keeping accepted connections open. Failed handshakes report
+  certificate rejection reasons or peer alerts when available. [#3346]
 - Compile regular expressions once with `re.compile(pattern)` and reuse the
   resulting `Pattern` across calls and actors. Count or replace non-overlapping
   matches with `re.count(pattern, string)` and
@@ -236,6 +260,12 @@
 - Return `0` for `bigint` right shifts that discard the entire value, such as
   `bigint(5) >> 64`, instead of crashing. Right shifts of negative values
   continue to truncate toward zero. [#3319]
+- Call `len()` and iterate over a `bytearray` in generic functions constrained
+  by `Container[int]` without crashing through uninitialized protocol
+  witnesses. [#3361]
+- Make `file.FS.rmtree()` remove the requested directory as well as its
+  contents. Child symlinks are removed without following them; missing paths
+  and other operating-system errors remain ignored. [#3366]
 - Hash bounded numeric types, complex values, and immutable sets directly,
   avoiding most of the allocation and runtime overhead of stateful hashing.
   Hashing user-defined values, including dictionary and set operations, now
@@ -292,6 +322,9 @@
   garbage collection runs before the seed host names are used. Log and skip
   unresolvable seed hosts so the client can try the remaining seeds instead
   of crashing. [#3321] [#3338]
+- Resolve distributed-database host names safely during concurrent lookups
+  by copying per-call results instead of relying on shared resolver state.
+  Database connections continue to use IPv4. [#3362]
 - Restore actor databases after interruption during root actor initialization
   without crashing when the saved bootstrap continuation resumes. Initial
   environment state, the root actor, and the first message are now saved
@@ -5943,6 +5976,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#3343]: https://github.com/actonlang/acton/pull/3343
 [#3344]: https://github.com/actonlang/acton/pull/3344
 [#3345]: https://github.com/actonlang/acton/pull/3345
+[#3346]: https://github.com/actonlang/acton/pull/3346
 [#3347]: https://github.com/actonlang/acton/pull/3347
 [#3348]: https://github.com/actonlang/acton/pull/3348
 [#3349]: https://github.com/actonlang/acton/pull/3349
@@ -5953,6 +5987,10 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#3354]: https://github.com/actonlang/acton/pull/3354
 [#3355]: https://github.com/actonlang/acton/pull/3355
 [#3356]: https://github.com/actonlang/acton/pull/3356
+[#3361]: https://github.com/actonlang/acton/pull/3361
+[#3362]: https://github.com/actonlang/acton/pull/3362
+[#3364]: https://github.com/actonlang/acton/pull/3364
+[#3366]: https://github.com/actonlang/acton/pull/3366
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
