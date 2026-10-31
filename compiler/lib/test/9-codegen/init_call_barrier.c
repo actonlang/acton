@@ -8,7 +8,7 @@ $R init_call_barrierQ_step ($Cont C_cont) {
 }
 $R init_call_barrierQ_L_1C_1cont (init_call_barrierQ_Later self, $Cont C_cont, B_NoneType C_2res) {
     #line 22 "test/src/init_call_barrier.act"
-    ((B_NoneType (*) (init_call_barrierQ_Base))init_call_barrierQ_BaseG_methods.__init__)(((init_call_barrierQ_Base)self));
+    ((B_NoneType (*) (init_call_barrierQ_Base))init_call_barrierQ_BaseG_methods.__init__)(acton_wbar_object(((init_call_barrierQ_Base)self), sizeof(struct init_call_barrierQ_Base)));
     return $R_CONT(C_cont, B_None);
 }
 $R init_call_barrierQ_L_2ContD___call__($Cont $closure, $WORD $result) {
@@ -150,7 +150,7 @@ B_NoneType init_call_barrierQ_RenewG_init (init_call_barrierQ_Renew self) {
 #line 27 "test/src/init_call_barrier.act"
 B_NoneType init_call_barrierQ_RenewD___init__ (init_call_barrierQ_Base b) {
     #line 29 "test/src/init_call_barrier.act"
-    ((init_call_barrierQ_Base)(b))->items = B_mk_list(1, toB_int(3LL));
+    ACTON_STORE_ATTR(((init_call_barrierQ_Base)(b)), items, B_mk_list(1, toB_int(3LL)));
     return B_None;
 }
 void init_call_barrierQ_RenewD___serialize__ (init_call_barrierQ_Renew self, $Serial$state state) {
@@ -173,7 +173,7 @@ struct init_call_barrierQ_RenewG_class init_call_barrierQ_RenewG_methods;
 #line 31 "test/src/init_call_barrier.act"
 B_NoneType init_call_barrierQ_reinit (init_call_barrierQ_Base b) {
     #line 32 "test/src/init_call_barrier.act"
-    ((B_NoneType (*) (init_call_barrierQ_Base))init_call_barrierQ_BaseG_methods.__init__)(b);
+    ((B_NoneType (*) (init_call_barrierQ_Base))init_call_barrierQ_BaseG_methods.__init__)(acton_wbar_object(b, sizeof(struct init_call_barrierQ_Base)));
     return B_None;
 }
 #line 34 "test/src/init_call_barrier.act"

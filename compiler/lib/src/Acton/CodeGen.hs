@@ -242,16 +242,29 @@ setVolVars as env                   = modX env $ \x -> x{ volVarsX = as }
 isVolVar a env                      = a `elem` volVarsX (envX env)
 
 -- The methods of a class that is neither an actor class nor a closure are
--- generated with plainClassX set. In its __init__ and G_init methods,
--- freshSelfX names the self parameter: the object was allocated by the
--- constructor that calls them and is held by it, so the stores into its
--- attributes need no write barrier (see genV MutAssign). This relies on
--- __init__ running only on a new object.
+-- generated with plainClassX set. In its __init__ and G_init methods that
+-- are not static, freshSelfX names the self parameter. That object was
+-- allocated by a constructor that still holds it, or an explicit call set
+-- the barrier on it first, over the struct of the class named in the call,
+-- which begins with the fields of every class it inherits from (see
+-- genDotCall). So the stores into its attributes need no write barrier (see
+-- genV MutAssign), and neither does a parent's __init__ or G_init called on
+-- it.
 setPlainClass b env                 = modX env $ \x -> x{ plainClassX = b }
 
 setFreshSelf n env                  = modX env $ \x -> x{ freshSelfX = n }
 
 freshSelf env                       = freshSelfX (envX env)
+
+-- True for the fresh self, also inside the $CAST to a parent class that a
+-- call such as Base.__init__(self) puts around it.
+isFreshSelf env (Var _ (NoQ x))     = Just x == freshSelf env
+isFreshSelf env (Call _ f (PosArg e PosNil) KwdNil)
+  | Var _ q <- stripTApp f,
+    q == primCAST                   = isFreshSelf env e
+isFreshSelf _ _                     = False
+
+isInitName n                        = n == initKW || n == altInit
 
 -- The Boxing pass wraps a condition's value in a single Box/UnBox node; its
 -- combinators collapse adjacent ones, so they never nest. Strip that one layer
@@ -929,7 +942,8 @@ declFunctionWithStorage env storage symbol (Def dloc n q p KwdNIL (Just t) b d f
         freshSelfName
           | plainClassX (envX env),
             Derived _ n0 <- n,
-            n0 == initKW || n0 == altInit,
+            isInitName n0,
+            d == NoDec,
             PosPar x _ _ _ <- p     = Just x
           | otherwise               = Nothing
         t2                          = exposeMsg fx t
@@ -2649,7 +2663,9 @@ declCon env n q b
         env1                        = ldefine ((tmpV, NVar tObj) : envOf pars) env
         abstr                       = abstractAttrs env (NoQ n)
 
-acton_malloc env n                  = text "acton_malloc" <> parens (text "sizeof" <> parens (text "struct" <+> gen env n))
+acton_malloc env n                  = text "acton_malloc" <> parens (structSize env n)
+
+structSize env n                    = text "sizeof" <> parens (text "struct" <+> gen env n)
 
 comma' x                            = if isEmpty x then empty else comma <+> x
 
@@ -2657,8 +2673,18 @@ genDotCall env ts dec e@(Var _ x) n p
   | NClass q _ _ _ <- info,
     Just _ <- dec                   =
       let TFun _ _ r _ _            = classCallableType env ts x q n
-      in classCast env ts x q n (methodtable' env x <> text "." <> gen env n) <> parens (genCallPosArgs env r p)
+      in classCast env ts x q n (methodtable' env x <> text "." <> gen env n) <> parens (args r p)
   where info                        = findQName x env
+        -- An __init__ or G_init method stores into its self without barriers
+        -- (see setPlainClass), so an explicit call on an object other than
+        -- the fresh self passes the object through acton_wbar_object, which
+        -- sets the dirty bits of its blocks first.
+        args (TRow _ _ _ t _ r) (PosArg a p')
+          | isInitName n,
+            Just NoDec <- dec,
+            not (isFreshSelf env a) = wbarObject (genCallArg env t a) <> comma' (genCallPosArgs env r p')
+        args r p'                   = genCallPosArgs env r p'
+        wbarObject obj              = text "acton_wbar_object" <> parens (obj <> comma <+> structSize env (unalias env x))
 genDotCall env ts dec e n p
   | Just NoDec <- dec               = genEnter env ts e n p
   | Just Static <- dec              = dotCast env False ts e n (genReceiver env e <> text "->" <> gen env classKW <> text "->" <> gen env n) <> parens (gen env p)
@@ -2693,8 +2719,7 @@ genStoreAttr env recv attr value    = text "ACTON_STORE_ATTR" <> parens (recv <>
 needsWriteBarrier env r t v
   | isUnboxedRep t                  = False
   | None{} <- v                     = False
-  | Var _ (NoQ x) <- r,
-    Just x == freshSelf env         = False
+  | isFreshSelf env r               = False
   | otherwise                       = True
 
 

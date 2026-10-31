@@ -27,7 +27,10 @@
 //   block it hands out while a collection is in progress). This covers the
 //   constructors and __init__ of classes, closures and continuations. It
 //   does not cover objects reached through the held object, an object
-//   loaded back from the heap, or the result of realloc;
+//   loaded back from the heap, or the result of realloc. An explicit
+//   __init__ or G_init call on an object other than the self of the
+//   calling __init__ or G_init sets the barrier on that object first
+//   (acton_wbar_object);
 // - of NULL, None, a static object or an integer;
 // - into a stack object, a C global, malloc memory or pointer-free GC
 //   memory;
@@ -117,6 +120,22 @@ static inline void acton_wbar_range(const void *obj, const void *dst, size_t n) 
 }
 #define ACTON_WBAR_RANGE(obj, dst, n)                                   \
     acton_wbar_range((const void *)(obj), (const void *)(dst), (size_t)(n))
+
+// Before an explicit __init__ or G_init call on obj, unless obj is the self
+// of the calling __init__ or G_init: every block of the first n bytes of
+// obj, the struct of the class named in the call. The method stores into obj
+// without barriers and does not keep the values live, so the bits come
+// first. They last until the next read of the bits, at a stop that pushes
+// the roots, and such a stop during the call finds obj in a register or on
+// the stack, as the argument and then the method's self, and sets the bits
+// again for the next read. The self of the calling method needs no barrier:
+// a constructor still holds it, or this function covered it before the
+// calling method ran, since a struct begins with the fields of its parent
+// class. Returns obj.
+static inline void *acton_wbar_object(void *obj, size_t n) {
+    acton_wbar_range(obj, obj, n);
+    return obj;
+}
 
 // lv = v, then the barrier, for a field lv of obj. v is evaluated first,
 // then the address of lv, once, as in the plain assignment that clang

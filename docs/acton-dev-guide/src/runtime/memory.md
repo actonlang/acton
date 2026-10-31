@@ -83,11 +83,19 @@ allocated. The collector makes this true:
   dirty for its final read.
 
 Rule F covers `__init__` and `G_init` stores into `self` of classes (not
-actors; it relies on `__init__` running only on a new object), closure and
-continuation constructors, and C constructors. It does not cover an object
-reached through the held one (`B_listD_new(n)->data`), an object loaded back
-from the heap (the `--db` restore fills objects allocated in an earlier pass,
-so every deserializer fill has a barrier), or the result of realloc.
+actors, not static methods), closure and continuation constructors, and C
+constructors. It does not cover an object reached through the held one
+(`B_listD_new(n)->data`), an object loaded back from the heap (the `--db`
+restore fills objects allocated in an earlier pass, so every deserializer fill
+has a barrier), or the result of realloc. So an explicit `C.__init__(x)` or
+`C.G_init(x)` call first sets the bits of the blocks of `x` that struct `C`
+spans (`acton_wbar_object`), unless `x` is the `self` of the calling
+`__init__` or `G_init`. That object is still held by its constructor, or the
+call that ran the calling method has covered it, since the struct of a class
+begins with the fields of its parent class. Such calls run in functions and
+methods that initialize an object again, and in the continuation of a `proc`
+`__init__`, which loads `self` back from the heap. A barrier after the call
+would be too late: the method does not keep the values it stores live.
 
 **Moves and bulk copies.** `ACTON_WBAR_RANGE` over the destination, before
 the first move: a step can scan a large object in pieces between two moves,
