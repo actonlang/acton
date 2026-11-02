@@ -92,8 +92,8 @@ runs the front passes (compileModule).  A TyTask is checked in this order:
   1. An import whose interface is gone fails the module.
   2. Its dependency rows are compared with the current hashes.  A changed
      pub hash, a missing hash or a changed module without name rows runs
-     the front passes, and so does a forced module: the requested module
-     under alternative output, or any module under --always-build.
+     the front passes, and so does the requested module under alternative
+     output.
   3. A changed impl hash alone computes the impl hashes again from the
      stored rows (refreshImpl), or runs the front passes when a hash it
      needs is unavailable.
@@ -1589,7 +1589,7 @@ data ModuleEnv = ModuleEnv
   , moduleResolver :: Resolver
   , moduleBase     :: Acton.Env.Env0                    -- __builtin__ and every module checked before this one
   , moduleBlocked  :: Bool                              -- a library boundary: its back passes are not deferred
-  , moduleForced   :: Bool                              -- alternative output for the requested module, or --always-build
+  , moduleDump     :: Bool                              -- alternative output for the requested module
   }
 
 keyOf                                   :: ModuleEnv -> TaskKey
@@ -1880,7 +1880,7 @@ data DepChange
   | RowsMissing A.ModName                                            -- a changed dependency module without name rows
 
 -- | Why a module runs its front passes.
-data Reason = SourceChanged | DependencyChanges [DepChange] | Forced | ImplRefreshFailed
+data Reason = SourceChanged | DependencyChanges [DepChange] | DumpRequested | ImplRefreshFailed
 
 -- | How a module's front stage brings it up to date, in priority order.
 -- An impl refresh carries the module's NotImplemented flag as assess read
@@ -1922,11 +1922,11 @@ assess env header = do
 
 -- | The action a cached module's dependency changes call for, if any.  A
 -- changed pub hash or a missing hash runs the front passes, and so does a
--- forced module.  A changed impl hash refreshes the impl hashes.
+-- request for a dump. A changed impl hash refreshes the impl hashes.
 dependencyAction                        :: ModuleEnv -> InterfaceFiles.HeaderSummary -> Bool -> [DepChange] -> Maybe Action
 dependencyAction env header hasNotImpl changes
   | any needsFront changes              = Just (RunFront (DependencyChanges changes))
-  | moduleForced env                    = Just (RunFront Forced)
+  | moduleDump env                      = Just (RunFront DumpRequested)
   | any (changedIn Impl) changes        = Just (RefreshImpl header hasNotImpl changes)
   | otherwise                           = Nothing
 
@@ -2019,7 +2019,7 @@ dependencyChanges env header = do
             users    = depUsers kind <$> InterfaceFiles.readDepUsers tydb m n
 
 -- | The --verbose lines of an action.  Tests match this text.  A source
--- change says only that, and a forced module says nothing.  Deltas come
+-- change says only that, and a dump request says nothing. Deltas come
 -- newest first, the reverse of the order they were found in.  Missing items
 -- come pub, then impl, each sorted by name, then the modules without rows.
 -- A module's dependency rows hold each name once, so no two missing items
@@ -2029,7 +2029,7 @@ describe env action = case action of
     RunFront SourceChanged          -> [ stale "source changed" ]
     RunFront (DependencyChanges cs) -> [ stale ("pub changes in " ++ deltas Pub cs)      | any (changedIn Pub) cs ]
                                     ++ [ stale ("missing dep hashes in " ++ missing cs) | any isMissing cs ]
-    RunFront Forced                 -> []
+    RunFront DumpRequested          -> []
     RunFront ImplRefreshFailed      -> [ stale "impl refresh encountered unresolved dep hashes; rerunning front passes" ]
     RefreshImpl _ _ cs              -> [ stale ("impl changes in " ++ deltas Impl cs) ]
     RefreshCodegen _ status         -> [ stale ("generated code out of date" ++ formatCodegenDelta status) ]
@@ -2329,7 +2329,7 @@ checkModule :: BuildEnv -> GlobalTask -> C.CompileOptions -> Acton.Env.Env0 -> M
 checkModule build t opts base = runFrontPasses ModuleEnv
     { moduleBuild = build, moduleTask = t, moduleCurrent = gtTask t, moduleOptions = opts
     , moduleResolver = cacheResolver (buildCache build) (gtPaths t), moduleBase = base
-    , moduleBlocked = False, moduleForced = False }
+    , moduleBlocked = False, moduleDump = False }
 
 -- | A module after its kinds, types and escape analysis.
 data Checked = Checked
@@ -3244,7 +3244,7 @@ moduleEnv run state k = ModuleEnv
     , moduleResolver = inRunResolver (buildCache (runBuild run)) (runTasks run) (finishedModules state) t
     , moduleBase     = accumulatedEnv state
     , moduleBlocked  = Data.Set.member k (runBlocked run)
-    , moduleForced   = altOutputFor (runContext run) k || C.alwaysbuild opts
+    , moduleDump     = altOutputFor (runContext run) k
     }
   where t    = taskOf run k
         opts = optionsFor (runContext run) k

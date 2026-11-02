@@ -84,7 +84,6 @@ data NewOptions     = NewOptions {
                     }  deriving Show
 
 data CompileOptions   = CompileOptions {
-                         alwaysbuild :: Bool,
                          ignore_compiler_version :: Bool,
                          db          :: Bool,
                          parse       :: Bool,
@@ -126,8 +125,7 @@ data CompileOptions   = CompileOptions {
 -- and tests start from it.
 defaultCompileOptions :: CompileOptions
 defaultCompileOptions = CompileOptions
-    { alwaysbuild             = False
-    , ignore_compiler_version = False
+    { ignore_compiler_version = False
     , db                      = False
     , parse                   = False
     , parse_ast               = False
@@ -385,8 +383,7 @@ sigOptions = SigOptions
 
 sigCompileOptions :: Parser CompileOptions
 sigCompileOptions = mkSigCompileOptions
-        <$> switch (long "always-build" <> help "Recompute signatures instead of reusing fresh cached interfaces")
-        <*> switch (long "ignore-compiler-version" <> help "Ignore acton version when checking .tydb freshness")
+        <$> switch (long "ignore-compiler-version" <> help "Ignore acton version when checking .tydb freshness")
         <*> strOption (long "syspath"   <> metavar "TARGETDIR" <> value "" <> help "Set syspath")
         <*> many (strOption (long "searchpath" <> metavar "DIR" <> help "Add search path"))
         <*> many (option depOverrideReader
@@ -394,10 +391,9 @@ sigCompileOptions = mkSigCompileOptions
                 <> metavar "NAME=PATH"
                 <> help "Override dependency NAME with local PATH"))
   where
-    mkSigCompileOptions always ignore syspath' search depOverrides =
+    mkSigCompileOptions ignore syspath' search depOverrides =
       defaultCompileOptions
-        { alwaysbuild = always
-        , ignore_compiler_version = ignore
+        { ignore_compiler_version = ignore
         , skip_build = True
         , syspath = syspath'
         , searchpath = search
@@ -408,8 +404,7 @@ compileOptions = compileOptionsWith optimizeOption
 
 compileOptionsWith :: Parser OptimizeMode -> Parser CompileOptions
 compileOptionsWith optimization = CompileOptions
-        <$> switch (long "always-build" <> help "Show the result of parsing")
-        <*> switch (long "ignore-compiler-version" <> help "Ignore acton version when checking .tydb freshness")
+        <$> switch (long "ignore-compiler-version" <> help "Ignore acton version when checking .tydb freshness")
         <*> switch (long "db"           <> help "Enable DB backend")
         <*> switch (long "parse"        <> help "Show the result of parsing")
         <*> switch (long "parse-ast"    <> help "Show the raw AST (Haskell Show)")

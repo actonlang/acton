@@ -461,20 +461,29 @@ result errors
 == import cycle
 result failed: Cyclic imports: <proj>:events.a <proj>:events.c <proj>:events.b
 
-== always build
+== interfaces removed
+parse-start events.a
+parse-done events.a
 front-start events.a
+info   Stale a: source changed
 output-start events.a tydb
 output-done events.a tydb ok
 output-start events.a doc
 front-done events.a
 front-result events.a deferred
+parse-start events.b
+parse-done events.b
 front-start events.b
+info   Stale b: source changed
 output-start events.b tydb
 output-done events.b tydb ok
 output-start events.b doc
 front-done events.b
 front-result events.b deferred
+parse-start events.c
+parse-done events.c
 front-start events.c
+info   Stale c: source changed
 output-start events.c tydb
 output-done events.c tydb ok
 output-start events.c doc

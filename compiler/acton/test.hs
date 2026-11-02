@@ -967,7 +967,7 @@ compilerTests =
                   , "zig_dependencies = {}"
                   ]
               runBuild dir = readCreateProcessWithExitCode
-                (proc actonExe ["build", "--always-build"]) { cwd = Just dir, env = Just envWithHome } ""
+                (proc actonExe ["build"]) { cwd = Just dir, env = Just envWithHome } ""
 
           createDirectoryIfMissing True homeDir
 
@@ -1043,7 +1043,7 @@ compilerTests =
                     , ""
                     ]
                 runBuild dir = readCreateProcessWithExitCode
-                  (proc actonExe ["build", "--always-build"]) { cwd = Just dir, env = Just envWithHome } ""
+                  (proc actonExe ["build"]) { cwd = Just dir, env = Just envWithHome } ""
                 assertBuildOk label (code, out, err) =
                   when (code /= ExitSuccess) $
                     assertFailure (label ++ " failed:\nstdout:\n" ++ out ++ "\nstderr:\n" ++ err)
@@ -1280,13 +1280,15 @@ parseFlagTests =
       assertBool "compatibility alias should stay out of help" (not ("--release" `isInfixOf` helpText))
       assertBool "generic optimization option uses native names"
         ("debug, safe, fast, small" `isInfixOf` unwords (words helpText))
+  , testCase "build and sig reject --always-build" $ do
+      assertParseFails ["build", "--always-build"]
+      assertParseFails ["sig", "--always-build", "foo"]
   , testCase "sig parser accepts target and project options" $ do
-      parsed <- parseArgs ["sig", "--always-build", "--dep", "dep=../dep", "--searchpath", "out/types", "foo.bar"]
+      parsed <- parseArgs ["sig", "--dep", "dep=../dep", "--searchpath", "out/types", "foo.bar"]
       case parsed of
         C.CmdOpt _ (C.Sig sigOpts) -> do
           let opts = C.sigCompile sigOpts
           assertEqual "sig target" "foo.bar" (C.sigTarget sigOpts)
-          assertBool "sig should force rebuild when requested" (C.alwaysbuild opts)
           assertEqual "sig searchpath" ["out/types"] (C.searchpath opts)
           assertEqual "sig dep overrides" [("dep", "../dep")] (C.dep_overrides opts)
           assertBool "sig should skip final build" (C.skip_build opts)
@@ -1877,7 +1879,7 @@ parseFlagTests =
           (case Ae.eitherDecode (LBS.pack jsonOut) :: Either String Ae.Value of
              Right _ -> True
              Left _ -> False)
-        checkNoTiming =<< run ["build", "--timing", "--always-build", "--types", "src/main.act"]
+        checkNoTiming =<< run ["build", "--timing", "--types", "src/main.act"]
         checkSummary =<< run ["build", "--timing", "--verbose-zig"]
         -- Cyclic imports fail runCompilePlan itself, before normal type-error handling.
         writeFile (proj </> "src" </> "cycle_a.act") "import cycle_b\n"
@@ -1961,6 +1963,13 @@ parseFlagTests =
         OA.CompletionInvoked _ ->
           assertFailure ("parser requested shell completion for " ++ unwords args)
 
+    assertParseFails args =
+      case OA.execParserPure OA.defaultPrefs parserInfo args of
+        OA.Failure _ -> return ()
+        OA.Success _ -> assertFailure ("parser unexpectedly accepted " ++ unwords args)
+        OA.CompletionInvoked _ ->
+          assertFailure ("parser requested shell completion for " ++ unwords args)
+
     assertParsedBuildOptimize args expected = do
       parsed <- parseArgs args
       case parsed of
@@ -2022,7 +2031,7 @@ actonProjTests =
             , "    env.exit(0)"
             ]
           (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode
-            (proc actonExe ["build", "--always-build", "--color", "never"]) { cwd = Just proj } ""
+            (proc actonExe ["build", "--color", "never"]) { cwd = Just proj } ""
           assertEqual ("project importing std.json should build\nstdout:\n" ++ cmdOut ++ "\nstderr:\n" ++ cmdErr)
             ExitSuccess returnCode
           zon <- readFile (proj </> "out/zig/build.zig.zon")
@@ -2067,7 +2076,7 @@ actonProjTests =
             , "    env.exit(0)"
             ]
           (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode
-            (proc actonExe ["build", "--always-build", "--skip-build", "--color", "never"])
+            (proc actonExe ["build", "--skip-build", "--color", "never"])
               { cwd = Just proj } ""
           assertEqual ("escaping hasher should fail\nstdout:\n" ++ cmdOut ++ "\nstderr:\n" ++ cmdErr)
             (ExitFailure 1) returnCode
@@ -2443,7 +2452,9 @@ actonProjTests =
         acton <- canonicalizePath "../../dist/bin/acton"
         -- Single-file build of foo must not prune outputs from other moduels
         -- since we don't have full visibility, so bar should remain
-        (returnCode, _, _) <- readCreateProcessWithExitCode (proc acton ["--skip-build", "--always-build", "src/foo.act"]){ cwd = Just proj } ""
+        writeFile fooAct (fooContent ++ "\n# rebuild foo\n")
+        (returnCode, _, _) <- readCreateProcessWithExitCode (proc acton ["--skip-build", "src/foo.act"]){ cwd = Just proj } ""
+        writeFile fooAct fooContent
         assertEqual "acton single-file build should succeed" ExitSuccess returnCode
         mapM_ (\p -> doesFileExist p >>= assertBool (p ++ " should exist")) [barC, barH]
         doesDirectoryExist barTydb >>= assertBool (barTydb ++ " should exist")
@@ -2459,7 +2470,7 @@ actonProjTests =
           writeFile nestedAct "actor main(env):\n    env.exit(0)\n"
           acton <- canonicalizePath "../../dist/bin/acton"
           (returnCode, cmdOut, cmdErr) <-
-            readCreateProcessWithExitCode (proc acton ["--skip-build", "--always-build", "--tydb", "src/pkg/nested.act"]){ cwd = Just proj } ""
+            readCreateProcessWithExitCode (proc acton ["--skip-build", "--tydb", "src/pkg/nested.act"]){ cwd = Just proj } ""
           assertEqual ("acton --tydb should succeed\nSTDOUT:\n" ++ cmdOut ++ "\nSTDERR:\n" ++ cmdErr) ExitSuccess returnCode
           doesDirectoryExist nestedTydb >>= assertBool (nestedTydb ++ " should exist")
           doesDirectoryExist flatTydb >>= assertBool (flatTydb ++ " should not exist") . not
@@ -3173,8 +3184,9 @@ dependencyDeclarationTests =
           writeProject app "app" [platformDep]
           createDirectoryIfMissing True (takeDirectory (app </> "src" </> localModule <.> "act"))
           writeModule app localModule answerSource
-          forM_ [("cached", []), ("rebuilt", ["--always-build"])] $ \(mode, flags) -> do
-            result <- runBuildWith flags acton app
+          forM_ ["cached", "rebuilt"] $ \mode -> do
+            when (mode == "rebuilt") $ removePathForcibly (app </> "out/types")
+            result <- runBuild acton app
             if localImport
               then expectSuccess (mode ++ " import of the replacement local module") result
               else expectFailure (mode ++ " undeclared dependency import") "yang" result
@@ -3930,7 +3942,7 @@ buildThing opts thing = do
     curDir <- getCurrentDirectory
     let wd = if proj then projPath else curDir
         args0 = if proj then ["build"] else [thing]
-        args  = args0 ++ ["--always-build"] ++ words opts
+        args  = args0 ++ words opts
     (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc actonExe args){ cwd = Just wd } ""
     return (returnCode, cmdOut, cmdErr)
 
