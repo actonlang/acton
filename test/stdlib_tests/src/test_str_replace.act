@@ -1,0 +1,65 @@
+import testing
+
+
+def _test_replace_single_byte():
+    for text, old, new, expected in [
+        ("Ethernet1/1", ",", "\\,", "Ethernet1/1"),
+        (",a,,b,", ",", "\\,", "\\,a\\,\\,b\\,"),
+        (",a,,b,", ",", "", "ab"),
+        (",a,,b,", ",", ";", ";a;;b;"),
+        ("é,€𝄞,", ",", "🌍", "é🌍€𝄞🌍"),
+        ("é,€𝄞,", ",", "", "é€𝄞"),
+        ("a\x00b\x00", "\x00", "é", "aébé"),
+        ("a,b", ",", "\x00", "a\x00b"),
+        ("", ",", "x", ""),
+        (",", ",", "🌍", "🌍"),
+    ]:
+        result = text.replace(old, new)
+        testing.assertEqual(result, expected)
+        testing.assertEqual(len(result), len(expected))
+        testing.assertEqual(result.encode(), expected.encode())
+
+def _test_replace_count():
+    for count, expected in [(0, ",a,,"), (1, "éa,,"), (2, "éaé,"),
+                            (3, "éaéé"), (100, "éaéé"), (-1, "éaéé"), (-2, "éaéé")]:
+        result = ",a,,".replace(",", "é", count)
+        testing.assertEqual(result, expected)
+        testing.assertEqual(len(result), len(expected))
+
+def _test_replace_empty_and_multibyte():
+    for text, old, new, expected in [
+        ("é€", "", "-", "-é-€-"),
+        ("", "", "🌍", "🌍"),
+        ("abc", "", "", "abc"),
+        ("é€é", "é", "🌍", "🌍€🌍"),
+        ("aaaaa", "aa", "x", "xxa"),
+        ("abc", "abcd", "x", "abc"),
+    ]:
+        result = text.replace(old, new)
+        testing.assertEqual(result, expected)
+        testing.assertEqual(len(result), len(expected))
+    testing.assertEqual("é€".replace("", "-", 2), "-é-€")
+
+def _test_single_byte_search():
+    # The shared search must respect explicit lengths, including embedded NUL.
+    text = "é\x00€\x00𝄞"
+    testing.assertEqual(text.find("\x00"), 1)
+    testing.assertEqual(text.find("\x00", 2), 3)
+    testing.assertEqual(text.find("\x00", 0, 1), -1)
+    testing.assertEqual(text.count("\x00"), 2)
+    testing.assertEqual(text.split("\x00"), ["é", "€", "𝄞"])
+    testing.assertEqual(text.partition("\x00"), ("é", "\x00", "€\x00𝄞"))
+    testing.assertEqual(text.find(""), 0)
+    testing.assertEqual(text.find("", len(text)), len(text))
+
+def _test_single_byte_binary_search():
+    text = b"\x80\x00\xff\x00\x80"
+    testing.assertEqual(text.find(b"\xff"), 2)
+    testing.assertEqual(text.count(b"\x80"), 2)
+    testing.assertEqual(text.replace(b"\x00", b"XY"), b"\x80XY\xffXY\x80")
+    testing.assertEqual(text.split(b"\x00"), [b"\x80", b"\xff", b"\x80"])
+    data = bytearray(text)
+    testing.assertEqual(data.find(bytearray(b"\xff")), 2)
+    testing.assertEqual(data.count(bytearray(b"\x80")), 2)
+    testing.assertEqual(data.replace(bytearray(b"\x00"), bytearray(b"XY")),
+                        bytearray(b"\x80XY\xffXY\x80"))

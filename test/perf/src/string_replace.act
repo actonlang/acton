@@ -1,0 +1,73 @@
+import testing
+
+
+# Scale is the input byte count for the replace cases. The key cases use
+# fixed inputs and the same two replacements as gdata.key_str_part.
+
+def replace(t: testing.SyncT, text: str, old: str, new: str, expected: str, count: ?int=None):
+    total = 0
+    repeats = 0
+    last = ""
+    for _ in t.loop():
+        repeats += 1
+        last = text.replace(old, new, count)
+        total += len(last)
+    testing.assertEqual(total, repeats * len(expected))
+    if repeats > 0:
+        testing.assertEqual(last, expected)
+
+def key_str_part(t: testing.SyncT, key: str, expected: str):
+    total = 0
+    repeats = 0
+    last = ""
+    for _ in t.loop():
+        repeats += 1
+        last = key.replace("\\", "\\\\").replace(",", "\\,")
+        total += len(last)
+    testing.assertEqual(total, repeats * len(expected))
+    if repeats > 0:
+        testing.assertEqual(last, expected)
+
+
+def _test_key_str_part_unescaped(t: testing.SyncT):
+    key_str_part(t, "Ethernet1/1", "Ethernet1/1")
+
+def _test_key_str_part_escaped(t: testing.SyncT):
+    key_str_part(t, "rack\\slot,port", "rack\\\\slot\\,port")
+
+def _test_replace_absent(t: testing.SyncT):
+    text = "x" * t.scale()
+    replace(t, text, ",", "\\,", text)
+
+def _test_replace_sparse(t: testing.SyncT):
+    prefix = "x" * (t.scale() - 1)
+    replace(t, prefix + ",", ",", "\\,", prefix + "\\,")
+
+def _test_replace_dense(t: testing.SyncT):
+    replace(t, "," * t.scale(), ",", "\\,", "\\," * t.scale())
+
+def _test_replace_same_size(t: testing.SyncT):
+    replace(t, "," * t.scale(), ",", ";", ";" * t.scale())
+
+def _test_replace_delete(t: testing.SyncT):
+    replace(t, "," * t.scale(), ",", "", "")
+
+def _test_replace_count_one(t: testing.SyncT):
+    size = t.scale()
+    replace(t, "," * size, ",", "\\,", "\\," + "," * (size - 1), 1)
+
+def _test_replace_count_zero(t: testing.SyncT):
+    text = "," * t.scale()
+    replace(t, text, ",", "\\,", text, 0)
+
+def _test_replace_unicode(t: testing.SyncT):
+    size = t.scale() // 2
+    replace(t, "å" * size, "å", "🌍", "🌍" * size)
+
+def _test_replace_long_pattern(t: testing.SyncT):
+    text = "abcdefgh" * (t.scale() // 8)
+    replace(t, text, "abcdefgh", "xyz", "xyz" * (t.scale() // 8))
+
+def _test_replace_long_pattern_absent(t: testing.SyncT):
+    text = "x" * t.scale()
+    replace(t, text, "abcdefgh", "xyz", text)
