@@ -1,0 +1,411 @@
+import net
+import std.syslog as syslog
+import test_net_tls_auth as certs
+import testing
+
+
+actor _test_SyslogTLSClientWire(t: testing.EnvT):
+    """Private CA, name override, both peer checks, and mTLS on an independent collector."""
+    cap = net.TCPCap(net.NetCap(t.env.cap))
+    var listener: ?net.TLSListener = None
+    var connection: ?net.TLSListenConnection = None
+    var client: ?syslog.StreamClient = None
+    var data = b""
+    var messages = 0
+    var server_verified = False
+    var client_verified = False
+    var closing = False
+    var done = False
+
+    def finish(error: ?str):
+        if done:
+            return
+        done = True
+        if client is not None:
+            client.close()
+        if connection is not None:
+            connection.close()
+        if listener is not None:
+            listener.close()
+        if error is not None:
+            t.failure(AssertionError(error))
+        else:
+            t.success()
+
+    def verified_server(chain: list[bytes], result: int) -> bool:
+        if result != 0 or chain != [certs.pem_to_der(certs.SERVER_CERT_PEM)]:
+            return False
+        server_verified = True
+        return True
+
+    def verified_client(chain: list[bytes], result: int) -> bool:
+        if result != 0 or chain != [certs.pem_to_der(certs.CLIENT_CERT_PEM)]:
+            return False
+        client_verified = True
+        return True
+
+    def client_failed(c: syslog.StreamClient, error: str):
+        finish("TLS syslog client failed: {error}")
+
+    def connected(c: syslog.StreamClient):
+        if done:
+            c.close()
+            return
+        c.log("café", hostname="host", app_name="test",
+              structured_data={"event@32473": [(name="instance", value="one")]})
+
+    def received(c: net.TLSListenConnection, chunk: bytes):
+        if done:
+            return
+        data += chunk
+        try:
+            while data:
+                end = data.find(b" ")
+                if end < 0:
+                    return
+                length = int(data[:end].decode())
+                testing.assertTrue(length > 0)
+                testing.assertEqual(data[:end], str(length).encode())
+                if len(data) < end + 1 + length:
+                    return
+                message = data[end + 1:end + 1 + length]
+                data = data[end + 1 + length:]
+                if messages == 0:
+                    testing.assertEqual(message, b"<14>1 - host app - - - queued\n\x00\xff")
+                elif messages == 1:
+                    testing.assertTrue(message.startswith(b"<14>1 "))
+                    testing.assertTrue(message.endswith(b' host test - - [event@32473 instance="one"] \xef\xbb\xbfcaf\xc3\xa9'))
+                    stamp = message.split(b" ")[1]
+                    testing.assertEqual(len(stamp), 27)
+                    testing.assertTrue(stamp.endswith(b"Z"))
+                else:
+                    finish("TLS client sent an extra frame")
+                    return
+                messages += 1
+        except Exception as error:
+            finish(error.error_message)
+            return
+        if messages == 2 and not closing:
+            closing = True
+            if client is not None:
+                client.close()
+                client.close()
+
+    def connection_failed(c: net.TLSListenConnection, error: str):
+        finish("TLS collector failed: {error}")
+
+    def connection_closed(c: net.TLSListenConnection):
+        if not closing or messages != 2 or data != b"" or not server_verified or not client_verified:
+            finish("TLS client closed with incomplete frames or missing verification")
+        else:
+            finish(None)
+
+    def accepted(c: net.TLSListenConnection):
+        if done:
+            c.close()
+            return
+        if connection is not None:
+            c.close()
+            finish("TLS client unexpectedly retried")
+            return
+        connection = c
+        ep = c.endpoints()
+        if ep.remote_address != "127.0.0.1" or ep.remote_port <= 0:
+            finish("TLS collector did not report the client endpoint")
+            return
+        c.cb_install(received, connection_failed, connection_closed)
+
+    def bound(l: net.TLSListener, error: ?str):
+        if done:
+            l.close()
+            return
+        if error is not None:
+            finish("TLS collector listener failed: {error}")
+            return
+        c = syslog.StreamClient(net.TCPConnectCap(cap), "127.0.0.1", l.local_port(), connected, client_failed,
+                                 tls=True, ca_pem=certs.CA_PEM, server_name="localhost",
+                                 cert_pem=certs.CLIENT_CERT_PEM, key_pem=certs.CLIENT_KEY_PEM,
+                                 verify_peer=verified_server)
+        client = c
+        c.send(syslog.Message(b"queued\n\x00\xff", hostname="host", app_name="app"))
+
+    listener = net.TLSListener(net.TCPListenCap(cap), "127.0.0.1", 0,
+                               certs.SERVER_CERT_PEM, certs.SERVER_KEY_PEM, bound, accepted,
+                               client_auth=True, ca_pem=certs.CA_PEM, verify_peer=verified_client)
+    after 10: finish("TLS client wire test timed out")
+
+
+actor rejected_server(t: testing.EnvT, reason: str):
+    """A failed server check closes the peer without releasing queued logs."""
+    cap = net.TCPCap(net.NetCap(t.env.cap))
+    ca = certs.OTHER_CA_PEM if reason == "ca" else certs.CA_PEM
+    name = "wrong.example" if reason == "name" else "localhost"
+    expected = "not trusted" if reason == "ca" else "does not match the server name" if reason == "name" else "rejected by verify_peer"
+    var listener: ?net.TLSListener = None
+    var connection: ?net.TLSListenConnection = None
+    var client: ?syslog.StreamClient = None
+    var listening = False
+    var rejected = False
+    var peer_closed = False
+    var verifier_called = False
+    var done = False
+
+    def finish(error: ?str):
+        if done:
+            return
+        done = True
+        if client is not None:
+            client.close()
+        if connection is not None:
+            connection.close()
+        if listener is not None:
+            listener.close()
+        if error is not None:
+            t.failure(AssertionError(error))
+        else:
+            t.success()
+
+    def progress():
+        if not done and rejected and peer_closed:
+            if verifier_called != (reason == "callback"):
+                finish("Unexpected invocation of the client verification callback")
+            else:
+                finish(None)
+
+    def verified(chain: list[bytes], result: int) -> bool:
+        verifier_called = True
+        if reason != "callback" or result != 0 or chain != [certs.pem_to_der(certs.SERVER_CERT_PEM)]:
+            finish("Client verifier received unexpected certificate information")
+        return False
+
+    def connected(c: syslog.StreamClient):
+        finish("TLS client connected to a rejected server")
+
+    def client_failed(c: syslog.StreamClient, error: str):
+        if done:
+            return
+        if rejected or expected not in error:
+            finish("Unexpected TLS verification error: {error}")
+            return
+        rejected = True
+        progress()
+
+    def received(c: net.TLSListenConnection, data: bytes):
+        finish("TLS verification failure released queued syslog bytes")
+
+    def connection_failed(c: net.TLSListenConnection, error: str):
+        if "reset" not in error.lower():
+            finish("Rejected TLS peer failed unexpectedly: {error}")
+            return
+        peer_closed = True
+        progress()
+
+    def connection_closed(c: net.TLSListenConnection):
+        peer_closed = True
+        progress()
+
+    def accepted(c: net.TLSListenConnection):
+        if done:
+            c.close()
+            return
+        if connection is not None:
+            c.close()
+            finish("Rejected TLS client retried")
+            return
+        connection = c
+        c.cb_install(received, connection_failed, connection_closed)
+
+    def bound(l: net.TLSListener, error: ?str):
+        if done:
+            l.close()
+            return
+        if error is not None:
+            if not listening or "handshake" not in error.lower():
+                finish("TLS rejection listener failed: {error}")
+                return
+            peer_closed = True
+            progress()
+            return
+        if listening:
+            finish("TLS rejection listener repeated its bind callback")
+            return
+        listening = True
+        c = syslog.StreamClient(net.TCPConnectCap(cap), "127.0.0.1", l.local_port(), connected, client_failed,
+                                 tls=True, ca_pem=ca, server_name=name, verify_peer=verified)
+        client = c
+        c.send(syslog.Message(b"must not be sent without verification"))
+
+    listener = net.TLSListener(net.TCPListenCap(cap), "127.0.0.1", 0,
+                               certs.SERVER_CERT_PEM, certs.SERVER_KEY_PEM, bound, accepted)
+    after 10: finish("TLS server-verification test timed out")
+
+
+actor _test_SyslogTLSUnknownCA(t: testing.EnvT):
+    rejected_server(t, "ca")
+
+
+actor _test_SyslogTLSWrongServerName(t: testing.EnvT):
+    rejected_server(t, "name")
+
+
+actor _test_SyslogTLSVerifierRejects(t: testing.EnvT):
+    rejected_server(t, "callback")
+
+
+actor stalled_client(t: testing.EnvT, close_early: bool):
+    """Observe ClientHello before closing, or wait for the forwarded deadline."""
+    cap = net.TCPCap(net.NetCap(t.env.cap))
+    var listener: ?net.TCPListener = None
+    var connection: ?net.TCPListenConnection = None
+    var client: ?syslog.StreamClient = None
+    var hello_seen = False
+    var closing = False
+    var timed_out = False
+    var peer_closed = False
+    var deadline_passed = False
+    var done = False
+
+    def finish(error: ?str):
+        if done:
+            return
+        done = True
+        if client is not None:
+            client.close()
+        if connection is not None:
+            connection.close()
+        if listener is not None:
+            listener.close()
+        if error is not None:
+            t.failure(AssertionError(error))
+        else:
+            t.success()
+
+    def progress():
+        if not done and hello_seen and peer_closed and ((close_early and closing and deadline_passed) or (not close_early and timed_out)):
+            finish(None)
+
+    def deadline_elapsed():
+        deadline_passed = True
+        progress()
+
+    def connected(c: syslog.StreamClient):
+        finish("TLS client connected without a handshake response")
+
+    def client_failed(c: syslog.StreamClient, error: str):
+        if done:
+            return
+        if close_early or timed_out or ("timeout" not in error.lower() and "timed out" not in error.lower()):
+            finish("Unexpected stalled TLS client error: {error}")
+            return
+        timed_out = True
+        progress()
+
+    def received(c: net.TCPListenConnection, data: bytes):
+        if done or len(data) == 0:
+            return
+        # Drain the actual ClientHello, but send no handshake response.
+        hello_seen = True
+        if close_early and not closing:
+            closing = True
+            if client is not None:
+                client.close()
+                client.close()
+
+    def connection_failed(c: net.TCPListenConnection, error: str):
+        finish("Stalled TLS collector failed before EOF: {error}")
+
+    def connection_closed(c: net.TCPListenConnection):
+        if peer_closed or not hello_seen:
+            finish("Stalled TLS client closed before ClientHello or repeated EOF")
+            return
+        peer_closed = True
+        progress()
+
+    def accepted(c: net.TCPListenConnection):
+        if done:
+            c.close()
+            return
+        if connection is not None:
+            c.close()
+            finish("TLS client retried a stalled handshake")
+            return
+        connection = c
+        c.cb_install(received, connection_failed, connection_closed)
+
+    def bound(l: net.TCPListener, error: ?str):
+        if done:
+            l.close()
+            return
+        if error is not None:
+            finish("Stalled TLS listener failed: {error}")
+            return
+        timeout = 2.0 if close_early else 1.0
+        c = syslog.StreamClient(net.TCPConnectCap(cap), "127.0.0.1", l.local_port(), connected, client_failed,
+                                 tls=True, ca_pem=certs.CA_PEM, connect_timeout=timeout)
+        client = c
+        if close_early:
+            after timeout + 0.2: deadline_elapsed()
+        c.send(syslog.Message(b"must wait for the handshake"))
+
+    listener = net.TCPListener(net.TCPListenCap(cap), "127.0.0.1", 0, bound, accepted)
+    after 8: finish("Stalled TLS syslog client test timed out")
+
+
+actor _test_SyslogTLSConnectTimeout(t: testing.EnvT):
+    stalled_client(t, False)
+
+
+actor _test_SyslogTLSCloseDuringHandshake(t: testing.EnvT):
+    stalled_client(t, True)
+
+
+actor _test_SyslogTLSClientConfiguration(t: testing.EnvT):
+    cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
+
+    def connected(c: syslog.StreamClient):
+        c.close()
+
+    def failed(c: syslog.StreamClient, error: str):
+        c.close()
+
+    var client: ?syslog.StreamClient = None
+
+    def run():
+        for kind in ["cert", "key", "pair", "ca", "name", "verify"]:
+            certificate = certs.CLIENT_CERT_PEM if kind in ["cert", "pair"] else None
+            key = certs.CLIENT_KEY_PEM if kind in ["key", "pair"] else None
+            ca = certs.CA_PEM if kind == "ca" else None
+            name = "localhost" if kind == "name" else None
+            expected = "Syslog TLS requires both cert_pem and key_pem" if kind in ["cert", "key"] else "Syslog TLS options require TLS"
+            client = None
+            try:
+                client = syslog.StreamClient(cap, "127.0.0.1", 1, connected, failed,
+                                             tls=kind in ["cert", "key"], verify_tls=kind != "verify",
+                                             cert_pem=certificate, key_pem=key, ca_pem=ca, server_name=name)
+            except ValueError as error:
+                if error.error_message != expected:
+                    t.failure(AssertionError("Unexpected TLS client configuration error: {error.error_message}"))
+                    return
+            else:
+                if client is not None:
+                    client.close()
+                t.failure(AssertionError("Invalid TLS client configuration was accepted: {kind}"))
+                return
+
+        for timeout in [0.0, -1.0, float("nan"), float("inf"), float("-inf")]:
+            client = None
+            try:
+                client = syslog.StreamClient(cap, "127.0.0.1", 1, connected, failed,
+                                             tls=True, ca_pem=certs.CA_PEM, connect_timeout=timeout)
+            except ValueError as error:
+                if error.error_message != "Invalid syslog stream limits":
+                    t.failure(AssertionError("Unexpected TLS client timeout error: {error.error_message}"))
+                    return
+            else:
+                if client is not None:
+                    client.close()
+                t.failure(AssertionError("Invalid TLS client timeout was accepted: {timeout}"))
+                return
+        t.success()
+
+    run()
