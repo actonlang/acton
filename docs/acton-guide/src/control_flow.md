@@ -3,6 +3,11 @@
 Control flow decides which code runs, when it runs, and how often it
 runs.
 
+Indent blocks consistently with either spaces or tabs throughout each file.
+Mixing the two in structural indentation is a compile error, including when
+different lines use different styles. Spaces and tabs inside strings, comments,
+and continuation alignment do not determine the file's indentation style.
+
 Acton does not have a Rust-style `match` expression. Use
 `if`/`elif`/`else` for branching, and combine that with optionals or
 exceptions when the question is about absence or failure.

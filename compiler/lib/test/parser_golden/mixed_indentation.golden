@@ -1,0 +1,10 @@
+ERROR: [error Syntax error]: Tabs and spaces cannot be mixed in indentation within a file
+     ╭──▶ test.act@3:2-3:3
+     │
+   3 │      pass
+     •     ┬ 
+     •     ╰╸ Tabs and spaces cannot be mixed in indentation within a file
+     •
+     │ Note: Only indentation that determines block structure is checked
+     │ Hint: Use either tabs or spaces consistently for indentation throughout this file
+─────╯

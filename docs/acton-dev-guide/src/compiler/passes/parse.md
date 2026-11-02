@@ -12,6 +12,27 @@ The entry point is `parseModule`, which takes a module name, filename, and file
 contents, then returns the parsed `Module`. It also appends a trailing newline
 if the file is missing one to keep the parser consistent.
 
+## Indentation
+
+Structural indentation may use tabs or spaces, but a file must use one style.
+`scn` consumes whitespace at structural line boundaries and records the first
+space and tab offsets. It skips blank and comment-only lines. String contents,
+parenthesized alignment (`sc2`), and explicit line continuations (`sc1`) do not
+contribute to the indentation style.
+
+Each chunk parses independently and returns its indentation summary with its
+statements. `mergeIndentation` takes the earliest offset for each character;
+when both are present, the later offset is the first conflicting indentation.
+Local conflicts carry the same summary in `MixedIndentation`, so collection
+can account for preceding chunks and report the correct source location.
+
+This adds no source prepass or shared worker state. Summary collection is
+constant work per chunk. The same metadata can accompany cached statements:
+replacing an edited statement's summary and merging the cached summaries does
+not require reparsing other statements when the file's indentation style changes.
+`newline1` already consumes the next statement's leading whitespace, so future
+statement cache boundaries must assign that prefix to a cache span explicitly.
+
 ## Module Top Level
 
 `parseModule` parses the module body as top-level chunks and then validates the

@@ -29,7 +29,7 @@ import Control.Concurrent.QSem
 import Control.Monad (replicateM, replicateM_, void, when, join)
 import Control.DeepSeq (rnf)
 import Data.IORef
-import Data.List (isPrefixOf)
+import Data.List (isPrefixOf, elemIndex)
 import Data.Maybe (fromMaybe)
 import Data.Void
 import Data.Char
@@ -64,6 +64,7 @@ data CustomParseError = TypeVariableNameError String  -- Name that looks like ty
                       | DuplicateTopLevelAssignment String
                       | MisplacedImport
                       | CyclicTypedef [String]
+                      | MixedIndentation Indentation
                       -- String interpolation errors
                       | EmptyInterpolationExpression
                       | MissingExpressionBeforeFormat
@@ -100,6 +101,7 @@ instance ShowErrorComponent CustomParseError where
     "Import statements must appear at the beginning of a module, preceded only by a possible docstring"
   showErrorComponent (CyclicTypedef names) =
     "Type definitions " ++ show names ++ " are cyclically dependent"
+  showErrorComponent (MixedIndentation _) = "Tabs and spaces cannot be mixed in indentation within a file"
   -- String interpolation errors
   showErrorComponent EmptyInterpolationExpression = "Empty expression in string interpolation"
   showErrorComponent MissingExpressionBeforeFormat = "Missing expression before format specifier"
@@ -208,6 +210,7 @@ extractSrcSpan (Loc l r) src = sp
 data ParserState = ParserState
   { psContexts :: [CTX]
   , psProgress :: Maybe ParseProgressReporter
+  , psIndentation :: !Indentation
   }
 
 data ParseProgressReporter = ParseProgressReporter
@@ -222,7 +225,7 @@ pushCtx ctx st = st { psContexts = ctx : psContexts st }
 popCtx st      = st { psContexts = tail (psContexts st) }
 getCtxs        = psContexts
 
-initState        = ParserState [] Nothing
+initState        = ParserState [] Nothing noIndentation
 
 parserStateWithProgress :: String -> Maybe (Int -> Int -> IO ()) -> IO ParserState
 parserStateWithProgress contentWithNewline mReportProgress =
@@ -367,6 +370,49 @@ instance Control.Exception.Exception ChunkScanError
 
 --- Whitespace consumers ----------------------------------------------------
 
+-- First structural space and tab offsets. Each chunk records its own summary;
+-- merging summaries does not depend on parser state or worker completion order.
+data Indentation = Indentation !(Maybe Int) !(Maybe Int) deriving (Eq, Ord, Show)
+
+noIndentation :: Indentation
+noIndentation = Indentation Nothing Nothing
+
+mergeIndentation :: Indentation -> Indentation -> Indentation
+mergeIndentation (Indentation s t) (Indentation s' t') =
+    Indentation (first s s') (first t t')
+  where first Nothing b = b
+        first a Nothing = a
+        first (Just a) (Just b) = let off = min a b in off `seq` Just off
+
+indentationAt :: Int -> String -> Indentation
+indentationAt off [] = noIndentation
+indentationAt off (' ':ws) = Indentation (Just off) (((off + 1) +) <$> elemIndex '\t' ws)
+indentationAt off ('\t':ws) = Indentation (((off + 1) +) <$> elemIndex ' ' ws) (Just off)
+indentationAt off (_:ws) = indentationAt (off + 1) ws
+
+checkIndentation :: Monad m => Indentation -> m ()
+checkIndentation ind@(Indentation (Just s) (Just t)) =
+    let off = max s t
+    in parseException (Loc off (off + 1)) (MixedIndentation ind)
+checkIndentation _ = return ()
+
+-- Whitespace at structural line boundaries. Ignore blank/comment-only lines;
+-- continuation whitespace and string contents never pass through this parser.
+scn :: Parser ()
+scn = do
+    off <- getOffset
+    ws <- takeWhileP Nothing (\c -> isSpace c && c /= '\n')
+    next <- optional (lookAhead anySingle)
+    case next of
+      Just '\n' -> anySingle *> scn
+      Just '#'  -> L.skipLineComment "#" *> scn
+      Nothing   -> return ()
+      _         -> do
+        st <- St.get
+        let ind = mergeIndentation (psIndentation st) (indentationAt off ws)
+        checkIndentation ind
+        St.put st { psIndentation = ind }
+
 -- Whitespace consumer, which *does not* consume newlines
 -- but accepts line joining.
 -- This is used outside parentheses/brackets/braces
@@ -495,7 +541,7 @@ symbol :: String -> Parser String
 symbol str = lexeme (string str)
 
 newline1 :: Parser [S.Stmt]
-newline1 = const [] <$> (eol *> sc2)
+newline1 = const [] <$> (eol *> scn)
 
 
 --- START OF STRING PARSING --------------------------------------------------------
@@ -1201,9 +1247,9 @@ module_docstring = do
     return (unescapeString (concat ss))
 
 file_input :: Parser ([S.Import], Maybe String, S.Suite)
-file_input = sc2 *> do
+file_input = scn *> do
     -- Allow optional module docstring before imports
-    mbDocstring <- optional (try (L.nonIndented sc2 module_docstring <* eol <* sc2))
+    mbDocstring <- optional (try (L.nonIndented scn module_docstring <* eol <* scn))
     is <- imports
     s <-  withCtx TOP top_suite
     validateModuleSuite s
@@ -1218,17 +1264,17 @@ import_input = do
     return (is, mbDocstring)
 
 module_header_with_offset :: Parser ([S.Import], Maybe String, Int)
-module_header_with_offset = sc2 *> do
-    mbDocstring <- optional (try (L.nonIndented sc2 module_docstring <* eol <* sc2))
+module_header_with_offset = scn *> do
+    mbDocstring <- optional (try (L.nonIndented scn module_docstring <* eol <* scn))
     is <- imports
     off <- getOffset
     return (is, mbDocstring, off)
 
 imports :: Parser [S.Import]
-imports = many (L.nonIndented sc2 import_stmt <* eol <* sc2 <* reportParseProgress)
+imports = many (L.nonIndented scn import_stmt <* eol <* scn <* reportParseProgress)
 
 top_suite :: Parser S.Suite
-top_suite = concat <$> (many (L.nonIndented sc2 (top_stmt <* reportParseProgress) <|> (newline1 <* reportParseProgress)))
+top_suite = concat <$> (many (L.nonIndented scn (top_stmt <* reportParseProgress) <|> (newline1 <* reportParseProgress)))
 
 validateModuleSuite :: S.Suite -> Parser ()
 validateModuleSuite = go Set.empty
@@ -1491,13 +1537,13 @@ scanTopLevelChunks src start emit
                    else scanBackslash st
              }
 
-parseTopLevelChunk :: String -> String -> TopLevelChunk -> IO (Either Control.Exception.SomeException [S.Stmt])
+parseTopLevelChunk :: String -> String -> TopLevelChunk -> IO (Either Control.Exception.SomeException ([S.Stmt], Indentation))
 parseTopLevelChunk fileName fileContent chunk = trySync $ do
   parsed <- Control.Exception.evaluate $
-    runParser (St.evalStateT (top_chunk_input fileName chunk) initState) fileName fileContent
+    runParser (St.runStateT (top_chunk_input fileName chunk) initState) fileName fileContent
   case parsed of
     Left bundle -> Control.Exception.throwIO bundle
-    Right stmts -> stmts <$ Control.Exception.evaluate (rnf stmts)
+    Right (stmts, st) -> (stmts, psIndentation st) <$ Control.Exception.evaluate (rnf stmts)
 
 data ChunkProgressEvent = ChunkProgressDone Int | ChunkProgressStop
 
@@ -1549,11 +1595,22 @@ parseTopLevelChunks fileName fileContent bodyStart mReportProgress = do
           putMVar result chunkResult
           reportChunkDone progress chunk
 
-collectParsedChunks :: [Either Control.Exception.SomeException [S.Stmt]] -> IO [[S.Stmt]]
-collectParsedChunks results =
-  case [ err | Left err <- results ] of
-    err:_ -> Control.Exception.throwIO err
-    []    -> return [ stmts | Right stmts <- results ]
+collectParsedChunks :: [Either Control.Exception.SomeException ([S.Stmt], Indentation)] -> IO [[S.Stmt]]
+collectParsedChunks = go noIndentation []
+  where
+    go _ acc [] = return (reverse acc)
+    go ind acc (Right (stmts, ind') : rest) = do
+      let merged = mergeIndentation ind ind'
+      checkIndentation merged
+      go merged (stmts : acc) rest
+    go ind _ (Left err : _) = do
+      -- A preceding chunk can make the first indentation in this failed chunk
+      -- the offending one, rather than the later local conflict.
+      case Control.Exception.fromException err of
+        Just (CustomParseException _ (MixedIndentation ind')) ->
+          checkIndentation (mergeIndentation ind ind')
+        _ -> return ()
+      Control.Exception.throwIO err
 
 withChunkProgress :: Maybe (Int -> Int -> IO ()) -> Int -> Int -> (Maybe ChunkProgress -> IO a) -> IO a
 withChunkProgress mReportProgress total done0 action = do
@@ -1625,8 +1682,8 @@ top_chunk_input fileName chunk = do
         , statePosState = startPosState
         }
   setParserState chunkState
-  ss <- withCtx TOP (L.nonIndented sc2 top_chunk_stmt)
-  sc2
+  ss <- withCtx TOP (L.nonIndented scn top_chunk_stmt)
+  scn
   off <- getOffset
   if off == end
     then return ss
