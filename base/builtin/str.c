@@ -784,12 +784,18 @@ static int islinebreak_codepoint(int codepoint) {
 }
 
 // The Boyer-Moore-Horspool algorithm for searching for pattern in text.
-// For very short patterns, this should be replaced by brute force.
+// Empty and single-byte patterns need no skip table.
+// Other very short patterns may benefit from brute force instead.
 // Returns byte position in text where first occurrence of pattern starts,
 // or -1 if it does not occur.
 // Start search from the left end of text.
 int64_t bmh( unsigned char *text, unsigned char *pattern, int64_t tbytes, int64_t pbytes) {
     if (pbytes>tbytes) return -1;
+    if (pbytes == 0) return 0;
+    if (pbytes == 1) {
+        unsigned char *p = memchr(text, pattern[0], tbytes);
+        return p ? p - text : -1;
+    }
     int64_t skip[256];
     for (int i=0; i<256; i++) skip[i] = pbytes;
     for (int64_t i=0; i<pbytes-1; i++)
@@ -1507,10 +1513,13 @@ B_tuple B_strD_partition(B_str s, B_str sep) {
 
 B_str B_strD_replace(B_str s, B_str old, B_str new, B_int count) {
     // A negative count, like no count, replaces every occurrence
-    if (count == NULL || fromB_int(count) < 0)
-        count = toB_int(INT64_MAX);
+    int64_t limit = count == NULL ? INT64_MAX : fromB_int(count);
+    if (limit < 0)
+        limit = INT64_MAX;
+    if (limit == 0)
+        return s;
     int64_t c = B_strD_count(s, old, 0, INT64_MAX);
-    int64_t c0 = fromB_int(count) < c ? fromB_int(count) : c;
+    int64_t c0 = limit < c ? limit : c;
     if (c0 == 0) {
         return s;
     }

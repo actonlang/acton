@@ -116,6 +116,18 @@ can share cached objects, so start at scale 2 to measure byte comparisons.
 All timed strings contain ordinary text; embedded NUL and malformed UTF-8
 are covered by `test/builtins_auto/bytes_decode.act`.
 
+`string_replace` covers absent, sparse and dense single-byte matches, deletion,
+equal-size replacement, count limits, Unicode and longer-pattern controls.
+Scale is the input byte count, rounded down to whole patterns for Unicode and
+longer patterns. The two `key_str_part` cases use fixed keys and the backslash
+and comma escaping from gdata. Each body performs one replacement or key escape;
+fixtures and result checks stay outside the timed loop.
+
+```sh
+acton test perf --module string_replace --scale 32 --time 3s
+acton test perf --module string_replace --scale 4096 --time 3s
+```
+
 ## Regular expressions
 
 `regex_matching` counts and replaces dense matches with a compiled pattern.
