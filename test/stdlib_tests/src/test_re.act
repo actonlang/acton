@@ -551,33 +551,30 @@ def _test_compile_survives_collections():
                 testing.assertEqual(n.group, ["bbbc", "bbb"])
             testing.assertEqual(_std_desc(sp.match("abbbc")), _desc(n))
 
-def _test_compile_reinitialize():
-    """Reinitializing a Pattern replaces its compiled expression"""
-    p = re.compile("a+")
-    sp = std_re.compile("a+")
-    for pattern, subject in [("b+", "bb"), ("c+", "ccc")]:
-        re.Pattern.__init__(p, pattern)
-        std_re.Pattern.__init__(sp, pattern)
+def _test_compile_recompile():
+    """A recompiled Pattern has new code, which matches, counts and replaces as before"""
+    pattern = "(?P<n>a+)b"
+    subject = "ab caab é"
+    expected = _desc(re.match(pattern, subject, 3))
+    p = re.compile(pattern)
+    sp = std_re.compile(pattern)
+    for _ in range(3):
+        code = p._code
+        std_code = sp._code
+        p._recompile()
+        sp._recompile()
+        testing.assertNotEqual(p._code, code)
+        testing.assertNotEqual(sp._code, std_code)
+        testing.assertNotEqual(re.compile(pattern)._code, p._code)
+        testing.assertNotEqual(std_re.compile(pattern)._code, sp._code)
         testing.assertEqual(p.pattern, pattern)
         testing.assertEqual(sp.pattern, pattern)
-        testing.assertEqual(p.count(subject), 1)
-        testing.assertEqual(sp.count(subject), 1)
-        testing.assertEqual(p.replace(subject, "_"), "_")
-        testing.assertEqual(sp.replace(subject, "_"), "_")
-        testing.assertNone(p.match("aaa"))
-        testing.assertNone(sp.match("aaa"))
-    for initialize in [lambda: re.Pattern.__init__(p, "("),
-                       lambda: std_re.Pattern.__init__(sp, "(")]:
-        try:
-            initialize()
-        except ValueError:
-            pass
-        else:
-            testing.error("Expected ValueError for invalid pattern")
-    testing.assertEqual(p.pattern, "c+")
-    testing.assertEqual(sp.pattern, "c+")
-    testing.assertEqual(p.count("ccc"), 1)
-    testing.assertEqual(sp.count("ccc"), 1)
+        testing.assertEqual(_desc(p.match(subject, 3)), expected)
+        testing.assertEqual(_std_desc(sp.match(subject, 3)), expected)
+        testing.assertEqual(p.count(subject), 2)
+        testing.assertEqual(sp.count(subject), 2)
+        testing.assertEqual(p.replace(subject, "_"), "_ c_ é")
+        testing.assertEqual(sp.replace(subject, "_"), "_ c_ é")
 
 def _test_compile_jit_fallback():
     """Interpreter fallback preserves captures and bulk operations"""

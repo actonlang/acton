@@ -89,7 +89,7 @@ B_NoneType reQ_PatternD__register_finalizer(reQ_Pattern self) {
     void *previous_code = NULL;
     GC_register_finalizer_no_order(self, reQ_Pattern_finalize,
                                   (void *)(uintptr_t)self->_code, NULL, &previous_code);
-    // Reinitializing a Pattern releases its previous compiled code.
+    // Recompiling a Pattern releases its previous compiled code.
     pcre2_code_free(previous_code);
     GC_reachable_here(self);
     return B_None;
