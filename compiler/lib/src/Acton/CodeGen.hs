@@ -956,11 +956,12 @@ declDeserialize env n c props sup_c = (gen env (tCon c) <+> genTopName env (meth
 
 -- Emit the body of the synthesized reflective getter __get_attr__(self, name).
 -- One branch per instance property: `if name == "attr": return self.attr`,
--- keyed by the Acton attribute name, then `return None`. Object/list/value
--- fields are returned by a plain pointer cast to B_value (valid even when the
--- field's class was pruned to an opaque forward declaration); unboxable scalar
--- fields are boxed with the builtin toB_* helpers. Reading an un-vivified
--- optional field yields B_None, which the caller treats as absent.
+-- comparing UTF-8 bytes to C literals without allocating, then `return None`.
+-- Object/list/value fields are returned by a plain pointer cast to B_value
+-- (valid even when the field's class was pruned to an opaque forward
+-- declaration); unboxable scalar fields are boxed with the builtin toB_*
+-- helpers. Reading an un-vivified optional field yields B_None, which the
+-- caller treats as absent.
 genGetAttr env cname                = case findQName (NoQ cname) env of
                                         NClass q _ _ _ -> body (TC (NoQ cname) (map tVar $ qbound q))
                                         _              -> retNone
@@ -970,9 +971,10 @@ genGetAttr env cname                = case findQName (NoQ cname) env of
         branch n t                  = (text "if" <+> parens (nameEq n) <+> char '{') $+$
                                       nest 4 (text "return" <+> parens (text "B_value") <> retval n t <> semi) $+$
                                       char '}'
-        nameEq n                    = text "B_OrdD_strD___eq__" <>
-                                      parens (text "B_OrdD_strG_witness" <> comma <+> gen env nameKW <> comma <+>
-                                              gen env primToStr <> parens (doubleQuotes (text (nstr n))))
+        nameEq n                    = gen env nameKW <> text "->nbytes ==" <+> len <+> text "&& memcmp" <>
+                                      parens (gen env nameKW <> text "->str" <> comma <+> lit <> comma <+> len) <+> text "== 0"
+          where lit                 = doubleQuotes (text (nstr n))
+                len                 = text "sizeof" <> parens lit <+> text "- 1"
         retval n t
           | B.isUnboxable t         = genBoxed env t (field n)
           | otherwise               = parens (field n)

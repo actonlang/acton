@@ -17,6 +17,12 @@ class Outer(object):
         self.flag = 99
         self.inner = None
 
+class Named(Outer):
+    café: str
+    def __init__(self):
+        Outer.__init__(self)
+        self.café = "coffee"
+
 actor main(env):
     o = Outer()
     ok = True
@@ -53,6 +59,28 @@ actor main(env):
     # unknown attribute name -> None
     if o.__get_attr__("nope") is not None:
         print("FAIL: nope should be None"); ok = False
+
+    named = Named()
+    # Byte lengths must match before comparing the complete name.
+    for missing in ["", "fla", "flags", "flab", "flag\x00", "fla\x00", "inner\x00tail", "cafe", "cafee", "cafè", "café\x00"]:
+        if named.__get_attr__(missing) is not None:
+            print("FAIL: unexpected attribute", missing); ok = False
+
+    # A dynamically constructed UTF-8 name must match by bytes, not identity.
+    vc = named.__get_attr__(bytearray("café".encode()).decode())
+    if isinstance(vc, str):
+        if vc != "coffee":
+            print("FAIL: café ==", vc); ok = False
+    else:
+        print("FAIL: café not str"); ok = False
+
+    # The synthesized getter also includes inherited properties.
+    inherited = named.__get_attr__("a")
+    if isinstance(inherited, int):
+        if inherited != 7:
+            print("FAIL: inherited a ==", inherited); ok = False
+    else:
+        print("FAIL: inherited a not int"); ok = False
 
     if ok:
         print("get_attr ok")
