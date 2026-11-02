@@ -21,7 +21,7 @@ import Control.Concurrent.Async (mapConcurrently)
 import Control.Exception (SomeException, displayException, IOException, bracketOnError, catch, throwIO, try)
 import Control.Monad
 import Data.Either (lefts, partitionEithers)
-import Data.List (isPrefixOf)
+import Data.List (isPrefixOf, isSuffixOf)
 import Data.IORef
 import Data.Maybe (catMaybes, isJust)
 import qualified Data.Map as M
@@ -586,7 +586,8 @@ safeArtifactPath p =
      p == "Build.act" ||
      p == "out" ||
      p == "out/types" ||
-     "out/types/" `isPrefixOf` p)
+     "out/types/" `isPrefixOf` p ||
+     ("src/" `isPrefixOf` p && (".ext.c" `isSuffixOf` p || hasTrailingPathSeparator p)))
 
 safeArtifactTypeLine :: String -> Bool
 safeArtifactTypeLine [] = True

@@ -6,10 +6,11 @@ use a prebuilt output artifact instead of rebuilding the dependency from
 source. If no matching artifact is available, Acton falls back to fetching and
 building the source locally.
 
-An output artifact contains the package's compiled type interfaces, not
-generated code. Producing an artifact only runs the compiler front end (parse
-and type check); code generation is deferred to the consuming build, which
-generates code from the artifact for the parts it uses.
+An output artifact contains the package's compiled type interfaces and native
+`.ext.c` implementations, with their paths under `src/` preserved. Producing an
+artifact only runs the compiler front end (parse and type check); the consuming
+build generates module headers and C code from the interfaces for the parts it
+uses.
 
 Acton uses OCI repositories for artifact distribution. OCI is the image and
 artifact format used by container registries. Acton takes advantage of that
@@ -131,7 +132,8 @@ acton artifact push --artifact-repo /tmp/acton-out
 
 `acton artifact push` type checks the current package before packaging and
 pushing it. No code is generated in this step; the artifact ships the compiled
-type interfaces and the consuming build performs code generation. `acton
+type interfaces and native implementations, and the consuming build performs
+code generation. `acton
 artifact pack` does the same check-and-pack step but only writes the artifact
 locally:
 

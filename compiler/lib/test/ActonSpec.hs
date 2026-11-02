@@ -1847,6 +1847,10 @@ main = do
           mods `shouldBe` [(tyFile, mn)]
           writeFile (dir </> "Build.act") $ unlines
             [ "name = " ++ show ("prebuilt" :: String), "fingerprint = " ++ fp ]
+          createDirectoryIfMissing True (dir </> "src" </> "nested")
+          writeFile (dir </> "src" </> "nested" </> "mod.ext.c") "/* native implementation */\n"
+          Project.isActonArtifactOnlyRoot dir `shouldReturn` True
+          Project.findProjectDir dir `shouldReturn` Nothing
           stamp <- Project.readBuildSpecStamp dir
           let paths = Project.projectPaths C.defaultCompileOptions (M.singleton dir ctx) ctx
               cctx = Compile.CompileContext

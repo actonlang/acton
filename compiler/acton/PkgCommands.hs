@@ -47,9 +47,10 @@ import qualified Data.Aeson.KeyMap as AesonKM
 import qualified Data.Text as T
 import Network.HTTP.Client (Manager)
 import System.Directory (Permissions, canonicalizePath, copyFile, copyFileWithMetadata, createDirectoryIfMissing, doesDirectoryExist, doesFileExist, doesPathExist, getCurrentDirectory, getHomeDirectory, getPermissions, listDirectory, makeAbsolute, pathIsSymbolicLink, removeFile, setPermissions)
+import System.Directory.Recursive (getFilesRecursive)
 import System.Environment (getExecutablePath, lookupEnv)
 import System.Exit (ExitCode(..))
-import System.FilePath ((</>), takeDirectory)
+import System.FilePath ((</>), makeRelative, takeDirectory)
 import System.IO (IOMode(ReadMode, WriteMode), hClose, hGetContents, hPutStr, hPutStrLn, hSetEncoding, openFile, stderr, utf8)
 import System.IO.Temp (withSystemTempDirectory)
 import System.Process (CreateProcess(cwd), proc, readCreateProcessWithExitCode)
@@ -368,15 +369,19 @@ packActonArtifactTo :: String -> String -> IO FilePath
 packActonArtifactTo sourceHash outputArg = do
     cwd <- getCurrentDirectory
     let output0 = if null outputArg then "out" </> Artifact.artifactArchiveFile else outputArg
+    srcFiles <- getFilesRecursive (cwd </> "src")
+    let nativeFiles = sort [ makeRelative cwd file | file <- srcFiles, ".ext.c" `isSuffixOf` file ]
+        manifest = (Artifact.expectedManifest sourceHash)
+          { Artifact.manifestContents = Artifact.manifestContents (Artifact.expectedManifest sourceHash) ++ nativeFiles }
     createDirectoryIfMissing True (takeDirectory output0)
     withSystemTempDirectory "acton-artifact-pack" $ \tmp -> do
-      Artifact.writeManifest tmp (Artifact.expectedManifest sourceHash)
+      Artifact.writeManifest tmp manifest
       runProcessChecked Nothing "tar"
-        [ "-czf", output0
-        , "--exclude=*.c", "--exclude=*.h", "--exclude=*.closures.inc"
-        , "-C", tmp, Artifact.artifactManifestFile
-        , "-C", cwd, "Build.act", "out/types"
-        ]
+        ([ "-czf", output0
+         , "--exclude=out/types/*.c", "--exclude=out/types/*.h", "--exclude=out/types/*.closures.inc"
+         , "-C", tmp, Artifact.artifactManifestFile
+         , "-C", cwd, "Build.act", "out/types"
+         ] ++ nativeFiles)
     return output0
 
 printActonArtifactHash :: String -> IO ()

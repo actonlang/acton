@@ -2419,6 +2419,8 @@ actonProjTests =
             createDirectoryIfMissing True srcDir
             createDirectoryIfMissing True invalidDepDir
             createDirectoryIfMissing True (artifactDep </> "out" </> "types")
+            createDirectoryIfMissing True (artifactDep </> "src")
+            writeFile (artifactDep </> "src" </> "lib.ext.c") "/* native implementation */\n"
             writeFile buildAct $ unlines
               [ "name = \"invalid_dep_override\""
               , "fingerprint = 0xb33bef4512345678"
@@ -2463,8 +2465,8 @@ actonProjTests =
             assertBool "path error should point users to artifact repos"
               ("Use --artifact-repo to search output artifacts" `isInfixOf` pathErr)
 
-  -- Producing an artifact ships .tydb only, so the back passes must not run;
-  -- code generation is deferred to the build that consumes the artifact.
+  -- Artifacts carry interfaces and native implementations. The consumer
+  -- generates headers and C for the parts it uses.
   , testCase "artifact pack skips back passes" $ do
         withSystemTempDirectory "acton-artifact-pack-nocodegen" $ \proj -> do
             let srcDir = proj </> "src"
@@ -2477,6 +2479,10 @@ actonProjTests =
               [ "def greeting() -> str:"
               , "    return \"hello\""
               ]
+            createDirectoryIfMissing True (srcDir </> "nested")
+            let nativeFiles = ["src/native helper.ext.c", "src/nested/helper.ext.c"]
+            forM_ nativeFiles $ \file -> writeFile (proj </> file) "/* native implementation */\n"
+            writeFile (srcDir </> "helper.h") "/* excluded header */\n"
             actonExe <- canonicalizePath "../../dist/bin/acton"
             (returnCode, _cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc actonExe ["artifact", "pack"]){ cwd = Just proj } ""
             assertEqual ("artifact pack should succeed: " ++ cmdErr) ExitSuccess returnCode
@@ -2486,6 +2492,23 @@ actonProjTests =
             assertBool "artifact pack should write .tydb" tydbExists
             cExists <- doesFileExist (proj </> "out" </> "types" </> "artifact_pack_nocodegen" </> "lib.c")
             assertBool "artifact pack should not generate C code" (not cExists)
+            -- A previous consuming build may have left generated files next
+            -- to the interfaces. Packing must select only the interfaces.
+            forM_ [".c", ".h", ".closures.inc"] $ \ext ->
+              writeFile (proj </> "out/types/artifact_pack_nocodegen/lib" ++ ext) "excluded\n"
+            (repackCode, _, repackErr) <- readCreateProcessWithExitCode
+              (proc actonExe ["artifact", "pack"]){ cwd = Just proj } ""
+            assertEqual ("artifact repack should succeed: " ++ repackErr) ExitSuccess repackCode
+            (listCode, listing, listErr) <- readCreateProcessWithExitCode
+              (proc "tar" ["-tzf", proj </> "out/acton-out.tar.gz"]) ""
+            assertEqual ("artifact listing should succeed: " ++ listErr) ExitSuccess listCode
+            let entries = lines listing
+            forM_ nativeFiles $ \file ->
+              assertBool ("artifact should contain " ++ file) (file `elem` entries)
+            assertBool "artifact should omit Acton source and headers"
+              (not (any (\file -> ".act" `isSuffixOf` file && file /= "Build.act" || ".h" `isSuffixOf` file) entries))
+            assertBool "artifact should omit generated C and closure support"
+              (not (any (\file -> ".c" `isSuffixOf` file && not (".ext.c" `isSuffixOf` file) || ".closures.inc" `isSuffixOf` file) entries))
 
   -- Verify pruning keeps binaries for modules that still have roots across build / test runs.
   , testCase "executable pruning" $ do

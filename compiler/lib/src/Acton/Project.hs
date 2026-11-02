@@ -175,7 +175,8 @@ isActonProjectRoot path = do
       else do
         hasBuildAct <- doesFileExist (projectBuildAct path)
         hasSrcDir <- doesDirectoryExist (projectSrcDir path)
-        return (hasBuildAct && hasSrcDir)
+        isArtifact <- isActonArtifactOnlyRoot path
+        return (hasBuildAct && hasSrcDir && not isArtifact)
 
 isActonArtifactRoot :: FilePath -> IO Bool
 isActonArtifactRoot path = do
@@ -187,8 +188,12 @@ isActonArtifactRoot path = do
 isActonArtifactOnlyRoot :: FilePath -> IO Bool
 isActonArtifactOnlyRoot path = do
     isArtifact <- isActonArtifactRoot path
-    hasSrcDir <- doesDirectoryExist (path </> "src")
-    return (isArtifact && not hasSrcDir)
+    if not isArtifact
+      then return False
+      else do
+        hasSrcDir <- doesDirectoryExist (projectSrcDir path)
+        files <- if hasSrcDir then getFilesRecursive (projectSrcDir path) else return []
+        return (not (any isActFile files))
 
 -- | The nearest directory at or above 'path' that is an Acton project root,
 -- Nothing when there is none up to the filesystem root.
