@@ -1,6 +1,6 @@
 # std.syslog
 
-The `std.syslog` module provides UDP and TCP clients and servers, an
+The `std.syslog` module provides UDP, TCP, and TLS clients and servers, an
 [RFC 5424](https://www.rfc-editor.org/rfc/rfc5424) message codec, and a decoder
 for canonical [RFC 3164](https://www.rfc-editor.org/rfc/rfc3164) messages.
 
@@ -161,6 +161,32 @@ verification failure calls `on_error` and discards queued messages. Closing
 during setup cancels the attempt. TLS 1.3 client-certificate rejection can
 arrive after `on_connect`, so a connection callback is not an acknowledgement
 that any syslog message was accepted.
+
+### TLS server
+
+Supply PEM bytes in both `cert_pem` and `key_pem` to enable TLS on `StreamServer`:
+
+```python
+syslog.StreamServer(cap, "0.0.0.0", 6514, bound, received, failed,
+                    cert_pem=cert_pem, key_pem=key_pem,
+                    client_auth=True, ca_pem=ca_pem)
+```
+
+With `client_auth=True`, the default `verify_tls=True` requires a trusted
+client certificate, verified against `ca_pem` or the system CA bundle.
+`verify_peer(certificates, result)` can apply additional policy and requires
+`client_auth=True`. Setting `verify_tls=False` with client authentication
+requires `verify_peer`, which decides whether to accept the presented chain,
+including a missing certificate. The default `client_auth=False` does not
+authenticate clients. Missing certificate/key pairs and TLS security options
+on a plaintext listener are rejected.
+
+After binding succeeds, failed handshakes are reported through `on_error` and
+the server keeps listening. `handshake_timeout=60.0` limits incomplete TLS
+handshakes; zero disables that deadline. It ends before the server's
+`verify_peer` callback, which should return promptly. `max_connections` counts
+accepted sessions, not pending handshakes or verification callbacks. Server
+`close()` aborts incomplete handshakes and closes accepted sessions.
 
 ### Framing
 
