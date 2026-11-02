@@ -1,0 +1,130 @@
+# Build bytes without retaining all boxed inputs in an intermediate list.
+class Items(Iterator[int]):
+    def __init__(self, values: list[int], fail_at: int = -1):
+        self.values = values
+        self.position = 0
+        self.fail_at = fail_at
+
+    def __next__(self):
+        if self.position == self.fail_at:
+            raise RuntimeError("iterator failed")
+        if self.position == len(self.values):
+            return nothing()
+        value = self.values[self.position]
+        self.position += 1
+        return just(value)
+
+# A reported size is only an initial capacity. The actual iterator can finish
+# earlier or produce more elements; neither case may lose or invent bytes.
+class Hinted:
+    def __init__(self, values: list[int], hint: int):
+        self.values = values
+        self.hint = hint
+
+extension Hinted(Collection[int]):
+    def __len__(self) -> int:
+        return self.hint
+
+    def __iter__(self) -> Iterator[int]:
+        return Items(self.values)
+
+    @staticmethod
+    def __fromiter__(values):
+        items = list(values)
+        return Hinted(items, len(items))
+
+
+def check_bytes(values: Iterable[int], expected: list[int]) -> None:
+    result = bytes(values)
+    assert list(result) == expected
+    assert len(result) == len(expected)
+    assert serialize(deserialize(serialize(result))) == serialize(result)
+
+
+def check_bytearray(values: Iterable[int], expected: list[int]) -> None:
+    result: bytearray = Collection.__fromiter__(values)
+    assert list(result) == expected
+    assert len(result) == len(expected)
+    assert serialize(deserialize(serialize(result))) == serialize(result)
+    # Exercise both spare capacity from growth/a size hint, and later growth.
+    for i in range(40):
+        result.append(255)
+    assert list(result) == expected + [255] * 40
+
+
+def rejects_bytes(values: Iterable[int]) -> bool:
+    try:
+        bytes(values)
+    except ValueError:
+        return True
+    return False
+
+
+def rejects_bytearray(values: Iterable[int]) -> bool:
+    try:
+        result: bytearray = Collection.__fromiter__(values)
+    except ValueError:
+        return True
+    return False
+
+
+def check() -> None:
+    for size in [0, 1, 15, 16, 17, 31, 32, 33, 255, 256, 257, 4097]:
+        values = [i % 256 for i in range(size)]
+        unboxed: array[int] = Collection.__fromiter__(values)
+        check_bytes(unboxed, values)
+        check_bytearray(unboxed, values)
+        check_bytes(values, values)
+        check_bytearray(values, values)
+        check_bytes(Items(values), values)
+        check_bytearray(Items(values), values)
+        for hint in [0, size // 2, size, size + 17]:
+            check_bytes(Hinted(values, hint), values)
+            check_bytearray(Hinted(values, hint), values)
+
+    check_bytes(range(256), list(range(256)))
+    check_bytearray(range(256), list(range(256)))
+    for n in [-1, 256, 2**32 + 65, -2**32 + 65]:
+        unboxed: array[int] = array(1, n)
+        assert rejects_bytes(unboxed) and rejects_bytearray(unboxed)
+        assert rejects_bytes([n]) and rejects_bytearray([n])
+        assert rejects_bytes(Items([n])) and rejects_bytearray(Items([n]))
+        assert rejects_bytes(Hinted([n], 1)) and rejects_bytearray(Hinted([n], 1))
+
+    # Reject a bad element immediately, before asking for a later element
+    # whose producer would raise a different exception.
+    assert rejects_bytes(Items([256, 0], 1))
+    assert rejects_bytearray(Items([256, 0], 1))
+    for mode in [0, 1]:
+        failed = False
+        try:
+            if mode == 0:
+                bytes(Items([1, 2], 1))
+            else:
+                result: bytearray = Collection.__fromiter__(Items([1, 2], 1))
+        except RuntimeError:
+            failed = True
+        assert failed
+
+    for hint in [-1, 2**60]:
+        assert rejects_bytes(Hinted([], hint))
+        assert rejects_bytearray(Hinted([], hint))
+
+    source: array[int] = array(2, 65)
+    immutable = bytes(source)
+    mutable: bytearray = Collection.__fromiter__(source)
+    source[0] = 66
+    mutable[1] = 67
+    assert immutable == b"AA"
+    assert list(source) == [66, 65]
+    assert mutable == bytearray(b"AC")
+
+
+actor main(env):
+    try:
+        check()
+        print("bytes fromiter passed")
+        env.exit(0)
+    except Exception as exc:
+        print("bytes fromiter failed:", exc)
+        env.exit(1)

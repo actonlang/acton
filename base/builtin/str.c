@@ -72,6 +72,8 @@ static struct B_ValueError B_str_invalid_bytearray_slice_error =
     STATIC_EXCEPTION(B_ValueError, "setslice for bytearray: illegal slice");
 static struct B_ValueError B_str_invalid_bytes_value_error =
     STATIC_EXCEPTION(B_ValueError, "bytes constructor: element outside [0..255]");
+static struct B_ValueError B_str_negative_collection_length_error =
+    STATIC_EXCEPTION(B_ValueError, "collection length must be non-negative");
 static struct B_ValueError B_str_invalid_bytes_center_fill_error =
     STATIC_EXCEPTION(B_ValueError, "center: fill bytes not single char");
 static struct B_ValueError B_str_invalid_bytes_ljust_fill_error =
@@ -427,6 +429,71 @@ static unsigned char *alloc_data(size_t nbytes) {
 static void check_result_len(int64_t nbytes) {
     if (nbytes > MAX_STR_LEN)
         RAISE_EXC(&B_str_too_long_error);
+}
+
+// Build the final pointer-free buffer directly. Collections supply an initial
+// capacity; the iterator determines the length. Unknown or underestimated sizes
+// grow geometrically, without retaining the boxed inputs in a temporary list.
+struct bytes_buffer {
+    unsigned char *data;
+    int64_t length;
+    int64_t capacity;
+};
+
+static struct bytes_buffer bytes_from_iter(B_Iterable wit, $WORD iterable) {
+    struct bytes_buffer b = {NULL, 0, 0};
+    if (!wit || !iterable) {
+        b.data = alloc_data(0);
+        return b;
+    }
+
+    if ($ISINSTANCE0(iterable, B_array) &&
+        ((B_array)iterable)->kind == B_ARRAY_INT) {
+        B_array ar = (B_array)iterable;
+        b.length = b.capacity = ar->length;
+        check_result_len(b.length);
+        b.data = alloc_data(b.capacity);
+        int64_t *values = ar->data;
+        for (int64_t i = 0; i < b.length; i++) {
+            int64_t n = values[i];
+            if (n < 0 || n > 255)
+                RAISE_EXC(&B_str_invalid_bytes_value_error);
+            b.data[i] = (unsigned char)n;
+        }
+        return b;
+    }
+
+    if ($ISINSTANCE0(wit, B_Collection)) {
+        B_Collection collection = (B_Collection)wit;
+        b.capacity = collection->$class->__len__(collection, iterable);
+        if (b.capacity < 0)
+            RAISE_EXC(&B_str_negative_collection_length_error);
+        check_result_len(b.capacity);
+        b.data = alloc_data(b.capacity);
+    }
+
+    B_Iterator it = wit->$class->__iter__(wit, iterable);
+    $WORD value;
+    while (it->$class->__next__(it, &value)) {
+        int64_t n = fromB_int((B_int)value);
+        if (n < 0 || n > 255)
+            RAISE_EXC(&B_str_invalid_bytes_value_error);
+        if (b.length == MAX_STR_LEN)
+            RAISE_EXC(&B_str_too_long_error);
+        if (b.length == b.capacity) {
+            int64_t capacity = b.capacity == 0 ? 16 :
+                b.capacity > MAX_STR_LEN / 2 ? MAX_STR_LEN : b.capacity * 2;
+            unsigned char *data = acton_realloc_atomic(b.data, capacity);
+            if (data == NULL)
+                RAISE_EXC(&B_str_allocation_failed_error);
+            b.data = data;
+            b.capacity = capacity;
+        }
+        b.data[b.length++] = (unsigned char)n;
+    }
+    if (b.data == NULL)
+        b.data = alloc_data(0);
+    return b;
 }
 
 // Conversion to and from C strings
@@ -3080,7 +3147,13 @@ B_Iterator B_CollectionD_SequenceD_bytearrayD___iter__ (B_CollectionD_SequenceD_
 }
 
 B_bytearray B_CollectionD_SequenceD_bytearrayD___fromiter__ (B_CollectionD_SequenceD_bytearray wit, B_Iterable wit2, $WORD iter) {
-    return B_bytearrayD_join(toB_bytearray(""),wit2,iter);
+    struct bytes_buffer b = bytes_from_iter(wit2, iter);
+    B_bytearray result = acton_malloc(sizeof(struct B_bytearray));
+    result->$class = &B_bytearrayG_methods;
+    result->nbytes = b.length;
+    result->str = b.data;
+    result->capacity = b.capacity;
+    return result;
 }
 
 int64_t B_CollectionD_SequenceD_bytearrayD___len__ (B_CollectionD_SequenceD_bytearray wit, B_bytearray str) {
@@ -3226,18 +3299,9 @@ B_bytes B_bytesG_new(B_Iterable iter, $WORD wit) {
 }
 
 B_NoneType B_bytesD___init__(B_bytes self, B_Iterable wit, $WORD iter) {
-    B_CollectionD_SequenceD_list wit2 = B_CollectionD_SequenceD_listG_witness;
-    B_list lst = wit2->$class->__fromiter__(wit2,wit,iter);
-    int len = lst->length;
-    self->nbytes = len;
-    self->str = alloc_data(len);
-    for (int i=0; i< len; i++) {
-        int64_t n = fromB_int((B_int)lst->data[i]);
-        if (0<=n && n <= 255)
-            self->str[i] = n;
-        else
-            RAISE_EXC(&B_str_invalid_bytes_value_error);
-    }
+    struct bytes_buffer b = bytes_from_iter(wit, iter);
+    self->nbytes = b.length;
+    self->str = b.data;
     return B_None;
 }
 
@@ -4038,7 +4102,7 @@ B_Iterator B_ContainerD_bytesD___iter__ (B_ContainerD_bytes wit, B_bytes str) {
 }
 
 B_bytes B_ContainerD_bytesD___fromiter__ (B_ContainerD_bytes wit, B_Iterable wit2, $WORD iter) {
-    return B_bytesD_join(actBytesFromCStringCopy(""),wit2,iter);
+    return B_bytesG_new(wit2, iter);
 }
 
 int64_t B_ContainerD_bytesD___len__ (B_ContainerD_bytes wit, B_bytes str) {
