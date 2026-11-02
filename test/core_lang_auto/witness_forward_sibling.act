@@ -19,22 +19,28 @@ extension Pt (Hashable):
     def hash(self, h):
         self.x.hash(h)
 
-actor main(env):
+def check() -> bool:
     d: dict[Pt, str] = {}
     d[Pt(1)] = "one"
     d[Pt(2)] = "two"
     if d[Pt(1)] != "one":
         print("FAIL: dict lookup through forwarded __eq__")
-        await async env.exit(1)
+        return False
     if Pt(2) not in d or Pt(3) in d:
         print("FAIL: dict membership through forwarded __eq__")
-        await async env.exit(1)
+        return False
     s = {Pt(4), Pt(4), Pt(5)}
     if len(s) != 2:
         print("FAIL: set dedup through forwarded __eq__")
-        await async env.exit(1)
+        return False
     # Protocol default methods are inherited, not forwarded.
     if Pt(1) != Pt(1) or not (Pt(1) <= Pt(1)):
         print("FAIL: inherited default methods")
-        await async env.exit(1)
-    await async env.exit(0)
+        return False
+    return True
+
+actor main(env):
+    if check():
+        env.exit(0)
+    else:
+        env.exit(1)

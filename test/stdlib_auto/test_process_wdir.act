@@ -1,34 +1,52 @@
 actor main(env):
+    var done = False
+
+    def finish(code: int):
+        if done:
+            return
+        done = True
+        env.exit(code)
+
     def on_stderr(p, data):
+        if done:
+            return
         print("Received output on stderr:", data)
         print("... but not expecting any, exiting with error")
-        await async env.exit(1)
+        finish(1)
 
     def on_stdout(p, data):
+        if done:
+            return
         print("Received output on stdout:", data)
         if data == b"/\n":
             print("Working directory as expected, yay")
-            await async env.exit(0)
+            finish(0)
         else:
             print("Unexpected working directory, exiting with error...")
-            await async env.exit(1)
+            finish(1)
 
     def on_exit(p, exit_code, term_signal):
+        if done:
+            return
         print("Process exited with code: ", exit_code, " terminated with signal:", term_signal)
         print("Exited in unexpected way, error...")
-        await async env.exit(1)
+        finish(1)
 
     def on_error(p, error):
+        if done:
+            return
         print("Error from process:", error)
-        await async env.exit(1)
+        finish(1)
 
     def test():
         print("Starting process..")
         p = env.process.spawn(["pwd"], on_stdout, on_stderr, on_exit, on_error, "/")
 
     def ex():
+        if done:
+            return
         print("Test timeout, exiting with error")
-        env.exit(1)
+        finish(1)
 
     test()
     after 3: ex()

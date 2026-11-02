@@ -11,5 +11,6 @@ def choose[T(Pick)](x: T) -> int:
 
 actor main(env):
     if choose(Box(OnlyB())) == 2:
-        await async env.exit(0)
-    await async env.exit(1)
+        env.exit(0)
+    else:
+        env.exit(1)

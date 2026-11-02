@@ -3,9 +3,9 @@ actor Foo():
         print("request", a)
 
 actor Bar(f):
-    f("test")
+    await async f("test")
 
 actor main(env):
     f = Foo()
     b = Bar(f.func)
-    await async env.exit(0)
+    env.exit(0)

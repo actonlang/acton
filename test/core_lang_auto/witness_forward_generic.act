@@ -17,20 +17,26 @@ extension Box[A(Ord,Hashable)] (Hashable):
     def hash(self, h):
         self.item.hash(h)
 
-actor main(env):
+def check() -> bool:
     d: dict[Box[int], str] = {}
     d[Box(1)] = "one"
     d[Box(2)] = "two"
     if d[Box(1)] != "one" or Box(2) not in d or Box(3) in d:
         print("FAIL: dict through forwarded generic __eq__")
-        await async env.exit(1)
+        return False
     l = sorted([Box(3), Box(1), Box(2)])
     if l[0].item != 1 or l[1].item != 2 or l[2].item != 3:
         print("FAIL: sorted through generic Ord witness")
-        await async env.exit(1)
+        return False
     s: dict[Box[str], int] = {}
     s[Box("a")] = 1
     if Box("a") not in s:
         print("FAIL: str instantiation of forwarded generic __eq__")
-        await async env.exit(1)
-    await async env.exit(0)
+        return False
+    return True
+
+actor main(env):
+    if check():
+        env.exit(0)
+    else:
+        env.exit(1)

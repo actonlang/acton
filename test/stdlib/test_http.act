@@ -92,7 +92,7 @@ actor main(env):
 ###    after 5: _exit()
 #
 #    if not run_test_http_request_parser():
-#        await async env.exit(1)
+#        env.exit(1)
 
     def _on_http_connect(c):
         c.get("/products/1", _on_http_receive)

@@ -5,8 +5,9 @@ actor main(env):
     def _work():
         print(i)
         if count_to and i == count_to:
-            await async env.exit(0)
-        i += 1
-        after 1: _work()
+            env.exit(0)
+        else:
+            i += 1
+            after 1: _work()
 
     _work()

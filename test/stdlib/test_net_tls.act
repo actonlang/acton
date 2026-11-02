@@ -102,14 +102,14 @@ actor main(env):
         if done:
             return
         done = True
-        await async env.exit(0)
+        env.exit(0)
 
     def _finish_failure(msg: str):
         if done:
             return
         done = True
         print("TLS test failed:", msg)
-        await async env.exit(1)
+        env.exit(1)
 
     def _on_client_success():
         _finish_success()

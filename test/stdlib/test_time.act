@@ -13,6 +13,6 @@ actor main(env):
     # seen to exceed 15s. Keep it wide enough not to flake on those.
     if abs(d.second) > 300:
         print("ERROR: diff seems too large, time.time*() should be roughly same as provided UNIX timestamp input")
-        await async env.exit(1)
-
-    await async env.exit(0)
+        env.exit(1)
+    else:
+        env.exit(0)

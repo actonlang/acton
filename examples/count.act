@@ -35,18 +35,18 @@ actor main(env):
     var i = 0;
     var count_to = 0
 
-    if len(env.argv) > 2:
-        print("Usage: count COUNT")
-        await async env.exit(1)
-
-    if len(env.argv) > 1:
-        count_to = int(env.argv[1])
-
     def _work():
         print(i)
         if count_to > 0 and i == count_to:
             env.exit(0)
-        i += 1
-        after 1: _work()
+        else:
+            i += 1
+            after 1: _work()
 
-    _work()
+    if len(env.argv) > 2:
+        print("Usage: count COUNT")
+        env.exit(1)
+    else:
+        if len(env.argv) > 1:
+            count_to = int(env.argv[1])
+        _work()

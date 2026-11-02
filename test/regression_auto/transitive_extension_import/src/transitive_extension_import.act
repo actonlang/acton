@@ -11,5 +11,6 @@ actor main(env):
          [keys[middle.make_key(2)]]]
     if r != [["foo", "bar"], ["foo", "bar"], ["int 7", "int 8"], ["b"]]:
         print("FAIL: witnesses from extensions in things", r)
-        await async env.exit(1)
-    env.exit(0)
+        env.exit(1)
+    else:
+        env.exit(0)

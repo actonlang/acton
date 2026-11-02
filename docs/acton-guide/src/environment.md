@@ -47,7 +47,16 @@ and stderr. `env.stdio.outb(b)` and `env.stdio.errb(b)` write the
 `bytes` `b` unchanged, so binary data and output that is not valid UTF-8
 reach stdout and stderr as they are. To be sure the output is written
 before the program exits, wait for the call, as in
-`await async env.stdio.out(s)`, before `env.exit()`.
+`await async env.stdio.out(s)`, before `env.exit(n)`.
+
+Use a plain `env.exit(n)` to request shutdown with status `n`. Like other
+actor calls used as statements, it is asynchronous: code after it can run
+before shutdown starts. Put success work in an `else` branch after an error
+exit, or return from a helper after requesting exit.
+
+Exit does not wait for other actors to finish their work. Await the output,
+cleanup or other operation that must finish before requesting exit; awaiting
+`env.exit(n)` itself does not provide that ordering.
 
 Use `env` when code needs process arguments, environment variables,
 standard input, terminal configuration or child processes. Pass it only

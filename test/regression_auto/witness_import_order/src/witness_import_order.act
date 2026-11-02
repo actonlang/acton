@@ -5,30 +5,36 @@
 
 import atomeq
 
-actor main(env):
+def check() -> bool:
     a: u64 = u64(5)
     i: int = 5
     o: ?u64 = u64(5)
     if a != 5 or 5 != a or a != u64(5):
         print("FAIL: u64 compared with a literal through Eq[atom]")
-        await async env.exit(1)
+        return False
     if i != 5:
         print("FAIL: int compared with a literal through Eq[atom]")
-        await async env.exit(1)
+        return False
     if o != 5:
         print("FAIL: ?u64 compared with a literal through Eq[atom]")
-        await async env.exit(1)
+        return False
     n = u64(5)
     m = 5
     if n != 5 or u64(5) != 5 or 5 != u64(5):
         print("FAIL: u64 without a declared type compared with a literal through Eq[atom]")
-        await async env.exit(1)
+        return False
     if m != 5 or 5 != 5:
         print("FAIL: int without a declared type compared with a literal through Eq[atom]")
-        await async env.exit(1)
+        return False
     x: atom = u64(5)
     y: atom = u64(5)
     if x == y:
         print("FAIL: atom compared without the imported Eq[atom]")
-        await async env.exit(1)
-    await async env.exit(0)
+        return False
+    return True
+
+actor main(env):
+    if check():
+        env.exit(0)
+    else:
+        env.exit(1)

@@ -23,4 +23,4 @@ extension Thing (AlphaBeta):
     pass
 
 actor main(env):
-    await async env.exit(0)
+    env.exit(0)

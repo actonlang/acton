@@ -26,6 +26,7 @@ actor Tester(env, verbose, port_chunk, unresolvable_seed):
     var combined_output = ""
     var p_alive = 0
     var error_encountered = False
+    var reported = False
     var state = 0
 
     def log(msg: str) -> None:
@@ -41,16 +42,19 @@ actor Tester(env, verbose, port_chunk, unresolvable_seed):
         stop(True)
 
     def report():
+        if reported:
+            return
+        reported = True
         if error_encountered:
             print("There was an error :/")
             print(combined_output)
-            await async env.exit(1)
+            env.exit(1)
         else:
             print("Test success!")
             if verbose:
                 print("Combined DB & App output:")
                 print(combined_output)
-            await async env.exit(0)
+            env.exit(0)
 
     def are_we_done():
         if p_alive > 0 :
@@ -152,9 +156,10 @@ actor main(env):
         await async t.stop(True)
 
     def unconditional_exit():
+        # Request diagnostics without waiting: Tester may be stuck.
         t.error("Giving up...")
         t.report()
-        await async env.exit(1)
+        env.exit(1)
 
     after 20: test_timeout()
     after 30: unconditional_exit()

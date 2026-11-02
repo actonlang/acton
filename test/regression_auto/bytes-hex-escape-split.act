@@ -15,7 +15,7 @@ def check() -> bool:
 
 actor main(env):
     if check():
-        await async env.exit(0)
+        env.exit(0)
     else:
         print("bytes hex-escape split produced wrong value")
-        await async env.exit(1)
+        env.exit(1)

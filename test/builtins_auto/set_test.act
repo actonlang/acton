@@ -87,7 +87,7 @@ def test_set_lookup_many_hashes():
     if 999999937 in s:
         raise ValueError("unexpected membership in the mixed set")
 
-actor main(env):
+def check() -> bool:
     try:
         test_set_pop()
         test_set_update_int()
@@ -99,7 +99,7 @@ actor main(env):
         test_set_lookup_many_hashes()
     except Exception as e:
         print("Unexpected exception during testing:", e)
-        await async env.exit(1)
+        return False
 
     s = {400}
     for i in range(13, 1000):
@@ -114,7 +114,7 @@ actor main(env):
 #            print(k,hash(k))
 #    if n != 18:
 #        raise ValueError("n is " + str(n) + ", not 18")
-#        env.exit(1)
+#        return False
 #    s2 = {1}
 #    for i in range(500):
 #        s2.add(i*i*i*i)
@@ -123,4 +123,10 @@ actor main(env):
 #        raise ValueError("set length error 1")
 #    if len(s & s2) != 27 or len(s | s2) != 1458 or len(s ^ s2) != 1431:  
 #        raise ValueError("set length error 2")
-    env.exit(0)
+    return True
+
+actor main(env):
+    if check():
+        env.exit(0)
+    else:
+        env.exit(1)
