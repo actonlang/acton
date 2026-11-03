@@ -58,7 +58,8 @@ generateCode supportInclude env srcbase srcText emitLines m hash = return (n,h,c
         (cDoc,supportDoc)            = cModuleParts supportInclude env0 srcbase srcText emitLines m
         c                           = render $ hashComment $+$ cDoc
         support                     = render $ hashComment $+$ supportDoc
-        env0                        = genEnv $ setMod (modname m) env
+        Module _ _ _ stmts          = m
+        env0                        = shareClosureLayouts (classdefine stmts $ genEnv $ setMod (modname m) env) stmts
 
 -- | The first line of a generated .c, .h and closure support file starts with
 -- this tag, followed by the hash that generateCode is given, in hex.
@@ -136,6 +137,7 @@ genEnv env0                         = setX env0 GenX{ globalX = HashSet.empty,
                                                       retX = tNone, maybeOutX = Nothing, localRepX = [],
                                                       volVarsX = [], lineEmitX = Nothing,
                                                       closureFieldsX = Map.empty,
+                                                      sharedClosuresX = Map.empty,
                                                       closureAdaptersX = Map.empty,
                                                       closureAdapterDocsX = [],
                                                       stackIteratorsX = [], iteratorWitnessesX = [],
@@ -162,6 +164,8 @@ data LocalRep                       = MaybeLocal Type PayloadRep
 
 type StackIteratorSpec              = (String, String) -- concrete C type, initializer
 
+data SharedClosure                  = SharedCont | SharedProc0 | SharedAction Int deriving Eq
+
 data GenX                           = GenX { globalX :: HashSet.HashSet Name
                                            , localX :: HashSet.HashSet Name
                                            , retX :: Type
@@ -170,6 +174,7 @@ data GenX                           = GenX { globalX :: HashSet.HashSet Name
                                            , volVarsX :: [Name]
                                            , lineEmitX :: Maybe (SrcLoc -> Doc)
                                            , closureFieldsX :: Map.Map Name (Name, [Name])
+                                           , sharedClosuresX :: Map.Map QName (SharedClosure, [(Name, Type)])
                                            , closureAdaptersX :: Map.Map (Name, Name) Name
                                            , closureAdapterDocsX :: [Doc]
                                            , stackIteratorsX :: [(Name, StackIteratorSpec)]
@@ -418,6 +423,7 @@ adapterArgName _                    = Nothing
 shareClosureAdapters env stmts      = modX env $ \x -> x{ closureAdaptersX=methods, closureAdapterDocsX=reverse docs }
   where (_,methods,docs)            = Data.List.foldl' add (Map.empty,Map.empty,[])
                                         [ (n,q,d) | Decl _ ds <- stmts, Class _ n q _ b _ <- ds, isClosureName n,
+                                          isNothing (sharedClosureSpec env (NoQ n)),
                                           Decl _ ms <- b, d@Def{} <- vsubst [(tvSelf,tCon (TC (NoQ n) (map tVar $ qbound q)))] ms ]
         add acc@(seen,methods,docs) (c,q,d)
           | Just adapter <- closureAdapter env c q d,
@@ -437,13 +443,86 @@ closureFieldId t
   | B.isUnboxable t                 = class_id t
   | otherwise                       = "$CLOSURE_REF"
 
+-- Cont R1-R8, Proc0 R1-R4, and Action0-3 R1 share storage and cold support
+-- with the runtime. Keep a class identity and a typed body for each one.
+-- Constructor and property order must agree: do not reorder/evaluate captures
+-- here. Other arities, scalar captures and larger environments use the usual
+-- generated representation. Compute this once for both header and C emission.
+shareClosureLayouts env stmts       = modX env $ \x -> x{ sharedClosuresX = Map.fromList entries }
+  where entries                    = [ (gname env n, (family,props))
+                                     | Decl _ ds <- stmts, Class _ n q _ b _ <- ds,
+                                       Internal LLiftPass s _ <- [n], s `elem` map packText ["Cont", "proc", "action"],
+                                       let props = closureProps (defineTVars q env) n q,
+                                       not (null props),
+                                       all ((== "$CLOSURE_REF") . closureFieldId . snd) props,
+                                       let captures = concat [ drop 1 (bound p) | Decl _ ds <- b,
+                                                               Def{dname=i,pos=p} <- ds, i == initKW ],
+                                       captures == map fst props,
+                                       Just family <- [select n q s b (length props)],
+                                       family /= SharedProc0 || closureMethod env n q attr_exec_ == attr_call_ ]
+        select n q s b k
+          | s == packText "action", k == 1,
+            [Def{pos=PosPar _ _ Nothing args}] <- methods attr_asyn_ b',
+            let ts = parTypes args, length ts <= 3,
+            adapterPars args, all (not . isRaw) ts,
+            -- Only the known AWAIT/R_CONT delegates may use runtime adapters.
+            let delegates = concatMap (`methods` b') [attr_call_,attr_exec_],
+            length delegates == 2, all (isJust . closureAdapter env1 n q) delegates
+                                    = Just (SharedAction $ length ts)
+          | [Def{pos=PosPar _ _ Nothing (PosPar _ (Just t) Nothing PosNIL)}] <- methods attr_call_ b,
+            s == packText "Cont", k <= 8, not (isRaw t) = Just SharedCont
+          | [Def{pos=PosPar _ _ Nothing (PosPar _ (Just t) Nothing PosNIL)}] <- methods attr_call_ b,
+            s == packText "proc", k <= 4,
+            TCon _ (TC c [_]) <- t, c == primCont = Just SharedProc0
+          | otherwise             = Nothing
+          where env1              = defineTVars q env
+                b'                = vsubst [(tvSelf,tCon (TC (NoQ n) (map tVar $ qbound q)))] b
+        methods i b               = [d | Decl _ ds <- b, d@Def{dname=n} <- ds, n == i]
+        isRaw TUnboxed{}           = True
+        isRaw _                    = False
+
+parTypes (PosPar _ (Just t) Nothing rest) = t : parTypes rest
+parTypes _                         = []
+
+sharedClosureSpec env n            = Map.lookup (unalias env n) (sharedClosuresX $ envX env)
+sharedClosureProps env n           = snd <$> sharedClosureSpec env n
+closureDescriptor env n            = gen env $ tableName $ unalias env n
+sharedPrefix SharedCont            = "$Cont"
+sharedPrefix SharedProc0           = "$Proc0"
+sharedPrefix (SharedAction k)       = "$Action" ++ show k
+sharedReceiver SharedCont          = text "$Cont"
+sharedReceiver SharedProc0         = text "$proc"
+sharedReceiver (SharedAction _)    = text "$action"
+sharedClass family@SharedAction{}  = text (sharedPrefix family ++ "G_class")
+sharedClass family                 = text (sharedPrefix family ++ "Class")
+sharedPayload (SharedAction _,_)   = text "$Action_R1"
+sharedPayload (family,props)        = text (sharedPrefix family ++ "_R" ++ show (length props))
+sharedHelper SharedCont suffix     = text ("$cont_" ++ suffix)
+sharedHelper SharedProc0 suffix    = text ("$proc0_" ++ suffix)
+sharedHelper (SharedAction k) "class_init" = text ("$action" ++ show k ++ "_class_init")
+sharedHelper (SharedAction _) suffix = text ("$action_r1_" ++ suffix)
+sharedPrimary SharedAction{}       = attr_asyn_
+sharedPrimary _                    = attr_call_
+sharedArgs SharedCont              = [(text "$WORD", text "$result")]
+sharedArgs SharedProc0             = [(text "$Cont", text "$continuation")]
+sharedArgs (SharedAction k)        = [(text "$WORD", text ("$arg" ++ show i)) | i <- [1..k]]
+sharedBodySig env n family         = result <+> genTopName env (methodname n $ sharedPrimary family) <>
+                                      parens (hsep $ punctuate comma
+                                        (sharedReceiver family <+> text "$closure" : [t <+> arg | (t,arg) <- sharedArgs family]))
+  where result                     = if sharedPrimary family == attr_asyn_ then text "B_Msg" else text "$R"
+sharedMethods SharedAction{}       = empty
+sharedMethods _                    = text ".methods"
+sharedRestoreSig env n family      = sharedReceiver family <+> genTopName env (methodname n deserializeKW) <>
+                                      parens (sharedReceiver family <+> text "self, $Serial$state state")
+
 -- Share only the field walk, in capture order. Scalar IDs remain distinct even
 -- when their C widths agree. Reference types and capture names may differ; the
 -- generated C checks their actual offsets and widths before reusing an array.
 shareClosureFields env stmts        = modX env $ \x -> x{ closureFieldsX = owners }
   where (_,owners)                  = Data.List.foldl' add (Map.empty, Map.empty)
                                         [ (n, closureProps (defineTVars q env) n q)
-                                          | Decl _ ds <- stmts, Class _ n q _ _ _ <- ds, isClosureName n ]
+                                          | Decl _ ds <- stmts, Class _ n q _ _ _ <- ds, isClosureName n,
+                                            isNothing (sharedClosureSpec env (NoQ n)) ]
         add tables (_,[])           = tables
         add (shapes,owners) (n,props) = (Map.insert key owner shapes, Map.insert n owner owners)
           where key                 = map (closureFieldId . snd) props
@@ -474,15 +553,20 @@ hStmt 1 env (Decl _ ds)             = vmap (declstub env1) ds $+$
 hStmt 2 env s                       = vcat [ text "extern" <+> genTypeDecl env n t <+> genTopName env n <> semi | (n,NVar t) <- envOf s]
 hStmt _ env s                       = empty
 
-declstub env (Class _ n q a b ddoc) = text "struct" <+> genTopName env n <> semi
+declstub env (Class _ n q a b ddoc)
+  | Just _ <- sharedClosureSpec env (NoQ n) = empty
+  | otherwise                       = text "struct" <+> genTopName env n <> semi
 declstub env Def{}                  = empty
 declstub env Typedef{}              = empty
 
-typedef env (Class _ n q a b ddoc)  = text "typedef" <+> text "struct" <+> genTopName env n <+> char '*' <> genTopName env n <> semi
+typedef env (Class _ n q a b ddoc)  = text "typedef struct" <+> payload <+> char '*' <> genTopName env n <> semi
+  where payload                    = maybe (genTopName env n) sharedPayload (sharedClosureSpec env (NoQ n))
 typedef env Def{}                   = empty
 typedef env Typedef{}               = empty
 
-decl env (Class _ n q a b ddoc)     = (text "struct" <+> classname env n <+> char '{') $+$
+decl env (Class _ n q a b ddoc)
+  | Just _ <- sharedClosureSpec env (NoQ n) = empty
+  | otherwise                       = (text "struct" <+> classname env n <+> char '{') $+$
                                       nest 4 (vcat $ stdprefix env ++ initdef : serialize env tc : deserialize env tc : meths) $+$
                                       char '}' <> semi $+$
                                       inst_struct
@@ -497,7 +581,11 @@ decl env (Class _ n q a b ddoc)     = (text "struct" <+> classname env n <+> cha
 decl env (Def _ n q p _ (Just t) _ _ fx ddoc)
                                     = repType env (exposeMsg fx t) <+> genTopName env n <+> parens (repParams env $ prowOf p) <> semi
 decl env Typedef{}                  = empty
-methstub env (Class _ n q a b ddoc) = text "extern" <+> text "struct" <+> classname env n <+> methodtable env n <> semi $+$
+methstub env (Class _ n q a b ddoc)
+  | Just (family,_) <- sharedClosureSpec env (NoQ n)
+                                    = text "extern struct" <+> sharedClass family <+> closureDescriptor env (NoQ n) <> semi $+$
+                                      sharedBodySig env n family <> semi $+$ sharedRestoreSig env n family <> semi
+  | otherwise                       = text "extern" <+> text "struct" <+> classname env n <+> methodtable env n <> semi $+$
                                       constub env t n r b $+$
                                       vcat [ methodDefStub env1 d{ dname = methodname n (dname d) } | Decl _ ds <- b', d@Def{} <- ds,
                                              not (isClosureName n) || emitClosureMethod env1 n q (dname d) ]
@@ -602,12 +690,12 @@ classlink env n                     = text "struct" <+> classname env n <+> text
 
 classname env n                     = genTopName env (Derived n suffixClass)
 
-methodtable env n                   = gen env (tableName $ gname env n)
+methodtable env n                   = methodtable' env (NoQ n)
 
 staticwitness env n                 = gen env (witName n)
 
-methodtable' env (NoQ n)            = methodtable env n
-methodtable' env n                  = gen env $ tableName (unalias env n)
+methodtable' env n                  = closureDescriptor env n <>
+                                      maybe empty (sharedMethods . fst) (sharedClosureSpec env n)
 
 tableName (GName m n)               = GName m (Derived n suffixMethods)
 tableName n                         = error ("#### tableName " ++ show n)
@@ -766,6 +854,7 @@ genPosPar env n d t p
 declDecl env d@Def{}                = declFunction env (genTopName env (dname d)) d
 
 declDecl env (Class _ n q as b ddoc)
+    | Just (family,_) <- sharedClosureSpec env (NoQ n) = declSharedClosure env1 n q b' family
     | isClosureName n               = declClosure env1 n q b'
     | cDefinedClass                 = vcat [ declDecl env1 d{ dname = methodname n (dname d) } | Decl _ ds <- b', d@Def{} <- ds ] $+$
                                       text "struct" <+> classname env n <+> methodtable env n <> semi
@@ -833,6 +922,25 @@ declFunctionWithStorage env storage symbol (Def dloc n q p KwdNIL (Just t) b d f
         emit                        = getLineEmit env
 
 
+
+-- Only the typed body and a tiny restore wrapper remain class-specific. The
+-- latter supplies the class when deserializing NULL: the
+-- ordinary dispatcher has already consumed the object's class-id header.
+declSharedClosure env n q b family  = resume $+$ restore $+$
+                                      text "struct" <+> sharedClass family <+> closureDescriptor env (NoQ n) <> semi
+  where [Def{pos=p@(PosPar self (Just selfT) Nothing args),dbody=body,ann=Just result,dfx=fx}]
+                                    = [d | Decl _ ds <- b, d@Def{dname=i} <- ds, i == sharedPrimary family]
+        env1                       = setMaybeOut Nothing $ setRet (exposeMsg fx result) $ ldefine (envOf p) env
+        (ss,_)                     = genSuite env1 body
+        resume                     = sharedBodySig env n family <+> char '{' $+$
+                                      nest 4 (repType env selfT <+> gen env self <+> equals <+>
+                                                parens (repType env selfT) <> text "$closure" <> semi $+$
+                                              vcat [ repType env t <+> gen env arg <+> equals <+>
+                                                       parens (repType env t) <> value <> semi
+                                                     | ((arg,t),(_,value)) <- zip (zip (bound args) (parTypes args)) (sharedArgs family) ] $+$ ss) $+$ char '}'
+        restore                    = sharedRestoreSig env n family <+> char '{' $+$
+                                      nest 4 (text "return" <+> sharedHelper family "restore" <> parens
+                                        (char '&' <> closureDescriptor env (NoQ n) <> text ", self, state") <> semi) $+$ char '}'
 
 -- Keep named, typed capture fields and per-body class identity. Share the cold
 -- serialization walk and effect adapters; invocation has no extra indirection or
@@ -980,10 +1088,21 @@ genGetAttr env cname                = case findQName (NoQ cname) env of
 
 
 initTables env []                   = empty
-initTables env (Decl _ ds : ss)     = vcat [ char '{' $+$ nest 4 (initClassBase env1 n q as hC $+$ initClass env1 n q b hC) $+$ char '}' | Class _ n q as b ddoc <- ds, let hC = hasCDef b ] $+$
+initTables env (Decl _ ds : ss)     = vcat [ initOne n q as b | Class _ n q as b ddoc <- ds ] $+$
                                       initTables env1 ss
   where env1                        = gdefine (envOf ds) env
         hasCDef b                   = inBuiltin env && any hasNotImpl [b' | Decl _ ds <- b, Def{dname=n',dbody=b'} <- ds, n' == initKW ]
+        initOne n q as b
+          | Just spec@(family,_) <- sharedClosureSpec env1 (NoQ n)
+                                    = sharedHelper family "class_init" <> parens (hsep $ punctuate comma $
+                                        [ char '&' <> closureDescriptor env1 (NoQ n), doubleQuotes (genTopName env1 n)
+                                          ] ++ shapeArg family spec ++
+                                        [ genTopName env1 (methodname n $ sharedPrimary family),
+                                          genTopName env1 (methodname n deserializeKW) ]) <> semi
+          | otherwise              = char '{' $+$ nest 4 (initClassBase env1 n q as hC $+$ initClass env1 n q b hC) $+$ char '}'
+          where hC                 = hasCDef b
+        shapeArg SharedAction{} _  = [] -- R1's fixed layout needs no per-class shape pointer.
+        shapeArg _ spec            = [char '&' <> sharedPayload spec <> text "_shape"]
 
 initTables env (s : ss)             = initTables env ss
 
@@ -2361,7 +2480,11 @@ classCallableType env ts x q n      = vsubst fullsubst $ addSelf (B.rtypeOf env 
 
 classCast env ts x q n              = parens . (parens (gen env (classCallableType env ts x q n)) <>)
 
-genNew env n p                      = newcon' env n <> parens (genUCallPosArgs env r p)
+genNew env n p
+  | Just spec <- sharedClosureSpec env n = parens (parens (gen env $ unalias env n) <>
+                                      (sharedPayload spec <> text "_new") <> parens
+                                        (char '&' <> closureDescriptor env n <> comma' (gen env p)))
+  | otherwise                       = newcon' env n <> parens (genUCallPosArgs env r p)
   where TFun _ _ r _ _              = sctype $ fst $ schemaOf env (Var NoLoc n)
 
 -- Builtin fixed-width numeric constructors can consume their argument in its
@@ -2506,6 +2629,12 @@ genDotCall env ts dec e n p
 
 genDot env ts e@(Var _ x) n
   | NClass q _ _ _ <- findQName x env = classCast env ts x q n $ methodtable' env x <> text "." <> gen env n
+genDot env ts e n
+  | TCon _ (TC c _) <- typeOf env e,
+    Just props <- sharedClosureProps env c,
+    Just i <- Data.List.elemIndex n (map fst props)
+                                    = parens (gen env $ typeOf env (Dot NoLoc e n)) <>
+                                      parens (genReceiver env e <> text "->ref" <> pretty i)
 genDot env ts e n                   = dotCast env False ts e n $ genReceiver env e <> text "->" <> gen env n
 -- NOTE: all method references are eta-expanded by the lambda-lifter at this point, so n cannot be a method (i.e., require methodtable lookup) here
 

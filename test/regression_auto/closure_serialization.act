@@ -21,6 +21,15 @@ def pure_three_probe(callback: pure(int, str, float) -> (int, str, float)) -> bo
 def mut_two_probe(callback: mut(str, float) -> float) -> bool:
     NotImplemented
 
+def action_zero_probe(callback: action() -> int) -> bool:
+    NotImplemented
+
+def action_one_probe(callback: action(int) -> int) -> bool:
+    NotImplemented
+
+def action_two_probe(callback: action(str, float) -> int) -> bool:
+    NotImplemented
+
 def action_three_probe(callback: action(int, str, float) -> int) -> bool:
     NotImplemented
 
@@ -116,12 +125,236 @@ actor Sample(base: int):
         return base + x
     def three(x: int, label: str, factor: float) -> int:
         return base + x + len(label) + int(factor)
+    def two(label: str, factor: float) -> int:
+        return base + len(label) + int(factor)
+    def zero() -> int:
+        return base
+    def four(a: int, b: int, c: int, d: int) -> int:
+        return base + a + 2*b + 3*c + 4*d
+    def fail(x: int) -> int:
+        raise ValueError("action failure")
+    def ref_plus(a: ContBox) -> int:
+        return base + a.n
+    def ref_fail(a: ContBox) -> int:
+        raise ValueError("proc0 message failure")
 
 def round_trip_actor[A](value: A, actor_ref: Sample) -> A:
     NotImplemented
 
+# Check selection and class identity in both restore modes, retaining external
+# actors. Cyclic ActionBox captures exercise graph sharing for ordinary objects.
+def action_round_trip[A](value: A, actor_ref: Sample, arity: int, allocation_only: bool) -> A:
+    NotImplemented
+
+proc def exec_action_one(callback: action(int) -> int, x: int) -> Msg[int]:
+    NotImplemented
+
+class ActionBox(object):
+    @property
+    target: action(int) -> int
+    callback: ?action(int) -> int
+    next: ?ActionBox
+    def __init__(self, target: action(int) -> int):
+        self.target = target
+        self.callback = None
+        self.next = None
+    action def invoke(self, x: int) -> int:
+        NotImplemented
+
+def cyclic_action(box: ActionBox) -> action(int) -> int:
+    # A bound method captures the box itself, retaining the cyclic object graph.
+    return box.invoke
+
+def action_graph(callback: action(int) -> int) -> bool:
+    NotImplemented
+
+proc def proc0_message(actor_ref: Sample, box: ContBox, allocation_only: bool, fail: bool) -> int:
+    NotImplemented
+
+
+# These suspend with exactly one to eight reference captures (including C_cont).
+# Check the actual resumed computation and graph sharing in both restore modes.
+proc def layout_snapshot[A](arity: int, value: A, allocation_only: bool) -> A:
+    NotImplemented
+
+class ContBox(object):
+    n: int
+    next: ?ContBox
+    callback: ?proc() -> int
+    def __init__(self, n: int):
+        self.n = n
+        self.next = None
+        self.callback = None
+
+def contbox_graph(a: ContBox, b: ContBox, c: ContBox) -> bool:
+    NotImplemented
+
+# Foreign arithmetic avoids extra protocol-witness captures in these shape probes.
+def cont_result(x: int, a: ?ContBox, b: ?ContBox, c: ?ContBox, d: ?ContBox) -> int:
+    NotImplemented
+
+def cont_many(x: int, a: ?ContBox, b: ?ContBox, c: ?ContBox, d: ?ContBox, e: ?ContBox, f: ?ContBox, g: ?ContBox, h: ?ContBox) -> int:
+    NotImplemented
+
+def cont_other(x: int, a: ContBox) -> int:
+    NotImplemented
+
+def cont_bool_result(flag: bool, a: ContBox, b: ContBox) -> int:
+    NotImplemented
+
+def cont_scalar_result(x: int, n: int) -> int:
+    NotImplemented
+
+# Proc0 takes a continuation at invocation, but no ordinary arguments. These
+# probes capture exactly R1-R4; scalar/R5/empty cases must retain the fallback.
+def proc0_r1(a: ContBox) -> proc() -> int:
+    proc def call() -> int:
+        return cont_result(17, a, None, None, None)
+    return call
+
+def proc0_other(a: ContBox) -> proc() -> int:
+    proc def call() -> int:
+        return cont_other(17, a)
+    return call
+
+def proc0_r2(a: ContBox, b: ContBox) -> proc() -> int:
+    proc def call() -> int:
+        return cont_many(17, a, b, None, None, None, None, None, None)
+    return call
+
+def proc0_r3(a: ContBox, b: ContBox, c: ContBox) -> proc() -> int:
+    proc def call() -> int:
+        return cont_many(17, a, b, c, None, None, None, None, None)
+    return call
+
+def proc0_r4(a: ContBox, b: ContBox, c: ContBox, d: ContBox) -> proc() -> int:
+    proc def call() -> int:
+        return cont_many(17, a, b, c, d, None, None, None, None)
+    return call
+
+def proc0_r5(a: ContBox, b: ContBox, c: ContBox, d: ContBox, e: ContBox) -> proc() -> int:
+    proc def call() -> int:
+        return cont_many(17, a, b, c, d, e, None, None, None)
+    return call
+
+def proc0_scalar(n: int) -> proc() -> int:
+    proc def call() -> int:
+        return n
+    return call
+
+def proc0_empty() -> proc() -> int:
+    proc def call() -> int:
+        return 17
+    return call
+
+def proc0_shape(callback: proc() -> int, arity: int, cyclic: bool) -> bool:
+    NotImplemented
+
+def proc0_same_class(first: proc() -> int, second: proc() -> int) -> bool:
+    NotImplemented
+
+proc def exec_proc0(callback: proc() -> int) -> int:
+    NotImplemented
+
+proc def cont_r1(allocation_only: bool) -> int:
+    x = layout_snapshot(1, 17, allocation_only)
+    return cont_result(x, None, None, None, None)
+
+proc def cont_r2(a: ContBox, allocation_only: bool) -> int:
+    x = layout_snapshot(2, 17, allocation_only)
+    assert contbox_graph(a, a, a)
+    return cont_result(x, a, None, None, None)
+
+proc def cont_r2_other(a: ContBox, allocation_only: bool) -> int:
+    x = layout_snapshot(2, 17, allocation_only)
+    return cont_other(x, a)
+
+proc def cont_r3(a: ContBox, b: ContBox, allocation_only: bool) -> int:
+    x = layout_snapshot(3, 17, allocation_only)
+    assert contbox_graph(a, b, a)
+    return cont_result(x, a, b, None, None)
+
+proc def cont_r3_bool(a: ContBox, b: ContBox, allocation_only: bool) -> int:
+    flag = layout_snapshot(3, True, allocation_only)
+    return cont_bool_result(flag, a, b)
+
+proc def cont_r4(a: ContBox, b: ContBox, c: ContBox, allocation_only: bool) -> int:
+    x = layout_snapshot(4, 17, allocation_only)
+    assert contbox_graph(a, b, c)
+    return cont_result(x, a, b, c, None)
+
+proc def cont_r5(a: ContBox, b: ContBox, c: ContBox, d: ContBox, allocation_only: bool) -> int:
+    x = layout_snapshot(5, 17, allocation_only)
+    assert contbox_graph(a, b, a)
+    return cont_result(x, a, b, c, d)
+
+proc def cont_r6(a: ContBox, b: ContBox, c: ContBox, d: ContBox, e: ContBox, allocation_only: bool) -> int:
+    x = layout_snapshot(6, 17, allocation_only)
+    assert contbox_graph(a, b, e)
+    return cont_many(x, a, b, c, d, e, None, None, None)
+
+proc def cont_r7(a: ContBox, b: ContBox, c: ContBox, d: ContBox, e: ContBox, f: ContBox, allocation_only: bool) -> int:
+    x = layout_snapshot(7, 17, allocation_only)
+    assert contbox_graph(a, b, f)
+    return cont_many(x, a, b, c, d, e, f, None, None)
+
+proc def cont_r8(a: ContBox, b: ContBox, c: ContBox, d: ContBox, e: ContBox, f: ContBox, g: ContBox, allocation_only: bool) -> int:
+    x = layout_snapshot(8, 17, allocation_only)
+    assert contbox_graph(a, b, g)
+    return cont_many(x, a, b, c, d, e, f, g, None)
+
+proc def cont_r9(a: ContBox, b: ContBox, c: ContBox, d: ContBox, e: ContBox, f: ContBox, g: ContBox, h: ContBox, allocation_only: bool) -> int:
+    x = layout_snapshot(9, 17, allocation_only)
+    assert contbox_graph(a, b, h)
+    return cont_many(x, a, b, c, d, e, f, g, h)
+
+proc def cont_scalar(n: int, allocation_only: bool) -> int:
+    x = layout_snapshot(0, 17, allocation_only)
+    return cont_scalar_result(x, n)
+
 actor main(env):
     try:
+        for allocation_only in [False, True]:
+            a = ContBox(10)
+            b = ContBox(20)
+            c = ContBox(30)
+            d = ContBox(40)
+            a.next = a
+            b.next = a
+            c.next = a
+            d.next = a
+            assert cont_r1(allocation_only) == 18
+            assert cont_r2(a, allocation_only) == 27
+            assert cont_r2_other(a, allocation_only) == 7
+            assert cont_r3(a, a, allocation_only) == 37
+            assert cont_r3_bool(a, a, allocation_only) == 21
+            assert cont_r4(a, a, b, allocation_only) == 57
+            assert cont_r5(a, a, b, c, allocation_only) == 87
+            assert cont_r6(a, a, b, c, d, allocation_only) == 427
+            assert cont_r7(a, a, b, c, d, a, allocation_only) == 487
+            assert cont_r8(a, a, b, c, d, a, b, allocation_only) == 627
+            assert cont_r9(a, a, b, c, d, a, b, c, allocation_only) == 867
+            assert cont_scalar(23, allocation_only) == 40
+        for allocation_only in [False, True]:
+            a = ContBox(10)
+            b = ContBox(20)
+            c = ContBox(30)
+            a.next = a
+            b.next = a
+            c.next = a
+            first = proc0_r1(a)
+            a.callback = first
+            for original, arity, expected, cyclic in [(first, 1, 27, True),
+                    (proc0_other(a), 1, 7, False), (proc0_r2(a, b), 2, 67, False),
+                    (proc0_r3(a, a, b), 3, 107, False), (proc0_r4(a, a, b, c), 4, 227, False),
+                    (proc0_r5(a, a, b, c, a), 5, 277, False),
+                    (proc0_scalar(23), -1, 23, False), (proc0_empty(), 0, 17, False)]:
+                assert proc0_shape(original, arity, False)
+                restored = round_trip_alloc(original) if allocation_only else round_trip(original)
+                assert proc0_shape(restored, arity, cyclic)
+                assert proc0_same_class(original, restored)
+                assert restored() == expected
+                assert exec_proc0(restored) == expected
         assert constcont_step_probe()
         assert saved_result(23) == 23
         assert round_trip(mixed(10, i8(-3), u16(258), u64(7), 2.5, True, "ab"))(4) == 281
@@ -189,6 +422,47 @@ actor main(env):
         assert round_trip(procedural(20))(5) == 25
         assert exec_proc(round_trip(procedural(20)), 7) == 27
         sample = Sample(30)
+        for allocation_only in [False, True]:
+            assert proc0_message(sample, ContBox(12), allocation_only, False) == 42
+            try:
+                proc0_message(sample, ContBox(12), allocation_only, True)
+                assert False
+            except ValueError:
+                pass
+        for allocation_only in [False, True]:
+            one: action(int) -> int = action_round_trip(sample.plus, sample, 1, allocation_only)
+            two: action(str, float) -> int = action_round_trip(sample.two, sample, 2, allocation_only)
+            three_action: action(int, str, float) -> int = action_round_trip(sample.three, sample, 3, allocation_only)
+            assert action_one_probe(one)
+            assert action_two_probe(two)
+            assert action_three_probe(three_action)
+            assert one(6) == 36
+            assert two("abc", 2.5) == 35
+            assert three_action(5, "abc", 2.5) == 40
+            future = exec_action_one(one, 7)
+            assert await future == 37
+            future3 = async three_action(5, "abc", 2.5)
+            assert await future3 == 40
+            zero = action_round_trip(sample.zero, sample, 0, allocation_only)
+            four = action_round_trip(sample.four, sample, 4, allocation_only)
+            assert action_zero_probe(zero)
+            assert zero() == 30
+            future0 = async zero()
+            assert await future0 == 30
+            assert four(1, 2, 3, 4) == 60
+            fail = action_round_trip(sample.fail, sample, 1, allocation_only)
+            try:
+                unexpected = fail(1)
+                assert unexpected == 0
+            except ValueError:
+                pass
+            box = ActionBox(one)
+            graph = cyclic_action(box)
+            box.callback = graph
+            box.next = box
+            restored_graph = action_round_trip(graph, sample, 1, allocation_only)
+            assert action_graph(restored_graph)
+            assert restored_graph(8) == 38
         callback = round_trip_actor(sample.plus, sample)
         assert callback(6) == 36
         triple: pure(int, str, float) -> (int, str, float) = lambda x, text, f: (x, text, f)
