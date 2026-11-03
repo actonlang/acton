@@ -137,7 +137,7 @@ pub fn build(b: *std.Build) void {
         // whole heap blocks.
         const entry_bytes: u64 = 2 * (target.result.ptrBitWidth() / 8);
         const block_bytes: u64 = if (gc_block_size != 0) gc_block_size else 4096;
-        if (gc_initial_mark_stack_size * entry_bytes % block_bytes != 0) {
+        if ((gc_initial_mark_stack_size * entry_bytes) % block_bytes != 0) {
             std.log.err("gc_initial_mark_stack_size must fill whole heap blocks: at least {d} entries on this target", .{block_bytes / entry_bytes});
             std.process.exit(1);
         }

@@ -2311,7 +2311,7 @@ actonProjTests =
                   [ "def ready() -> bool:"
                   , "    return True"
                   ]
-              writeZigPkg proj = do
+              writeZigPkg proj name = do
                 createDirectoryIfMissing True (proj </> "src")
                 writeFile (proj </> "build.zig") $ unlines
                   [ "const std = @import(\"std\");"
@@ -2333,9 +2333,9 @@ actonProjTests =
                   ]
                 writeFile (proj </> "build.zig.zon") $ unlines
                   [ ".{"
-                  , "    .name = .lmdb_zig,"
+                  , "    .name = ." ++ name ++ ","
                   , "    .version = \"0.0.0\","
-                  , "    .fingerprint = 0xd571f8beb86c413e,"
+                  , "    .fingerprint = " ++ mkFp name ++ ","
                   , "    .minimum_zig_version = \"0.17.0\","
                   , "    .dependencies = .{},"
                   , "    .paths = .{\"\"},"
@@ -2369,11 +2369,13 @@ actonProjTests =
           writeWrapper depAProj "dep_a" "../zig_common" "lib"
           writeWrapper depBProj "dep_b" "../zig_common" "lib"
           writeWrapper depCProj "dep_c" "../zig_other" "lib"
-          writeZigPkg zigCommonProj
-          writeZigPkg zigOtherProj
-          (returnCode, _cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc actonExe ["build"]){ cwd = Just rootProj } ""
-          assertEqual "acton should build with colliding transitive zig dep names" ExitSuccess returnCode
-          assertBool "acton should not report the old dependency option collision" (not ("invalid option: -Dacton_modules" `isInfixOf` cmdErr))
+          writeZigPkg zigCommonProj "zig_common"
+          writeZigPkg zigOtherProj "zig_other"
+          (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc actonExe ["build"]){ cwd = Just rootProj } ""
+          let output = cmdOut ++ cmdErr
+          assertEqual ("acton should build with colliding transitive zig dep names\n" ++ output) ExitSuccess returnCode
+          assertBool ("acton should not report the old dependency option collision\n" ++ output)
+            (not ("invalid option: -Dacton_modules" `isInfixOf` output))
           rootZon <- readFile (rootProj </> "out/zig/build.zig.zon")
           rootBuildZig <- readFile (rootProj </> "out/zig/build.zig")
           assertBool "root build.zig.zon should include the first local zig dep name"

@@ -16,7 +16,7 @@ export ZIG_GLOBAL_CACHE_DIR
 
 ACTON=$(TD)/dist/bin/acton
 ACTONC=dist/bin/actonc
-ZIG_VERSION:=0.17.0
+ZIG_VERSION:=0.18.0-dev.904+acton.2
 ZIG=$(TD)/dist/zig/zig
 CURL:=curl --fail --location --retry 5 --retry-delay 2 --retry-max-time 120 --retry-connrefused
 AR=$(ZIG) ar
@@ -373,10 +373,11 @@ deps-download/$(LIBGC_REF).tar.gz:
 	mkdir -p deps-download
 	$(CURL) -o $@ https://github.com/actonlang/bdwgc/archive/$(LIBGC_REF).tar.gz
 
-dist/deps/libgc: deps-download/$(LIBGC_REF).tar.gz
+dist/deps/libgc: deps-download/$(LIBGC_REF).tar.gz deps/libgc/build.patch
 	rm -rf "$@"
 	mkdir -p "$@"
 	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<"
+	cd "$@" && patch -p1 < "$(TD)/deps/libgc/build.patch"
 	rm -rf "$@/.github" "$@/autogen.sh" "$@/docs" "$@/tools"
 	touch "$(TD)/$@"
 
@@ -714,35 +715,25 @@ dist/completion/acton.bash-completion: completion/acton.bash-completion
 	cp "$<" "$@"
 
 ZIG_TARBALL=zig-$(ARCH)-$(OS)-$(ZIG_VERSION).tar.xz
-ZIG_DOWNLOAD_BASE_URL ?=
-ifeq ($(strip $(ZIG_DOWNLOAD_BASE_URL)),)
-ifeq ($(findstring -dev,$(ZIG_VERSION)),-dev)
-ZIG_DOWNLOAD_URL ?= https://ziglang.org/builds/$(ZIG_TARBALL)
-else
-ZIG_DOWNLOAD_URL ?= https://ziglang.org/download/$(ZIG_VERSION)/$(ZIG_TARBALL)
-endif
-else
+ZIG_DOWNLOAD_BASE_URL ?= https://github.com/actonlang/zig/releases/download/acton-$(ZIG_VERSION)
 ZIG_DOWNLOAD_URL ?= $(patsubst %/,%,$(ZIG_DOWNLOAD_BASE_URL))/$(ZIG_TARBALL)
-endif
 
-dist/zig: dist/zig/.patched
+dist/zig: dist/zig/.version-$(ZIG_VERSION)
 	touch "$@"
 
-dist/zig/.patched: deps-download/$(ZIG_TARBALL) deps/zig-compiler-rt.patch
+dist/zig/.version-$(ZIG_VERSION): deps-download/$(ZIG_TARBALL) deps/zig/SHA256SUMS $(shell find deps/zig-extras)
+	cd deps-download && awk '$$2 == "$(ZIG_TARBALL)"' ../deps/zig/SHA256SUMS | $(if $(filter macos,$(OS)),shasum -a 256,sha256sum) -c -
+	rm -rf "$(@D)"
 	mkdir -p "$(@D)"
 	cd "$(@D)" && tar Jx --strip-components=1 -f "../../$<"
 	rm -rf "$(@D)/doc"
 	cp -a deps/zig-extras/* "$(@D)"
-	cd "$(@D)" && patch -p1 -t -N < ../../deps/zig-compiler-rt.patch
 	touch "$@"
 
-
-# By default Zig downloads come from ziglang.org. CI can set
-# ZIG_DOWNLOAD_BASE_URL=https://github.com/actonlang/zigballs/raw/main
-# to fetch the same tarball filename from our mirror.
 deps-download/$(ZIG_TARBALL):
 	mkdir -p deps-download
-	$(CURL) -o $@ "$(ZIG_DOWNLOAD_URL)"
+	$(CURL) -o "$@.tmp" "$(ZIG_DOWNLOAD_URL)"
+	mv "$@.tmp" "$@"
 
 .PHONY: distribution1 distribution clean-distribution
 distribution1: dist/base dist/std $(DIST_BACKEND_FILES) dist/builder $(DIST_BINS) $(DIST_ZIG)
