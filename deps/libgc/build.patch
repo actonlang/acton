@@ -1,0 +1,17 @@
+--- a/build.zig
++++ b/build.zig
+@@ -123 +123 @@
+-    var source_files: std.ArrayListUnmanaged([]const u8) = .empty;
++    var source_files: std.ArrayList([]const u8) = .empty;
+@@ -125 +125 @@
+-    var flags: std.ArrayListUnmanaged([]const u8) = .empty;
++    var flags: std.ArrayList([]const u8) = .empty;
+@@ -592 +592 @@
+-        if (linkage == .dynamic and t.os.tag == .windows or t.abi == .msvc) {
++        if ((linkage == .dynamic and t.os.tag == .windows) or t.abi == .msvc) {
+@@ -892 +892 @@
+-fn addTest(b: *std.Build, gc: *std.Build.Step.Compile, test_step: *std.Build.Step, flags: std.ArrayListUnmanaged([]const u8), testname: []const u8, filename: []const u8) void {
++fn addTest(b: *std.Build, gc: *std.Build.Step.Compile, test_step: *std.Build.Step, flags: std.ArrayList([]const u8), testname: []const u8, filename: []const u8) void {
+@@ -896 +896 @@
+-fn addTestExt(b: *std.Build, gc: *std.Build.Step.Compile, test_step: *std.Build.Step, flags: std.ArrayListUnmanaged([]const u8), testname: []const u8, filename: []const u8, ext_args: struct {
++fn addTestExt(b: *std.Build, gc: *std.Build.Step.Compile, test_step: *std.Build.Step, flags: std.ArrayList([]const u8), testname: []const u8, filename: []const u8, ext_args: struct {

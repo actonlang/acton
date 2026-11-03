@@ -373,10 +373,11 @@ deps-download/$(LIBGC_REF).tar.gz:
 	mkdir -p deps-download
 	$(CURL) -o $@ https://github.com/actonlang/bdwgc/archive/$(LIBGC_REF).tar.gz
 
-dist/deps/libgc: deps-download/$(LIBGC_REF).tar.gz
+dist/deps/libgc: deps-download/$(LIBGC_REF).tar.gz deps/libgc/build.patch
 	rm -rf "$@"
 	mkdir -p "$@"
 	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<"
+	cd "$@" && patch -p1 < "$(TD)/deps/libgc/build.patch"
 	rm -rf "$@/.github" "$@/autogen.sh" "$@/docs" "$@/tools"
 	touch "$(TD)/$@"
 
