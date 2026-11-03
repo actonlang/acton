@@ -2671,7 +2671,7 @@ genBuildZigZon template relSys depsRootAbs sysAbs projAbs buildDir fingerprint z
 #if defined(darwin_HOST_OS) && defined(aarch64_HOST_ARCH)
 defCpuFlag = ["-Dcpu=apple_m1"]
 #elif defined(aarch64_HOST_ARCH)
-defCpuFlag = ["-Dcpu=generic+crypto"]
+defCpuFlag = ["-Dcpu=armv8a+crypto"]
 #elif defined(x86_64_HOST_ARCH)
 defCpuFlag = ["-Dcpu=x86_64_v2+aes"]
 #else
@@ -2710,7 +2710,7 @@ zigBuild env gopts opts paths rootSpec rootModules binTasks allowPrune moduleSou
             else case (splitOn "-" (C.target opts)) of
                    ("native":_)            -> defCpuFlag
                    ("aarch64":"macos":_)   -> ["-Dcpu=apple_m1"]
-                   ("aarch64":_)           -> ["-Dcpu=generic+crypto"]
+                   ("aarch64":_)           -> ["-Dcpu=armv8a+crypto"]
                    ("x86_64":_)            -> ["-Dcpu=x86_64_v2+aes"]
                    (_:_)                   -> defCpuFlag
                    []                      -> defCpuFlag
