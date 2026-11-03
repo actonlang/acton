@@ -94,7 +94,8 @@ def main():
     (RESULTS / "cpuinfo.txt").write_bytes(Path("/proc/cpuinfo").read_bytes())
     run("host", ["sh", "-c", "uname -a; nproc; cat /proc/loadavg; cat /proc/meminfo; cat /etc/os-release"], ROOT, 10)
     source_root = ROOT / "input-source"
-    assert subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=source_root, text=True).strip() == SOURCE
+    assert subprocess.check_output(["git", "-c", "safe.directory=" + str(source_root),
+                                    "rev-parse", "HEAD"], cwd=source_root, text=True).strip() == SOURCE
     source_files = {}
     for name in ["Build.act", "src/test_xml.act"]:
         data = (source_root / "test/stdlib_tests" / name).read_bytes()
@@ -102,7 +103,8 @@ def main():
     write_json(RESULTS / "source.json", {
         "revision": SOURCE,
         "files": {name: sha(data) for name, data in source_files.items()},
-        "diagnostic_revision": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
+        "diagnostic_revision": subprocess.check_output([
+            "git", "-c", "safe.directory=" + str(ROOT), "rev-parse", "HEAD"], text=True).strip(),
     })
     prepared = {}
     for lane, metadata in PACKAGES.items():
