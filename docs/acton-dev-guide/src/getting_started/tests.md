@@ -10,6 +10,7 @@ make test
 ```
 
 This runs:
+- toolchain installer tests (`make test-zig-toolchain`, requires `python3`)
 - `stack test` for the compiler packages
 - stdlib tests (`make test-stdlib`)
 - backend tests (`make -C backend test`)
@@ -18,6 +19,7 @@ This runs:
 ## Targeted suites
 
 ```sh
+make test-zig-toolchain
 make test-compiler
 make test-builtins
 make test-stdlib
