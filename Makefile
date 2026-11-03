@@ -16,7 +16,7 @@ export ZIG_GLOBAL_CACHE_DIR
 
 ACTON=$(TD)/dist/bin/acton
 ACTONC=dist/bin/actonc
-ZIG_VERSION:=0.17.0
+ZIG_VERSION:=0.18.0-dev.904+acton.2
 ZIG=$(TD)/dist/zig/zig
 CURL:=curl --fail --location --retry 5 --retry-delay 2 --retry-max-time 120 --retry-connrefused
 AR=$(ZIG) ar
@@ -541,12 +541,12 @@ dist/deps/libyyjson: deps/libyyjson $(DIST_ZIG)
 # top level targets
 .PHONY: test test-benchgames test-builtins test-compiler test-db test-examples test-lang test-regressions test-rts test-stdlib online-tests
 .PHONY: test-compiler-accept test-lib-accept test-acton-goldens-accept test-goldens-accept
-.PHONY: test-performance
+.PHONY: test-performance test-zig-toolchain
 # These run stack against libacton/acton, which link liblmdb, so the bdeps
 # archives must exist first. (test, test-stdlib, test-incremental, online-tests
 # already pull it in transitively via dist/bin/acton[c].)
 test-benchgames test-builtins test-compiler test-lib-accept test-acton-goldens-accept test-cross-compile test-syntaxerrors test-syntaxerrors-accept test-typeerrors test-typeerrors-accept test-db test-examples test-lang test-regressions test-rts: $(BDEPS)
-test: dist/bin/acton
+test: dist/bin/acton test-zig-toolchain
 	cd compiler && stack test libacton acton:incremental
 	# Exclude the cross-compilation group from the default run: it builds for
 	# many targets and bloats ~/.cache/acton. Run it via `make test-cross-compile`.
@@ -558,6 +558,9 @@ test: dist/bin/acton
 	$(MAKE) test-stdlib
 	$(MAKE) -C backend test
 	$(MAKE) test-rts-db
+
+test-zig-toolchain:
+	python3 test/zig_toolchain.py
 
 test-performance: dist/bin/acton
 	cd compiler && stack test acton:test_acton --ta '-p "/live performance/"'
@@ -715,35 +718,16 @@ dist/completion/acton.bash-completion: completion/acton.bash-completion
 	cp "$<" "$@"
 
 ZIG_TARBALL=zig-$(ARCH)-$(OS)-$(ZIG_VERSION).tar.xz
-ZIG_DOWNLOAD_BASE_URL ?=
-ifeq ($(strip $(ZIG_DOWNLOAD_BASE_URL)),)
-ifeq ($(findstring -dev,$(ZIG_VERSION)),-dev)
-ZIG_DOWNLOAD_URL ?= https://ziglang.org/builds/$(ZIG_TARBALL)
-else
-ZIG_DOWNLOAD_URL ?= https://ziglang.org/download/$(ZIG_VERSION)/$(ZIG_TARBALL)
-endif
-else
+ZIG_DOWNLOAD_BASE_URL ?= https://github.com/actonlang/zig/releases/download/acton-$(ZIG_VERSION)
 ZIG_DOWNLOAD_URL ?= $(patsubst %/,%,$(ZIG_DOWNLOAD_BASE_URL))/$(ZIG_TARBALL)
-endif
+ZIG_CHECKSUMS=deps/zig/SHA256SUMS
+ZIG_EXTRAS=$(shell find deps/zig-extras)
 
-dist/zig: dist/zig/.patched
+dist/zig: dist/zig/.version-$(ZIG_VERSION)
 	touch "$@"
 
-dist/zig/.patched: deps-download/$(ZIG_TARBALL) deps/zig-compiler-rt.patch
-	mkdir -p "$(@D)"
-	cd "$(@D)" && tar Jx --strip-components=1 -f "../../$<"
-	rm -rf "$(@D)/doc"
-	cp -a deps/zig-extras/* "$(@D)"
-	cd "$(@D)" && patch -p1 -t -N < ../../deps/zig-compiler-rt.patch
-	touch "$@"
-
-
-# By default Zig downloads come from ziglang.org. CI can set
-# ZIG_DOWNLOAD_BASE_URL=https://github.com/actonlang/zigballs/raw/main
-# to fetch the same tarball filename from our mirror.
-deps-download/$(ZIG_TARBALL):
-	mkdir -p deps-download
-	$(CURL) -o $@ "$(ZIG_DOWNLOAD_URL)"
+dist/zig/.version-$(ZIG_VERSION): deps/zig/install.sh $(ZIG_CHECKSUMS) $(ZIG_EXTRAS)
+	sh deps/zig/install.sh "deps-download/$(ZIG_TARBALL)" "$(ZIG_DOWNLOAD_URL)" "$(ZIG_CHECKSUMS)" "$(ZIG_VERSION)" "dist/zig" "deps/zig-extras"
 
 .PHONY: distribution1 distribution clean-distribution
 distribution1: dist/base dist/std $(DIST_BACKEND_FILES) dist/builder $(DIST_BINS) $(DIST_ZIG)

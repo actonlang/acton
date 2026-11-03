@@ -53,7 +53,6 @@ debian/changelog
 debian/files
 
 deps/*
-!deps/zig-compiler-rt.patch
 !deps/*/
 deps-download
 
