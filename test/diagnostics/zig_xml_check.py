@@ -11,12 +11,12 @@ import time
 
 ROOT = Path.cwd()
 RESULTS = ROOT / "xml-results"
-SOURCE = "2b21f7879130420cffe21ad2906f0e8ceb6182f0"
+SOURCE = "103a9dcabf9e217df13967217525d9fea10bfed3"
 PACKAGES = {
     "baseline": {"run": 41627152742, "artifact": 13227945065,
                  "source": "b2d512559a719e35fd1f267c4edfb7cbacc934c7"},
     "candidate": {"run": 41694428931, "artifact": 13261192012,
-                  "source": SOURCE},
+                  "source": "2b21f7879130420cffe21ad2906f0e8ceb6182f0"},
 }
 
 
@@ -100,6 +100,10 @@ def main():
     for name in ["Build.act", "src/test_xml.act"]:
         data = (source_root / "test/stdlib_tests" / name).read_bytes()
         source_files[name] = data
+    snapshots = source_root / "test/stdlib_tests/snapshots/expected/test_xml"
+    for path in sorted(snapshots.iterdir()):
+        if path.is_file():
+            source_files[str(path.relative_to(source_root / "test/stdlib_tests"))] = path.read_bytes()
     write_json(RESULTS / "source.json", {
         "revision": SOURCE,
         "files": {name: sha(data) for name, data in source_files.items()},
@@ -141,8 +145,8 @@ def main():
         prepared[lane] = (acton, dist, project)
     rows = []
     # All ten invocations are serial, alternating package order. Do not use
-    # --iter, --max-time, perf mode, or an RTS thread override here: ordinary
-    # defaults preserve the original three-second watchdog and workload.
+    # --iter, --max-time, perf mode, or an RTS thread override here. The
+    # test source owns its deadline and workload.
     for sample in range(1, 6):
         for lane, (acton, dist, project) in prepared.items():
             row = run(lane + "-isolated-" + str(sample),
@@ -159,6 +163,11 @@ def main():
         read_report(row, isolated=False)
         rows.append(row)
         write_json(RESULTS / "results.json", rows)
+    failures = [row["label"] for row in rows
+                if row["exit_code"] != 0 or any(test["status"] != "OK"
+                                               for test in row["report"]["tests"])]
+    if failures:
+        raise RuntimeError("Tests failed: " + ", ".join(failures))
 
 
 if __name__ == "__main__":

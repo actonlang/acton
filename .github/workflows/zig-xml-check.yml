@@ -24,7 +24,7 @@ jobs:
       - name: Check out the fixed XML test source
         uses: actions/checkout@v7
         with:
-          ref: 2b21f7879130420cffe21ad2906f0e8ceb6182f0
+          ref: 103a9dcabf9e217df13967217525d9fea10bfed3
           path: input-source
           persist-credentials: false
       - name: Download previous main package
