@@ -60,6 +60,9 @@ customParseErrorToDiagnostic MisplacedImport                    = ("Import state
                                                                    [Hint "Move all imports before the module's top-level definitions"])
 customParseErrorToDiagnostic (CyclicTypedef names)              = ("Type definitions " ++ show names ++ " are cyclically dependent",
                                                                    [Hint "A dependency cycle among types must involve at least one class or actor name"])
+customParseErrorToDiagnostic (MixedIndentation _)               = ("Tabs and spaces cannot be mixed in indentation within a file",
+                                                                  [Note "Only indentation that determines block structure is checked",
+                                                                   Hint "Use either tabs or spaces consistently for indentation throughout this file"])
 -- String interpolation errors
 customParseErrorToDiagnostic EmptyInterpolationExpression       = ("Empty expression in string interpolation",
                                                                   [Hint "Add an expression between the braces, e.g. {name}"])
@@ -160,7 +163,8 @@ customParseErrorDiagnostic errKind filename src srcLoc customErr =
                         { pstateInput = src
                         , pstateOffset = 0
                         , pstateSourcePos = SourcePos filename (mkPos 1) (mkPos 1)
-                        , pstateTabWidth = mkPos 8
+                        -- diagnose expects codepoint columns and expands tabs itself.
+                        , pstateTabWidth = mkPos 1
                         , pstateLinePrefix = ""
                         }
                     (_, startState) = reachOffset startOffset initialState

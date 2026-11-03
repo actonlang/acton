@@ -1,8 +1,11 @@
 Building file test/syntaxerrors/err30.act using temporary scratch directory
-[error Indentation error]: Too much indentation
-     +--> err30.act@4:9-4:9
+[error Syntax error]: Tabs and spaces cannot be mixed in indentation within a file
+     +--> test/syntaxerrors/err30.act@4:1-4:2
      |
    4 |     y = 2  # This line starts with a tab
-     :             
-     :            `- Too much indentation
+     : ^--- 
+     : `- Tabs and spaces cannot be mixed in indentation within a file
+     :
+     | Note: Only indentation that determines block structure is checked
+     | Hint: Use either tabs or spaces consistently for indentation throughout this file
 -----+

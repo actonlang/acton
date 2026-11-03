@@ -1875,6 +1875,94 @@ main = do
         testParse env0 ["docstrings"]
         testDocstrings env0 "docstrings"
 
+      describe "Structural indentation" $ do
+        forM_ ["    ", "\t"] $ \indent ->
+          it ("accepts consistent " ++ show indent ++ " indentation") $ do
+            expectChunkedParseMatchesSerial $ unlines
+              [ "def first(flag):"
+              , indent ++ "if flag:"
+              , indent ++ indent ++ "return 1"
+              , indent ++ "else:"
+              , indent ++ indent ++ "return 2"
+              , "def second():"
+              , indent ++ "return 3"
+              ]
+
+        forM_ [("    ", "\t"), ("\t", "    ")] $ \(first, second) -> do
+          it ("rejects mixing across lines after " ++ show first) $ do
+            let prefix = "def first():\n" ++ first ++ "pass\n"
+            expectMixedIndentation (length prefix) (prefix ++ second ++ "pass\n")
+
+          it ("rejects mixing across chunks after " ++ show first) $ do
+            let prefix = "def first():\n" ++ first ++ "pass\ndef second():\n"
+            expectMixedIndentation (length prefix) (prefix ++ second ++ "pass\n")
+
+          it ("points at the conflicting character within " ++ show (first ++ second)) $ do
+            let prefix = "def first():\n" ++ first
+            expectMixedIndentation (length prefix) (prefix ++ second ++ "pass\n")
+
+          it ("merges a failed chunk's summary after " ++ show first) $ do
+            let prefix = "def first():\n" ++ first ++ "pass\ndef second():\n"
+                input = prefix ++ second ++ "pass\n" ++ first ++ "pass\n"
+            expectMixedIndentation (length prefix) input
+
+        it "rejects visually aligned indentation that changes return nesting" $ do
+          let prefix = "def first(flag):\n    if flag:\n        pass\n"
+          expectMixedIndentation (length prefix) (prefix ++ "\treturn\n")
+
+        it "ignores comments, blank lines, literals, and continuation alignment" $ do
+          expectChunkedParseMatchesSerial $ unlines
+            [ "\"\"\"module docs"
+            , "\t    arbitrary indentation"
+            , "\"\"\""
+            , "\t # before imports"
+            , "import math"
+            , "\t \t"
+            , "def first():"
+            , "\t # before the first statement"
+            , "    text = \"\"\"literal"
+            , "\t    arbitrary indentation"
+            , "\"\"\""
+            , "    values = ("
+            , "\t 1,"
+            , " \t2,"
+            , "\t)"
+            , "    total = 1 + \\"
+            , "\t 2"
+            , "    return text"
+            , "\t # trailing comment"
+            , "\t "
+            ]
+
+        it "allows space alignment in a tab-indented file" $ do
+          expectChunkedParseMatchesSerial $ unlines
+            [ "def first():"
+            , "\tvalues = ("
+            , "    1,"
+            , "    2,"
+            , "    )"
+            , "\treturn values"
+            ]
+
+        it "checks indentation after imports and a module docstring" $ do
+          let prefix = "\"\"\"docs\"\"\"\nimport math\ndef first():\n    pass\ndef second():\n"
+          expectMixedIndentation (length prefix) (prefix ++ "\tpass\n")
+
+        it "handles CRLF and a missing final newline" $ do
+          let prefix = "def first():\r\n    pass\r\ndef second():\r\n"
+          expectMixedIndentation (length prefix) (prefix ++ "\tpass")
+
+        it "combines cached indentation summaries independently of grouping" $ do
+          let a = P.Indentation (Just 10) Nothing
+              b = P.noIndentation
+              c = P.Indentation Nothing (Just 30)
+              merge = P.mergeIndentation
+          merge (merge a b) c `shouldBe` merge a (merge b c)
+          merge a c `shouldBe` merge c a
+          merge (P.Indentation (Just 40) Nothing) a `shouldBe` a
+
+        testModuleParseError "mixed_indentation" "def first():\n\tpass\n\t pass\n"
+
       describe "Module Structure" $ do
         describe "Module-level docstrings" $ do
           it "allows single-line docstring before import" $ do
@@ -4764,6 +4852,16 @@ expectChunkedParseMatchesSerialFile actFile input = do
   chunked <- P.parseModule moduleName actFile input Nothing
   when (chunked /= serial) $
     expectationFailure ("Chunked parser AST differs from serial parser for " ++ actFile)
+
+expectMixedIndentation :: Int -> String -> Expectation
+expectMixedIndentation offset input =
+  forM_ [P.parseModuleSerial, P.parseModule] $ \parse -> do
+    result <- E.try (parse (S.modName ["indentation"]) "indentation.act" input Nothing)
+    case result of
+      Left (P.CustomParseException l (P.MixedIndentation _)) ->
+        l `shouldBe` Loc offset (offset + 1)
+      Left err -> expectationFailure ("Expected mixed indentation, got " ++ show err)
+      Right _ -> expectationFailure "Expected mixed indentation to be rejected"
 
 parseBundleErrorLine :: ParseErrorBundle String P.CustomParseError -> Int
 parseBundleErrorLine bundle =
