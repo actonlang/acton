@@ -1,0 +1,81 @@
+# Captured cells must survive nested definitions without changing the bindings
+# of shadowing parameters, branch locals, loop locals or lambda parameters.
+proc def check_scope() -> None:
+    value: ?str = None
+
+    pure def read() -> ?str:
+        return value
+
+    pure def pure_parameter(value: str) -> str:
+        return value
+
+    proc def proc_parameter(value: str) -> str:
+        return value
+
+    # Locals in one branch or a loop still shadow the enclosing cell.
+    pure def branch_local(flag: bool) -> str:
+        if flag:
+            value = "branch"
+            return value
+        return "other"
+
+    proc def loop_local() -> str:
+        for value in ["loop"]:
+            return value
+        return "missing"
+
+    # This parameter needs its own cell, initialized only once.
+    proc def volatile_parameter(value: ?str) -> ?str:
+        proc def callback() -> ?str:
+            return value
+        try:
+            value = "parameter"
+        except:
+            return None
+        return callback()
+
+    # Retain the outer cell while introducing and capturing another one.
+    proc def nested() -> (?str, ?str):
+        inner: ?str = None
+
+        proc def callback() -> (?str, ?str):
+            return (value, inner)
+
+        try:
+            inner = "inner"
+        except:
+            return (None, None)
+        return callback()
+
+    identity: pure(str) -> str = lambda value: value
+    proc_identity: proc(str) -> str = proc lambda value: value
+    captured: pure() -> ?str = lambda: value
+    proc_captured: proc() -> ?str = proc lambda: value
+
+    try:
+        value = "outer"
+    except:
+        return
+
+    assert read() == "outer"
+    assert pure_parameter("pure") == "pure"
+    assert proc_parameter("proc") == "proc"
+    assert branch_local(True) == "branch"
+    assert branch_local(False) == "other"
+    assert loop_local() == "loop"
+    assert volatile_parameter(None) == "parameter"
+    assert nested() == ("outer", "inner")
+    assert identity("lambda") == "lambda"
+    assert proc_identity("proc lambda") == "proc lambda"
+    assert captured() == "outer"
+    assert proc_captured() == "outer"
+
+
+actor main(env):
+    try:
+        check_scope()
+        print("Cell shadowing passed")
+        env.exit(0)
+    except Exception as exc:
+        print("Cell shadowing failed:", exc)
+        env.exit(1)
