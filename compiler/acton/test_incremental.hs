@@ -1865,8 +1865,8 @@ p30_only_build = testCase "30-only-build skips front passes" $ do
   assertBool "did not expect c.act to type check after invalid b.act in only-build" (not (typechecked out3 modC))
   assertBool "did not expect parse diagnostics in only-build" (not ("Syntax error" `T.isInfixOf` out3))
 
-p31_always_build :: TestTree
-p31_always_build = testCase "31-always-build forces front passes" $ do
+p31_missing_interfaces :: TestTree
+p31_missing_interfaces = testCase "31-missing interfaces rebuild front passes" $ do
   let proj = casesProjDir
       src = casesSrcDir
       modA = modLabel proj "a"
@@ -1888,7 +1888,9 @@ p31_always_build = testCase "31-always-build forces front passes" $ do
     , "    env.exit(0)"
     ]
   _ <- buildOutIn proj
-  out <- buildOutInArgs proj ["--always-build"]
+  interfaces <- InterfaceFiles.listInterfaceDirsRecursive (proj </> "out/types")
+  mapM_ removePathForcibly interfaces
+  out <- buildOutIn proj
   assertBool "expected a.act to type check" (typechecked out modA)
   assertBool "expected b.act to type check" (typechecked out modB)
   assertBool "expected c.act to type check" (typechecked out modC)
@@ -3450,7 +3452,7 @@ eventScenarios =
   , ("restored source reuses its interface",      writeSources [("c", cUsesBar)],                   id)
   , ("type error with a blocked dependent",       writeSources [("b", bTypeError)],                 id)
   , ("import cycle",                              writeSources [("b", bUsesFoo), ("a", aImportsC)], id)
-  , ("always build",                              writeSources [("a", aImplChanged)],               alwaysBuild)
+  , ("interfaces removed",                        clearInterfaces,                                 id)
   , ("only build",                                noEdit,                                           onlyBuild)
   , ("tydb copies",                               noEdit,                                           tydbCopies)
   , ("no DBP refreshes generated code",           noEdit,                                           noDbp)
@@ -3460,7 +3462,10 @@ eventScenarios =
   ]
   where
     noEdit _      = return ()
-    alwaysBuild o = o { C.alwaysbuild = True }
+    clearInterfaces proj = do
+      writeSources [("a", aImplChanged)] proj
+      interfaces <- InterfaceFiles.listInterfaceDirsRecursive (proj </> "out/types")
+      mapM_ removePathForcibly interfaces
     onlyBuild o   = o { C.only_build = True }
     tydbCopies o  = o { C.tydb = True }
     noDbp o       = o { C.no_dbp = True }
@@ -3552,7 +3557,7 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
       , p28_protocol_extension_deps
       , p29_protocol_impl_rebuild
       , p30_only_build
-      , p31_always_build
+      , p31_missing_interfaces
       , p32_project_alt_output
       , p33_comprehensive_hashes
       , p34_removed_import_module
