@@ -103,8 +103,7 @@ def main():
     write_json(RESULTS / "source.json", {
         "revision": SOURCE,
         "files": {name: sha(data) for name, data in source_files.items()},
-        "diagnostic_revision": subprocess.check_output([
-            "git", "-c", "safe.directory=" + str(ROOT), "rev-parse", "HEAD"], text=True).strip(),
+        "diagnostic_revision": os.environ["GITHUB_SHA"],
     })
     prepared = {}
     for lane, metadata in PACKAGES.items():
