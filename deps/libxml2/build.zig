@@ -52,7 +52,7 @@ pub fn build(b: *std.Build) void {
     // Only the core parser and tree: none of the optional modules, as the
     // xml module needs nothing else.
     const version_header = b.addConfigHeader(.{
-        .style = .{ .autoconf_at = b.path("include/libxml/xmlversion.h.in") },
+        .style = .{ .autoconf_file = b.path("include/libxml/xmlversion.h.in") },
         .include_path = "libxml/xmlversion.h",
     }, .{
         .VERSION = version,

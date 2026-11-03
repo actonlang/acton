@@ -108,7 +108,7 @@ pub fn build(b: *std.Build) void {
         // whole heap blocks.
         const entry_bytes: u64 = 2 * (target.result.ptrBitWidth() / 8);
         const block_bytes: u64 = if (gc_block_size != 0) gc_block_size else 4096;
-        if (gc_initial_mark_stack_size * entry_bytes % block_bytes != 0) {
+        if ((gc_initial_mark_stack_size * entry_bytes) % block_bytes != 0) {
             std.log.err("gc_initial_mark_stack_size must fill whole heap blocks: at least {d} entries on this target", .{block_bytes / entry_bytes});
             std.process.exit(1);
         }
@@ -342,7 +342,7 @@ pub fn build(b: *std.Build) void {
         std.log.err("Error walking dir: {}", .{err});
         std.process.exit(1);
     };
-    defer walker.deinit();
+    defer walker.deinit(io);
 
     // Find all .c files
     while (true) {
@@ -492,7 +492,7 @@ pub fn build(b: *std.Build) void {
 
     var hiter_dir = b.root.openDir(io, "out/types/", .{ .iterate = true }) catch unreachable;
     var hwalker = hiter_dir.walk(b.allocator) catch unreachable;
-    defer hwalker.deinit();
+    defer hwalker.deinit(io);
 
     // Find all .h files
     while (true) {
