@@ -433,7 +433,7 @@ pub fn build(b: *std.Build) void {
     b.dependOnDirectoryContents(project_path.path(b, "out/types"));
     var hiter_dir = project_dir.openDir(io, "out/types/", .{ .iterate = true }) catch unreachable;
     var hwalker = hiter_dir.walk(b.allocator) catch unreachable;
-    defer hwalker.deinit();
+    defer hwalker.deinit(io);
 
     // Find all .h files
     while (true) {
