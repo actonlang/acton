@@ -1,0 +1,54 @@
+name: Compare XML package performance
+
+on:
+  push:
+    branches: [zig-xml-check]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  compare:
+    runs-on: ubuntu-24.04
+    container: ubuntu:20.04
+    timeout-minutes: 30
+    steps:
+      - name: Install diagnostic prerequisites
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates git libgmp10 libtinfo6 python3 xz-utils zlib1g
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Check out the fixed XML test source
+        uses: actions/checkout@v7
+        with:
+          ref: 2b21f7879130420cffe21ad2906f0e8ceb6182f0
+          path: input-source
+          persist-credentials: false
+      - name: Download previous main package
+        uses: actions/download-artifact@v8
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: 41627152742
+          artifact-ids: 13227945065
+          merge-multiple: true
+          path: packages/baseline
+      - name: Download current PR package
+        uses: actions/download-artifact@v8
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: 41694428931
+          artifact-ids: 13261192012
+          merge-multiple: true
+          path: packages/candidate
+      - name: Compare unchanged XML tests
+        run: python3 test/diagnostics/zig_xml_check.py
+      - name: Retain diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: xml-package-comparison-${{ github.run_id }}
+          path: xml-results
+          if-no-files-found: error
