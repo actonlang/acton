@@ -1,0 +1,74 @@
+import testing
+
+
+# Use object fields so returning the value needs no scalar boxing. All names
+# have the same byte length; first/last refer to the generated branch order.
+class Record(object):
+    field_00: str
+    field_01: str
+    field_02: str
+    field_03: str
+    field_04: str
+    field_05: str
+    field_06: str
+    field_07: str
+    field_08: str
+    field_09: str
+    field_10: str
+    field_11: str
+    field_12: str
+    field_13: str
+    field_14: str
+    field_15: str
+
+    def __init__(self):
+        self.field_00 = "value"
+        self.field_01 = "value"
+        self.field_02 = "value"
+        self.field_03 = "value"
+        self.field_04 = "value"
+        self.field_05 = "value"
+        self.field_06 = "value"
+        self.field_07 = "value"
+        self.field_08 = "value"
+        self.field_09 = "value"
+        self.field_10 = "value"
+        self.field_11 = "value"
+        self.field_12 = "value"
+        self.field_13 = "value"
+        self.field_14 = "value"
+        self.field_15 = "value"
+
+
+def lookup(t: testing.SyncT, key: str, found: bool):
+    record = Record()
+    # Prepare a separate name buffer outside the timed loop.
+    key = bytearray(key.encode()).decode()
+    result: ?value = None
+    repeats = 0
+    for _ in t.loop():
+        repeats += 1
+        result = record.__get_attr__(key)
+    if repeats > 0:
+        if found:
+            testing.assertTrue(isinstance(result, str))
+            if isinstance(result, str):
+                testing.assertEqual(result, "value")
+        else:
+            testing.assertNone(result)
+
+
+def _test_first_field(t: testing.SyncT):
+    lookup(t, "field_00", True)
+
+
+def _test_last_field(t: testing.SyncT):
+    lookup(t, "field_15", True)
+
+
+def _test_missing_same_length(t: testing.SyncT):
+    lookup(t, "field_16", False)
+
+
+def _test_missing_short_name(t: testing.SyncT):
+    lookup(t, "field", False)

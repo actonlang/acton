@@ -82,6 +82,17 @@ prepared before `t.loop()`. These are fixed workloads; use
 guide's [witness sharing](../../docs/acton-dev-guide/src/compiler/witnesses.md)
 page for the rules and for `--witness-stats`.
 
+## Reflective attribute reads
+
+`get_attr` measures first-field and last-field hits, a same-length miss, and a
+short-name miss on a 16-field class. Names and objects are prepared before
+`t.loop()`. The fields hold strings, so returning a field needs no scalar boxing;
+allocated bytes expose temporary name allocations during lookup. Use scale 1:
+
+```sh
+acton test perf --module get_attr --scale 1 --time 3s --rts-wthreads 1
+```
+
 ## Exceptions
 
 `exceptions` measures a fixed builtin error, a fixed Acton error, and a formatted

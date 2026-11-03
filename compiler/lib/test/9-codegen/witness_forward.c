@@ -58,7 +58,7 @@ witness_forwardQ_PC witness_forwardQ_PCD___deserialize__ (witness_forwardQ_PC se
 }
 struct witness_forwardQ_PCG_class witness_forwardQ_PCG_methods;
 B_value witness_forwardQ_ThingD___get_attr__ (witness_forwardQ_Thing self, B_str name) {
-    if (B_OrdD_strD___eq__(B_OrdD_strG_witness, name, actStrFromCString("n"))) {
+    if (name->nbytes == sizeof("n") - 1 && memcmp(name->str, "n", sizeof("n") - 1) == 0) {
         return (B_value)toB_int(self->n);
     }
     return B_None;
