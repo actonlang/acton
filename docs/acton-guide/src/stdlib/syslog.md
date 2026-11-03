@@ -1,6 +1,6 @@
 # std.syslog
 
-The `std.syslog` module provides UDP and TCP clients and servers, an
+The `std.syslog` module provides UDP, TCP, and TLS clients and servers, an
 [RFC 5424](https://www.rfc-editor.org/rfc/rfc5424) message codec, and a decoder
 for canonical [RFC 3164](https://www.rfc-editor.org/rfc/rfc3164) messages.
 
@@ -101,7 +101,7 @@ Both actors accept `max_size` from 480 through 65507 bytes. These limits apply
 to the entire encoded message. Choose a limit that suits the receiving system
 and network; larger UDP datagrams may require IP fragmentation.
 
-## TCP streams
+## Stream transports
 
 `StreamClient(cap, address, port, on_connect, on_error, max_size=65536,
 max_pending=64, connect_timeout=10.0)` accepts a `net.TCPConnectCap`.
@@ -135,9 +135,63 @@ to TCP are drained before closing. Server `close()` stops listening and closes
 its accepted connections. Repeated calls are safe. TCP supplies no syslog
 application acknowledgement.
 
+### TLS client
+
+Set `tls=True` on `StreamClient` for TLS with the same octet-counting framing.
+The standard TLS syslog port is 6514. The server certificate and hostname are
+verified by default. `ca_pem` supplies trusted CA certificates as PEM bytes;
+otherwise the system CA bundle is used. `server_name` selects the expected
+hostname and SNI name, defaulting to `address`.
+
+```python
+syslog.StreamClient(cap, "192.0.2.10", 6514, connected, failed,
+                    tls=True, ca_pem=ca_pem, server_name="logs.example.com")
+```
+
+Supply `cert_pem` and `key_pem` to present a client certificate. Both must be
+provided together. `verify_peer(certificates, result)` can apply additional
+policy to the server's DER certificate chain and verification result. With
+`verify_tls=True`, it can reject a verified certificate; with `verify_tls=False`,
+it makes the trust decision itself. Its return value must be `True` to proceed.
+`server_name=""` disables SNI and hostname checking. TLS options supplied without
+`tls=True` are rejected.
+
+`connect_timeout` includes the TLS handshake and `verify_peer`. A timeout or
+verification failure calls `on_error` and discards queued messages. Closing
+during setup cancels the attempt. TLS 1.3 client-certificate rejection can
+arrive after `on_connect`, so a connection callback is not an acknowledgement
+that any syslog message was accepted.
+
+### TLS server
+
+Supply PEM bytes in both `cert_pem` and `key_pem` to enable TLS on `StreamServer`:
+
+```python
+syslog.StreamServer(cap, "0.0.0.0", 6514, bound, received, failed,
+                    cert_pem=cert_pem, key_pem=key_pem,
+                    client_auth=True, ca_pem=ca_pem)
+```
+
+With `client_auth=True`, the default `verify_tls=True` requires a trusted
+client certificate, verified against `ca_pem` or the system CA bundle.
+`verify_peer(certificates, result)` can apply additional policy and requires
+`client_auth=True`. Setting `verify_tls=False` with client authentication
+requires `verify_peer`, which decides whether to accept the presented chain,
+including a missing certificate. The default `client_auth=False` does not
+authenticate clients. Missing certificate/key pairs and TLS security options
+on a plaintext listener are rejected.
+
+After binding succeeds, failed handshakes are reported through `on_error` and
+the server keeps listening. `handshake_timeout=60.0` limits incomplete TLS
+handshakes; zero disables that deadline. It ends before the server's
+`verify_peer` callback, which should return promptly. `max_connections` counts
+accepted sessions, not pending handshakes or verification callbacks. Server
+`close()` aborts incomplete handshakes and closes accepted sessions.
+
 ### Framing
 
-Octet counting prefixes each message with its byte length and a space. Newlines
+TCP and [TLS syslog](https://www.rfc-editor.org/rfc/rfc5425) use the same
+octet-counting framing: each message starts with its byte length and a space. Newlines
 and binary content remain part of the body; newline-delimited framing is not
 supported.
 

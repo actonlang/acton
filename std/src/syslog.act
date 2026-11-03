@@ -81,6 +81,9 @@ invalid_udp_max_size_error = ValueError("Syslog UDP max_size must be in 480..655
 invalid_max_pending_error = ValueError("Syslog max_pending must not be negative")
 invalid_listen_port_error = ValueError("Syslog listen port must be in 0..65535")
 invalid_stream_limits_error = ValueError("Invalid syslog stream limits")
+invalid_tls_credentials_error = ValueError("Syslog TLS requires both cert_pem and key_pem")
+tls_required_error = ValueError("Syslog TLS options require TLS")
+invalid_handshake_timeout_error = ValueError("Syslog handshake_timeout must be finite and nonnegative")
 
 
 class Message(value):
@@ -658,61 +661,110 @@ actor StreamClient(cap: net.TCPConnectCap, address: str, port: int,
                    on_connect: action(StreamClient) -> None,
                    on_error: action(StreamClient, str) -> None,
                    max_size: int=65536, max_pending: int=64,
-                   connect_timeout: float=10.0):
-    """Send RFC 5424 messages over TCP using RFC 6587 octet counting.
+                   connect_timeout: float=10.0, tls: bool=False,
+                   verify_tls: bool=True, ca_pem: ?bytes=None,
+                   cert_pem: ?bytes=None, key_pem: ?bytes=None,
+                   server_name: ?str=None,
+                   verify_peer: ?action(list[bytes], int) -> bool=None):
+    """Send RFC 5424 messages over TCP or TLS using octet counting.
 
     Startup buffering is bounded by max_pending. Transport errors close the
     connection; messages are never retried because the receiver may already
-    have them.
-    close() discards startup messages and closes the transport. There is no
-    application-level delivery acknowledgement.
+    have them. close() discards startup messages and closes the transport.
+    There is no application-level delivery acknowledgement.
+
+    Set tls=True for TLS. Certificates and hostnames are verified by default.
+    ca_pem, cert_pem, key_pem, server_name and verify_peer follow net.TLSConnection.
+    connect_timeout includes the handshake and peer verification.
     """
     if port < 1 or port > 65535:
         raise invalid_destination_port_error
-    if max_size < 480 or max_pending < 0 or connect_timeout <= 0:
+    if max_size < 480 or max_pending < 0 or not (0.0 < connect_timeout and connect_timeout < float("inf")):
         raise invalid_stream_limits_error
-    var _connection: ?net.TCPConnection = None
+    if (cert_pem is None) != (key_pem is None):
+        raise invalid_tls_credentials_error
+    if not tls and (not verify_tls or ca_pem is not None or cert_pem is not None or server_name is not None or verify_peer is not None):
+        raise tls_required_error
+    var _write: ?action(bytes) -> None = None
+    var _close_transport: ?action() -> None = None
     var _pending: list[bytes] = []
     var _ready = False
     var _closed = False
-
-    def closed(c: net.TCPConnection):
-        pass
 
     def close_connection():
         _closed = True
         _ready = False
         _pending = []
-        c = _connection
-        if c is not None:
-            c.close(closed)
+        close_transport = _close_transport
+        _write = None
+        _close_transport = None
+        if close_transport is not None:
+            close_transport()
+
+    def connection_ready():
+        if _closed:
+            return
+        _ready = True
+        write = _write
+        if write is not None:
+            for data in _pending:
+                write(data)
+        _pending = []
+        on_connect(self)
+
+    def connection_failed(error: str):
+        if not _closed:
+            close_connection()
+            on_error(self, error)
 
     def connected(c: net.TCPConnection):
         if _closed:
-            c.close(closed)
-            return
-        _ready = True
-        for data in _pending:
-            c.write(data)
-        _pending = []
-        on_connect(self)
+            c.close(lambda c: None)
+        else:
+            connection_ready()
 
     def received(c: net.TCPConnection, data: bytes):
         pass
 
     def failed(c: net.TCPConnection, error: str):
-        if not _closed:
-            close_connection()
-            on_error(self, error)
+        connection_failed(error)
 
     def remote_closed(c: net.TCPConnection):
-        failed(c, "Syslog connection closed by peer")
+        connection_failed("Syslog connection closed by peer")
+
+    def tls_connected(c: net.TLSConnection):
+        if _closed:
+            c.close(lambda c: None)
+        else:
+            connection_ready()
+
+    def tls_received(c: net.TLSConnection, data: bytes):
+        pass
+
+    def tls_failed(c: net.TLSConnection, error: str):
+        connection_failed(error)
+
+    def tls_remote_closed(c: net.TLSConnection):
+        connection_failed("Syslog connection closed by peer")
 
     def start():
-        if not _closed:
-            _connection = net.TCPConnection(cap, address, port, connected,
+        if _closed:
+            return
+        if tls:
+            tls_connection = net.TLSConnection(cap, address, port, tls_connected,
+                                               tls_received, tls_failed, tls_remote_closed,
+                                               verify_tls=verify_tls, ca_pem=ca_pem,
+                                               cert_pem=cert_pem, key_pem=key_pem,
+                                               server_name=server_name, verify_peer=verify_peer,
+                                               connect_timeout=connect_timeout)
+            _write = tls_connection.write
+            _close_transport = lambda: tls_connection.close(lambda c: None)
+        else:
+            connection = net.TCPConnection(cap, address, port, connected,
                                            received, failed, remote_closed,
-                                           connect_timeout)
+                                           connect_timeout=connect_timeout)
+            _write = connection.write
+            _close_transport = lambda: connection.close(lambda c: None)
 
     action def send(message: Message) -> None:
         """Send an octet-counted message, or report rejection through on_error."""
@@ -725,9 +777,9 @@ actor StreamClient(cap: net.TCPConnectCap, address: str, port: int,
         except ValueError as error:
             on_error(self, error.error_message)
             return
-        c = _connection
-        if _ready and c is not None:
-            c.write(data)
+        write = _write
+        if _ready and write is not None:
+            write(data)
         elif len(_pending) < max_pending:
             _pending.append(data)
         else:
@@ -752,39 +804,62 @@ actor StreamServer(cap: net.TCPListenCap, address: str, port: int,
                    on_listen: action(StreamServer, ?str) -> None,
                    on_message: action(StreamServer, Message, str, int) -> None,
                    on_error: action(StreamServer, str) -> None,
-                   max_size: int=65536, max_connections: int=64, legacy: bool=True):
-    """Collect octet-counted syslog messages over TCP.
+                   max_size: int=65536, max_connections: int=64, legacy: bool=True,
+                   cert_pem: ?bytes=None, key_pem: ?bytes=None,
+                   client_auth: bool=False, verify_tls: bool=True,
+                   ca_pem: ?bytes=None,
+                   verify_peer: ?action(list[bytes], int) -> bool=None,
+                   handshake_timeout: float=60.0):
+    """Collect octet-counted syslog messages over TCP or TLS.
 
     Each connection has its own bounded decoder. Invalid framing or truncated
     EOF closes that connection; a malformed complete syslog message is reported
     and skipped. Other connections remain usable. No newline framing is used.
     close() closes both the listener and its accepted connections.
+
+    Supply cert_pem and key_pem for TLS. Client authentication and verification
+    options follow net.TLSListener. Failed handshakes go to on_error after
+    binding succeeds. max_connections counts accepted sessions;
+    handshake_timeout bounds incomplete TLS handshakes, 0 for no deadline.
     """
     if port < 0 or port > 65535:
         raise invalid_listen_port_error
     if max_size < 480 or max_connections < 1:
         raise invalid_stream_limits_error
-    var _listener: ?net.TCPListener = None
+    if (cert_pem is None) != (key_pem is None):
+        raise invalid_tls_credentials_error
+    if cert_pem is None and (client_auth or not verify_tls or ca_pem is not None or verify_peer is not None):
+        raise tls_required_error
+    if not (0.0 <= handshake_timeout and handshake_timeout < float("inf")):
+        raise invalid_handshake_timeout_error
+    var _stop_listener: ?action() -> None = None
+    var _local_address: ?action() -> str = None
+    var _local_port: ?action() -> int = None
     var _connections: dict[int, (decoder: StreamDecoder, peer: str, port: int, close: action() -> None)] = {}
     var _next_connection = 0
     var _ready = False
     var _closed = False
 
-    def bound(listener: net.TCPListener, error: ?str):
+    def listening(error: ?str):
         if _closed:
-            listener.close()
-        elif _ready:
+            return
+        if _ready:
             if error is not None:
                 if error == "resume":
                     close()
                 on_error(self, error)
         else:
             if error is not None:
-                _closed = True
-                listener.close()
+                close()
             else:
                 _ready = True
             on_listen(self, error)
+
+    def bound(listener: net.TCPListener, error: ?str):
+        listening(error)
+
+    def tls_bound(listener: net.TLSListener, error: ?str):
+        listening(error)
 
     def remove(key: int):
         if key in _connections:
@@ -835,18 +910,23 @@ actor StreamServer(cap: net.TCPListenCap, address: str, port: int,
             if not _closed:
                 on_error(self, "Syslog connection from {peer}:{peer_port}: {error}")
 
-    def accepted(c: net.TCPListenConnection):
+    def accept(peer: str, peer_port: int, close_connection: action() -> None) -> ?int:
         if _closed:
-            c.close()
-        elif len(_connections) >= max_connections:
-            c.close()
+            close_connection()
+            return None
+        if len(_connections) >= max_connections:
+            close_connection()
             on_error(self, "Syslog connection limit reached")
-        else:
-            key = _next_connection
-            _next_connection += 1
-            endpoints = c.endpoints()
-            _connections[key] = (StreamDecoder(max_size), endpoints.remote_address, endpoints.remote_port, c.close)
+            return None
+        key = _next_connection
+        _next_connection += 1
+        _connections[key] = (StreamDecoder(max_size), peer, peer_port, close_connection)
+        return key
 
+    def accepted(c: net.TCPListenConnection):
+        endpoints = c.endpoints()
+        key = accept(endpoints.remote_address, endpoints.remote_port, c.close)
+        if key is not None:
             def received(conn: net.TCPListenConnection, data: bytes):
                 data_received(key, data)
 
@@ -858,28 +938,59 @@ actor StreamServer(cap: net.TCPListenCap, address: str, port: int,
 
             c.cb_install(received, failed, closed)
 
+    def tls_accepted(c: net.TLSListenConnection):
+        endpoints = c.endpoints()
+        key = accept(endpoints.remote_address, endpoints.remote_port, c.close)
+        if key is not None:
+            def received(conn: net.TLSListenConnection, data: bytes):
+                data_received(key, data)
+
+            def failed(conn: net.TLSListenConnection, error: str):
+                connection_failed(key, error)
+
+            def closed(conn: net.TLSListenConnection):
+                remote_closed(key)
+
+            c.cb_install(received, failed, closed)
+
     def start():
-        if not _closed:
-            _listener = net.TCPListener(cap, address, port, bound, accepted)
+        if _closed:
+            return
+        if cert_pem is not None and key_pem is not None:
+            tls_listener = net.TLSListener(cap, address, port, cert_pem, key_pem,
+                                           tls_bound, tls_accepted, client_auth=client_auth,
+                                           verify_tls=verify_tls, ca_pem=ca_pem,
+                                           verify_peer=verify_peer, handshake_timeout=handshake_timeout)
+            _stop_listener = tls_listener.close
+            _local_address = tls_listener.local_address
+            _local_port = tls_listener.local_port
+        else:
+            listener = net.TCPListener(cap, address, port, bound, accepted)
+            _stop_listener = listener.close
+            _local_address = listener.local_address
+            _local_port = listener.local_port
 
     action def local_address() -> str:
-        listener = _listener
-        if listener is not None and not _closed:
-            return listener.local_address()
+        get_address = _local_address
+        if get_address is not None and not _closed:
+            return get_address()
         return ""
 
     action def local_port() -> int:
-        listener = _listener
-        if listener is not None and not _closed:
-            return listener.local_port()
+        get_port = _local_port
+        if get_port is not None and not _closed:
+            return get_port()
         return 0
 
     action def close() -> None:
         """Close the listener and every accepted connection. Idempotent."""
         _closed = True
-        listener = _listener
-        if listener is not None:
-            listener.close()
+        stop_listener = _stop_listener
+        _stop_listener = None
+        _local_address = None
+        _local_port = None
+        if stop_listener is not None:
+            stop_listener()
         for state in _connections.values():
             close_connection = state.close
             close_connection()
