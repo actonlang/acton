@@ -210,6 +210,28 @@ compilerTests =
         testBuild "" ExitSuccess False proj
         (returnCode, _cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc "./out/bin/main" []){ cwd = Just proj } ""
         assertEqual ("unboxed bool method slot binary should run: " ++ cmdErr) ExitSuccess returnCode
+  , testCase "builtin len and append eliminate concrete witness arguments" $ do
+        withSystemTempDirectory "acton-builtin-len-append" $ \tmp -> do
+          let src = tmp </> "builtin_len_append.act"
+          copyFile "../../test/regression_auto/builtin_len_append.act" src
+          (code, generated, err) <- buildThing "--quiet --dbg-no-lines --cgen" src
+          assertEqual ("C generation should succeed:\n" ++ generated ++ err) ExitSuccess code
+          let body name = unlines $ takeWhile (/= "}") $ dropWhile
+                (not . isInfixOf ("builtin_len_appendQ_" ++ name ++ " (")) (lines generated)
+              workers = [ ("list_length", "$listD_U__len"), ("ilist_length", "$ilistD_U__len")
+                        , ("dict_length", "$dictD_U__len"), ("idict_length", "$idictD_U__len")
+                        , ("set_length", "$setD_U__len"), ("iset_length", "$isetD_U__len")
+                        , ("str_length", "$strD_U__len"), ("bytes_length", "$bytesD_U__len")
+                        , ("bytearray_length", "$bytearrayD_U__len"), ("bitset_length", "$bitsetD_U__len")
+                        , ("array_length", "$arrayD_U__len"), ("bitarray_length", "$bitarrayD_U__len")
+                        , ("append_value", "$listD_U_append") ]
+          forM_ workers $ \(name, worker) -> do
+            let c = body name
+            assertBool (name ++ " should call its witness-free worker") (worker `isInfixOf` c)
+            assertBool (name ++ " should not call generic len or append")
+              (not ("B_len" `isInfixOf` c || "$class->append" `isInfixOf` c))
+          assertBool "generic Collection should retain len dispatch" ("B_len" `isInfixOf` body "generic_length")
+          assertBool "generic Sequence should retain append dispatch" ("$class->append" `isInfixOf` body "generic_append")
   , testCase "release-mode loop-carried local survives setjmp" $ do
         -- A local assigned inside a for-loop and read afterwards must be emitted
         -- as C volatile so it survives the loop's StopIteration setjmp/longjmp.

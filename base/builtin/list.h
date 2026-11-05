@@ -82,7 +82,16 @@ B_list B_listD_new(int capacity);
 B_list B_listD_copy(B_list lst);
 B_ilist B_ilistD_new(int capacity);
 
+B_NoneType $listD_U_append(B_list lst, $WORD elem);
 $WORD $listD_U__getitem__(B_list lst, int64_t n);
 B_NoneType $listD_U__setitem__(B_list lst, int64_t n, $WORD val);
 B_NoneType $listD_U__delitem__(B_list lst, int64_t n);
 $WORD $ilistD_U__getitem__(B_ilist lst, int64_t n);
+
+// Witness-free length getters used by generated code.
+static inline int64_t $listD_U__len(B_list self) {
+    return (int64_t)self->length;
+}
+static inline int64_t $ilistD_U__len(B_ilist self) {
+    return (int64_t)self->length;
+}

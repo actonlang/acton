@@ -156,6 +156,17 @@ primAnnot           = gPrim "annot"
 
 primRaiseValueError = gPrim "raiseValueError"
 primUGetItem        = gPrim "listD_U__getitem__"
+primUListAppend    = gPrim "listD_U_append"
+primUListLen       = gPrim "listD_U__len"
+primUIListLen      = gPrim "ilistD_U__len"
+primUDictLen       = gPrim "dictD_U__len"
+primUIDictLen      = gPrim "idictD_U__len"
+primUSetLen        = gPrim "setD_U__len"
+primUISetLen       = gPrim "isetD_U__len"
+primUStrLen        = gPrim "strD_U__len"
+primUBytesLen      = gPrim "bytesD_U__len"
+primUBytearrayLen  = gPrim "bytearrayD_U__len"
+primUBitsetLen     = gPrim "bitsetD_U__len"
 primUListSetItem    = gPrim "listD_U__setitem__"
 primUListDelItem    = gPrim "listD_U__delitem__"
 primUIListGetItem   = gPrim "ilistD_U__getitem__"
@@ -271,6 +282,17 @@ primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec Nothing)
                             (noq primAnnot,         NDef scAnnot NoDec Nothing),
                             (noq primRaiseValueError,NDef scRaiseValueError NoDec Nothing), 
                             (noq primUGetItem,      NDef scUGetItem NoDec Nothing),
+                            (noq primUListAppend, NDef scUListAppend NoDec Nothing),
+                            (noq primUListLen, NDef scUListLen NoDec Nothing),
+                            (noq primUIListLen, NDef scUIListLen NoDec Nothing),
+                            (noq primUDictLen, NDef scUDictLen NoDec Nothing),
+                            (noq primUIDictLen, NDef scUIDictLen NoDec Nothing),
+                            (noq primUSetLen, NDef scUSetLen NoDec Nothing),
+                            (noq primUISetLen, NDef scUISetLen NoDec Nothing),
+                            (noq primUStrLen, NDef scUStrLen NoDec Nothing),
+                            (noq primUBytesLen, NDef scUBytesLen NoDec Nothing),
+                            (noq primUBytearrayLen, NDef scUBytearrayLen NoDec Nothing),
+                            (noq primUBitsetLen, NDef scUBitsetLen NoDec Nothing),
                             (noq primUListSetItem,  NDef scUListSetItem NoDec Nothing),
                             (noq primUListDelItem,  NDef scUListDelItem NoDec Nothing),
                             (noq primUIListGetItem, NDef scUIListGetItem NoDec Nothing),
@@ -635,6 +657,39 @@ scAnnot             = tSchema [qbind a, qbind b] tAnnot
 scUGetItem          = tSchema [qbind a] tUGetItem
   where tUGetItem   = tFun fxPure (posRow (tList (tVar a)) (posRow tInt posNil)) kwdNil (tVar a)
         a           = TV KType $ name "A"
+
+-- Witness-free append keeps the element boxed at this polymorphic boundary.
+scUListAppend       = tSchema [qbind a] $ tFun fxMut (posRow (tList (tVar a)) (posRow (tVar a) posNil)) kwdNil tNone
+  where a           = TV KType $ name "A"
+
+-- Length workers return the existing native int representation.
+scUListLen          = tSchema [qbind a] $ tFun fxPure (posRow (tList (tVar a)) posNil) kwdNil tInt
+  where a           = TV KType $ name "A"
+
+scUIListLen         = tSchema [qbind a] $ tFun fxPure (posRow (tIList (tVar a)) posNil) kwdNil tInt
+  where a           = TV KType $ name "A"
+
+scUDictLen          = tSchema [qbind a, qbind b] $ tFun fxPure (posRow (tDict (tVar a) (tVar b)) posNil) kwdNil tInt
+  where a           = TV KType $ name "A"
+        b           = TV KType $ name "B"
+
+scUIDictLen         = tSchema [qbind a, qbind b] $ tFun fxPure (posRow (tIDict (tVar a) (tVar b)) posNil) kwdNil tInt
+  where a           = TV KType $ name "A"
+        b           = TV KType $ name "B"
+
+scUSetLen           = tSchema [qbind a] $ tFun fxPure (posRow (tSet (tVar a)) posNil) kwdNil tInt
+  where a           = TV KType $ name "A"
+
+scUISetLen          = tSchema [qbind a] $ tFun fxPure (posRow (tISet (tVar a)) posNil) kwdNil tInt
+  where a           = TV KType $ name "A"
+
+scUStrLen           = monotype $ tFun fxPure (posRow tStr posNil) kwdNil tInt
+
+scUBytesLen         = monotype $ tFun fxPure (posRow tBytes posNil) kwdNil tInt
+
+scUBytearrayLen     = monotype $ tFun fxPure (posRow tBytearray posNil) kwdNil tInt
+
+scUBitsetLen        = monotype $ tFun fxPure (posRow tBitset posNil) kwdNil tInt
 
 scUListSetItem      = tSchema [qbind a] tUListSetItem
   where tUListSetItem = tFun fxMut (posRow (tList (tVar a)) (posRow tInt (posRow (tVar a) posNil))) kwdNil tNone

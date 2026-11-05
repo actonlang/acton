@@ -195,3 +195,14 @@ int64_t $bytesD_U__getitem__(B_bytes str, int64_t i);
 int64_t $bytearrayD_U__getitem__(B_bytearray self, int64_t i);
 B_NoneType $bytearrayD_U__setitem__(B_bytearray self, int64_t i, int64_t val);
 B_NoneType $bytearrayD_U__delitem__(B_bytearray self, int64_t i);
+
+// Witness-free length getters used by generated code.
+static inline int64_t $strD_U__len(B_str self) {
+    return (int64_t)self->nchars;
+}
+static inline int64_t $bytesD_U__len(B_bytes self) {
+    return (int64_t)self->nbytes;
+}
+static inline int64_t $bytearrayD_U__len(B_bytearray self) {
+    return (int64_t)self->nbytes;
+}

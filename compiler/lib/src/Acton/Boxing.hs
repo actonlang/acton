@@ -266,14 +266,20 @@ rawBuiltinMethod                   :: BoxEnv -> Name -> [Expr] -> Maybe Expr
 -- the polymorphic bytes constructor merely to discover that hex has no raw
 -- worker.
 rawBuiltinMethod _ attr _
-  | attr `notElem` [getitemKW, setitemKW, delitemKW, lenKW,
+  | attr `notElem` [getitemKW, setitemKW, delitemKW, lenKW, appendKW,
                     containsKW, containsnotKW, setAddKW, discardKW]
                                     = Nothing
 rawBuiltinMethod env attr es@(recv:_)
                                     = case (unalias env (typeOf env recv), attr, es) of
+                                        (TCon _ (TC q ts), n, [_])
+                                          | n == lenKW
+                                            -> do worker <- lookup q builtinLengthWorkers
+                                                  return $ tApp (eQVar worker) ts
                                         (TCon _ (TC q [t]), n, [_, _])
                                           | q == qnList, n == getitemKW
                                             -> Just $ tApp (eQVar primUGetItem) [t]
+                                          | q == qnList, n == appendKW
+                                            -> Just $ tApp (eQVar primUListAppend) [t]
                                           | q == qnList, n == delitemKW
                                             -> Just $ tApp (eQVar primUListDelItem) [t]
                                           | q == qnIList, n == getitemKW
@@ -289,9 +295,6 @@ rawBuiltinMethod env attr es@(recv:_)
                                             -> Just $ eQVar primUArraySetInt
                                           | q == qnArray, t == tFloat, n == setitemKW
                                             -> Just $ eQVar primUArraySetFloat
-                                        (TCon _ (TC q [t]), n, [_])
-                                          | q == qnArray, n == lenKW
-                                            -> Just $ tApp (eQVar primUArrayLen) [t]
                                         (TCon _ (TC q []), n, [_, _])
                                           | q == qnBitarray, n == getitemKW
                                             -> Just $ eQVar primUBitarrayGetItem
@@ -316,11 +319,21 @@ rawBuiltinMethod env attr es@(recv:_)
                                             -> Just $ eQVar primUBitarraySetItem
                                           | q == qnBytearray, n == setitemKW
                                             -> Just $ eQVar primUBytearraySetItem
-                                        (TCon _ (TC q []), n, [_])
-                                          | q == qnBitarray, n == lenKW
-                                            -> Just $ eQVar primUBitarrayLen
                                         _   -> Nothing
 rawBuiltinMethod _ _ _             = Nothing
+
+-- Concrete builtin lengths need neither the Collection receiver witness nor
+-- its element/key witnesses. Keep this lowering in boxing so its ordinary
+-- dead-witness removal runs before witness sharing and module pooling.
+builtinLengthWorkers               :: [(QName,QName)]
+builtinLengthWorkers               =
+    [ (qnList, primUListLen), (qnIList, primUIListLen)
+    , (qnDict, primUDictLen), (qnIDict, primUIDictLen)
+    , (qnSetT, primUSetLen), (qnISetT, primUISetLen)
+    , (qnStr, primUStrLen), (qnBytes, primUBytesLen)
+    , (qnBytearray, primUBytearrayLen), (qnBitset, primUBitsetLen)
+    , (qnArray, primUArrayLen), (qnBitarray, primUBitarrayLen)
+    ]
 
 -- A comma-separated matrix index is represented by a tuple throughout the
 -- language front end.  For a concrete numeric matrix, split that still
@@ -871,9 +884,9 @@ instance Boxing Expr where
     boxing env (Call l e@(TApp _ (Var _ f) ts) p KwdNil)
       -- len is type-checked through Collection, so its explicit arguments at
       -- this stage are the collection witness followed by the value.  For
-      -- concrete fixed-size arrays the witness is still semantically required
-      -- during type checking, but the call can use the same private raw worker
-      -- as other statically resolved builtin operations.
+      -- concrete builtin containers the witness is still semantically required
+      -- during type checking, but the operation only reads their size field.
+      -- Generic Collection calls keep their witness and normal dispatch.
       | unalias env f == qnLen,
         [_, recv] <- posargs p,
         Just _ <- rawBuiltinMethod env lenKW [recv]

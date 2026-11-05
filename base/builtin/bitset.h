@@ -40,3 +40,8 @@ bool $bitsetD_U__contains__(B_bitset self, int64_t elem);
 bool $bitsetD_U__containsnot__(B_bitset self, int64_t elem);
 B_NoneType $bitsetD_U_add(B_bitset self, int64_t elem);
 B_NoneType $bitsetD_U_discard(B_bitset self, int64_t elem);
+
+// Witness-free length getters used by generated code.
+static inline int64_t $bitsetD_U__len(B_bitset self) {
+    return (int64_t)self->count;
+}

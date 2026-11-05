@@ -581,6 +581,10 @@ struct B_IteratorD_listG_class B_IteratorD_listG_methods = {
 
 // Unboxed helpers used by generated code //////////////////////////////////////////////////////////
 
+B_NoneType $listD_U_append(B_list lst, $WORD elem) {
+    return B_list_base_append((B_list_base)lst, elem);
+}
+
 $WORD $listD_U__getitem__(B_list lst, int64_t n) {
     return B_list_base_getitem((B_list_base)lst, n);
 }
