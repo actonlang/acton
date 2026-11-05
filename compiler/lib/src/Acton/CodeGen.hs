@@ -1532,12 +1532,16 @@ builtinIteratorSource env t e
             Just (spec, wits, xs') <- source xs
                                     = Just (spec, wit:wits, xs')
         source (Call _ f (PosArg xs PosNil) KwdNil)
-          -- Boxing can remove a concrete list iterator's receiver witness.
+          -- Boxing can remove a concrete builtin iterator's receiver witness.
           -- Recognize that worker too, so normalized for-loops still use
           -- automatic iterator storage rather than falling back to the heap.
           | Var _ q <- stripTApp f,
-            q `elem` [primUListIter, primUIListIter]
-                                    = Just (("B_IteratorD_list", "$listD_U_iter_init"), [], xs)
+            Just spec <- lookup q [ (primUListIter, ("B_IteratorD_list", "$listD_U_iter_init"))
+                                  , (primUIListIter, ("B_IteratorD_list", "$listD_U_iter_init"))
+                                  , (primUStrIter, ("B_IteratorD_str", "$strD_U_iter_init"))
+                                  , (primUBytesIter, ("B_IteratorD_bytes", "$bytesD_U_iter_init"))
+                                  , (primUBytearrayIter, ("B_IteratorD_bytearray", "$bytearrayD_U_iter_init")) ]
+                                    = Just (spec, [], xs)
           | Dot _ wit method <- stripTApp f,
             Just ctor <- builtinIteratorWitness env [] wit,
             Just spec <- lookup (ctor ++ "D_" ++ nstr method) builtinIteratorCalls

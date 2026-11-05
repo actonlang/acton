@@ -287,6 +287,77 @@ compilerTests =
               (not ("$listD_U__iter__" `isInfixOf` c || "$ilistD_U__iter__" `isInfixOf` c))
           assertBool "generic reverse should retain dispatch" ("$class->reverse" `isInfixOf` body "generic_reverse")
           assertBool "generic slicing should retain dispatch" ("$class->__getslice__" `isInfixOf` body "generic_slice")
+  , testCase "builtin text protocol workers discard dead receiver witnesses" $ do
+        withSystemTempDirectory "acton-builtin-text-ops" $ \tmp -> do
+          let src = tmp </> "builtin_text_ops.act"
+          copyFile "../../test/regression_auto/builtin_text_ops.act" src
+          (code, generated, err) <- buildThing "--quiet --dbg-no-lines --cgen" src
+          assertEqual ("C generation should succeed:\n" ++ generated ++ err) ExitSuccess code
+          let body name = unlines $ takeWhile (/= "}") $ dropWhile
+                (not . isInfixOf ("builtin_text_opsQ_" ++ name ++ " (")) (lines generated)
+              workers = [ ("str_lt", "$strD_U__lt__", False)
+                        , ("str_le", "$strD_U__le__", False)
+                        , ("str_gt", "$strD_U__gt__", False)
+                        , ("str_ge", "$strD_U__ge__", False)
+                        , ("str_hash", "$strD_U_hash", False)
+                        , ("str_zero", "$strD_U__zero__", False)
+                        , ("str_mul", "$strD_U__mul__", False)
+                        , ("str_fromiter", "$strD_U__fromiter__", True)
+                        , ("str_contains", "$strD_U__contains__", False)
+                        , ("str_containsnot", "$strD_U__containsnot__", False)
+                        , ("str_iter", "$strD_U__iter__", False)
+                        , ("str_getslice", "$strD_U__getslice__", False)
+                        , ("bytes_eq", "$bytesD_U__eq__", False)
+                        , ("bytes_ne", "$bytesD_U__ne__", False)
+                        , ("bytes_lt", "$bytesD_U__lt__", False)
+                        , ("bytes_le", "$bytesD_U__le__", False)
+                        , ("bytes_gt", "$bytesD_U__gt__", False)
+                        , ("bytes_ge", "$bytesD_U__ge__", False)
+                        , ("bytes_contains", "$bytesD_U__contains__", False)
+                        , ("bytes_containsnot", "$bytesD_U__containsnot__", False)
+                        , ("bytearray_eq", "$bytearrayD_U__eq__", False)
+                        , ("bytearray_ne", "$bytearrayD_U__ne__", False)
+                        , ("bytearray_lt", "$bytearrayD_U__lt__", False)
+                        , ("bytearray_le", "$bytearrayD_U__le__", False)
+                        , ("bytearray_gt", "$bytearrayD_U__gt__", False)
+                        , ("bytearray_ge", "$bytearrayD_U__ge__", False)
+                        , ("bytearray_contains", "$bytearrayD_U__contains__", False)
+                        , ("bytearray_containsnot", "$bytearrayD_U__containsnot__", False)
+                        , ("bytes_hash", "$bytesD_U_hash", False)
+                        , ("bytes_fromiter", "$bytesD_U__fromiter__", True)
+                        , ("bytes_iter", "$bytesD_U__iter__", False)
+                        , ("bytes_getslice", "$bytesD_U__getslice__", False)
+                        , ("bytes_add", "$bytesD_U__add__", False)
+                        , ("bytes_zero", "$bytesD_U__zero__", False)
+                        , ("bytes_mul", "$bytesD_U__mul__", False)
+                        , ("bytearray_insert", "$bytearrayD_U_insert", False)
+                        , ("bytearray_append", "$bytearrayD_U_append", False)
+                        , ("bytearray_reverse", "$bytearrayD_U_reverse", False)
+                        , ("bytearray_reversed", "$bytearrayD_U__reversed__", False)
+                        , ("bytearray_getslice", "$bytearrayD_U__getslice__", False)
+                        , ("bytearray_setslice", "$bytearrayD_U__setslice__", True)
+                        , ("bytearray_delslice", "$bytearrayD_U__delslice__", False)
+                        , ("bytearray_fromiter", "$bytearrayD_U__fromiter__", True)
+                        , ("bytearray_iter", "$bytearrayD_U__iter__", False)
+                        , ("bytearray_add", "$bytearrayD_U__add__", False)
+                        , ("bytearray_zero", "$bytearrayD_U__zero__", False)
+                        , ("bytearray_mul", "$bytearrayD_U__mul__", False)
+                        , ("bytearray_iadd", "$bytearrayD_U__iadd__", False)
+                        , ("bytearray_imul", "$bytearrayD_U__imul__", False) ]
+          forM_ workers $ \(name, worker, inputWitness) -> do
+            let c = body name
+            assertBool (name ++ " should call its worker") (worker `isInfixOf` c)
+            assertBool (name ++ " should drop the receiver witness")
+              (not ("G_witness" `isInfixOf` c || "$class->" `isInfixOf` c))
+            if inputWitness
+              then assertBool (name ++ " must keep the input Iterable witness") ("B_Iterable" `isInfixOf` c)
+              else assertBool (name ++ " must have no dead witness binding") (not (" W_" `isInfixOf` c))
+          forM_ [("str", "str"), ("bytes", "bytes"), ("bytearray", "bytearray")] $ \(name, ctype) -> do
+            let c = body (name ++ "_loop")
+            assertBool (name ++ " iteration should stay on the stack")
+              (("struct B_IteratorD_" ++ ctype) `isInfixOf` c && ("$" ++ ctype ++ "D_U_iter_init") `isInfixOf` c)
+          assertBool "generic Ord retains dispatch" ("$class->__le__" `isInfixOf` body "generic_le")
+          assertBool "generic Container retains dispatch" ("$class->__contains__" `isInfixOf` body "generic_contains")
   , testCase "release-mode loop-carried local survives setjmp" $ do
         -- A local assigned inside a for-loop and read afterwards must be emitted
         -- as C volatile so it survives the loop's StopIteration setjmp/longjmp.

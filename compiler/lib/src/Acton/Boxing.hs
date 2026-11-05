@@ -269,7 +269,8 @@ rawBuiltinMethod                   :: BoxEnv -> Name -> [Expr] -> Maybe Expr
 rawBuiltinMethod _ attr _
   | attr `notElem` [getitemKW, setitemKW, delitemKW, lenKW, appendKW, eqKW, neKW, addKW,
                     containsKW, containsnotKW, setAddKW, discardKW, insertKW, reverseKW,
-                    getsliceKW, setsliceKW, delsliceKW, iterKW, reversedKW, mulKW, iaddKW, imulKW]
+                    getsliceKW, setsliceKW, delsliceKW, iterKW, reversedKW, mulKW, iaddKW, imulKW,
+                    ltKW, leKW, gtKW, geKW, name "hash"]
                                     = Nothing
 rawBuiltinMethod env attr es@(recv:_)
                                     = case (unalias env (typeOf env recv), attr, es) of
@@ -277,6 +278,12 @@ rawBuiltinMethod env attr es@(recv:_)
                                           | n == lenKW
                                             -> do worker <- lookup q builtinLengthWorkers
                                                   return $ tApp (eQVar worker) ts
+                                        (TCon _ (TC q []), n, [_, _, _, src])
+                                          | q == qnBytearray, n == setsliceKW
+                                            -> Just $ tApp (eQVar primUBytearraySetslice) [typeOf env src]
+                                        (TCon _ (TC q []), n, _)
+                                          | Just worker <- lookup (q, n, length es) builtinTextWorkers
+                                            -> Just $ eQVar worker
                                         (TCon _ (TC q [t]), n, [_, _, _, src])
                                           | q == qnList, n == setsliceKW
                                             -> Just $ tApp (eQVar primUListSetSlice) [t, typeOf env src]
@@ -357,6 +364,53 @@ builtinSequenceWorkers             =
     , ((qnIList, mulKW, 2), primUIListMul)
     ]
 
+-- These native methods ignore the receiver witness, including the Eq/Ord
+-- defaults inherited by the three builtin text/byte-container implementations.
+builtinTextWorkers                 =
+    [ ((qnStr, name "__lt__", 2), primUStrLt)
+    , ((qnStr, name "__le__", 2), primUStrLe)
+    , ((qnStr, name "__gt__", 2), primUStrGt)
+    , ((qnStr, name "__ge__", 2), primUStrGe)
+    , ((qnStr, name "hash", 2), primUStrHash)
+    , ((qnStr, name "__mul__", 2), primUStrMul)
+    , ((qnStr, name "__contains__", 2), primUStrContains)
+    , ((qnStr, name "__containsnot__", 2), primUStrContainsnot)
+    , ((qnStr, name "__iter__", 1), primUStrIter)
+    , ((qnStr, name "__getslice__", 2), primUStrGetslice)
+    , ((qnBytes, name "__eq__", 2), primUBytesEq)
+    , ((qnBytes, name "__ne__", 2), primUBytesNe)
+    , ((qnBytes, name "__lt__", 2), primUBytesLt)
+    , ((qnBytes, name "__le__", 2), primUBytesLe)
+    , ((qnBytes, name "__gt__", 2), primUBytesGt)
+    , ((qnBytes, name "__ge__", 2), primUBytesGe)
+    , ((qnBytes, name "__contains__", 2), primUBytesContains)
+    , ((qnBytes, name "__containsnot__", 2), primUBytesContainsnot)
+    , ((qnBytearray, name "__eq__", 2), primUBytearrayEq)
+    , ((qnBytearray, name "__ne__", 2), primUBytearrayNe)
+    , ((qnBytearray, name "__lt__", 2), primUBytearrayLt)
+    , ((qnBytearray, name "__le__", 2), primUBytearrayLe)
+    , ((qnBytearray, name "__gt__", 2), primUBytearrayGt)
+    , ((qnBytearray, name "__ge__", 2), primUBytearrayGe)
+    , ((qnBytearray, name "__contains__", 2), primUBytearrayContains)
+    , ((qnBytearray, name "__containsnot__", 2), primUBytearrayContainsnot)
+    , ((qnBytes, name "hash", 2), primUBytesHash)
+    , ((qnBytes, name "__iter__", 1), primUBytesIter)
+    , ((qnBytes, name "__getslice__", 2), primUBytesGetslice)
+    , ((qnBytes, name "__add__", 2), primUBytesAdd)
+    , ((qnBytes, name "__mul__", 2), primUBytesMul)
+    , ((qnBytearray, name "insert", 3), primUBytearrayInsert)
+    , ((qnBytearray, name "append", 2), primUBytearrayAppend)
+    , ((qnBytearray, name "reverse", 1), primUBytearrayReverse)
+    , ((qnBytearray, name "__reversed__", 1), primUBytearrayReversed)
+    , ((qnBytearray, name "__getslice__", 2), primUBytearrayGetslice)
+    , ((qnBytearray, name "__delslice__", 2), primUBytearrayDelslice)
+    , ((qnBytearray, name "__iter__", 1), primUBytearrayIter)
+    , ((qnBytearray, name "__add__", 2), primUBytearrayAdd)
+    , ((qnBytearray, name "__mul__", 2), primUBytearrayMul)
+    , ((qnBytearray, name "__iadd__", 2), primUBytearrayIadd)
+    , ((qnBytearray, name "__imul__", 2), primUBytearrayImul)
+    ]
+
 rawBuiltinCall env attr rest p      = rawBuiltinMethodCall env attr p <|> factory
   where factory                     = case (attr, unalias env rest, posargs p) of
                                         (n, TCon _ (TC q [t]), [])
@@ -367,6 +421,14 @@ rawBuiltinCall env attr rest p      = rawBuiltinMethodCall env attr p <|> factor
                                           | n == fromiterKW,
                                             Just worker <- lookup q [(qnList, primUListFromIter), (qnIList, primUIListFromIter)]
                                             -> call worker [t, typeOf env src]
+                                        (n, TCon _ (TC q []), [])
+                                          | n == name "__zero__",
+                                            Just worker <- lookup q [(qnStr, primUStrZero), (qnBytes, primUBytesZero), (qnBytearray, primUBytearrayZero)]
+                                            -> call worker []
+                                        (n, TCon _ (TC q []), [_, src])
+                                          | n == name "__fromiter__",
+                                            Just worker <- lookup q [(qnStr, primUStrFromIter), (qnBytes, primUBytesFromIter), (qnBytearray, primUBytearrayFromIter)]
+                                            -> call worker [typeOf env src]
                                         _ -> Nothing
         call worker ts              = let f = tApp (eQVar worker) ts
                                           TFun _ _ pr _ rt = rtypeOfFun env f
@@ -944,12 +1006,11 @@ instance Boxing Expr where
         | isUnboxable t             = return (HashSet.empty, Box tBool $ Paren NoLoc $ CompOp NoLoc (unbox t x1) [OpArg op (unbox t x2)])
         where t = head ts
               op = cmp2Comparison attr
-      -- str inherits Eq's default __ne__, so the usual direct-method check
-      -- below does not select a worker. For a known builtin witness that
-      -- default is the negation of string equality. The raw worker lookup
-      -- restricts this case to str; generic witnesses keep their dispatch.
+      -- Known builtin text witnesses inherit some Eq/Ord defaults. Their
+      -- native workers implement those same comparisons directly; generic
+      -- witnesses and user-defined overrides retain normal dispatch.
       boxingCompop w attr es _ rt pr rest
-        | attr == neKW,
+        | attr `elem` [neKW, leKW, gtKW, geKW],
           Just sw <- lookupStaticWitness env n,
           Just tc <- staticWitnessMethodClass env sw attr,
           not (directMethodImpl env (tcname tc) attr),

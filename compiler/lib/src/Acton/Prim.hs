@@ -210,6 +210,55 @@ primUListDelSlice   = gPrim "listD_U__delslice__"
 primUListSetSlice   = gPrim "listD_U__setslice__"
 primUListIAdd       = gPrim "listD_U__iadd__"
 primUListIMul       = gPrim "listD_U__imul__"
+primUStrLt              = gPrim "strD_U__lt__"
+primUStrLe              = gPrim "strD_U__le__"
+primUStrGt              = gPrim "strD_U__gt__"
+primUStrGe              = gPrim "strD_U__ge__"
+primUStrHash            = gPrim "strD_U_hash"
+primUStrZero            = gPrim "strD_U__zero__"
+primUStrMul             = gPrim "strD_U__mul__"
+primUStrFromIter        = gPrim "strD_U__fromiter__"
+primUStrContains        = gPrim "strD_U__contains__"
+primUStrContainsnot     = gPrim "strD_U__containsnot__"
+primUStrIter            = gPrim "strD_U__iter__"
+primUStrGetslice        = gPrim "strD_U__getslice__"
+primUBytesEq            = gPrim "bytesD_U__eq__"
+primUBytesNe            = gPrim "bytesD_U__ne__"
+primUBytesLt            = gPrim "bytesD_U__lt__"
+primUBytesLe            = gPrim "bytesD_U__le__"
+primUBytesGt            = gPrim "bytesD_U__gt__"
+primUBytesGe            = gPrim "bytesD_U__ge__"
+primUBytesContains      = gPrim "bytesD_U__contains__"
+primUBytesContainsnot   = gPrim "bytesD_U__containsnot__"
+primUBytearrayEq        = gPrim "bytearrayD_U__eq__"
+primUBytearrayNe        = gPrim "bytearrayD_U__ne__"
+primUBytearrayLt        = gPrim "bytearrayD_U__lt__"
+primUBytearrayLe        = gPrim "bytearrayD_U__le__"
+primUBytearrayGt        = gPrim "bytearrayD_U__gt__"
+primUBytearrayGe        = gPrim "bytearrayD_U__ge__"
+primUBytearrayContains  = gPrim "bytearrayD_U__contains__"
+primUBytearrayContainsnot= gPrim "bytearrayD_U__containsnot__"
+primUBytesHash          = gPrim "bytesD_U_hash"
+primUBytesFromIter      = gPrim "bytesD_U__fromiter__"
+primUBytesIter          = gPrim "bytesD_U__iter__"
+primUBytesGetslice      = gPrim "bytesD_U__getslice__"
+primUBytesAdd           = gPrim "bytesD_U__add__"
+primUBytesZero          = gPrim "bytesD_U__zero__"
+primUBytesMul           = gPrim "bytesD_U__mul__"
+primUBytearrayInsert    = gPrim "bytearrayD_U_insert"
+primUBytearrayAppend    = gPrim "bytearrayD_U_append"
+primUBytearrayReverse   = gPrim "bytearrayD_U_reverse"
+primUBytearrayReversed  = gPrim "bytearrayD_U__reversed__"
+primUBytearrayGetslice  = gPrim "bytearrayD_U__getslice__"
+primUBytearraySetslice  = gPrim "bytearrayD_U__setslice__"
+primUBytearrayDelslice  = gPrim "bytearrayD_U__delslice__"
+primUBytearrayFromIter  = gPrim "bytearrayD_U__fromiter__"
+primUBytearrayIter      = gPrim "bytearrayD_U__iter__"
+primUBytearrayAdd       = gPrim "bytearrayD_U__add__"
+primUBytearrayZero      = gPrim "bytearrayD_U__zero__"
+primUBytearrayMul       = gPrim "bytearrayD_U__mul__"
+primUBytearrayIadd      = gPrim "bytearrayD_U__iadd__"
+primUBytearrayImul      = gPrim "bytearrayD_U__imul__"
 primUNext           = gPrim "rangeD_U__next__"
 
 annot t_ann ann t e = eCall (tApp (eQVar primAnnot) [t_ann, t]) [ann, e]
@@ -359,6 +408,55 @@ primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec Nothing)
                             (noq primUListSetSlice, NDef scUListSetSlice NoDec Nothing),
                             (noq primUListIAdd, NDef scUListIAdd NoDec Nothing),
                             (noq primUListIMul, NDef scUListIMul NoDec Nothing),
+                            (noq primUStrLt, NDef scUStrLt NoDec Nothing),
+                            (noq primUStrLe, NDef scUStrLe NoDec Nothing),
+                            (noq primUStrGt, NDef scUStrGt NoDec Nothing),
+                            (noq primUStrGe, NDef scUStrGe NoDec Nothing),
+                            (noq primUStrHash, NDef scUStrHash NoDec Nothing),
+                            (noq primUStrZero, NDef scUStrZero NoDec Nothing),
+                            (noq primUStrMul, NDef scUStrMul NoDec Nothing),
+                            (noq primUStrFromIter, NDef scUStrFromIter NoDec Nothing),
+                            (noq primUStrContains, NDef scUStrContains NoDec Nothing),
+                            (noq primUStrContainsnot, NDef scUStrContainsnot NoDec Nothing),
+                            (noq primUStrIter, NDef scUStrIter NoDec Nothing),
+                            (noq primUStrGetslice, NDef scUStrGetslice NoDec Nothing),
+                            (noq primUBytesEq, NDef scUBytesEq NoDec Nothing),
+                            (noq primUBytesNe, NDef scUBytesNe NoDec Nothing),
+                            (noq primUBytesLt, NDef scUBytesLt NoDec Nothing),
+                            (noq primUBytesLe, NDef scUBytesLe NoDec Nothing),
+                            (noq primUBytesGt, NDef scUBytesGt NoDec Nothing),
+                            (noq primUBytesGe, NDef scUBytesGe NoDec Nothing),
+                            (noq primUBytesContains, NDef scUBytesContains NoDec Nothing),
+                            (noq primUBytesContainsnot, NDef scUBytesContainsnot NoDec Nothing),
+                            (noq primUBytearrayEq, NDef scUBytearrayEq NoDec Nothing),
+                            (noq primUBytearrayNe, NDef scUBytearrayNe NoDec Nothing),
+                            (noq primUBytearrayLt, NDef scUBytearrayLt NoDec Nothing),
+                            (noq primUBytearrayLe, NDef scUBytearrayLe NoDec Nothing),
+                            (noq primUBytearrayGt, NDef scUBytearrayGt NoDec Nothing),
+                            (noq primUBytearrayGe, NDef scUBytearrayGe NoDec Nothing),
+                            (noq primUBytearrayContains, NDef scUBytearrayContains NoDec Nothing),
+                            (noq primUBytearrayContainsnot, NDef scUBytearrayContainsnot NoDec Nothing),
+                            (noq primUBytesHash, NDef scUBytesHash NoDec Nothing),
+                            (noq primUBytesFromIter, NDef scUBytesFromIter NoDec Nothing),
+                            (noq primUBytesIter, NDef scUBytesIter NoDec Nothing),
+                            (noq primUBytesGetslice, NDef scUBytesGetslice NoDec Nothing),
+                            (noq primUBytesAdd, NDef scUBytesAdd NoDec Nothing),
+                            (noq primUBytesZero, NDef scUBytesZero NoDec Nothing),
+                            (noq primUBytesMul, NDef scUBytesMul NoDec Nothing),
+                            (noq primUBytearrayInsert, NDef scUBytearrayInsert NoDec Nothing),
+                            (noq primUBytearrayAppend, NDef scUBytearrayAppend NoDec Nothing),
+                            (noq primUBytearrayReverse, NDef scUBytearrayReverse NoDec Nothing),
+                            (noq primUBytearrayReversed, NDef scUBytearrayReversed NoDec Nothing),
+                            (noq primUBytearrayGetslice, NDef scUBytearrayGetslice NoDec Nothing),
+                            (noq primUBytearraySetslice, NDef scUBytearraySetslice NoDec Nothing),
+                            (noq primUBytearrayDelslice, NDef scUBytearrayDelslice NoDec Nothing),
+                            (noq primUBytearrayFromIter, NDef scUBytearrayFromIter NoDec Nothing),
+                            (noq primUBytearrayIter, NDef scUBytearrayIter NoDec Nothing),
+                            (noq primUBytearrayAdd, NDef scUBytearrayAdd NoDec Nothing),
+                            (noq primUBytearrayZero, NDef scUBytearrayZero NoDec Nothing),
+                            (noq primUBytearrayMul, NDef scUBytearrayMul NoDec Nothing),
+                            (noq primUBytearrayIadd, NDef scUBytearrayIadd NoDec Nothing),
+                            (noq primUBytearrayImul, NDef scUBytearrayImul NoDec Nothing),
                             (noq primUNext,         NDef scUNext NoDec Nothing)
                       ]
 
@@ -820,6 +918,61 @@ scUListReverse          = sequenceWorkerSchema tList fxMut (\a s -> [s]) (\a s -
 scUListDelSlice         = sequenceWorkerSchema tList fxMut (\a s -> [s,tSlice]) (\a s -> tNone)
 scUListIAdd             = sequenceWorkerSchema tList fxMut (\a s -> [s,s]) (\a s -> s)
 scUListIMul             = sequenceWorkerSchema tList fxMut (\a s -> [s,tInt]) (\a s -> s)
+
+-- Monomorphic workers keep only input witnesses used by their implementations.
+scUStrLt                = monotype $ tFun fxPure (foldr posRow posNil [tStr, tStr]) kwdNil (tBool)
+scUStrLe                = monotype $ tFun fxPure (foldr posRow posNil [tStr, tStr]) kwdNil (tBool)
+scUStrGt                = monotype $ tFun fxPure (foldr posRow posNil [tStr, tStr]) kwdNil (tBool)
+scUStrGe                = monotype $ tFun fxPure (foldr posRow posNil [tStr, tStr]) kwdNil (tBool)
+scUStrHash              = monotype $ tFun fxPure (foldr posRow posNil [tStr, tCon (TC (gBuiltin (name "hasher")) [])]) kwdNil (tNone)
+scUStrZero              = monotype $ tFun fxPure (foldr posRow posNil []) kwdNil (tStr)
+scUStrMul               = monotype $ tFun fxPure (foldr posRow posNil [tStr, tInt]) kwdNil (tStr)
+scUStrFromIter          = tSchema [qbind c] $ tFun fxPure (foldr posRow posNil [tCon (TC qnIterable [tVar c,tStr]), tVar c]) kwdNil (tStr)
+  where c = TV KType $ name "C"
+scUStrContains          = monotype $ tFun fxPure (foldr posRow posNil [tStr, tStr]) kwdNil (tBool)
+scUStrContainsnot       = monotype $ tFun fxPure (foldr posRow posNil [tStr, tStr]) kwdNil (tBool)
+scUStrIter              = monotype $ tFun fxPure (foldr posRow posNil [tStr]) kwdNil (tIterator tStr)
+scUStrGetslice          = monotype $ tFun fxPure (foldr posRow posNil [tStr, tSlice]) kwdNil (tStr)
+scUBytesEq              = monotype $ tFun fxPure (foldr posRow posNil [tBytes, tBytes]) kwdNil (tBool)
+scUBytesNe              = monotype $ tFun fxPure (foldr posRow posNil [tBytes, tBytes]) kwdNil (tBool)
+scUBytesLt              = monotype $ tFun fxPure (foldr posRow posNil [tBytes, tBytes]) kwdNil (tBool)
+scUBytesLe              = monotype $ tFun fxPure (foldr posRow posNil [tBytes, tBytes]) kwdNil (tBool)
+scUBytesGt              = monotype $ tFun fxPure (foldr posRow posNil [tBytes, tBytes]) kwdNil (tBool)
+scUBytesGe              = monotype $ tFun fxPure (foldr posRow posNil [tBytes, tBytes]) kwdNil (tBool)
+scUBytesContains        = monotype $ tFun fxPure (foldr posRow posNil [tBytes, tInt]) kwdNil (tBool)
+scUBytesContainsnot     = monotype $ tFun fxPure (foldr posRow posNil [tBytes, tInt]) kwdNil (tBool)
+scUBytearrayEq          = monotype $ tFun fxPure (foldr posRow posNil [tBytearray, tBytearray]) kwdNil (tBool)
+scUBytearrayNe          = monotype $ tFun fxPure (foldr posRow posNil [tBytearray, tBytearray]) kwdNil (tBool)
+scUBytearrayLt          = monotype $ tFun fxPure (foldr posRow posNil [tBytearray, tBytearray]) kwdNil (tBool)
+scUBytearrayLe          = monotype $ tFun fxPure (foldr posRow posNil [tBytearray, tBytearray]) kwdNil (tBool)
+scUBytearrayGt          = monotype $ tFun fxPure (foldr posRow posNil [tBytearray, tBytearray]) kwdNil (tBool)
+scUBytearrayGe          = monotype $ tFun fxPure (foldr posRow posNil [tBytearray, tBytearray]) kwdNil (tBool)
+scUBytearrayContains    = monotype $ tFun fxPure (foldr posRow posNil [tBytearray, tInt]) kwdNil (tBool)
+scUBytearrayContainsnot = monotype $ tFun fxPure (foldr posRow posNil [tBytearray, tInt]) kwdNil (tBool)
+scUBytesHash            = monotype $ tFun fxPure (foldr posRow posNil [tBytes, tCon (TC (gBuiltin (name "hasher")) [])]) kwdNil (tNone)
+scUBytesFromIter        = tSchema [qbind c] $ tFun fxPure (foldr posRow posNil [tCon (TC qnIterable [tVar c,tInt]), tVar c]) kwdNil (tBytes)
+  where c = TV KType $ name "C"
+scUBytesIter            = monotype $ tFun fxPure (foldr posRow posNil [tBytes]) kwdNil (tIterator tInt)
+scUBytesGetslice        = monotype $ tFun fxPure (foldr posRow posNil [tBytes, tSlice]) kwdNil (tBytes)
+scUBytesAdd             = monotype $ tFun fxPure (foldr posRow posNil [tBytes, tBytes]) kwdNil (tBytes)
+scUBytesZero            = monotype $ tFun fxPure (foldr posRow posNil []) kwdNil (tBytes)
+scUBytesMul             = monotype $ tFun fxPure (foldr posRow posNil [tBytes, tInt]) kwdNil (tBytes)
+scUBytearrayInsert      = monotype $ tFun fxMut (foldr posRow posNil [tBytearray, tInt, tInt]) kwdNil (tNone)
+scUBytearrayAppend      = monotype $ tFun fxMut (foldr posRow posNil [tBytearray, tInt]) kwdNil (tNone)
+scUBytearrayReverse     = monotype $ tFun fxMut (foldr posRow posNil [tBytearray]) kwdNil (tNone)
+scUBytearrayReversed    = monotype $ tFun fxPure (foldr posRow posNil [tBytearray]) kwdNil (tIterator tInt)
+scUBytearrayGetslice    = monotype $ tFun fxPure (foldr posRow posNil [tBytearray, tSlice]) kwdNil (tBytearray)
+scUBytearraySetslice    = tSchema [qbind c] $ tFun fxMut (foldr posRow posNil [tBytearray, tCon (TC qnIterable [tVar c,tInt]), tSlice, tVar c]) kwdNil (tNone)
+  where c = TV KType $ name "C"
+scUBytearrayDelslice    = monotype $ tFun fxMut (foldr posRow posNil [tBytearray, tSlice]) kwdNil (tNone)
+scUBytearrayFromIter    = tSchema [qbind c] $ tFun fxPure (foldr posRow posNil [tCon (TC qnIterable [tVar c,tInt]), tVar c]) kwdNil (tBytearray)
+  where c = TV KType $ name "C"
+scUBytearrayIter        = monotype $ tFun fxPure (foldr posRow posNil [tBytearray]) kwdNil (tIterator tInt)
+scUBytearrayAdd         = monotype $ tFun fxPure (foldr posRow posNil [tBytearray, tBytearray]) kwdNil (tBytearray)
+scUBytearrayZero        = monotype $ tFun fxPure (foldr posRow posNil []) kwdNil (tBytearray)
+scUBytearrayMul         = monotype $ tFun fxPure (foldr posRow posNil [tBytearray, tInt]) kwdNil (tBytearray)
+scUBytearrayIadd        = monotype $ tFun fxMut (foldr posRow posNil [tBytearray, tBytearray]) kwdNil (tBytearray)
+scUBytearrayImul        = monotype $ tFun fxMut (foldr posRow posNil [tBytearray, tInt]) kwdNil (tBytearray)
 
 scRaiseValueError   = tSchema [qbind a] tRaiseValErr
   where tRaiseValErr= tFun fxPure (posRow tStr posNil) kwdNil (tVar a)
