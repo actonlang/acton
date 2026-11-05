@@ -1837,13 +1837,11 @@ static int str_compare(B_str a, B_str b) {
 }
 
 bool B_OrdD_strD___eq__ (B_OrdD_str wit, B_str a, B_str b) {
-    if (a == b)
-        return true;
-    return a->nbytes == b->nbytes && memcmp(a->str, b->str, a->nbytes) == 0;
+    return $strD_U__eq__(a, b);
 }
 
 bool B_OrdD_strD___ne__ (B_OrdD_str wit, B_str a, B_str b) {
-    return !B_OrdD_strD___eq__(wit, a, b);
+    return $strD_U__ne__(a, b);
 }
 
 bool B_OrdD_strD___lt__ (B_OrdD_str wit, B_str a, B_str b) {
@@ -1871,6 +1869,10 @@ B_NoneType B_HashableD_strD_hash(B_HashableD_str wit, B_str a, B_hasher h) {
 // B_Times /////////////////////////////////////////////////////////////////////////////////////////////
 
 B_str B_TimesD_strD___add__ (B_TimesD_str wit, B_str s, B_str t) {
+    return $strD_U__add__(s, t);
+}
+
+B_str $strD_U__add__(B_str s, B_str t) {
     int64_t nbytes = (int64_t)s->nbytes + t->nbytes;
     check_result_len(nbytes);
     B_str res;

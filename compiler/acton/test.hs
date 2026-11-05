@@ -232,6 +232,24 @@ compilerTests =
               (not ("B_len" `isInfixOf` c || "$class->append" `isInfixOf` c))
           assertBool "generic Collection should retain len dispatch" ("B_len" `isInfixOf` body "generic_length")
           assertBool "generic Sequence should retain append dispatch" ("$class->append" `isInfixOf` body "generic_append")
+  , testCase "builtin string operators eliminate concrete witness arguments" $ do
+        withSystemTempDirectory "acton-builtin-str-ops" $ \tmp -> do
+          let src = tmp </> "builtin_str_ops.act"
+          copyFile "../../test/regression_auto/builtin_str_ops.act" src
+          (code, generated, err) <- buildThing "--quiet --dbg-no-lines --cgen" src
+          assertEqual ("C generation should succeed:\n" ++ generated ++ err) ExitSuccess code
+          let body name = unlines $ takeWhile (/= "}") $ dropWhile
+                (not . isInfixOf ("builtin_str_opsQ_" ++ name ++ " (")) (lines generated)
+              workers = [ ("string_equal", "$strD_U__eq__"), ("string_not_equal", "$strD_U__ne__")
+                        , ("string_concat", "$strD_U__add__"), ("string_iadd", "$strD_U__add__") ]
+          forM_ workers $ \(name, worker) -> do
+            let c = body name
+            assertBool (name ++ " should call its witness-free worker") (worker `isInfixOf` c)
+            assertBool (name ++ " should not retain string witnesses")
+              (not ("G_witness" `isInfixOf` c || "$class->" `isInfixOf` c))
+          forM_ [("generic_equal", "__eq__"), ("generic_not_equal", "__ne__"),
+                 ("generic_concat", "__add__"), ("generic_iadd", "__iadd__")] $ \(name, method) ->
+            assertBool (name ++ " should retain protocol dispatch") (("$class->" ++ method) `isInfixOf` body name)
   , testCase "release-mode loop-carried local survives setjmp" $ do
         -- A local assigned inside a for-loop and read afterwards must be emitted
         -- as C volatile so it survives the loop's StopIteration setjmp/longjmp.

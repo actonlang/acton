@@ -171,6 +171,9 @@ primUListSetItem    = gPrim "listD_U__setitem__"
 primUListDelItem    = gPrim "listD_U__delitem__"
 primUIListGetItem   = gPrim "ilistD_U__getitem__"
 primUStrGetItem     = gPrim "strD_U__getitem__"
+primUStrEq          = gPrim "strD_U__eq__"
+primUStrNe          = gPrim "strD_U__ne__"
+primUStrAdd         = gPrim "strD_U__add__"
 primUBytesGetItem   = gPrim "bytesD_U__getitem__"
 primUBytearrayGetItem = gPrim "bytearrayD_U__getitem__"
 primUBytearraySetItem = gPrim "bytearrayD_U__setitem__"
@@ -297,6 +300,9 @@ primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec Nothing)
                             (noq primUListDelItem,  NDef scUListDelItem NoDec Nothing),
                             (noq primUIListGetItem, NDef scUIListGetItem NoDec Nothing),
                             (noq primUStrGetItem,   NDef scUStrGetItem NoDec Nothing),
+                            (noq primUStrEq,        NDef scUStrCompare NoDec Nothing),
+                            (noq primUStrNe,        NDef scUStrCompare NoDec Nothing),
+                            (noq primUStrAdd,       NDef scUStrAdd NoDec Nothing),
                             (noq primUBytesGetItem, NDef scUBytesGetItem NoDec Nothing),
                             (noq primUBytearrayGetItem, NDef scUBytearrayGetItem NoDec Nothing),
                             (noq primUBytearraySetItem, NDef scUBytearraySetItem NoDec Nothing),
@@ -704,6 +710,10 @@ scUIListGetItem     = tSchema [qbind a] tUIListGetItem
         a              = TV KType $ name "A"
 
 scUStrGetItem       = monotype $ tFun fxPure (posRow tStr (posRow tInt posNil)) kwdNil tStr
+
+scUStrCompare       = monotype $ tFun fxPure (posRow tStr (posRow tStr posNil)) kwdNil tBool
+
+scUStrAdd           = monotype $ tFun fxPure (posRow tStr (posRow tStr posNil)) kwdNil tStr
 
 scUBytesGetItem     = monotype $ tFun fxPure (posRow tBytes (posRow tInt posNil)) kwdNil tInt
 

@@ -206,3 +206,14 @@ static inline int64_t $bytesD_U__len(B_bytes self) {
 static inline int64_t $bytearrayD_U__len(B_bytearray self) {
     return (int64_t)self->nbytes;
 }
+
+// Witness-free string operations used by generated code and protocol wrappers.
+static inline bool $strD_U__eq__(B_str a, B_str b) {
+    if (a == b)
+        return true;
+    return a->nbytes == b->nbytes && memcmp(a->str, b->str, a->nbytes) == 0;
+}
+static inline bool $strD_U__ne__(B_str a, B_str b) {
+    return !$strD_U__eq__(a, b);
+}
+B_str $strD_U__add__(B_str s, B_str t);

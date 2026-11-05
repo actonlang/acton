@@ -266,7 +266,7 @@ rawBuiltinMethod                   :: BoxEnv -> Name -> [Expr] -> Maybe Expr
 -- the polymorphic bytes constructor merely to discover that hex has no raw
 -- worker.
 rawBuiltinMethod _ attr _
-  | attr `notElem` [getitemKW, setitemKW, delitemKW, lenKW, appendKW,
+  | attr `notElem` [getitemKW, setitemKW, delitemKW, lenKW, appendKW, eqKW, neKW, addKW,
                     containsKW, containsnotKW, setAddKW, discardKW]
                                     = Nothing
 rawBuiltinMethod env attr es@(recv:_)
@@ -296,6 +296,12 @@ rawBuiltinMethod env attr es@(recv:_)
                                           | q == qnArray, t == tFloat, n == setitemKW
                                             -> Just $ eQVar primUArraySetFloat
                                         (TCon _ (TC q []), n, [_, _])
+                                          | q == qnStr, n == eqKW
+                                            -> Just $ eQVar primUStrEq
+                                          | q == qnStr, n == neKW
+                                            -> Just $ eQVar primUStrNe
+                                          | q == qnStr, n == addKW
+                                            -> Just $ eQVar primUStrAdd
                                           | q == qnBitarray, n == getitemKW
                                             -> Just $ eQVar primUBitarrayGetItem
                                           | q == qnBitset, n == containsKW
@@ -879,6 +885,17 @@ instance Boxing Expr where
         | isUnboxable t             = return (HashSet.empty, Box tBool $ Paren NoLoc $ CompOp NoLoc (unbox t x1) [OpArg op (unbox t x2)])
         where t = head ts
               op = cmp2Comparison attr
+      -- str inherits Eq's default __ne__, so the usual direct-method check
+      -- below does not select a worker. For a known builtin witness that
+      -- default is the negation of string equality. The raw worker lookup
+      -- restricts this case to str; generic witnesses keep their dispatch.
+      boxingCompop w attr es _ rt pr rest
+        | attr == neKW,
+          Just sw <- lookupStaticWitness env n,
+          Just tc <- staticWitnessMethodClass env sw attr,
+          not (directMethodImpl env (tcname tc) attr),
+          Just c <- rawBuiltinMethodCall env attr (posarg es)
+                                    = return (HashSet.empty, c)
       boxingCompop w attr es _ rt pr rest
                                     = boxingDirectOrDynamic w attr (posarg es) rt pr rest
     boxing env (Call l e@(TApp _ (Var _ f) ts) p KwdNil)
