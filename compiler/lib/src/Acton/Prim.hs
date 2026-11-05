@@ -190,6 +190,26 @@ primUBitsetContains = gPrim "bitsetD_U__contains__"
 primUBitsetContainsNot = gPrim "bitsetD_U__containsnot__"
 primUBitsetAdd      = gPrim "bitsetD_U_add"
 primUBitsetDiscard  = gPrim "bitsetD_U_discard"
+primUListGetSlice   = gPrim "listD_U__getslice__"
+primUListIter       = gPrim "listD_U__iter__"
+primUListReversed   = gPrim "listD_U__reversed__"
+primUListAdd        = gPrim "listD_U__add__"
+primUListMul        = gPrim "listD_U__mul__"
+primUListZero       = gPrim "listD_U__zero__"
+primUListFromIter   = gPrim "listD_U__fromiter__"
+primUIListGetSlice  = gPrim "ilistD_U__getslice__"
+primUIListIter      = gPrim "ilistD_U__iter__"
+primUIListReversed  = gPrim "ilistD_U__reversed__"
+primUIListAdd       = gPrim "ilistD_U__add__"
+primUIListMul       = gPrim "ilistD_U__mul__"
+primUIListZero      = gPrim "ilistD_U__zero__"
+primUIListFromIter  = gPrim "ilistD_U__fromiter__"
+primUListInsert     = gPrim "listD_U_insert"
+primUListReverse    = gPrim "listD_U_reverse"
+primUListDelSlice   = gPrim "listD_U__delslice__"
+primUListSetSlice   = gPrim "listD_U__setslice__"
+primUListIAdd       = gPrim "listD_U__iadd__"
+primUListIMul       = gPrim "listD_U__imul__"
 primUNext           = gPrim "rangeD_U__next__"
 
 annot t_ann ann t e = eCall (tApp (eQVar primAnnot) [t_ann, t]) [ann, e]
@@ -319,6 +339,26 @@ primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec Nothing)
                             (noq primUBitsetContainsNot, NDef scUBitsetContains NoDec Nothing),
                             (noq primUBitsetAdd, NDef scUBitsetMutate NoDec Nothing),
                             (noq primUBitsetDiscard, NDef scUBitsetMutate NoDec Nothing),
+                            (noq primUListGetSlice, NDef scUListGetSlice NoDec Nothing),
+                            (noq primUListIter, NDef scUListIter NoDec Nothing),
+                            (noq primUListReversed, NDef scUListReversed NoDec Nothing),
+                            (noq primUListAdd, NDef scUListAdd NoDec Nothing),
+                            (noq primUListMul, NDef scUListMul NoDec Nothing),
+                            (noq primUListZero, NDef scUListZero NoDec Nothing),
+                            (noq primUListFromIter, NDef scUListFromIter NoDec Nothing),
+                            (noq primUIListGetSlice, NDef scUIListGetSlice NoDec Nothing),
+                            (noq primUIListIter, NDef scUIListIter NoDec Nothing),
+                            (noq primUIListReversed, NDef scUIListReversed NoDec Nothing),
+                            (noq primUIListAdd, NDef scUIListAdd NoDec Nothing),
+                            (noq primUIListMul, NDef scUIListMul NoDec Nothing),
+                            (noq primUIListZero, NDef scUIListZero NoDec Nothing),
+                            (noq primUIListFromIter, NDef scUIListFromIter NoDec Nothing),
+                            (noq primUListInsert, NDef scUListInsert NoDec Nothing),
+                            (noq primUListReverse, NDef scUListReverse NoDec Nothing),
+                            (noq primUListDelSlice, NDef scUListDelSlice NoDec Nothing),
+                            (noq primUListSetSlice, NDef scUListSetSlice NoDec Nothing),
+                            (noq primUListIAdd, NDef scUListIAdd NoDec Nothing),
+                            (noq primUListIMul, NDef scUListIMul NoDec Nothing),
                             (noq primUNext,         NDef scUNext NoDec Nothing)
                       ]
 
@@ -743,6 +783,43 @@ scUBitarrayLen      = monotype $ tFun fxPure (posRow tBitarray posNil) kwdNil tI
 scUBitsetContains   = monotype $ tFun fxPure (posRow tBitset (posRow tInt posNil)) kwdNil tBool
 
 scUBitsetMutate     = monotype $ tFun fxMut (posRow tBitset (posRow tInt posNil)) kwdNil tNone
+
+-- The element stays polymorphic (boxed) at Sequence worker boundaries.
+sequenceWorkerSchema cons fx args result = tSchema [qbind a] $
+    tFun fx (foldr posRow posNil (args elemT selfT)) kwdNil (result elemT selfT)
+  where a           = TV KType $ name "A"
+        elemT       = tVar a
+        selfT       = cons elemT
+
+sequenceFromIterSchema cons = tSchema [qbind a, qbind c] $
+    tFun fxPure (posRow (tCon (TC qnIterable [tVar c,tVar a])) (posRow (tVar c) posNil)) kwdNil (cons (tVar a))
+  where a           = TV KType $ name "A"
+        c           = TV KType $ name "C"
+
+scUListSetSlice     = tSchema [qbind a, qbind c] $
+    tFun fxMut (foldr posRow posNil [tList (tVar a),tCon (TC qnIterable [tVar c,tVar a]),tSlice,tVar c]) kwdNil tNone
+  where a           = TV KType $ name "A"
+        c           = TV KType $ name "C"
+
+scUListGetSlice         = sequenceWorkerSchema tList fxPure (\a s -> [s,tSlice]) (\a s -> s)
+scUListIter             = sequenceWorkerSchema tList fxPure (\a s -> [s]) (\a s -> tIterator a)
+scUListReversed         = sequenceWorkerSchema tList fxPure (\a s -> [s]) (\a s -> tIterator a)
+scUListAdd              = sequenceWorkerSchema tList fxPure (\a s -> [s,s]) (\a s -> s)
+scUListMul              = sequenceWorkerSchema tList fxPure (\a s -> [s,tInt]) (\a s -> s)
+scUListZero             = sequenceWorkerSchema tList fxPure (\a s -> []) (\a s -> s)
+scUListFromIter         = sequenceFromIterSchema tList
+scUIListGetSlice        = sequenceWorkerSchema tIList fxPure (\a s -> [s,tSlice]) (\a s -> s)
+scUIListIter            = sequenceWorkerSchema tIList fxPure (\a s -> [s]) (\a s -> tIterator a)
+scUIListReversed        = sequenceWorkerSchema tIList fxPure (\a s -> [s]) (\a s -> tIterator a)
+scUIListAdd             = sequenceWorkerSchema tIList fxPure (\a s -> [s,s]) (\a s -> s)
+scUIListMul             = sequenceWorkerSchema tIList fxPure (\a s -> [s,tInt]) (\a s -> s)
+scUIListZero            = sequenceWorkerSchema tIList fxPure (\a s -> []) (\a s -> s)
+scUIListFromIter        = sequenceFromIterSchema tIList
+scUListInsert           = sequenceWorkerSchema tList fxMut (\a s -> [s,tInt,a]) (\a s -> tNone)
+scUListReverse          = sequenceWorkerSchema tList fxMut (\a s -> [s]) (\a s -> tNone)
+scUListDelSlice         = sequenceWorkerSchema tList fxMut (\a s -> [s,tSlice]) (\a s -> tNone)
+scUListIAdd             = sequenceWorkerSchema tList fxMut (\a s -> [s,s]) (\a s -> s)
+scUListIMul             = sequenceWorkerSchema tList fxMut (\a s -> [s,tInt]) (\a s -> s)
 
 scRaiseValueError   = tSchema [qbind a] tRaiseValErr
   where tRaiseValErr= tFun fxPure (posRow tStr posNil) kwdNil (tVar a)

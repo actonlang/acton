@@ -18,6 +18,7 @@ import Data.Aeson (Value)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import qualified Data.HashSet as HashSet
+import Control.Applicative ((<|>))
 import Control.Monad.State.Strict
 import Control.Monad.Except
 import qualified Data.HashMap.Strict as M
@@ -267,7 +268,8 @@ rawBuiltinMethod                   :: BoxEnv -> Name -> [Expr] -> Maybe Expr
 -- worker.
 rawBuiltinMethod _ attr _
   | attr `notElem` [getitemKW, setitemKW, delitemKW, lenKW, appendKW, eqKW, neKW, addKW,
-                    containsKW, containsnotKW, setAddKW, discardKW]
+                    containsKW, containsnotKW, setAddKW, discardKW, insertKW, reverseKW,
+                    getsliceKW, setsliceKW, delsliceKW, iterKW, reversedKW, mulKW, iaddKW, imulKW]
                                     = Nothing
 rawBuiltinMethod env attr es@(recv:_)
                                     = case (unalias env (typeOf env recv), attr, es) of
@@ -275,6 +277,12 @@ rawBuiltinMethod env attr es@(recv:_)
                                           | n == lenKW
                                             -> do worker <- lookup q builtinLengthWorkers
                                                   return $ tApp (eQVar worker) ts
+                                        (TCon _ (TC q [t]), n, [_, _, _, src])
+                                          | q == qnList, n == setsliceKW
+                                            -> Just $ tApp (eQVar primUListSetSlice) [t, typeOf env src]
+                                        (TCon _ (TC q [t]), n, _)
+                                          | Just worker <- lookup (q, n, length es) builtinSequenceWorkers
+                                            -> Just $ tApp (eQVar worker) [t]
                                         (TCon _ (TC q [t]), n, [_, _])
                                           | q == qnList, n == getitemKW
                                             -> Just $ tApp (eQVar primUGetItem) [t]
@@ -327,6 +335,42 @@ rawBuiltinMethod env attr es@(recv:_)
                                             -> Just $ eQVar primUBytearraySetItem
                                         _   -> Nothing
 rawBuiltinMethod _ _ _             = Nothing
+
+-- Sequence workers discard only the receiver witness. Slice assignment and
+-- construction from an iterable still pass that iterable's witness. The
+-- generic element stays boxed, while indexes/repetition counts use native int.
+builtinSequenceWorkers             =
+    [ ((qnList, insertKW, 3), primUListInsert)
+    , ((qnList, reverseKW, 1), primUListReverse)
+    , ((qnList, getsliceKW, 2), primUListGetSlice)
+    , ((qnList, delsliceKW, 2), primUListDelSlice)
+    , ((qnList, iterKW, 1), primUListIter)
+    , ((qnList, reversedKW, 1), primUListReversed)
+    , ((qnList, addKW, 2), primUListAdd)
+    , ((qnList, mulKW, 2), primUListMul)
+    , ((qnList, iaddKW, 2), primUListIAdd)
+    , ((qnList, imulKW, 2), primUListIMul)
+    , ((qnIList, getsliceKW, 2), primUIListGetSlice)
+    , ((qnIList, iterKW, 1), primUIListIter)
+    , ((qnIList, reversedKW, 1), primUIListReversed)
+    , ((qnIList, addKW, 2), primUIListAdd)
+    , ((qnIList, mulKW, 2), primUIListMul)
+    ]
+
+rawBuiltinCall env attr rest p      = rawBuiltinMethodCall env attr p <|> factory
+  where factory                     = case (attr, unalias env rest, posargs p) of
+                                        (n, TCon _ (TC q [t]), [])
+                                          | n == zeroKW,
+                                            Just worker <- lookup q [(qnList, primUListZero), (qnIList, primUIListZero)]
+                                            -> call worker [t]
+                                        (n, TCon _ (TC q [t]), [_, src])
+                                          | n == fromiterKW,
+                                            Just worker <- lookup q [(qnList, primUListFromIter), (qnIList, primUIListFromIter)]
+                                            -> call worker [t, typeOf env src]
+                                        _ -> Nothing
+        call worker ts              = let f = tApp (eQVar worker) ts
+                                          TFun _ _ pr _ rt = rtypeOfFun env f
+                                      in Just $ tryBox rt $ eCallP f (fixargs env p pr)
 
 -- Concrete builtin lengths need neither the Collection receiver witness nor
 -- its element/key witnesses. Keep this lowering in boxing so its ordinary
@@ -811,6 +855,21 @@ instance Boxing Expr where
     boxing env v@(Var _ n)
        | Just t <- varType (findQName n env), isUnboxable t
                                     = return (HashSet.empty, Box t v)
+    -- Polymorphic Sequence methods (slice assignment and __fromiter__) have
+    -- an explicit type application. Retain its source witness in the worker
+    -- arguments; omitting the receiver from the used-witness set lets the
+    -- ordinary statement cleanup remove its now-dead binding.
+    boxing env (Call _ f@(TApp _ (Dot _ (Var _ (NoQ n)) attr) _) p KwdNil)
+      | isWitness n,
+        Just sw <- lookupStaticWitness env n,
+        Just tc <- staticWitnessMethodClass env sw attr,
+        directMethodImpl env (tcname tc) attr,
+        TFun _ _ _ _ rest <- rtypeOfFun env f,
+        Just _ <- rawBuiltinCall env attr rest p
+                                    = do (ws,p1) <- boxing env p
+                                         case rawBuiltinCall env attr rest p1 of
+                                           Just c -> return (ws,c)
+                                           Nothing -> error "Internal error: raw builtin generic method lost during boxing"
     boxing env (Call _ (Dot _ e@(Var _ w@(NoQ n)) attr) p KwdNil)
       | isWitness n                 = do (ws1,p1) <- boxing env p
                                          (ws2,e1) <- boxingWitness env w attr p1 pr rest
@@ -840,7 +899,7 @@ instance Boxing Expr where
         | otherwise                 = case lookupStaticWitness env n >>= \sw -> staticWitnessMethodClass env sw attr >>= \tc -> return (sw, tc) of
                                         Just (sw, tc)
                                           | directMethodImpl env (tcname tc) attr,
-                                            Just c <- rawBuiltinMethodCall env attr p
+                                            Just c <- rawBuiltinCall env attr rest p
                                             -> return (HashSet.empty, c)
                                           | directMethodImpl env (tcname tc) attr
                                             -> return (HashSet.empty, tryBox rest $ staticWitnessCall sw tc attr (fixargs env p pr))
@@ -899,18 +958,17 @@ instance Boxing Expr where
       boxingCompop w attr es _ rt pr rest
                                     = boxingDirectOrDynamic w attr (posarg es) rt pr rest
     boxing env (Call l e@(TApp _ (Var _ f) ts) p KwdNil)
-      -- len is type-checked through Collection, so its explicit arguments at
-      -- this stage are the collection witness followed by the value.  For
-      -- concrete builtin containers the witness is still semantically required
-      -- during type checking, but the operation only reads their size field.
-      -- Generic Collection calls keep their witness and normal dispatch.
-      | unalias env f == qnLen,
+      -- These unary builtin functions pass a protocol witness and a value.
+      -- Their concrete workers drop the former, preserving generic dispatch
+      -- when no worker is available for the value's type.
+      | Just attr <- lookup (unalias env f) [(qnLen, lenKW), (gBuiltin (name "iter"), iterKW),
+                                             (gBuiltin (name "reversed"), reversedKW)],
         [_, recv] <- posargs p,
-        Just _ <- rawBuiltinMethod env lenKW [recv]
+        Just _ <- rawBuiltinMethod env attr [recv]
                                     = do (ws1,recv1) <- boxing env recv
-                                         case rawBuiltinMethodCall env lenKW (PosArg recv1 PosNil) of
+                                         case rawBuiltinMethodCall env attr (PosArg recv1 PosNil) of
                                            Just c  -> return (ws1,c)
-                                           Nothing -> error "Internal error: raw builtin len lost during boxing"
+                                           Nothing -> error "Internal error: raw builtin unary call lost during boxing"
       | f `elem` prims              = do (ws1,p1) <- boxing env p
                                          return (ws1, Box tBool $ eCallP e' (fixargs env p1 r))
       | otherwise                   = do (ws1,p1) <- boxing env p

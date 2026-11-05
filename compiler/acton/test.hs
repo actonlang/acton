@@ -250,6 +250,43 @@ compilerTests =
           forM_ [("generic_equal", "__eq__"), ("generic_not_equal", "__ne__"),
                  ("generic_concat", "__add__"), ("generic_iadd", "__iadd__")] $ \(name, method) ->
             assertBool (name ++ " should retain protocol dispatch") (("$class->" ++ method) `isInfixOf` body name)
+  , testCase "builtin Sequence workers remove only dead receiver witnesses" $ do
+        withSystemTempDirectory "acton-builtin-sequence-ops" $ \tmp -> do
+          let src = tmp </> "builtin_sequence_ops.act"
+          copyFile "../../test/regression_auto/builtin_sequence_ops.act" src
+          (code, generated, err) <- buildThing "--quiet --dbg-no-lines --cgen" src
+          assertEqual ("C generation should succeed:\n" ++ generated ++ err) ExitSuccess code
+          let body name = unlines $ takeWhile (/= "}") $ dropWhile
+                (not . isInfixOf ("builtin_sequence_opsQ_" ++ name ++ " (")) (lines generated)
+              workers = [ ("list_insert", "$listD_U_insert"), ("list_reverse", "$listD_U_reverse")
+                        , ("list_slice", "$listD_U__getslice__"), ("list_del_slice", "$listD_U__delslice__")
+                        , ("list_iterator", "$listD_U__iter__"), ("list_reversed", "$listD_U__reversed__")
+                        , ("list_add", "$listD_U__add__"), ("list_repeat", "$listD_U__mul__")
+                        , ("list_iadd", "$listD_U__iadd__"), ("list_irepeat", "$listD_U__imul__")
+                        , ("list_zero", "$listD_U__zero__")
+                        , ("ilist_slice", "$ilistD_U__getslice__"), ("ilist_iterator", "$ilistD_U__iter__")
+                        , ("ilist_reversed", "$ilistD_U__reversed__"), ("ilist_add", "$ilistD_U__add__")
+                        , ("ilist_repeat", "$ilistD_U__mul__"), ("ilist_zero", "$ilistD_U__zero__") ]
+          forM_ workers $ \(name, worker) -> do
+            let c = body name
+            assertBool (name ++ " should call its witness-free worker") (worker `isInfixOf` c)
+            assertBool (name ++ " should have no dead receiver witness binding")
+              (not (" W_" `isInfixOf` c || "G_witness" `isInfixOf` c || "$class->" `isInfixOf` c || "B_Sequence" `isInfixOf` c || "B_ISequence" `isInfixOf` c))
+          forM_ [("list_set_slice", "$listD_U__setslice__"),
+                 ("list_from_iter", "$listD_U__fromiter__"), ("ilist_from_iter", "$ilistD_U__fromiter__")] $ \(name, worker) -> do
+            let c = body name
+            assertBool (name ++ " should call its worker with the input witness")
+              (worker `isInfixOf` c && "B_Iterable" `isInfixOf` c)
+            assertBool (name ++ " should drop the receiver witness")
+              (not ("G_witness" `isInfixOf` c || "B_Sequence" `isInfixOf` c || "B_Collection" `isInfixOf` c))
+          forM_ ["list_total", "ilist_total"] $ \name -> do
+            let c = body name
+            assertBool (name ++ " should retain stack iterator storage")
+              ("struct B_IteratorD_list" `isInfixOf` c && "$listD_U_iter_init" `isInfixOf` c)
+            assertBool (name ++ " should not allocate its loop iterator")
+              (not ("$listD_U__iter__" `isInfixOf` c || "$ilistD_U__iter__" `isInfixOf` c))
+          assertBool "generic reverse should retain dispatch" ("$class->reverse" `isInfixOf` body "generic_reverse")
+          assertBool "generic slicing should retain dispatch" ("$class->__getslice__" `isInfixOf` body "generic_slice")
   , testCase "release-mode loop-carried local survives setjmp" $ do
         -- A local assigned inside a for-loop and read afterwards must be emitted
         -- as C volatile so it survives the loop's StopIteration setjmp/longjmp.

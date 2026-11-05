@@ -249,8 +249,7 @@ static B_list_base B_list_base_add(B_list_base lst, B_list_base other, $SuperG_c
     return res;
 }
 
-static B_list_base B_list_base_mul(B_list_base lst, B_int n, $SuperG_class cls) {
-    int64_t count = n->val;
+static B_list_base B_list_base_mul(B_list_base lst, int64_t count, $SuperG_class cls) {
     if (lst->length == 0 || count <= 0)
         return B_list_base_new(0, cls);
     B_list_base res = B_list_base_new(lst->length * count, cls);
@@ -262,8 +261,7 @@ static B_list_base B_list_base_mul(B_list_base lst, B_int n, $SuperG_class cls) 
 
 // Repeat the elements of lst n times in lst, or remove them if n <= 0. Only
 // the added copies are written.
-static void B_list_base_imul(B_list_base lst, B_int n) {
-    int64_t count = n->val;
+static void B_list_base_imul(B_list_base lst, int64_t count) {
     int len = lst->length;
     if (count <= 0) {
         B_list_base_clear(lst);
@@ -601,6 +599,94 @@ $WORD $ilistD_U__getitem__(B_ilist lst, int64_t n) {
     return B_list_base_getitem((B_list_base)lst, n);
 }
 
+// Witness-free Sequence workers /////////////////////////////////////////////////////////////////
+
+B_list $listD_U__getslice__(B_list lst, B_slice slc) {
+    return (B_list)B_list_base_getslice((B_list_base)lst, slc, ($SuperG_class)&B_listG_methods);
+}
+
+B_Iterator $listD_U__iter__(B_list lst) {
+    return B_list_base_iter(lst, (B_list_base)lst);
+}
+
+B_Iterator $listD_U__reversed__(B_list lst) {
+    B_list_base copy = B_list_base_copy_as((B_list_base)lst, ($SuperG_class)&B_listG_methods);
+    B_list_base_reverse(copy);
+    return B_list_base_iter(copy, copy);
+}
+
+B_list $listD_U__add__(B_list lst, B_list other) {
+    return (B_list)B_list_base_add((B_list_base)lst, (B_list_base)other, ($SuperG_class)&B_listG_methods);
+}
+
+B_list $listD_U__mul__(B_list lst, int64_t n) {
+    return (B_list)B_list_base_mul((B_list_base)lst, n, ($SuperG_class)&B_listG_methods);
+}
+
+B_list $listD_U__zero__(void) {
+    return B_listD_new(0);
+}
+
+B_list $listD_U__fromiter__(B_Iterable wit, $WORD src) {
+    return B_listG_new(wit, src);
+}
+
+B_ilist $ilistD_U__getslice__(B_ilist lst, B_slice slc) {
+    return (B_ilist)B_list_base_getslice((B_list_base)lst, slc, ($SuperG_class)&B_ilistG_methods);
+}
+
+B_Iterator $ilistD_U__iter__(B_ilist lst) {
+    return B_list_base_iter(lst, (B_list_base)lst);
+}
+
+B_Iterator $ilistD_U__reversed__(B_ilist lst) {
+    B_list_base copy = B_list_base_copy_as((B_list_base)lst, ($SuperG_class)&B_ilistG_methods);
+    B_list_base_reverse(copy);
+    return B_list_base_iter(copy, copy);
+}
+
+B_ilist $ilistD_U__add__(B_ilist lst, B_ilist other) {
+    return (B_ilist)B_list_base_add((B_list_base)lst, (B_list_base)other, ($SuperG_class)&B_ilistG_methods);
+}
+
+B_ilist $ilistD_U__mul__(B_ilist lst, int64_t n) {
+    return (B_ilist)B_list_base_mul((B_list_base)lst, n, ($SuperG_class)&B_ilistG_methods);
+}
+
+B_ilist $ilistD_U__zero__(void) {
+    return B_ilistD_new(0);
+}
+
+B_ilist $ilistD_U__fromiter__(B_Iterable wit, $WORD src) {
+    return B_ilistG_new(wit, src);
+}
+
+B_NoneType $listD_U_insert(B_list lst, int64_t n, $WORD elem) {
+    return B_list_base_insert((B_list_base)lst, n, elem);
+}
+
+B_NoneType $listD_U_reverse(B_list lst) {
+    return B_list_base_reverse((B_list_base)lst);
+}
+
+B_NoneType $listD_U__delslice__(B_list lst, B_slice slc) {
+    return B_list_base_delslice((B_list_base)lst, slc);
+}
+
+B_NoneType $listD_U__setslice__(B_list lst, B_Iterable wit, B_slice slc, $WORD src) {
+    return B_list_base_setslice((B_list_base)lst, wit, slc, src);
+}
+
+B_list $listD_U__iadd__(B_list lst, B_list other) {
+    B_list_base_extend((B_list_base)lst, (B_list_base)other);
+    return lst;
+}
+
+B_list $listD_U__imul__(B_list lst, int64_t n) {
+    B_list_base_imul((B_list_base)lst, n);
+    return lst;
+}
+
 // Sequence[list] wrappers /////////////////////////////////////////////////////////////////////////
 
 $WORD B_SequenceD_listD___getitem__(B_SequenceD_list wit, B_list lst, B_int n) {
@@ -684,7 +770,7 @@ B_list B_TimesD_SequenceD_listD___zero__(B_TimesD_SequenceD_list wit) {
 }
 
 B_list B_TimesD_SequenceD_listD___mul__(B_TimesD_SequenceD_list wit, B_list lst, B_int n) {
-    return (B_list)B_list_base_mul((B_list_base)lst, n, ($SuperG_class)&B_listG_methods);
+    return (B_list)B_list_base_mul((B_list_base)lst, n->val, ($SuperG_class)&B_listG_methods);
 }
 
 B_list B_TimesD_SequenceD_listD___iadd__(B_TimesD_SequenceD_list wit, B_list lst, B_list other) {
@@ -693,7 +779,7 @@ B_list B_TimesD_SequenceD_listD___iadd__(B_TimesD_SequenceD_list wit, B_list lst
 }
 
 B_list B_TimesD_SequenceD_listD___imul__(B_TimesD_SequenceD_list wit, B_list lst, B_int n) {
-    B_list_base_imul((B_list_base)lst, n);
+    B_list_base_imul((B_list_base)lst, n->val);
     return lst;
 }
 
@@ -752,7 +838,7 @@ B_ilist B_TimesD_ISequenceD_ilistD___zero__(B_TimesD_ISequenceD_ilist wit) {
 }
 
 B_ilist B_TimesD_ISequenceD_ilistD___mul__(B_TimesD_ISequenceD_ilist wit, B_ilist lst, B_int n) {
-    return (B_ilist)B_list_base_mul((B_list_base)lst, n, ($SuperG_class)&B_ilistG_methods);
+    return (B_ilist)B_list_base_mul((B_list_base)lst, n->val, ($SuperG_class)&B_ilistG_methods);
 }
 
 bool B_ContainerD_ilistD___contains__(B_ContainerD_ilist wit, B_ilist lst, $WORD elem) {
