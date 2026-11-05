@@ -1,0 +1,41 @@
+def test_missing_delete(n: int):
+    d = {i: "v" + str(i) for i in range(n)}
+    expected = list(d.items())
+
+    del d[-1]
+    del d[-1]
+    assert len(d) == n
+    assert list(d.items()) == expected
+
+    # Repeated deletion must also work as the table shrinks back to empty.
+    for i in range(n):
+        del d[i]
+        del d[i]
+        del d[-1]
+        assert len(d) == n - i - 1
+    assert list(d.items()) == []
+    del d[0]
+
+    # Missing-key deletion leaves the dictionary usable and preserves order.
+    d[1] = "one"
+    d[2] = "two"
+    del d[0]
+    del d[1]
+    del d[1]
+    d[1] = "new one"
+    assert list(d.items()) == [(2, "two"), (1, "new one")]
+
+def test_none_value():
+    d: dict[str, ?int] = {"none": None, "value": 1}
+    del d["missing"]
+    assert "none" in d
+    assert len(d) == 2
+    del d["none"]
+    del d["none"]
+    assert list(d.items()) == [("value", 1)]
+
+actor main(env):
+    for n in [0, 1, 2, 3, 8, 33, 1000]:
+        test_missing_delete(n)
+    test_none_value()
+    env.exit(0)
