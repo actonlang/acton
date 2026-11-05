@@ -270,7 +270,8 @@ rawBuiltinMethod _ attr _
   | attr `notElem` [getitemKW, setitemKW, delitemKW, lenKW, appendKW, eqKW, neKW, addKW,
                     containsKW, containsnotKW, setAddKW, discardKW, insertKW, reverseKW,
                     getsliceKW, setsliceKW, delsliceKW, iterKW, reversedKW, mulKW, iaddKW, imulKW,
-                    ltKW, leKW, gtKW, geKW, name "hash"]
+                    ltKW, leKW, gtKW, geKW, name "hash",
+                    name "__abs__", name "__and__", name "__ceil__", name "__complex__", name "__divmod__", name "__float__", name "__floor__", name "__floordiv__", name "__index__", name "__int__", name "__invert__", name "__lshift__", name "__mod__", name "__neg__", name "__or__", name "__pos__", name "__pow__", name "__round__", name "__rshift__", name "__sub__", name "__truediv__", name "__trunc__", name "__xor__", name "conjugate", name "denominator", name "imag", name "numerator", name "real"]
                                     = Nothing
 rawBuiltinMethod env attr es@(recv:_)
                                     = case (unalias env (typeOf env recv), attr, es) of
@@ -278,6 +279,9 @@ rawBuiltinMethod env attr es@(recv:_)
                                           | n == lenKW
                                             -> do worker <- lookup q builtinLengthWorkers
                                                   return $ tApp (eQVar worker) ts
+                                        (TCon _ (TC q []), n, _)
+                                          | Just worker <- lookup (q, n, length es) builtinNumberWorkers
+                                            -> Just $ eQVar worker
                                         (TCon _ (TC q []), n, [_, _, _, src])
                                           | q == qnBytearray, n == setsliceKW
                                             -> Just $ tApp (eQVar primUBytearraySetslice) [typeOf env src]
@@ -411,8 +415,74 @@ builtinTextWorkers                 =
     , ((qnBytearray, name "__imul__", 2), primUBytearrayImul)
     ]
 
-rawBuiltinCall env attr rest p      = rawBuiltinMethodCall env attr p <|> factory
-  where factory                     = case (attr, unalias env rest, posargs p) of
+-- Native number methods discard only their receiver witness. Conversion
+-- methods below retain the caller-selected Real/Integral result witness.
+builtinNumberWorkers               =
+    [ ((qnBigint, name "__add__", 2), primUBigintAdd)
+    , ((qnBigint, name "__complex__", 1), primUBigintComplex)
+    , ((qnBigint, name "__mul__", 2), primUBigintMul)
+    , ((qnBigint, name "__pow__", 2), primUBigintPow)
+    , ((qnBigint, name "__neg__", 1), primUBigintNeg)
+    , ((qnBigint, name "__pos__", 1), primUBigintPos)
+    , ((qnBigint, name "conjugate", 1), primUBigintConjugate)
+    , ((qnBigint, name "__float__", 1), primUBigintFloat)
+    , ((qnBigint, name "__round__", 2), primUBigintRound)
+    , ((qnBigint, name "__int__", 1), primUBigintInt)
+    , ((qnBigint, name "__index__", 1), primUBigintIndex)
+    , ((qnBigint, name "__divmod__", 2), primUBigintDivmod)
+    , ((qnBigint, name "__floordiv__", 2), primUBigintFloordiv)
+    , ((qnBigint, name "__mod__", 2), primUBigintMod)
+    , ((qnBigint, name "__lshift__", 2), primUBigintLshift)
+    , ((qnBigint, name "__rshift__", 2), primUBigintRshift)
+    , ((qnBigint, name "__invert__", 1), primUBigintInvert)
+    , ((qnBigint, name "__and__", 2), primUBigintAnd)
+    , ((qnBigint, name "__or__", 2), primUBigintOr)
+    , ((qnBigint, name "__xor__", 2), primUBigintXor)
+    , ((qnBigint, name "__sub__", 2), primUBigintSub)
+    , ((qnBigint, name "__truediv__", 2), primUBigintTruediv)
+    , ((qnBigint, name "__eq__", 2), primUBigintEq)
+    , ((qnBigint, name "__ne__", 2), primUBigintNe)
+    , ((qnBigint, name "__lt__", 2), primUBigintLt)
+    , ((qnBigint, name "__le__", 2), primUBigintLe)
+    , ((qnBigint, name "__gt__", 2), primUBigintGt)
+    , ((qnBigint, name "__ge__", 2), primUBigintGe)
+    , ((qnBigint, name "hash", 2), primUBigintHash)
+    , ((qnComplex, name "__add__", 2), primUComplexAdd)
+    , ((qnComplex, name "__complex__", 1), primUComplexComplex)
+    , ((qnComplex, name "__mul__", 2), primUComplexMul)
+    , ((qnComplex, name "__pow__", 2), primUComplexPow)
+    , ((qnComplex, name "__neg__", 1), primUComplexNeg)
+    , ((qnComplex, name "__pos__", 1), primUComplexPos)
+    , ((qnComplex, name "conjugate", 1), primUComplexConjugate)
+    , ((qnComplex, name "__truediv__", 2), primUComplexTruediv)
+    , ((qnComplex, name "__sub__", 2), primUComplexSub)
+    , ((qnComplex, name "__eq__", 2), primUComplexEq)
+    , ((qnComplex, name "__ne__", 2), primUComplexNe)
+    , ((qnComplex, name "hash", 2), primUComplexHash)
+    ]
+
+builtinNumberConversions           =
+    [ ((qnBigint, name "real"), primUBigintReal)
+    , ((qnBigint, name "imag"), primUBigintImag)
+    , ((qnBigint, name "__abs__"), primUBigintAbs)
+    , ((qnBigint, name "__trunc__"), primUBigintTrunc)
+    , ((qnBigint, name "__floor__"), primUBigintFloor)
+    , ((qnBigint, name "__ceil__"), primUBigintCeil)
+    , ((qnBigint, name "numerator"), primUBigintNumerator)
+    , ((qnBigint, name "denominator"), primUBigintDenominator)
+    , ((qnComplex, name "real"), primUComplexReal)
+    , ((qnComplex, name "imag"), primUComplexImag)
+    , ((qnComplex, name "__abs__"), primUComplexAbs)
+    ]
+
+rawBuiltinCall env attr rest p      = rawBuiltinMethodCall env attr p <|> conversion <|> factory
+  where conversion
+          | [recv, _] <- posargs p,
+            TCon _ (TC q []) <- unalias env (typeOf env recv),
+            Just worker <- lookup (q, attr) builtinNumberConversions
+                                    = call worker [boxedRepType rest]
+          | otherwise               = Nothing
+        factory                     = case (attr, unalias env rest, posargs p) of
                                         (n, TCon _ (TC q [t]), [])
                                           | n == zeroKW,
                                             Just worker <- lookup q [(qnList, primUListZero), (qnIList, primUIListZero)]
@@ -429,10 +499,28 @@ rawBuiltinCall env attr rest p      = rawBuiltinMethodCall env attr p <|> factor
                                           | n == name "__fromiter__",
                                             Just worker <- lookup q [(qnStr, primUStrFromIter), (qnBytes, primUBytesFromIter), (qnBytearray, primUBytearrayFromIter)]
                                             -> call worker [typeOf env src]
+                                        (n, TCon _ (TC q []), [])
+                                          | n == name "__zero__",
+                                            Just worker <- lookup q [(qnBigint, primUBigintZero), (qnComplex, primUComplexZero)]
+                                            -> call worker []
+                                        (n, TCon _ (TC q []), [_])
+                                          | n == name "__fromatom__",
+                                            Just worker <- lookup q [(qnBigint, primUBigintFromatom), (qnComplex, primUComplexFromatom)]
+                                            -> call worker []
                                         _ -> Nothing
         call worker ts              = let f = tApp (eQVar worker) ts
                                           TFun _ _ pr _ rt = rtypeOfFun env f
                                       in Just $ tryBox rt $ eCallP f (fixargs env p pr)
+
+-- Keep the result-conversion witness of abs; round/divmod need only values.
+numericBuiltinArgs q es
+  | q == gBuiltin (name "abs"), [resultWit, _, recv] <- es
+                                    = Just (name "__abs__", [recv, resultWit])
+  | q == gBuiltin (name "round"), [_, recv, places] <- es
+                                    = Just (name "__round__", [recv, places])
+  | q == gBuiltin (name "divmod"), [_, a, b] <- es
+                                    = Just (name "__divmod__", [a,b])
+  | otherwise                       = Nothing
 
 -- Concrete builtin lengths need neither the Collection receiver witness nor
 -- its element/key witnesses. Keep this lowering in boxing so its ordinary
@@ -1006,7 +1094,7 @@ instance Boxing Expr where
         | isUnboxable t             = return (HashSet.empty, Box tBool $ Paren NoLoc $ CompOp NoLoc (unbox t x1) [OpArg op (unbox t x2)])
         where t = head ts
               op = cmp2Comparison attr
-      -- Known builtin text witnesses inherit some Eq/Ord defaults. Their
+      -- Known builtin witnesses inherit some Eq/Ord defaults. Their
       -- native workers implement those same comparisons directly; generic
       -- witnesses and user-defined overrides retain normal dispatch.
       boxingCompop w attr es _ rt pr rest
@@ -1030,6 +1118,12 @@ instance Boxing Expr where
                                          case rawBuiltinMethodCall env attr (PosArg recv1 PosNil) of
                                            Just c  -> return (ws1,c)
                                            Nothing -> error "Internal error: raw builtin unary call lost during boxing"
+      | Just (attr, args) <- numericBuiltinArgs (unalias env f) (posargs p),
+        Just _ <- rawBuiltinCall env attr t (posarg args)
+                                    = do (ws1,p1) <- boxing env (posarg args)
+                                         case rawBuiltinCall env attr t p1 of
+                                           Just c -> return (ws1,c)
+                                           Nothing -> error "Internal error: raw builtin numeric call lost during boxing"
       | f `elem` prims              = do (ws1,p1) <- boxing env p
                                          return (ws1, Box tBool $ eCallP e' (fixargs env p1 r))
       | otherwise                   = do (ws1,p1) <- boxing env p

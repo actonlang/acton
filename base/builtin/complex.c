@@ -72,57 +72,109 @@ B_str B_complexD___repr__(B_complex c) {
 // B_NumberD_complex  ////////////////////////////////////////////////////////////////////////////////////////
 
 B_complex B_NumberD_complexD___add__(B_NumberD_complex wit, B_complex a, B_complex b) {
+    return $complexD_U__add__(a, b);
+}
+
+B_complex $complexD_U__add__(B_complex a, B_complex b) {
     return toB_complex(a->val + b->val);
 }
 
 B_complex B_NumberD_complexD___zero__(B_NumberD_complex wit) {
+    return $complexD_U__zero__();
+}
+
+B_complex $complexD_U__zero__(void) {
     return toB_complex(0.0);
 }
 
-B_complex B_NumberD_complexD___complex__ (B_NumberD_complex wit, B_complex c) {
+B_complex B_NumberD_complexD___complex__(B_NumberD_complex wit, B_complex c) {
+    return $complexD_U__complex__(c);
+}
+
+B_complex $complexD_U__complex__(B_complex c) {
     return c;
 }
 
-B_complex B_NumberD_complexD___mul__ (B_NumberD_complex wit, B_complex a, B_complex b){
+B_complex B_NumberD_complexD___mul__(B_NumberD_complex wit, B_complex a, B_complex b) {
+    return $complexD_U__mul__(a, b);
+}
+
+B_complex $complexD_U__mul__(B_complex a, B_complex b) {
     return toB_complex(a->val * b->val);
 }
 
 B_complex B_NumberD_complexD___fromatom__(B_NumberD_complex wit, B_atom a) {
+    return $complexD_U__fromatom__(a);
+}
+
+B_complex $complexD_U__fromatom__(B_atom a) {
     RAISE_EXC(&B_complex_fromatom_not_implemented_error);
     return B_None;
 }
 
-B_complex B_NumberD_complexD___pow__ (B_NumberD_complex wit, B_complex a, B_complex b) {
+B_complex B_NumberD_complexD___pow__(B_NumberD_complex wit, B_complex a, B_complex b) {
+    return $complexD_U__pow__(a, b);
+}
+
+B_complex $complexD_U__pow__(B_complex a, B_complex b) {
     return toB_complex(cpow(a->val,b->val));
 }
 
-B_complex B_NumberD_complexD___neg__ (B_NumberD_complex wit, B_complex c){
+B_complex B_NumberD_complexD___neg__(B_NumberD_complex wit, B_complex c) {
+    return $complexD_U__neg__(c);
+}
+
+B_complex $complexD_U__neg__(B_complex c) {
     return toB_complex(-c->val);
 }
 
-B_complex B_NumberD_complexD___pos__ (B_NumberD_complex wit, B_complex c) {
+B_complex B_NumberD_complexD___pos__(B_NumberD_complex wit, B_complex c) {
+    return $complexD_U__pos__(c);
+}
+
+B_complex $complexD_U__pos__(B_complex c) {
     return c;
 }
 
-$WORD B_NumberD_complexD_real (B_NumberD_complex wit, B_complex c, B_Real wit2) {
+$WORD B_NumberD_complexD_real(B_NumberD_complex wit, B_complex c, B_Real wit2) {
+    return $complexD_U_real(c, wit2);
+}
+
+$WORD $complexD_U_real(B_complex c, B_Real wit2) {
     return wit2->$class->__fromatom__(wit2,(B_atom)to$float(creal(c->val)));
 }
 
-$WORD B_NumberD_complexD_imag (B_NumberD_complex wit, B_complex c, B_Real wit2) {
+$WORD B_NumberD_complexD_imag(B_NumberD_complex wit, B_complex c, B_Real wit2) {
+    return $complexD_U_imag(c, wit2);
+}
+
+$WORD $complexD_U_imag(B_complex c, B_Real wit2) {
     return wit2->$class->__fromatom__(wit2,(B_atom)to$float(cimag(c->val)));
 }
 
-$WORD B_NumberD_complexD___abs__ (B_NumberD_complex wit, B_complex c, B_Real wit2) {
+$WORD B_NumberD_complexD___abs__(B_NumberD_complex wit, B_complex c, B_Real wit2) {
+    return $complexD_U__abs__(c, wit2);
+}
+
+$WORD $complexD_U__abs__(B_complex c, B_Real wit2) {
     return wit2->$class->__fromatom__(wit2,(B_atom)to$float(cabs(c->val)));
 }
 
-B_complex B_NumberD_complexD_conjugate (B_NumberD_complex wit, B_complex c) {
+B_complex B_NumberD_complexD_conjugate(B_NumberD_complex wit, B_complex c) {
+    return $complexD_U_conjugate(c);
+}
+
+B_complex $complexD_U_conjugate(B_complex c) {
     return toB_complex(conj(c->val));
 }
 
 // B_DivD_complex /////////////////////////////////////////////////////////////////////////////////////////
 
-B_complex B_DivD_complexD___truediv__ (B_DivD_complex wit, B_complex a, B_complex b) {
+B_complex B_DivD_complexD___truediv__(B_DivD_complex wit, B_complex a, B_complex b) {
+    return $complexD_U__truediv__(a, b);
+}
+
+B_complex $complexD_U__truediv__(B_complex a, B_complex b) {
     if (b->val == 0.0) {
         RAISE_EXC(&B_complex_truediv_zero_error);
     }
@@ -132,22 +184,38 @@ B_complex B_DivD_complexD___truediv__ (B_DivD_complex wit, B_complex a, B_comple
 // B_MinusD_NumberD_complex  ////////////////////////////////////////////////////////////////////////////////////////
 
 B_complex B_MinusD_NumberD_complexD___sub__(B_MinusD_NumberD_complex wit, B_complex a, B_complex b) {
+    return $complexD_U__sub__(a, b);
+}
+
+B_complex $complexD_U__sub__(B_complex a, B_complex b) {
     return toB_complex(a->val - b->val);
 }
 // B_EqD_complex  ////////////////////////////////////////////////////////////////////////////////////////
 
-bool B_EqD_complexD___eq__ (B_EqD_complex wit, B_complex a, B_complex b) {
+bool B_EqD_complexD___eq__(B_EqD_complex wit, B_complex a, B_complex b) {
+    return $complexD_U__eq__(a, b);
+}
+
+bool $complexD_U__eq__(B_complex a, B_complex b) {
     return creal(a->val) == creal(b->val) && cimag(a->val) == cimag(b->val);
 }
 
-bool B_EqD_complexD___ne__ (B_EqD_complex wit, B_complex a, B_complex b) {
-    return !B_EqD_complexD___eq__(wit,a,b);
+bool B_EqD_complexD___ne__(B_EqD_complex wit, B_complex a, B_complex b) {
+    return $complexD_U__ne__(a, b);
+}
+
+bool $complexD_U__ne__(B_complex a, B_complex b) {
+    return !$complexD_U__eq__(a, b);
 }
 
 
 // B_HashableD_complex  ////////////////////////////////////////////////////////////////////////////////////////
 
 B_NoneType B_HashableD_complexD_hash(B_HashableD_complex wit, B_complex a, B_hasher h) {
+    return $complexD_U_hash(a, h);
+}
+
+B_NoneType $complexD_U_hash(B_complex a, B_hasher h) {
     // Complex equality treats positive and negative zero as equal in each
     // component, so their hash contributions must be identical as well.
     double parts[2];

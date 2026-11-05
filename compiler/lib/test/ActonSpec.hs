@@ -3901,12 +3901,13 @@ main = do
         , "->$class->items"
         ]
       testCodeGenContains env0 "stack_iterators_fallback"
-        [ "B_CollectionD_SequenceD_listD___iter__(" ]
+        [ "$listD_U__iter__(" ]
       testCodeGenDoesNotContain env0 "stack_iterators_fallback"
         [ "iterator_storage", "$listD_U_iter_init(" ]
       testCodeGenContains env0 "static_witness_path"
         [ "$listD_U__setitem__(xs, index, toB_int(0LL))"
-        , "B_SequenceD_listG_witness->W_Sliceable"
+        , "$listD_U__setslice__(xs,"
+        , "B_SequenceD_listG_witness->W_Collection"
         ]
       testCodeGenContains env0 "numeric_casts"
         [ "double N_tmp = ((double)(x));"

@@ -197,32 +197,56 @@ B_bigint zz$toB_bigint(zz_ptr n) {
 // B_IntegralD_bigint /////////////////////////////////////////////////////////////////////////
 
  
-B_bigint B_IntegralD_bigintD___add__(B_IntegralD_bigint wit,  B_bigint a, B_bigint b) {
+B_bigint B_IntegralD_bigintD___add__(B_IntegralD_bigint wit, B_bigint a, B_bigint b) {
+    return $bigintD_U__add__(a, b);
+}
+
+B_bigint $bigintD_U__add__(B_bigint a, B_bigint b) {
     B_bigint res = malloc_bigint();
     zz_add(&res->val,&a->val,&b->val);
     return res;
 }
 
 B_bigint B_IntegralD_bigintD___zero__(B_IntegralD_bigint wit) {
+    return $bigintD_U__zero__();
+}
+
+B_bigint $bigintD_U__zero__(void) {
     return toB_bigint(0);
 }
 
 B_complex B_IntegralD_bigintD___complex__(B_IntegralD_bigint wit, B_bigint a) {
+    return $bigintD_U__complex__(a);
+}
+
+B_complex $bigintD_U__complex__(B_bigint a) {
     RAISE_EXC(&B_bigint_complex_not_implemented_error);
     return NULL; // This is just to silence compiler warning, above RAISE will longjmp from here anyway
 }
 
 B_bigint B_IntegralD_bigintD___fromatom__(B_IntegralD_bigint wit, B_atom a) {
+    return $bigintD_U__fromatom__(a);
+}
+
+B_bigint $bigintD_U__fromatom__(B_atom a) {
     return B_bigintG_new(a,NULL);
 }
 
-B_bigint B_IntegralD_bigintD___mul__(B_IntegralD_bigint wit,  B_bigint a, B_bigint b) {
+B_bigint B_IntegralD_bigintD___mul__(B_IntegralD_bigint wit, B_bigint a, B_bigint b) {
+    return $bigintD_U__mul__(a, b);
+}
+
+B_bigint $bigintD_U__mul__(B_bigint a, B_bigint b) {
     B_bigint res = malloc_bigint();
     zz_mul(&res->val,&a->val,&b->val);
     return res;
 }  
   
 B_bigint B_IntegralD_bigintD___pow__(B_IntegralD_bigint wit, B_bigint a, B_bigint b) {
+    return $bigintD_U__pow__(a, b);
+}
+
+B_bigint $bigintD_U__pow__(B_bigint a, B_bigint b) {
     zz_ptr val_b = &b->val;
     if (zz_cmpi(val_b,0) < 0) {
         char errmsg[1024];
@@ -242,83 +266,139 @@ B_bigint B_IntegralD_bigintD___pow__(B_IntegralD_bigint wit, B_bigint a, B_bigin
     return res;
 }
 
-B_bigint B_IntegralD_bigintD___neg__(B_IntegralD_bigint wit,  B_bigint a) {
+B_bigint B_IntegralD_bigintD___neg__(B_IntegralD_bigint wit, B_bigint a) {
+    return $bigintD_U__neg__(a);
+}
+
+B_bigint $bigintD_U__neg__(B_bigint a) {
     B_bigint res = malloc_bigint();
     zz_neg(&res->val,&a->val);
     return res;
 }
 
-B_bigint B_IntegralD_bigintD___pos__(B_IntegralD_bigint wit,  B_bigint a) {
+B_bigint B_IntegralD_bigintD___pos__(B_IntegralD_bigint wit, B_bigint a) {
+    return $bigintD_U__pos__(a);
+}
+
+B_bigint $bigintD_U__pos__(B_bigint a) {
     return a;
 }
 
 $WORD B_IntegralD_bigintD_real(B_IntegralD_bigint wit, B_bigint a, B_Real wit2) {
+    return $bigintD_U_real(a, wit2);
+}
+
+$WORD $bigintD_U_real(B_bigint a, B_Real wit2) {
     RAISE_EXC(&B_bigint_real_not_implemented_error);
     return NULL; // This is just to silence compiler warning, above RAISE will longjmp from here anyway
 }
 
 $WORD B_IntegralD_bigintD_imag(B_IntegralD_bigint wit, B_bigint a, B_Real wit2) {
+    return $bigintD_U_imag(a, wit2);
+}
+
+$WORD $bigintD_U_imag(B_bigint a, B_Real wit2) {
     RAISE_EXC(&B_bigint_imag_not_implemented_error);
     return NULL; // This is just to silence compiler warning, above RAISE will longjmp from here anyway
 }
 
 $WORD B_IntegralD_bigintD___abs__(B_IntegralD_bigint wit, B_bigint a, B_Real wit2) {
+    return $bigintD_U__abs__(a, wit2);
+}
+
+$WORD $bigintD_U__abs__(B_bigint a, B_Real wit2) {
     B_bigint res = malloc_bigint();
     zz_set(&res->val,&a->val);
     res->val.size = labs(a->val.size);
     return wit2->$class->__fromatom__(wit2,(B_atom)res);
 }
 
-B_bigint B_IntegralD_bigintD_conjugate(B_IntegralD_bigint wit,  B_bigint a) {
+B_bigint B_IntegralD_bigintD_conjugate(B_IntegralD_bigint wit, B_bigint a) {
+    return $bigintD_U_conjugate(a);
+}
+
+B_bigint $bigintD_U_conjugate(B_bigint a) {
     return a;
 }
 
-double B_IntegralD_bigintD___float__ (B_IntegralD_bigint wit, B_bigint n) {
+double B_IntegralD_bigintD___float__(B_IntegralD_bigint wit, B_bigint n) {
+    return $bigintD_U__float__(n);
+}
+
+double $bigintD_U__float__(B_bigint n) {
     return B_floatG_new((B_atom)n);
 }
 
-$WORD B_IntegralD_bigintD___trunc__ (B_IntegralD_bigint wit, B_bigint n, B_Integral wit2) {
+$WORD B_IntegralD_bigintD___trunc__(B_IntegralD_bigint wit, B_bigint n, B_Integral wit2) {
+    return $bigintD_U__trunc__(n, wit2);
+}
+
+$WORD $bigintD_U__trunc__(B_bigint n, B_Integral wit2) {
     return wit2->$class->__fromatom__(wit2,(B_atom)n);
 }
   
-$WORD B_IntegralD_bigintD___floor__ (B_IntegralD_bigint wit, B_bigint n, B_Integral wit2) {
+$WORD B_IntegralD_bigintD___floor__(B_IntegralD_bigint wit, B_bigint n, B_Integral wit2) {
+    return $bigintD_U__floor__(n, wit2);
+}
+
+$WORD $bigintD_U__floor__(B_bigint n, B_Integral wit2) {
     return wit2->$class->__fromatom__(wit2,(B_atom)n);
 }
   
-$WORD B_IntegralD_bigintD___ceil__ (B_IntegralD_bigint wit, B_bigint n, B_Integral wit2) {
+$WORD B_IntegralD_bigintD___ceil__(B_IntegralD_bigint wit, B_bigint n, B_Integral wit2) {
+    return $bigintD_U__ceil__(n, wit2);
+}
+
+$WORD $bigintD_U__ceil__(B_bigint n, B_Integral wit2) {
     return wit2->$class->__fromatom__(wit2,(B_atom)n);
 }
 
 B_bigint B_IntegralD_bigintD___floordiv__(B_IntegralD_bigint wit, B_bigint a, B_bigint b);
 
-B_bigint B_IntegralD_bigintD___round__ (B_IntegralD_bigint wit, B_bigint n, B_int p) {
+B_bigint B_IntegralD_bigintD___round__(B_IntegralD_bigint wit, B_bigint n, B_int p) {
+    return $bigintD_U__round__(n, p);
+}
+
+B_bigint $bigintD_U__round__(B_bigint n, B_int p) {
     zz_struct nval = n->val;
     if (nval.size < 0) { 
         B_bigint n1 = malloc_bigint();
         zz_neg(&n1->val,&nval);
-        B_bigint res = B_IntegralD_bigintD___round__(wit,n1,p);
+        B_bigint res = $bigintD_U__round__(n1, p);
         zz_neg(&res->val,&res->val);
         return res;
     }
     long pval = fromB_int(p);
     if (pval>=0)
         return n;
-    B_bigint p10 = B_IntegralD_bigintD___pow__(NULL,toB_bigint(10), B_IntegralD_bigintD___neg__(NULL,toB_bigint(p->val)));
-    B_bigint p10half = B_IntegralD_bigintD___floordiv__(NULL, p10,toB_bigint(2));
-    B_bigint n1 = B_IntegralD_bigintD___floordiv__(NULL,B_IntegralD_bigintD___add__(NULL,n,p10half),p10);
-    return B_IntegralD_bigintD___mul__(NULL,n1,p10);
+    B_bigint p10 = $bigintD_U__pow__(toB_bigint(10), $bigintD_U__neg__(toB_bigint(p->val)));
+    B_bigint p10half = $bigintD_U__floordiv__(p10, toB_bigint(2));
+    B_bigint n1 = $bigintD_U__floordiv__($bigintD_U__add__(n, p10half), p10);
+    return $bigintD_U__mul__(n1, p10);
 }
   
-$WORD B_IntegralD_bigintD_numerator (B_IntegralD_bigint wit, B_bigint n, B_Integral wit2) {
+$WORD B_IntegralD_bigintD_numerator(B_IntegralD_bigint wit, B_bigint n, B_Integral wit2) {
+    return $bigintD_U_numerator(n, wit2);
+}
+
+$WORD $bigintD_U_numerator(B_bigint n, B_Integral wit2) {
     return wit2->$class->__fromatom__(wit2,(B_atom)n);
 }
   
-$WORD B_IntegralD_bigintD_denominator (B_IntegralD_bigint wit, B_bigint n, B_Integral wit2) {
+$WORD B_IntegralD_bigintD_denominator(B_IntegralD_bigint wit, B_bigint n, B_Integral wit2) {
+    return $bigintD_U_denominator(n, wit2);
+}
+
+$WORD $bigintD_U_denominator(B_bigint n, B_Integral wit2) {
     B_bigint res = toB_bigint(1L);
     return wit2->$class->__fromatom__(wit2,(B_atom)res);
 }
   
-int64_t B_IntegralD_bigintD___int__ (B_IntegralD_bigint wit, B_bigint n) {
+int64_t B_IntegralD_bigintD___int__(B_IntegralD_bigint wit, B_bigint n) {
+    return $bigintD_U__int__(n);
+}
+
+int64_t $bigintD_U__int__(B_bigint n) {
     long sz = n->val.size;
     unsigned long k = sz == 0 ? 0 : n->val.n[0];
     if (labs(sz) > 1 || (sz==1 && k > 0x7ffffffffffffffful) || sz == -1 && k > 0x8000000000000000ul) {
@@ -329,7 +409,11 @@ int64_t B_IntegralD_bigintD___int__ (B_IntegralD_bigint wit, B_bigint n) {
     return k*sz;
 }
 
-int64_t B_IntegralD_bigintD___index__ (B_IntegralD_bigint wit, B_bigint n) {
+int64_t B_IntegralD_bigintD___index__(B_IntegralD_bigint wit, B_bigint n) {
+    return $bigintD_U__index__(n);
+}
+
+int64_t $bigintD_U__index__(B_bigint n) {
     long sz = n->val.size;
     unsigned long k = sz == 0 ? 0 : n->val.n[0];
     if (labs(sz) > 1 || (sz==1 && k > 0x7ffffffffffffffful) || sz == -1 && k > 0x8000000000000000ul) {
@@ -341,6 +425,10 @@ int64_t B_IntegralD_bigintD___index__ (B_IntegralD_bigint wit, B_bigint n) {
 }
 
 B_tuple B_IntegralD_bigintD___divmod__(B_IntegralD_bigint wit, B_bigint a, B_bigint b) {
+    return $bigintD_U__divmod__(a, b);
+}
+
+B_tuple $bigintD_U__divmod__(B_bigint a, B_bigint b) {
     if (b->val.size == 0){
         RAISE_EXC(&B_bigint_divmod_zero_error);
     }
@@ -351,6 +439,10 @@ B_tuple B_IntegralD_bigintD___divmod__(B_IntegralD_bigint wit, B_bigint a, B_big
 }
 
 B_bigint B_IntegralD_bigintD___floordiv__(B_IntegralD_bigint wit, B_bigint a, B_bigint b) {
+    return $bigintD_U__floordiv__(a, b);
+}
+
+B_bigint $bigintD_U__floordiv__(B_bigint a, B_bigint b) {
     if (b->val.size == 0){
         RAISE_EXC(&B_bigint_floordiv_zero_error);
     }
@@ -360,6 +452,10 @@ B_bigint B_IntegralD_bigintD___floordiv__(B_IntegralD_bigint wit, B_bigint a, B_
 }
 
 B_bigint B_IntegralD_bigintD___mod__(B_IntegralD_bigint wit, B_bigint a, B_bigint b) {
+    return $bigintD_U__mod__(a, b);
+}
+
+B_bigint $bigintD_U__mod__(B_bigint a, B_bigint b) {
     if (b->val.size == 0){
         RAISE_EXC(&B_bigint_divmod_zero_error);
     }
@@ -375,7 +471,11 @@ B_bigint B_IntegralD_bigintD___mod__(B_IntegralD_bigint wit, B_bigint a, B_bigin
     return r;
 }
 
-B_bigint B_IntegralD_bigintD___lshift__(B_IntegralD_bigint wit,  B_bigint a, int64_t b) {
+B_bigint B_IntegralD_bigintD___lshift__(B_IntegralD_bigint wit, B_bigint a, int64_t b) {
+    return $bigintD_U__lshift__(a, b);
+}
+
+B_bigint $bigintD_U__lshift__(B_bigint a, int64_t b) {
     zz_struct aval = a->val;
     long ma = aval.size;
     long bval = b;
@@ -406,7 +506,11 @@ B_bigint B_IntegralD_bigintD___lshift__(B_IntegralD_bigint wit,  B_bigint a, int
     return res; 
 }
 
-B_bigint B_IntegralD_bigintD___rshift__(B_IntegralD_bigint wit,  B_bigint a, int64_t b) {
+B_bigint B_IntegralD_bigintD___rshift__(B_IntegralD_bigint wit, B_bigint a, int64_t b) {
+    return $bigintD_U__rshift__(a, b);
+}
+
+B_bigint $bigintD_U__rshift__(B_bigint a, int64_t b) {
     zz_struct aval = a->val;
     long ma = aval.size;
     long bval = b;
@@ -433,7 +537,11 @@ B_bigint B_IntegralD_bigintD___rshift__(B_IntegralD_bigint wit,  B_bigint a, int
     return res; 
 }
  
-B_bigint B_IntegralD_bigintD___invert__(B_IntegralD_bigint wit,  B_bigint a) {
+B_bigint B_IntegralD_bigintD___invert__(B_IntegralD_bigint wit, B_bigint a) {
+    return $bigintD_U__invert__(a);
+}
+
+B_bigint $bigintD_U__invert__(B_bigint a) {
     B_bigint res0 = malloc_bigint();
     B_bigint res = malloc_bigint();
     B_bigint one = toB_bigint(1);
@@ -510,19 +618,31 @@ B_bigint bigint_bitwise(B_bigint a, B_bigint b, enum bigint_bitwise_op op) {
     return res;
 }
 
-B_bigint B_LogicalD_IntegralD_bigintD___and__(B_LogicalD_IntegralD_bigint wit,  B_bigint a, B_bigint b) {
+B_bigint B_LogicalD_IntegralD_bigintD___and__(B_LogicalD_IntegralD_bigint wit, B_bigint a, B_bigint b) {
+    return $bigintD_U__and__(a, b);
+}
+
+B_bigint $bigintD_U__and__(B_bigint a, B_bigint b) {
     if (a->val.size == 0 || b->val.size == 0)
         return toB_bigint(0);
     return bigint_bitwise(a, b, BIGINT_AND);
 }
 
-B_bigint B_LogicalD_IntegralD_bigintD___or__(B_LogicalD_IntegralD_bigint wit,  B_bigint a, B_bigint b) {
+B_bigint B_LogicalD_IntegralD_bigintD___or__(B_LogicalD_IntegralD_bigint wit, B_bigint a, B_bigint b) {
+    return $bigintD_U__or__(a, b);
+}
+
+B_bigint $bigintD_U__or__(B_bigint a, B_bigint b) {
     if (b->val.size == 0) return a;
     if (a->val.size == 0) return b;
     return bigint_bitwise(a, b, BIGINT_OR);
 }
 
-B_bigint B_LogicalD_IntegralD_bigintD___xor__(B_LogicalD_IntegralD_bigint wit,  B_bigint a, B_bigint b) {
+B_bigint B_LogicalD_IntegralD_bigintD___xor__(B_LogicalD_IntegralD_bigint wit, B_bigint a, B_bigint b) {
+    return $bigintD_U__xor__(a, b);
+}
+
+B_bigint $bigintD_U__xor__(B_bigint a, B_bigint b) {
     if (b->val.size == 0) return a;
     if (a->val.size == 0) return b;
     return bigint_bitwise(a, b, BIGINT_XOR);
@@ -530,7 +650,11 @@ B_bigint B_LogicalD_IntegralD_bigintD___xor__(B_LogicalD_IntegralD_bigint wit,  
 
 // B_MinusD_IntegralD_bigint  ////////////////////////////////////////////////////////////////////////////////////////
 
-B_bigint B_MinusD_IntegralD_bigintD___sub__(B_MinusD_IntegralD_bigint wit,  B_bigint a, B_bigint b) {
+B_bigint B_MinusD_IntegralD_bigintD___sub__(B_MinusD_IntegralD_bigint wit, B_bigint a, B_bigint b) {
+    return $bigintD_U__sub__(a, b);
+}
+
+B_bigint $bigintD_U__sub__(B_bigint a, B_bigint b) {
     B_bigint res = malloc_bigint();
     zz_sub(&res->val,&a->val,&b->val);
     return res;
@@ -539,7 +663,11 @@ B_bigint B_MinusD_IntegralD_bigintD___sub__(B_MinusD_IntegralD_bigint wit,  B_bi
 
 // B_DivD_bigint  ////////////////////////////////////////////////////////////////////////////////////////
 
-B_float B_DivD_bigintD___truediv__ (B_DivD_bigint wit, B_bigint a, B_bigint b) {
+B_float B_DivD_bigintD___truediv__(B_DivD_bigint wit, B_bigint a, B_bigint b) {
+    return toB_float($bigintD_U__truediv__(a, b));
+}
+
+double $bigintD_U__truediv__(B_bigint a, B_bigint b) {
     if (zz_equal(&b->val, &toB_bigint(0)->val))
         RAISE_EXC(&B_bigint_zero_division_error);
     zz_ptr aval = &a->val;
@@ -553,42 +681,70 @@ B_float B_DivD_bigintD___truediv__ (B_DivD_bigint wit, B_bigint a, B_bigint b) {
     zz_div(&ared->val,aval,&g->val);
     zz_div(&bred->val,bval,&g->val);
     zz_divrem(&q->val,&r->val,&ared->val,&bred->val);
-    return toB_float((B_floatG_new((B_atom)q) +  B_floatG_new((B_atom)r)/ B_floatG_new((B_atom)bred)));
+    return (B_floatG_new((B_atom)q) +  B_floatG_new((B_atom)r)/ B_floatG_new((B_atom)bred));
 }
 
 // B_OrdD_bigint  ////////////////////////////////////////////////////////////////////////////////////////
 
-bool B_OrdD_bigintD___eq__ (B_OrdD_bigint wit, B_bigint a, B_bigint b) {
+bool B_OrdD_bigintD___eq__(B_OrdD_bigint wit, B_bigint a, B_bigint b) {
+    return $bigintD_U__eq__(a, b);
+}
+
+bool $bigintD_U__eq__(B_bigint a, B_bigint b) {
     if (a == b)
         return true;
     return zz_equal(&a->val,&b->val);
 }
 
-bool B_OrdD_bigintD___ne__ (B_OrdD_bigint wit, B_bigint a, B_bigint b) {
+bool B_OrdD_bigintD___ne__(B_OrdD_bigint wit, B_bigint a, B_bigint b) {
+    return $bigintD_U__ne__(a, b);
+}
+
+bool $bigintD_U__ne__(B_bigint a, B_bigint b) {
     if (a == b)
         return false;
     return !zz_equal(&a->val,&b->val);
 }
 
-bool B_OrdD_bigintD___lt__ (B_OrdD_bigint wit, B_bigint a, B_bigint b) {
+bool B_OrdD_bigintD___lt__(B_OrdD_bigint wit, B_bigint a, B_bigint b) {
+    return $bigintD_U__lt__(a, b);
+}
+
+bool $bigintD_U__lt__(B_bigint a, B_bigint b) {
     return zz_cmp(&a->val,&b->val) < 0;
 }
 
-bool B_OrdD_bigintD___le__ (B_OrdD_bigint wit, B_bigint a, B_bigint b) {
+bool B_OrdD_bigintD___le__(B_OrdD_bigint wit, B_bigint a, B_bigint b) {
+    return $bigintD_U__le__(a, b);
+}
+
+bool $bigintD_U__le__(B_bigint a, B_bigint b) {
     return zz_cmp(&a->val,&b->val) <= 0;
 }
 
-bool B_OrdD_bigintD___gt__ (B_OrdD_bigint wit, B_bigint a, B_bigint b) {
+bool B_OrdD_bigintD___gt__(B_OrdD_bigint wit, B_bigint a, B_bigint b) {
+    return $bigintD_U__gt__(a, b);
+}
+
+bool $bigintD_U__gt__(B_bigint a, B_bigint b) {
     return zz_cmp(&a->val,&b->val) > 0;
 }
 
-bool B_OrdD_bigintD___ge__ (B_OrdD_bigint wit, B_bigint a, B_bigint b) {
+bool B_OrdD_bigintD___ge__(B_OrdD_bigint wit, B_bigint a, B_bigint b) {
+    return $bigintD_U__ge__(a, b);
+}
+
+bool $bigintD_U__ge__(B_bigint a, B_bigint b) {
     return zz_cmp(&a->val,&b->val) >= 0;
 }
 
 // B_HashableD_bigint ///////////////////////////////////////////////////////////////////////////////////////////////////////
 
 B_NoneType B_HashableD_bigintD_hash(B_HashableD_bigint wit, B_bigint a, B_hasher h) {
+    return $bigintD_U_hash(a, h);
+}
+
+B_NoneType $bigintD_U_hash(B_bigint a, B_hasher h) {
     long sz = a->val.size;
     unsigned long data;
     if (sz==0)
