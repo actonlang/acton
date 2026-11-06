@@ -128,3 +128,11 @@ B_Iterator $dictD_U_items_init(B_IteratorD_dict_items iter, $WORD src);
 // Convenience methods used for (de)serialization
 void B_dictD_setitem(B_dict dict, B_Hashable hashwit, $WORD key, $WORD value);
 $WORD B_dictD_get(B_dict dict, B_Hashable hashwit, $WORD key, $WORD deflt);
+
+// Witness-free length getters used by generated code.
+static inline int64_t $dictD_U__len(B_dict self) {
+    return (int64_t)self->numelements;
+}
+static inline int64_t $idictD_U__len(B_idict self) {
+    return (int64_t)self->numelements;
+}

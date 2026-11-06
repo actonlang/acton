@@ -210,6 +210,231 @@ compilerTests =
         testBuild "" ExitSuccess False proj
         (returnCode, _cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc "./out/bin/main" []){ cwd = Just proj } ""
         assertEqual ("unboxed bool method slot binary should run: " ++ cmdErr) ExitSuccess returnCode
+  , testCase "builtin len and append eliminate concrete witness arguments" $ do
+        withSystemTempDirectory "acton-builtin-len-append" $ \tmp -> do
+          let src = tmp </> "builtin_len_append.act"
+          copyFile "../../test/regression_auto/builtin_len_append.act" src
+          (code, generated, err) <- buildThing "--quiet --dbg-no-lines --cgen" src
+          assertEqual ("C generation should succeed:\n" ++ generated ++ err) ExitSuccess code
+          let body name = unlines $ takeWhile (/= "}") $ dropWhile
+                (not . isInfixOf ("builtin_len_appendQ_" ++ name ++ " (")) (lines generated)
+              workers = [ ("list_length", "$listD_U__len"), ("ilist_length", "$ilistD_U__len")
+                        , ("dict_length", "$dictD_U__len"), ("idict_length", "$idictD_U__len")
+                        , ("set_length", "$setD_U__len"), ("iset_length", "$isetD_U__len")
+                        , ("str_length", "$strD_U__len"), ("bytes_length", "$bytesD_U__len")
+                        , ("bytearray_length", "$bytearrayD_U__len"), ("bitset_length", "$bitsetD_U__len")
+                        , ("array_length", "$arrayD_U__len"), ("bitarray_length", "$bitarrayD_U__len")
+                        , ("append_value", "$listD_U_append") ]
+          forM_ workers $ \(name, worker) -> do
+            let c = body name
+            assertBool (name ++ " should call its witness-free worker") (worker `isInfixOf` c)
+            assertBool (name ++ " should not call generic len or append")
+              (not ("B_len" `isInfixOf` c || "$class->append" `isInfixOf` c))
+          assertBool "generic Collection should retain len dispatch" ("B_len" `isInfixOf` body "generic_length")
+          assertBool "generic Sequence should retain append dispatch" ("$class->append" `isInfixOf` body "generic_append")
+  , testCase "builtin string operators eliminate concrete witness arguments" $ do
+        withSystemTempDirectory "acton-builtin-str-ops" $ \tmp -> do
+          let src = tmp </> "builtin_str_ops.act"
+          copyFile "../../test/regression_auto/builtin_str_ops.act" src
+          (code, generated, err) <- buildThing "--quiet --dbg-no-lines --cgen" src
+          assertEqual ("C generation should succeed:\n" ++ generated ++ err) ExitSuccess code
+          let body name = unlines $ takeWhile (/= "}") $ dropWhile
+                (not . isInfixOf ("builtin_str_opsQ_" ++ name ++ " (")) (lines generated)
+              workers = [ ("string_equal", "$strD_U__eq__"), ("string_not_equal", "$strD_U__ne__")
+                        , ("string_concat", "$strD_U__add__"), ("string_iadd", "$strD_U__add__") ]
+          forM_ workers $ \(name, worker) -> do
+            let c = body name
+            assertBool (name ++ " should call its witness-free worker") (worker `isInfixOf` c)
+            assertBool (name ++ " should not retain string witnesses")
+              (not ("G_witness" `isInfixOf` c || "$class->" `isInfixOf` c))
+          forM_ [("generic_equal", "__eq__"), ("generic_not_equal", "__ne__"),
+                 ("generic_concat", "__add__"), ("generic_iadd", "__iadd__")] $ \(name, method) ->
+            assertBool (name ++ " should retain protocol dispatch") (("$class->" ++ method) `isInfixOf` body name)
+  , testCase "builtin Sequence workers remove only dead receiver witnesses" $ do
+        withSystemTempDirectory "acton-builtin-sequence-ops" $ \tmp -> do
+          let src = tmp </> "builtin_sequence_ops.act"
+          copyFile "../../test/regression_auto/builtin_sequence_ops.act" src
+          (code, generated, err) <- buildThing "--quiet --dbg-no-lines --cgen" src
+          assertEqual ("C generation should succeed:\n" ++ generated ++ err) ExitSuccess code
+          let body name = unlines $ takeWhile (/= "}") $ dropWhile
+                (not . isInfixOf ("builtin_sequence_opsQ_" ++ name ++ " (")) (lines generated)
+              workers = [ ("list_insert", "$listD_U_insert"), ("list_reverse", "$listD_U_reverse")
+                        , ("list_slice", "$listD_U__getslice__"), ("list_del_slice", "$listD_U__delslice__")
+                        , ("list_iterator", "$listD_U__iter__"), ("list_reversed", "$listD_U__reversed__")
+                        , ("list_add", "$listD_U__add__"), ("list_repeat", "$listD_U__mul__")
+                        , ("list_iadd", "$listD_U__iadd__"), ("list_irepeat", "$listD_U__imul__")
+                        , ("list_zero", "$listD_U__zero__")
+                        , ("ilist_slice", "$ilistD_U__getslice__"), ("ilist_iterator", "$ilistD_U__iter__")
+                        , ("ilist_reversed", "$ilistD_U__reversed__"), ("ilist_add", "$ilistD_U__add__")
+                        , ("ilist_repeat", "$ilistD_U__mul__"), ("ilist_zero", "$ilistD_U__zero__") ]
+          forM_ workers $ \(name, worker) -> do
+            let c = body name
+            assertBool (name ++ " should call its witness-free worker") (worker `isInfixOf` c)
+            assertBool (name ++ " should have no dead receiver witness binding")
+              (not (" W_" `isInfixOf` c || "G_witness" `isInfixOf` c || "$class->" `isInfixOf` c || "B_Sequence" `isInfixOf` c || "B_ISequence" `isInfixOf` c))
+          forM_ [("list_set_slice", "$listD_U__setslice__"),
+                 ("list_from_iter", "$listD_U__fromiter__"), ("ilist_from_iter", "$ilistD_U__fromiter__")] $ \(name, worker) -> do
+            let c = body name
+            assertBool (name ++ " should call its worker with the input witness")
+              (worker `isInfixOf` c && "B_Iterable" `isInfixOf` c)
+            assertBool (name ++ " should drop the receiver witness")
+              (not ("G_witness" `isInfixOf` c || "B_Sequence" `isInfixOf` c || "B_Collection" `isInfixOf` c))
+          forM_ ["list_total", "ilist_total"] $ \name -> do
+            let c = body name
+            assertBool (name ++ " should retain stack iterator storage")
+              ("struct B_IteratorD_list" `isInfixOf` c && "$listD_U_iter_init" `isInfixOf` c)
+            assertBool (name ++ " should not allocate its loop iterator")
+              (not ("$listD_U__iter__" `isInfixOf` c || "$ilistD_U__iter__" `isInfixOf` c))
+          assertBool "generic reverse should retain dispatch" ("$class->reverse" `isInfixOf` body "generic_reverse")
+          assertBool "generic slicing should retain dispatch" ("$class->__getslice__" `isInfixOf` body "generic_slice")
+  , testCase "builtin text protocol workers discard dead receiver witnesses" $ do
+        withSystemTempDirectory "acton-builtin-text-ops" $ \tmp -> do
+          let src = tmp </> "builtin_text_ops.act"
+          copyFile "../../test/regression_auto/builtin_text_ops.act" src
+          (code, generated, err) <- buildThing "--quiet --dbg-no-lines --cgen" src
+          assertEqual ("C generation should succeed:\n" ++ generated ++ err) ExitSuccess code
+          let body name = unlines $ takeWhile (/= "}") $ dropWhile
+                (not . isInfixOf ("builtin_text_opsQ_" ++ name ++ " (")) (lines generated)
+              workers = [ ("str_lt", "$strD_U__lt__", False)
+                        , ("str_le", "$strD_U__le__", False)
+                        , ("str_gt", "$strD_U__gt__", False)
+                        , ("str_ge", "$strD_U__ge__", False)
+                        , ("str_hash", "$strD_U_hash", False)
+                        , ("str_zero", "$strD_U__zero__", False)
+                        , ("str_mul", "$strD_U__mul__", False)
+                        , ("str_fromiter", "$strD_U__fromiter__", True)
+                        , ("str_contains", "$strD_U__contains__", False)
+                        , ("str_containsnot", "$strD_U__containsnot__", False)
+                        , ("str_iter", "$strD_U__iter__", False)
+                        , ("str_getslice", "$strD_U__getslice__", False)
+                        , ("bytes_eq", "$bytesD_U__eq__", False)
+                        , ("bytes_ne", "$bytesD_U__ne__", False)
+                        , ("bytes_lt", "$bytesD_U__lt__", False)
+                        , ("bytes_le", "$bytesD_U__le__", False)
+                        , ("bytes_gt", "$bytesD_U__gt__", False)
+                        , ("bytes_ge", "$bytesD_U__ge__", False)
+                        , ("bytes_contains", "$bytesD_U__contains__", False)
+                        , ("bytes_containsnot", "$bytesD_U__containsnot__", False)
+                        , ("bytearray_eq", "$bytearrayD_U__eq__", False)
+                        , ("bytearray_ne", "$bytearrayD_U__ne__", False)
+                        , ("bytearray_lt", "$bytearrayD_U__lt__", False)
+                        , ("bytearray_le", "$bytearrayD_U__le__", False)
+                        , ("bytearray_gt", "$bytearrayD_U__gt__", False)
+                        , ("bytearray_ge", "$bytearrayD_U__ge__", False)
+                        , ("bytearray_contains", "$bytearrayD_U__contains__", False)
+                        , ("bytearray_containsnot", "$bytearrayD_U__containsnot__", False)
+                        , ("bytes_hash", "$bytesD_U_hash", False)
+                        , ("bytes_fromiter", "$bytesD_U__fromiter__", True)
+                        , ("bytes_iter", "$bytesD_U__iter__", False)
+                        , ("bytes_getslice", "$bytesD_U__getslice__", False)
+                        , ("bytes_add", "$bytesD_U__add__", False)
+                        , ("bytes_zero", "$bytesD_U__zero__", False)
+                        , ("bytes_mul", "$bytesD_U__mul__", False)
+                        , ("bytearray_insert", "$bytearrayD_U_insert", False)
+                        , ("bytearray_append", "$bytearrayD_U_append", False)
+                        , ("bytearray_reverse", "$bytearrayD_U_reverse", False)
+                        , ("bytearray_reversed", "$bytearrayD_U__reversed__", False)
+                        , ("bytearray_getslice", "$bytearrayD_U__getslice__", False)
+                        , ("bytearray_setslice", "$bytearrayD_U__setslice__", True)
+                        , ("bytearray_delslice", "$bytearrayD_U__delslice__", False)
+                        , ("bytearray_fromiter", "$bytearrayD_U__fromiter__", True)
+                        , ("bytearray_iter", "$bytearrayD_U__iter__", False)
+                        , ("bytearray_add", "$bytearrayD_U__add__", False)
+                        , ("bytearray_zero", "$bytearrayD_U__zero__", False)
+                        , ("bytearray_mul", "$bytearrayD_U__mul__", False)
+                        , ("bytearray_iadd", "$bytearrayD_U__iadd__", False)
+                        , ("bytearray_imul", "$bytearrayD_U__imul__", False) ]
+          forM_ workers $ \(name, worker, inputWitness) -> do
+            let c = body name
+            assertBool (name ++ " should call its worker") (worker `isInfixOf` c)
+            assertBool (name ++ " should drop the receiver witness")
+              (not ("G_witness" `isInfixOf` c || "$class->" `isInfixOf` c))
+            if inputWitness
+              then assertBool (name ++ " must keep the input Iterable witness") ("B_Iterable" `isInfixOf` c)
+              else assertBool (name ++ " must have no dead witness binding") (not (" W_" `isInfixOf` c))
+          forM_ [("str", "str"), ("bytes", "bytes"), ("bytearray", "bytearray")] $ \(name, ctype) -> do
+            let c = body (name ++ "_loop")
+            assertBool (name ++ " iteration should stay on the stack")
+              (("struct B_IteratorD_" ++ ctype) `isInfixOf` c && ("$" ++ ctype ++ "D_U_iter_init") `isInfixOf` c)
+          assertBool "generic Ord retains dispatch" ("$class->__le__" `isInfixOf` body "generic_le")
+          assertBool "generic Container retains dispatch" ("$class->__contains__" `isInfixOf` body "generic_contains")
+  , testCase "builtin numeric workers retain result conversion witnesses" $ do
+        withSystemTempDirectory "acton-builtin-number-ops" $ \tmp -> do
+          let src = tmp </> "builtin_number_ops.act"
+          copyFile "../../test/regression_auto/builtin_number_ops.act" src
+          (code, generated, err) <- buildThing "--quiet --dbg-no-lines --cgen" src
+          assertEqual ("C generation should succeed:\n" ++ generated ++ err) ExitSuccess code
+          let body name = unlines $ takeWhile (/= "}") $ dropWhile
+                (not . isInfixOf ("builtin_number_opsQ_" ++ name ++ " (")) (lines generated)
+              workers = [ ("bigint_add", "$bigintD_U__add__", False)
+                        , ("bigint_zero", "$bigintD_U__zero__", False)
+                        , ("bigint_complex", "$bigintD_U__complex__", False)
+                        , ("bigint_fromatom", "$bigintD_U__fromatom__", False)
+                        , ("bigint_mul", "$bigintD_U__mul__", False)
+                        , ("bigint_pow", "$bigintD_U__pow__", False)
+                        , ("bigint_neg", "$bigintD_U__neg__", False)
+                        , ("bigint_pos", "$bigintD_U__pos__", False)
+                        , ("bigint_real", "$bigintD_U_real", True)
+                        , ("bigint_imag", "$bigintD_U_imag", True)
+                        , ("bigint_abs", "$bigintD_U__abs__", True)
+                        , ("bigint_conjugate", "$bigintD_U_conjugate", False)
+                        , ("bigint_float", "$bigintD_U__float__", False)
+                        , ("bigint_trunc", "$bigintD_U__trunc__", True)
+                        , ("bigint_floor", "$bigintD_U__floor__", True)
+                        , ("bigint_ceil", "$bigintD_U__ceil__", True)
+                        , ("bigint_round", "$bigintD_U__round__", False)
+                        , ("bigint_numerator", "$bigintD_U_numerator", True)
+                        , ("bigint_denominator", "$bigintD_U_denominator", True)
+                        , ("bigint_int", "$bigintD_U__int__", False)
+                        , ("bigint_index", "$bigintD_U__index__", False)
+                        , ("bigint_divmod", "$bigintD_U__divmod__", False)
+                        , ("bigint_floordiv", "$bigintD_U__floordiv__", False)
+                        , ("bigint_mod", "$bigintD_U__mod__", False)
+                        , ("bigint_lshift", "$bigintD_U__lshift__", False)
+                        , ("bigint_rshift", "$bigintD_U__rshift__", False)
+                        , ("bigint_invert", "$bigintD_U__invert__", False)
+                        , ("bigint_and", "$bigintD_U__and__", False)
+                        , ("bigint_or", "$bigintD_U__or__", False)
+                        , ("bigint_xor", "$bigintD_U__xor__", False)
+                        , ("bigint_sub", "$bigintD_U__sub__", False)
+                        , ("bigint_truediv", "$bigintD_U__truediv__", False)
+                        , ("bigint_eq", "$bigintD_U__eq__", False)
+                        , ("bigint_ne", "$bigintD_U__ne__", False)
+                        , ("bigint_lt", "$bigintD_U__lt__", False)
+                        , ("bigint_le", "$bigintD_U__le__", False)
+                        , ("bigint_gt", "$bigintD_U__gt__", False)
+                        , ("bigint_ge", "$bigintD_U__ge__", False)
+                        , ("bigint_hash", "$bigintD_U_hash", False)
+                        , ("complex_add", "$complexD_U__add__", False)
+                        , ("complex_zero", "$complexD_U__zero__", False)
+                        , ("complex_complex", "$complexD_U__complex__", False)
+                        , ("complex_mul", "$complexD_U__mul__", False)
+                        , ("complex_fromatom", "$complexD_U__fromatom__", False)
+                        , ("complex_pow", "$complexD_U__pow__", False)
+                        , ("complex_neg", "$complexD_U__neg__", False)
+                        , ("complex_pos", "$complexD_U__pos__", False)
+                        , ("complex_real", "$complexD_U_real", True)
+                        , ("complex_imag", "$complexD_U_imag", True)
+                        , ("complex_abs", "$complexD_U__abs__", True)
+                        , ("complex_conjugate", "$complexD_U_conjugate", False)
+                        , ("complex_truediv", "$complexD_U__truediv__", False)
+                        , ("complex_sub", "$complexD_U__sub__", False)
+                        , ("complex_eq", "$complexD_U__eq__", False)
+                        , ("complex_ne", "$complexD_U__ne__", False)
+                        , ("complex_hash", "$complexD_U_hash", False) ]
+          forM_ workers $ \(name, worker, resultWitness) -> do
+            let c = body name
+            assertBool (name ++ " should call its worker") (worker `isInfixOf` c)
+            assertBool (name ++ " should drop its receiver witness")
+              (not ("B_Ord " `isInfixOf` c || "B_Number " `isInfixOf` c || "B_Hashable " `isInfixOf` c || "B_Div " `isInfixOf` c))
+            if resultWitness
+              then assertBool (name ++ " must retain the result conversion witness") (" W_" `isInfixOf` c)
+              else assertBool (name ++ " must discard its dead witness bindings")
+                     (not (" W_" `isInfixOf` c || "G_witness" `isInfixOf` c || "$class->" `isInfixOf` c))
+          assertBool "generic addition retains dispatch" ("$class->__add__" `isInfixOf` body "generic_add")
+          assertBool "generic ordering retains dispatch" ("$class->__le__" `isInfixOf` body "generic_le")
+          assertBool "generic Real result is retained" ("$complexD_U_real" `isInfixOf` body "generic_real" && "B_Real" `isInfixOf` body "generic_real")
+          assertBool "generic Integral result is retained" ("$bigintD_U__trunc__" `isInfixOf` body "generic_trunc" && "B_Integral" `isInfixOf` body "generic_trunc")
   , testCase "release-mode loop-carried local survives setjmp" $ do
         -- A local assigned inside a for-loop and read afterwards must be emitted
         -- as C volatile so it survives the loop's StopIteration setjmp/longjmp.

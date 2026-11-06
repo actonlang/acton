@@ -1,0 +1,98 @@
+# Concrete strings use witness-free workers; generic operations keep dispatch.
+def string_equal(a: str, b: str) -> bool:
+    return a == b
+
+def string_not_equal(a: str, b: str) -> bool:
+    return a != b
+
+def string_concat(a: str, b: str) -> str:
+    return a + b
+
+mut def string_iadd(a: str, b: str) -> str:
+    a += b
+    return a
+
+def generic_equal[A(Eq)](a: A, b: A) -> bool:
+    return a == b
+
+def generic_not_equal[A(Eq)](a: A, b: A) -> bool:
+    return a != b
+
+def generic_concat[A(Plus)](a: A, b: A) -> A:
+    return a + b
+
+mut def generic_iadd[A(Plus)](a: A, b: A) -> A:
+    a += b
+    return a
+
+class Fragment(object):
+    text: str
+    def __init__(self, text: str):
+        self.text = text
+
+extension Fragment(Eq):
+    def __eq__(a: Fragment, b: Fragment) -> bool:
+        return len(a.text) == len(b.text)
+
+extension Fragment(Plus):
+    def __zero__() -> Fragment:
+        return Fragment("")
+    def __add__(a: Fragment, b: Fragment) -> Fragment:
+        return Fragment(b.text + a.text)
+    mut def __iadd__(a: Fragment, b: Fragment) -> Fragment:
+        return Fragment(a.text + "!" + b.text)
+
+mut def marked(s: str, trace: list[int], n: int) -> str:
+    trace.append(n)
+    return s
+
+actor main(env):
+    a = string_concat("aå", "中🙂")
+    b = string_concat("a", "å中🙂")
+    assert string_equal(a, a)
+    assert string_equal(a, b)
+    assert not string_not_equal(a, b)
+    assert not string_equal(a, "aå中")
+    assert string_not_equal(a, "aå中🙃")
+    assert string_equal("", "")
+    assert string_not_equal("", "x")
+    # Compare every byte after embedded NUL, without Unicode normalization.
+    assert string_equal("a\0中", string_concat("a\0", "中"))
+    assert string_not_equal("a\0中", "a\0文")
+    assert string_not_equal("a\0", "a")
+    assert string_not_equal("é", "é")
+    assert string_concat("", a) == a
+    assert string_concat(a, "") == a
+    joined = string_concat("a\0å", "🙂\0z")
+    assert joined == "a\0å🙂\0z" and len(joined) == 6
+    assert string_iadd("a\0", "🙂") == "a\0🙂"
+    # Boolean results must also work at a boxed, polymorphic boundary.
+    results = [string_equal(a, b), string_not_equal(a, b)]
+    assert results[0] and not results[1]
+    assert generic_equal(a, b) and not generic_not_equal(a, b)
+    assert generic_concat("a\0", "🙂") == "a\0🙂"
+    assert generic_iadd("a", "b") == "ab"
+    x = Fragment("ab")
+    y = Fragment("cd")
+    assert generic_equal(x, y)
+    assert generic_not_equal(x, Fragment("e"))
+    assert generic_concat(x, y).text == "cdab"
+    assert generic_iadd(x, y).text == "ab!cd"
+    # Preserve operand evaluation once, in order, and short-circuit behavior.
+    trace: list[int] = []
+    assert marked("a", trace, 1) + marked("b", trace, 2) == "ab"
+    assert trace == [1, 2]
+    assert marked("a", trace, 3) == marked("a", trace, 4)
+    assert marked("a", trace, 5) != marked("b", trace, 6)
+    assert trace == [1, 2, 3, 4, 5, 6]
+    assert not (marked("a", trace, 7) == "b" and marked("x", trace, 8) == "x")
+    assert trace == [1, 2, 3, 4, 5, 6, 7]
+    nested = marked("x", trace, 9) + (marked("y", trace, 10) + marked("z", trace, 11))
+    assert nested == "xyz"
+    assert trace == [1, 2, 3, 4, 5, 6, 7, 9, 10, 11]
+    # Exercise the concatenation result's byte/character counts repeatedly.
+    s = ""
+    for i in range(100):
+        s += "å\0🙂"
+    assert len(s) == 300 and s == "å\0🙂" * 100
+    env.exit(0)

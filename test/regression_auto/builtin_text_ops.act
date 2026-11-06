@@ -1,0 +1,258 @@
+# Builtin text protocols keep their semantics after receiver-witness removal.
+
+def str_lt(a: str, b: str) -> bool:
+    return a < b
+
+def str_le(a: str, b: str) -> bool:
+    return a <= b
+
+def str_gt(a: str, b: str) -> bool:
+    return a > b
+
+def str_ge(a: str, b: str) -> bool:
+    return a >= b
+
+def str_hash(a: str, h: hasher) -> None:
+    a.hash(h)
+
+def str_zero() -> str:
+    return Plus.__zero__()
+
+def str_mul(a: str, n: int) -> str:
+    return a * n
+
+def str_fromiter(iter: Iterable[str]) -> str:
+    return Collection.__fromiter__(iter)
+
+def str_contains(s: str, sub: str) -> bool:
+    return sub in s
+
+def str_containsnot(s: str, sub: str) -> bool:
+    return sub not in s
+
+def str_iter(s: str) -> Iterator[str]:
+    return iter(s)
+
+def str_getslice(s: str) -> str:
+    return s[::-2]
+
+def bytes_eq(a: bytes, b: bytes) -> bool:
+    return a == b
+
+def bytes_ne(a: bytes, b: bytes) -> bool:
+    return a != b
+
+def bytes_lt(a: bytes, b: bytes) -> bool:
+    return a < b
+
+def bytes_le(a: bytes, b: bytes) -> bool:
+    return a <= b
+
+def bytes_gt(a: bytes, b: bytes) -> bool:
+    return a > b
+
+def bytes_ge(a: bytes, b: bytes) -> bool:
+    return a >= b
+
+def bytes_contains(str: bytes, n: int) -> bool:
+    return n in str
+
+def bytes_containsnot(str: bytes, n: int) -> bool:
+    return n not in str
+
+def bytearray_eq(a: bytearray, b: bytearray) -> bool:
+    return a == b
+
+def bytearray_ne(a: bytearray, b: bytearray) -> bool:
+    return a != b
+
+def bytearray_lt(a: bytearray, b: bytearray) -> bool:
+    return a < b
+
+def bytearray_le(a: bytearray, b: bytearray) -> bool:
+    return a <= b
+
+def bytearray_gt(a: bytearray, b: bytearray) -> bool:
+    return a > b
+
+def bytearray_ge(a: bytearray, b: bytearray) -> bool:
+    return a >= b
+
+def bytearray_contains(self: bytearray, n: int) -> bool:
+    return n in self
+
+def bytearray_containsnot(self: bytearray, n: int) -> bool:
+    return n not in self
+
+def bytes_hash(a: bytes, h: hasher) -> None:
+    a.hash(h)
+
+def bytes_fromiter(iter: Iterable[int]) -> bytes:
+    return Collection.__fromiter__(iter)
+
+def bytes_iter(str: bytes) -> Iterator[int]:
+    return iter(str)
+
+def bytes_getslice(str: bytes) -> bytes:
+    return str[::-2]
+
+def bytes_add(s: bytes, t: bytes) -> bytes:
+    return s + t
+
+def bytes_zero() -> bytes:
+    return Plus.__zero__()
+
+def bytes_mul(a: bytes, n: int) -> bytes:
+    return a * n
+
+mut def bytearray_insert(self: bytearray, n: int, elem: int) -> None:
+    self.insert(n, elem)
+
+mut def bytearray_append(self: bytearray, elem: int) -> None:
+    self.append(elem)
+
+mut def bytearray_reverse(self: bytearray) -> None:
+    self.reverse()
+
+def bytearray_reversed(self: bytearray) -> Iterator[int]:
+    return reversed(self)
+
+def bytearray_getslice(self: bytearray) -> bytearray:
+    return self[::-2]
+
+mut def bytearray_setslice(self: bytearray, iter: Iterable[int]) -> None:
+    self[1:3] = iter
+
+mut def bytearray_delslice(self: bytearray) -> None:
+    del self[::2]
+
+def bytearray_fromiter(iter: Iterable[int]) -> bytearray:
+    return Collection.__fromiter__(iter)
+
+def bytearray_iter(str: bytearray) -> Iterator[int]:
+    return iter(str)
+
+def bytearray_add(a: bytearray, b: bytearray) -> bytearray:
+    return a + b
+
+def bytearray_zero() -> bytearray:
+    return Plus.__zero__()
+
+def bytearray_mul(a: bytearray, n: int) -> bytearray:
+    return a * n
+
+mut def bytearray_iadd(a: bytearray, b: bytearray) -> bytearray:
+    a += b
+    return a
+
+mut def bytearray_imul(a: bytearray, n: int) -> bytearray:
+    a *= n
+    return a
+
+def generic_le[A(Ord)](a: A, b: A) -> bool:
+    return a <= b
+
+def generic_contains[C(Container[int])](xs: C, x: int) -> bool:
+    return x in xs
+
+def str_loop(xs: str) -> int:
+    total = 0
+    for x in xs:
+        total += len(x)
+    return total
+
+def bytes_loop(xs: bytes) -> int:
+    total = 0
+    for x in xs:
+        total += x
+    return total
+
+def bytearray_loop(xs: bytearray) -> int:
+    total = 0
+    for x in xs:
+        total += x
+    return total
+
+actor main(env):
+    assert str_lt("a\0b", "a\0c")
+    assert str_le("å", "å") and str_ge("å", "å")
+    assert str_gt("ab", "a")
+    assert str_contains("a\0å🙂", "\0å")
+    assert str_containsnot("a\0å🙂", "å\0")
+    assert str_getslice("aå中🙂z") == "z中a"
+    assert str_mul("å\0🙂", 3) == "å\0🙂å\0🙂å\0🙂"
+    assert str_mul("x", -1) == "" and str_zero() == ""
+    assert str_fromiter(["a", "\0", "🙂"]) == "a\0🙂"
+    assert list(str_iter("a\0🙂")) == ["a", "\0", "🙂"]
+    h = hasher()
+    str_hash("a\0🙂", h)
+    assert h.finalize() == hash("a\0🙂")
+    for data in [b"", b"a\0b", bytes([0, 128, 255])]:
+        copy = bytes_fromiter(list(bytes_iter(data)))
+        assert bytes_eq(data, copy) and not bytes_ne(data, copy)
+        assert bytes_le(data, copy) and bytes_ge(data, copy)
+        assert not bytes_lt(data, copy) and not bytes_gt(data, copy)
+    assert bytes_lt(bytes([128]), bytes([255]))
+    assert bytes_gt(b"ab", b"a")
+    assert bytes_contains(b"a\0b", 0) and bytes_containsnot(b"a", 0)
+    assert bytes_containsnot(b"abc", -1) and bytes_containsnot(b"abc", 256)
+    assert bytes_getslice(b"abcde") == b"eca"
+    assert bytes_add(b"a\0", b"b") == b"a\0b"
+    assert bytes_mul(b"a\0", 3) == b"a\0a\0a\0"
+    assert bytes_mul(b"x", -1) == b"" and bytes_zero() == b""
+    h = hasher()
+    bytes_hash(b"a\0b", h)
+    assert h.finalize() == hash(b"a\0b")
+    data = bytearray_fromiter([0, 128, 255])
+    copy = bytearray_fromiter(list(bytearray_iter(data)))
+    assert bytearray_eq(data, copy) and not bytearray_ne(data, copy)
+    assert bytearray_le(data, copy) and bytearray_ge(data, copy)
+    assert not bytearray_lt(data, copy) and not bytearray_gt(data, copy)
+    assert bytearray_lt(bytearray(b"a"), bytearray(b"ab"))
+    assert bytearray_gt(bytearray_fromiter([255]), bytearray_fromiter([128]))
+    assert bytearray_contains(data, 255) and bytearray_containsnot(data, 1)
+    assert bytearray_containsnot(data, -1) and bytearray_containsnot(data, 256)
+    assert bytearray_getslice(bytearray(b"abcde")) == bytearray(b"eca")
+    assert bytearray_add(bytearray(b"a\0"), bytearray(b"b")) == bytearray(b"a\0b")
+    assert bytearray_mul(bytearray(b"a\0"), 2) == bytearray(b"a\0a\0")
+    assert bytearray_zero() == bytearray(b"")
+    bytearray_insert(data, -100, 1)
+    bytearray_append(data, 2)
+    bytearray_reverse(data)
+    assert list(data) == [2, 255, 128, 0, 1]
+    rev = bytearray_reversed(data)
+    bytearray_append(data, 3)
+    assert list(rev) == [1, 0, 128, 255, 2]
+    bytearray_setslice(data, [8, 9, 10])
+    assert list(data) == [2, 8, 9, 10, 0, 1, 3]
+    bytearray_delslice(data)
+    assert list(data) == [8, 10, 1]
+    alias = bytearray_iadd(data, data)
+    assert list(data) == [8, 10, 1, 8, 10, 1]
+    bytearray_imul(alias, 2)
+    assert len(data) == 12
+    bytearray_imul(alias, 0)
+    assert len(data) == 0
+    try:
+        bytearray_append(data, 256)
+        assert False
+    except ValueError:
+        pass
+    try:
+        bytearray_insert(data, 0, -1)
+        assert False
+    except ValueError:
+        pass
+    try:
+        bytearray_mul(bytearray(b"ab"), 2**62)
+        assert False
+    except ValueError:
+        pass
+    assert generic_le(b"a", b"b")
+    assert generic_le(bytearray(b"a"), bytearray(b"b"))
+    assert generic_contains(b"a\0b", 0)
+    assert generic_contains(bytearray(b"a\0b"), 0)
+    assert str_loop("aå🙂") == 3
+    assert bytes_loop(bytes([1, 128, 255])) == 384
+    assert bytearray_loop(bytearray_fromiter([1, 128, 255])) == 384
+    env.exit(0)

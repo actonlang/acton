@@ -58,3 +58,11 @@ B_Iterator $setD_U_iter_init(B_IteratorD_set iter, B_set src);
 B_Iterator $isetD_U_iter_init(B_IteratorD_set iter, B_iset src);
 
 void B_set_add_entry(B_set set, B_Hashable hashwit, $WORD key, uint64_t hash);
+
+// Witness-free length getters used by generated code.
+static inline int64_t $setD_U__len(B_set self) {
+    return (int64_t)self->data.numelements;
+}
+static inline int64_t $isetD_U__len(B_iset self) {
+    return (int64_t)self->data.numelements;
+}

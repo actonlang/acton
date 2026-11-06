@@ -156,10 +156,24 @@ primAnnot           = gPrim "annot"
 
 primRaiseValueError = gPrim "raiseValueError"
 primUGetItem        = gPrim "listD_U__getitem__"
+primUListAppend    = gPrim "listD_U_append"
+primUListLen       = gPrim "listD_U__len"
+primUIListLen      = gPrim "ilistD_U__len"
+primUDictLen       = gPrim "dictD_U__len"
+primUIDictLen      = gPrim "idictD_U__len"
+primUSetLen        = gPrim "setD_U__len"
+primUISetLen       = gPrim "isetD_U__len"
+primUStrLen        = gPrim "strD_U__len"
+primUBytesLen      = gPrim "bytesD_U__len"
+primUBytearrayLen  = gPrim "bytearrayD_U__len"
+primUBitsetLen     = gPrim "bitsetD_U__len"
 primUListSetItem    = gPrim "listD_U__setitem__"
 primUListDelItem    = gPrim "listD_U__delitem__"
 primUIListGetItem   = gPrim "ilistD_U__getitem__"
 primUStrGetItem     = gPrim "strD_U__getitem__"
+primUStrEq          = gPrim "strD_U__eq__"
+primUStrNe          = gPrim "strD_U__ne__"
+primUStrAdd         = gPrim "strD_U__add__"
 primUBytesGetItem   = gPrim "bytesD_U__getitem__"
 primUBytearrayGetItem = gPrim "bytearrayD_U__getitem__"
 primUBytearraySetItem = gPrim "bytearrayD_U__setitem__"
@@ -176,6 +190,131 @@ primUBitsetContains = gPrim "bitsetD_U__contains__"
 primUBitsetContainsNot = gPrim "bitsetD_U__containsnot__"
 primUBitsetAdd      = gPrim "bitsetD_U_add"
 primUBitsetDiscard  = gPrim "bitsetD_U_discard"
+primUListGetSlice   = gPrim "listD_U__getslice__"
+primUListIter       = gPrim "listD_U__iter__"
+primUListReversed   = gPrim "listD_U__reversed__"
+primUListAdd        = gPrim "listD_U__add__"
+primUListMul        = gPrim "listD_U__mul__"
+primUListZero       = gPrim "listD_U__zero__"
+primUListFromIter   = gPrim "listD_U__fromiter__"
+primUIListGetSlice  = gPrim "ilistD_U__getslice__"
+primUIListIter      = gPrim "ilistD_U__iter__"
+primUIListReversed  = gPrim "ilistD_U__reversed__"
+primUIListAdd       = gPrim "ilistD_U__add__"
+primUIListMul       = gPrim "ilistD_U__mul__"
+primUIListZero      = gPrim "ilistD_U__zero__"
+primUIListFromIter  = gPrim "ilistD_U__fromiter__"
+primUListInsert     = gPrim "listD_U_insert"
+primUListReverse    = gPrim "listD_U_reverse"
+primUListDelSlice   = gPrim "listD_U__delslice__"
+primUListSetSlice   = gPrim "listD_U__setslice__"
+primUListIAdd       = gPrim "listD_U__iadd__"
+primUListIMul       = gPrim "listD_U__imul__"
+primUStrLt              = gPrim "strD_U__lt__"
+primUStrLe              = gPrim "strD_U__le__"
+primUStrGt              = gPrim "strD_U__gt__"
+primUStrGe              = gPrim "strD_U__ge__"
+primUStrHash            = gPrim "strD_U_hash"
+primUStrZero            = gPrim "strD_U__zero__"
+primUStrMul             = gPrim "strD_U__mul__"
+primUStrFromIter        = gPrim "strD_U__fromiter__"
+primUStrContains        = gPrim "strD_U__contains__"
+primUStrContainsnot     = gPrim "strD_U__containsnot__"
+primUStrIter            = gPrim "strD_U__iter__"
+primUStrGetslice        = gPrim "strD_U__getslice__"
+primUBytesEq            = gPrim "bytesD_U__eq__"
+primUBytesNe            = gPrim "bytesD_U__ne__"
+primUBytesLt            = gPrim "bytesD_U__lt__"
+primUBytesLe            = gPrim "bytesD_U__le__"
+primUBytesGt            = gPrim "bytesD_U__gt__"
+primUBytesGe            = gPrim "bytesD_U__ge__"
+primUBytesContains      = gPrim "bytesD_U__contains__"
+primUBytesContainsnot   = gPrim "bytesD_U__containsnot__"
+primUBytearrayEq        = gPrim "bytearrayD_U__eq__"
+primUBytearrayNe        = gPrim "bytearrayD_U__ne__"
+primUBytearrayLt        = gPrim "bytearrayD_U__lt__"
+primUBytearrayLe        = gPrim "bytearrayD_U__le__"
+primUBytearrayGt        = gPrim "bytearrayD_U__gt__"
+primUBytearrayGe        = gPrim "bytearrayD_U__ge__"
+primUBytearrayContains  = gPrim "bytearrayD_U__contains__"
+primUBytearrayContainsnot= gPrim "bytearrayD_U__containsnot__"
+primUBytesHash          = gPrim "bytesD_U_hash"
+primUBytesFromIter      = gPrim "bytesD_U__fromiter__"
+primUBytesIter          = gPrim "bytesD_U__iter__"
+primUBytesGetslice      = gPrim "bytesD_U__getslice__"
+primUBytesAdd           = gPrim "bytesD_U__add__"
+primUBytesZero          = gPrim "bytesD_U__zero__"
+primUBytesMul           = gPrim "bytesD_U__mul__"
+primUBytearrayInsert    = gPrim "bytearrayD_U_insert"
+primUBytearrayAppend    = gPrim "bytearrayD_U_append"
+primUBytearrayReverse   = gPrim "bytearrayD_U_reverse"
+primUBytearrayReversed  = gPrim "bytearrayD_U__reversed__"
+primUBytearrayGetslice  = gPrim "bytearrayD_U__getslice__"
+primUBytearraySetslice  = gPrim "bytearrayD_U__setslice__"
+primUBytearrayDelslice  = gPrim "bytearrayD_U__delslice__"
+primUBytearrayFromIter  = gPrim "bytearrayD_U__fromiter__"
+primUBytearrayIter      = gPrim "bytearrayD_U__iter__"
+primUBytearrayAdd       = gPrim "bytearrayD_U__add__"
+primUBytearrayZero      = gPrim "bytearrayD_U__zero__"
+primUBytearrayMul       = gPrim "bytearrayD_U__mul__"
+primUBytearrayIadd      = gPrim "bytearrayD_U__iadd__"
+primUBytearrayImul      = gPrim "bytearrayD_U__imul__"
+primUBigintAdd           = gPrim "bigintD_U__add__"
+primUBigintZero          = gPrim "bigintD_U__zero__"
+primUBigintComplex       = gPrim "bigintD_U__complex__"
+primUBigintFromatom      = gPrim "bigintD_U__fromatom__"
+primUBigintMul           = gPrim "bigintD_U__mul__"
+primUBigintPow           = gPrim "bigintD_U__pow__"
+primUBigintNeg           = gPrim "bigintD_U__neg__"
+primUBigintPos           = gPrim "bigintD_U__pos__"
+primUBigintReal          = gPrim "bigintD_U_real"
+primUBigintImag          = gPrim "bigintD_U_imag"
+primUBigintAbs           = gPrim "bigintD_U__abs__"
+primUBigintConjugate     = gPrim "bigintD_U_conjugate"
+primUBigintFloat         = gPrim "bigintD_U__float__"
+primUBigintTrunc         = gPrim "bigintD_U__trunc__"
+primUBigintFloor         = gPrim "bigintD_U__floor__"
+primUBigintCeil          = gPrim "bigintD_U__ceil__"
+primUBigintRound         = gPrim "bigintD_U__round__"
+primUBigintNumerator     = gPrim "bigintD_U_numerator"
+primUBigintDenominator   = gPrim "bigintD_U_denominator"
+primUBigintInt           = gPrim "bigintD_U__int__"
+primUBigintIndex         = gPrim "bigintD_U__index__"
+primUBigintDivmod        = gPrim "bigintD_U__divmod__"
+primUBigintFloordiv      = gPrim "bigintD_U__floordiv__"
+primUBigintMod           = gPrim "bigintD_U__mod__"
+primUBigintLshift        = gPrim "bigintD_U__lshift__"
+primUBigintRshift        = gPrim "bigintD_U__rshift__"
+primUBigintInvert        = gPrim "bigintD_U__invert__"
+primUBigintAnd           = gPrim "bigintD_U__and__"
+primUBigintOr            = gPrim "bigintD_U__or__"
+primUBigintXor           = gPrim "bigintD_U__xor__"
+primUBigintSub           = gPrim "bigintD_U__sub__"
+primUBigintTruediv       = gPrim "bigintD_U__truediv__"
+primUBigintEq            = gPrim "bigintD_U__eq__"
+primUBigintNe            = gPrim "bigintD_U__ne__"
+primUBigintLt            = gPrim "bigintD_U__lt__"
+primUBigintLe            = gPrim "bigintD_U__le__"
+primUBigintGt            = gPrim "bigintD_U__gt__"
+primUBigintGe            = gPrim "bigintD_U__ge__"
+primUBigintHash          = gPrim "bigintD_U_hash"
+primUComplexAdd          = gPrim "complexD_U__add__"
+primUComplexZero         = gPrim "complexD_U__zero__"
+primUComplexComplex      = gPrim "complexD_U__complex__"
+primUComplexMul          = gPrim "complexD_U__mul__"
+primUComplexFromatom     = gPrim "complexD_U__fromatom__"
+primUComplexPow          = gPrim "complexD_U__pow__"
+primUComplexNeg          = gPrim "complexD_U__neg__"
+primUComplexPos          = gPrim "complexD_U__pos__"
+primUComplexReal         = gPrim "complexD_U_real"
+primUComplexImag         = gPrim "complexD_U_imag"
+primUComplexAbs          = gPrim "complexD_U__abs__"
+primUComplexConjugate    = gPrim "complexD_U_conjugate"
+primUComplexTruediv      = gPrim "complexD_U__truediv__"
+primUComplexSub          = gPrim "complexD_U__sub__"
+primUComplexEq           = gPrim "complexD_U__eq__"
+primUComplexNe           = gPrim "complexD_U__ne__"
+primUComplexHash         = gPrim "complexD_U_hash"
 primUNext           = gPrim "rangeD_U__next__"
 
 annot t_ann ann t e = eCall (tApp (eQVar primAnnot) [t_ann, t]) [ann, e]
@@ -271,10 +410,24 @@ primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec Nothing)
                             (noq primAnnot,         NDef scAnnot NoDec Nothing),
                             (noq primRaiseValueError,NDef scRaiseValueError NoDec Nothing), 
                             (noq primUGetItem,      NDef scUGetItem NoDec Nothing),
+                            (noq primUListAppend, NDef scUListAppend NoDec Nothing),
+                            (noq primUListLen, NDef scUListLen NoDec Nothing),
+                            (noq primUIListLen, NDef scUIListLen NoDec Nothing),
+                            (noq primUDictLen, NDef scUDictLen NoDec Nothing),
+                            (noq primUIDictLen, NDef scUIDictLen NoDec Nothing),
+                            (noq primUSetLen, NDef scUSetLen NoDec Nothing),
+                            (noq primUISetLen, NDef scUISetLen NoDec Nothing),
+                            (noq primUStrLen, NDef scUStrLen NoDec Nothing),
+                            (noq primUBytesLen, NDef scUBytesLen NoDec Nothing),
+                            (noq primUBytearrayLen, NDef scUBytearrayLen NoDec Nothing),
+                            (noq primUBitsetLen, NDef scUBitsetLen NoDec Nothing),
                             (noq primUListSetItem,  NDef scUListSetItem NoDec Nothing),
                             (noq primUListDelItem,  NDef scUListDelItem NoDec Nothing),
                             (noq primUIListGetItem, NDef scUIListGetItem NoDec Nothing),
                             (noq primUStrGetItem,   NDef scUStrGetItem NoDec Nothing),
+                            (noq primUStrEq,        NDef scUStrCompare NoDec Nothing),
+                            (noq primUStrNe,        NDef scUStrCompare NoDec Nothing),
+                            (noq primUStrAdd,       NDef scUStrAdd NoDec Nothing),
                             (noq primUBytesGetItem, NDef scUBytesGetItem NoDec Nothing),
                             (noq primUBytearrayGetItem, NDef scUBytearrayGetItem NoDec Nothing),
                             (noq primUBytearraySetItem, NDef scUBytearraySetItem NoDec Nothing),
@@ -291,6 +444,131 @@ primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec Nothing)
                             (noq primUBitsetContainsNot, NDef scUBitsetContains NoDec Nothing),
                             (noq primUBitsetAdd, NDef scUBitsetMutate NoDec Nothing),
                             (noq primUBitsetDiscard, NDef scUBitsetMutate NoDec Nothing),
+                            (noq primUListGetSlice, NDef scUListGetSlice NoDec Nothing),
+                            (noq primUListIter, NDef scUListIter NoDec Nothing),
+                            (noq primUListReversed, NDef scUListReversed NoDec Nothing),
+                            (noq primUListAdd, NDef scUListAdd NoDec Nothing),
+                            (noq primUListMul, NDef scUListMul NoDec Nothing),
+                            (noq primUListZero, NDef scUListZero NoDec Nothing),
+                            (noq primUListFromIter, NDef scUListFromIter NoDec Nothing),
+                            (noq primUIListGetSlice, NDef scUIListGetSlice NoDec Nothing),
+                            (noq primUIListIter, NDef scUIListIter NoDec Nothing),
+                            (noq primUIListReversed, NDef scUIListReversed NoDec Nothing),
+                            (noq primUIListAdd, NDef scUIListAdd NoDec Nothing),
+                            (noq primUIListMul, NDef scUIListMul NoDec Nothing),
+                            (noq primUIListZero, NDef scUIListZero NoDec Nothing),
+                            (noq primUIListFromIter, NDef scUIListFromIter NoDec Nothing),
+                            (noq primUListInsert, NDef scUListInsert NoDec Nothing),
+                            (noq primUListReverse, NDef scUListReverse NoDec Nothing),
+                            (noq primUListDelSlice, NDef scUListDelSlice NoDec Nothing),
+                            (noq primUListSetSlice, NDef scUListSetSlice NoDec Nothing),
+                            (noq primUListIAdd, NDef scUListIAdd NoDec Nothing),
+                            (noq primUListIMul, NDef scUListIMul NoDec Nothing),
+                            (noq primUStrLt, NDef scUStrLt NoDec Nothing),
+                            (noq primUStrLe, NDef scUStrLe NoDec Nothing),
+                            (noq primUStrGt, NDef scUStrGt NoDec Nothing),
+                            (noq primUStrGe, NDef scUStrGe NoDec Nothing),
+                            (noq primUStrHash, NDef scUStrHash NoDec Nothing),
+                            (noq primUStrZero, NDef scUStrZero NoDec Nothing),
+                            (noq primUStrMul, NDef scUStrMul NoDec Nothing),
+                            (noq primUStrFromIter, NDef scUStrFromIter NoDec Nothing),
+                            (noq primUStrContains, NDef scUStrContains NoDec Nothing),
+                            (noq primUStrContainsnot, NDef scUStrContainsnot NoDec Nothing),
+                            (noq primUStrIter, NDef scUStrIter NoDec Nothing),
+                            (noq primUStrGetslice, NDef scUStrGetslice NoDec Nothing),
+                            (noq primUBytesEq, NDef scUBytesEq NoDec Nothing),
+                            (noq primUBytesNe, NDef scUBytesNe NoDec Nothing),
+                            (noq primUBytesLt, NDef scUBytesLt NoDec Nothing),
+                            (noq primUBytesLe, NDef scUBytesLe NoDec Nothing),
+                            (noq primUBytesGt, NDef scUBytesGt NoDec Nothing),
+                            (noq primUBytesGe, NDef scUBytesGe NoDec Nothing),
+                            (noq primUBytesContains, NDef scUBytesContains NoDec Nothing),
+                            (noq primUBytesContainsnot, NDef scUBytesContainsnot NoDec Nothing),
+                            (noq primUBytearrayEq, NDef scUBytearrayEq NoDec Nothing),
+                            (noq primUBytearrayNe, NDef scUBytearrayNe NoDec Nothing),
+                            (noq primUBytearrayLt, NDef scUBytearrayLt NoDec Nothing),
+                            (noq primUBytearrayLe, NDef scUBytearrayLe NoDec Nothing),
+                            (noq primUBytearrayGt, NDef scUBytearrayGt NoDec Nothing),
+                            (noq primUBytearrayGe, NDef scUBytearrayGe NoDec Nothing),
+                            (noq primUBytearrayContains, NDef scUBytearrayContains NoDec Nothing),
+                            (noq primUBytearrayContainsnot, NDef scUBytearrayContainsnot NoDec Nothing),
+                            (noq primUBytesHash, NDef scUBytesHash NoDec Nothing),
+                            (noq primUBytesFromIter, NDef scUBytesFromIter NoDec Nothing),
+                            (noq primUBytesIter, NDef scUBytesIter NoDec Nothing),
+                            (noq primUBytesGetslice, NDef scUBytesGetslice NoDec Nothing),
+                            (noq primUBytesAdd, NDef scUBytesAdd NoDec Nothing),
+                            (noq primUBytesZero, NDef scUBytesZero NoDec Nothing),
+                            (noq primUBytesMul, NDef scUBytesMul NoDec Nothing),
+                            (noq primUBytearrayInsert, NDef scUBytearrayInsert NoDec Nothing),
+                            (noq primUBytearrayAppend, NDef scUBytearrayAppend NoDec Nothing),
+                            (noq primUBytearrayReverse, NDef scUBytearrayReverse NoDec Nothing),
+                            (noq primUBytearrayReversed, NDef scUBytearrayReversed NoDec Nothing),
+                            (noq primUBytearrayGetslice, NDef scUBytearrayGetslice NoDec Nothing),
+                            (noq primUBytearraySetslice, NDef scUBytearraySetslice NoDec Nothing),
+                            (noq primUBytearrayDelslice, NDef scUBytearrayDelslice NoDec Nothing),
+                            (noq primUBytearrayFromIter, NDef scUBytearrayFromIter NoDec Nothing),
+                            (noq primUBytearrayIter, NDef scUBytearrayIter NoDec Nothing),
+                            (noq primUBytearrayAdd, NDef scUBytearrayAdd NoDec Nothing),
+                            (noq primUBytearrayZero, NDef scUBytearrayZero NoDec Nothing),
+                            (noq primUBytearrayMul, NDef scUBytearrayMul NoDec Nothing),
+                            (noq primUBytearrayIadd, NDef scUBytearrayIadd NoDec Nothing),
+                            (noq primUBytearrayImul, NDef scUBytearrayImul NoDec Nothing),
+                            (noq primUBigintAdd, NDef scUBigintAdd NoDec Nothing),
+                            (noq primUBigintZero, NDef scUBigintZero NoDec Nothing),
+                            (noq primUBigintComplex, NDef scUBigintComplex NoDec Nothing),
+                            (noq primUBigintFromatom, NDef scUBigintFromatom NoDec Nothing),
+                            (noq primUBigintMul, NDef scUBigintMul NoDec Nothing),
+                            (noq primUBigintPow, NDef scUBigintPow NoDec Nothing),
+                            (noq primUBigintNeg, NDef scUBigintNeg NoDec Nothing),
+                            (noq primUBigintPos, NDef scUBigintPos NoDec Nothing),
+                            (noq primUBigintReal, NDef scUBigintReal NoDec Nothing),
+                            (noq primUBigintImag, NDef scUBigintImag NoDec Nothing),
+                            (noq primUBigintAbs, NDef scUBigintAbs NoDec Nothing),
+                            (noq primUBigintConjugate, NDef scUBigintConjugate NoDec Nothing),
+                            (noq primUBigintFloat, NDef scUBigintFloat NoDec Nothing),
+                            (noq primUBigintTrunc, NDef scUBigintTrunc NoDec Nothing),
+                            (noq primUBigintFloor, NDef scUBigintFloor NoDec Nothing),
+                            (noq primUBigintCeil, NDef scUBigintCeil NoDec Nothing),
+                            (noq primUBigintRound, NDef scUBigintRound NoDec Nothing),
+                            (noq primUBigintNumerator, NDef scUBigintNumerator NoDec Nothing),
+                            (noq primUBigintDenominator, NDef scUBigintDenominator NoDec Nothing),
+                            (noq primUBigintInt, NDef scUBigintInt NoDec Nothing),
+                            (noq primUBigintIndex, NDef scUBigintIndex NoDec Nothing),
+                            (noq primUBigintDivmod, NDef scUBigintDivmod NoDec Nothing),
+                            (noq primUBigintFloordiv, NDef scUBigintFloordiv NoDec Nothing),
+                            (noq primUBigintMod, NDef scUBigintMod NoDec Nothing),
+                            (noq primUBigintLshift, NDef scUBigintLshift NoDec Nothing),
+                            (noq primUBigintRshift, NDef scUBigintRshift NoDec Nothing),
+                            (noq primUBigintInvert, NDef scUBigintInvert NoDec Nothing),
+                            (noq primUBigintAnd, NDef scUBigintAnd NoDec Nothing),
+                            (noq primUBigintOr, NDef scUBigintOr NoDec Nothing),
+                            (noq primUBigintXor, NDef scUBigintXor NoDec Nothing),
+                            (noq primUBigintSub, NDef scUBigintSub NoDec Nothing),
+                            (noq primUBigintTruediv, NDef scUBigintTruediv NoDec Nothing),
+                            (noq primUBigintEq, NDef scUBigintEq NoDec Nothing),
+                            (noq primUBigintNe, NDef scUBigintNe NoDec Nothing),
+                            (noq primUBigintLt, NDef scUBigintLt NoDec Nothing),
+                            (noq primUBigintLe, NDef scUBigintLe NoDec Nothing),
+                            (noq primUBigintGt, NDef scUBigintGt NoDec Nothing),
+                            (noq primUBigintGe, NDef scUBigintGe NoDec Nothing),
+                            (noq primUBigintHash, NDef scUBigintHash NoDec Nothing),
+                            (noq primUComplexAdd, NDef scUComplexAdd NoDec Nothing),
+                            (noq primUComplexZero, NDef scUComplexZero NoDec Nothing),
+                            (noq primUComplexComplex, NDef scUComplexComplex NoDec Nothing),
+                            (noq primUComplexMul, NDef scUComplexMul NoDec Nothing),
+                            (noq primUComplexFromatom, NDef scUComplexFromatom NoDec Nothing),
+                            (noq primUComplexPow, NDef scUComplexPow NoDec Nothing),
+                            (noq primUComplexNeg, NDef scUComplexNeg NoDec Nothing),
+                            (noq primUComplexPos, NDef scUComplexPos NoDec Nothing),
+                            (noq primUComplexReal, NDef scUComplexReal NoDec Nothing),
+                            (noq primUComplexImag, NDef scUComplexImag NoDec Nothing),
+                            (noq primUComplexAbs, NDef scUComplexAbs NoDec Nothing),
+                            (noq primUComplexConjugate, NDef scUComplexConjugate NoDec Nothing),
+                            (noq primUComplexTruediv, NDef scUComplexTruediv NoDec Nothing),
+                            (noq primUComplexSub, NDef scUComplexSub NoDec Nothing),
+                            (noq primUComplexEq, NDef scUComplexEq NoDec Nothing),
+                            (noq primUComplexNe, NDef scUComplexNe NoDec Nothing),
+                            (noq primUComplexHash, NDef scUComplexHash NoDec Nothing),
                             (noq primUNext,         NDef scUNext NoDec Nothing)
                       ]
 
@@ -636,6 +914,39 @@ scUGetItem          = tSchema [qbind a] tUGetItem
   where tUGetItem   = tFun fxPure (posRow (tList (tVar a)) (posRow tInt posNil)) kwdNil (tVar a)
         a           = TV KType $ name "A"
 
+-- Witness-free append keeps the element boxed at this polymorphic boundary.
+scUListAppend       = tSchema [qbind a] $ tFun fxMut (posRow (tList (tVar a)) (posRow (tVar a) posNil)) kwdNil tNone
+  where a           = TV KType $ name "A"
+
+-- Length workers return the existing native int representation.
+scUListLen          = tSchema [qbind a] $ tFun fxPure (posRow (tList (tVar a)) posNil) kwdNil tInt
+  where a           = TV KType $ name "A"
+
+scUIListLen         = tSchema [qbind a] $ tFun fxPure (posRow (tIList (tVar a)) posNil) kwdNil tInt
+  where a           = TV KType $ name "A"
+
+scUDictLen          = tSchema [qbind a, qbind b] $ tFun fxPure (posRow (tDict (tVar a) (tVar b)) posNil) kwdNil tInt
+  where a           = TV KType $ name "A"
+        b           = TV KType $ name "B"
+
+scUIDictLen         = tSchema [qbind a, qbind b] $ tFun fxPure (posRow (tIDict (tVar a) (tVar b)) posNil) kwdNil tInt
+  where a           = TV KType $ name "A"
+        b           = TV KType $ name "B"
+
+scUSetLen           = tSchema [qbind a] $ tFun fxPure (posRow (tSet (tVar a)) posNil) kwdNil tInt
+  where a           = TV KType $ name "A"
+
+scUISetLen          = tSchema [qbind a] $ tFun fxPure (posRow (tISet (tVar a)) posNil) kwdNil tInt
+  where a           = TV KType $ name "A"
+
+scUStrLen           = monotype $ tFun fxPure (posRow tStr posNil) kwdNil tInt
+
+scUBytesLen         = monotype $ tFun fxPure (posRow tBytes posNil) kwdNil tInt
+
+scUBytearrayLen     = monotype $ tFun fxPure (posRow tBytearray posNil) kwdNil tInt
+
+scUBitsetLen        = monotype $ tFun fxPure (posRow tBitset posNil) kwdNil tInt
+
 scUListSetItem      = tSchema [qbind a] tUListSetItem
   where tUListSetItem = tFun fxMut (posRow (tList (tVar a)) (posRow tInt (posRow (tVar a) posNil))) kwdNil tNone
         a             = TV KType $ name "A"
@@ -649,6 +960,10 @@ scUIListGetItem     = tSchema [qbind a] tUIListGetItem
         a              = TV KType $ name "A"
 
 scUStrGetItem       = monotype $ tFun fxPure (posRow tStr (posRow tInt posNil)) kwdNil tStr
+
+scUStrCompare       = monotype $ tFun fxPure (posRow tStr (posRow tStr posNil)) kwdNil tBool
+
+scUStrAdd           = monotype $ tFun fxPure (posRow tStr (posRow tStr posNil)) kwdNil tStr
 
 scUBytesGetItem     = monotype $ tFun fxPure (posRow tBytes (posRow tInt posNil)) kwdNil tInt
 
@@ -678,6 +993,167 @@ scUBitarrayLen      = monotype $ tFun fxPure (posRow tBitarray posNil) kwdNil tI
 scUBitsetContains   = monotype $ tFun fxPure (posRow tBitset (posRow tInt posNil)) kwdNil tBool
 
 scUBitsetMutate     = monotype $ tFun fxMut (posRow tBitset (posRow tInt posNil)) kwdNil tNone
+
+-- The element stays polymorphic (boxed) at Sequence worker boundaries.
+sequenceWorkerSchema cons fx args result = tSchema [qbind a] $
+    tFun fx (foldr posRow posNil (args elemT selfT)) kwdNil (result elemT selfT)
+  where a           = TV KType $ name "A"
+        elemT       = tVar a
+        selfT       = cons elemT
+
+sequenceFromIterSchema cons = tSchema [qbind a, qbind c] $
+    tFun fxPure (posRow (tCon (TC qnIterable [tVar c,tVar a])) (posRow (tVar c) posNil)) kwdNil (cons (tVar a))
+  where a           = TV KType $ name "A"
+        c           = TV KType $ name "C"
+
+scUListSetSlice     = tSchema [qbind a, qbind c] $
+    tFun fxMut (foldr posRow posNil [tList (tVar a),tCon (TC qnIterable [tVar c,tVar a]),tSlice,tVar c]) kwdNil tNone
+  where a           = TV KType $ name "A"
+        c           = TV KType $ name "C"
+
+scUListGetSlice         = sequenceWorkerSchema tList fxPure (\a s -> [s,tSlice]) (\a s -> s)
+scUListIter             = sequenceWorkerSchema tList fxPure (\a s -> [s]) (\a s -> tIterator a)
+scUListReversed         = sequenceWorkerSchema tList fxPure (\a s -> [s]) (\a s -> tIterator a)
+scUListAdd              = sequenceWorkerSchema tList fxPure (\a s -> [s,s]) (\a s -> s)
+scUListMul              = sequenceWorkerSchema tList fxPure (\a s -> [s,tInt]) (\a s -> s)
+scUListZero             = sequenceWorkerSchema tList fxPure (\a s -> []) (\a s -> s)
+scUListFromIter         = sequenceFromIterSchema tList
+scUIListGetSlice        = sequenceWorkerSchema tIList fxPure (\a s -> [s,tSlice]) (\a s -> s)
+scUIListIter            = sequenceWorkerSchema tIList fxPure (\a s -> [s]) (\a s -> tIterator a)
+scUIListReversed        = sequenceWorkerSchema tIList fxPure (\a s -> [s]) (\a s -> tIterator a)
+scUIListAdd             = sequenceWorkerSchema tIList fxPure (\a s -> [s,s]) (\a s -> s)
+scUIListMul             = sequenceWorkerSchema tIList fxPure (\a s -> [s,tInt]) (\a s -> s)
+scUIListZero            = sequenceWorkerSchema tIList fxPure (\a s -> []) (\a s -> s)
+scUIListFromIter        = sequenceFromIterSchema tIList
+scUListInsert           = sequenceWorkerSchema tList fxMut (\a s -> [s,tInt,a]) (\a s -> tNone)
+scUListReverse          = sequenceWorkerSchema tList fxMut (\a s -> [s]) (\a s -> tNone)
+scUListDelSlice         = sequenceWorkerSchema tList fxMut (\a s -> [s,tSlice]) (\a s -> tNone)
+scUListIAdd             = sequenceWorkerSchema tList fxMut (\a s -> [s,s]) (\a s -> s)
+scUListIMul             = sequenceWorkerSchema tList fxMut (\a s -> [s,tInt]) (\a s -> s)
+
+-- Monomorphic workers keep only input witnesses used by their implementations.
+scUStrLt                = monotype $ tFun fxPure (foldr posRow posNil [tStr, tStr]) kwdNil (tBool)
+scUStrLe                = monotype $ tFun fxPure (foldr posRow posNil [tStr, tStr]) kwdNil (tBool)
+scUStrGt                = monotype $ tFun fxPure (foldr posRow posNil [tStr, tStr]) kwdNil (tBool)
+scUStrGe                = monotype $ tFun fxPure (foldr posRow posNil [tStr, tStr]) kwdNil (tBool)
+scUStrHash              = monotype $ tFun fxPure (foldr posRow posNil [tStr, tCon (TC (gBuiltin (name "hasher")) [])]) kwdNil (tNone)
+scUStrZero              = monotype $ tFun fxPure (foldr posRow posNil []) kwdNil (tStr)
+scUStrMul               = monotype $ tFun fxPure (foldr posRow posNil [tStr, tInt]) kwdNil (tStr)
+scUStrFromIter          = tSchema [qbind c] $ tFun fxPure (foldr posRow posNil [tCon (TC qnIterable [tVar c,tStr]), tVar c]) kwdNil (tStr)
+  where c = TV KType $ name "C"
+scUStrContains          = monotype $ tFun fxPure (foldr posRow posNil [tStr, tStr]) kwdNil (tBool)
+scUStrContainsnot       = monotype $ tFun fxPure (foldr posRow posNil [tStr, tStr]) kwdNil (tBool)
+scUStrIter              = monotype $ tFun fxPure (foldr posRow posNil [tStr]) kwdNil (tIterator tStr)
+scUStrGetslice          = monotype $ tFun fxPure (foldr posRow posNil [tStr, tSlice]) kwdNil (tStr)
+scUBytesEq              = monotype $ tFun fxPure (foldr posRow posNil [tBytes, tBytes]) kwdNil (tBool)
+scUBytesNe              = monotype $ tFun fxPure (foldr posRow posNil [tBytes, tBytes]) kwdNil (tBool)
+scUBytesLt              = monotype $ tFun fxPure (foldr posRow posNil [tBytes, tBytes]) kwdNil (tBool)
+scUBytesLe              = monotype $ tFun fxPure (foldr posRow posNil [tBytes, tBytes]) kwdNil (tBool)
+scUBytesGt              = monotype $ tFun fxPure (foldr posRow posNil [tBytes, tBytes]) kwdNil (tBool)
+scUBytesGe              = monotype $ tFun fxPure (foldr posRow posNil [tBytes, tBytes]) kwdNil (tBool)
+scUBytesContains        = monotype $ tFun fxPure (foldr posRow posNil [tBytes, tInt]) kwdNil (tBool)
+scUBytesContainsnot     = monotype $ tFun fxPure (foldr posRow posNil [tBytes, tInt]) kwdNil (tBool)
+scUBytearrayEq          = monotype $ tFun fxPure (foldr posRow posNil [tBytearray, tBytearray]) kwdNil (tBool)
+scUBytearrayNe          = monotype $ tFun fxPure (foldr posRow posNil [tBytearray, tBytearray]) kwdNil (tBool)
+scUBytearrayLt          = monotype $ tFun fxPure (foldr posRow posNil [tBytearray, tBytearray]) kwdNil (tBool)
+scUBytearrayLe          = monotype $ tFun fxPure (foldr posRow posNil [tBytearray, tBytearray]) kwdNil (tBool)
+scUBytearrayGt          = monotype $ tFun fxPure (foldr posRow posNil [tBytearray, tBytearray]) kwdNil (tBool)
+scUBytearrayGe          = monotype $ tFun fxPure (foldr posRow posNil [tBytearray, tBytearray]) kwdNil (tBool)
+scUBytearrayContains    = monotype $ tFun fxPure (foldr posRow posNil [tBytearray, tInt]) kwdNil (tBool)
+scUBytearrayContainsnot = monotype $ tFun fxPure (foldr posRow posNil [tBytearray, tInt]) kwdNil (tBool)
+scUBytesHash            = monotype $ tFun fxPure (foldr posRow posNil [tBytes, tCon (TC (gBuiltin (name "hasher")) [])]) kwdNil (tNone)
+scUBytesFromIter        = tSchema [qbind c] $ tFun fxPure (foldr posRow posNil [tCon (TC qnIterable [tVar c,tInt]), tVar c]) kwdNil (tBytes)
+  where c = TV KType $ name "C"
+scUBytesIter            = monotype $ tFun fxPure (foldr posRow posNil [tBytes]) kwdNil (tIterator tInt)
+scUBytesGetslice        = monotype $ tFun fxPure (foldr posRow posNil [tBytes, tSlice]) kwdNil (tBytes)
+scUBytesAdd             = monotype $ tFun fxPure (foldr posRow posNil [tBytes, tBytes]) kwdNil (tBytes)
+scUBytesZero            = monotype $ tFun fxPure (foldr posRow posNil []) kwdNil (tBytes)
+scUBytesMul             = monotype $ tFun fxPure (foldr posRow posNil [tBytes, tInt]) kwdNil (tBytes)
+scUBytearrayInsert      = monotype $ tFun fxMut (foldr posRow posNil [tBytearray, tInt, tInt]) kwdNil (tNone)
+scUBytearrayAppend      = monotype $ tFun fxMut (foldr posRow posNil [tBytearray, tInt]) kwdNil (tNone)
+scUBytearrayReverse     = monotype $ tFun fxMut (foldr posRow posNil [tBytearray]) kwdNil (tNone)
+scUBytearrayReversed    = monotype $ tFun fxPure (foldr posRow posNil [tBytearray]) kwdNil (tIterator tInt)
+scUBytearrayGetslice    = monotype $ tFun fxPure (foldr posRow posNil [tBytearray, tSlice]) kwdNil (tBytearray)
+scUBytearraySetslice    = tSchema [qbind c] $ tFun fxMut (foldr posRow posNil [tBytearray, tCon (TC qnIterable [tVar c,tInt]), tSlice, tVar c]) kwdNil (tNone)
+  where c = TV KType $ name "C"
+scUBytearrayDelslice    = monotype $ tFun fxMut (foldr posRow posNil [tBytearray, tSlice]) kwdNil (tNone)
+scUBytearrayFromIter    = tSchema [qbind c] $ tFun fxPure (foldr posRow posNil [tCon (TC qnIterable [tVar c,tInt]), tVar c]) kwdNil (tBytearray)
+  where c = TV KType $ name "C"
+scUBytearrayIter        = monotype $ tFun fxPure (foldr posRow posNil [tBytearray]) kwdNil (tIterator tInt)
+scUBytearrayAdd         = monotype $ tFun fxPure (foldr posRow posNil [tBytearray, tBytearray]) kwdNil (tBytearray)
+scUBytearrayZero        = monotype $ tFun fxPure (foldr posRow posNil []) kwdNil (tBytearray)
+scUBytearrayMul         = monotype $ tFun fxPure (foldr posRow posNil [tBytearray, tInt]) kwdNil (tBytearray)
+scUBytearrayIadd        = monotype $ tFun fxMut (foldr posRow posNil [tBytearray, tBytearray]) kwdNil (tBytearray)
+scUBytearrayImul        = monotype $ tFun fxMut (foldr posRow posNil [tBytearray, tInt]) kwdNil (tBytearray)
+
+-- Bigint and complex remain boxed; only fixed native scalar results are raw.
+scUBigintAdd             = monotype $ tFun fxPure (foldr posRow posNil [tBigint, tBigint]) kwdNil (tBigint)
+scUBigintZero            = monotype $ tFun fxPure (foldr posRow posNil []) kwdNil (tBigint)
+scUBigintComplex         = monotype $ tFun fxPure (foldr posRow posNil [tBigint]) kwdNil (tComplex)
+scUBigintFromatom        = monotype $ tFun fxPure (foldr posRow posNil [tAtom]) kwdNil (tBigint)
+scUBigintMul             = monotype $ tFun fxPure (foldr posRow posNil [tBigint, tBigint]) kwdNil (tBigint)
+scUBigintPow             = monotype $ tFun fxPure (foldr posRow posNil [tBigint, tBigint]) kwdNil (tBigint)
+scUBigintNeg             = monotype $ tFun fxPure (foldr posRow posNil [tBigint]) kwdNil (tBigint)
+scUBigintPos             = monotype $ tFun fxPure (foldr posRow posNil [tBigint]) kwdNil (tBigint)
+scUBigintReal            = tSchema [qbind r] $ tFun fxPure (foldr posRow posNil [tBigint, tCon (TC qnReal [tVar r])]) kwdNil (tVar r)
+  where r = TV KType $ name "R"
+scUBigintImag            = tSchema [qbind r] $ tFun fxPure (foldr posRow posNil [tBigint, tCon (TC qnReal [tVar r])]) kwdNil (tVar r)
+  where r = TV KType $ name "R"
+scUBigintAbs             = tSchema [qbind r] $ tFun fxPure (foldr posRow posNil [tBigint, tCon (TC qnReal [tVar r])]) kwdNil (tVar r)
+  where r = TV KType $ name "R"
+scUBigintConjugate       = monotype $ tFun fxPure (foldr posRow posNil [tBigint]) kwdNil (tBigint)
+scUBigintFloat           = monotype $ tFun fxPure (foldr posRow posNil [tBigint]) kwdNil (tFloat)
+scUBigintTrunc           = tSchema [qbind r] $ tFun fxPure (foldr posRow posNil [tBigint, tCon (TC qnIntegral [tVar r])]) kwdNil (tVar r)
+  where r = TV KType $ name "R"
+scUBigintFloor           = tSchema [qbind r] $ tFun fxPure (foldr posRow posNil [tBigint, tCon (TC qnIntegral [tVar r])]) kwdNil (tVar r)
+  where r = TV KType $ name "R"
+scUBigintCeil            = tSchema [qbind r] $ tFun fxPure (foldr posRow posNil [tBigint, tCon (TC qnIntegral [tVar r])]) kwdNil (tVar r)
+  where r = TV KType $ name "R"
+scUBigintRound           = monotype $ tFun fxPure (foldr posRow posNil [tBigint, tOpt tInt]) kwdNil (tBigint)
+scUBigintNumerator       = tSchema [qbind r] $ tFun fxPure (foldr posRow posNil [tBigint, tCon (TC qnIntegral [tVar r])]) kwdNil (tVar r)
+  where r = TV KType $ name "R"
+scUBigintDenominator     = tSchema [qbind r] $ tFun fxPure (foldr posRow posNil [tBigint, tCon (TC qnIntegral [tVar r])]) kwdNil (tVar r)
+  where r = TV KType $ name "R"
+scUBigintInt             = monotype $ tFun fxPure (foldr posRow posNil [tBigint]) kwdNil (tInt)
+scUBigintIndex           = monotype $ tFun fxPure (foldr posRow posNil [tBigint]) kwdNil (tInt)
+scUBigintDivmod          = monotype $ tFun fxPure (foldr posRow posNil [tBigint, tBigint]) kwdNil (tTuple (posRow tBigint (posRow tBigint posNil)) kwdNil)
+scUBigintFloordiv        = monotype $ tFun fxPure (foldr posRow posNil [tBigint, tBigint]) kwdNil (tBigint)
+scUBigintMod             = monotype $ tFun fxPure (foldr posRow posNil [tBigint, tBigint]) kwdNil (tBigint)
+scUBigintLshift          = monotype $ tFun fxPure (foldr posRow posNil [tBigint, tInt]) kwdNil (tBigint)
+scUBigintRshift          = monotype $ tFun fxPure (foldr posRow posNil [tBigint, tInt]) kwdNil (tBigint)
+scUBigintInvert          = monotype $ tFun fxPure (foldr posRow posNil [tBigint]) kwdNil (tBigint)
+scUBigintAnd             = monotype $ tFun fxPure (foldr posRow posNil [tBigint, tBigint]) kwdNil (tBigint)
+scUBigintOr              = monotype $ tFun fxPure (foldr posRow posNil [tBigint, tBigint]) kwdNil (tBigint)
+scUBigintXor             = monotype $ tFun fxPure (foldr posRow posNil [tBigint, tBigint]) kwdNil (tBigint)
+scUBigintSub             = monotype $ tFun fxPure (foldr posRow posNil [tBigint, tBigint]) kwdNil (tBigint)
+scUBigintTruediv         = monotype $ tFun fxPure (foldr posRow posNil [tBigint, tBigint]) kwdNil (tFloat)
+scUBigintEq              = monotype $ tFun fxPure (foldr posRow posNil [tBigint, tBigint]) kwdNil (tBool)
+scUBigintNe              = monotype $ tFun fxPure (foldr posRow posNil [tBigint, tBigint]) kwdNil (tBool)
+scUBigintLt              = monotype $ tFun fxPure (foldr posRow posNil [tBigint, tBigint]) kwdNil (tBool)
+scUBigintLe              = monotype $ tFun fxPure (foldr posRow posNil [tBigint, tBigint]) kwdNil (tBool)
+scUBigintGt              = monotype $ tFun fxPure (foldr posRow posNil [tBigint, tBigint]) kwdNil (tBool)
+scUBigintGe              = monotype $ tFun fxPure (foldr posRow posNil [tBigint, tBigint]) kwdNil (tBool)
+scUBigintHash            = monotype $ tFun fxPure (foldr posRow posNil [tBigint, tCon (TC (gBuiltin (name "hasher")) [])]) kwdNil (tNone)
+scUComplexAdd            = monotype $ tFun fxPure (foldr posRow posNil [tComplex, tComplex]) kwdNil (tComplex)
+scUComplexZero           = monotype $ tFun fxPure (foldr posRow posNil []) kwdNil (tComplex)
+scUComplexComplex        = monotype $ tFun fxPure (foldr posRow posNil [tComplex]) kwdNil (tComplex)
+scUComplexMul            = monotype $ tFun fxPure (foldr posRow posNil [tComplex, tComplex]) kwdNil (tComplex)
+scUComplexFromatom       = monotype $ tFun fxPure (foldr posRow posNil [tAtom]) kwdNil (tComplex)
+scUComplexPow            = monotype $ tFun fxPure (foldr posRow posNil [tComplex, tComplex]) kwdNil (tComplex)
+scUComplexNeg            = monotype $ tFun fxPure (foldr posRow posNil [tComplex]) kwdNil (tComplex)
+scUComplexPos            = monotype $ tFun fxPure (foldr posRow posNil [tComplex]) kwdNil (tComplex)
+scUComplexReal           = tSchema [qbind r] $ tFun fxPure (foldr posRow posNil [tComplex, tCon (TC qnReal [tVar r])]) kwdNil (tVar r)
+  where r = TV KType $ name "R"
+scUComplexImag           = tSchema [qbind r] $ tFun fxPure (foldr posRow posNil [tComplex, tCon (TC qnReal [tVar r])]) kwdNil (tVar r)
+  where r = TV KType $ name "R"
+scUComplexAbs            = tSchema [qbind r] $ tFun fxPure (foldr posRow posNil [tComplex, tCon (TC qnReal [tVar r])]) kwdNil (tVar r)
+  where r = TV KType $ name "R"
+scUComplexConjugate      = monotype $ tFun fxPure (foldr posRow posNil [tComplex]) kwdNil (tComplex)
+scUComplexTruediv        = monotype $ tFun fxPure (foldr posRow posNil [tComplex, tComplex]) kwdNil (tComplex)
+scUComplexSub            = monotype $ tFun fxPure (foldr posRow posNil [tComplex, tComplex]) kwdNil (tComplex)
+scUComplexEq             = monotype $ tFun fxPure (foldr posRow posNil [tComplex, tComplex]) kwdNil (tBool)
+scUComplexNe             = monotype $ tFun fxPure (foldr posRow posNil [tComplex, tComplex]) kwdNil (tBool)
+scUComplexHash           = monotype $ tFun fxPure (foldr posRow posNil [tComplex, tCon (TC (gBuiltin (name "hasher")) [])]) kwdNil (tNone)
 
 scRaiseValueError   = tSchema [qbind a] tRaiseValErr
   where tRaiseValErr= tFun fxPure (posRow tStr posNil) kwdNil (tVar a)

@@ -1,0 +1,150 @@
+# Concrete Sequence calls discard their receiver witness, keeping input witnesses.
+mut def list_insert[A](xs: list[A], n: int, value: A) -> None:
+    xs.insert(n, value)
+
+mut def list_reverse[A](xs: list[A]) -> None:
+    xs.reverse()
+
+def list_slice[A](xs: list[A]) -> list[A]:
+    return xs[1::2]
+
+mut def list_set_slice[A](xs: list[A], src: Iterable[A]) -> None:
+    xs[1:3] = src
+
+mut def list_del_slice[A](xs: list[A]) -> None:
+    del xs[1::2]
+
+def list_iterator[A](xs: list[A]) -> Iterator[A]:
+    return iter(xs)
+
+def list_reversed[A](xs: list[A]) -> Iterator[A]:
+    return reversed(xs)
+
+def list_add[A](xs: list[A], ys: list[A]) -> list[A]:
+    return xs + ys
+
+def list_repeat[A](xs: list[A], n: int) -> list[A]:
+    return xs * n
+
+mut def list_iadd[A](xs: list[A], ys: list[A]) -> list[A]:
+    xs += ys
+    return xs
+
+mut def list_irepeat[A](xs: list[A], n: int) -> list[A]:
+    xs *= n
+    return xs
+
+def list_zero[A]() -> list[A]:
+    return Plus.__zero__()
+
+def list_from_iter[A](src: Iterable[A]) -> list[A]:
+    return Collection.__fromiter__(src)
+
+def ilist_slice[A](xs: ilist[A]) -> ilist[A]:
+    return xs[::-1]
+
+def ilist_iterator[A](xs: ilist[A]) -> Iterator[A]:
+    return iter(xs)
+
+def ilist_reversed[A](xs: ilist[A]) -> Iterator[A]:
+    return xs.__reversed__()
+
+def ilist_add[A](xs: ilist[A], ys: ilist[A]) -> ilist[A]:
+    return xs + ys
+
+def ilist_repeat[A](xs: ilist[A], n: int) -> ilist[A]:
+    return xs * n
+
+def ilist_zero[A]() -> ilist[A]:
+    return Plus.__zero__()
+
+def ilist_from_iter[A](src: Iterable[A]) -> ilist[A]:
+    return Collection.__fromiter__(src)
+
+# These loops must still use automatic iterator storage after witness removal.
+def list_total(xs: list[int]) -> int:
+    total = 0
+    for x in xs:
+        total += x
+    return total
+
+def ilist_total(xs: ilist[int]) -> int:
+    total = 0
+    for x in xs:
+        total += x
+    return total
+
+mut def generic_reverse[S(Sequence[int])](xs: S) -> None:
+    xs.reverse()
+
+def generic_slice[S(ISequence[int])](xs: S) -> S:
+    return xs[1:]
+
+class Wrapped(object):
+    values: list[int]
+    def __init__(self, values: list[int]):
+        self.values = values
+
+extension Wrapped(Iterable[int]):
+    def __iter__(self) -> Iterator[int]:
+        return iter(self.values)
+
+actor main(env):
+    xs = [0, 1, 2, 3, 4]
+    list_insert(xs, -100, -1)
+    list_insert(xs, 100, 5)
+    assert xs == [-1, 0, 1, 2, 3, 4, 5]
+    list_reverse(xs)
+    assert xs == [5, 4, 3, 2, 1, 0, -1]
+    assert list_slice(xs) == [4, 2, 0]
+    list_set_slice(xs, Wrapped([8, 9, 10]))
+    assert xs == [5, 8, 9, 10, 2, 1, 0, -1]
+    list_del_slice(xs)
+    assert xs == [5, 9, 2, 0]
+    assert list_total(xs) == 16
+    assert list(list_iterator(xs)) == xs
+    # reversed() copies before returning its iterator; mutating xs is independent.
+    rev = list_reversed(xs)
+    list_insert(xs, 0, 7)
+    assert list(rev) == [0, 2, 9, 5]
+    assert list_add([1.5], [2.5]) == [1.5, 2.5]
+    assert list_repeat([1, 2], 3) == [1, 2, 1, 2, 1, 2]
+    assert list_repeat([1], -2) == []
+    assert list_repeat([], 3) == []
+    orig = [1, 2]
+    result = list_iadd(orig, orig)
+    result.append(3)
+    assert orig == [1, 2, 1, 2, 3]
+    alias = list_irepeat(orig, 2)
+    assert alias == [1, 2, 1, 2, 3, 1, 2, 1, 2, 3]
+    list_irepeat(alias, 0)
+    assert orig == []
+    empty: list[int] = list_zero()
+    assert empty == []
+    assert list_from_iter(Wrapped([4, 5])) == [4, 5]
+    # The element remains boxed for native values and object references alike.
+    fs: list[float] = [1.5]
+    list_insert(fs, 1, 2.5)
+    assert list_slice(fs) == [2.5]
+    obj = Wrapped([7])
+    objects = [obj]
+    list_insert(objects, 1, obj)
+    assert list_slice(objects)[0].values == [7]
+    frozen = ilist([1, 2, 3])
+    assert str(ilist_slice(frozen)) == "ilist([3, 2, 1])"
+    assert list(ilist_iterator(frozen)) == [1, 2, 3]
+    assert list(ilist_reversed(frozen)) == [3, 2, 1]
+    assert list(ilist_add(frozen, ilist([4]))) == [1, 2, 3, 4]
+    assert str(ilist_repeat(frozen, 2)) == "ilist([1, 2, 3, 1, 2, 3])"
+    frozen_empty: ilist[int] = ilist_zero()
+    assert list(frozen_empty) == []
+    assert list(ilist_from_iter(Wrapped([6, 7]))) == [6, 7]
+    assert ilist_total(frozen) == 6
+    generic_reverse(xs)
+    assert xs == [0, 2, 9, 5, 7]
+    assert generic_slice(xs) == [2, 9, 5, 7]
+    assert list(generic_slice(frozen)) == [2, 3]
+    data = bytearray(b"abc")
+    generic_reverse(data)
+    assert data == bytearray(b"cba")
+    env.exit(0)

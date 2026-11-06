@@ -1,0 +1,123 @@
+# Concrete builtin operations must agree with the generic protocol path.
+def list_length[A](xs: list[A]) -> int:
+    return len(xs)
+
+def ilist_length[A](xs: ilist[A]) -> int:
+    return len(xs)
+
+def dict_length[K(Hashable), V](xs: dict[K,V]) -> int:
+    return len(xs)
+
+def idict_length[K(Hashable), V](xs: idict[K,V]) -> int:
+    return len(xs)
+
+def set_length[A(Hashable)](xs: set[A]) -> int:
+    return len(xs)
+
+def iset_length[A(Hashable)](xs: iset[A]) -> int:
+    return len(xs)
+
+def str_length(xs: str) -> int:
+    return len(xs)
+
+def bytes_length(xs: bytes) -> int:
+    return len(xs)
+
+def bytearray_length(xs: bytearray) -> int:
+    return len(xs)
+
+def bitset_length(xs: bitset) -> int:
+    return len(xs)
+
+def array_length[A(ArrayElement,Eq)](xs: array[A]) -> int:
+    return len(xs)
+
+def bitarray_length(xs: bitarray) -> int:
+    return len(xs)
+
+def generic_length[C(Collection[int])](xs: C) -> int:
+    return len(xs)
+
+mut def append_value[A](xs: list[A], x: A) -> None:
+    xs.append(x)
+
+mut def generic_append[C(Sequence[int])](xs: C, x: int) -> None:
+    xs.append(x)
+
+class Sized(object):
+    values: list[int]
+    def __init__(self, values: list[int]):
+        self.values = values
+
+extension Sized(Collection[int]):
+    @staticmethod
+    def __fromiter__(xs):
+        return Sized(list(xs))
+    def __iter__(self) -> Iterator[int]:
+        return iter(self.values)
+    def __len__(self) -> int:
+        return 100 + len(self.values)
+
+class Appender(object):
+    values: list[int]
+    def __init__(self):
+        self.values = []
+    mut def append(self, x: int) -> None:
+        self.values.append(x + 100)
+
+mut def receiver(xs: list[int], trace: list[int]) -> list[int]:
+    trace.append(1)
+    return xs
+
+mut def element(trace: list[int]) -> int:
+    trace.append(2)
+    return 7
+
+actor main(env):
+    assert list_length([]) == 0
+    xs = [1, 2, 3]
+    assert list_length(xs) == 3
+    assert ilist_length(ilist(xs)) == 3
+    d = {"one": 1, "two": 2}
+    assert dict_length(d) == 2
+    assert idict_length(idict(d.items())) == 2
+    assert set_length({1, 1, 2}) == 2
+    assert iset_length(iset([1, 1, 2])) == 2
+    # Unicode length counts characters, and an embedded NUL is a character too.
+    assert str_length("aå中🙂") == 4
+    assert str_length("a\0🙂") == 3
+    assert bytes_length(b"a\0b") == 3
+    data = bytearray(b"a\0b")
+    assert bytearray_length(data) == 3
+    data.append(4)
+    assert bytearray_length(data) == 4
+    assert bitset_length(bitset(130, [1, 64, 129])) == 3
+    assert array_length(array(5, 2)) == 5
+    assert array_length(array(7, 2.5)) == 7
+    assert bitarray_length(bitarray(65, True)) == 65
+    # Generic dispatch and a user-defined Collection must retain their behavior.
+    assert generic_length(xs) == 3
+    assert generic_length(Sized(xs)) == 103
+    app = Appender()
+    app.append(5)
+    assert app.values == [105]
+    # Append must keep its boxed element ABI for concrete and generic values.
+    ints: list[int] = []
+    floats: list[float] = []
+    objects: list[Sized] = []
+    obj = Sized([8])
+    for i in range(1000):
+        append_value(ints, i)
+        append_value(floats, float(i) + 0.5)
+        append_value(objects, obj)
+    assert len(ints) == 1000 and ints[999] == 999
+    assert len(floats) == 1000 and floats[999] == 999.5
+    assert len(objects) == 1000 and objects[999].values == [8]
+    generic_append(ints, 1000)
+    assert len(ints) == 1001 and ints[1000] == 1000
+    trace: list[int] = []
+    receiver(ints, trace).append(element(trace))
+    assert trace == [1, 2] and ints[-1] == 7
+    assert len(receiver(ints, trace)) == 1002
+    assert trace == [1, 2, 1]
+    env.exit(0)

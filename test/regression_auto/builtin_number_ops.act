@@ -1,0 +1,310 @@
+# Native bigint/complex methods keep their boxed values and required result witnesses.
+
+def bigint_add(a: bigint, b: bigint) -> bigint:
+    return a + b
+
+def bigint_zero() -> bigint:
+    return Plus.__zero__()
+
+def bigint_complex(a: bigint) -> complex:
+    return a.__complex__()
+
+def bigint_fromatom(a: atom) -> bigint:
+    return Number.__fromatom__(a)
+
+def bigint_mul(a: bigint, b: bigint) -> bigint:
+    return a * b
+
+def bigint_pow(a: bigint, b: bigint) -> bigint:
+    return a ** b
+
+def bigint_neg(a: bigint) -> bigint:
+    return -a
+
+def bigint_pos(a: bigint) -> bigint:
+    return +a
+
+def bigint_real(a: bigint) -> float:
+    return a.real()
+
+def bigint_imag(a: bigint) -> float:
+    return a.imag()
+
+def bigint_abs(a: bigint) -> float:
+    return abs(a)
+
+def bigint_conjugate(a: bigint) -> bigint:
+    return a.conjugate()
+
+def bigint_float(n: bigint) -> float:
+    return n.__float__()
+
+def bigint_trunc(n: bigint) -> int:
+    return n.__trunc__()
+
+def bigint_floor(n: bigint) -> int:
+    return n.__floor__()
+
+def bigint_ceil(n: bigint) -> int:
+    return n.__ceil__()
+
+def bigint_round(n: bigint, p: ?int) -> bigint:
+    return round(n, p)
+
+def bigint_numerator(n: bigint) -> int:
+    return n.numerator()
+
+def bigint_denominator(n: bigint) -> int:
+    return n.denominator()
+
+def bigint_int(n: bigint) -> int:
+    return n.__int__()
+
+def bigint_index(n: bigint) -> int:
+    return n.__index__()
+
+def bigint_divmod(a: bigint, b: bigint) -> (bigint,bigint):
+    return divmod(a, b)
+
+def bigint_floordiv(a: bigint, b: bigint) -> bigint:
+    return a // b
+
+def bigint_mod(a: bigint, b: bigint) -> bigint:
+    return a % b
+
+def bigint_lshift(a: bigint, b: int) -> bigint:
+    return a << b
+
+def bigint_rshift(a: bigint, b: int) -> bigint:
+    return a >> b
+
+def bigint_invert(a: bigint) -> bigint:
+    return ~a
+
+def bigint_and(a: bigint, b: bigint) -> bigint:
+    return a & b
+
+def bigint_or(a: bigint, b: bigint) -> bigint:
+    return a | b
+
+def bigint_xor(a: bigint, b: bigint) -> bigint:
+    return a ^ b
+
+def bigint_sub(a: bigint, b: bigint) -> bigint:
+    return a - b
+
+def bigint_truediv(a: bigint, b: bigint) -> float:
+    return a / b
+
+def bigint_eq(a: bigint, b: bigint) -> bool:
+    return a == b
+
+def bigint_ne(a: bigint, b: bigint) -> bool:
+    return a != b
+
+def bigint_lt(a: bigint, b: bigint) -> bool:
+    return a < b
+
+def bigint_le(a: bigint, b: bigint) -> bool:
+    return a <= b
+
+def bigint_gt(a: bigint, b: bigint) -> bool:
+    return a > b
+
+def bigint_ge(a: bigint, b: bigint) -> bool:
+    return a >= b
+
+def bigint_hash(a: bigint, h: hasher) -> None:
+    a.hash(h)
+
+def complex_add(a: complex, b: complex) -> complex:
+    return a + b
+
+def complex_zero() -> complex:
+    return Plus.__zero__()
+
+def complex_complex(c: complex) -> complex:
+    return c.__complex__()
+
+def complex_mul(a: complex, b: complex) -> complex:
+    return a * b
+
+def complex_fromatom(a: atom) -> complex:
+    return Number.__fromatom__(a)
+
+def complex_pow(a: complex, b: complex) -> complex:
+    return a ** b
+
+def complex_neg(c: complex) -> complex:
+    return -c
+
+def complex_pos(c: complex) -> complex:
+    return +c
+
+def complex_real(c: complex) -> float:
+    return c.real()
+
+def complex_imag(c: complex) -> float:
+    return c.imag()
+
+def complex_abs(c: complex) -> float:
+    return abs(c)
+
+def complex_conjugate(c: complex) -> complex:
+    return c.conjugate()
+
+def complex_truediv(a: complex, b: complex) -> complex:
+    return a / b
+
+def complex_sub(a: complex, b: complex) -> complex:
+    return a - b
+
+def complex_eq(a: complex, b: complex) -> bool:
+    return a == b
+
+def complex_ne(a: complex, b: complex) -> bool:
+    return a != b
+
+def complex_hash(a: complex, h: hasher) -> None:
+    a.hash(h)
+
+def generic_add[A(Plus)](a: A, b: A) -> A:
+    return a + b
+
+def generic_le[A(Ord)](a: A, b: A) -> bool:
+    return a <= b
+
+def generic_real[R(Real)](x: complex) -> R:
+    return x.real()
+
+def generic_trunc[R(Integral)](x: bigint) -> R:
+    return x.__trunc__()
+
+mut def marked(x: bigint, trace: list[int], tag: int) -> bigint:
+    trace.append(tag)
+    return x
+
+actor main(env):
+    n = bigint("123456789012345678901234567890")
+    m = bigint("987654321098765432109876543210")
+    assert bigint_add(n, m) == bigint("1111111110111111111011111111100")
+    assert bigint_sub(m, n) == bigint("864197532086419753208641975320")
+    assert bigint_mul(bigint(1234567), bigint(7654321)) == bigint("9449772114007")
+    assert bigint_pow(bigint(2), bigint(100)) == bigint("1267650600228229401496703205376")
+    assert bigint_neg(n) == -n and bigint_pos(n) == n
+    assert bigint_zero() == bigint(0)
+    assert bigint_fromatom(123) == bigint(123)
+    assert bigint_eq(n, bigint(str(n))) and not bigint_ne(n, n)
+    assert bigint_lt(n, m) and bigint_le(n, n)
+    assert bigint_gt(m, n) and bigint_ge(n, n)
+    assert bigint_and(bigint(12), bigint(10)) == bigint(8)
+    assert bigint_or(bigint(12), bigint(10)) == bigint(14)
+    assert bigint_xor(bigint(12), bigint(10)) == bigint(6)
+    assert bigint_invert(bigint(7)) == bigint(-8)
+    assert bigint_lshift(bigint(1), 100) == bigint_pow(bigint(2), bigint(100))
+    assert bigint_rshift(bigint_pow(bigint(2), bigint(100)), 97) == bigint(8)
+    assert bigint_floordiv(bigint(100), bigint(7)) == bigint(14)
+    assert bigint_mod(bigint(100), bigint(7)) == bigint(2)
+    q, r = bigint_divmod(bigint(100), bigint(7))
+    assert q == bigint(14) and r == bigint(2)
+    assert bigint_truediv(bigint(7), bigint(2)) == 3.5
+    assert bigint_float(bigint(7)) == 7.0
+    assert bigint_int(bigint(-7)) == -7 and bigint_index(bigint(7)) == 7
+    assert bigint_round(bigint(12345), -2) == bigint(12300)
+    assert bigint_round(bigint(-12345), -2) == bigint(-12300)
+    assert bigint_abs(bigint(-7)) == 7.0
+    assert bigint_trunc(bigint(7)) == 7
+    assert bigint_floor(bigint(7)) == 7 and bigint_ceil(bigint(7)) == 7
+    assert bigint_numerator(bigint(7)) == 7 and bigint_denominator(bigint(7)) == 1
+    assert bigint_conjugate(n) == n
+    h = hasher()
+    bigint_hash(n, h)
+    assert h.finalize() == hash(n)
+    try:
+        bigint_complex(n)
+        assert False
+    except NotImplementedError:
+        pass
+    try:
+        bigint_real(n)
+        assert False
+    except NotImplementedError:
+        pass
+    try:
+        bigint_imag(n)
+        assert False
+    except NotImplementedError:
+        pass
+    try:
+        bigint_int(n)
+        assert False
+    except ValueError:
+        pass
+    try:
+        bigint_floordiv(n, bigint(0))
+        assert False
+    except ZeroDivisionError:
+        pass
+    try:
+        bigint_truediv(n, bigint(0))
+        assert False
+    except ZeroDivisionError:
+        pass
+    try:
+        bigint_lshift(bigint(1), -1)
+        assert False
+    except ValueError:
+        pass
+    try:
+        bigint_pow(bigint(2), bigint(-1))
+        assert False
+    except ValueError:
+        pass
+    a = complex.from_real_imag(3.0, 4.0)
+    b = complex.from_real_imag(1.0, -2.0)
+    assert complex_add(a, b) == complex.from_real_imag(4.0, 2.0)
+    assert complex_sub(a, b) == complex.from_real_imag(2.0, 6.0)
+    assert complex_mul(a, b) == complex.from_real_imag(11.0, -2.0)
+    assert complex_neg(a) == complex.from_real_imag(-3.0, -4.0)
+    assert complex_pos(a) == a and complex_complex(a) == a
+    assert complex_zero() == complex.from_real_imag(0.0, 0.0)
+    assert complex_eq(a, a) and complex_ne(a, b)
+    assert complex_real(a) == 3.0 and complex_imag(a) == 4.0
+    assert complex_abs(a) == 5.0
+    assert complex_conjugate(a) == complex.from_real_imag(3.0, -4.0)
+    z = complex_truediv(a, complex.from_real_imag(2.0, 0.0))
+    assert complex_real(z) == 1.5 and complex_imag(z) == 2.0
+    p = complex_pow(complex.from_real_imag(2.0, 0.0), complex.from_real_imag(3.0, 0.0))
+    assert abs(complex_real(p) - 8.0) < 1e-10
+    assert abs(complex_imag(p)) < 1e-10
+    try:
+        complex_truediv(a, complex_zero())
+        assert False
+    except ZeroDivisionError:
+        pass
+    try:
+        complex_fromatom(1)
+        assert False
+    except NotImplementedError:
+        pass
+    nan = float("nan")
+    nc = complex.from_real_imag(nan, 0.0)
+    assert not complex_eq(nc, nc) and complex_ne(nc, nc)
+    pz = complex.from_real_imag(0.0, 0.0)
+    nz = complex.from_real_imag(float("-0.0"), float("-0.0"))
+    assert complex_eq(pz, nz)
+    h = hasher()
+    complex_hash(nz, h)
+    assert h.finalize() == hash(pz)
+    assert generic_add(n, bigint(1)) == n + bigint(1)
+    assert generic_add(a, b) == complex_add(a, b)
+    assert generic_le(n, m)
+    real: float = generic_real(a)
+    trunc: bigint = generic_trunc(n)
+    assert real == 3.0 and trunc == n
+    trace: list[int] = []
+    value = marked(bigint(1), trace, 1) + marked(bigint(2), trace, 2)
+    assert value == bigint(3) and trace == [1, 2]
+    boxed = [bigint_truediv(bigint(7), bigint(2)), bigint_float(bigint(2))]
+    assert boxed == [3.5, 2.0]
+    env.exit(0)
