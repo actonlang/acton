@@ -60,6 +60,9 @@ already exists.
 
 ## Removing entries
 
+`del counts[key]` removes the key if it exists. If the key is missing,
+it does nothing, so there is no need to check membership before deleting.
+
 ```python
 counts = {"apples": 2, "bananas": 4, "pears": 1}
 
