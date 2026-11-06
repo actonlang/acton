@@ -1,0 +1,320 @@
+import logging
+import net
+import std.syslog as syslog
+import testing
+import time
+
+
+class TextFormatter(logging.Formatter):
+    def format(self, m: logging.Message) -> ?str:
+        return m.msg
+
+
+class LogMessage(logging.Message):
+    def __init__(self, msg: ?str="hello", data: ?dict[str, ?value]=None,
+                 level: int=logging.INFO, timezone: ?time.Timezone=time.Timezone("UTC", 0),
+                 path: list[str]=["app", "worker"], name: ?str="worker"):
+        self.ts = time.DateTime(None, timezone, None, None, 2003, 10, 11,
+                                22, 14, 15, 123456789123456789, 6, 284)
+        self.actor_class = "example.Worker"
+        self.actor_id = -17
+        self.level = level
+        self.path = path
+        self.name = name
+        self.msg = msg
+        self.data = data
+
+
+actor _test_SyslogLoggingSinkLevels(t: testing.AsyncT):
+    levels = [logging.EMERGENCY, logging.ALERT, logging.CRITICAL, logging.ERR,
+              logging.WARNING, logging.INFO, logging.NOTICE, logging.DEBUG,
+              logging.VERBOSE, logging.TRACE]
+    severities = [syslog.EMERGENCY, syslog.ALERT, syslog.CRITICAL, syslog.ERROR,
+                  syslog.WARNING, syslog.INFO, syslog.NOTICE, syslog.DEBUG,
+                  syslog.DEBUG, syslog.DEBUG]
+    var count = 0
+    var done = False
+
+    def received(m: syslog.Message):
+        if done:
+            return
+        try:
+            testing.assertTrue(count < len(severities))
+            testing.assertEqual(m.severity, severities[count])
+            testing.assertEqual(m.facility, syslog.LOCAL3)
+            testing.assertEqual(m.timestamp, "2003-10-11T22:14:15.123456Z")
+            testing.assertEqual(m.hostname, "host.example.com")
+            testing.assertEqual(m.app_name, "application")
+            testing.assertEqual(m.procid, "42")
+            testing.assertEqual(m.msgid, "event")
+            testing.assertEqual(m.message, b"\xef\xbb\xbfhello")
+            testing.assertEqual(len(m.structured_data), 0)
+            testing.assertEqual(syslog.decode(syslog.encode(m)).severity, severities[count])
+            count += 1
+            if count == len(severities):
+                done = True
+                t.success()
+        except AssertionError as error:
+            done = True
+            t.failure(error)
+        except Exception as error:
+            done = True
+            t.error(error)
+
+    sink = syslog.Sink(received, facility=syslog.LOCAL3, hostname="host.example.com",
+                       app_name="application", procid="42", msgid="event")
+    sink.set_formatter(TextFormatter())
+    for level in levels:
+        sink.handle(LogMessage(level=level))
+
+
+actor _test_SyslogLoggingSinkFormatting(t: testing.AsyncT):
+    expected = [
+        "\ufeff2003-10-11T22:14:15.123456789Z INFO   app>worker: example.Worker[-17]: café 🫡 - {{'answer':42, 'missing':None}}".encode(),
+        b"\xef\xbb\xbf2003-10-11T22:14:15.123456789Z INFO   app>worker: example.Worker[-17]:  - {'answer':42}",
+        b"\xef\xbb\xbf2003-10-11T22:14:15.123456789Z INFO   app>worker: example.Worker[-17]: ",
+        b"\xef\xbb\xbfcustom - {'answer':42}",
+        b"\xef\xbb\xbfafter suppression",
+    ]
+    var count = 0
+    var done = False
+
+    def received(m: syslog.Message):
+        if done:
+            return
+        try:
+            testing.assertTrue(count < len(expected))
+            testing.assertEqual(m.message, expected[count])
+            testing.assertEqual(m.facility, syslog.USER)
+            testing.assertEqual(m.hostname, None)
+            testing.assertEqual(m.app_name, "app")
+            testing.assertEqual(m.procid, None)
+            testing.assertEqual(m.msgid, None)
+            testing.assertEqual(syslog.decode(syslog.encode(m)).message, expected[count])
+            count += 1
+            if count == len(expected):
+                done = True
+                t.success()
+        except AssertionError as error:
+            done = True
+            t.failure(error)
+        except Exception as error:
+            done = True
+            t.error(error)
+
+    sink = syslog.Sink(received)
+    sink.handle(LogMessage("café 🫡", {"answer": 42, "missing": None}))
+    sink.handle(LogMessage(None, {"answer": 42}))
+    sink.handle(LogMessage(""))
+    # The default formatter suppresses messages without either text or data.
+    sink.handle(LogMessage(None))
+    sink.set_formatter(TextFormatter())
+    sink.handle(LogMessage("custom", {"answer": 42}))
+    # A custom formatter can suppress even a message that has structured data.
+    sink.handle(LogMessage(None, {"answer": 42}))
+    sink.handle(LogMessage("after suppression"))
+
+
+actor _test_SyslogLoggingSinkAppNames(t: testing.AsyncT):
+    cases: list[(path: list[str], name: ?str, app_name: ?str, expected: ?str)] = [
+        (["service", "http", "worker"], "worker", None, "service"),
+        (["service", "http"], None, None, "service"),
+        (["service", "service"], "service", None, "service"),
+        (["service", ""], "", None, "service"),
+        (["worker"], "worker", None, None),
+        ([""], "", None, None),
+        ([], None, None, None),
+        (["service", "http", "worker"], "worker", "explicit", "explicit"),
+        ([], None, "explicit", "explicit"),
+        (["My App", "worker"], "worker", None, None),
+        (["My App", "worker"], "worker", "explicit", "explicit"),
+        (["café", "worker"], "worker", None, None),
+        (["a" * 48, "worker"], "worker", None, "a" * 48),
+        (["a" * 49, "worker"], "worker", None, None),
+        (["", "worker"], "worker", None, None),
+    ]
+    var count = 0
+    var done = False
+
+    def received(m: syslog.Message):
+        if done:
+            return
+        try:
+            testing.assertTrue(count < len(cases))
+            expected = cases[count].expected
+            testing.assertEqual(m.app_name, expected)
+            testing.assertEqual(syslog.decode(syslog.encode(m)).app_name, expected)
+            count += 1
+            if count == len(cases):
+                done = True
+                t.success()
+        except AssertionError as error:
+            done = True
+            t.failure(error)
+        except Exception as error:
+            done = True
+            t.error(error)
+
+    for case in cases:
+        sink = syslog.Sink(received, app_name=case.app_name)
+        sink.set_formatter(TextFormatter())
+        sink.handle(LogMessage(path=case.path, name=case.name))
+
+
+actor _test_SyslogLoggingSinkTimestamps(t: testing.AsyncT):
+    offsets: list[?int] = [0, 3600, -3600, 19800, -19800, None]
+    expected: list[?str] = [
+        "2003-10-11T22:14:15.123456Z",
+        "2003-10-11T22:14:15.123456+01:00",
+        "2003-10-11T22:14:15.123456-01:00",
+        "2003-10-11T22:14:15.123456+05:30",
+        "2003-10-11T22:14:15.123456-05:30",
+        None,
+    ]
+    var count = 0
+    var done = False
+
+    def received(m: syslog.Message):
+        if done:
+            return
+        try:
+            testing.assertTrue(count < len(expected))
+            testing.assertEqual(m.timestamp, expected[count])
+            testing.assertEqual(syslog.decode(syslog.encode(m)).timestamp, expected[count])
+            count += 1
+            if count == len(expected):
+                done = True
+                t.success()
+        except AssertionError as error:
+            done = True
+            t.failure(error)
+        except Exception as error:
+            done = True
+            t.error(error)
+
+    sink = syslog.Sink(received)
+    sink.set_formatter(TextFormatter())
+    for offset in offsets:
+        tz: ?time.Timezone = None
+        if offset is not None:
+            tz = time.Timezone("test", offset)
+        sink.handle(LogMessage(timezone=tz))
+
+
+actor logging_sink_network(t: testing.EnvT, stream: bool):
+    cap = net.NetCap(t.env.cap)
+    var close_server: ?action() -> None = None
+    var close_client: ?action() -> None = None
+    var done = False
+
+    def close():
+        if close_client is not None:
+            close_client()
+        if close_server is not None:
+            close_server()
+
+    def fail(error: str):
+        if not done:
+            done = True
+            close()
+            t.failure(AssertionError(error))
+
+    def log(send: action(syslog.Message) -> None):
+        root = logging.Handler("service")
+        root.add_sink(syslog.Sink(send, facility=syslog.LOCAL0,
+                                 hostname="localhost"))
+        child = logging.Handler("worker")
+        child.set_handler(root)
+        logger = logging.Logger(child)
+        logger.name = "instance"
+        # Exercise the client's startup queue through Logger and Handler.
+        logger.info("Application started", {"answer": 42})
+
+    def received(m: syslog.Message):
+        if done:
+            return
+        try:
+            testing.assertEqual(m.facility, syslog.LOCAL0)
+            testing.assertEqual(m.severity, syslog.INFO)
+            testing.assertEqual(m.hostname, "localhost")
+            testing.assertEqual(m.app_name, "service")
+            testing.assertTrue(m.timestamp is not None)
+            body = m.message
+            testing.assertTrue(body is not None)
+            if body is not None:
+                testing.assertTrue(body.startswith(b"\xef\xbb\xbf"))
+                testing.assertTrue(body.find(b"service>worker>instance: ") != -1)
+                testing.assertTrue(body.endswith(b"Application started - {'answer':42}"))
+            done = True
+            close()
+            t.success()
+        except AssertionError as error:
+            fail(error.error_message)
+
+    def udp_connected(c: syslog.Client):
+        if done:
+            c.close()
+
+    def udp_failed(c: syslog.Client, error: str):
+        fail("Syslog UDP client failed: " + error)
+
+    def udp_received(s: syslog.Server, m: syslog.Message, peer: str, port: int):
+        received(m)
+
+    def udp_server_failed(s: syslog.Server, error: str):
+        fail("Syslog UDP server failed: " + error)
+
+    def udp_bound(s: syslog.Server, error: ?str):
+        if done:
+            s.close()
+            return
+        if error is not None:
+            fail("Syslog UDP listen failed: " + error)
+            return
+        c = syslog.Client(net.UDPConnectCap(net.UDPCap(cap)), "127.0.0.1",
+                          s.local_port(), udp_connected, udp_failed)
+        close_client = c.close
+        log(c.send)
+
+    def tcp_connected(c: syslog.StreamClient):
+        if done:
+            c.close()
+
+    def tcp_failed(c: syslog.StreamClient, error: str):
+        fail("Syslog TCP client failed: " + error)
+
+    def tcp_received(s: syslog.StreamServer, m: syslog.Message, peer: str, port: int):
+        received(m)
+
+    def tcp_server_failed(s: syslog.StreamServer, error: str):
+        fail("Syslog TCP server failed: " + error)
+
+    def tcp_bound(s: syslog.StreamServer, error: ?str):
+        if done:
+            s.close()
+            return
+        if error is not None:
+            fail("Syslog TCP listen failed: " + error)
+            return
+        c = syslog.StreamClient(net.TCPConnectCap(net.TCPCap(cap)), "127.0.0.1",
+                                s.local_port(), tcp_connected, tcp_failed)
+        close_client = c.close
+        log(c.send)
+
+    if stream:
+        tcp_server = syslog.StreamServer(net.TCPListenCap(net.TCPCap(cap)), "127.0.0.1",
+                                         0, tcp_bound, tcp_received, tcp_server_failed)
+        close_server = tcp_server.close
+    else:
+        udp_server = syslog.Server(net.UDPListenCap(net.UDPCap(cap)), "127.0.0.1",
+                                   0, udp_bound, udp_received, udp_server_failed)
+        close_server = udp_server.close
+    after 5: fail("Logging sink network test timed out")
+
+
+actor _test_SyslogLoggingSinkUDP(t: testing.EnvT):
+    logging_sink_network(t, False)
+
+
+actor _test_SyslogLoggingSinkTCP(t: testing.EnvT):
+    logging_sink_network(t, True)

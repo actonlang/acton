@@ -12,6 +12,7 @@ are preserved. Encoding validates fields and escapes parameter values.
 Malformed input raises `ValueError`. The codec has no transport size limit.
 """
 
+import logging
 import net
 import time
 
@@ -129,6 +130,77 @@ def timestamp() -> str:
     """Return the current UTC time with RFC 5424 microsecond precision."""
     dt = time.utcnow()
     return "{dt.year:04d}-{dt.month:02d}-{dt.day:02d}T{dt.hour:02d}:{dt.minute:02d}:{dt.second:02d}.{dt.attosecond // 10**12:06d}Z"
+
+
+_logging_severities = {
+    logging.EMERGENCY: EMERGENCY,
+    logging.ALERT: ALERT,
+    logging.CRITICAL: CRITICAL,
+    logging.ERR: ERROR,
+    logging.WARNING: WARNING,
+    logging.NOTICE: NOTICE,
+    logging.INFO: INFO,
+    logging.DEBUG: DEBUG,
+    logging.VERBOSE: DEBUG,
+    logging.TRACE: DEBUG,
+}
+
+
+class Sink(logging.Sink):
+    """Forward application logs through Client.send or StreamClient.send.
+
+    The client owns the transport, startup queue and error callbacks. Closing
+    it also stops this sink's output. The sink uses logging.DefaultFormatter;
+    set_formatter() can replace it or suppress messages by returning None.
+    Log data is appended to the body, as with logging's console sinks.
+    APP-NAME defaults to the outermost named handler in the record's path.
+    Logger names are excluded; unrepresentable handler names use NILVALUE.
+    """
+    @property
+    _send: action(Message) -> None
+    facility: int
+    hostname: ?str
+    app_name: ?str
+    procid: ?str
+    msgid: ?str
+
+    def __init__(self, send: action(Message) -> None, facility: int=USER,
+                 hostname: ?str=None, app_name: ?str=None,
+                 procid: ?str=None, msgid: ?str=None):
+        self.formatter = logging.DefaultFormatter()
+        self._send = send
+        self.facility = facility
+        self.hostname = hostname
+        self.app_name = app_name
+        self.procid = procid
+        self.msgid = msgid
+
+    proc def handle(self, m: logging.Message):
+        text = self.formatter.format(m)
+        if text is not None:
+            data = m.data
+            if data is not None:
+                text += " - " + str(data)
+            app_name = self.app_name
+            if app_name is None and len(m.path) > (1 if m.name is not None else 0):
+                candidate = m.path[0]
+                try:
+                    check_ascii(candidate, 48, "APP-NAME")
+                    app_name = candidate
+                except ValueError:
+                    pass
+            dt = m.ts
+            tz = dt.timezone
+            ts: ?str = None
+            if tz is not None:
+                offset = abs(tz.offset)
+                sign = "+" if tz.offset >= 0 else "-"
+                suffix = "Z" if offset == 0 else "{sign}{offset // 3600:02d}:{(offset % 3600) // 60:02d}"
+                ts = "{dt.year:04d}-{dt.month:02d}-{dt.day:02d}T{dt.hour:02d}:{dt.minute:02d}:{dt.second:02d}.{dt.attosecond // 10**12:06d}{suffix}"
+            self._send(Message(b"\xef\xbb\xbf" + text.encode(), facility=self.facility,
+                               severity=_logging_severities[m.level], timestamp=ts,
+                               hostname=self.hostname, app_name=app_name,
+                               procid=self.procid, msgid=self.msgid))
 
 
 def check_ascii(text: str, limit: int, field: str, sd_name: bool=False) -> None:
