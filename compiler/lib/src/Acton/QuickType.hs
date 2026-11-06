@@ -199,7 +199,11 @@ instance QType Expr where
                                         TCon _ (TC c [t]) | c == qnMsg -> (t, fxProc, Await l e')
       where (t, fx, e')             = qType env f e
     qType env f e@(BinOp l e1 op e2)
-       | isUnboxedExpr e            = (t, fx, BinOp l e1' op e2')
+       -- Boxing has already selected the raw operator and its representation.
+       -- In particular, a shift has the left operand's type even when its
+       -- count is an int; joining u64 and int here would produce atom and
+       -- insert pointer casts when this expression is used in another call.
+       | isUnboxedExpr e            = (t1, fx, BinOp l e1' op e2')
        | otherwise                  = (t, fx, BinOp l (qMatch f t1 t e1') op (qMatch f t2 t e2'))
       where (t1, fx1, e1')          = qType env f e1
             (t2, fx2, e2')          = qType env f e2

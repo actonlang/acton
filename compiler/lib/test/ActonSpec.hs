@@ -24,6 +24,7 @@ import qualified Acton.Deactorizer
 import qualified Acton.CPS
 import qualified Acton.LambdaLifter
 import qualified Acton.Boxing
+import qualified Acton.QuickType as QuickType
 import qualified Acton.CodeGen
 import qualified Acton.Diagnostics as Diag
 import qualified Acton.Compile as Compile
@@ -228,6 +229,25 @@ main = do
   env0 <- Acton.Env.initEnv sysTypesPath False
 
   sydTest $ do
+    describe "Raw operator result types" $ do
+      let raw t n = S.UnBox t (S.eInt n)
+          shifted t op = S.BinOp NoLoc (raw t 16) op (raw Builtin.tInt 1)
+      forM_ [("u64", Builtin.tU64), ("u8", Builtin.tU8), ("i32", Builtin.tI32)] $ \(label, t) ->
+        forM_ [S.ShiftL, S.ShiftR] $ \op ->
+          it ("preserves " ++ label ++ " through " ++ show op ++ " with an int count") $
+            QuickType.typeOf env0 (shifted t op) `shouldBe` t
+      it "keeps a nested raw shift and mask free of atom casts" $ do
+        let t = Builtin.tU64
+            expr = S.BinOp NoLoc (S.Paren NoLoc (shifted t S.ShiftR)) S.BAnd
+                     (S.Box t (raw t 255))
+            (result, _, rewritten) = QuickType.qType env0 Acton.CodeGen.adjust expr
+        result `shouldBe` t
+        -- Source-level Expr equality does not compare Box/UnBox nodes.
+        show rewritten `shouldBe` show expr
+      it "still joins the types of boxed logical operands" $
+        QuickType.typeOf env0 (S.BinOp NoLoc (S.eInt 1) S.Or (S.Float NoLoc 2 "2.0"))
+          `shouldBe` Builtin.tAtom
+
     describe "Local witness sharing" $ do
       let w i = S.Internal S.Witness "test" i
           dep i = S.eVar (w i)
