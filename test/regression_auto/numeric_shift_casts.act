@@ -1,0 +1,52 @@
+# Raw shifts keep the value type even when their count is an int.
+# In particular, a nested shift must not turn a u64 mask into an atom cast.
+
+def extract(v: u64, i: int) -> int:
+    return int((v >> (8 * i)) & u64(0xff))
+
+def constant_extract(v: u64) -> int:
+    return int((v >> 8) & u64(0xff))
+
+def shifted_mask(v: u64, i: int) -> u64:
+    return (v >> i) & u64(0xff)
+
+def swapped_mask(v: u64, i: int) -> u64:
+    return u64(0xff) & (v >> i)
+
+def shifted_add(v: u64, i: int) -> u64:
+    return (v >> i) + u64(1)
+
+def shifted_less(v: u64, i: int) -> bool:
+    return (v >> i) < u64(0x100)
+
+def shifted_float(v: u64, i: int) -> float:
+    return float((v >> i) & u64(0xff))
+
+def left_shifted_mask(v: u64, i: int) -> u64:
+    return (v << i) & u64(0xffff)
+
+def small_shift(v: u8, i: int) -> u8:
+    return (v >> i) & u8(0xf)
+
+def signed_shift(v: i32, i: int) -> i32:
+    return (v << i) | i32(2)
+
+actor main(env):
+    v = u64(0x1234567812345678)
+    assert constant_extract(v) == 0x56
+    assert extract(v, 0) == 0x78
+    assert extract(v, 3) == 0x12
+    assert extract(v, 7) == 0x12
+    assert extract(u64(0xffffffffffffffff), 7) == 255
+    assert shifted_mask(v, 8) == u64(0x56)
+    assert swapped_mask(v, 8) == u64(0x56)
+    assert shifted_add(u64(0x100), 8) == u64(2)
+    assert shifted_less(u64(0x100), 8)
+    assert not shifted_less(u64(0x10000), 8)
+    assert shifted_float(v, 8) == 86.0
+    assert left_shifted_mask(u64(0x1234), 8) == u64(0x3400)
+    assert small_shift(u8(0xd6), 4) == u8(0xd)
+    assert signed_shift(i32(1), 8) == i32(258)
+    boxed = [shifted_mask(v, 8), swapped_mask(v, 8)]
+    assert boxed == [u64(0x56), u64(0x56)]
+    env.exit(0)
