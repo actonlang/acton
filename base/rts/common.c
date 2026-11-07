@@ -60,16 +60,18 @@ static void *uv_gc_calloc(size_t count, size_t size) {
     return GC_malloc_uncollectable(count * size);
 }
 
-// The collector's dirty bits, set by acton_init_write_barrier(). The RTS
-// calls it right after GC_INIT, before it allocates a GC object, starts a
-// thread or initializes a module, so no barrier runs while this is NULL.
+// The collector's dirty bits in incremental mode, set by
+// acton_init_write_barrier(). The RTS calls it right after GC_INIT, before it
+// allocates a GC object, starts a thread or initializes a module, so no
+// barrier runs before it. NULL in ordinary mode.
 volatile uintptr_t *acton_gc_dirty_bits = NULL;
 
 // Called after GC_INIT, before any thread but the main one runs. The
-// collector's table is at the same address for the life of the process. Its
-// bits are read only in the manual dirty-bit mode, which the collector
-// chooses in GC_INIT; in ordinary mode the barrier sets bits that nothing
-// reads.
+// collector's table is at the same address for the life of the process. The
+// collector reads the bits only in incremental mode, which GC_INIT chooses
+// (the generational mode of the RTS, or GC_ENABLE_INCREMENTAL set by hand),
+// and nothing changes the mode afterwards. In ordinary mode the barrier gets
+// no table and sets no bits.
 void acton_init_write_barrier(void) {
     unsigned log_block = 0, log_entries = 0;
     volatile GC_word *bits = GC_get_dirty_bits(&log_block, &log_entries);
@@ -83,7 +85,8 @@ void acton_init_write_barrier(void) {
                 log_block, log_entries);
         exit(1);
     }
-    acton_gc_dirty_bits = (volatile uintptr_t *)bits;
+    if (GC_is_incremental_mode())
+        acton_gc_dirty_bits = (volatile uintptr_t *)bits;
 }
 
 #ifdef ACTON_WBAR_DEBUG

@@ -80,8 +80,7 @@ static B_list_base B_list_base_new(int capacity, $SuperG_class cls) {
 static B_NoneType B_list_base_append(B_list_base lst, $WORD elem) {
     B_list_base_expand(lst, 1);
     $WORD *data = lst->data;
-    data[lst->length] = elem;
-    ACTON_WBAR(data, &data[lst->length], elem);
+    ACTON_STORE_ELEM(data, lst->length, elem);
     lst->length++;
     return B_None;
 }
@@ -112,8 +111,7 @@ static B_str B_list_base_str(B_list_base self) {
         // parts, so each store has a barrier.
         B_str r = elem == B_None ? B_None_str : elem->$class->__repr__(elem);
         $WORD *data = parts->data;
-        data[parts->length] = r;
-        ACTON_WBAR(data, &data[parts->length], r);
+        ACTON_STORE_ELEM(data, parts->length, r);
         parts->length++;
     }
     return B_strD_join_par('[', parts, ']');
@@ -160,8 +158,7 @@ static B_list_base B_list_base_deserialize(B_list_base res, $SuperG_class cls, $
     for (int i = 0; i < len; i++) {
         $WORD v = $step_deserialize(state);
         $WORD *data = res->data;
-        data[i] = v;
-        ACTON_WBAR(data, &data[i], v);
+        ACTON_STORE_ELEM(data, i, v);
     }
     return res;
 }
@@ -328,8 +325,7 @@ static B_NoneType B_list_base_setitem(B_list_base lst, int64_t n, $WORD val) {
     if (ix0 < 0 || ix0 >= len)
         RAISE(B_IndexError, ix0, actStrFromCString("setitem: index outside list"));
     $WORD *data = lst->data;
-    data[ix0] = val;
-    ACTON_WBAR(data, &data[ix0], val);
+    ACTON_STORE_ELEM(data, ix0, val);
     return B_None;
 }
 
@@ -372,8 +368,7 @@ static B_NoneType B_list_base_setslice(B_list_base lst, B_Iterable wit, B_slice 
     for (int i = 0; i < copy; i++) {
         $WORD v = other->data[i];
         $WORD *data = lst->data;
-        data[pos] = v;
-        ACTON_WBAR(data, &data[pos], v);
+        ACTON_STORE_ELEM(data, pos, v);
         pos += step;
     }
     if (other->length == slen)

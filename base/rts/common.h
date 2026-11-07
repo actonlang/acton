@@ -76,8 +76,9 @@ void acton_gc_free(void* ptr);
 GC_ATTR_MALLOC char *acton_gc_strdup(const char *s);
 GC_ATTR_MALLOC char *acton_gc_strndup(const char *s, size_t n);
 
-// Points the write barrier (wbar.h) at the collector's dirty bits, right
-// after GC_INIT.
+// Points the write barrier (wbar.h) at the collector's dirty bits right after
+// GC_INIT, in incremental mode only. In ordinary mode the barrier sets no
+// bits.
 void acton_init_write_barrier(void);
 
 // Memory that a C library writes pointers into by itself, such as the uv

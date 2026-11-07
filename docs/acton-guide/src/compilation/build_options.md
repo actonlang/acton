@@ -201,16 +201,18 @@ remain available for tuning.
 
 ## GC write barrier
 
-Every build compiles a write barrier into the generated code and the runtime:
-after a pointer store into a heap object, the program sets the dirty bit of
-the object's block in the collector's table, which the collector reads with
-every thread stopped. Generational mode takes the written blocks from these
-bits. This needs no page protection or kernel support and works the same way
+Every build compiles a write barrier into the generated code and the runtime.
+In generational mode, after a pointer store into a heap object, the program
+sets the dirty bit of the object's block in the collector's table, and the
+collector reads these bits with every thread stopped to find the written
+blocks. This needs no page protection or kernel support and works the same way
 on every platform. The collector is built with this mechanism only. C
 extensions must follow the rules in
 [Storing pointers into GC memory](../ext/integrating_c_library.md#storing-pointers-into-gc-memory).
-In ordinary mode the barrier still runs, at a cost of about ten instructions per
-pointer store.
+In ordinary mode the collector reads no bits and the barrier sets none, at a
+cost of a test and a branch per pointer store. The barrier's code is laid out
+for the default mode that `gc_mode` sets: in the other mode, selected when
+launching the executable, every pointer store takes a branch.
 
 The collector reads the bits only in its incremental mode, which
 `GC_ENABLE_INCREMENTAL=1` selects when launching the executable. The runtime

@@ -69,6 +69,21 @@ so that stop marks it, and the bit set after the restart serves the next
 read. `ACTON_STORE_ATTR` (generated code) and `ACTON_STORE` evaluate the
 value first, then the receiver, as clang does for the plain assignment.
 
+**Ordinary mode.** The collector reads the bits only in its incremental mode,
+which `GC_INIT` chooses. Nothing calls `GC_enable_incremental` afterwards, and
+the manual dirty-bit mode never leaves incremental mode, so the mode holds for
+the whole run. `acton_init_write_barrier` (`base/rts/common.c`), right after
+`GC_INIT`, gives the barrier the collector's table (`acton_gc_dirty_bits`) in
+incremental mode only. In ordinary mode the pointer stays NULL: every barrier
+tests it and sets no bit, and `ACTON_WBAR_RANGE` returns at once. The hint on
+the test follows the default mode of the build (the `gc_mode` build option,
+`ACTON_GC_MODE_GENERATIONAL` in `acton_gc_config.h`), so the barrier's work is
+out of line unless generational mode is the default. `ACTON_STORE_ELEM` stores
+an element of a pointer array, such as the data of a list, with the barrier,
+and evaluates the value first like `ACTON_STORE`. In ordinary mode it is the
+test and the plain store, so that loops of element stores keep no induction
+variables or spilled values for the barrier.
+
 **Rule F: stores that need no barrier.** A store into an object that the
 storing code has held in a local variable continuously since the object was
 allocated. The collector makes this true:

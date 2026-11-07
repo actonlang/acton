@@ -58,7 +58,9 @@ extern "C" {
 #endif
 
 // The collector's dirty bits (GC_get_dirty_bits), set by the RTS right after
-// GC_INIT. In ordinary mode nothing reads them.
+// GC_INIT when the collector runs in incremental mode (generational mode).
+// In ordinary mode the collector does not read the bits and this stays NULL,
+// so that every barrier only tests it.
 extern volatile uintptr_t *acton_gc_dirty_bits;
 
 #ifdef ACTON_WBAR_DEBUG
@@ -74,48 +76,104 @@ void acton_wbar_check(const void *obj, const void *slot);
 #endif
 
 static inline __attribute__((always_inline)) volatile uintptr_t *
-acton_wbar_word(const void *slot, uintptr_t *mask) {
+acton_wbar_word(volatile uintptr_t *bits, const void *slot, uintptr_t *mask) {
     uintptr_t i = ((uintptr_t)slot >> ACTON_GC_LOG_BLOCK)
                   & (((uintptr_t)1 << ACTON_GC_LOG_PHT) - 1);
     *mask = (uintptr_t)1 << (i % (8 * sizeof(uintptr_t)));
-    return acton_gc_dirty_bits + i / (8 * sizeof(uintptr_t));
+    return bits + i / (8 * sizeof(uintptr_t));
 }
 
-// Set the bit of the block of slot, with an atomic OR only if it is clear.
+// Set the bit of the block of slot in the table bits, with an atomic OR only
+// if it is clear.
 static inline __attribute__((always_inline)) volatile uintptr_t *
-acton_wbar_dirty(const void *slot) {
+acton_wbar_dirty(volatile uintptr_t *bits, const void *slot) {
     uintptr_t m;
-    volatile uintptr_t *w = acton_wbar_word(slot, &m);
-    if (!(*w & m))
+    volatile uintptr_t *w = acton_wbar_word(bits, slot, &m);
+    if (__builtin_expect(!(*w & m), 0))
         __atomic_fetch_or(w, m, __ATOMIC_RELAXED);
     return w;
 }
 
-// After the store of v into *slot, in the object obj. The collector stops a
-// thread at an instruction boundary, and either order of the store and the
-// bit is correct as long as v stays live until both are done: a stop before
-// the bit is set marks v from the registers, and the bit set after the
-// thread resumes serves the next read. The asm keeps v in a register up to
-// the bit; it reads the table word, so it comes after the OR.
-#define ACTON_WBAR(obj, slot, v) do {                                   \
-        ACTON_WBAR_CHECK_((obj), (slot));                               \
+// The table pointer, loaded again where a barrier sets a bit, so that the
+// test of the pointer in front of it uses the value only for the compare (on
+// x86-64 a compare with memory) and no register keeps it on the path of
+// ordinary mode.
+static inline __attribute__((always_inline)) volatile uintptr_t *
+acton_wbar_bits_(void) {
+    return *(volatile uintptr_t *volatile *)&acton_gc_dirty_bits;
+}
+
+// The test in front of the work of a barrier: bits, the table pointer, is set
+// in incremental mode only. The hint follows the default mode of the build
+// (gc_mode, ACTON_GC_MODE_GENERATIONAL in acton_gc_config.h), so the work is
+// laid out inline where generational mode is the default and out of line
+// where ordinary mode is.
+#define ACTON_WBAR_INCREMENTAL_(bits)                                   \
+    __builtin_expect((bits) != NULL, ACTON_GC_MODE_GENERATIONAL)
+
+// The bit of slot after the store of v into it, v kept live up to the bit.
+#define ACTON_WBAR_SET_(slot, v) do {                                   \
         volatile uintptr_t *acton_wbar_w_ =                             \
-            acton_wbar_dirty((const void *)(slot));                     \
+            acton_wbar_dirty(acton_wbar_bits_(), (const void *)(slot)); \
         __asm__ __volatile__("" : : "r"(v), "m"(*acton_wbar_w_));       \
     } while (0)
 
+// After the store of v into *slot, in the object obj. slot and v are
+// evaluated once each, in that order. In ordinary mode only the test of the
+// table pointer. The collector stops a thread at an instruction boundary, and
+// either order of the store and the bit is correct as long as v stays live
+// until both are done: a stop before the bit is set marks v from the
+// registers, and the bit set after the thread resumes serves the next read.
+// The asm keeps v in a register up to the bit; it reads the table word, so it
+// comes after the OR.
+#define ACTON_WBAR(obj, slot, v) do {                                   \
+        __typeof__(slot) acton_wbar_s_ = (slot);                        \
+        __typeof__(v) acton_wbar_v_ = (v);                              \
+        ACTON_WBAR_CHECK_((obj), acton_wbar_s_);                        \
+        if (ACTON_WBAR_INCREMENTAL_(acton_gc_dirty_bits))               \
+            ACTON_WBAR_SET_(acton_wbar_s_, acton_wbar_v_);              \
+    } while (0)
+
+// data[i] = v with the barrier, for an element of data, an array of pointers
+// that is a GC object of its own. v is evaluated first, then data and i, each
+// once, like ACTON_STORE. In ordinary mode the test of the table pointer and
+// the plain store. In the other branch the index passes through an empty asm,
+// so the store and the bit there compute their own address: clang then keeps
+// no induction variables for those addresses in loops of element stores, and
+// does not merge the two stores into one in front of the branch.
+#define ACTON_STORE_ELEM(data, i, v) do {                               \
+        __typeof__((data)[0]) acton_store_v_ = (v);                     \
+        __typeof__(data) acton_store_d_ = (data);                       \
+        __typeof__(i) acton_store_i_ = (i);                             \
+        ACTON_WBAR_CHECK_(acton_store_d_,                               \
+                          acton_store_d_ + acton_store_i_);             \
+        if (ACTON_WBAR_INCREMENTAL_(acton_gc_dirty_bits)) {             \
+            __asm__("" : "+r"(acton_store_i_));                         \
+            __typeof__(data) acton_store_p_ =                           \
+                acton_store_d_ + acton_store_i_;                        \
+            *acton_store_p_ = acton_store_v_;                           \
+            ACTON_WBAR_SET_(acton_store_p_, acton_store_v_);            \
+        } else {                                                        \
+            acton_store_d_[acton_store_i_] = acton_store_v_;            \
+        }                                                               \
+    } while (0)
+
 // Before n bytes of pointers are copied or moved into obj at dst: every
-// block of the range. The memory clobber keeps the copy after the bits.
+// block of the range, nothing in ordinary mode. The memory clobber keeps the
+// copy after the bits.
 static inline void acton_wbar_range(const void *obj, const void *dst, size_t n) {
     uintptr_t p = (uintptr_t)dst;
     uintptr_t end = p + n;
+    volatile uintptr_t *bits = acton_gc_dirty_bits;
     (void)obj;
     if (n == 0)
         return;
     ACTON_WBAR_CHECK_(obj, dst);
+    if (!ACTON_WBAR_INCREMENTAL_(bits))
+        return;
     for (p &= ~(((uintptr_t)1 << ACTON_GC_LOG_BLOCK) - 1); p < end;
          p += (uintptr_t)1 << ACTON_GC_LOG_BLOCK)
-        acton_wbar_dirty((const void *)p);
+        acton_wbar_dirty(bits, (const void *)p);
     __asm__ __volatile__("" : : : "memory");
 }
 #define ACTON_WBAR_RANGE(obj, dst, n)                                   \

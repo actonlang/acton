@@ -2466,6 +2466,8 @@ void wt_work_cb(uv_check_t *ev) {
             WT_STAT_SET(ws->state, WT_Working);
         }
         SET_SELF(current);
+        // m is volatile like the variables above. Its stores go through
+        // ACTON_STORE, which reads m once for the store and the barrier.
         volatile B_Msg m = current->B_Msg;
         $Cont cont = m->$cont;
         $WORD val = m->value;
@@ -2539,8 +2541,7 @@ void wt_work_cb(uv_check_t *ev) {
         switch (r.tag) {
         case $RDONE: {
             save_actor_state(current, m, end_us);
-            m->value = r.value;                             // m->value holds the message result,
-            ACTON_WBAR(m, &m->value, r.value);
+            ACTON_STORE(m, m->value, r.value);              // m->value holds the message result,
             $Actor b = FREEZE_waiting(m, MARK_RESULT);      // so mark this and stop further m->waiting additions
             while (b) {
                 B_Msg bm = b->B_Msg;
@@ -2559,10 +2560,8 @@ void wt_work_cb(uv_check_t *ev) {
             break;
         }
         case $RCONT: {
-            m->$cont = r.cont;
-            ACTON_WBAR(m, &m->$cont, r.cont);
-            m->value = r.value;
-            ACTON_WBAR(m, &m->value, r.value);
+            ACTON_STORE(m, m->$cont, r.cont);
+            ACTON_STORE(m, m->value, r.value);
             rtsd_printf("## CONT actor %" PRId64 " : %s", current->$globkey, current->$class->$GCINFO);
             more = true;
             break;
@@ -2573,16 +2572,14 @@ void wt_work_cb(uv_check_t *ev) {
                 c->xval = (B_BaseException)r.value;
                 ACTON_WBAR(c, &c->xval, r.value);
                 $Cont k = c->$cont;
-                m->$cont = k;
-                ACTON_WBAR(m, &m->$cont, k);
+                ACTON_STORE(m, m->$cont, k);
                 m->value = B_False;             // False signals the exceptional branch
                 rtsd_printf("## FAIL/handle actor %" PRId64 " : %s", current->$globkey, current->$class->$GCINFO);
                 more = true;
             } else {                            // An unhandled exception
                 save_actor_state(current, m, end_us);
                 B_BaseException ex = (B_BaseException)r.value;
-                m->value = r.value;                                 // m->value holds the raised exception,
-                ACTON_WBAR(m, &m->value, r.value);
+                ACTON_STORE(m, m->value, r.value);                  // m->value holds the raised exception,
                 $Actor b = FREEZE_waiting(m, MARK_EXCEPTION);       // so mark this and stop further m->waiting additions
                 // If any other actor is waiting for our result / exception,
                 // then we consider the exception handled and we can avoid
@@ -2634,8 +2631,7 @@ void wt_work_cb(uv_check_t *ev) {
 #ifdef ACTON_DB
             }
 #endif
-            m->$cont = r.cont;
-            ACTON_WBAR(m, &m->$cont, r.cont);
+            ACTON_STORE(m, m->$cont, r.cont);
             B_Msg x = (B_Msg)r.value;
             assert(x != NULL);
 
@@ -2652,14 +2648,12 @@ void wt_work_cb(uv_check_t *ev) {
                 rtsd_printf("## AWAIT/fail actor %" PRId64 " : %s", current->$globkey, current->$class->$GCINFO);
                 m->$cont = &$Fail$instance;
                 $WORD v = x->value;
-                m->value = v;
-                ACTON_WBAR(m, &m->value, v);
+                ACTON_STORE(m, m->value, v);
                 more = true;
             } else {                            // x->cont == MARK_RESULT: x->value holds the final response, current is not in x->waiting
                 rtsd_printf("## AWAIT/wakeup actor %" PRId64 " : %s", current->$globkey, current->$class->$GCINFO);
                 $WORD v = x->value;
-                m->value = v;
-                ACTON_WBAR(m, &m->value, v);
+                ACTON_STORE(m, m->value, v);
                 more = true;
             }
             break;
