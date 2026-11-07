@@ -3,6 +3,11 @@
 ## Unreleased
 
 ### Language
+- Reject files that mix tabs and spaces in block indentation, even on separate
+  lines or in separate functions. Use one style throughout each file;
+  whitespace inside strings, comments, and continuation alignment does not
+  affect this check. Diagnostics point to the first conflicting character.
+  [#3372]
 - Give parameters explicit defaults, for example
   `def collect(items: list[int]=[])`; a nullable type alone no longer makes an
   argument optional. At a call such as `collect()`, the compiler supplies the
@@ -36,13 +41,24 @@
   call when they depend on its protocol arguments, including those introduced
   by default arguments. Use `--witness-stats` to report the constructions left
   after sharing as one JSON line per compiled module. [#3354]
+- Reduce protocol-dispatch overhead for builtin operations, including `len()`,
+  `list.append()`, list slicing, string and byte comparisons, and `bigint` and
+  `complex` arithmetic. Calls on known builtin types use native implementations
+  directly, omitting unused protocol arguments while preserving generic and
+  user-defined dispatch. [#3383]
 - Generate less C and smaller binaries for programs with many closures by
   sharing equivalent closure classes, call adapters, and serialization code.
   Avoid redundant boxing in identity lambdas and unnecessary forwarding
   continuations while retaining bounded C stack use. Generated closure support
   lives beside each module's C file as `<module>.closures.inc`, making the C
   easier to inspect and avoiding repeated rebuilds for packages named
-  `Generated` on case-insensitive filesystems. [#3262] [#3303]
+  `Generated` on case-insensitive filesystems. Common continuation, `proc`,
+  and `action` closures with reference captures now reuse runtime layouts and
+  support routines, further reducing generated C and native build time.
+  [#3262] [#3303] [#3380]
+- Avoid allocating temporary attribute-name strings in generated
+  `__get_attr__()` methods, reducing allocation and garbage-collection work
+  during reflective property lookup. [#3374]
 - Reduce allocation in synchronous `for` loops over builtin collections by
   keeping compiler-created iterators on the C stack. This covers mutable and
   immutable lists, dictionaries and sets, dictionary keys/values/items,
@@ -58,6 +74,17 @@
   without waiting, including calls through forced unwrapping (`!`), optional
   chaining (`?.`), and conditional expressions, preventing actor deadlocks.
   [#3300]
+- Correct reads of captured variables in nested functions and callbacks when
+  an enclosing `try` block reassigns them. `None` checks, type inspection, and
+  JSON encoding now see the captured value, while shadowing parameters and
+  local variables keep their own bindings. [#3363]
+- Compile selected, renamed, and wildcard imports of module-level numeric
+  and boolean values correctly, avoiding crashes and C compilation errors.
+  [#3367]
+- Preserve numeric result types in compound expressions involving fixed-width
+  integer shifts, such as `(value >> n) & mask`. Mixing an `int` shift count
+  with a signed or unsigned fixed-width operand no longer introduces invalid
+  pointer casts in generated C. [#3382]
 - Keep symbols needed by dynamic module libraries in optimized macOS
   executables, fixing release builds that fail to load a library with a
   `symbol not found in flat namespace` error. [#3298]
@@ -103,6 +130,9 @@
   an enclosing `finally` clause runs. [#3241]
 
 ### CLI & Project Workflow
+- Remove `--always-build` from compilation commands and `acton sig`. To force
+  source checking, delete cached module interfaces under `out/types` (or the
+  configured output directory's `types` subdirectory) and rebuild. [#3376]
 - Keep watch builds running after overlapping file changes, and retry failed
   or interrupted dependency fetches on the next change without restarting
   watch mode or editing `Build.act`. The language server also retries these
@@ -133,16 +163,20 @@
 
 ### Standard Library
 - Add `std.syslog`, a new module for sending and receiving syslog messages
-  over UDP and TCP. Use `Client` and `Server` for UDP, or `StreamClient` and
-  `StreamServer` for TCP. The module includes an RFC 5424 codec with structured
-  data and a decoder for canonical RFC 3164 messages. Clients limit startup
-  queues; UDP servers report malformed or oversized datagrams and keep
-  listening. TCP uses RFC 6587 octet counting to preserve newlines and binary
-  message bodies. Stream servers limit message sizes and connection counts;
-  framing errors close only the affected connection, while malformed complete
-  messages are reported and skipped. Use `frame()` and `StreamDecoder` for
-  custom stream transports. The guide includes runnable UDP and TCP examples.
-  TLS syslog transport is not yet supported. [#3323] [#3344]
+  over UDP, TCP, and TLS. Use `Client` and `Server` for UDP, or `StreamClient`
+  and `StreamServer` for TCP and TLS. The module includes an RFC 5424 codec
+  with structured data and a decoder for canonical RFC 3164 messages. Clients
+  limit startup queues; UDP servers report malformed or oversized datagrams and
+  keep listening. Streams use octet counting (RFC 6587 for TCP, RFC 5425 for
+  TLS) to preserve newlines and binary message bodies. Stream servers limit
+  message sizes and connection counts; framing errors close only the affected
+  connection, while malformed complete messages are reported and skipped. Use
+  `frame()` and `StreamDecoder` for custom stream transports. Enable TLS with
+  `tls=True` on `StreamClient`, or supply `cert_pem` and `key_pem` to
+  `StreamServer`. Clients verify server certificates and hostnames by default;
+  private CAs, client certificates, and custom peer verification are supported.
+  The guide includes runnable UDP and TCP examples and TLS configuration.
+  [#3323] [#3344] [#3375]
 - Use private CAs and client certificates with `net.TLSConnection` and
   `net.TLSListener` through `ca_pem`, `cert_pem`, and `key_pem`.
   Listeners request client certificates with `client_auth=True`. Set
@@ -242,6 +276,15 @@
 - Improve `bytes` slicing and `bytes`/`bytearray` case conversion by exposing
   runtime allocator guarantees to the C compiler, allowing it to keep buffer
   pointers in registers and vectorize loops. [#3293]
+- Construct `bytes` from integer iterables with fewer allocations by writing
+  directly into the byte buffer instead of first building a list. Integer
+  arrays use unboxed copying, collections supply an initial size, and other
+  iterables grow the buffer as needed. Collection conversions to `bytes` and
+  `bytearray` use the same construction path, and invalid byte values raise
+  `ValueError` as soon as they are read. [#3371]
+- Speed up `str.replace()` for single-byte search strings, including ASCII
+  delimiters in Unicode text. A replacement count of 0 now returns without
+  scanning the input. [#3373]
 - Speed up JSON encoding and decoding and avoid retaining temporary documents
   by using ordinary C allocation for yyjson work data and freeing each document
   before returning. Encoding NaN or infinite floats now raises `ValueError`
@@ -430,6 +473,8 @@
   Concurrent builds can install the same dependency without conflicts. [#3325]
 
 ### Documentation
+- Document that `del d[key]` does nothing when a dictionary key is missing,
+  so callers do not need a membership check before deleting. [#3381]
 - Update the compiler developer guide to describe the compile pipeline,
   incremental builds, project and dependency discovery, and cached module
   interfaces, plus protocol witness sharing. [#3325] [#3354]
@@ -441,6 +486,10 @@
   capture timing, purity requirements, and callback behavior. [#3242]
 
 ### Testing & CI
+- Calculate non-GC memory changes in `acton test` with signed samples,
+  avoiding overflow when resident memory is smaller than GC-managed memory.
+  Errors during test setup or result processing now report the original
+  exception and complete the test instead of waiting for a timeout. [#3370]
 - Preserve expected snapshots and legacy golden files in `utils/perf_compare`
   comparisons, giving both compilers identical test inputs and including those
   inputs in benchmark hashes. [#3354]
@@ -486,7 +535,11 @@
   `env.stdout_write(s)` becomes `env.stdio.out(s)`; call `stdin_install`,
   `set_stdin`, and `is_tty` on `env.stdio` as well. Output and `env.exit()`
   go to separate actors, so wait for output with
-  `await async env.stdio.out(s)` before calling `env.exit(...)`. [#3317]
+  `await async env.stdio.out(s)` before calling `env.exit(...)`. Shutdown is
+  asynchronous; code after `env.exit(n)` can still run, and awaiting the exit
+  call does not wait for work in other actors. Await required output or cleanup
+  before requesting exit, and return or branch after an error exit to avoid
+  running success code. [#3317] [#3365]
 - Replace `process.Process(...)` and `process.RunProcess(...)` with
   `env.process.spawn(...)` and `env.process.run(...)`. The `process` module
   is removed; drop `ProcessCap` construction and the capability argument.
@@ -5989,8 +6042,22 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#3356]: https://github.com/actonlang/acton/pull/3356
 [#3361]: https://github.com/actonlang/acton/pull/3361
 [#3362]: https://github.com/actonlang/acton/pull/3362
+[#3363]: https://github.com/actonlang/acton/pull/3363
 [#3364]: https://github.com/actonlang/acton/pull/3364
+[#3365]: https://github.com/actonlang/acton/pull/3365
 [#3366]: https://github.com/actonlang/acton/pull/3366
+[#3367]: https://github.com/actonlang/acton/pull/3367
+[#3370]: https://github.com/actonlang/acton/pull/3370
+[#3371]: https://github.com/actonlang/acton/pull/3371
+[#3372]: https://github.com/actonlang/acton/pull/3372
+[#3373]: https://github.com/actonlang/acton/pull/3373
+[#3374]: https://github.com/actonlang/acton/pull/3374
+[#3375]: https://github.com/actonlang/acton/pull/3375
+[#3376]: https://github.com/actonlang/acton/pull/3376
+[#3380]: https://github.com/actonlang/acton/pull/3380
+[#3381]: https://github.com/actonlang/acton/pull/3381
+[#3382]: https://github.com/actonlang/acton/pull/3382
+[#3383]: https://github.com/actonlang/acton/pull/3383
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0

@@ -344,6 +344,7 @@ actor _test_TCPConnectLocalhost(t: testing.EnvT):
 
 actor _test_TCPConnectUnresolvable(t: testing.EnvT):
     """A host name that does not resolve is reported, once"""
+    t.timeout(10)
     tcp_cap = net.TCPCap(net.NetCap(t.env.cap))
     base = tcp_test_result(t, "unresolvable name")
     var errors: list[str] = []

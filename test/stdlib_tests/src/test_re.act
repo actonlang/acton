@@ -534,8 +534,9 @@ class _StdCyclicPattern(std_re.Pattern):
         self.cycle = []
         self.cycle.append(self)
 
-def _test_compile_survives_collections():
+def _test_compile_survives_collections(t: testing.SyncT):
     """A Pattern keeps its code while many other Patterns are collected"""
+    t.timeout(30)
     p = _CyclicPattern("(b+)c")
     sp = _StdCyclicPattern("(b+)c")
     for i in range(20000):
