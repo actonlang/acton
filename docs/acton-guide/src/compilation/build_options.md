@@ -199,6 +199,9 @@ barrier (see the next section). The runtime sets the collector's own `GC_*`
 environment variables for the mode unless they are set already, so they
 remain available for tuning.
 
+On Windows, a fatal error of the collector prints its message to stderr and the
+process exits with code 3.
+
 ## GC write barrier
 
 Every build compiles a write barrier into the generated code and the runtime.

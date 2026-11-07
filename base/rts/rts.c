@@ -3358,6 +3358,31 @@ static void GC_CALLBACK gc_disable_thp(void *space, size_t size) {
 }
 #endif
 
+#ifdef _WIN32
+// The collector's abort function on Windows. On a fatal error the collector
+// calls it with the message and, if it returns, calls DebugBreak(), which can
+// bring up Windows' crash or debugger dialog and keep the process waiting
+// there. gc_abort writes the message and CR LF to stderr, the line end that
+// the C runtime's text mode gives the collector's other output, and ends the
+// process at once with exit code 3, the code with which abort() exits when it
+// does not call Windows Error Reporting. The collector may call it with the
+// allocator lock held and with the world stopped, so it writes with WriteFile
+// on the stderr handle, without the C runtime's locks and without allocating.
+// When the collector runs out of memory, it calls gc_abort with NULL and then
+// exit(1), so gc_abort returns for NULL.
+static void GC_CALLBACK gc_abort(const char *msg) {
+    if (msg == NULL)
+        return;
+    HANDLE h = GetStdHandle(STD_ERROR_HANDLE);
+    if (h != NULL && h != INVALID_HANDLE_VALUE) {
+        DWORD n;
+        WriteFile(h, msg, (DWORD)strlen(msg), &n, NULL);
+        WriteFile(h, "\r\n", 2, &n, NULL);
+    }
+    TerminateProcess(GetCurrentProcess(), 3);
+}
+#endif
+
 void DaveNull () {}
 
 // The GC mode: ordinary, or generational, which collects the young objects
@@ -3513,6 +3538,9 @@ int main(int argc, char **argv) {
     init_counter();
     init_clock();
     // Init garbage collector and suppress warnings
+#ifdef _WIN32
+    GC_set_abort_func(gc_abort);
+#endif
 #ifdef ACTON_GC_DISABLE_THP
     GC_set_on_os_get_mem(gc_disable_thp);
 #endif
