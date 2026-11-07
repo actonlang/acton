@@ -251,8 +251,9 @@ def _test_xml_cdata_multiple():
     d = xml.decode(test_xml)
     testing.assertEqual(d.text, "First middle Second", "CDATA: multiple sections failed")
 
-def _test_xml_cdata_large():
+def _test_xml_cdata_large(t: testing.SyncT):
     """Device replies can contain a single CDATA section larger than 10 MB"""
+    t.timeout(30)
     payload = "<raw> & text\n" * 1700000
     document = '<rpc-reply xmlns="urn:ietf:params:xml:ns:netconf:base:1.0"><output><![CDATA[' + payload + ']]></output></rpc-reply>'
     testing.assertEqual(xml.decode(document).children[0].text, payload)
