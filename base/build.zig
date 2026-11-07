@@ -193,6 +193,7 @@ pub fn build(b: *std.Build) void {
         .disable_realloc_free = gc_realloc_no_free,
         .disable_thread_local_warmup = gc_no_thread_local_warmup,
         .tl_refill_max = gc_thread_local_refill_blocks,
+        .CFLAGS_EXTRA = gcCflagsExtra(target.result),
     });
     const libgc = dep_libgc.artifact("gc");
     if (enable_lto) libgc.lto = .thin;
@@ -618,4 +619,14 @@ pub fn gcModeGenerational(mode: []const u8) bool {
 pub fn gcTinyFreelists(t: std.Target, size_limit: u32) u32 {
     if (size_limit == 0) return 0;
     return size_limit / (2 * (t.ptrBitWidth() / 8)) + 1;
+}
+
+// The collector's extra C flags. On Windows, CONSOLE_LOG makes the collector
+// write its log, its warnings and the message of a fatal error to stderr, as on
+// the other systems, instead of to a file named after the executable, and
+// NO_MSGBOX_ON_ERROR makes a fatal error print its message without a message
+// box that waits for a click.
+pub fn gcCflagsExtra(t: std.Target) []const u8 {
+    if (t.os.tag != .windows) return "";
+    return "-DCONSOLE_LOG -DNO_MSGBOX_ON_ERROR";
 }
