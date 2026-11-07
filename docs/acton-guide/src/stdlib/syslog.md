@@ -56,6 +56,57 @@ does not wait for delivery. The short delay in this example lets the
 asynchronous send run before the program exits; it is not a delivery guarantee.
 In a long-running application, keep the client open for subsequent messages.
 
+## Application logging
+
+`Sink(send, facility=USER, hostname=None, app_name=None, procid=None,
+msgid=None)` connects the `logging` module to a syslog client. Pass
+`client.send` from either `Client` or `StreamClient`; this works with UDP,
+TCP, and TLS. Add the sink to a `logging.Handler` as usual:
+
+```python
+import logging
+import net
+import std.syslog as syslog
+
+actor main(env):
+    def connected(client: syslog.Client):
+        pass
+
+    def failed(client: syslog.Client, error: str):
+        print("Syslog client error:", error, err=True)
+
+    cap = net.UDPConnectCap(net.UDPCap(net.NetCap(env.cap)))
+    client = syslog.Client(cap, "127.0.0.1", 5514, connected, failed)
+    handler = logging.Handler("service")
+    handler.add_sink(syslog.Sink(client.send, facility=syslog.LOCAL0,
+                                 hostname="host.example.com"))
+    log = logging.Logger(handler)
+    log.info("Service started", {"version": "1.0"})
+```
+
+`APP-NAME` defaults to the outermost named handler in the record's path
+(`service` above). Logger names are excluded. Set `app_name` to override this
+default. If there is no named handler, or its name cannot fit the syslog
+header rules (1–48 printable ASCII characters without spaces), `APP-NAME`
+uses NILVALUE. The full path remains available in the formatted body.
+
+The sink maps logging levels to syslog severities by name, including the
+different `INFO` and `NOTICE` values. `VERBOSE` and `TRACE` become syslog
+`DEBUG`. Handler and logger level filtering still apply.
+
+The RFC 5424 timestamp comes from the original log record, retaining its UTC
+offset and truncating fractions to microseconds. A record without a timezone
+uses NILVALUE. The body uses UTF-8 with a BOM and `logging.DefaultFormatter`,
+which includes the handler path, logger name, actor class, and actor ID.
+Structured log data is appended to the body as a dictionary, matching the
+console sinks; it is not converted to RFC 5424 structured-data elements.
+Use `sink.set_formatter(formatter)` to customize the body. A formatter that
+returns `None` suppresses that record, including its data.
+
+The application owns the client and closes it when finished. Startup buffering,
+size limits, transport errors, and send rejections use the client's existing
+behavior and `on_error` callback. The sink adds no retries or delivery guarantee.
+
 ## Receiving UDP messages
 
 ```python
