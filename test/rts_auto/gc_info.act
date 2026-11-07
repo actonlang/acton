@@ -3,7 +3,7 @@ import acton.rts
 
 actor main(env):
     before = acton.rts.get_gc_info(env.syscap)
-    assert before.mode in ["ordinary", "generational", "incremental"]
+    assert before.mode in ["ordinary", "generational"]
     assert before.page_hash_table_log2 > 0
     assert before.block_size >= 4096
     assert (before.block_size & (before.block_size - 1)) == 0
@@ -23,10 +23,8 @@ actor main(env):
         assert before.pause_target_ms is None
     else:
         assert before.backend in before.supported_backends
-        if before.mode == "generational":
-            assert before.pause_target_ms is None
-        else:
-            assert before.pause_target_ms is not None
+        # None with one stop per collection
+        if before.pause_target_ms is not None:
             assert before.pause_target_ms! >= 0.0
 
     retained = [[i, i + 1] for i in range(2048)]

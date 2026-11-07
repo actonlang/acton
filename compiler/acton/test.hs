@@ -3149,24 +3149,24 @@ gcCollectorOptionTests = testGroup "GC collector options"
                     ("bytes_per_marker", "0"),
                     ("initial_mark_stack_size", "65536")]
     -- The GC mode chosen when starting the program: generational mode marks
-    -- in steps of 50 ms (reported as incremental), or in one stop per
-    -- collection; the write-barrier checker runs in generational mode with
-    -- steps of 1 ms, and its exit status fails the run if it finds a store
-    -- without a barrier.
+    -- in steps of 50 ms, or in one stop per collection; the write-barrier
+    -- checker runs in generational mode with steps of 1 ms, and its exit
+    -- status fails the run if it finds a store without a barrier.
     modes = [("generational mode", [("ACTON_GC_MODE", "generational")],
-              [("mode", "incremental"), ("backend", "manual"),
+              [("mode", "generational"), ("backend", "manual"),
                ("pause_target_us", "50000")]),
              ("generational mode in one stop",
               [("ACTON_GC_MODE", "generational"), ("ACTON_GC_PAUSE_MS", "0")],
               [("mode", "generational"), ("backend", "manual"),
                ("pause_target_us", "None")]),
              ("write-barrier checker", [("ACTON_GC_CHECK", "1")],
-              [("mode", "incremental"), ("backend", "manual"),
+              [("mode", "generational"), ("backend", "manual"),
                ("pause_target_us", "1000"), ("alloc_budget_percent", "20")])]
     -- With 0, the initial mark stack has the collector's default size: as
     -- many entries as a block has bytes.
     others = [([("gc_mode", "generational")],
-               [("mode", "incremental"), ("backend", "manual")]),
+               [("mode", "generational"), ("backend", "manual"),
+                ("pause_target_us", "50000")]),
               ([("gc_block_size", "65536"),
                 ("gc_initial_mark_stack_size", "0"),
                 ("gc_thread_local_size_limit", "32768")],

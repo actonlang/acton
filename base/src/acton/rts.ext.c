@@ -117,9 +117,9 @@ B_tuple actonQ_rtsQ_get_gc_info (B_SysCap cap) {
     size_t bytes_per_marker = GC_get_bytes_per_marker();
 
     // Construct Acton values only after releasing the collector lock.
-    const char *mode = !info.incremental ? "ordinary"
-        : info.time_limit.tv_ms == GC_TIME_UNLIMITED ? "generational"
-        : "incremental";
+    // The collector's incremental mode is generational mode, whether the
+    // collector marks each collection in steps or in one stop.
+    const char *mode = info.incremental ? "generational" : "ordinary";
     const char *backend = info.backend == GC_VDB_NONE ? "none" : "unknown";
     B_list supported = B_listG_new(NULL, NULL);
     B_SequenceD_list sequence = B_SequenceD_listG_witness;

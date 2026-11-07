@@ -994,9 +994,9 @@ actor main(env):
 
 `backend` is the active dirty-tracking mechanism: `manual`, the dirty bits
 that the write barrier sets, in generational mode, and `none` in ordinary
-mode. Generational mode with a pause target is reported as `incremental`, with
-the target in `pause_target_ms`. `supported_backends` lists the mechanisms the
-collector is built with.
+mode. `mode` is the [GC mode](#gc-mode) in effect, `ordinary` or `generational`,
+and in generational mode `pause_target_ms` is the marking time target of a step.
+`supported_backends` lists the mechanisms the collector is built with.
 
 The result also reports `page_hash_table_log2`, `block_size`, `end_padding`,
 `thread_local_size_limit`, `no_thread_local_warmup`,

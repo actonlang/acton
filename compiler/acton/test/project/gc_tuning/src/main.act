@@ -29,7 +29,7 @@ actor main(env):
 
     if generational:
         # Steps of the default 50 ms
-        assert info.mode == "incremental"
+        assert info.mode == "generational"
         assert info.pause_target_ms is not None
         assert info.pause_target_ms! == 50.0
     else:
