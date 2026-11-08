@@ -251,12 +251,21 @@ def _test_xml_cdata_multiple():
     d = xml.decode(test_xml)
     testing.assertEqual(d.text, "First middle Second", "CDATA: multiple sections failed")
 
-def _test_xml_cdata_large(t: testing.SyncT):
-    """Device replies can contain a single CDATA section larger than 10 MB"""
-    t.timeout(30)
-    payload = "<raw> & text\n" * 1700000
+def _large_cdata_document() -> (str, str):
+    # Cross libxml2's 10,000,000-byte limit without making this a throughput test.
+    chunk = "<raw> & text\n"
+    payload = chunk * (10000000 // len(chunk) + 1)
     document = '<rpc-reply xmlns="urn:ietf:params:xml:ns:netconf:base:1.0"><output><![CDATA[' + payload + ']]></output></rpc-reply>'
+    return document, payload
+
+def _test_xml_cdata_large():
+    """Device replies can contain a single CDATA section larger than 10 MB"""
+    document, payload = _large_cdata_document()
     testing.assertEqual(xml.decode(document).children[0].text, payload)
+
+def _test_std_xml_cdata_large():
+    """The std.xml module also accepts CDATA sections larger than 10 MB"""
+    document, payload = _large_cdata_document()
     testing.assertEqual(std_xml.decode(document).children[0].text, payload)
 
 def _test_xml_cdata_utf8():
