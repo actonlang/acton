@@ -154,8 +154,15 @@ $WORD $step_deserialize($Serial$state state) {
                 return state->globmap(($WORD)key);
             else
                 return B_dictD_get(state->done, toB_int(key), NULL);
-        } else
-            return $GET_METHODS(this->class_id)->__deserialize__(NULL, state);
+        } else {
+            long key = state->row_no - 1;
+            $WORD res = $GET_METHODS(this->class_id)->__deserialize__(NULL, state);
+            // Classes with recursive fields register before restoring them.
+            // Scalar decoders return a value without doing so, but the
+            // serializer can still emit back-references to their boxes.
+            B_dictD_setitem(state->done, toB_int(key), res);
+            return res;
+        }
     } else
         return $GET_METHODS(abs(state->row->class_id))->__deserialize__(NULL, state);
 }
