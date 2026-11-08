@@ -175,8 +175,12 @@
   `tls=True` on `StreamClient`, or supply `cert_pem` and `key_pem` to
   `StreamServer`. Clients verify server certificates and hostnames by default;
   private CAs, client certificates, and custom peer verification are supported.
+  Forward `logging` records through any client with `Sink(client.send)`,
+  mapping levels to syslog severities and retaining timestamps and formatted
+  text. Log data is appended to the message body. `APP-NAME` defaults to the
+  outermost named handler; set `app_name` to override it.
   The guide includes runnable UDP and TCP examples and TLS configuration.
-  [#3323] [#3344] [#3375]
+  [#3323] [#3344] [#3375] [#3384]
 - Use private CAs and client certificates with `net.TLSConnection` and
   `net.TLSListener` through `ca_pem`, `cert_pem`, and `key_pem`.
   Listeners request client certificates with `client_auth=True`. Set
@@ -309,6 +313,9 @@
 - Make `file.FS.rmtree()` remove the requested directory as well as its
   contents. Child symlinks are removed without following them; missing paths
   and other operating-system errors remain ignored. [#3366]
+- Reduce allocation in `file` operations by keeping temporary filesystem
+  requests on the C stack instead of the GC heap. This covers file reads and
+  writes, directory operations, and file metadata queries. [#3385]
 - Hash bounded numeric types, complex values, and immutable sets directly,
   avoiding most of the allocation and runtime overhead of stateful hashing.
   Hashing user-defined values, including dictionary and set operations, now
@@ -6058,6 +6065,8 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#3381]: https://github.com/actonlang/acton/pull/3381
 [#3382]: https://github.com/actonlang/acton/pull/3382
 [#3383]: https://github.com/actonlang/acton/pull/3383
+[#3384]: https://github.com/actonlang/acton/pull/3384
+[#3385]: https://github.com/actonlang/acton/pull/3385
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
