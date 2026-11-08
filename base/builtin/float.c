@@ -37,11 +37,11 @@ double B_floatG_new(B_atom a) {
         zz_struct aval = ((B_bigint)a)->val;
         if (aval.size == 0) 
             return 0.0;
-        if (labs(aval.size) > 16)
+        if (llabs(aval.size) > 16)
             RAISE_EXC(&B_float_int_too_large_error);
         double pow = 1.0;  
         double res = 0.0;
-        for (int i = 0; i<(labs(aval.size)); i++) {
+        for (int i = 0; i<(llabs(aval.size)); i++) {
             res += aval.n[i] * pow;
             pow *= 18446744073709551616.0; // literal is 2^64
         }
@@ -168,15 +168,15 @@ double B_RealFloatD_floatD___float__ (B_RealFloatD_float wit, B_float x) {
 }
 
 $WORD B_RealFloatD_floatD___trunc__ (B_RealFloatD_float wit, B_float x, B_Integral wit2) {
-    return wit2->$class->__fromatom__(wit2,(B_atom)toB_int((long)trunc(x->val)));
+    return wit2->$class->__fromatom__(wit2,(B_atom)toB_int((int64_t)trunc(x->val)));
 }
   
 $WORD B_RealFloatD_floatD___floor__ (B_RealFloatD_float wit, B_float x, B_Integral wit2) {
-    return wit2->$class->__fromatom__(wit2,(B_atom)toB_int((long)floor(x->val)));
+    return wit2->$class->__fromatom__(wit2,(B_atom)toB_int((int64_t)floor(x->val)));
 }
   
 $WORD B_RealFloatD_floatD___ceil__ (B_RealFloatD_float wit, B_float x, B_Integral wit2) {
-    return wit2->$class->__fromatom__(wit2,(B_atom)toB_int((long)ceil(x->val)));
+    return wit2->$class->__fromatom__(wit2,(B_atom)toB_int((int64_t)ceil(x->val)));
 }
   
 B_float B_RealFloatD_floatD___round__ (B_RealFloatD_float wit, B_float x, B_int p) {

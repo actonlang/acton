@@ -36,14 +36,14 @@ uint16_t u16_pow(uint16_t a, uint16_t e) {
 
 uint16_t B_u16G_new(B_atom a, B_int base) {  // base is optional
     B_bigint b = B_bigintG_new(a, base);
-    int sz = b->val.size;
-    unsigned long n = sz == 0 ? 0 : b->val.n[0];
+    int64_t sz = b->val.size;
+    uint64_t n = sz == 0 ? 0 : b->val.n[0];
     if (sz  > 1 || sz < 0 || (sz==1 && n > 0xffff)) {
         char errmsg[1024];
         snprintf(errmsg, sizeof(errmsg), "u16(): value %s out of range for type u16",get_str(&b->val));
         RAISE(B_ValueError, actStrFromCStringCopy(errmsg));
     }
-    return n*sz;
+    return (uint16_t)n;
 }
  
 B_NoneType B_u16D___init__(B_u16 self, B_atom a, B_int base){

@@ -36,14 +36,14 @@ uint64_t u64_pow(uint64_t a, uint64_t e) {
 
 uint64_t B_u64G_new(B_atom a, B_int base) {  // base is optional
     B_bigint b = B_bigintG_new(a, base);
-    int sz = b->val.size;
-    unsigned long n = sz == 0 ? 0 : b->val.n[0];
+    int64_t sz = b->val.size;
+    uint64_t n = sz == 0 ? 0 : b->val.n[0];
     if (sz > 1 || sz < 0) {
         char errmsg[1024];
         snprintf(errmsg, sizeof(errmsg), "u64(): value %s out of range for type u64",get_str(&b->val));
         RAISE(B_ValueError, actStrFromCStringCopy(errmsg));
     }
-    return n*sz;
+    return n;
 }
  
 B_NoneType B_u64D___init__(B_u64 self, B_atom a, B_int base){

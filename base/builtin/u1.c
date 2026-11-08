@@ -51,14 +51,14 @@ uint8_t u1_pow(uint8_t a, uint8_t e) {
 
 uint8_t B_u1G_new(B_atom a, B_int base) {  // base is optional
     B_bigint b = B_bigintG_new(a, base);
-    int sz = b->val.size;
-    unsigned long n = sz == 0 ? 0 : b->val.n[0];
+    int64_t sz = b->val.size;
+    uint64_t n = sz == 0 ? 0 : b->val.n[0];
     if (sz  > 1 || sz < 0 || (sz==1 && n > 1)) {
         char errmsg[1024];
         snprintf(errmsg, sizeof(errmsg), "u1(): value %s out of range for type u1",get_str(&b->val));
         RAISE(B_ValueError, actStrFromCStringCopy(errmsg));
     }
-    return (uint8_t)(n*sz);
+    return (uint8_t)n;
 }
  
 B_NoneType B_u1D___init__(B_u1 self, B_atom a, B_int base){

@@ -35,14 +35,14 @@ int i32_pow(int a, int e) {
 
 int32_t B_i32G_new(B_atom a, B_int base) {
     B_bigint b = B_bigintG_new(a, base);
-    long sz = b->val.size;
-    unsigned long n = sz == 0 ? 0 : b->val.n[0];
-    if (labs(sz) > 1 || (sz==1 && n > 0x7ffffffful) || sz == -1 && n > 0x80000000ul) {
+    int64_t sz = b->val.size;
+    uint64_t n = sz == 0 ? 0 : b->val.n[0];
+    if (llabs(sz) > 1 || (sz==1 && n > 0x7ffffffful) || sz == -1 && n > 0x80000000ul) {
         char errmsg[1024];
         snprintf(errmsg, sizeof(errmsg), "i32(): value %s out of range for type i32",get_str(&b->val));
         RAISE(B_ValueError, actStrFromCStringCopy(errmsg));
     }
-    return (int32_t)(n*sz);
+    return (int32_t)((int64_t)n*sz);
 }
 
 
