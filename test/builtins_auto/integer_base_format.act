@@ -1,0 +1,54 @@
+def check_format[A(Integral)](value: A, expected_hex: str, expected_bin: str) -> bool:
+    actual_hex = hex(value)
+    actual_bin = bin(value)
+    if actual_hex != expected_hex:
+        print("hex({value}) = {actual_hex}, expected {expected_hex}")
+    if actual_bin != expected_bin:
+        print("bin({value}) = {actual_bin}, expected {expected_bin}")
+    return actual_hex == expected_hex and actual_bin == expected_bin
+
+actor main(env):
+    checks = [
+        # u64 must stay unsigned on both sides of the signed int boundary.
+        check_format(u64(0), "0x0", "0b0"),
+        check_format(u64(9223372036854775807),
+                     "0x7fffffffffffffff", "0b" + "1" * 63),
+        check_format(u64(9223372036854775808),
+                     "0x8000000000000000", "0b1" + "0" * 63),
+        check_format(u64(18446744073709551615),
+                     "0xffffffffffffffff", "0b" + "1" * 64),
+
+        # Smaller unsigned types must not sign-extend their top bit.
+        check_format(u32(0), "0x0", "0b0"),
+        check_format(u32(2147483647), "0x7fffffff", "0b" + "1" * 31),
+        check_format(u32(2147483648), "0x80000000", "0b1" + "0" * 31),
+        check_format(u32(4294967295), "0xffffffff", "0b" + "1" * 32),
+        check_format(u16(0), "0x0", "0b0"),
+        check_format(u16(32767), "0x7fff", "0b" + "1" * 15),
+        check_format(u16(32768), "0x8000", "0b1" + "0" * 15),
+        check_format(u16(65535), "0xffff", "0b" + "1" * 16),
+        check_format(u8(0), "0x0", "0b0"),
+        check_format(u8(127), "0x7f", "0b" + "1" * 7),
+        check_format(u8(128), "0x80", "0b1" + "0" * 7),
+        check_format(u8(255), "0xff", "0b" + "1" * 8),
+        check_format(u1(0), "0x0", "0b0"),
+        check_format(u1(1), "0x1", "0b1"),
+
+        # Signed values keep their sign, including the minimum int.
+        check_format(0, "0x0", "0b0"),
+        check_format(1, "0x1", "0b1"),
+        check_format(-1, "-0x1", "-0b1"),
+        check_format(42, "0x2a", "0b101010"),
+        check_format(-42, "-0x2a", "-0b101010"),
+        check_format(9223372036854775807,
+                     "0x7fffffffffffffff", "0b" + "1" * 63),
+        check_format(-9223372036854775807 - 1,
+                     "-0x8000000000000000", "-0b1" + "0" * 63),
+        check_format(i32(-2147483647 - 1), "-0x80000000", "-0b1" + "0" * 31),
+        check_format(i32(2147483647), "0x7fffffff", "0b" + "1" * 31),
+        check_format(i16(-32768), "-0x8000", "-0b1" + "0" * 15),
+        check_format(i16(32767), "0x7fff", "0b" + "1" * 15),
+        check_format(i8(-128), "-0x80", "-0b1" + "0" * 7),
+        check_format(i8(127), "0x7f", "0b" + "1" * 7)
+    ]
+    env.exit(0 if all(checks) else 1)
