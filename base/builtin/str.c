@@ -4425,11 +4425,23 @@ B_str B_ascii(B_value v) {
     return res;
 }
 
+static uint64_t integral_magnitude(B_Integral wit, $WORD n, int *sign) {
+    // u64 values must not pass through the signed __int__ conversion.
+    if (wit->$class == (struct B_IntegralG_class *)&B_IntegralD_u64G_methods) {
+        *sign = 0;
+        return ((B_u64)n)->val;
+    }
+    int64_t v = wit->$class->__int__(wit,n);
+    *sign = v<0;
+    // Unsigned negation also handles the minimum signed int.
+    return *sign ? -(uint64_t)v : (uint64_t)v;
+}
+
 B_str B_bin(B_Integral wit, $WORD n) {
-    long v = wit->$class->__int__(wit,n);
-    int sign = v<0;
+    int sign;
+    uint64_t magnitude = integral_magnitude(wit,n,&sign);
     int nbits = 1;
-    unsigned long u = labs(v);
+    uint64_t u = magnitude;
     if (u & 0xffffffff00000000) {
         u >>= 32; nbits += 32;
     }
@@ -4457,9 +4469,9 @@ B_str B_bin(B_Integral wit, $WORD n) {
     }
     *p = '0'; p++;
     *p = 'b'; p++;
-    u = labs(v);
+    u = magnitude;
     for (int i = nbits-1; i>=0; i--) {
-        *p = u & (1L << i) ? '1' : '0'; p++;
+        *p = (u >> i) & 1 ? '1' : '0'; p++;
     }
     return res;
 }
@@ -4484,10 +4496,10 @@ B_str B_chr(B_Integral wit, $WORD n) {
 
 B_str B_hex(B_Integral wit, $WORD n) {
     unsigned char *hexdigits = (unsigned char *)"0123456789abcdef";
-    long v =  wit->$class->__int__(wit,n);
-    int sign = v<0;
+    int sign;
+    uint64_t magnitude = integral_magnitude(wit,n,&sign);
     int nhexs = 1;
-    unsigned long u = labs(v);
+    uint64_t u = magnitude;
     if (u & 0xffffffff00000000) {
         u >>= 32; nhexs += 8;
     }
@@ -4509,7 +4521,7 @@ B_str B_hex(B_Integral wit, $WORD n) {
     }
     *p = '0'; p++;
     *p = 'x'; p++;
-    u = labs(v);
+    u = magnitude;
     for (int i = nhexs-1; i>=0; i--) {
         *p = hexdigits[(u>>(4*i)) & 0xf]; p++;
     }
