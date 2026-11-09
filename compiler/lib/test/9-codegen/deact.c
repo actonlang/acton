@@ -170,13 +170,13 @@ $Cont deactQ_L_20ContD___deserialize__($Cont self, $Serial$state state) {
 struct $ContClass deactQ_L_20ContG_methods;
 $R deactQ_L_12C_7cont (deactQ_main self, $Cont C_cont, deactQ_Bepa C_8res) {
     #line 30 "test/src/deact.act"
-    ((deactQ_main)(self))->b = C_8res;
+    ACTON_STORE_ATTR(((deactQ_main)(self)), b, C_8res);
     #line 31 "test/src/deact.act"
     ((B_NoneType (*) (B_tuple, B_str, B_str, bool, bool))B_print)($NEWTUPLE(1, actStrFromLiteral("-----", 5, 5)), actStrFromLiteral(" ", 1, 1), actStrFromLiteral("\n", 1, 1), false, false);
     #line 32 "test/src/deact.act"
     ((B_Msg (*) ($WORD, $action))((deactQ_Apa)(((deactQ_main)(self))->a))->$class->setup)(((deactQ_main)(self))->a, (($action)((deactQ_L_14action)$Action_R1_new(&deactQ_L_14actionG_methods, ((deactQ_main)(self))->a))));
     #line 33 "test/src/deact.act"
-    ((deactQ_main)(self))->x = ((B_Msg (*) ($WORD, $action))((deactQ_Apa)(((deactQ_main)(self))->a))->$class->compute)(((deactQ_main)(self))->a, (($action)((deactQ_L_16action)$Action_R1_new(&deactQ_L_16actionG_methods, ((deactQ_main)(self))->b))));
+    ACTON_STORE_ATTR(((deactQ_main)(self)), x, ((B_Msg (*) ($WORD, $action))((deactQ_Apa)(((deactQ_main)(self))->a))->$class->compute)(((deactQ_main)(self))->a, (($action)((deactQ_L_16action)$Action_R1_new(&deactQ_L_16actionG_methods, ((deactQ_main)(self))->b)))));
     return $AWAIT((($Cont)((deactQ_L_20Cont)$Cont_R2_new(&deactQ_L_20ContG_methods, self, C_cont))), ((deactQ_main)(self))->x);
 }
 $R deactQ_L_21ContD___call__($Cont $closure, $WORD $result) {
@@ -192,7 +192,7 @@ $Cont deactQ_L_21ContD___deserialize__($Cont self, $Serial$state state) {
 struct $ContClass deactQ_L_21ContG_methods;
 $R deactQ_L_11C_5cont (deactQ_main self, $Cont C_cont, deactQ_Apa C_6res) {
     #line 29 "test/src/deact.act"
-    ((deactQ_main)(self))->a = C_6res;
+    ACTON_STORE_ATTR(((deactQ_main)(self)), a, C_6res);
     return deactQ_BepaG_newact((($Cont)((deactQ_L_21Cont)$Cont_R2_new(&deactQ_L_21ContG_methods, self, C_cont))));
 }
 $R deactQ_L_22ContD___call__($Cont $closure, $WORD $result) {
@@ -370,7 +370,7 @@ $R deactQ_BepaG_new($Cont G_1) {
 }
 struct deactQ_BepaG_class deactQ_BepaG_methods;
 $R deactQ_mainD___init__ (deactQ_main self, $Cont C_cont, B_Env env) {
-    ((deactQ_main)(self))->env = env;
+    ACTON_STORE_ATTR(((deactQ_main)(self)), env, env);
     return deactQ_ApaG_newact((($Cont)((deactQ_L_22Cont)$Cont_R2_new(&deactQ_L_22ContG_methods, self, C_cont))));
 }
 #line 24 "test/src/deact.act"
@@ -406,10 +406,10 @@ deactQ_main deactQ_mainD___deserialize__ (deactQ_main self, $Serial$state state)
         self = $DNEW(deactQ_main, state);
     }
     $ActorG_methods.__deserialize__(($Actor)self, state);
-    self->env = $step_deserialize(state);
-    self->a = $step_deserialize(state);
-    self->b = $step_deserialize(state);
-    self->x = $step_deserialize(state);
+    ACTON_STORE_ATTR(self, env, $step_deserialize(state));
+    ACTON_STORE_ATTR(self, a, $step_deserialize(state));
+    ACTON_STORE_ATTR(self, b, $step_deserialize(state));
+    ACTON_STORE_ATTR(self, x, $step_deserialize(state));
     $tmp = $val_deserialize(state);
     memcpy(&self->r, &$tmp, sizeof(self->r));
     return self;

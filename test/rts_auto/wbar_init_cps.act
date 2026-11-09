@@ -1,0 +1,91 @@
+# Pointer stores that the write barrier covers: Derived.__init__ calls an
+# actor method and then the __init__ of its parent class. CPS moves the
+# parent call into a continuation, which loads self back from the heap after
+# the minor collections that ran during the actor call have marked it. In
+# checker mode (ACTON_GC_CHECK=1) a parent call without the barrier makes
+# the program exit with status 70.
+#
+# wbar_init_cps [ROUNDS]
+
+class Pad(object):
+    def __init__(self):
+        pass
+
+class Base(object):
+    def __init__(self, n: int):
+        # A tuple of 300 items (2416 bytes) is larger than the objects of
+        # the thread-local free lists (2048 bytes by default). A collection
+        # marks the free objects of those lists, so a new object from them
+        # can be marked already, while a new tuple of this size is not.
+        self.items = (
+            n, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None)
+
+actor Helper():
+    def get(n: int) -> int:
+        total = 0
+        for i in range(400):
+            total += len(str(n + i) * 500)
+        return total
+
+class Derived(Base):
+    def __init__(self, h: Helper, n: int, pads: list[Pad]):
+        # Take the rest of the block that holds self from the thread-local
+        # free list, and keep those objects, so that their memory does not
+        # get back on such a list. Every collection dirties the blocks of the
+        # free objects of those lists. A Pad takes 16 bytes, as self does,
+        # and 1100 of them are more than a block of 16 KiB (the default)
+        # holds.
+        for i in range(1100):
+            pads.append(Pad())
+        # Assigning the result makes the call synchronous.
+        v = h.get(n)
+        Base.__init__(self, n)
+
+actor main(env):
+    rounds = int(env.argv[1]) if len(env.argv) > 1 else 100
+    h = Helper()
+    keep = []
+    pads = []
+    for r in range(rounds):
+        # After a parent call, main only appends the new Derived, so that most
+        # of the collections that follow come in the next round, when main's
+        # stack no longer holds that object. A collection that finds it on a
+        # stack dirties its block, and the checker then takes the parent's
+        # store for one made right before its barrier whenever the allocation
+        # of the tuple left a copy of its address on the stack as well.
+        keep.append(Derived(h, r, pads))
+    for r in range(rounds):
+        d = keep[r]
+        if d.items.0 != r or d.items.299 is not None:
+            print("wrong tuple", r, d.items.0)
+            env.exit(1)
+    env.exit(0)

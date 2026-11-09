@@ -5,7 +5,10 @@ void *zig_crypto_hash_md5_update(void *hasher, B_bytes data);
 void *zig_crypto_hash_md5_finalize(void *hasher, B_bytes output);
 
 B_NoneType cryptoQ_hashQ_md5Q_HasherD__init (cryptoQ_hashQ_md5Q_Hasher self) {
-    self->_hasher = (uint64_t)(uintptr_t)zig_crypto_hash_md5_init();
+    // A GC pointer in an int attribute: the barrier is up to this code
+    void *hasher = zig_crypto_hash_md5_init();
+    self->_hasher = (uint64_t)(uintptr_t)hasher;
+    ACTON_WBAR(self, &self->_hasher, hasher);
     return B_None;
 }
 B_NoneType cryptoQ_hashQ_md5Q_HasherD_update (cryptoQ_hashQ_md5Q_Hasher self, B_bytes data) {

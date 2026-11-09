@@ -51,7 +51,6 @@
 #include <sys/resource.h>
 #endif
 #ifdef __APPLE__
-#include <fcntl.h>
 #include <mach/mach_time.h>
 #include <sys/sysctl.h>
 #endif
@@ -624,11 +623,11 @@ B_Msg B_MsgD___deserialize__(B_Msg res, $Serial$state state) {
         res = $DNEW(B_Msg,state);
     }
     res->$next = NULL;
-    res->$to = $step_deserialize(state);
-    res->$cont = $step_deserialize(state);
+    ACTON_STORE(res, res->$to, $step_deserialize(state));
+    ACTON_STORE(res, res->$cont, $step_deserialize(state));
     res->$waiting = NULL;
     res->$baseline = (time_t)$val_deserialize(state) - wall_offset_us();
-    res->value = $step_deserialize(state);
+    ACTON_STORE(res, res->value, $step_deserialize(state));
     atomic_store_explicit(&res->$wait_lock, 0, memory_order_relaxed);
     return res;
 }
@@ -683,9 +682,9 @@ $Actor $ActorD___deserialize__($Actor res, $Serial$state state) {
     res->$next = NULL;
     res->B_Msg = NULL;
     res->$outgoing = NULL;
-    res->$waitsfor = $step_deserialize(state);
+    ACTON_STORE(res, res->$waitsfor, $step_deserialize(state));
     res->$consume_hd = (long)$val_deserialize(state);
-    res->$catcher = $step_deserialize(state);
+    ACTON_STORE(res, res->$catcher, $step_deserialize(state));
     atomic_store_explicit(&res->B_Msg_lock, 0, memory_order_relaxed);
     if (res->$affinity > 0)
         res->$affinity = SHARED_RQ;
@@ -716,9 +715,9 @@ void $CatcherD___serialize__($Catcher self, $Serial$state state) {
 
 $Catcher $CatcherD___deserialize__($Catcher self, $Serial$state state) {
     $Catcher res = $DNEW($Catcher,state);
-    res->$next = $step_deserialize(state);
-    res->$cont = $step_deserialize(state);
-    res->xval = $step_deserialize(state);
+    ACTON_STORE(res, res->$next, $step_deserialize(state));
+    ACTON_STORE(res, res->$cont, $step_deserialize(state));
+    ACTON_STORE(res, res->xval, $step_deserialize(state));
     return res;
 }
 ///////////////////////////////////////////////////////////////////////////////////////
@@ -743,8 +742,8 @@ void $ConstContD___serialize__($ConstCont self, $Serial$state state) {
 
 $ConstCont $ConstContD___deserialize__($ConstCont self, $Serial$state state) {
     $ConstCont res = $DNEW($ConstCont,state);
-    res->val = $step_deserialize(state);
-    res->cont = $step_deserialize(state);
+    ACTON_STORE(res, res->val, $step_deserialize(state));
+    ACTON_STORE(res, res->cont, $step_deserialize(state));
     return res;
 }
 
@@ -833,9 +832,13 @@ bool ADD_waiting($Actor a, B_Msg m) {
 
     spinlock_lock(&m->$wait_lock);
     if (!FROZEN(m)) {
-        a->$next = m->$waiting;
+        $Actor next = m->$waiting;
+        a->$next = next;
+        ACTON_WBAR(a, &a->$next, next);
         m->$waiting = a;
+        ACTON_WBAR(m, &m->$waiting, a);
         a->$waitsfor = m;
+        ACTON_WBAR(a, &a->$waitsfor, m);
         did_add = true;
     }
     spinlock_unlock(&m->$wait_lock);
@@ -880,10 +883,14 @@ bool ENQ_timed(B_Msg m) {
         size_t parent = (pos - 1) / 2;
         if (!timed_before(entry, timerQ[parent]))
             break;
+        // The heap array is a GC object: every moved entry has a barrier
+        B_Msg moved = timerQ[parent].msg;
         timerQ[pos] = timerQ[parent];
+        ACTON_WBAR(timerQ, &timerQ[pos].msg, moved);
         pos = parent;
     }
     timerQ[pos] = entry;
+    ACTON_WBAR(timerQ, &timerQ[pos].msg, m);
     spinlock_unlock(&timerQ_lock);
     return new_head;
 }
@@ -906,10 +913,13 @@ B_Msg DEQ_timed(time_t now) {
                     child++;
                 if (!timed_before(timerQ[child], entry))
                     break;
+                B_Msg moved = timerQ[child].msg;
                 timerQ[pos] = timerQ[child];
+                ACTON_WBAR(timerQ, &timerQ[pos].msg, moved);
                 pos = child;
             }
             timerQ[pos] = entry;
+            ACTON_WBAR(timerQ, &timerQ[pos].msg, entry.msg);
         } else {
             timerQ_sequence = 0;
         }
@@ -1140,19 +1150,27 @@ void register_actor(int64_t key) {
 #endif
 
 void PUSH_outgoing($Actor self, B_Msg m) {
-    m->$next = self->$outgoing;
+    B_Msg next = self->$outgoing;
+    m->$next = next;
+    ACTON_WBAR(m, &m->$next, next);
     self->$outgoing = m;
+    ACTON_WBAR(self, &self->$outgoing, m);
 }
 
 void PUSH_catcher($Actor a, $Catcher c) {
-    c->$next = a->$catcher;
+    $Catcher next = a->$catcher;
+    c->$next = next;
+    ACTON_WBAR(c, &c->$next, next);
     a->$catcher = c;
+    ACTON_WBAR(a, &a->$catcher, c);
 }
 
 $Catcher POP_catcher($Actor a) {
     $Catcher c = a->$catcher;
     if (c) {
-        a->$catcher = c->$next;
+        $Catcher next = c->$next;
+        a->$catcher = next;
+        ACTON_WBAR(a, &a->$catcher, next);
         c->$next = NULL;
     }
     return c;
@@ -1310,11 +1328,14 @@ void reverse_outgoing_queue($Actor self) {
     B_Msg m = self->$outgoing;
     while (m) {
         B_Msg next = m->$next;
+        // An older message now points to a newer one
         m->$next = prev;
+        ACTON_WBAR(m, &m->$next, prev);
         prev = m;
         m = next;
     }
     self->$outgoing = prev;
+    ACTON_WBAR(self, &self->$outgoing, prev);
 }
 
 #ifdef ACTON_DB
@@ -1483,8 +1504,10 @@ $ROW extract_row($WORD *blob, size_t blob_size) {
         if (words_left == 0)
             break;
         head = (BlobHd*)blob;
-        row->next = GC_malloc(sizeof(struct $ROW) + head->blob_size*sizeof($WORD));
-        row = row->next;
+        // Each row is filled while a local holds it
+        $ROW next = GC_malloc(sizeof(struct $ROW) + head->blob_size*sizeof($WORD));
+        row->next = next;
+        row = next;
     };
     row->next = NULL;
     return fst;
@@ -2443,6 +2466,8 @@ void wt_work_cb(uv_check_t *ev) {
             WT_STAT_SET(ws->state, WT_Working);
         }
         SET_SELF(current);
+        // m is volatile like the variables above. Its stores go through
+        // ACTON_STORE, which reads m once for the store and the barrier.
         volatile B_Msg m = current->B_Msg;
         $Cont cont = m->$cont;
         $WORD val = m->value;
@@ -2516,10 +2541,12 @@ void wt_work_cb(uv_check_t *ev) {
         switch (r.tag) {
         case $RDONE: {
             save_actor_state(current, m, end_us);
-            m->value = r.value;                             // m->value holds the message result,
+            ACTON_STORE(m, m->value, r.value);              // m->value holds the message result,
             $Actor b = FREEZE_waiting(m, MARK_RESULT);      // so mark this and stop further m->waiting additions
             while (b) {
-                b->B_Msg->value = r.value;
+                B_Msg bm = b->B_Msg;
+                bm->value = r.value;
+                ACTON_WBAR(bm, &bm->value, r.value);
                 b->$waitsfor = NULL;
                 $Actor c = b->$next;
                 ENQ_ready(b, end_us);
@@ -2533,8 +2560,8 @@ void wt_work_cb(uv_check_t *ev) {
             break;
         }
         case $RCONT: {
-            m->$cont = r.cont;
-            m->value = r.value;
+            ACTON_STORE(m, m->$cont, r.cont);
+            ACTON_STORE(m, m->value, r.value);
             rtsd_printf("## CONT actor %" PRId64 " : %s", current->$globkey, current->$class->$GCINFO);
             more = true;
             break;
@@ -2543,14 +2570,16 @@ void wt_work_cb(uv_check_t *ev) {
             $Catcher c = current->$catcher;
             if (c) {                            // Normal exception handling
                 c->xval = (B_BaseException)r.value;
-                m->$cont = c->$cont;
+                ACTON_WBAR(c, &c->xval, r.value);
+                $Cont k = c->$cont;
+                ACTON_STORE(m, m->$cont, k);
                 m->value = B_False;             // False signals the exceptional branch
                 rtsd_printf("## FAIL/handle actor %" PRId64 " : %s", current->$globkey, current->$class->$GCINFO);
                 more = true;
             } else {                            // An unhandled exception
                 save_actor_state(current, m, end_us);
                 B_BaseException ex = (B_BaseException)r.value;
-                m->value = r.value;                                 // m->value holds the raised exception,
+                ACTON_STORE(m, m->value, r.value);                  // m->value holds the raised exception,
                 $Actor b = FREEZE_waiting(m, MARK_EXCEPTION);       // so mark this and stop further m->waiting additions
                 // If any other actor is waiting for our result / exception,
                 // then we consider the exception handled and we can avoid
@@ -2560,8 +2589,10 @@ void wt_work_cb(uv_check_t *ev) {
                 if (!b)
                     fprintf(stderr, "Unhandled exception in actor: %s[%" PRId64 "]:\n  %s\n", unmangle_name(current->$class->$GCINFO), current->$globkey, fromB_str(ex->$class->__str__(ex)));
                 while (b) {
-                    b->B_Msg->$cont = &$Fail$instance;
-                    b->B_Msg->value = r.value;
+                    B_Msg bm = b->B_Msg;
+                    bm->$cont = &$Fail$instance;
+                    bm->value = r.value;
+                    ACTON_WBAR(bm, &bm->value, r.value);
                     b->$waitsfor = NULL;
                     $Actor c = b->$next;
                     ENQ_ready(b, end_us);
@@ -2600,7 +2631,7 @@ void wt_work_cb(uv_check_t *ev) {
 #ifdef ACTON_DB
             }
 #endif
-            m->$cont = r.cont;
+            ACTON_STORE(m, m->$cont, r.cont);
             B_Msg x = (B_Msg)r.value;
             assert(x != NULL);
 
@@ -2616,11 +2647,13 @@ void wt_work_cb(uv_check_t *ev) {
             } else if (EXCEPTIONAL(x)) {        // x->cont == MARK_EXCEPTION: x->value holds the raised exception, current is not in x->waiting
                 rtsd_printf("## AWAIT/fail actor %" PRId64 " : %s", current->$globkey, current->$class->$GCINFO);
                 m->$cont = &$Fail$instance;
-                m->value = x->value;
+                $WORD v = x->value;
+                ACTON_STORE(m, m->value, v);
                 more = true;
             } else {                            // x->cont == MARK_RESULT: x->value holds the final response, current is not in x->waiting
                 rtsd_printf("## AWAIT/wakeup actor %" PRId64 " : %s", current->$globkey, current->$class->$GCINFO);
-                m->value = x->value;
+                $WORD v = x->value;
+                ACTON_STORE(m, m->value, v);
                 more = true;
             }
             break;
@@ -2669,8 +2702,14 @@ void wt_work_cb(uv_check_t *ev) {
     uv_async_send(&wake_ev[wctx->id]);
 }
 
+// SET_SELF stores the current actor into the worker context for every
+// continuation, without a write barrier.
+static WorkerCtx new_worker_ctx(void) {
+    return acton_gc_malloc_rescanned_aligned(_Alignof(struct WorkerCtx), sizeof(struct WorkerCtx));
+}
+
 void *main_loop(void *idx) {
-    WorkerCtx wctx = GC_memalign(_Alignof(struct WorkerCtx), sizeof(struct WorkerCtx));
+    WorkerCtx wctx = new_worker_ctx();
     wctxs[(intptr_t)idx] = wctx;
     wctx->id = (intptr_t)idx;
     wctx->uv_loop = uv_loops[wctx->id];
@@ -3163,39 +3202,6 @@ static void get_exe_path(char *name_buf, size_t buf_size) {
     name_buf[buf_size - 1] = 0;
 }
 
-#ifdef __APPLE__
-// In incremental and generational mode, the collector's mprotect dirty
-// tracking makes other threads take write faults on protected heap pages
-// while lldb is attached. debugserver takes over the task's EXC_BAD_ACCESS
-// exception port when it attaches, so these faults reach lldb instead of
-// the collector's handler. lldb then reports a crash, --one-line-on-crash
-// exits before "thread backtrace all" runs, and on detach the fault is
-// delivered as SIGBUS. This setting makes debugserver leave EXC_BAD_ACCESS
-// to the task's own handler.
-#define LLDB_IGNORE_BAD_ACCESS "settings set platform.plugin.darwin.ignored-exceptions EXC_BAD_ACCESS"
-
-// Older lldb versions lack the setting, and lldb --batch stops at the first
-// failing command, before it attaches. Try the command on its own first.
-static bool lldb_can_ignore_bad_access() {
-    int probe_pid = fork();
-    if (probe_pid < 0)
-        return false;
-    if (!probe_pid) {
-        int devnull = open("/dev/null", O_WRONLY);
-        if (devnull >= 0) {
-            dup2(devnull, 1);
-            dup2(devnull, 2);
-        }
-        execlp("lldb", "lldb", "--batch", "-O", LLDB_IGNORE_BAD_ACCESS, NULL);
-        _exit(127);
-    }
-    int status;
-    if (waitpid(probe_pid, &status, 0) != probe_pid)
-        return false;
-    return WIFEXITED(status) && WEXITSTATUS(status) == 0;
-}
-#endif
-
 void print_trace() {
     char pid_buf[30];
     sprintf(pid_buf, "%d", getpid());
@@ -3207,10 +3213,6 @@ void print_trace() {
     int child_pid = fork();
     if (!child_pid) {
         dup2(2, 1); // redirect output to stderr
-#ifdef __APPLE__
-        if (lldb_can_ignore_bad_access())
-            execlp("lldb", "lldb", "-O", LLDB_IGNORE_BAD_ACCESS, "-p", pid_buf, "--batch", "-o", "thread backtrace all", "-o", "exit", "--one-line-on-crash", "exit", name_buf, NULL);
-#endif
         execlp("lldb", "lldb", "-p", pid_buf, "--batch", "-o", "thread backtrace all", "-o", "exit", "--one-line-on-crash", "exit", name_buf, NULL);
         execlp("gdb", "gdb", "--quiet", "--batch", "-n", "-ex", "set confirm off", "-ex", "set pagination off", "-ex", "set debuginfod enabled off", "-ex", "thread", "-ex", "thread apply all backtrace full", name_buf, pid_buf, NULL);
         fprintf(stderr, "Unable to get detailed backtrace using lldb or gdb\n");
@@ -3356,7 +3358,152 @@ static void GC_CALLBACK gc_disable_thp(void *space, size_t size) {
 }
 #endif
 
+#ifdef _WIN32
+// The collector's abort function on Windows. On a fatal error the collector
+// calls it with the message and, if it returns, calls DebugBreak(), which can
+// bring up Windows' crash or debugger dialog and keep the process waiting
+// there. gc_abort writes the message and CR LF to stderr, the line end that
+// the C runtime's text mode gives the collector's other output, and ends the
+// process at once with exit code 3, the code with which abort() exits when it
+// does not call Windows Error Reporting. The collector may call it with the
+// allocator lock held and with the world stopped, so it writes with WriteFile
+// on the stderr handle, without the C runtime's locks and without allocating.
+// When the collector runs out of memory, it calls gc_abort with NULL and then
+// exit(1), so gc_abort returns for NULL.
+static void GC_CALLBACK gc_abort(const char *msg) {
+    if (msg == NULL)
+        return;
+    HANDLE h = GetStdHandle(STD_ERROR_HANDLE);
+    if (h != NULL && h != INVALID_HANDLE_VALUE) {
+        DWORD n;
+        WriteFile(h, msg, (DWORD)strlen(msg), &n, NULL);
+        WriteFile(h, "\r\n", 2, &n, NULL);
+    }
+    TerminateProcess(GetCurrentProcess(), 3);
+}
+#endif
+
 void DaveNull () {}
+
+// The GC mode: ordinary, or generational, which collects the young objects
+// in minor collections and marks every collection in world-stopped parallel
+// steps with a target length of ACTON_GC_PAUSE_MS milliseconds (default 50,
+// 0 for one stop per collection). ACTON_GC_MODE=ordinary|generational
+// overrides the gc_mode build option. ACTON_GC_CHECK=1 selects generational
+// mode with the collector's write-barrier checker, a small allocation budget
+// and steps of 1 ms, so that a test run has many collections, and exits with
+// status 70 after a collection that finds a store without its barrier. The
+// RTS sets the collector's environment variables before GC_INIT, unless they
+// are set already, and removes them again after it, so that child processes
+// choose their own mode.
+#define GC_ENV_MAX 4
+static const char *gc_env_set[GC_ENV_MAX];
+static int gc_env_nset = 0;
+
+static void gc_env_default(const char *name, const char *value) {
+    if (getenv(name) != NULL || gc_env_nset == GC_ENV_MAX)
+        return;
+#ifdef _WIN32
+    _putenv_s(name, value);
+#else
+    setenv(name, value, 1);
+#endif
+    gc_env_set[gc_env_nset++] = name;
+}
+
+static void gc_env_restore(void) {
+    for (int i = 0; i < gc_env_nset; i++) {
+#ifdef _WIN32
+        _putenv_s(gc_env_set[i], "");
+#else
+        unsetenv(gc_env_set[i]);
+#endif
+    }
+    gc_env_nset = 0;
+}
+
+static bool gc_env_flag(const char *name) {
+    const char *s = getenv(name);
+    return s != NULL && *s != '\0' && strcmp(s, "0") != 0;
+}
+
+// A pause target in milliseconds: digits, optionally with a fraction.
+static bool gc_valid_pause(const char *s) {
+    const char *p = s;
+    while (*p >= '0' && *p <= '9')
+        p++;
+    if (p == s)
+        return false;
+    if (*p == '.') {
+        const char *f = ++p;
+        while (*p >= '0' && *p <= '9')
+            p++;
+        if (p == f)
+            return false;
+    }
+    return *p == '\0';
+}
+
+static void gc_select_mode(void) {
+    bool check = gc_env_flag("ACTON_GC_CHECK");
+    bool generational = ACTON_GC_MODE_GENERATIONAL;
+    const char *mode = getenv("ACTON_GC_MODE");
+    if (mode != NULL && *mode != '\0') {
+        if (strcmp(mode, "generational") == 0)
+            generational = true;
+        else if (strcmp(mode, "ordinary") == 0)
+            generational = false;
+        else {
+            fprintf(stderr, "Acton RTS: ACTON_GC_MODE must be ordinary or generational, not %s\n", mode);
+            exit(1);
+        }
+    }
+    if (check) {
+        if (mode != NULL && strcmp(mode, "ordinary") == 0) {
+            fprintf(stderr, "Acton RTS: ACTON_GC_CHECK=1 needs generational mode\n");
+            exit(1);
+        }
+        generational = true;
+    }
+    if (!generational)
+        return;
+    const char *pause = getenv("ACTON_GC_PAUSE_MS");
+    if (pause == NULL || *pause == '\0')
+        pause = check ? "1" : "50";
+    else if (!gc_valid_pause(pause)) {
+        fprintf(stderr, "Acton RTS: ACTON_GC_PAUSE_MS must be a number of milliseconds, not %s\n", pause);
+        exit(1);
+    }
+    if (strspn(pause, "0.") == strlen(pause))
+        pause = "999999";  // GC_TIME_UNLIMITED: one stop per collection
+    gc_env_default("GC_ENABLE_INCREMENTAL", "1");
+    gc_env_default("GC_PAUSE_TIME_TARGET", pause);
+    if (check) {
+        gc_env_default("GC_WBAR_VERIFY", "1");
+        gc_env_default("GC_ALLOC_BUDGET_PERCENT", "20");
+    }
+}
+
+#ifndef _WIN32
+#include <dlfcn.h>
+#endif
+// Names the class of an object that the write-barrier checker reports: the
+// name of the symbol that starts at the address in the object's first word,
+// which for an instance of a class is the methods table of its class, if
+// dladdr finds one, else NULL (always on Windows).
+static const char *GC_CALLBACK gc_wbar_describe(const void *obj, size_t size) {
+#ifndef _WIN32
+    Dl_info info;
+    const void *cls = size >= sizeof(void *) ? *(void *const *)obj : NULL;
+    if (cls != NULL && GC_base((void *)cls) == NULL && dladdr(cls, &info) != 0
+            && info.dli_saddr == cls && info.dli_sname != NULL)
+        return info.dli_sname;
+#else
+    (void)obj;
+    (void)size;
+#endif
+    return NULL;
+}
 
 #ifndef _WIN32
 // Raise the soft limit on open files to the hard limit. Systems set a low
@@ -3391,18 +3538,18 @@ int main(int argc, char **argv) {
     init_counter();
     init_clock();
     // Init garbage collector and suppress warnings
+#ifdef _WIN32
+    GC_set_abort_func(gc_abort);
+#endif
 #ifdef ACTON_GC_DISABLE_THP
     GC_set_on_os_get_mem(gc_disable_thp);
 #endif
+    gc_select_mode();
+    if (getenv("GC_WBAR_VERIFY") != NULL)
+        GC_set_wbar_verify_describe(gc_wbar_describe);
     GC_INIT();
-#if ACTON_GC_REQUIRED_VDB != 0
-    if (getenv("GC_ENABLE_INCREMENTAL") != NULL
-            && GC_get_actual_vdb() != ACTON_GC_REQUIRED_VDB) {
-        fprintf(stderr, "Acton RTS: requested GC dirty tracking backend %s is unavailable\n",
-                ACTON_GC_DIRTY_TRACKING_BACKEND);
-        exit(1);
-    }
-#endif
+    gc_env_restore();
+    acton_init_write_barrier();
     GC_set_warn_proc(DaveNull);
     acton_init_alloc();
     acton_replace_allocator(GC_malloc, GC_malloc_atomic, GC_realloc, GC_calloc, acton_noop_free, GC_strdup, GC_strndup);
@@ -3795,7 +3942,8 @@ int main(int argc, char **argv) {
     wctxs[0] = NULL;
 
     for (int i=0; i <= num_wthreads; i++) {
-        uv_loop_t *loop = GC_malloc(sizeof(uv_loop_t));
+        // libuv writes handle links and timers into the loop
+        uv_loop_t *loop = acton_gc_malloc_rescanned_aligned(_Alignof(uv_loop_t), sizeof(uv_loop_t));
         check_uv_fatal(uv_loop_init(loop), "Error initializing libuv loop: ");
         uv_loops[i] = loop;
 
@@ -3837,7 +3985,7 @@ int main(int argc, char **argv) {
     B___init__();
     $register_rts();
 
-    WorkerCtx wctx = GC_memalign(_Alignof(struct WorkerCtx), sizeof(struct WorkerCtx));
+    WorkerCtx wctx = new_worker_ctx();
     wctxs[0] = wctx;
     wctx->id = 0;
     wctx->uv_loop = uv_loops[wctx->id];

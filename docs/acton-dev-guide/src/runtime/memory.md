@@ -39,6 +39,100 @@ re-points the table during startup (`base/rts/rts.c`):
 `free` is deliberately a no-op in the GC regime: the collector reclaims
 memory, and explicit frees of GC memory would be double-management.
 
+## Write barrier
+
+Every build compiles the collector with its manual dirty-bit mode only and
+the program with a write barrier (`base/rts/wbar.h`). The collector refuses
+the manual mode without threads, so targets without threads (wasm) cannot be
+built. In generational mode (`ACTON_GC_MODE=generational`) the collector reads
+those bits:
+
+- a minor collection rescans the marked objects of the dirty blocks, pushes
+  the roots and marks to the end;
+- a collection marked in slices reads the bits at its first stop (minor) or
+  clears them (full), marks in world-stopped parallel steps, and at its final
+  stop rescans the marked objects of the blocks dirtied since the first,
+  pushes the roots and marks to the end. Steps push no roots and scan no
+  stacks.
+
+The collector marks only with every thread stopped, and reads and clears the
+bits only with every thread stopped. So the barrier needs no memory fence.
+
+**The invariant.** At every read of the bits, every marked object that holds
+a pointer to an unmarked object lies in a dirty block, or in a block of a kind
+that every read rescans (uncollectable objects, `acton_malloc_rescanned`).
+
+**The barrier.** After `*slot = v` in object `obj`: set the bit of the slot's
+block, with an atomic OR only if it is clear, and keep `v` in a register until
+then. A thread stopped between the store and the bit has `v` in a register,
+so that stop marks it, and the bit set after the restart serves the next
+read. `ACTON_STORE_ATTR` (generated code) and `ACTON_STORE` evaluate the
+value first, then the receiver, as clang does for the plain assignment.
+
+**Ordinary mode.** The collector reads the bits only in its incremental mode,
+which `GC_INIT` chooses. Nothing calls `GC_enable_incremental` afterwards, and
+the manual dirty-bit mode never leaves incremental mode, so the mode holds for
+the whole run. `acton_init_write_barrier` (`base/rts/common.c`), right after
+`GC_INIT`, gives the barrier the collector's table (`acton_gc_dirty_bits`) in
+incremental mode only. In ordinary mode the pointer stays NULL: every barrier
+tests it and sets no bit, and `ACTON_WBAR_RANGE` returns at once. The hint on
+the test follows the default mode of the build (the `gc_mode` build option,
+`ACTON_GC_MODE_GENERATIONAL` in `acton_gc_config.h`), so the barrier's work is
+out of line unless generational mode is the default. `ACTON_STORE_ELEM` stores
+an element of a pointer array, such as the data of a list, with the barrier,
+and evaluates the value first like `ACTON_STORE`. In ordinary mode it is the
+test and the plain store, so that loops of element stores keep no induction
+variables or spilled values for the barrier.
+
+**Rule F: stores that need no barrier.** A store into an object that the
+storing code has held in a local variable continuously since the object was
+allocated. The collector makes this true:
+
+- the allocator returns an unmarked object, or one in a block that is dirty
+  for the next read (the blocks of thread-local free lists, whose entries a
+  collection marks, are dirtied at every root push; so is the block of a
+  marked object that `GC_free` releases);
+- every stop that pushes roots dirties, for the next read, the block of every
+  object a stack or register references, and every block of a large one;
+- while a collection is in progress, every block the allocator hands out is
+  dirty for its final read.
+
+Rule F covers `__init__` and `G_init` stores into `self` of classes (not
+actors, not static methods), closure and continuation constructors, and C
+constructors. It does not cover an object reached through the held one
+(`B_listD_new(n)->data`), an object loaded back from the heap (the `--db`
+restore fills objects allocated in an earlier pass, so every deserializer fill
+has a barrier), or the result of realloc. So an explicit `C.__init__(x)` or
+`C.G_init(x)` call first sets the bits of the blocks of `x` that struct `C`
+spans (`acton_wbar_object`), unless `x` is the `self` of the calling
+`__init__` or `G_init`. That object is still held by its constructor, or the
+call that ran the calling method has covered it, since the struct of a class
+begins with the fields of its parent class. Such calls run in functions and
+methods that initialize an object again, and in the continuation of a `proc`
+`__init__`, which loads `self` back from the heap. A barrier after the call
+would be too late: the method does not keep the values it stores live.
+
+**Moves and bulk copies.** `ACTON_WBAR_RANGE` over the destination, before
+the first move: a step can scan a large object in pieces between two moves,
+and the values in flight are only in registers or a temporary buffer. A
+barrier after the copy is not enough for sliced marking. Values held on the
+stack do not make a store safe either, since steps do not scan stacks.
+
+**C libraries.** libuv writes pointers into the uv loops, handles and
+requests and into memory it allocates with `realloc(NULL, n)`: in generational
+mode those come from the rescanned kind (`acton_malloc_rescanned`,
+`base/rts/common.c`). libuv's other allocations are uncollectable, which every
+read rescans. The worker context, which `SET_SELF` writes for every
+continuation, is rescanned too. Each allocation from the kind takes the
+collector's allocator lock, so ordinary mode, which never reads the dirty
+bits, allocates ordinary GC memory instead.
+
+**Checking.** `ACTON_GC_CHECK=1` (`acton test --gc-check`) runs the
+collector's checker at every read: it reports a marked object in a clean block
+that points to an unmarked object, and exits with status 70. It finds a
+missing barrier only when nothing else dirtied the same block in that run, so
+it needs many collections (small budget, 1 ms steps) and many runs.
+
 ## Finalizers
 
 Actors that override `__cleanup__` get a GC finalizer: code generation emits a

@@ -303,7 +303,10 @@ B_str xmlQ_node2str(xmlQ_Node node, bool pretty, int depth) {
         children->length = node->children->length;
         for (int i = 0; i < node->children->length; i++) {
             xmlQ_Node ch = (xmlQ_Node)node->children->data[i];
-            children->data[i] = xmlQ_node2str(ch, pretty, depth + 1);
+            // The call allocates, and the array of children is reached
+            // through children, so each store has a barrier.
+            B_str s = xmlQ_node2str(ch, pretty, depth + 1);
+            ACTON_STORE(children->data, children->data[i], s);
         }
 
         if (pretty) {

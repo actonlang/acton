@@ -163,7 +163,8 @@ $R B_ProcessD__create_processG_local(B_Process self, $Cont c$cont) {
         return $R_CONT(c$cont, B_None);
     }
 
-    struct child_process_data *process_data = acton_calloc(1, sizeof(struct child_process_data));
+    // libuv writes into the uv pipes inside process_data and into req
+    struct child_process_data *process_data = acton_malloc_rescanned(sizeof(struct child_process_data));
     process_data->process = self;
     process_data->on_stdout = self->on_stdout;
     process_data->on_stderr = self->on_stderr;
@@ -171,8 +172,11 @@ $R B_ProcessD__create_processG_local(B_Process self, $Cont c$cont) {
 
     uv_process_options_t *options = acton_calloc(1, sizeof(uv_process_options_t));
 
-    uv_process_t *req = acton_calloc(1, sizeof(uv_process_t));
+    uv_process_t *req = acton_malloc_rescanned(sizeof(uv_process_t));
+    // A GC pointer in an int attribute, which the generated code stores
+    // without a write barrier
     self->_p = (int64_t)(intptr_t)req;
+    ACTON_WBAR(self, &self->_p, req);
 
     req->data = process_data;
 
@@ -315,7 +319,7 @@ $R B_ProcessD_writeG_local(B_Process self, $Cont c$cont, B_bytes data) {
         return $R_CONT(c$cont, B_None);
     }
 
-    uv_write_t *req = (uv_write_t *)acton_malloc(sizeof(uv_write_t));
+    uv_write_t *req = (uv_write_t *)acton_malloc_rescanned(sizeof(uv_write_t));
     uv_buf_t buf = uv_buf_init((char *)data->str, (unsigned int)data->nbytes);
 
     struct child_process_data *process_data = (struct child_process_data *)p->data;

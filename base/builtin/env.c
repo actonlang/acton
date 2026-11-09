@@ -108,7 +108,7 @@ $R B_StdioD__on_stdin_bytesG_local (B_Stdio self, $Cont c$cont, $action cb) {
     // This should be the only call in Stdio that uses the libuv loop, so it is
     // safe to pin affinity here (and not earlier).
     pin_actor_affinity();
-    uv_tty_t *tty = acton_malloc(sizeof(uv_tty_t));
+    uv_tty_t *tty = acton_malloc_rescanned(sizeof(uv_tty_t));
     uv_tty_init(get_uv_loop(), tty, STDIN_FILENO, 1);
     tty->data = cb;
     uv_read_start((uv_stream_t*)tty, alloc_buffer, read_stdin);

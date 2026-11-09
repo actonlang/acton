@@ -33,7 +33,10 @@ static void B_bitset_init_storage(B_bitset self, int64_t capacity) {
         self->data = NULL;
         return;
     }
-    self->data = acton_malloc_atomic((size_t)word_count * sizeof(uint64_t));
+    // The --db restore initializes a bitset that an earlier pass allocated
+    uint64_t *data = acton_malloc_atomic((size_t)word_count * sizeof(uint64_t));
+    self->data = data;
+    ACTON_WBAR(self, &self->data, data);
     memset(self->data, 0, (size_t)word_count * sizeof(uint64_t));
 }
 
@@ -174,6 +177,7 @@ static void B_bitset_set_capacity(B_bitset self, int64_t capacity) {
         data[new_words - 1] &= B_bitset_tail_mask(capacity);
     }
     self->data = data;
+    ACTON_WBAR(self, &self->data, data);
     self->capacity = capacity;
     if (shrinks)
         B_bitset_recount(self);
@@ -320,7 +324,7 @@ B_IteratorD_bitset B_IteratorD_bitsetD_deserialize(B_IteratorD_bitset self,
                                                     $Serial$state state) {
     if (!self)
         self = $DNEW(B_IteratorD_bitset, state);
-    self->src = (B_bitset)$step_deserialize(state);
+    ACTON_STORE(self, self->src, (B_bitset)$step_deserialize(state));
     self->next = fromB_u64((B_u64)$step_deserialize(state));
     return self;
 }

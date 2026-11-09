@@ -1,0 +1,98 @@
+# Pointer stores that the write barrier cannot see: TCP connections opened
+# and closed while data flows and the program allocates. libuv links each
+# new handle and request into the loop's queues, which writes pointers into
+# older handles from inside libuv, so in generational mode their memory
+# comes from the kind that every collection rescans. In checker mode
+# (ACTON_GC_CHECK=1) handles from ordinary memory make the program exit with
+# status 70 in some runs.
+#
+# wbar_tcp [CLIENTS CONNECTIONS TRIPS]: each client opens CONNECTIONS
+# connections one after the other, with TRIPS echo round trips on each.
+
+import net
+
+actor Server(env, ready: action(int) -> None):
+    var conns: list[net.TCPListenConnection] = []
+
+    def on_listen(l: net.TCPListener, err: ?str):
+        if err is not None:
+            print("listen error", err)
+            env.exit(2)
+        else:
+            ready(l.local_port())
+
+    def on_receive(c, data: bytes):
+        junk = [str(i) for i in range(30)]
+        c.write(data)
+
+    def on_error(c, err: str):
+        pass
+
+    def on_close(c):
+        pass
+
+    def on_accept(c):
+        conns.append(c)
+        if len(conns) > 64:
+            conns = conns[32:]
+        c.cb_install(on_receive, on_error, on_close)
+
+    listener = net.TCPListener(net.TCPListenCap(net.TCPCap(net.NetCap(env.cap))), "127.0.0.1", 0, on_listen, on_accept)
+
+actor Client(env, port: int, id: int, connections: int, trips: int, done: action(int, bool) -> None):
+    var conn_no = 0
+    var trip = 0
+    var conn: ?net.TCPConnection = None
+
+    def on_connect(c):
+        trip = 0
+        c.write(("c" + str(id) + "." + str(conn_no) + ".0").encode())
+
+    def on_receive(c, data: bytes):
+        junk = [str(i) for i in range(30)]
+        trip += 1
+        if trip < trips:
+            c.write(("c" + str(id) + "." + str(conn_no) + "." + str(trip)).encode())
+        else:
+            c.close(lambda c: None)
+            conn_no += 1
+            if conn_no < connections:
+                open_one()
+            else:
+                done(id, True)
+
+    def on_error(c, err: str):
+        print("client error", id, err)
+        done(id, False)
+
+    def open_one():
+        conn = net.TCPConnection(net.TCPConnectCap(net.TCPCap(net.NetCap(env.cap))), "127.0.0.1", port, on_connect, on_receive, on_error)
+
+    open_one()
+
+actor main(env):
+    clients = int(env.argv[1]) if len(env.argv) > 1 else 16
+    connections = int(env.argv[2]) if len(env.argv) > 2 else 40
+    trips = int(env.argv[3]) if len(env.argv) > 3 else 20
+    var left = clients
+    var ok = True
+
+    def done(id: int, good: bool):
+        if not good:
+            ok = False
+        left -= 1
+        if left == 0:
+            if not ok:
+                print("a client failed")
+            env.exit(0 if ok else 1)
+
+    def ready(port: int):
+        for i in range(clients):
+            Client(env, port, i, connections, trips, done)
+
+    server = Server(env, ready)
+
+    def timeout():
+        print("TIMEOUT", left)
+        env.exit(3)
+    after 60: timeout()

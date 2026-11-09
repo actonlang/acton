@@ -1,0 +1,71 @@
+proc def step (C_cont : $Cont[None]) -> $R:
+    pass
+    return $R_CONT@[None](C_cont, None)
+
+# recursive group:
+proc def L_1C_1cont (self : Later, C_cont : $Cont[None], C_2res : None) -> $R:
+    Base.__init__(self)
+    return $R_CONT@[None](C_cont, None)
+class L_2Cont ($Cont[None], __builtin__.value):
+    @property
+    self : Later
+    @property
+    C_cont : $Cont[None]
+    pure def __init__ (L_self : L_2Cont, self : Later, C_cont : $Cont[None]) -> None:
+        L_self.self = self
+        L_self.C_cont = C_cont
+        return None
+    proc def __call__ (L_self : L_2Cont, G_1 : None) -> $R:
+        self: Later = L_self.self
+        C_cont: $Cont[None] = L_self.C_cont
+        return L_1C_1cont(self, C_cont, G_1)
+class Base (__builtin__.object, __builtin__.value):
+    @property
+    items : __builtin__.list[__builtin__.int]
+    pure def __get_attr__ (self : Base, name : __builtin__.str) -> ?__builtin__.value:
+        return None
+    pure def G_init (self : Base) -> None:
+        pass
+        return None
+    pure def __init__ (self : Base) -> None:
+        self.items = [(BOX __builtin__.int (UNBOX __builtin__.int 1))]
+        return None
+class Derived (Base, __builtin__.object, __builtin__.value):
+    pure def __get_attr__ (self : Derived, name : __builtin__.str) -> ?__builtin__.value:
+        return None
+    pure def G_init (self : Derived) -> None:
+        Base.G_init(self)
+        return None
+    pure def __init__ (self : Derived) -> None:
+        Base.__init__(self)
+        return None
+class Later (Base, __builtin__.object, __builtin__.value):
+    pure def __get_attr__ (self : Later, name : __builtin__.str) -> ?__builtin__.value:
+        return None
+    pure def G_init (self : Later) -> None:
+        Base.G_init(self)
+        return None
+    proc def __init__ (self : Later, C_cont : $Cont[None]) -> $R:
+        return step($SKIPRES@[None](L_2Cont(self, C_cont)))
+class Renew (__builtin__.object, __builtin__.value):
+    @property
+    items : None
+    pure def __get_attr__ (self : Renew, name : __builtin__.str) -> ?__builtin__.value:
+        return None
+    pure def G_init (self : Renew) -> None:
+        pass
+        return None
+    hook : () -> None
+    @static
+    pure def __init__ (b : Base) -> None:
+        b.items = [(BOX __builtin__.int (UNBOX __builtin__.int 3))]
+        return None
+# (recursive group)
+
+pure def reinit (b : Base) -> None:
+    Base.__init__(b)
+    return None
+
+pure def renew (b : Base) -> None:
+    Renew.__init__(b)
+    return None

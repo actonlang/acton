@@ -37,7 +37,10 @@ static void B_array_init_storage(B_array self, enum B_array_kind kind, int64_t l
     }
 
     size_t nbytes = (size_t)length * sizeof(uint64_t);
-    self->data = acton_malloc_atomic(nbytes);
+    // The --db restore initializes an array that an earlier pass allocated
+    void *buf = acton_malloc_atomic(nbytes);
+    self->data = buf;
+    ACTON_WBAR(self, &self->data, buf);
     if (initial == B_None) {
         memset(self->data, 0, nbytes);
     } else if (kind == B_ARRAY_INT) {
@@ -80,15 +83,23 @@ B_str B_arrayD___str__(B_array self) {
     if (self->length > INT_MAX)
         RAISE_EXC(&B_array_representation_too_large_error);
 
+    // $FORMAT allocates, and the array of parts is reached through parts,
+    // so each store has a barrier.
     B_list parts = B_listD_new((int)self->length);
     if (self->kind == B_ARRAY_INT) {
         int64_t *data = self->data;
-        for (int64_t i = 0; i < self->length; i++)
-            parts->data[parts->length++] = $FORMAT("%lld", data[i]);
+        for (int64_t i = 0; i < self->length; i++) {
+            B_str s = $FORMAT("%lld", data[i]);
+            ACTON_STORE(parts->data, parts->data[parts->length], s);
+            parts->length++;
+        }
     } else {
         double *data = self->data;
-        for (int64_t i = 0; i < self->length; i++)
-            parts->data[parts->length++] = $FORMAT("%g", data[i]);
+        for (int64_t i = 0; i < self->length; i++) {
+            B_str s = $FORMAT("%g", data[i]);
+            ACTON_STORE(parts->data, parts->data[parts->length], s);
+            parts->length++;
+        }
     }
 
     B_str bracketed = B_strD_join_par('[', parts, ']');
@@ -217,7 +228,7 @@ B_IteratorD_array B_IteratorD_arrayD_deserialize(B_IteratorD_array self,
                                                   $Serial$state state) {
     if (!self)
         self = $DNEW(B_IteratorD_array, state);
-    self->src = (B_array)$step_deserialize(state);
+    ACTON_STORE(self, self->src, (B_array)$step_deserialize(state));
     self->next = fromB_int((B_int)$step_deserialize(state));
     return self;
 }

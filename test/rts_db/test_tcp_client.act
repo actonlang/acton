@@ -47,6 +47,7 @@ actor Tester(env, verbose, port_chunk):
     var p_alive = 0
     var error_encountered = False
     var reported = False
+    var checker_report = False
     var tcp_client = None
     var tcp_expect = 0
     var state = 0
@@ -67,7 +68,11 @@ actor Tester(env, verbose, port_chunk):
         if reported:
             return
         reported = True
-        if error_encountered:
+        if checker_report:
+            print("The write-barrier checker reported a store without its barrier:")
+            print(combined_output)
+            env.exit(70)
+        elif error_encountered:
             print("There was an error :/")
             print(combined_output)
             env.exit(1)
@@ -174,6 +179,9 @@ actor Tester(env, verbose, port_chunk):
                 if ps_aid == paid:
                     del ps[i]
                     break
+            if exit_code == 70:
+                checker_report = True
+                error("Server app exited with exit code 70")
             are_we_done()
 
         p_srv = env.process.spawn(cmd_srv, app_server_on_stdout, on_stderr, app_server_on_exit, on_error)
@@ -241,6 +249,9 @@ actor Tester(env, verbose, port_chunk):
                 if exit_code == 0 and term_signal == 0:
                     log("YAY, TCP client application exited happily")
                     stop(False)
+            if exit_code == 70:
+                checker_report = True
+                error("App exited in state %d with exit code 70" % state)
             are_we_done()
 
         log("Running TCP client test")

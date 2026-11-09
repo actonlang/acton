@@ -78,7 +78,9 @@ static inline void rq_head_changed(struct mpmcq *q, $Actor h) {
 static inline void rq_append(struct mpmcq *q, $Actor first, $Actor last, int64_t n) {
     spinlock_lock(&q->lock);
     if (q->tail) {
-        q->tail->$next = first;
+        $Actor tail = q->tail;
+        tail->$next = first;
+        ACTON_WBAR(tail, &tail->$next, first);
     } else {
         __atomic_store_n(&q->head, first, __ATOMIC_RELAXED);
         rq_head_changed(q, first);
@@ -154,6 +156,7 @@ static inline void rq_prepend(struct mpmcq *q, $Actor first, $Actor last, int64_
     spinlock_lock(&q->lock);
     $Actor head = __atomic_load_n(&q->head, __ATOMIC_RELAXED);
     last->$next = head;
+    ACTON_WBAR(last, &last->$next, head);
     if (head == NULL)
         q->tail = last;
     __atomic_store_n(&q->head, first, __ATOMIC_RELAXED);
@@ -306,6 +309,7 @@ int32_t ENQ_ready($Actor a, uint32_t ready_us) {
         while (x->$next)
             x = x->$next;
         x->$next = a;
+        ACTON_WBAR(x, &x->$next, a);
     } else {
         __atomic_store_n(&rqs[i].head, a, __ATOMIC_RELAXED);
     }
@@ -405,13 +409,16 @@ bool ENQ_msg(B_Msg m, $Actor a) {
     spinlock_lock(&a->B_Msg_lock);
     m->$next = NULL;
     if (a->B_Msg_tail) {
-        a->B_Msg_tail->$next = m;
-        a->B_Msg_tail = m;
+        B_Msg tail = a->B_Msg_tail;
+        tail->$next = m;
+        ACTON_WBAR(tail, &tail->$next, m);
         did_enq = false;
     } else {
         a->B_Msg = m;
-        a->B_Msg_tail = m;
+        ACTON_WBAR(a, &a->B_Msg, m);
     }
+    a->B_Msg_tail = m;
+    ACTON_WBAR(a, &a->B_Msg_tail, m);
     spinlock_unlock(&a->B_Msg_lock);
     return did_enq;
 }
@@ -423,7 +430,9 @@ bool DEQ_msg($Actor a) {
     spinlock_lock(&a->B_Msg_lock);
     B_Msg x = a->B_Msg;
     if (x) {
-        a->B_Msg = x->$next;
+        B_Msg next = x->$next;
+        a->B_Msg = next;
+        ACTON_WBAR(a, &a->B_Msg, next);
         x->$next = NULL;
         if (a->B_Msg == NULL) {
             a->B_Msg_tail = NULL;
@@ -447,9 +456,11 @@ bool ENQ_msg(B_Msg m, $Actor a) {
         while (x->$next)
             x = x->$next;
         x->$next = m;
+        ACTON_WBAR(x, &x->$next, m);
         did_enq = false;
     } else {
         a->B_Msg = m;
+        ACTON_WBAR(a, &a->B_Msg, m);
     }
     spinlock_unlock(&a->B_Msg_lock);
     return did_enq;
@@ -462,7 +473,9 @@ bool DEQ_msg($Actor a) {
     spinlock_lock(&a->B_Msg_lock);
     if (a->B_Msg) {
         B_Msg x = a->B_Msg;
-        a->B_Msg = x->$next;
+        B_Msg next = x->$next;
+        a->B_Msg = next;
+        ACTON_WBAR(a, &a->B_Msg, next);
         x->$next = NULL;
         has_more = a->B_Msg != NULL;
     }

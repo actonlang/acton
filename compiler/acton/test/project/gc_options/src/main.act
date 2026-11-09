@@ -24,6 +24,13 @@ actor Worker(wid: int, report: action(int, int) -> None):
 actor main(env):
     # The test compares these lines with the settings it built.
     info = acton.rts.get_gc_info(env.syscap)
+    print("mode=" + info.mode)
+    print("backend=" + info.backend)
+    pause = info.pause_target_ms
+    if pause is not None:
+        print("pause_target_us=" + str(int(pause * 1000.0)))
+    else:
+        print("pause_target_us=None")
     print("block_size=" + str(info.block_size))
     print("end_padding=" + str(info.end_padding))
     print("small_object_size=" + str(small_object_size()))

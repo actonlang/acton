@@ -14,7 +14,6 @@ pub fn build(b: *std.Build) void {
     const only_actondb = b.option(bool, "only_actondb", "") orelse false;
     const gc_use_mark_bits = b.option(bool, "gc_use_mark_bits", "Use packed GC mark bits (default: true)") orelse true;
     const gc_mark_bit_per_object = b.option(bool, "gc_mark_bit_per_object", "Track GC marks per object") orelse false;
-    const gc_dirty_tracking_backend = b.option([]const u8, "gc_dirty_tracking_backend", "GC dirty tracking backend: auto, soft_dirty, userfaultfd") orelse "auto";
     const gc_page_hash_table_log2 = b.option(u8, "gc_page_hash_table_log2", "Log2 of GC page-hash entries (0 keeps the default)") orelse 0;
     const gc_heap_growth_divisor = b.option(u32, "gc_heap_growth_divisor", "Limit automatic GC heap growth to the heap size divided by this (default 4; 0 keeps the fixed increment)") orelse 4;
     const gc_alloc_budget_percent = b.option(u32, "gc_alloc_budget_percent", "Collect after allocating this percentage of the live data (default 250; 0 selects the free space divisor policy)") orelse 250;
@@ -46,7 +45,7 @@ pub fn build(b: *std.Build) void {
         .enable_mmap = true,
         .enable_mark_bits = gc_use_mark_bits,
         .enable_mark_bit_per_obj = gc_mark_bit_per_object,
-        .dirty_tracking_backend = gc_dirty_tracking_backend,
+        .dirty_tracking_backend = "manual",
         .page_hash_table_log2 = gc_page_hash_table_log2,
         .heap_growth_divisor = gc_heap_growth_divisor,
         .alloc_budget_percent = gc_alloc_budget_percent,
@@ -61,7 +60,7 @@ pub fn build(b: *std.Build) void {
         .disable_realloc_free = gc_realloc_no_free,
         .disable_thread_local_warmup = gc_no_thread_local_warmup,
         .tl_refill_max = gc_thread_local_refill_blocks,
-        .enable_mprotect_vdb = !(target.result.os.tag.isDarwin() and target.result.cpu.arch == .x86_64),
+        .CFLAGS_EXTRA = gcCflagsExtra(target.result),
     });
     const libgc = dep_libgc.artifact("gc");
     if (enable_lto) libgc.lto = .thin;
@@ -182,4 +181,10 @@ pub fn build(b: *std.Build) void {
 fn gcTinyFreelists(t: std.Target, size_limit: u32) u32 {
     if (size_limit == 0) return 0;
     return size_limit / (2 * (t.ptrBitWidth() / 8)) + 1;
+}
+
+// Same as gcCflagsExtra in base/build.zig.
+fn gcCflagsExtra(t: std.Target) []const u8 {
+    if (t.os.tag != .windows) return "";
+    return "-DCONSOLE_LOG -DNO_MSGBOX_ON_ERROR";
 }
