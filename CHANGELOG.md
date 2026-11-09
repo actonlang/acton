@@ -301,6 +301,9 @@
 - Decode XML CDATA sections larger than 10 MB with `xml.decode()` and
   `std.xml.decode()`, up to libxml2's 1 GB limit. The maximum element nesting
   depth also increases from 256 to 2048. [#3353]
+- Format the full `u64` range correctly with `hex()` and `bin()`, instead of
+  treating values above the signed 64-bit maximum as negative. For example,
+  `hex(u64(18446744073709551615))` returns `"0xffffffffffffffff"`. [#3388]
 - Fix parsing negative integer strings whose digit count exactly matches the
   parser's chunk size, including fixed-width integer constructors, and fix
   `bigint` `&`, `|`, and `^` results for negative operands. [#3246] [#3247]
@@ -6067,6 +6070,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#3383]: https://github.com/actonlang/acton/pull/3383
 [#3384]: https://github.com/actonlang/acton/pull/3384
 [#3385]: https://github.com/actonlang/acton/pull/3385
+[#3388]: https://github.com/actonlang/acton/pull/3388
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
