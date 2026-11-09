@@ -1,6 +1,8 @@
 module Acton.Testing
   ( TestResult(..)
   , TestRunContext(..)
+  , testRunnerVariables
+  , testRunEnvironment
   , TestCachedResult(..)
   , TestCacheEntry(..)
   , TestCache(..)
@@ -87,8 +89,11 @@ data TestRunContext = TestRunContext
   , trcMode            :: String
   , trcArgs            :: [String]
   , trcBuildOptions    :: M.Map String String
+  , trcEnvironment     :: M.Map String String      -- testRunEnvironment
   } deriving (Show, Eq)
 
+-- | A context without build options or environment encodes as before either
+-- existed, so the results that earlier caches hold for it stay valid.
 instance Aeson.ToJSON TestRunContext where
   toJSON ctx = Aeson.object $
     [ AesonKey.fromString "compilerVersion" Aeson..= trcCompilerVersion ctx
@@ -98,6 +103,8 @@ instance Aeson.ToJSON TestRunContext where
     , AesonKey.fromString "args" Aeson..= trcArgs ctx
     ] ++ [ AesonKey.fromString "build_options" Aeson..= trcBuildOptions ctx
          | not (M.null (trcBuildOptions ctx)) ]
+      ++ [ AesonKey.fromString "environment" Aeson..= trcEnvironment ctx
+         | not (M.null (trcEnvironment ctx)) ]
 
 instance Aeson.FromJSON TestRunContext where
   parseJSON = Aeson.withObject "TestRunContext" $ \o ->
@@ -108,6 +115,26 @@ instance Aeson.FromJSON TestRunContext where
       <*> o Aeson..: AesonKey.fromString "mode"
       <*> o Aeson..: AesonKey.fromString "args"
       <*> o Aeson..:? AesonKey.fromString "build_options" Aeson..!= M.empty
+      <*> o Aeson..:? AesonKey.fromString "environment" Aeson..!= M.empty
+
+-- | The environment variables that the test runner sets for a test process
+-- from its own options.  A test process never inherits them.
+testRunnerVariables :: [String]
+testRunnerVariables = ["ACTON_TEST_PERF", "ACTON_GC_CHECK"]
+
+-- | The part of acton test's environment that a cached test result depends
+-- on: the variables of the Acton RTS (ACTON_) and of its garbage collector
+-- (GC_), which a test process reads at startup, as it inherits them.  For
+-- example ACTON_GC_MODE selects the collector, and GC_MARKERS its threads.
+-- Other variables reach only the code that asks for them, and keying on
+-- them all would make every change of the shell a miss.
+testRunEnvironment :: [(String, String)] -> M.Map String String
+testRunEnvironment environment = M.fromList
+    [ (name, value)
+    | (name, value) <- environment
+    , "ACTON_" `isPrefixOf` name || "GC_" `isPrefixOf` name
+    , name `notElem` testRunnerVariables
+    ]
 
 data TestCachedResult = TestCachedResult
   { tcrComplete     :: Bool
