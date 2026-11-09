@@ -19,6 +19,7 @@ import Acton.Syntax
 import Acton.Builtin
 import Acton.Names
 import Acton.NameInfo
+import qualified Data.Map.Strict as Map
 
 nPrim               = name "$"
 mPrim               = ModName [nPrim]
@@ -322,7 +323,97 @@ annot t_ann ann t e = eCall (tApp (eQVar primAnnot) [t_ann, t]) [ann, e]
 unAnnot t_ann (Call _ (TApp _ (Var _ n) [t,_]) (PosArg w (PosArg e PosNil)) KwdNil)
   | n == primAnnot && t == t_ann    = (w, e)
 
-primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec Nothing),
+-- Compiler-private descriptions of concrete hash-container calls. The schemas
+-- keep keys/elements boxed; CodeGen adapts the container to the shared C view.
+-- Factories keep their protocol witness, which supplies Hashable before there
+-- is a container. Dict comparisons likewise retain their value Eq witness.
+data HashContainerABI = DictBase | SetTable | SetObject | SetBuild QName
+
+data HashContainerWorker = HashContainerWorker {
+    hcType :: QName, hcMethod :: Name, hcArity :: Int,
+    hcName :: QName, hcSchema :: TSchema, hcCName :: String,
+    hcABI :: HashContainerABI, hcNegate :: Bool, hcReverse :: Bool,
+    hcDefault :: Bool, hcContainerArgs :: Int
+    }
+
+hashContainerWorker q attr arity = Map.lookup (q,attr,arity) hashContainerMethodMap
+
+hashContainerPrimitive q = Map.lookup q hashContainerPrimitiveMap
+
+hashContainerMethodMap = Map.fromList [ ((hcType w,hcMethod w,hcArity w),w) | w <- hashContainerWorkers ]
+hashContainerPrimitiveMap = Map.fromList [ (hcName w,w) | w <- hashContainerWorkers ]
+
+hashContainerWorkers = dictWorkers qnDict tDict True ++ dictWorkers qnIDict tIDict False ++
+                       setWorkers qnSetT tSet True ++ setWorkers qnISetT tISet False
+  where a = TV KType (name "A")
+        b = TV KType (name "B")
+        c = TV KType (name "C")
+        at = tVar a
+        bt = tVar b
+        ct = tVar c
+        pair = tTupleP (foldr posRow posNil [at,bt])
+        worker q self qs attr fx args result native abi neg rev def =
+            HashContainerWorker q (name attr) (length args)
+                (gPrim (nstr (noq q) ++ "_base_" ++ attr))
+                (tSchema qs $ tFun fx (foldr posRow posNil args) kwdNil result)
+                native abi neg rev def (length $ takeWhile (== self) args)
+        dictWorkers q cons mutable =
+          let self = cons at bt
+              make attr fx args result native def = worker q self [qbind a,qbind b]
+                  attr fx args result native DictBase False False def
+          in [ make "__getitem__" fxPure [self,at] bt "B_dict_base_getitem" False
+             , make "__contains__" fxPure [self,at] tBool "B_dict_base_contains" False
+             , (make "__containsnot__" fxPure [self,at] tBool "B_dict_base_contains" False){hcNegate=True}
+             , make "get" fxPure [self,at] (tOpt bt) "B_dict_base_get" True
+             , make "get_def" fxPure [self,at,bt] bt "B_dict_base_get" False
+             , make "__iter__" fxPure [self] (tIterator at) "B_dict_base_key_iterator" False
+             , make "keys" fxPure [self] (tIterator at) "B_dict_base_key_iterator" False
+             , make "values" fxPure [self] (tIterator bt) "B_dict_base_values_iterator" False
+             , make "items" fxPure [self] (tIterator pair) "B_dict_base_items_iterator" False
+             ] ++ if not mutable then [] else
+             [ make "__setitem__" fxMut [self,at,bt] tNone "B_dict_base_setitem" False
+             , make "__delitem__" fxMut [self,at] tNone "B_dict_base_delitem" False
+             , make "pop" fxMut [self,at] (tOpt bt) "B_dict_base_pop" True
+             , make "pop_def" fxMut [self,at,bt] bt "B_dict_base_pop" False
+             , make "popitem" fxMut [self] pair "B_dict_base_popitem" False
+             , make "setdefault" fxMut [self,at,bt] (tOpt bt) "B_dict_base_setdefault" False
+             , worker q self [qbind a,qbind b,qbind c] "update" fxMut
+                 [self,tCon (TC qnIterable [ct,pair]),ct] tNone
+                 "B_dict_base_update" DictBase False False False
+             ]
+        setWorkers q cons mutable =
+          let self = cons at
+              make attr fx args result native abi neg rev = worker q self [qbind a]
+                  attr fx args result native abi neg rev False
+          in [ make "__contains__" fxPure [self,at] tBool "B_set_table_contains" SetTable False False
+             , make "__containsnot__" fxPure [self,at] tBool "B_set_table_contains" SetTable True False
+             , make "__iter__" fxPure [self] (tIterator at) "B_set_base_iter" SetObject False False
+             ] ++ [make attr fxPure [self,self] tBool native SetTable neg rev
+                   | (attr,native,neg,rev) <-
+                       [("__eq__","B_set_table_eq",False,False), ("__ne__","B_set_table_eq",True,False),
+                        ("__gt__","B_set_table_gt",False,False), ("__ge__","B_set_table_ge",False,False),
+                        ("__lt__","B_set_table_gt",False,True), ("__le__","B_set_table_ge",False,True),
+                        ("isdisjoint","B_set_table_isdisjoint",False,False)]] ++
+             [make attr fxPure [self,self] self native (SetBuild q) False False
+                   | (attrs,native) <- [(["__or__","union"],"B_set_base_union"),
+                        (["__and__","intersection"],"B_set_base_intersection"),
+                        (["__sub__","difference"],"B_set_base_difference"),
+                        (["__xor__","symmetric_difference"],"B_set_base_symmetric_difference")], attr <- attrs] ++
+             if not mutable then
+               [make "hash" fxPure [self,tCon (TC (gBuiltin (name "hasher")) [])] tNone
+                   "B_set_hash_table" SetTable False False]
+             else [make "add" fxMut [self,at] tNone "B_set_table_add" SetTable False False,
+                   make "discard" fxMut [self,at] tNone "B_set_table_discard" SetTable False False,
+                   make "pop" fxMut [self] at "B_set_table_pop" SetTable False False,
+                   worker q self [qbind a,qbind c] "update" fxMut
+                     [self,tCon (TC qnIterable [ct,at]),ct] tNone
+                     "B_set_base_update" SetObject False False False] ++
+               [make attr fxMut [self,self] self native SetObject False False
+                   | (attr,native) <- [("__ior__","B_set_base_ior"), ("__iand__","B_set_base_iand"),
+                        ("__isub__","B_set_base_isub"), ("__ixor__","B_set_base_ixor")]]
+
+primEnv             = [ (noq (hcName w), NDef (hcSchema w) NoDec Nothing) | w <- hashContainerWorkers ] ++
+                      [     (noq primASYNCf,        NDef scASYNCf NoDec Nothing),
                             (noq primAFTERf,        NDef scAFTERf NoDec Nothing),
                             (noq primAFTER_NOWf,    NDef scAFTERf NoDec Nothing),
                             (noq primAWAITf,        NDef scAWAITf NoDec Nothing),

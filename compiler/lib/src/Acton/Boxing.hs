@@ -53,6 +53,7 @@ data BoxX                          = BoxX { inClassX :: Maybe (TCon, TEnv)
                                           , inActionX :: Bool
                                           , returnTypeX :: Maybe Type
                                           , staticWitnessesX :: M.HashMap Name StaticWitness
+                                          , hashWitnessesX :: M.HashMap Name QName
                                           , boxedParamsX :: HashSet.HashSet Name
                                           }
 
@@ -62,6 +63,7 @@ boxEnv env0                        = setX env0 BoxX{ inClassX = Nothing
                                                    , inActionX = False
                                                    , returnTypeX = Nothing
                                                    , staticWitnessesX = M.empty
+                                                   , hashWitnessesX = M.empty
                                                    , boxedParamsX = HashSet.empty
                                                    }
 
@@ -104,6 +106,32 @@ setStaticWitness n mbw env          = modX env $ \x -> x{ staticWitnessesX = upd
   where upd                         = maybe (M.delete n) (M.insert n) mbw
 
 lookupStaticWitness env n           = M.lookup n (staticWitnessesX $ envX env)
+
+setHashWitness n q env              = modX env $ \x -> x{ hashWitnessesX =
+                                        maybe (M.delete n) (M.insert n) q (hashWitnessesX x) }
+
+-- Track the primary builtin implementation, not just the protocol's type:
+-- the latter alone does not identify a method-table implementation.
+-- These constructors fix the method tables even with dynamic Hashable inputs;
+-- their embedded protocol fields belong to the same implementation. Captured
+-- type-parameter witnesses (Derived field names) deliberately do not qualify.
+hashWitnessOf env (Var _ (NoQ n))   = M.lookup n (hashWitnessesX $ envX env)
+hashWitnessOf env (Paren _ e)       = hashWitnessOf env e
+hashWitnessOf env (Dot _ e (Internal Witness _ _)) = hashWitnessOf env e
+hashWitnessOf env (Call _ f p KwdNil)
+  | Var _ q <- stripHashTApp f,
+    q == primCAST, [e] <- posargs p = hashWitnessOf env e
+  | Var _ q <- stripHashTApp f,
+    q `elem` map fst primary       = lookup q primary
+  where primary = [ (gBuiltin (Derived nMapping nDict),qnDict),
+                    (gBuiltin (Derived (name "IMapping") nIDict),qnIDict),
+                    (gBuiltin (Derived nSetP nSetT),qnSetT),
+                    (gBuiltin (Derived (name "ISet") nISetT),qnISetT),
+                    (gBuiltin (Derived nHashable nISetT),qnISetT) ]
+hashWitnessOf _ _                  = Nothing
+
+stripHashTApp (TApp _ f _)          = stripHashTApp f
+stripHashTApp f                    = f
 
 -- Recognize witness expressions whose runtime object has a static C name.  A
 -- dot path records selection of embedded super-witness fields from that root.
@@ -261,19 +289,38 @@ rawBuiltinMethodCall env attr p     = do f <- rawBuiltinMethod env attr (posargs
                                            _                  -> Nothing
 
 rawBuiltinMethod                   :: BoxEnv -> Name -> [Expr] -> Maybe Expr
+rawBuiltinMethod env attr es        = rawHashContainerMethod env attr es <|> rawOtherBuiltinMethod env attr es
+
+-- The registered builtin implementations use the container's stored policy,
+-- even when its key/element witness is a function parameter. Only the Iterable of
+-- update survives; Hashable is already owned by the destination container.
+rawHashContainerMethod env attr (recv:es)
+  | attr `elem` map hcMethod hashContainerWorkers,
+    TCon _ (TC q ts) <- unalias env (typeOf env recv),
+    Just w <- hashContainerWorker q attr (1 + length es)
+                                    = Just $ tApp (eQVar $ hcName w)
+                                        (ts ++ [typeOf env (last es) | attr == name "update"])
+rawHashContainerMethod _ _ _        = Nothing
+
+hashWitnessMethod env (TApp _ f _)  = hashWitnessMethod env f
+hashWitnessMethod env (Dot _ wit@(Var _ (NoQ w)) attr)
+  | isWitness w,
+    Just _ <- hashWitnessOf env wit = Just attr
+hashWitnessMethod _ _              = Nothing
+
 -- Reject unrelated methods before inspecting the receiver type.  Besides
 -- avoiding needless QuickType work, this is important for chained calls such
 -- as bytes.from_hex(...).hex(): a probe for hex must not try to instantiate
 -- the polymorphic bytes constructor merely to discover that hex has no raw
 -- worker.
-rawBuiltinMethod _ attr _
+rawOtherBuiltinMethod _ attr _
   | attr `notElem` [getitemKW, setitemKW, delitemKW, lenKW, appendKW, eqKW, neKW, addKW,
                     containsKW, containsnotKW, setAddKW, discardKW, insertKW, reverseKW,
                     getsliceKW, setsliceKW, delsliceKW, iterKW, reversedKW, mulKW, iaddKW, imulKW,
                     ltKW, leKW, gtKW, geKW, name "hash",
                     name "__abs__", name "__and__", name "__ceil__", name "__complex__", name "__divmod__", name "__float__", name "__floor__", name "__floordiv__", name "__index__", name "__int__", name "__invert__", name "__lshift__", name "__mod__", name "__neg__", name "__or__", name "__pos__", name "__pow__", name "__round__", name "__rshift__", name "__sub__", name "__truediv__", name "__trunc__", name "__xor__", name "conjugate", name "denominator", name "imag", name "numerator", name "real"]
                                     = Nothing
-rawBuiltinMethod env attr es@(recv:_)
+rawOtherBuiltinMethod env attr es@(recv:_)
                                     = case (unalias env (typeOf env recv), attr, es) of
                                         (TCon _ (TC q ts), n, [_])
                                           | n == lenKW
@@ -345,7 +392,7 @@ rawBuiltinMethod env attr es@(recv:_)
                                           | q == qnBytearray, n == setitemKW
                                             -> Just $ eQVar primUBytearraySetItem
                                         _   -> Nothing
-rawBuiltinMethod _ _ _             = Nothing
+rawOtherBuiltinMethod _ _ _        = Nothing
 
 -- Sequence workers discard only the receiver witness. Slice assignment and
 -- construction from an iterable still pass that iterable's witness. The
@@ -984,7 +1031,8 @@ instance {-# OVERLAPS #-} Boxing ([Stmt]) where
                                            (ws2,xs') <- boxing env1 xs
                                            return $ if HashSet.member w  ws2 then (HashSet.union ws1 (HashSet.delete w ws2),x':xs') else (ws2,xs')
       where te                        = envOf x
-            env1                      = setStaticWitness w (staticWitnessOf env rhs) (define te env)
+            env1                      = setHashWitness w (hashWitnessOf env rhs) $
+                                        setStaticWitness w (staticWitnessOf env rhs) (define te env)
 
     boxing env (x : xs)              = do (ws1,x') <- boxing env x
                                           let env1 = define (envOf x') env
@@ -1005,6 +1053,18 @@ instance Boxing Expr where
     boxing env v@(Var _ n)
        | Just t <- varType (findQName n env), isUnboxable t
                                     = return (HashSet.empty, Box t v)
+    -- A recognized builtin dict/set implementation does not require a static
+    -- receiver witness. Do this before the dynamic protocol path so
+    -- generic keys work too, and ordinary dead-witness cleanup sees the use
+    -- disappear. Receiver-less factories and dict value comparisons do not
+    -- match: their independent witnesses are still necessary.
+    boxing env (Call _ f p KwdNil)
+      | Just attr <- hashWitnessMethod env f,
+        Just _ <- rawHashContainerMethod env attr (posargs p)
+                                    = do (ws,p1) <- boxing env p
+                                         case rawBuiltinMethodCall env attr p1 of
+                                           Just c -> return (ws,c)
+                                           Nothing -> error "Internal error: hash container method lost during boxing"
     -- Polymorphic Sequence methods (slice assignment and __fromiter__) have
     -- an explicit type application. Retain its source witness in the worker
     -- arguments; omitting the receiver from the used-witness set lets the
@@ -1113,6 +1173,8 @@ instance Boxing Expr where
       | Just attr <- lookup (unalias env f) [(qnLen, lenKW), (gBuiltin (name "iter"), iterKW),
                                              (gBuiltin (name "reversed"), reversedKW)],
         [_, recv] <- posargs p,
+        (not (isJust $ rawHashContainerMethod env attr [recv]) ||
+          isJust (hashWitnessOf env (head $ posargs p))),
         Just _ <- rawBuiltinMethod env attr [recv]
                                     = do (ws1,recv1) <- boxing env recv
                                          case rawBuiltinMethodCall env attr (PosArg recv1 PosNil) of

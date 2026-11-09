@@ -13,6 +13,13 @@ typedef struct {
     B_setentry *table;       // the hashtable
 } B_set_table;
 
+// Mutable and immutable sets share this storage view, including their policy.
+typedef struct B_set_base *B_set_base;
+struct __attribute__((__may_alias__)) B_set_base {
+    $SuperG_class $class;
+    B_set_table data;
+};
+
 struct B_set {
     struct B_setG_class *$class;
     B_set_table data;
@@ -28,6 +35,51 @@ _Static_assert(sizeof(struct B_set) == sizeof(struct B_iset),
 _Static_assert(offsetof(struct B_set, data) == offsetof(struct B_iset, data),
                "set and iset must have the same table offset for freeze()");
 
+
+_Static_assert(sizeof(struct B_set_base) == sizeof(struct B_set),
+               "set base and set must have the same size");
+_Static_assert(offsetof(struct B_set_base, data) == offsetof(struct B_set, data),
+               "set base and set must have the same table offset");
+
+// Direct table operations. Generated calls project the shared data field.
+bool B_set_table_contains(B_set_table *, $WORD);
+bool B_set_table_eq(B_set_table *, B_set_table *);
+bool B_set_table_gt(B_set_table *, B_set_table *);
+bool B_set_table_ge(B_set_table *, B_set_table *);
+bool B_set_table_isdisjoint(B_set_table *, B_set_table *);
+B_NoneType B_set_table_add(B_set_table *, $WORD);
+B_NoneType B_set_table_discard(B_set_table *, $WORD);
+$WORD B_set_table_pop(B_set_table *);
+B_NoneType B_set_hash_table(B_set_table *, B_hasher);
+B_Iterator B_set_base_iter(B_set_base);
+B_NoneType B_set_base_update(B_set_base, B_Iterable, $WORD);
+B_set_base B_set_base_union(B_set_table *, B_set_table *, $SuperG_class);
+B_set_base B_set_base_intersection(B_set_table *, B_set_table *, $SuperG_class);
+B_set_base B_set_base_difference(B_set_table *, B_set_table *, $SuperG_class);
+B_set_base B_set_base_symmetric_difference(B_set_table *, B_set_table *, $SuperG_class);
+
+// These adapters only retain the receiver result. Always inline them so even
+// debug builds call the existing table operation without another call layer.
+void B_set_table_ior(B_set_table *, B_set_table *);
+void B_set_table_iand(B_set_table *, B_set_table *);
+void B_set_table_isub(B_set_table *, B_set_table *);
+void B_set_table_ixor(B_set_table *, B_set_table *);
+static inline __attribute__((always_inline)) B_set_base B_set_base_ior(B_set_base self, B_set_base other) {
+    B_set_table_ior(&self->data, &other->data);
+    return self;
+}
+static inline __attribute__((always_inline)) B_set_base B_set_base_iand(B_set_base self, B_set_base other) {
+    B_set_table_iand(&self->data, &other->data);
+    return self;
+}
+static inline __attribute__((always_inline)) B_set_base B_set_base_isub(B_set_base self, B_set_base other) {
+    B_set_table_isub(&self->data, &other->data);
+    return self;
+}
+static inline __attribute__((always_inline)) B_set_base B_set_base_ixor(B_set_base self, B_set_base other) {
+    B_set_table_ixor(&self->data, &other->data);
+    return self;
+}
 
 // Iterators over sets ///////////////////////////////////////////////////////
 

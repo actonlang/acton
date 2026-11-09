@@ -577,9 +577,9 @@ B_Iterator $dictD_U_keys_init(B_IteratorD_dict iter, $WORD src) {
     return (B_Iterator)B_dict_base_key_iterator_init(iter, src, (B_dict_base)src);
 }
 
-static B_IteratorD_dict B_dict_base_key_iterator($WORD src, B_dict_base dict) {
+B_Iterator B_dict_base_key_iterator(B_dict_base dict) {
     B_IteratorD_dict iter = acton_malloc(sizeof(struct B_IteratorD_dict));
-    return B_dict_base_key_iterator_init(iter, src, dict);
+    return (B_Iterator)B_dict_base_key_iterator_init(iter, dict, dict);
 }
 
 static bool B_IteratorD_dictD_next(B_IteratorD_dict self, $WORD *out) {
@@ -641,7 +641,7 @@ struct B_IteratorD_dictG_class B_IteratorD_dictG_methods = {"B_IteratorD_dict",U
 
 
 B_Iterator B_MappingD_dictD___iter__ (B_MappingD_dict wit, B_dict dict) {
-    return (B_Iterator)B_dict_base_key_iterator(dict, (B_dict_base)dict);
+    return (B_Iterator)B_dict_base_key_iterator((B_dict_base)dict);
 }
 
 B_dict B_MappingD_dictD___fromiter__ (B_MappingD_dict wit, B_Iterable wit2, $WORD iter) {
@@ -652,7 +652,7 @@ static int64_t B_dict_base_len(B_dict_base dict) {
     return dict->numelements;
 }
 
-static bool B_dict_base_contains(B_dict_base dict, $WORD key) {
+bool B_dict_base_contains(B_dict_base dict, $WORD key) {
     if (dict->numelements == 0)
         return false;
     $WORD res;
@@ -662,7 +662,7 @@ static bool B_dict_base_contains(B_dict_base dict, $WORD key) {
     return B_dict_lookup(dict, h, key, &res) >= 0;
 }
 
-static $WORD B_dict_base_get(B_dict_base dict, $WORD key, $WORD deflt) {
+$WORD B_dict_base_get(B_dict_base dict, $WORD key, $WORD deflt) {
     if (!dict->table)
         return deflt;
     uint64_t hash = 0;
@@ -675,7 +675,7 @@ static $WORD B_dict_base_get(B_dict_base dict, $WORD key, $WORD deflt) {
     return res;
 }
 
-static $WORD B_dict_base_getitem(B_dict_base dict, $WORD key) {
+$WORD B_dict_base_getitem(B_dict_base dict, $WORD key) {
     if (dict->numelements == 0)
         RAISE(B_KeyError, key, actStrFromCString("getitem: empty dictionary"));
     uint64_t hash = 0;
@@ -688,7 +688,7 @@ static $WORD B_dict_base_getitem(B_dict_base dict, $WORD key) {
     return res;
 }
 
-static $WORD B_dict_base_pop(B_dict_base dict, $WORD key, $WORD deflt) {
+$WORD B_dict_base_pop(B_dict_base dict, $WORD key, $WORD deflt) {
     if (dict->numelements == 0)
         return deflt;
     $table table = dict->table;
@@ -741,7 +741,7 @@ $WORD B_MappingD_dictD_pop_def(B_MappingD_dict wit, B_dict dict, $WORD key, $WOR
 }
 
 B_Iterator B_MappingD_dictD_keys (B_MappingD_dict wit, B_dict dict) {
-    return (B_Iterator)B_dict_base_key_iterator(dict, (B_dict_base)dict);
+    return (B_Iterator)B_dict_base_key_iterator((B_dict_base)dict);
 }
 
 // Iterator classes for values and items
@@ -781,9 +781,9 @@ B_Iterator $dictD_U_values_init(B_IteratorD_dict_values iter, $WORD src) {
     return (B_Iterator)B_dict_base_values_iterator_init(iter, src, (B_dict_base)src);
 }
 
-static B_IteratorD_dict_values B_dict_base_values_iterator($WORD src, B_dict_base dict) {
+B_Iterator B_dict_base_values_iterator(B_dict_base dict) {
     B_IteratorD_dict_values iter = acton_malloc(sizeof(struct B_IteratorD_dict_values));
-    return B_dict_base_values_iterator_init(iter, src, dict);
+    return (B_Iterator)B_dict_base_values_iterator_init(iter, dict, dict);
 }
  
 void B_IteratorD_dict_values_init(B_IteratorD_dict_values self, B_dict dict) {
@@ -854,9 +854,9 @@ B_Iterator $dictD_U_items_init(B_IteratorD_dict_items iter, $WORD src) {
     return (B_Iterator)B_dict_base_items_iterator_init(iter, src, (B_dict_base)src);
 }
 
-static B_IteratorD_dict_items B_dict_base_items_iterator($WORD src, B_dict_base dict) {
+B_Iterator B_dict_base_items_iterator(B_dict_base dict) {
     B_IteratorD_dict_items iter = acton_malloc(sizeof(struct B_IteratorD_dict_items));
-    return B_dict_base_items_iterator_init(iter, src, dict);
+    return (B_Iterator)B_dict_base_items_iterator_init(iter, dict, dict);
 }
  
 void B_IteratorD_dict_items_init(B_IteratorD_dict_items self, B_dict dict) {
@@ -896,17 +896,17 @@ struct B_IteratorD_dict_itemsG_class B_IteratorD_dict_itemsG_methods = {"B_Itera
 
 
 B_Iterator B_MappingD_dictD_values (B_MappingD_dict wit, B_dict dict) {
-    return (B_Iterator)B_dict_base_values_iterator(dict, (B_dict_base)dict);
+    return (B_Iterator)B_dict_base_values_iterator((B_dict_base)dict);
 }
 
 B_Iterator B_MappingD_dictD_items (B_MappingD_dict wit, B_dict dict) {
-    return (B_Iterator)B_dict_base_items_iterator(dict, (B_dict_base)dict);
+    return (B_Iterator)B_dict_base_items_iterator((B_dict_base)dict);
 }
 
 // IMapping[idict] wrappers ///////////////////////////////////////////////////////////////////////
 
 B_Iterator B_IMappingD_idictD___iter__(B_IMappingD_idict wit, B_idict dict) {
-    return (B_Iterator)B_dict_base_key_iterator(dict, (B_dict_base)dict);
+    return (B_Iterator)B_dict_base_key_iterator((B_dict_base)dict);
 }
 
 B_idict B_IMappingD_idictD___fromiter__(B_IMappingD_idict wit, B_Iterable wit2, $WORD iter) {
@@ -935,28 +935,32 @@ $WORD B_IMappingD_idictD_get_def(B_IMappingD_idict wit, B_idict dict,
 }
 
 B_Iterator B_IMappingD_idictD_keys(B_IMappingD_idict wit, B_idict dict) {
-    return (B_Iterator)B_dict_base_key_iterator(dict, (B_dict_base)dict);
+    return (B_Iterator)B_dict_base_key_iterator((B_dict_base)dict);
 }
 
 B_Iterator B_IMappingD_idictD_values(B_IMappingD_idict wit, B_idict dict) {
-    return (B_Iterator)B_dict_base_values_iterator(dict, (B_dict_base)dict);
+    return (B_Iterator)B_dict_base_values_iterator((B_dict_base)dict);
 }
 
 B_Iterator B_IMappingD_idictD_items(B_IMappingD_idict wit, B_idict dict) {
-    return (B_Iterator)B_dict_base_items_iterator(dict, (B_dict_base)dict);
+    return (B_Iterator)B_dict_base_items_iterator((B_dict_base)dict);
 }
 
-B_NoneType B_MappingD_dictD_update (B_MappingD_dict wit, B_dict dict, B_Iterable wit2, $WORD other) {
+B_NoneType B_dict_base_update(B_dict_base dict, B_Iterable wit2, $WORD other) {
     B_Iterator it = wit2->$class->__iter__(wit2,other);
     $WORD next;
     while (it->$class->__next__(it, &next)) {
         B_tuple item = (B_tuple)next;
-        B_dictD_setitem(dict, item->components[0], item->components[1]);
+        B_dict_base_setitem(dict, item->components[0], item->components[1]);
     }
     return B_None;
 }
 
-B_tuple B_MappingD_dictD_popitem (B_MappingD_dict wit, B_dict dict) {
+B_NoneType B_MappingD_dictD_update (B_MappingD_dict wit, B_dict dict, B_Iterable wit2, $WORD other) {
+    return B_dict_base_update((B_dict_base)dict, wit2, other);
+}
+
+B_tuple B_dict_base_popitem(B_dict_base dict) {
     if (dict->numelements == 0)  {
         return NULL;
     }
@@ -979,7 +983,11 @@ B_tuple B_MappingD_dictD_popitem (B_MappingD_dict wit, B_dict dict) {
     return NULL;
 }
 
-$WORD B_MappingD_dictD_setdefault (B_MappingD_dict wit, B_dict dict, $WORD key, $WORD deflt) {
+B_tuple B_MappingD_dictD_popitem (B_MappingD_dict wit, B_dict dict) {
+    return B_dict_base_popitem((B_dict_base)dict);
+}
+
+$WORD B_dict_base_setdefault(B_dict_base dict, $WORD key, $WORD deflt) {
     if (!deflt) deflt = B_None;
     uint64_t hash = B_hash(dict->hashwit, key);
     $WORD value;
@@ -988,6 +996,10 @@ $WORD B_MappingD_dictD_setdefault (B_MappingD_dict wit, B_dict dict, $WORD key, 
         return value;
     B_dict_insert((B_dict_base)dict, hash, key, deflt);
     return deflt;
+}
+
+$WORD B_MappingD_dictD_setdefault (B_MappingD_dict wit, B_dict dict, $WORD key, $WORD deflt) {
+    return B_dict_base_setdefault((B_dict_base)dict, key, deflt);
 }
  
 
@@ -1003,18 +1015,17 @@ $WORD B_IIndexedD_MappingD_dictD___getitem__(B_IIndexedD_MappingD_dict wit,
 }
 
 B_NoneType B_IndexedD_MappingD_dictD___setitem__ (B_IndexedD_MappingD_dict wit, B_dict dict, $WORD key, $WORD value) {
-    uint64_t hash = 0;
-    if (dict->table && dict->table->tb_size > INIT_SIZE) {
-        hash = B_hash(dict->hashwit, key);
-    }
-    B_dict_insert((B_dict_base)dict, hash, key, value);
+    return B_dict_base_setitem((B_dict_base)dict, key, value);
+}
+
+B_NoneType B_dict_base_delitem(B_dict_base dict, $WORD key) {
+    B_dict_base_pop((B_dict_base)dict, key, B_None);
     return B_None;
 }
 
 B_NoneType B_IndexedD_MappingD_dictD___delitem__(B_IndexedD_MappingD_dict wit,
                                                  B_dict dict, $WORD key) {
-    B_dict_base_pop((B_dict_base)dict, key, B_None);
-    return B_None;
+    return B_dict_base_delitem((B_dict_base)dict, key);
 }
 
 // IIndexed[IMapping[idict]] //////////////////////////////////////////////////////////////////////
@@ -1024,13 +1035,15 @@ $WORD B_IIndexedD_IMappingD_idictD___getitem__(B_IIndexedD_IMappingD_idict wit,
     return B_dict_base_getitem((B_dict_base)dict, key);
 }
 
-void B_dictD_setitem(B_dict dict, $WORD key, $WORD value) {
+B_NoneType B_dict_base_setitem(B_dict_base dict, $WORD key, $WORD value) {
     uint64_t hash = 0;
     if (dict->table && dict->table->tb_size > INIT_SIZE) {
         hash = B_hash(dict->hashwit, key);
     }
     B_dict_insert((B_dict_base)dict, hash, key, value);
+    return B_None;
 }
+
 
 $WORD B_dictD_get(B_dict dict, $WORD key, $WORD deflt) {
     return B_dict_base_get((B_dict_base)dict, key, deflt);

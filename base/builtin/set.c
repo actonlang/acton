@@ -136,7 +136,7 @@ static bool B_set_table_contains_hash(B_set_table *set, $WORD elem, uint64_t has
     return ACTIVE_ENTRY(entry);
 }
 
-static bool B_set_table_contains(B_set_table *set, $WORD elem) {
+bool B_set_table_contains(B_set_table *set, $WORD elem) {
     return B_set_table_contains_hash(set, elem, B_hash(set->hashwit, elem));
 }
 
@@ -189,8 +189,9 @@ found_unused:
     B_set_table_resize(set, set->numelements * growth);
 }
 
-static void B_set_table_add(B_set_table *set, $WORD key) {
+B_NoneType B_set_table_add(B_set_table *set, $WORD key) {
     B_set_table_add_hash(set, key, B_hash(set->hashwit, key));
+    return B_None;
 }
 
 static void B_set_table_drop_entry(B_set_table *set, B_setentry *entry) {
@@ -299,7 +300,7 @@ static void B_set_table_deserialize_payload(B_set_table *set, $ROW row, $Serial$
     }
 }
 
-static bool B_set_table_isdisjoint(B_set_table *set, B_set_table *other) {
+bool B_set_table_isdisjoint(B_set_table *set, B_set_table *other) {
     if (set == other)
         return set->numelements == 0;
     if (other->mask > set->mask)
@@ -312,7 +313,7 @@ static bool B_set_table_isdisjoint(B_set_table *set, B_set_table *other) {
     return true;
 }
 
-static bool B_set_table_eq(B_set_table *set, B_set_table *other) {
+bool B_set_table_eq(B_set_table *set, B_set_table *other) {
     if (set == other)
         return true;
     if (set->numelements != other->numelements)
@@ -327,7 +328,7 @@ static bool B_set_table_eq(B_set_table *set, B_set_table *other) {
     return true;
 }
 
-static bool B_set_table_gt(B_set_table *set, B_set_table *other) {
+bool B_set_table_gt(B_set_table *set, B_set_table *other) {
     if (set == other || set->numelements <= other->numelements)
         return false;
     for (uint64_t i = 0; i <= other->mask; i++) {
@@ -338,7 +339,7 @@ static bool B_set_table_gt(B_set_table *set, B_set_table *other) {
     return true;
 }
 
-static bool B_set_table_ge(B_set_table *set, B_set_table *other) {
+bool B_set_table_ge(B_set_table *set, B_set_table *other) {
     if (set == other)
         return true;
     if (set->numelements < other->numelements)
@@ -354,7 +355,7 @@ static bool B_set_table_ge(B_set_table *set, B_set_table *other) {
 // In-place operations change set and do not copy it. Each walks the table of
 // other, or the smaller table when the result allows either.
 
-static void B_set_table_ior(B_set_table *set, B_set_table *other) {
+void B_set_table_ior(B_set_table *set, B_set_table *other) {
     if (set == other)
         return;
     for (uint64_t i = 0; i <= other->mask; i++) {
@@ -364,7 +365,7 @@ static void B_set_table_ior(B_set_table *set, B_set_table *other) {
     }
 }
 
-static void B_set_table_isub(B_set_table *set, B_set_table *other) {
+void B_set_table_isub(B_set_table *set, B_set_table *other) {
     if (set == other) {
         B_set_table_clear(set);
         return;
@@ -386,7 +387,7 @@ static void B_set_table_isub(B_set_table *set, B_set_table *other) {
     }
 }
 
-static void B_set_table_iand(B_set_table *set, B_set_table *other) {
+void B_set_table_iand(B_set_table *set, B_set_table *other) {
     if (set == other)
         return;
     if (set->mask <= other->mask) {
@@ -413,7 +414,7 @@ static void B_set_table_iand(B_set_table *set, B_set_table *other) {
     *set = res;
 }
 
-static void B_set_table_ixor(B_set_table *set, B_set_table *other) {
+void B_set_table_ixor(B_set_table *set, B_set_table *other) {
     if (set == other) {
         B_set_table_clear(set);
         return;
@@ -463,7 +464,7 @@ static void B_set_table_xor_into(B_set_table *res, B_set_table *set, B_set_table
     B_set_table_ixor(res, other);
 }
 
-static $WORD B_set_table_pop(B_set_table *set) {
+$WORD B_set_table_pop(B_set_table *set) {
     if (set->numelements == 0)
         RAISE_EXC(&B_set_empty_pop_error);
 
@@ -490,13 +491,9 @@ static B_set B_set_alloc(void) {
     return res;
 }
 
-static B_iset B_iset_alloc(void) {
-    B_iset res = acton_malloc(sizeof(struct B_iset));
-    res->$class = &B_isetG_methods;
-    return res;
-}
 
-static void B_set_hash_table(B_set_table *set, B_hasher h) {
+
+B_NoneType B_set_hash_table(B_set_table *set, B_hasher h) {
     uint64_t sum = UINT64_C(0x1927868237a12d3b);
     uint64_t xors = UINT64_C(0x9e3779b97f4a7c15) ^ set->numelements;
     for (uint64_t i = 0; i <= set->mask; i++) {
@@ -511,6 +508,34 @@ static void B_set_hash_table(B_set_table *set, B_hasher h) {
     }
     uint64_t parts[3] = { set->numelements, sum, xors };
     zig_hash_wyhash_update(h->_hasher, (const uint8_t *)parts, sizeof(parts));
+    return B_None;
+}
+
+
+// Shared constructors for set/iset algebra; the caller selects the result class.
+B_set_base B_set_base_union(B_set_table *set, B_set_table *other, $SuperG_class cls) {
+    B_set_base res = acton_malloc(sizeof(struct B_set_base));
+    res->$class = cls;
+    B_set_table_or_into(&res->data, set, other);
+    return res;
+}
+B_set_base B_set_base_intersection(B_set_table *set, B_set_table *other, $SuperG_class cls) {
+    B_set_base res = acton_malloc(sizeof(struct B_set_base));
+    res->$class = cls;
+    B_set_table_and_into(&res->data, set, other);
+    return res;
+}
+B_set_base B_set_base_difference(B_set_table *set, B_set_table *other, $SuperG_class cls) {
+    B_set_base res = acton_malloc(sizeof(struct B_set_base));
+    res->$class = cls;
+    B_set_table_sub_into(&res->data, set, other);
+    return res;
+}
+B_set_base B_set_base_symmetric_difference(B_set_table *set, B_set_table *other, $SuperG_class cls) {
+    B_set_base res = acton_malloc(sizeof(struct B_set_base));
+    res->$class = cls;
+    B_set_table_xor_into(&res->data, set, other);
+    return res;
 }
 
 // set object methods ///////////////////////////////////////////////////////////////////////////////
@@ -652,9 +677,9 @@ B_Iterator $isetD_U_iter_init(B_IteratorD_set iter, B_iset src) {
     return B_set_iter_table_init(iter, src, &src->data);
 }
 
-static B_Iterator B_set_iter_table($WORD src, B_set_table *set) {
+B_Iterator B_set_base_iter(B_set_base set) {
     B_IteratorD_set iter = acton_malloc(sizeof(struct B_IteratorD_set));
-    return B_set_iter_table_init(iter, src, set);
+    return B_set_iter_table_init(iter, set, &set->data);
 }
 static bool B_IteratorD_set_next(B_IteratorD_set self, $WORD *out) {
     B_setentry *entry = B_IteratorD_set_next_entry_maybe(self);
@@ -704,7 +729,7 @@ struct B_IteratorD_setG_class B_IteratorD_setG_methods = {"B_IteratorD_set", UNA
 // Set[set] wrappers ////////////////////////////////////////////////////////////////////////////////
 
 B_Iterator B_SetD_setD___iter__(B_SetD_set wit, B_set set) {
-    return B_set_iter_table(set, &set->data);
+    return B_set_base_iter((B_set_base)set);
 }
 
 B_set B_SetD_setD___fromiter__(B_SetD_set wit, B_Iterable wit2, $WORD iter) {
@@ -732,7 +757,7 @@ B_NoneType B_SetD_setD_add(B_SetD_set wit, B_set set, $WORD elem) {
     return B_None;
 }
 
-B_NoneType B_SetD_setD_update(B_SetD_set wit, B_set set, B_Iterable otherwit, $WORD other) {
+B_NoneType B_set_base_update(B_set_base set, B_Iterable otherwit, $WORD other) {
     if (set == other)
         return B_None;
     B_Iterator it = otherwit->$class->__iter__(otherwit, other);
@@ -743,9 +768,17 @@ B_NoneType B_SetD_setD_update(B_SetD_set wit, B_set set, B_Iterable otherwit, $W
     return B_None;
 }
 
-B_NoneType B_SetD_setD_discard(B_SetD_set wit, B_set set, $WORD elem) {
-    B_set_table_discard_hash(&set->data, elem, B_hash(set->data.hashwit, elem));
+B_NoneType B_SetD_setD_update(B_SetD_set wit, B_set set, B_Iterable otherwit, $WORD other) {
+    return B_set_base_update((B_set_base)set, otherwit, other);
+}
+
+B_NoneType B_set_table_discard(B_set_table *set, $WORD elem) {
+    B_set_table_discard_hash(set, elem, B_hash(set->hashwit, elem));
     return B_None;
+}
+
+B_NoneType B_SetD_setD_discard(B_SetD_set wit, B_set set, $WORD elem) {
+    return B_set_table_discard(&set->data, elem);
 }
 
 $WORD B_SetD_setD_pop(B_SetD_set wit, B_set set) {
@@ -777,47 +810,35 @@ bool B_OrdD_SetD_setD___le__(B_OrdD_SetD_set wit, B_set set, B_set other) {
 }
 
 B_set B_MinusD_SetD_setD___sub__(B_MinusD_SetD_set wit, B_set set, B_set other) {
-    B_set res = B_set_alloc();
-    B_set_table_sub_into(&res->data, &set->data, &other->data);
-    return res;
+    return (B_set)B_set_base_difference(&set->data, &other->data, ($SuperG_class)&B_setG_methods);
 }
 
 B_set B_LogicalD_SetD_setD___and__(B_LogicalD_SetD_set wit, B_set set, B_set other) {
-    B_set res = B_set_alloc();
-    B_set_table_and_into(&res->data, &set->data, &other->data);
-    return res;
+    return (B_set)B_set_base_intersection(&set->data, &other->data, ($SuperG_class)&B_setG_methods);
 }
 
 B_set B_LogicalD_SetD_setD___or__(B_LogicalD_SetD_set wit, B_set set, B_set other) {
-    B_set res = B_set_alloc();
-    B_set_table_or_into(&res->data, &set->data, &other->data);
-    return res;
+    return (B_set)B_set_base_union(&set->data, &other->data, ($SuperG_class)&B_setG_methods);
 }
 
 B_set B_LogicalD_SetD_setD___xor__(B_LogicalD_SetD_set wit, B_set set, B_set other) {
-    B_set res = B_set_alloc();
-    B_set_table_xor_into(&res->data, &set->data, &other->data);
-    return res;
+    return (B_set)B_set_base_symmetric_difference(&set->data, &other->data, ($SuperG_class)&B_setG_methods);
 }
 
 B_set B_MinusD_SetD_setD___isub__(B_MinusD_SetD_set wit, B_set set, B_set other) {
-    B_set_table_isub(&set->data, &other->data);
-    return set;
+    return (B_set)B_set_base_isub((B_set_base)set, (B_set_base)other);
 }
 
 B_set B_LogicalD_SetD_setD___iand__(B_LogicalD_SetD_set wit, B_set set, B_set other) {
-    B_set_table_iand(&set->data, &other->data);
-    return set;
+    return (B_set)B_set_base_iand((B_set_base)set, (B_set_base)other);
 }
 
 B_set B_LogicalD_SetD_setD___ior__(B_LogicalD_SetD_set wit, B_set set, B_set other) {
-    B_set_table_ior(&set->data, &other->data);
-    return set;
+    return (B_set)B_set_base_ior((B_set_base)set, (B_set_base)other);
 }
 
 B_set B_LogicalD_SetD_setD___ixor__(B_LogicalD_SetD_set wit, B_set set, B_set other) {
-    B_set_table_ixor(&set->data, &other->data);
-    return set;
+    return (B_set)B_set_base_ixor((B_set_base)set, (B_set_base)other);
 }
 
 // Freeze[set] /////////////////////////////////////////////////////////////////////////////////////
@@ -831,7 +852,7 @@ B_iset B_FreezeD_setD_freeze(B_FreezeD_set wit, B_set self) {
 // ISet[iset] wrappers //////////////////////////////////////////////////////////////////////////////
 
 B_Iterator B_ISetD_isetD___iter__(B_ISetD_iset wit, B_iset set) {
-    return B_set_iter_table(set, &set->data);
+    return B_set_base_iter((B_set_base)set);
 }
 
 B_iset B_ISetD_isetD___fromiter__(B_ISetD_iset wit, B_Iterable wit2, $WORD iter) {
@@ -879,27 +900,19 @@ bool B_OrdD_ISetD_isetD___le__(B_OrdD_ISetD_iset wit, B_iset set, B_iset other) 
 }
 
 B_iset B_MinusD_ISetD_isetD___sub__(B_MinusD_ISetD_iset wit, B_iset set, B_iset other) {
-    B_iset res = B_iset_alloc();
-    B_set_table_sub_into(&res->data, &set->data, &other->data);
-    return res;
+    return (B_iset)B_set_base_difference(&set->data, &other->data, ($SuperG_class)&B_isetG_methods);
 }
 
 B_iset B_LogicalD_ISetD_isetD___and__(B_LogicalD_ISetD_iset wit, B_iset set, B_iset other) {
-    B_iset res = B_iset_alloc();
-    B_set_table_and_into(&res->data, &set->data, &other->data);
-    return res;
+    return (B_iset)B_set_base_intersection(&set->data, &other->data, ($SuperG_class)&B_isetG_methods);
 }
 
 B_iset B_LogicalD_ISetD_isetD___or__(B_LogicalD_ISetD_iset wit, B_iset set, B_iset other) {
-    B_iset res = B_iset_alloc();
-    B_set_table_or_into(&res->data, &set->data, &other->data);
-    return res;
+    return (B_iset)B_set_base_union(&set->data, &other->data, ($SuperG_class)&B_isetG_methods);
 }
 
 B_iset B_LogicalD_ISetD_isetD___xor__(B_LogicalD_ISetD_iset wit, B_iset set, B_iset other) {
-    B_iset res = B_iset_alloc();
-    B_set_table_xor_into(&res->data, &set->data, &other->data);
-    return res;
+    return (B_iset)B_set_base_symmetric_difference(&set->data, &other->data, ($SuperG_class)&B_isetG_methods);
 }
 
 B_NoneType B_HashableD_isetD_hash(B_HashableD_iset wit, B_iset set, B_hasher h) {

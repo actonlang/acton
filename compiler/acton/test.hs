@@ -287,6 +287,65 @@ compilerTests =
               (not ("$listD_U__iter__" `isInfixOf` c || "$ilistD_U__iter__" `isInfixOf` c))
           assertBool "generic reverse should retain dispatch" ("$class->reverse" `isInfixOf` body "generic_reverse")
           assertBool "generic slicing should retain dispatch" ("$class->__getslice__" `isInfixOf` body "generic_slice")
+  , testCase "builtin dict and set operations call shared native implementations" $ do
+        withSystemTempDirectory "acton-builtin-hash-containers" $ \tmp -> do
+          let src = tmp </> "builtin_hash_container_ops.act"
+          copyFile "../../test/regression_auto/builtin_hash_container_ops.act" src
+          (code, generated, err) <- buildThing "--quiet --dbg-no-lines --cgen" src
+          assertEqual ("C generation should succeed:\n" ++ generated ++ err) ExitSuccess code
+          let body name = unlines $ takeWhile (/= "}") $ dropWhile
+                (not . isInfixOf ("builtin_hash_container_opsQ_" ++ name ++ " (")) (lines generated)
+              direct = [("dict_lookup", "B_dict_base_getitem"), ("idict_lookup", "B_dict_base_getitem"),
+                        ("dict_contains", "B_dict_base_contains"), ("idict_missing", "B_dict_base_contains"),
+                        ("dict_get", "B_dict_base_get"), ("idict_get_default", "B_dict_base_get"),
+                        ("dict_store", "B_dict_base_setitem"), ("dict_delete", "B_dict_base_delitem"),
+                        ("dict_pop", "B_dict_base_pop"), ("dict_pop_default", "B_dict_base_pop"),
+                        ("dict_default", "B_dict_base_setdefault"), ("dict_popitem", "B_dict_base_popitem"),
+                        ("dict_keys", "B_dict_base_key_iterator"), ("dict_values", "B_dict_base_values_iterator"),
+                        ("dict_items", "B_dict_base_items_iterator"), ("idict_items", "B_dict_base_items_iterator"),
+                        ("set_contains", "B_set_table_contains"), ("set_missing", "B_set_table_contains"),
+                        ("iset_contains", "B_set_table_contains"), ("set_add", "B_set_table_add"),
+                        ("set_discard", "B_set_table_discard"), ("set_pop", "B_set_table_pop"),
+                        ("set_iterator", "B_set_base_iter"), ("iset_iterator", "B_set_base_iter"),
+                        ("set_equal", "B_set_table_eq"), ("set_not_equal", "B_set_table_eq"),
+                        ("set_lt", "B_set_table_gt"), ("set_le", "B_set_table_ge"),
+                        ("set_gt", "B_set_table_gt"), ("set_ge", "B_set_table_ge"),
+                        ("set_disjoint", "B_set_table_isdisjoint"), ("set_union", "B_set_base_union"),
+                        ("set_intersection", "B_set_base_intersection"), ("set_difference", "B_set_base_difference"),
+                        ("set_xor", "B_set_base_symmetric_difference"), ("iset_union", "B_set_base_union"),
+                        ("named_union", "B_set_base_union"), ("set_ior", "B_set_base_ior"),
+                        ("set_iand", "B_set_base_iand"), ("set_isub", "B_set_base_isub"),
+                        ("set_ixor", "B_set_base_ixor"), ("iset_hash", "B_set_hash_table")]
+          forM_ direct $ \(name, native) -> do
+            let c = body name
+            assertBool (name ++ " should call the shared native implementation") (native `isInfixOf` c)
+            assertBool (name ++ " should discard its receiver witness")
+              (not (any (`isInfixOf` c) ["G_new", "G_witness", "$class->", "B_Mapping", "B_IMapping", "B_SetD", "B_ISetD"]))
+          forM_ [("dict_update", "B_dict_base_update"), ("set_update", "B_set_base_update")] $ \(name,native) -> do
+            let c = body name
+            assertBool (name ++ " keeps its source Iterable witness")
+              (native `isInfixOf` c && "B_Iterable" `isInfixOf` c)
+            assertBool (name ++ " discards its destination witness")
+              (not (any (`isInfixOf` c) ["B_Mapping", "B_SetD", "G_new", "$class->"]))
+          forM_ [("dict_total", "B_IteratorD_dict_items", "$dictD_U_items_init"),
+                 ("idict_total", "B_IteratorD_dict", "$dictD_U_keys_init"),
+                 ("set_total", "B_IteratorD_set", "$setD_U_iter_init"),
+                 ("iset_total", "B_IteratorD_set", "$isetD_U_iter_init")] $ \(name,storage,init) -> do
+            let c = body name
+            assertBool (name ++ " keeps its stack iterator")
+              (("struct " ++ storage) `isInfixOf` c && init `isInfixOf` c)
+          assertBool "generic membership retains dispatch" ("$class->__contains__" `isInfixOf` body "generic_contains")
+          assertBool "generic mutation retains dispatch" ("$class->add" `isInfixOf` body "generic_add")
+          assertBool "factory retains the witness supplying Hashable" ("$class->__fromiter__" `isInfixOf` body "factory")
+          assertBool "dict comparison retains value Eq" ("W_EqD_B" `isInfixOf` body "dict_compare" && "$class->__eq__" `isInfixOf` body "dict_compare")
+          let customSrc = tmp </> "builtin_hash_container_override.act"
+          copyFile "../../test/regression_auto/builtin_hash_container_override.act" customSrc
+          (customCode, customC, customErr) <- buildThing "--quiet --dbg-no-lines --cgen" customSrc
+          assertEqual ("custom protocol should compile:\n" ++ customC ++ customErr) ExitSuccess customCode
+          let customBody = unlines $ takeWhile (/= "}") $ dropWhile
+                (not . isInfixOf "builtin_hash_container_overrideQ_custom_get (") (lines customC)
+          assertBool "an unrelated user protocol keeps its implementation"
+            ("$class->get" `isInfixOf` customBody && not ("B_dict_base_get" `isInfixOf` customBody))
   , testCase "builtin text protocol workers discard dead receiver witnesses" $ do
         withSystemTempDirectory "acton-builtin-text-ops" $ \tmp -> do
           let src = tmp </> "builtin_text_ops.act"
