@@ -21,6 +21,7 @@ import qualified Acton.InitializationAnalysis as Init
 import Acton.Env (CompilationError(..))
 import qualified Acton.Kinds
 import qualified Acton.Types
+import qualified Acton.TypeEnv as TE
 import Acton.TypeEnv (TypeError(..),typeReport,initTypeEnv)
 import qualified Acton.Normalizer
 import qualified Acton.Deactorizer
@@ -322,6 +323,35 @@ main = do
           case result of
             Left (_ :: TypeError) -> pure ()
             Right _ -> expectationFailure "Unexpectedly accepted incompatible effects"
+    describe "Effect inference" $ do
+      let env = TE.initTypeEnv env0
+          info = TE.noinfo 0
+          solve te cs = fst <$> Solver.solve env (const True) te [] cs
+      it "keeps the temporary mut-to-pure cast out of effect bounds" $ do
+        Acton.Env.castable env S.fxMut S.fxPure `shouldBe` True
+        Solver.allAbove env S.fxMut `shouldSatisfy` notElem S.fxPure
+        Solver.allBelow env S.fxPure `shouldSatisfy` notElem S.fxMut
+      it "keeps callback effects general under a proc upper bound" $ do
+        let (remaining, inferred) = TE.runTypeM $ do
+              fx <- TE.newUnivarOfKind S.KFX env
+              let callback = S.tFun fx S.posNil S.kwdNil S.tNone
+                  consumer = S.tFun S.fxPure (S.posRow callback S.posNil) S.kwdNil S.tNone
+              remaining <- solve [(S.name "consumer", I.NVar consumer)] [TE.Cast info env fx S.fxProc]
+              inferred <- TE.usubst fx
+              return (remaining, inferred)
+        length remaining `shouldBe` 0
+        inferred `shouldBe` S.fxProc
+      forM_ [ ("prefers pure under a proc upper bound", \fx -> [TE.Cast info env fx S.fxProc], S.fxPure)
+            , ("preserves a mut lower bound", \fx -> [TE.Cast info env S.fxMut fx], S.fxMut)
+            , ("preserves an action lower bound", \fx -> [TE.Cast info env S.fxAction fx], S.fxAction)
+            ] $ \(name, constraints, expected) -> it name $ do
+        let (remaining, inferred) = TE.runTypeM $ do
+              fx <- TE.newUnivarOfKind S.KFX env
+              remaining <- solve [(S.name "effect", I.NVar fx)] (constraints fx)
+              inferred <- TE.usubst fx
+              return (remaining, inferred)
+        length remaining `shouldBe` 0
+        inferred `shouldBe` expected
 
     describe "Raw operator result types" $ do
       let raw t n = S.UnBox t (S.eInt n)

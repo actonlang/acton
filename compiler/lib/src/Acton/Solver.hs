@@ -381,6 +381,7 @@ solve' env select hist te eq cs
                   where (ts1,ts2)           = partition (\t' -> castable' t' t) ts
 
                 -- Interim: the env above is a simplification, it won't necessarily contain all TVars
+                castable' (TFX _ fx1) (TFX _ fx2) = subeffect fx1 fx2
                 castable' t'@TVar{} t       = True      -- But a TVar is less than any of its bounds anyway
                 castable' t' t@TVar{}       = False     -- And vice versa
                 castable' t' t              = castable env t' t
