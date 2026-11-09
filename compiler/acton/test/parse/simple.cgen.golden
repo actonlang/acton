@@ -1,4 +1,4 @@
-/* Acton impl hash: facb8817dbf13d176f877d25b19ed6e2d8b8239cec0db66b43dde224d74b99d4 */
+/* Acton impl hash: cd6e86d778ebd81bccb09aaca6b95fd1bd811b672b7bd0b4487315fa6822e795 */
 #include "rts/common.h"
 #include "out/types/simple.h"
 B_NoneType simpleQ_main () {
