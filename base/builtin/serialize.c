@@ -33,17 +33,24 @@ static struct B_ValueError B_serialize_empty_input_error =
 
 // Queue implementation //////////////////////////////////////////////////////////////////
 
+// The serializer holds state in a local since its allocation. The previous
+// row is reached through it.
 void $enqueue($Serial$state state, $ROW elem) {
-    if (state->row)
-        state->row->next = elem;
-    else
+    if (state->row) {
+        $ROW last = state->row;
+        last->next = elem;
+        ACTON_WBAR(last, &last->next, elem);
+    } else
         state->fst = elem;
     state->row = elem;
 }
+// header is a C variable, the rows are GC objects
 void $enqueue2(struct $ROWLISTHEADER *header, $ROW elem) {
-    if (header->last)
-        header->last->next = elem;
-    else
+    if (header->last) {
+        $ROW last = header->last;
+        last->next = elem;
+        ACTON_WBAR(last, &last->next, elem);
+    } else
         header->fst = elem;
     header->last = elem;
 }
@@ -217,6 +224,9 @@ $WORD $closure_deserialize($WORD self, const struct $ClosureLayout *layout, $Ser
         $WORD value = field->class_id == $CLOSURE_REF
             ? $step_deserialize(state) : $val_deserialize(state);
         memcpy((char *)self + field->offset, &value, field->size);
+        // The --db restore fills closures that an earlier pass allocated
+        if (field->class_id == $CLOSURE_REF)
+            ACTON_WBAR(self, (char *)self + field->offset, value);
     }
     return self;
 }

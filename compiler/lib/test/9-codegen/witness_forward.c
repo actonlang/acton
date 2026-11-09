@@ -171,7 +171,7 @@ witness_forwardQ_PCD_Thing witness_forwardQ_PCD_ThingD___deserialize__ (witness_
         }
         self = $DNEW(witness_forwardQ_PCD_Thing, state);
     }
-    self->W_PA_34 = $step_deserialize(state);
+    ACTON_STORE_ATTR(self, W_PA_34, $step_deserialize(state));
     return self;
 }
 witness_forwardQ_PCD_Thing witness_forwardQ_PCD_ThingG_new() {

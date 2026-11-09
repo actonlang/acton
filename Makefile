@@ -368,7 +368,7 @@ dist/deps/libbsdnt: deps-download/$(LIBBSDNT_REF).tar.gz $(LIBBSDNT_BUILD_ZIG)
 # /deps/libgc --------------------------------------------
 # Built with the build.zig of the bdwgc tree itself. The tests are kept so that
 # `zig build test` can run in dist/deps/libgc.
-LIBGC_REF=b5c707b9d169b3c9dace21bc51cd1a657205ebfc
+LIBGC_REF=9cfeefeb74cca6956ac88c269fe69e212c19b1e0
 deps-download/$(LIBGC_REF).tar.gz:
 	mkdir -p deps-download
 	$(CURL) -o $@ https://github.com/actonlang/bdwgc/archive/$(LIBGC_REF).tar.gz
@@ -538,7 +538,7 @@ dist/deps/libyyjson: deps/libyyjson $(DIST_ZIG)
 	cp -a "$</"* "$(TD)/$@"
 
 # top level targets
-.PHONY: test test-benchgames test-builtins test-compiler test-db test-examples test-lang test-regressions test-rts test-stdlib online-tests
+.PHONY: test test-benchgames test-builtins test-compiler test-db test-examples test-lang test-regressions test-rts test-stdlib test-gc-check online-tests
 .PHONY: test-compiler-accept test-lib-accept test-acton-goldens-accept test-goldens-accept
 .PHONY: test-performance
 # These run stack against libacton/acton, which link liblmdb, so the bdeps
@@ -637,6 +637,26 @@ test-stdlib: dist/bin/acton dist/std
 	cd compiler && stack test acton --ta '-p "stdlib"'
 	$(MAKE) -C test tls-test-server
 	cd test/stdlib_tests && "$(ACTON)" test
+
+# Small programs in the write barrier's checker mode (ACTON_GC_CHECK=1):
+# generational collection, marked in steps of 1 ms, with an allocation budget
+# of 20%, which the collector halves in that mode, so that each program has
+# many minor and sliced collections. A program exits with status 70 after a
+# collection that finds a pointer store without its barrier. The groups are
+# the test directories of builtins, the RTS, the core language, regressions
+# and stdlib, the RTS tests, the benchmark programs, the stdlib_tests project
+# and the --db tests. The checker scans the heap at every collection, which
+# makes the slowest stdlib test take seconds, so the time limit of a test is
+# 30 s instead of 3. The RTS auto group runs once more with one world-stopped
+# mark per collection (ACTON_GC_PAUSE_MS=0), which reports a mailbox enqueue
+# without its barriers in more runs than steps of 1 ms do.
+GC_CHECK_GROUPS = $$2 == "Builtins auto" || $$2 == "RTS auto" || $$2 == "RTS" || $$2 == "Core language auto" || $$2 == "Regression auto" || $$2 == "stdlib auto" || $$2 == "Benchmark programs"
+test-gc-check: dist/bin/acton dist/std $(BDEPS)
+	cd compiler && ACTON_GC_CHECK=1 TASTY_PATTERN='$(GC_CHECK_GROUPS)' stack test acton:test_acton
+	cd compiler && ACTON_GC_CHECK=1 ACTON_GC_PAUSE_MS=0 TASTY_PATTERN='$$2 == "RTS auto"' stack test acton:test_acton
+	$(MAKE) -C test tls-test-server
+	cd test/stdlib_tests && "$(ACTON)" test --gc-check --max-time 30000
+	ACTON_GC_CHECK=1 $(MAKE) -C test ddb-tests
 
 online-tests: dist/bin/acton
 	cd compiler && stack test acton:test_acton_online

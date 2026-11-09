@@ -7,6 +7,7 @@
 #include <winsock2.h>
 #endif
 #include <gc.h>
+#include "wbar.h"
 
 typedef void *(*acton_malloc_func)(size_t size);
 typedef void *(*acton_malloc_func)(size_t size);
@@ -74,3 +75,17 @@ void *acton_gc_calloc(size_t count, size_t size);
 void acton_gc_free(void* ptr);
 GC_ATTR_MALLOC char *acton_gc_strdup(const char *s);
 GC_ATTR_MALLOC char *acton_gc_strndup(const char *s, size_t n);
+
+// Points the write barrier (wbar.h) at the collector's dirty bits right after
+// GC_INIT, in incremental mode only. In ordinary mode the barrier sets no
+// bits.
+void acton_init_write_barrier(void);
+
+// Memory that a C library writes pointers into by itself, such as the uv
+// loops, handles and requests that libuv links together. Every read of the
+// dirty bits rescans it in generational mode, so the stores need no write
+// barrier. Like acton_malloc, it returns cleared memory, from the C library
+// while the allocator is the C library's.
+GC_ATTR_MALLOC GC_ATTR_ALLOC_SIZE(1) void *acton_malloc_rescanned(size_t size);
+// Always GC memory, aligned to align, a power of two.
+void *acton_gc_malloc_rescanned_aligned(size_t align, size_t size);

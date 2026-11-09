@@ -48,6 +48,7 @@ actor Tester(env, verbose, port_chunk, app_wthreads=4):
     var p_alive = 0
     var error_encountered = False
     var reported = False
+    var checker_report = False
     var tcp_client = None
     var tcp_expect = 0
     var state = 0
@@ -69,7 +70,11 @@ actor Tester(env, verbose, port_chunk, app_wthreads=4):
         if reported:
             return
         reported = True
-        if error_encountered:
+        if checker_report:
+            print("The write-barrier checker reported a store without its barrier:")
+            print(combined_output)
+            env.exit(70)
+        elif error_encountered:
             print("There was an error :/")
             print(combined_output)
             env.exit(1)
@@ -241,6 +246,8 @@ actor Tester(env, verbose, port_chunk, app_wthreads=4):
         dbc_start()
 
         def app_server_on_exit(p, exit_code, term_signal):
+            if exit_code == 70:
+                checker_report = True
             log("App exited in state %d with exit code %d and termination signal %d" % (state, exit_code, term_signal))
             p_alive -= 1
             paid = p.aid()

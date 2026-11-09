@@ -70,7 +70,7 @@ B_tuple B_tupleD___deserialize__(B_tuple self, $Serial$state state) {
         res->$class = &B_tupleG_methods;
         res->size = len;
         for (int i = 0; i < len; i++) 
-            res->components[i] = $step_deserialize(state);
+            ACTON_STORE(res, res->components[i], $step_deserialize(state));
         return res;
     }
 }

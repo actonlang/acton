@@ -7,10 +7,12 @@ DDB_SERVER=../dist/bin/actondb
 # failing with "Error unpacking client message" or a timeout. Each run picks
 # fresh random ports, so a clean re-run is safe and almost always passes.
 # RETRY wraps just the (flaky) binary execution, not compilation: it runs the
-# given command up to 3 times, succeeding on the first green attempt.
+# given command up to 3 times, succeeding on the first green attempt. Exit
+# status 70 is a report of the write barrier's checker and is not retried.
 RETRY=n=1; max=3; while true; do \
 	echo "attempt $$n/$$max: $(1)"; \
-	if $(1); then break; fi; \
+	if $(1); then break; else status=$$?; fi; \
+	if [ $$status -eq 70 ]; then echo "FAILED with a write-barrier checker report: $(1)" >&2; exit 70; fi; \
 	if [ $$n -ge $$max ]; then echo "FAILED after $$max attempts: $(1)" >&2; exit 1; fi; \
 	echo "attempt $$n failed, retrying: $(1)" >&2; n=$$((n+1)); \
 done

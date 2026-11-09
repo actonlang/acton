@@ -550,6 +550,12 @@ void TIM_SORT(B_Ord w, SORT_TYPE *dst, const size_t size) {
     return;
   }
 
+  /* dst is a GC object. The sort moves its pointers around, through
+     registers and the temporary storage, so the dirty bits of the whole
+     array are set before the first move (rts/wbar.h). The temporary storage
+     is held in a local since its allocation and needs no barrier. */
+  ACTON_WBAR_RANGE(dst, dst, size * sizeof(SORT_TYPE));
+
   if (size < 64) {
       BINARY_INSERTION_SORT(w, dst, size);
     return;

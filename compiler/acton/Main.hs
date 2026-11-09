@@ -2558,7 +2558,6 @@ genBuildZig template sys spec zigDeps depModuleOpts =
                    , "        .db = db,"
                    , "        .gc_use_mark_bits = gc_use_mark_bits,"
                    , "        .gc_mark_bit_per_object = gc_mark_bit_per_object,"
-                   , "        .gc_dirty_tracking_backend = gc_dirty_tracking_backend,"
                    , "        .gc_page_hash_table_log2 = gc_page_hash_table_log2,"
                    , "        .gc_heap_growth_divisor = gc_heap_growth_divisor,"
                    , "        .gc_alloc_budget_percent = gc_alloc_budget_percent,"
@@ -2574,6 +2573,7 @@ genBuildZig template sys spec zigDeps depModuleOpts =
                    , "        .gc_no_thread_local_warmup = gc_no_thread_local_warmup,"
                    , "        .gc_thread_local_refill_blocks = gc_thread_local_refill_blocks,"
                    , "        .gc_disable_thp = gc_disable_thp,"
+                   , "        .gc_mode = gc_mode,"
                    , "        .max_wthreads = max_wthreads,"
                    ]
                    ++ moduleOpts

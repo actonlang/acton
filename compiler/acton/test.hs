@@ -15,7 +15,7 @@ import qualified Data.ByteString.Lazy.Char8 as LBS
 import Control.Exception (catch, IOException)
 import System.Directory
 import System.Directory.Recursive
-import System.Environment (getEnvironment)
+import System.Environment (getEnvironment, lookupEnv)
 import System.Exit
 import System.FilePath
 import System.FilePath.Posix
@@ -2990,122 +2990,51 @@ gcThpBuildOptionTests = testGroup "GC transparent huge pages"
   | System.Info.os == "linux"
   ]
 
-gcTuningBuildOptionTests = testGroup "GC dirty tracking build options" $
+gcTuningBuildOptionTests = testGroup "GC page-hash table build option" $
   [ testCase "root settings rebuild the collector and shared dependencies" $
       withFixture $ \acton app shared runEnv writeOptions -> do
-        let uffdTarget = System.Info.arch ++ "-linux-gnu.2.34"
-            build flags = readCreateProcessWithExitCode
+        let build flags = readCreateProcessWithExitCode
               (proc acton (["build", "--color", "never"] ++ flags))
                 { cwd = Just app, env = Just runEnv } ""
-            run backend log2 incremental extraEnv = readCreateProcessWithExitCode
+            run log2 generational = readCreateProcessWithExitCode
               (proc (app </> "out/bin/main")
-                [show backend, show log2, if incremental then "true" else "false",
+                [show log2, if generational then "true" else "false",
                  "--rts-wthreads", "2"])
-                { cwd = Just app, env = Just (extraEnv ++ runEnv) } ""
-            assertRuns backend log2 incremental extraEnv = do
-              result@(_, out, _) <- run backend log2 incremental extraEnv
+                { cwd = Just app,
+                  env = Just ([("ACTON_GC_MODE", "generational") | generational] ++ runEnv) } ""
+            assertRuns log2 generational = do
+              result@(_, out, _) <- run log2 generational
               expectSuccess "GC configuration and retained objects" result
               assertEqual "application completes" "GC tuning OK\n" out
-            expectUnavailable backend (code, out, err) = do
-              assertBool ("explicit backend should be rejected\n" ++ out ++ err)
-                (code /= ExitSuccess)
-              assertBool ("failure should identify the requested backend\n" ++ out ++ err)
-                ("requested GC dirty tracking backend" `isInfixOf` err
-                 && backend `isInfixOf` err && "unavailable" `isInfixOf` err)
-              assertEqual "failed activation must not run the application" "" out
-            expectActivation backend result@(code, out, _) =
-              if code == ExitSuccess
-                then assertEqual "selected backend completes the application" "GC tuning OK\n" out
-                else expectUnavailable backend result
-            activeEnv pauseTarget = [("GC_ENABLE_INCREMENTAL", "1"),
-                                    ("GC_PAUSE_TIME_TARGET", pauseTarget)]
             sourceFiles = [shared </> "Build.act", shared </> "src/lib.act"]
-            parseComponent part
-              | not (null part) && all (\c -> c >= '0' && c <= '9') part =
-                  case reads part of
-                    [(value, "")] -> Just (value :: Integer)
-                    _ -> Nothing
-              | otherwise = Nothing
-            glibcVersion out = case words out of
-              ["glibc", version] -> case mapM parseComponent (splitOn "." version) of
-                Just (major : minor : _) -> Just (major, minor)
-                _ -> Nothing
-              _ -> Nothing
-            skipUffd reason = do
-              putStrLn ("Skipping userfaultfd runtime checks: " ++ reason
-                        ++ "; glibc >= 2.34 is required. Compile coverage is retained.")
-              pure False
-        libc <- readCreateProcessWithExitCode
-          (proc "getconf" ["GNU_LIBC_VERSION"]){ env = Just runEnv } ""
-          `catch` (\(err :: IOException) -> pure (ExitFailure 127, "", show err))
-        canRunUffd <- case libc of
-          (ExitSuccess, out, _) -> case glibcVersion out of
-            Just version | version >= (2, 34) -> pure True
-                         | otherwise -> skipUffd ("host reports " ++ unwords (words out))
-            Nothing -> skipUffd ("unrecognized getconf output " ++ show out)
-          (code, out, err) -> skipUffd ("getconf GNU_LIBC_VERSION failed ("
-                                      ++ show code ++ "): " ++ out ++ err)
         originalShared <- mapM BS.readFile sourceFiles
         -- Keep all generated output and dependency caches between selections.
-        forM_ [([], 0, 0), (options "soft_dirty" "23", 64, 23),
-               (options "userfaultfd" "23", 128, 23),
-               (options "auto" "0", 0, 0)] $ \(selected, backend, log2) -> do
+        forM_ [([], 0), (options "23", 23)] $ \(selected, log2) -> do
           writeOptions selected
-          expectSuccess "build selected collector" =<<
-            build (if backend == 128 then ["--target", uffdTarget] else [])
-          when (backend /= 128 || canRunUffd) $ do
-            assertRuns backend log2 False []
-            when (backend /= 0) $ do
-              let name = if backend == 64 then "soft_dirty" else "userfaultfd"
-              -- Kernel policy may disallow UFFD or soft-dirty in CI. Only the
-              -- explicit startup rejection is acceptable in place of success.
-              forM_ ["999999", "123"] $ \pauseTarget ->
-                expectActivation name =<< run backend log2 True (activeEnv pauseTarget)
-              -- An inherited preference must not defeat explicit selection.
-              -- Explicit builds omit the mprotect fallback entirely.
-              expectActivation name =<< run backend log2 True
-                (("GC_USE_GETWRITEWATCH", "0") : activeEnv "999999")
+          expectSuccess "build selected collector" =<< build []
+          -- Generational mode turns on the collector's manual dirty-bit mode
+          forM_ [False, True] $ assertRuns log2
           mapM BS.readFile sourceFiles >>=
             assertEqual "root settings must not rewrite dependency sources" originalShared
-        writeOptions (options "soft_dirty" "23")
         expectSuccess "database dependency uses the selected collector" =<< build ["--db"]
         -- No database server is needed: the DB build checks linkage, then the
         -- ordinary executable checks reuse of output after that build.
         expectSuccess "return to ordinary linkage without cleaning" =<< build []
-        assertRuns 64 23 False []
-  | System.Info.os == "linux", System.Info.arch `elem` ["x86_64", "aarch64"]
-  ] ++
-  [ testCase "invalid values and unsupported targets fail clearly" $
+        assertRuns 23 False
+  , testCase "invalid values fail clearly" $
       withFixture $ \acton app _ runEnv writeOptions -> do
-        forM_ invalidConfigurations $ \(selected, flags, key) -> do
-          writeOptions selected
+        forM_ ["invalid", "-1", "31"] $ \value -> do
+          writeOptions (options value)
           (code, out, err) <- readCreateProcessWithExitCode
-            (proc acton (["build", "--color", "never"] ++ flags))
+            (proc acton ["build", "--color", "never"])
               { cwd = Just app, env = Just runEnv } ""
-          assertBool ("invalid configuration should fail: " ++ show selected
-                      ++ " " ++ show flags ++ "\n" ++ out ++ err)
+          assertBool ("invalid configuration should fail: " ++ value ++ "\n" ++ out ++ err)
             (code /= ExitSuccess)
-          assertBool ("diagnostic should name " ++ key ++ "\n" ++ out ++ err)
-            (key `isInfixOf` (out ++ err))
+          assertBool ("diagnostic should name gc_page_hash_table_log2\n" ++ out ++ err)
+            ("gc_page_hash_table_log2" `isInfixOf` (out ++ err))
   ]
   where
-    options backend log2 = [("gc_dirty_tracking_backend", backend),
-                            ("gc_page_hash_table_log2", log2)]
-    invalidConfigurations =
-      [ ([(key, value)], [], key)
-      | (key, value) <- [("gc_dirty_tracking_backend", "invalid"),
-                        ("gc_page_hash_table_log2", "invalid"),
-                        ("gc_page_hash_table_log2", "-1"),
-                        ("gc_page_hash_table_log2", "31")]
-      ] ++
-      [ ([("gc_dirty_tracking_backend", backend)], ["--target", target],
-         "gc_dirty_tracking_backend")
-      | (backend, target) <- [("soft_dirty", "aarch64-macos"),
-                             ("userfaultfd", "aarch64-macos"),
-                             ("userfaultfd", "x86_64-linux-gnu.2.27"),
-                             ("userfaultfd", "x86_64-linux-musl"),
-                             ("userfaultfd", "riscv64-linux-gnu.2.36")]
-      ]
+    options log2 = [("gc_page_hash_table_log2", log2)]
     expectSuccess label (code, out, err) =
       assertEqual (label ++ "\nstdout:\n" ++ out ++ "\nstderr:\n" ++ err) ExitSuccess code
     withFixture action = withSystemTempDirectory "acton-gc-tuning" $ \tmp -> do
@@ -3115,7 +3044,7 @@ gcTuningBuildOptionTests = testGroup "GC dirty tracking build options" $
           shared = tmp </> "shared"
           runEnv = [("GC_MARKERS", "2"), ("GC_FREE_SPACE_DIVISOR", "5"),
                     ("GC_FULL_FREQUENCY", "7")]
-                ++ filter (not . isPrefixOf "GC_" . fst) environment
+                ++ withoutGcVariables environment
           fingerprint name = Fingerprint.formatFingerprint
             (Fingerprint.updateFingerprintPrefix (Fingerprint.fingerprintPrefixForName name) 1)
           writeProject dir name deps selected = writeFile (dir </> "Build.act") $ unlines
@@ -3131,7 +3060,7 @@ gcTuningBuildOptionTests = testGroup "GC dirty tracking build options" $
         copyFile ("test/project/gc_tuning/src" </> file) (app </> "src" </> file)
       copyFile "test/project/gc_tuning/src/shared.act" (shared </> "src/lib.act")
       -- Dependency declarations deliberately conflict with root defaults.
-      writeProject shared "shared" "" (options "userfaultfd" "22")
+      writeProject shared "shared" "" (options "22")
       action acton app shared runEnv writeOptions
 
 gcHeapGrowthBuildOptionTests = testGroup "GC heap growth"
@@ -3189,6 +3118,10 @@ gcHeapGrowthBuildOptionTests = testGroup "GC heap growth"
             ]
       action acton proj runEnv writeOptions
 
+-- The GC tests choose the collector variables and the GC mode of each run
+withoutGcVariables :: [(String, String)] -> [(String, String)]
+withoutGcVariables = filter (\(name, _) -> not ("GC_" `isPrefixOf` name || "ACTON_GC_" `isPrefixOf` name))
+
 gcCollectorOptionTests = testGroup "GC collector options"
   [ testCase "settings reach the collector and allocation still works" $
       withFixture $ \acton proj runEnv writeOptions -> do
@@ -3210,6 +3143,8 @@ gcCollectorOptionTests = testGroup "GC collector options"
         writeOptions []
         expectSuccess "build default collector" =<< build []
         assertReports "default collector" defaults []
+        forM_ modes $ \(label, extraEnv, reports) ->
+          assertReports label reports extraEnv
         -- The environment overrides the runtime policy of either build.
         assertReports "environment overrides" overridden overrides
         writeOptions tuned
@@ -3243,7 +3178,9 @@ gcCollectorOptionTests = testGroup "GC collector options"
   ]
   where
     -- Reported get_gc_info fields for a build without settings.
-    defaults = [("alloc_budget_percent", "250"), ("block_size", "16384"),
+    defaults = [("mode", "ordinary"), ("backend", "none"),
+                ("pause_target_us", "None"),
+                ("alloc_budget_percent", "250"), ("block_size", "16384"),
                 ("heap_ceiling_percent", "75"), ("memory_limit_known", "True"),
                 ("end_padding", "False"), ("small_object_size", "16"),
                 ("thread_local_size_limit", "2048"),
@@ -3280,9 +3217,26 @@ gcCollectorOptionTests = testGroup "GC collector options"
                     ("mark_bits", "False"),
                     ("bytes_per_marker", "0"),
                     ("initial_mark_stack_size", "65536")]
+    -- The GC mode chosen when starting the program: generational mode marks
+    -- in steps of 50 ms, or in one stop per collection; the write-barrier
+    -- checker runs in generational mode with steps of 1 ms, and its exit
+    -- status fails the run if it finds a store without a barrier.
+    modes = [("generational mode", [("ACTON_GC_MODE", "generational")],
+              [("mode", "generational"), ("backend", "manual"),
+               ("pause_target_us", "50000")]),
+             ("generational mode in one stop",
+              [("ACTON_GC_MODE", "generational"), ("ACTON_GC_PAUSE_MS", "0")],
+              [("mode", "generational"), ("backend", "manual"),
+               ("pause_target_us", "None")]),
+             ("write-barrier checker", [("ACTON_GC_CHECK", "1")],
+              [("mode", "generational"), ("backend", "manual"),
+               ("pause_target_us", "1000"), ("alloc_budget_percent", "20")])]
     -- With 0, the initial mark stack has the collector's default size: as
     -- many entries as a block has bytes.
-    others = [([("gc_block_size", "65536"),
+    others = [([("gc_mode", "generational")],
+               [("mode", "generational"), ("backend", "manual"),
+                ("pause_target_us", "50000")]),
+              ([("gc_block_size", "65536"),
                 ("gc_initial_mark_stack_size", "0"),
                 ("gc_thread_local_size_limit", "32768")],
                [("block_size", "65536"), ("initial_mark_stack_size", "65536"),
@@ -3347,6 +3301,7 @@ gcCollectorOptionTests = testGroup "GC collector options"
                         ("gc_block_size", "131072"),
                         ("gc_block_size", "invalid"),
                         ("gc_mark_range_stealing", "maybe"),
+                        ("gc_mode", "incremental"),
                         ("gc_initial_mark_stack_size", "2048"),
                         ("gc_initial_mark_stack_size", "12288"),
                         ("gc_initial_mark_stack_size", "invalid"),
@@ -3381,8 +3336,7 @@ gcCollectorOptionTests = testGroup "GC collector options"
       createDirectoryIfMissing True (proj </> "src")
       forM_ ["main.act", "main.ext.c"] $ \file ->
         copyFile ("test/project/gc_options/src" </> file) (proj </> "src" </> file)
-      let runEnv = [("GC_MARKERS", "2")]
-                ++ filter (not . isPrefixOf "GC_" . fst) environment
+      let runEnv = [("GC_MARKERS", "2")] ++ withoutGcVariables environment
           fingerprint = Fingerprint.formatFingerprint
             (Fingerprint.updateFingerprintPrefix (Fingerprint.fingerprintPrefixForName "gc_options") 1)
           writeOptions selected = writeFile (proj </> "Build.act") $ unlines
@@ -4196,7 +4150,8 @@ runThing opts thing = do
     let wd = if isProj then projBinPath else twd
     let exe = if isProj then binName else fileBody
     (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc ("./" ++ exe) (words opts)){ cwd = Just wd } ""
-    return (returnCode, cmdOut, cmdErr)
+    cmdErr' <- dropCheckerLines returnCode cmdErr
+    return (returnCode, cmdOut, cmdErr')
   where (fileBody, fileExt) = splitExtension $ takeFileName thing
         fileParts = splitOn "__" fileBody
         binName = head fileParts
@@ -4217,8 +4172,40 @@ runThingBytes opts thing = do
                                                { cwd = Just wd, std_in = UseHandle hIn, std_out = UseHandle hOut, std_err = UseHandle hErr }
                           waitForProcess ph
         cmdOut <- BS.readFile outPath
-        cmdErr <- BS.readFile errPath
+        cmdErr <- BS.readFile errPath >>= dropCheckerLinesBytes returnCode
         return (returnCode, cmdOut, cmdErr)
+
+-- In the write barrier's checker mode (ACTON_GC_CHECK=1) the collector of a
+-- program writes lines of its own to stderr: a line after a collection whose
+-- check was incomplete, and its reports before it exits with status 70. A
+-- store without its barrier fails a test through that exit status, so the
+-- stderr the tests compare is taken without these lines. After exit status 70
+-- they stay, so that the output of the failed test shows the report.
+checkerLinePrefixes :: [String]
+checkerLinePrefixes = ["WBVERIFY ", "GC_WBAR_VERIFY: "]
+
+checkerMode :: IO Bool
+checkerMode = do
+    v <- lookupEnv "ACTON_GC_CHECK"
+    return $ maybe False (\s -> s /= "" && s /= "0") v
+
+dropCheckerLines :: ExitCode -> String -> IO String
+dropCheckerLines code err = do
+    check <- checkerMode
+    let ls = lines err
+        isChecker l = any (`isPrefixOf` l) checkerLinePrefixes
+    return $ if check && code /= ExitFailure 70 && any isChecker ls
+               then unlines (filter (not . isChecker) ls)
+               else err
+
+dropCheckerLinesBytes :: ExitCode -> BS.ByteString -> IO BS.ByteString
+dropCheckerLinesBytes code err = do
+    check <- checkerMode
+    let ls = BC.lines err
+        isChecker l = any (`BC.isPrefixOf` l) (map BC.pack checkerLinePrefixes)
+    return $ if check && code /= ExitFailure 70 && any isChecker ls
+               then BC.unlines (filter (not . isChecker) ls)
+               else err
 
 
 testBuildThing opts expRet expFail thing = do

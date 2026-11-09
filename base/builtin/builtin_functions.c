@@ -93,7 +93,7 @@ void B_IteratorD_enumerate_serialize(B_IteratorD_enumerate self,$Serial$state st
 B_IteratorD_enumerate B_IteratorD_enumerate$_deserialize(B_IteratorD_enumerate res,$Serial$state state) {
     if (!res)
         res = $DNEW(B_IteratorD_enumerate,state);
-    res->it = $step_deserialize(state);
+    ACTON_STORE(res, res->it, $step_deserialize(state));
     res->nxt = fromB_int((B_int)$step_deserialize(state));
     return res;
 }
@@ -150,7 +150,7 @@ void $EqOptD_serialize($EqOpt self,$Serial$state state) {
 $EqOpt $EqOptD_deserialize($EqOpt res, $Serial$state state) {
     if (!res)
         res = $DNEW($EqOpt,state);
-    res->W_Eq$A = $step_deserialize(state);
+    ACTON_STORE(res, res->W_Eq$A, $step_deserialize(state));
     return res;
 }
 
@@ -214,7 +214,7 @@ void $EqTupleD_serialize($EqTuple self,$Serial$state state) {
 $EqTuple $EqTupleD_deserialize($EqTuple res, $Serial$state state) {
     if (!res)
         res = $DNEW($EqTuple,state);
-    res->W_Eq = $step_deserialize(state);
+    ACTON_STORE(res, res->W_Eq, $step_deserialize(state));
     return res;
 }
 
@@ -261,7 +261,7 @@ void $OrdTupleD_serialize($OrdTuple self,$Serial$state state) {
 $OrdTuple $OrdTupleD_deserialize($OrdTuple res, $Serial$state state) {
     if (!res)
         res = $DNEW($OrdTuple,state);
-    res->W_Ord = $step_deserialize(state);
+    ACTON_STORE(res, res->W_Ord, $step_deserialize(state));
     return res;
 }
 
@@ -339,7 +339,7 @@ void $HashableTupleD_serialize($HashableTuple self,$Serial$state state) {
 $HashableTuple $HashableTupleD_deserialize($HashableTuple res, $Serial$state state) {
     if (!res)
         res = $DNEW($HashableTuple,state);
-    res->W_Hashable = $step_deserialize(state);
+    ACTON_STORE(res, res->W_Hashable, $step_deserialize(state));
     return res;
 }
 

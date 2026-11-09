@@ -6,7 +6,10 @@ uint64_t zig_hash_wyhash_final(void *hasher);
 uint64_t zig_hash_wyhash_hash(uint64_t seed, B_bytes data);
 
 B_NoneType stdQ_hashQ_wyhashQ_HasherD__init (stdQ_hashQ_wyhashQ_Hasher self, uint64_t seed) {
-    self->_hasher = (uint64_t)(uintptr_t)zig_hash_wyhash_init(seed);
+    // A GC pointer in an int attribute: the barrier is up to this code
+    void *hasher = zig_hash_wyhash_init(seed);
+    self->_hasher = (uint64_t)(uintptr_t)hasher;
+    ACTON_WBAR(self, &self->_hasher, hasher);
     return B_None;
 }
 

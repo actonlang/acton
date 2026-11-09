@@ -1,10 +1,14 @@
 B_list B_mk_list(int len, ...) {
     B_list res = B_listD_new(len);
     res->length = len;
+    // The array is reached through res, not held in a local since its
+    // allocation
+    $WORD *data = res->data;
+    ACTON_WBAR_RANGE(data, data, len * sizeof($WORD));
     va_list args;
     va_start(args, len);
     for (int i = 0; i < len; i++)
-        res->data[i] = va_arg(args, $WORD);
+        data[i] = va_arg(args, $WORD);
     return res;
 }
 

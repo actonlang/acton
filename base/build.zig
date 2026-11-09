@@ -25,35 +25,6 @@ fn joinPath(allocator: std.mem.Allocator, base: []const u8, relative: []const u8
     return path;
 }
 
-// The ACTON_GC_REQUIRED_VDB value (a GC_VDB_* constant, or 0 for automatic
-// selection) for gc_dirty_tracking_backend, which must be supported by target.
-fn gcRequiredVdb(t: std.Target, backend: []const u8) u8 {
-    const required_vdb: u8 = if (std.mem.eql(u8, backend, "auto")) 0
-        else if (std.mem.eql(u8, backend, "soft_dirty")) 0x40
-        else if (std.mem.eql(u8, backend, "userfaultfd")) 0x80
-        else {
-            std.log.err("gc_dirty_tracking_backend must be auto, soft_dirty or userfaultfd", .{});
-            std.process.exit(1);
-        };
-    if (required_vdb != 0 and (t.os.tag != .linux or !t.abi.isGnu())) {
-        std.log.err("gc_dirty_tracking_backend={s} requires a Linux GNU target", .{backend});
-        std.process.exit(1);
-    }
-    if (required_vdb == 0x80) {
-        const supported_arch = switch (t.cpu.arch) {
-            .x86, .x86_64, .aarch64 => true,
-            else => false,
-        };
-        const glibc_version = t.os.versionRange().gnuLibCVersion() orelse
-            std.SemanticVersion{ .major = 0, .minor = 0, .patch = 0 };
-        if (!supported_arch or glibc_version.order(.{ .major = 2, .minor = 34, .patch = 0 }) == .lt) {
-            std.log.err("gc_dirty_tracking_backend=userfaultfd requires x86, x86_64 or aarch64 and glibc 2.34 or newer", .{});
-            std.process.exit(1);
-        }
-    }
-    return required_vdb;
-}
-
 // The C compiler flags of the collector sources in lib.
 fn cSourceFlags(lib: *std.Build.Step.Compile) []const []const u8 {
     for (lib.root_module.link_objects.items) |link_object| {
@@ -84,7 +55,7 @@ pub fn build(b: *std.Build) void {
     const no_threads = b.option(bool, "no_threads", "") orelse false;
     const gc_use_mark_bits = b.option(bool, "gc_use_mark_bits", "Use packed GC mark bits (default: true)") orelse true;
     const gc_mark_bit_per_object = b.option(bool, "gc_mark_bit_per_object", "Track GC marks per object") orelse false;
-    const gc_dirty_tracking_backend = b.option([]const u8, "gc_dirty_tracking_backend", "GC dirty tracking backend: auto, soft_dirty, userfaultfd") orelse "auto";
+    const gc_mode = b.option([]const u8, "gc_mode", "Default GC mode, which the ACTON_GC_MODE environment variable overrides: ordinary (default) or generational") orelse "ordinary";
     const gc_page_hash_table_log2 = b.option(u8, "gc_page_hash_table_log2", "Log2 of GC page-hash entries (0 keeps the default)") orelse 0;
     const gc_heap_growth_divisor = b.option(u32, "gc_heap_growth_divisor", "Limit automatic GC heap growth to the heap size divided by this (default 4; 0 keeps the fixed increment)") orelse 4;
     const gc_alloc_budget_percent = b.option(u32, "gc_alloc_budget_percent", "Collect after allocating this percentage of the live data (default 250; 0 selects the free space divisor policy)") orelse 250;
@@ -115,7 +86,7 @@ pub fn build(b: *std.Build) void {
     }
     // Validate here, before the collector's own option checks, so that the
     // diagnostics name the Build.act options.
-    const gc_required_vdb = gcRequiredVdb(target.result, gc_dirty_tracking_backend);
+    const gc_mode_generational = gcModeGenerational(gc_mode);
     if (gc_page_hash_table_log2 > 30) {
         std.log.err("gc_page_hash_table_log2 must be between 1 and 30, or 0 for the default", .{});
         std.process.exit(1);
@@ -179,7 +150,12 @@ pub fn build(b: *std.Build) void {
         std.log.err("gc_no_thread_local_warmup requires a target with threads", .{});
         std.process.exit(1);
     }
-    const gc_enable_mprotect_vdb = gcEnableMprotectVdb(target.result);
+    // The write barrier compiles in the block size and the number of dirty
+    // bits, which the RTS checks against the collector when it starts:
+    // LOG_PHT_ENTRIES of LARGE_CONFIG unless gc_page_hash_table_log2 sets it.
+    const gc_log_block: u32 = std.math.log2_int(u32, if (gc_block_size != 0) gc_block_size else 4096);
+    const gc_log_pht: u32 = if (gc_page_hash_table_log2 != 0) gc_page_hash_table_log2
+        else if (target.result.ptrBitWidth() == 32) 20 else 21;
 
     const projpath_outtypes = joinPath(b.allocator, buildroot_path, "out/types");
 
@@ -199,7 +175,10 @@ pub fn build(b: *std.Build) void {
         .enable_mmap = true,
         .enable_mark_bits = gc_use_mark_bits,
         .enable_mark_bit_per_obj = gc_mark_bit_per_object,
-        .dirty_tracking_backend = gc_dirty_tracking_backend,
+        // The program sets the dirty bits through its write barrier
+        // (rts/wbar.h): the collector's manual dirty-bit mode, which needs
+        // threads.
+        .dirty_tracking_backend = "manual",
         .page_hash_table_log2 = gc_page_hash_table_log2,
         .heap_growth_divisor = gc_heap_growth_divisor,
         .alloc_budget_percent = gc_alloc_budget_percent,
@@ -214,7 +193,7 @@ pub fn build(b: *std.Build) void {
         .disable_realloc_free = gc_realloc_no_free,
         .disable_thread_local_warmup = gc_no_thread_local_warmup,
         .tl_refill_max = gc_thread_local_refill_blocks,
-        .enable_mprotect_vdb = gc_enable_mprotect_vdb,
+        .CFLAGS_EXTRA = gcCflagsExtra(target.result),
     });
     const libgc = dep_libgc.artifact("gc");
     if (enable_lto) libgc.lto = .thin;
@@ -226,9 +205,10 @@ pub fn build(b: *std.Build) void {
         \\#ifndef ACTON_GC_CONFIG_H
         \\#define ACTON_GC_CONFIG_H
         \\#include <gc.h>
-        \\#define ACTON_GC_DIRTY_TRACKING_BACKEND "{s}"
-        \\#define ACTON_GC_REQUIRED_VDB {d}
         \\#define ACTON_GC_THREADS {d}
+        \\#define ACTON_GC_LOG_BLOCK {d}
+        \\#define ACTON_GC_LOG_PHT {d}
+        \\#define ACTON_GC_MODE_GENERATIONAL {d}
         \\#ifdef __cplusplus
         \\extern "C" {{
         \\#endif
@@ -244,7 +224,7 @@ pub fn build(b: *std.Build) void {
         \\#endif
         \\#endif
         \\
-    , .{ gc_dirty_tracking_backend, gc_required_vdb, @intFromBool(gc_enable_threads) }));
+    , .{ @intFromBool(gc_enable_threads), gc_log_block, gc_log_pht, @intFromBool(gc_mode_generational) }));
     // The effective settings depend on the collector defaults and its
     // configuration macros, so read them from the collector's private header,
     // compiled with the C flags of libgc itself.
@@ -551,6 +531,7 @@ pub fn build(b: *std.Build) void {
     libActon.installHeader(b.path("rts/rts.h"), "rts/rts.h");
     libActon.installHeader(b.path("rts/log.h"), "rts/log.h");
     libActon.installHeader(b.path("rts/perf.h"), "rts/perf.h");
+    libActon.installHeader(b.path("rts/wbar.h"), "rts/wbar.h");
 
     libActon.root_module.addIncludePath(b.path("."));
     libActon.root_module.addIncludePath(dep_libtlsuv.path("include"));
@@ -564,7 +545,6 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
             .gc_use_mark_bits = gc_use_mark_bits,
             .gc_mark_bit_per_object = gc_mark_bit_per_object,
-            .gc_dirty_tracking_backend = gc_dirty_tracking_backend,
             .gc_page_hash_table_log2 = gc_page_hash_table_log2,
             .gc_heap_growth_divisor = gc_heap_growth_divisor,
             .gc_alloc_budget_percent = gc_alloc_budget_percent,
@@ -615,6 +595,7 @@ pub fn build(b: *std.Build) void {
     });
     if (enable_lto) base_tests.lto = .thin;
     base_tests.root_module.addIncludePath(b.path("."));
+    base_tests.root_module.addIncludePath(gc_config_files.getDirectory());
     base_tests.root_module.linkLibrary(dep_libbsdnt.artifact("bsdnt"));
     base_tests.root_module.linkLibrary(libgc);
     base_tests.root_module.link_libc = true;
@@ -623,12 +604,13 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&run_base_tests.step);
 }
 
-// x86_64 macOS builds leave out mprotect-based dirty tracking. Under
-// Rosetta 2, incremental collection with it hangs when 12 or more threads
-// run; it is untested on Intel Macs. Incremental mode then treats every
-// page as dirty, as all macOS builds did before.
-pub fn gcEnableMprotectVdb(t: std.Target) bool {
-    return !(t.os.tag.isDarwin() and t.cpu.arch == .x86_64);
+pub fn gcModeGenerational(mode: []const u8) bool {
+    if (std.mem.eql(u8, mode, "generational")) return true;
+    if (!std.mem.eql(u8, mode, "ordinary")) {
+        std.log.err("gc_mode must be ordinary or generational", .{});
+        std.process.exit(1);
+    }
+    return false;
 }
 
 // The collector's GC_TINY_FREELISTS for gc_thread_local_size_limit (0 keeps
@@ -637,4 +619,14 @@ pub fn gcEnableMprotectVdb(t: std.Target) bool {
 pub fn gcTinyFreelists(t: std.Target, size_limit: u32) u32 {
     if (size_limit == 0) return 0;
     return size_limit / (2 * (t.ptrBitWidth() / 8)) + 1;
+}
+
+// The collector's extra C flags. On Windows, CONSOLE_LOG makes the collector
+// write its log, its warnings and the message of a fatal error to stderr, as on
+// the other systems, instead of to a file named after the executable, and
+// NO_MSGBOX_ON_ERROR makes a fatal error print its message without a message
+// box that waits for a click.
+pub fn gcCflagsExtra(t: std.Target) []const u8 {
+    if (t.os.tag != .windows) return "";
+    return "-DCONSOLE_LOG -DNO_MSGBOX_ON_ERROR";
 }

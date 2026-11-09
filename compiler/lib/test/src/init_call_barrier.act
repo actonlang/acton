@@ -1,0 +1,35 @@
+# __init__ stores into the new object of its constructor without write
+# barriers. An explicit __init__ call on any other object sets the barrier on
+# that object first: in a function, and in the continuation of a proc
+# __init__, which loads self back from the heap. The call on the new self of
+# Derived.__init__ gets no barrier. A static __init__ stores into its first
+# parameter with barriers, and its calls pass the argument as it is.
+
+proc def step():
+    pass
+
+class Base(object):
+    def __init__(self):
+        self.items = [1]
+
+class Derived(Base):
+    def __init__(self):
+        Base.__init__(self)
+
+class Later(Base):
+    def __init__(self):
+        step()
+        Base.__init__(self)
+
+class Renew(object):
+    hook: () -> None
+
+    @staticmethod
+    def __init__(b: Base):
+        b.items = [3]
+
+def reinit(b: Base):
+    Base.__init__(b)
+
+def renew(b: Base):
+    Renew.__init__(b)

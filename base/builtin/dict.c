@@ -105,7 +105,9 @@ static int B_dict_resize(B_dict_base d) {
     //   $entry_t e = newentries + i;
         // printf("%ld     %lu\n", e->hash, ((B_int)e->key)->val.n[0])
         
+    // The new table was filled while only a local held it
     d->table = newtable;
+    ACTON_WBAR(d, &d->table, newtable);
     return 0;
 }
 
@@ -215,15 +217,21 @@ static void B_dict_insert(B_dict_base dict, uint64_t hash, $WORD key, $WORD valu
         ep = &TB_ENTRIES(table)[table->tb_nentries];
         table->tb_indices[newpos] = table->tb_nentries;
         ep->key = key;
+        ACTON_WBAR(table, &ep->key, key);
         ep->hash = hash;
         ep->value = value;
+        ACTON_WBAR(table, &ep->value, value);
         table->tb_usable--;
         table->tb_nentries++;
         dict->numelements++;
         return;
     }
-    if (old_value != value)  //eq ??
-        TB_ENTRIES(dict->table)[ix].value = value;
+    if (old_value != value) {  //eq ??
+        table = dict->table;
+        $WORD *slot = &TB_ENTRIES(table)[ix].value;
+        *slot = value;
+        ACTON_WBAR(table, slot, value);
+    }
     return;
 }
 
@@ -253,7 +261,7 @@ static B_dict_base B_dict_base_new($SuperG_class cls, B_Hashable hashwit,
 
 static B_NoneType B_dict_base_init(B_dict_base dict, B_Hashable hashwit,
                                    B_Iterable wit, $WORD iterable) {
-    dict->hashwit = hashwit;
+    ACTON_STORE(dict, dict->hashwit, hashwit);
     dict->numelements = 0;
     dict->table = NULL;
     if (wit && iterable) {
@@ -342,21 +350,23 @@ static void B_dict_base_serialize(B_dict_base self, int class_id, $Serial$state 
 
 static void B_dict_base_deserialize_payload(B_dict_base res, $ROW row,
                                             $Serial$state state) {
-    res->hashwit = (B_Hashable)$step_deserialize(state);
+    ACTON_STORE(res, res->hashwit, (B_Hashable)$step_deserialize(state));
     res->numelements = (long)row->blob[0];
     long tb_size = (long)row->blob[1];
     if (tb_size == 0) {
         res->table = NULL;
         return;
     }
-    res->table = acton_malloc(sizeof(char *) + 3 * sizeof(long) + tb_size * sizeof(int)
-                              + (2 * tb_size / 3) * sizeof(struct $entry_struct));
-    res->table->tb_size = tb_size;
-    res->table->tb_usable = (long)row->blob[2];
-    res->table->tb_nentries = (long)row->blob[3];
-    memcpy(res->table->tb_indices, &row->blob[4], tb_size * sizeof(int));
-    for (int i = 0; i < res->table->tb_nentries; i++) {
-        $entry_t entry = &TB_ENTRIES(res->table)[i];
+    // The table is filled while only a local holds it, then stored into
+    // res, which the --db restore may have allocated in an earlier pass
+    $table table = acton_malloc(sizeof(char *) + 3 * sizeof(long) + tb_size * sizeof(int)
+                                + (2 * tb_size / 3) * sizeof(struct $entry_struct));
+    table->tb_size = tb_size;
+    table->tb_usable = (long)row->blob[2];
+    table->tb_nentries = (long)row->blob[3];
+    memcpy(table->tb_indices, &row->blob[4], tb_size * sizeof(int));
+    for (int i = 0; i < table->tb_nentries; i++) {
+        $entry_t entry = &TB_ENTRIES(table)[i];
         if (state->row->class_id == NONE_ID) {
             (void)$step_deserialize(state);
             entry->hash = 0;
@@ -368,6 +378,8 @@ static void B_dict_base_deserialize_payload(B_dict_base res, $ROW row,
         entry->key = $step_deserialize(state);
         entry->value = $step_deserialize(state);
     }
+    res->table = table;
+    ACTON_WBAR(res, &res->table, table);
 }
 
 static B_dict_base B_dict_base_deserialize(B_dict_base res, $SuperG_class cls,
@@ -628,8 +640,8 @@ void B_IteratorD_dictD_serialize(B_IteratorD_dict self, $Serial$state state) {
 B_IteratorD_dict B_IteratorD_dict__deserialize(B_IteratorD_dict res, $Serial$state state) {
     if (!res)
         res = $DNEW( B_IteratorD_dict,state);
-    res->src = $step_deserialize(state);
-    res->data = B_dict_base_from_iter_src(res->src);
+    ACTON_STORE(res, res->src, $step_deserialize(state));
+    ACTON_STORE(res, res->data, B_dict_base_from_iter_src(res->src));
     res->nxt = fromB_int((B_int)$step_deserialize(state));
     return res;
 }
@@ -809,8 +821,8 @@ void B_IteratorD_dict_values_serialize(B_IteratorD_dict_values self, $Serial$sta
 B_IteratorD_dict_values B_IteratorD_dict_values_deserialize(B_IteratorD_dict_values res, $Serial$state state) {
     if (!res)
         res = $DNEW(B_IteratorD_dict_values,state);
-    res->src = $step_deserialize(state);
-    res->data = B_dict_base_from_iter_src(res->src);
+    ACTON_STORE(res, res->src, $step_deserialize(state));
+    ACTON_STORE(res, res->data, B_dict_base_from_iter_src(res->src));
     res->nxt = fromB_int((B_int)$step_deserialize(state));
     return res;
 }
@@ -882,8 +894,8 @@ void B_IteratorD_dict_items_serialize(B_IteratorD_dict_items self, $Serial$state
 B_IteratorD_dict_items B_IteratorD_dict_items_deserialize(B_IteratorD_dict_items res, $Serial$state state) {
     if (!res)
         res = $DNEW(B_IteratorD_dict_items,state);
-    res->src = $step_deserialize(state);
-    res->data = B_dict_base_from_iter_src(res->src);
+    ACTON_STORE(res, res->src, $step_deserialize(state));
+    ACTON_STORE(res, res->data, B_dict_base_from_iter_src(res->src));
     res->nxt = fromB_int((B_int)$step_deserialize(state));
     return res;
 }

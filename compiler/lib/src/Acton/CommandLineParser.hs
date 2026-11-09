@@ -241,6 +241,7 @@ data TestOptions = TestOptions
     , testScaleAxes    :: ScaleAxes
     , testStressWorkers :: Int
     , testRtsWthreads  :: Maybe Int
+    , testGcCheck      :: Bool
     , testTags         :: [String]
     , testMaxIterSet   :: Bool
     , testMaxTimeSet   :: Bool
@@ -593,13 +594,14 @@ testOptions mode = mkTestOptions
     <*> (if mode == ScaleOptions then optional (option memoryLimitReader (long "max-memory" <> metavar "LIMIT" <> help "Scaling study memory limit, as bytes or a percentage (e.g. 2GiB or 50%; default: 50%)")) else pure Nothing)
     <*> ordinary 0 (option auto (long "stress-workers" <> metavar "N" <> value 0 <> help "Concurrent stress workers to run in stress mode (0 = auto)"))
     <*> optional (option wthreadsReader (long "rts-wthreads" <> metavar "N" <> help "Run each test process with N runtime worker threads (default: one per CPU core, at least 4)"))
+    <*> switch (long "gc-check" <> help "Run each test process in generational GC mode with the write-barrier checker (ACTON_GC_CHECK=1)")
     <*> many (strOption (long "tag" <> metavar "TAG" <> help "Enable test capability TAG for testing.require()"))
     <*> many (strOption (long "module" <> metavar "MODULE" <> help "Filter on test module name"))
     <*> many (strOption (long "name" <> metavar "NAME" <> help "Filter on test name (regex, anchored; use .* for substrings)"))
   where
     defaultOptimize = if mode == OrdinaryOptions then Debug else ReleaseFast
     ordinary fallback parser = if mode == OrdinaryOptions then parser else pure fallback
-    mkTestOptions testCompile testShowLog testShowCached testNoCache testJson testRecord testSnapshotUpdate testIter testMaxIterOpt testMinIter testMaxTimeOpt testMinTimeOpt testTime testScale testStartScale testEndScale testMaxMemory testStressWorkers testRtsWthreads testTags testModules testNames =
+    mkTestOptions testCompile testShowLog testShowCached testNoCache testJson testRecord testSnapshotUpdate testIter testMaxIterOpt testMinIter testMaxTimeOpt testMinTimeOpt testTime testScale testStartScale testEndScale testMaxMemory testStressWorkers testRtsWthreads testGcCheck testTags testModules testNames =
       TestOptions
         { testCompile = testCompile
         , testShowLog = testShowLog
@@ -622,6 +624,7 @@ testOptions mode = mkTestOptions
         , testScaleAxes = LinearAxes
         , testStressWorkers = testStressWorkers
         , testRtsWthreads = testRtsWthreads
+        , testGcCheck = testGcCheck
         , testTags = testTags
         , testMaxIterSet = isJust testMaxIterOpt
         , testMaxTimeSet = isJust testMaxTimeOpt

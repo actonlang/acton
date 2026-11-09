@@ -1,0 +1,123 @@
+# Pointer stores that the write barrier covers: pointers moved within big
+# lists (insert, pop, del, reverse, slice assignment, slice deletion, extend,
+# repeat, sorted) while new strings are allocated, so that collections marked
+# in short steps scan the arrays in pieces between the moves. Every element
+# is a new string "v<number>"; a running sum of the numbers is checked against
+# the list at the end of every round. In checker mode (ACTON_GC_CHECK=1) a
+# missing barrier makes the program exit with status 70.
+#
+# wbar_list_moves [N ROUNDS WORKERS]: WORKERS actors of their own lists, each
+# with N elements and ROUNDS rounds.
+
+def fresh(i: int) -> str:
+    return "v" + str(i)
+
+def num(s: str) -> int:
+    return int(s[1:])
+
+def sum_of(l: list[str]) -> int:
+    t = 0
+    for s in l:
+        t += num(s)
+    return t
+
+def work(seed: int, n: int, rounds: int) -> int:
+    nxt = seed * 100000000
+    lst: list[str] = []
+    total = 0
+    for i in range(n):
+        lst.append(fresh(nxt))
+        total += nxt
+        nxt += 1
+    for r in range(rounds):
+        # insert at the front and in the middle: memmove up
+        for j in range(200):
+            lst.insert(0, fresh(nxt))
+            total += nxt
+            nxt += 1
+            lst.insert(len(lst) // 2, fresh(nxt))
+            total += nxt
+            nxt += 1
+        # pop from the front, del in the middle: memmove down
+        for j in range(200):
+            total -= num(lst.pop(0))
+            m = len(lst) // 3
+            total -= num(lst[m])
+            del lst[m]
+        lst.reverse()
+        # slice assignment, longer and shorter than the slice
+        a = len(lst) // 4
+        total -= sum_of(lst[a:a + 100])
+        new1 = [fresh(nxt + k) for k in range(300)]
+        for k in range(300):
+            total += nxt + k
+        nxt += 300
+        lst[a:a + 100] = new1
+        b = len(lst) // 2
+        total -= sum_of(lst[b:b + 400])
+        new2 = [fresh(nxt + k) for k in range(100)]
+        for k in range(100):
+            total += nxt + k
+        nxt += 100
+        lst[b:b + 400] = new2
+        # slice deletion
+        c = len(lst) // 5
+        total -= sum_of(lst[c:c + 300])
+        del lst[c:c + 300]
+        # extend
+        ext = [fresh(nxt + k) for k in range(500)]
+        for k in range(500):
+            total += nxt + k
+        nxt += 500
+        lst.extend(ext)
+        # repeat a small list in place
+        rep = lst[0:500]
+        rep *= 3
+        if len(rep) != 1500 or sum_of(rep) != 3 * sum_of(lst[0:500]):
+            print("FAIL repeat", seed, r)
+            return -1
+        # sorted copy
+        srt = sorted(lst)
+        if len(srt) != len(lst):
+            print("FAIL sorted length", seed, r)
+            return -1
+        for k in range(1, len(srt)):
+            if srt[k - 1] > srt[k]:
+                print("FAIL sorted order", seed, r, k)
+                return -1
+        if sum_of(srt) != total:
+            print("FAIL sorted sum", seed, r)
+            return -1
+        # trim back to n from the end
+        while len(lst) > n:
+            total -= num(lst.pop(-1))
+        if sum_of(lst) != total:
+            print("FAIL sum", seed, r, sum_of(lst), total)
+            return -1
+    return total
+
+actor Worker(seed: int, n: int, rounds: int, done: action(int, int) -> None):
+    def run():
+        done(seed, work(seed, n, rounds))
+    after 0: run()
+
+actor main(env):
+    n = int(env.argv[1]) if len(env.argv) > 1 else 20000
+    rounds = int(env.argv[2]) if len(env.argv) > 2 else 3
+    workers = int(env.argv[3]) if len(env.argv) > 3 else 2
+    var left = workers
+    var failed = False
+
+    def done(seed: int, total: int):
+        if total < 0:
+            failed = True
+        left -= 1
+        if left == 0:
+            if failed:
+                print("FAIL")
+                env.exit(1)
+            else:
+                env.exit(0)
+
+    for w in range(workers):
+        Worker(w + 1, n, rounds, done)

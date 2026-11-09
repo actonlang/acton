@@ -18,7 +18,12 @@ extern fn GC_malloc_atomic(usize) ?*anyopaque;
 extern fn GC_free(?*anyopaque) void;
 extern fn GC_size(?*const anyopaque) usize;
 
-/// Returns the Allocator used for APIs in Zig
+/// Returns the Allocator used for APIs in Zig. The collector scans its
+/// memory. In generational mode a store of a GC pointer into it, after the
+/// memory was handed out and after any further allocation, must set the
+/// dirty bit of its block like the C write barrier (base/rts/wbar.h), which
+/// this file does not provide. Zig code in Acton therefore keeps GC pointers
+/// out of it and uses atomicAllocator.
 pub fn allocator() Allocator {
     // Initialize libgc
     if (GC_is_init_called() == 0) {

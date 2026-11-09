@@ -1,0 +1,102 @@
+# Pointer stores that the write barrier covers: __init__ called again on old
+# objects stores new tuples into them. __init__ stores into the new object
+# of its constructor without barriers, so an explicit call on any other
+# object sets the barrier on that object first. In checker mode
+# (ACTON_GC_CHECK=1) a call without it makes the program exit with status
+# 70.
+#
+# wbar_init_call [ROUNDS KEEP]
+import acton.rts
+
+class Pad(object):
+    def __init__(self):
+        pass
+
+class Thing(object):
+    def __init__(self, n: int):
+        # A tuple of 300 items (2416 bytes) is larger than the objects of
+        # the thread-local free lists (2048 bytes by default). A collection
+        # marks the free objects of those lists, so a new object from them
+        # can be marked already, while a new tuple of this size is not.
+        self.vals = (
+            n, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None)
+
+def reinit(t: Thing, n: int):
+    Thing.__init__(t, n)
+
+def fill(pads: list[Pad]):
+    # A Pad takes 16 bytes, as a Thing does, and 1100 of them are more than
+    # a block of 16 KiB (the default) holds.
+    for i in range(1100):
+        pads.append(Pad())
+
+def garbage(n: int, seed: int) -> int:
+    total = 0
+    for i in range(n):
+        total += len(str(seed + i) * 500)
+    return total
+
+actor main(env):
+    rounds = int(env.argv[1]) if len(env.argv) > 1 else 200
+    nkeep = int(env.argv[2]) if len(env.argv) > 2 else 8
+    # Each Thing gets a block of its own, between Pads that stay referenced.
+    # A collection dirties the block of every object that a stack word
+    # points to, also when the word is stale, and the checker skips dirty
+    # blocks. The I/O loop of the main thread keeps an event array on its
+    # stack and writes only the entries of the events that arrive, so a
+    # block address that the collector left there before stays for the
+    # whole run and keeps that block dirty. Such a word then hides the
+    # stores into one Thing only. The Pads fill the rest of each block, so
+    # that none of it gets on a thread-local free list, whose blocks every
+    # collection dirties. The lists grow between Pads, so that the arrays
+    # they discard do not share a block with a Thing either.
+    keep = []
+    pads = []
+    for i in range(nkeep):
+        fill(pads)
+        t = Thing(i)
+        fill(pads)
+        keep.append(t)
+    expect = list(range(nkeep))
+    # A full collection marks every Thing and leaves their blocks clean.
+    # Then a re-initialized Thing is the only object that points to its new
+    # tuple, and the garbage starts minor collections.
+    acton.rts.gc(env.syscap)
+    for r in range(rounds):
+        reinit(keep[r % nkeep], r)
+        expect[r % nkeep] = r
+        garbage(400, r)
+    for i in range(nkeep):
+        if keep[i].vals.0 != expect[i] or keep[i].vals.299 is not None:
+            print("wrong tuple", i, keep[i].vals.0)
+            env.exit(1)
+    env.exit(0)

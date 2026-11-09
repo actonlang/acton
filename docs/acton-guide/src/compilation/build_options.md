@@ -133,12 +133,10 @@ build_options = {
 }
 ```
 
-Without parallel marking, as on WebAssembly, BDWGC uses mark bits whatever
-`gc_use_mark_bits` says. `gc_mark_bit_per_object` indexes marks by object
-instead of allocation granule, which changes the work needed to find an
-object's mark. It defaults to `"false"`. The options are independent, so
-either can be set on its own. Measure on the application's workload before
-changing them.
+`gc_mark_bit_per_object` indexes marks by object instead of allocation granule,
+which changes the work needed to find an object's mark. It defaults to
+`"false"`. The options are independent, so either can be set on its own. Measure
+on the application's workload before changing them.
 
 These are compile-time settings shared by the application, its Acton
 dependencies, the standard library and database support. They preserve
@@ -161,47 +159,69 @@ page (THP) policy unchanged. When enabled, the runtime applies
 allocation. It does not change the policy for the rest of the process. The
 setting persists when the collector releases physical pages and reuses them.
 
-Ordinary pages can reduce dirty-page tracking work for incremental or
-generational collection. Huge pages can improve address translation and
-memory access performance, so measure both choices for the application.
-This option does not enable incremental or generational collection itself.
+Huge pages can improve address translation and memory access performance,
+so measure both choices for the application.
 
 Enabling it for a non-Linux target fails the build. If the kernel rejects
 `MADV_NOHUGEPAGE`, the application exits with an error instead of continuing
 with an ineffective setting.
 
-## GC dirty tracking backend
+## GC mode
 
-Linux applications can select the collector's dirty-page tracking backend:
+The collector runs in ordinary mode by default: every collection marks the
+whole heap with the program stopped. Generational mode collects young objects
+in minor collections and marks every collection in world-stopped parallel
+steps with a marking time target, so that a large heap gives short pauses:
 
 ```python
 build_options = {
-    "gc_dirty_tracking_backend": "soft_dirty",
+    "gc_mode": "generational",
 }
 ```
 
-The choices are `"auto"` (the default), `"soft_dirty"` and `"userfaultfd"`.
-Automatic selection preserves BDWGC's platform choices and fallback behavior.
-Explicit choices require a Linux GNU target. `userfaultfd` additionally requires
-x86, x86_64 or aarch64 and a glibc target of 2.34 or newer. Both explicit backends
-can therefore be compared using `--target x86_64-linux-gnu.2.36`.
+The choices are `"ordinary"` (the default) and `"generational"`. The build
+option sets the default; environment variables override it when launching
+the executable:
 
-This is a build setting, shared by the application and its dependencies,
-including database support. It does not enable incremental or generational
-collection. For example, `GC_ENABLE_INCREMENTAL=1` enables that machinery when
-launching the executable; `GC_PAUSE_TIME_TARGET=999999` selects generational
-collection without a marking time limit.
+- `ACTON_GC_MODE=ordinary` or `ACTON_GC_MODE=generational` selects the mode.
+- `ACTON_GC_PAUSE_MS=N` sets the marking time target of a step in generational
+  mode, in milliseconds (default 50, fractions allowed): a step pauses the
+  program for as long as stopping it takes plus up to the target. `0` marks
+  each collection in one stop.
+- `ACTON_GC_CHECK=1` selects generational mode with the collector's
+  write-barrier checker, a small allocation budget and 1 ms steps, so that a
+  run has many collections. The process exits with status 70 after a
+  collection that finds a pointer store without its write barrier.
+  `acton test --gc-check` runs the tests this way.
 
-An explicit choice compiles out the `mprotect` fallback. If incremental
-collection is requested through `GC_ENABLE_INCREMENTAL` at startup and the
-selected backend cannot be activated, the runtime exits with an error. An
-ordinary collection run does not require the backend to be active. Native code
-that enables incremental collection later must check `GC_get_actual_vdb()`;
-this build option does not add a live backend-switching API.
+Generational mode takes the written heap blocks from the program's write
+barrier (see the next section). The runtime sets the collector's own `GC_*`
+environment variables for the mode unless they are set already, so they
+remain available for tuning.
 
-On macOS, arm64 builds track dirty pages with `mprotect`. x86_64 macOS builds
-leave it out, because incremental collection with it hangs under Rosetta 2;
-there, incremental and generational mode treat every heap page as dirty.
+On Windows, a fatal error of the collector prints its message to stderr and the
+process exits with code 3.
+
+## GC write barrier
+
+Every build compiles a write barrier into the generated code and the runtime.
+In generational mode, after a pointer store into a heap object, the program
+sets the dirty bit of the object's block in the collector's table, and the
+collector reads these bits with every thread stopped to find the written
+blocks. This needs no page protection or kernel support and works the same way
+on every platform. The collector is built with this mechanism only. C
+extensions must follow the rules in
+[Storing pointers into GC memory](../ext/integrating_c_library.md#storing-pointers-into-gc-memory).
+In ordinary mode the collector reads no bits and the barrier sets none, at a
+cost of a test and a branch per pointer store. The barrier's code is laid out
+for the default mode that `gc_mode` sets: in the other mode, selected when
+launching the executable, every pointer store takes a branch.
+
+The collector reads the bits only in its incremental mode, which
+`GC_ENABLE_INCREMENTAL=1` selects when launching the executable. The runtime
+sets it in generational mode, together with the pause target. Set by hand
+while the runtime is in ordinary mode, it selects generational mode with one
+stop per collection.
 
 ## GC page-hash table size
 
@@ -228,7 +248,7 @@ so this also affects ordinary collection. It is independent of object mark-bit
 layout.
 
 Measure the application's workload before choosing a larger table. Increasing
-this value does not remove dirty-tracking faults or guarantee fewer collections.
+this value does not guarantee fewer collections.
 
 ## GC heap growth
 
@@ -971,15 +991,15 @@ import acton.rts
 actor main(env):
     info = acton.rts.get_gc_info(env.syscap)
     print(info.mode)
-    print(info.configured_backend)
     print(info.backend)
     env.exit(0)
 ```
 
-`configured_backend` is the build choice; `backend` is the active mechanism,
-using the same `soft_dirty` and `userfaultfd` names. In ordinary mode the active
-backend is `none`. `supported_backends` lists compiled capabilities, not a
-promise that the host kernel permits them.
+`backend` is the active dirty-tracking mechanism: `manual`, the dirty bits
+that the write barrier sets, in generational mode, and `none` in ordinary
+mode. `mode` is the [GC mode](#gc-mode) in effect, `ordinary` or `generational`,
+and in generational mode `pause_target_ms` is the marking time target of a step.
+`supported_backends` lists the mechanisms the collector is built with.
 
 The result also reports `page_hash_table_log2`, `block_size`, `end_padding`,
 `thread_local_size_limit`, `no_thread_local_warmup`,

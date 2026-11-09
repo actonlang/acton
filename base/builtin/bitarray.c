@@ -32,7 +32,10 @@ static void B_bitarray_init_storage(B_bitarray self, int64_t length, bool initia
     }
 
     size_t nbytes = (size_t)word_count * sizeof(uint64_t);
-    self->data = acton_malloc_atomic(nbytes);
+    // The --db restore initializes a bitarray that an earlier pass allocated
+    uint64_t *data = acton_malloc_atomic(nbytes);
+    self->data = data;
+    ACTON_WBAR(self, &self->data, data);
     memset(self->data, initial ? 0xff : 0, nbytes);
     if (initial)
         self->data[word_count - 1] &= B_bitarray_tail_mask(length);
@@ -156,6 +159,7 @@ static void B_bitarray_set_length(B_bitarray self, int64_t length) {
         data[new_words - 1] &= B_bitarray_tail_mask(length);
     }
     self->data = data;
+    ACTON_WBAR(self, &self->data, data);
     self->length = length;
     if (shrinks) {
         self->count = 0;
@@ -280,7 +284,7 @@ B_IteratorD_bitarray B_IteratorD_bitarrayD_deserialize(B_IteratorD_bitarray self
                                                         $Serial$state state) {
     if (!self)
         self = $DNEW(B_IteratorD_bitarray, state);
-    self->src = (B_bitarray)$step_deserialize(state);
+    ACTON_STORE(self, self->src, (B_bitarray)$step_deserialize(state));
     self->next = fromB_int((B_int)$step_deserialize(state));
     return self;
 }

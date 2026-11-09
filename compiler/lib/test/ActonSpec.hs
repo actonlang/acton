@@ -3790,6 +3790,7 @@ main = do
       testCodeGen env0 ["chunking"]
       testCodeGen env0 ["boxparam"]
       testCodeGen env0 ["witness_forward"]
+      testCodeGen env0 ["init_call_barrier"]
       testCodeGenContains env0 "protocol_generic_siblings" ["SecondD_InheritedD___init__"]
       -- Non-throwing iteration lowers for-loops to a bool/out __next__ call, so
       -- locals live across the loop no longer need StopIteration longjmp protection.

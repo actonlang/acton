@@ -31,7 +31,7 @@ $SEQ $SEQD___deserialize__ ($SEQ self, $Serial$state state) {
         }
         self = $DNEW($SEQ, state);
     }
-    self->error_message = $step_deserialize(state);
+    ACTON_STORE(self, self->error_message, $step_deserialize(state));
     return self;
 }
 static struct $SEQ $SEQ_exception = { .$class = &$SEQG_methods };
@@ -89,7 +89,7 @@ $CNT $CNTD___deserialize__ ($CNT self, $Serial$state state) {
         }
         self = $DNEW($CNT, state);
     }
-    self->error_message = $step_deserialize(state);
+    ACTON_STORE(self, self->error_message, $step_deserialize(state));
     return self;
 }
 static struct $CNT $CNT_exception = { .$class = &$CNTG_methods };
@@ -126,8 +126,8 @@ $RET $RETD___deserialize__ ($RET self, $Serial$state state) {
         }
         self = $DNEW($RET, state);
     }
-    self->error_message = $step_deserialize(state);
-    self->val = $step_deserialize(state);
+    ACTON_STORE(self, self->error_message, $step_deserialize(state));
+    ACTON_STORE(self, self->val, $step_deserialize(state));
     return self;
 }
 $RET $RETG_new(B_value G_1) {
