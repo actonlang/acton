@@ -4037,7 +4037,7 @@ main = do
             , "mode" Ae..= ("TestModeRun" :: String)
             , "args" Ae..= ([] :: [String])
             ]
-          defaults = Testing.TestRunContext "test" "native" "ReleaseFast" "TestModeRun" [] M.empty
+          defaults = Testing.TestRunContext "test" "native" "ReleaseFast" "TestModeRun" [] M.empty M.empty
       it "preserves default build identities from earlier test caches" $ do
         Ae.fromJSON legacy `shouldBe` Ae.Success defaults
         Ae.toJSON defaults `shouldBe` legacy
@@ -4047,6 +4047,27 @@ main = do
         Ae.decode (Ae.encode enabled) `shouldBe` Just enabled
         (Testing.contextHashBytes enabled == Testing.contextHashBytes defaults) `shouldBe` False
         (Testing.contextHashBytes enabled == Testing.contextHashBytes disabled) `shouldBe` False
+      it "includes the runtime environment in test cache keys" $ do
+        let generational = defaults { Testing.trcEnvironment = M.singleton "ACTON_GC_MODE" "generational" }
+            ordinary = defaults { Testing.trcEnvironment = M.singleton "ACTON_GC_MODE" "ordinary" }
+        Ae.decode (Ae.encode generational) `shouldBe` Just generational
+        (Testing.contextHashBytes generational == Testing.contextHashBytes defaults) `shouldBe` False
+        (Testing.contextHashBytes generational == Testing.contextHashBytes ordinary) `shouldBe` False
+      it "keys test results on the variables of the RTS and its collector" $
+        Testing.testRunEnvironment
+          [ ("ACTON_GC_MODE", "generational")
+          , ("ACTON_GC_PAUSE_MS", "5")
+          , ("GC_MARKERS", "2")
+          , ("PATH", "/usr/bin")
+          , ("HOME", "/home/user")
+          , ("ACTON_TEST_PERF", "1")
+          , ("ACTON_GC_CHECK", "1")
+          ]
+          `shouldBe` M.fromList
+            [ ("ACTON_GC_MODE", "generational")
+            , ("ACTON_GC_PAUSE_MS", "5")
+            , ("GC_MARKERS", "2")
+            ]
 
     -- BuildSpec: parsing and update-in-place of Build.act (canonical layout)
     describe "BuildSpec" $ do
