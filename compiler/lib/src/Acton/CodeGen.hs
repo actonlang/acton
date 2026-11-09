@@ -1508,9 +1508,9 @@ builtinIteratorCalls               =
     , ("IMappingD_idictD_items", items)
     , ("SetD_setD___iter__", ("B_IteratorD_set", "$setD_U_iter_init"))
     , ("ISetD_isetD___iter__", ("B_IteratorD_set", "$isetD_U_iter_init"))
-    , ("ContainerD_strD___iter__", ("B_IteratorD_str", "$strD_U_iter_init"))
-    , ("ContainerD_bytesD___iter__", ("B_IteratorD_bytes", "$bytesD_U_iter_init"))
-    , ("CollectionD_SequenceD_bytearrayD___iter__", ("B_IteratorD_bytearray", "$bytearrayD_U_iter_init"))
+    , ("ContainerD_strD___iter__", ("B_IteratorD_str", "B_str_iter_init"))
+    , ("ContainerD_bytesD___iter__", ("B_IteratorD_bytes", "B_bytes_iter_init"))
+    , ("CollectionD_SequenceD_bytearrayD___iter__", ("B_IteratorD_bytearray", "B_bytearray_iter_init"))
     ]
   where list                        = ("B_IteratorD_list", "B_list_base_iter_init")
         keys                        = ("B_IteratorD_dict", "$dictD_U_keys_init")
@@ -1525,7 +1525,10 @@ builtinCallIteratorCalls =
          ("B_dict_base_key_iterator", ("B_IteratorD_dict", "$dictD_U_keys_init")),
          ("B_dict_base_values_iterator", ("B_IteratorD_dict_values", "$dictD_U_values_init")),
          ("B_dict_base_items_iterator", ("B_IteratorD_dict_items", "$dictD_U_items_init")),
-         ("B_set_base_iter", ("B_IteratorD_set", "$setD_U_iter_init"))]] ]
+         ("B_set_base_iter", ("B_IteratorD_set", "$setD_U_iter_init")),
+         ("B_str_iter", ("B_IteratorD_str", "B_str_iter_init")),
+         ("B_bytes_iter", ("B_IteratorD_bytes", "B_bytes_iter_init")),
+         ("B_bytearray_iter", ("B_IteratorD_bytearray", "B_bytearray_iter_init"))]] ]
 
 builtinIteratorSource env t e
   | Just _ <- iteratorElementType (boxedRepType t)
@@ -1546,9 +1549,7 @@ builtinIteratorSource env t e
           -- Recognize that worker too, so normalized for-loops still use
           -- automatic iterator storage rather than falling back to the heap.
           | Var _ q <- stripTApp f,
-            Just spec <- lookup q (builtinCallIteratorCalls ++ [ (primUStrIter, ("B_IteratorD_str", "$strD_U_iter_init"))
-                                  , (primUBytesIter, ("B_IteratorD_bytes", "$bytesD_U_iter_init"))
-                                  , (primUBytearrayIter, ("B_IteratorD_bytearray", "$bytearrayD_U_iter_init")) ])
+            Just spec <- lookup q builtinCallIteratorCalls
                                     = Just (spec, [], xs)
           | Dot _ wit method <- stripTApp f,
             Just ctor <- builtinIteratorWitness env [] wit,
@@ -2735,7 +2736,7 @@ genExp' env e
 
 genBoxed env t e                    = text ("toB_"++render(pretty (noq (tcname(tcon (boxedRepType t)))))) <> parens e
 
--- Native container calls use the shared C storage view directly. Each actual
+-- Native builtin calls use typed implementations or shared storage views. Each actual
 -- expression appears once, including when comparisons reverse their operands.
 -- Base routines perform the real work. The receiver-returning inplace
 -- adapters are header-inline, so they introduce no out-of-line call layer.
@@ -2751,6 +2752,7 @@ genBuiltinCall env call w p = result $ negateResult $ text (bwCName w) <> parens
             ListBuild _ -> cast "B_list_base" e
             ListInplace -> cast "B_list_base" e
             NativeArgs -> gen env e
+            NativeCompare _ -> gen env e
             DictBase -> cast "B_dict_base" e
             SetTable -> table e
             SetObject -> cast "B_set_base" e
@@ -2762,6 +2764,7 @@ genBuiltinCall env call w p = result $ negateResult $ text (bwCName w) <> parens
         resultClass q = [parens (text "$SuperG_class") <> char '&' <> gen env q <> text "G_methods"]
         negateResult d = if bwNegate w then char '!' <> parens d else d
         result d = case bwABI w of
+            NativeCompare op -> parens (d <+> text op <+> char '0')
             ListBuild _ | bwMethod w /= reversedKW -> castResult d
             ListInplace -> castResult d
             SetBuild _ -> castResult d
