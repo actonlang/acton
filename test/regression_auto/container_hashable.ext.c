@@ -19,8 +19,8 @@ bool container_hashableQ_native_checks(void) {
         B_int key = toB_int(i);
         B_dictD_setitem(dict, key, toB_int(i + 1));
         B_SetD_setD_add(NULL, set, key);
-        $listD_U_append(pairs, $NEWTUPLE(2, key, toB_int(i + 1)));
-        $listD_U_append(keys, key);
+        B_list_base_append((B_list_base)pairs, $NEWTUPLE(2, key, toB_int(i + 1)));
+        B_list_base_append((B_list_base)keys, key);
     }
     if (dict->hashwit != hashwit || set->data.hashwit != hashwit)
         return false;

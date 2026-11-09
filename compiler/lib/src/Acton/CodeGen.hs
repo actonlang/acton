@@ -1512,16 +1512,17 @@ builtinIteratorCalls               =
     , ("ContainerD_bytesD___iter__", ("B_IteratorD_bytes", "$bytesD_U_iter_init"))
     , ("CollectionD_SequenceD_bytearrayD___iter__", ("B_IteratorD_bytearray", "$bytearrayD_U_iter_init"))
     ]
-  where list                        = ("B_IteratorD_list", "$listD_U_iter_init")
+  where list                        = ("B_IteratorD_list", "B_list_base_iter_init")
         keys                        = ("B_IteratorD_dict", "$dictD_U_keys_init")
         values                      = ("B_IteratorD_dict_values", "$dictD_U_values_init")
         items                       = ("B_IteratorD_dict_items", "$dictD_U_items_init")
 
-hashContainerIteratorCalls =
-    [ (hcName w, if hcType w == qnISetT then ("B_IteratorD_set", "$isetD_U_iter_init") else spec)
-      | w <- hashContainerWorkers,
-      Just spec <- [lookup (hcCName w)
-        [("B_dict_base_key_iterator", ("B_IteratorD_dict", "$dictD_U_keys_init")),
+builtinCallIteratorCalls =
+    [ (bwName w, if bwType w == qnISetT then ("B_IteratorD_set", "$isetD_U_iter_init") else spec)
+      | w <- builtinCallWorkers,
+      Just spec <- [lookup (bwCName w)
+        [("B_list_base_iter", ("B_IteratorD_list", "B_list_base_iter_init")),
+         ("B_dict_base_key_iterator", ("B_IteratorD_dict", "$dictD_U_keys_init")),
          ("B_dict_base_values_iterator", ("B_IteratorD_dict_values", "$dictD_U_values_init")),
          ("B_dict_base_items_iterator", ("B_IteratorD_dict_items", "$dictD_U_items_init")),
          ("B_set_base_iter", ("B_IteratorD_set", "$setD_U_iter_init"))]] ]
@@ -1545,9 +1546,7 @@ builtinIteratorSource env t e
           -- Recognize that worker too, so normalized for-loops still use
           -- automatic iterator storage rather than falling back to the heap.
           | Var _ q <- stripTApp f,
-            Just spec <- lookup q (hashContainerIteratorCalls ++ [ (primUListIter, ("B_IteratorD_list", "$listD_U_iter_init"))
-                                  , (primUIListIter, ("B_IteratorD_list", "$listD_U_iter_init"))
-                                  , (primUStrIter, ("B_IteratorD_str", "$strD_U_iter_init"))
+            Just spec <- lookup q (builtinCallIteratorCalls ++ [ (primUStrIter, ("B_IteratorD_str", "$strD_U_iter_init"))
                                   , (primUBytesIter, ("B_IteratorD_bytes", "$bytesD_U_iter_init"))
                                   , (primUBytearrayIter, ("B_IteratorD_bytearray", "$bytearrayD_U_iter_init")) ])
                                     = Just (spec, [], xs)
@@ -2738,28 +2737,38 @@ genBoxed env t e                    = text ("toB_"++render(pretty (noq (tcname(t
 
 -- Native container calls use the shared C storage view directly. Each actual
 -- expression appears once, including when comparisons reverse their operands.
--- The C base routines perform the real work; there is no forwarding worker.
-genHashContainerCall env call w p = result $ negateResult $ text (hcCName w) <> parens (commaSep id args)
+-- Base routines perform the real work. The receiver-returning inplace
+-- adapters are header-inline, so they introduce no out-of-line call layer.
+genBuiltinCall env call w p = result $ negateResult $ text (bwCName w) <> parens (commaSep id args)
   where actuals = zip [0..] (posargs p)
-        converted = [ if i < hcContainerArgs w then container e else gen env e | (i,e) <- actuals ]
-        ordered = if hcReverse w then reverse converted else converted
-        args = ordered ++ [text "B_None" | hcDefault w] ++ classArg
+        converted = [ if i < bwContainerArgs w then container e else gen env e | (i,e) <- actuals ]
+        ordered = if bwReverse w then reverse converted else converted
+        args = ordered ++ map text (bwExtraArgs w) ++ classArg
         cast ty e = parens (parens (text ty) <> gen env e)
         table e = char '&' <> parens (cast "B_set_base" e <> text "->data")
-        container e = case hcABI w of
+        container e = case bwABI w of
+            ListBase -> cast "B_list_base" e
+            ListBuild _ -> cast "B_list_base" e
+            ListInplace -> cast "B_list_base" e
+            NativeArgs -> gen env e
             DictBase -> cast "B_dict_base" e
             SetTable -> table e
             SetObject -> cast "B_set_base" e
             SetBuild _ -> table e
-        classArg = case hcABI w of
-            SetBuild q -> [parens (text "$SuperG_class") <> char '&' <> gen env q <> text "G_methods"]
+        classArg = case bwABI w of
+            ListBuild q -> resultClass q
+            SetBuild q -> resultClass q
             _ -> []
-        negateResult d = if hcNegate w then char '!' <> parens d else d
-        result d = case hcABI w of
-            SetBuild _ -> parens (parens (gen env $ boxedRepType $ typeOf env call) <> d)
-            SetObject | hcMethod w `elem` map name ["__ior__","__iand__","__isub__","__ixor__"]
-                -> parens (parens (gen env $ boxedRepType $ typeOf env call) <> d)
+        resultClass q = [parens (text "$SuperG_class") <> char '&' <> gen env q <> text "G_methods"]
+        negateResult d = if bwNegate w then char '!' <> parens d else d
+        result d = case bwABI w of
+            ListBuild _ | bwMethod w /= reversedKW -> castResult d
+            ListInplace -> castResult d
+            SetBuild _ -> castResult d
+            SetObject | bwMethod w `elem` map name ["__ior__","__iand__","__isub__","__ixor__"]
+                -> castResult d
             _ -> d
+        castResult d = parens (parens (gen env $ boxedRepType $ typeOf env call) <> d)
 
 instance Gen Expr where
     gen env (Var _ (NoQ n))
@@ -2797,8 +2806,8 @@ instance Gen Expr where
                                     = genRawRangeNew env args
     gen env c@(Call _ f p KwdNil)
       | Var _ q <- stripTApp f,
-        Just w <- hashContainerPrimitive q
-                                    = genHashContainerCall env c w p
+        Just w <- builtinCallPrimitive q
+                                    = genBuiltinCall env c w p
     gen env c@(Call _ f p KwdNil)
       | callIsClass env f,
         Just d <- genRawNumericConstructor env (boxedRepType $ typeOf env c) p

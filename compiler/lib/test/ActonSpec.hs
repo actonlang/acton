@@ -3872,7 +3872,7 @@ main = do
         , "struct B_IteratorD_str "
         , "struct B_IteratorD_bytes "
         , "struct B_IteratorD_bytearray "
-        , "$listD_U_iter_init(&"
+        , "B_list_base_iter_init(&"
         , "$arrayD_U_iter_init(&"
         , "$bitarrayD_U_iter_init(&"
         , "$bitsetD_U_iter_init(&"
@@ -3901,12 +3901,12 @@ main = do
         , "->$class->items"
         ]
       testCodeGenContains env0 "stack_iterators_fallback"
-        [ "$listD_U__iter__(" ]
+        [ "B_list_base_iter(" ]
       testCodeGenDoesNotContain env0 "stack_iterators_fallback"
-        [ "iterator_storage", "$listD_U_iter_init(" ]
+        [ "iterator_storage", "B_list_base_iter_init(" ]
       testCodeGenContains env0 "static_witness_path"
-        [ "$listD_U__setitem__(xs, index, toB_int(0LL))"
-        , "$listD_U__setslice__(xs,"
+        [ "B_list_base_setitem(((B_list_base)xs), index, toB_int(0LL))"
+        , "B_list_base_setslice(((B_list_base)xs),"
         , "B_SequenceD_listG_witness->W_Collection"
         ]
       testCodeGenContains env0 "numeric_casts"
@@ -3930,10 +3930,10 @@ main = do
         ]
       testCodeGenDoesNotContain env0 "static_witness_path" ["B_SequenceD_listG_new()"]
       testCodeGenContains env0 "raw_builtin_indexing"
-        [ "$listD_U__getitem__(xs, i)"
-        , "$listD_U__setitem__(xs, i, toB_int(v))"
-        , "$listD_U__delitem__(xs, i)"
-        , "$ilistD_U__getitem__(xs, i)"
+        [ "B_list_base_getitem(((B_list_base)xs), i)"
+        , "B_list_base_setitem(((B_list_base)xs), i, toB_int(v))"
+        , "B_list_base_delitem(((B_list_base)xs), i)"
+        , "B_list_base_getitem(((B_list_base)xs), i)"
         , "$strD_U__getitem__(xs, i)"
         , "$bytesD_U__getitem__(xs, i)"
         , "$bytearrayD_U__getitem__(xs, i)"

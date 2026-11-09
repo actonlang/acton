@@ -218,13 +218,13 @@ compilerTests =
           assertEqual ("C generation should succeed:\n" ++ generated ++ err) ExitSuccess code
           let body name = unlines $ takeWhile (/= "}") $ dropWhile
                 (not . isInfixOf ("builtin_len_appendQ_" ++ name ++ " (")) (lines generated)
-              workers = [ ("list_length", "$listD_U__len"), ("ilist_length", "$ilistD_U__len")
+              workers = [ ("list_length", "B_list_base_len"), ("ilist_length", "B_list_base_len")
                         , ("dict_length", "$dictD_U__len"), ("idict_length", "$idictD_U__len")
                         , ("set_length", "$setD_U__len"), ("iset_length", "$isetD_U__len")
                         , ("str_length", "$strD_U__len"), ("bytes_length", "$bytesD_U__len")
                         , ("bytearray_length", "$bytearrayD_U__len"), ("bitset_length", "$bitsetD_U__len")
                         , ("array_length", "$arrayD_U__len"), ("bitarray_length", "$bitarrayD_U__len")
-                        , ("append_value", "$listD_U_append") ]
+                        , ("append_value", "B_list_base_append") ]
           forM_ workers $ \(name, worker) -> do
             let c = body name
             assertBool (name ++ " should call its witness-free worker") (worker `isInfixOf` c)
@@ -250,7 +250,7 @@ compilerTests =
           forM_ [("generic_equal", "__eq__"), ("generic_not_equal", "__ne__"),
                  ("generic_concat", "__add__"), ("generic_iadd", "__iadd__")] $ \(name, method) ->
             assertBool (name ++ " should retain protocol dispatch") (("$class->" ++ method) `isInfixOf` body name)
-  , testCase "builtin Sequence workers remove only dead receiver witnesses" $ do
+  , testCase "builtin Sequence calls use shared native implementations" $ do
         withSystemTempDirectory "acton-builtin-sequence-ops" $ \tmp -> do
           let src = tmp </> "builtin_sequence_ops.act"
           copyFile "../../test/regression_auto/builtin_sequence_ops.act" src
@@ -258,22 +258,32 @@ compilerTests =
           assertEqual ("C generation should succeed:\n" ++ generated ++ err) ExitSuccess code
           let body name = unlines $ takeWhile (/= "}") $ dropWhile
                 (not . isInfixOf ("builtin_sequence_opsQ_" ++ name ++ " (")) (lines generated)
-              workers = [ ("list_insert", "$listD_U_insert"), ("list_reverse", "$listD_U_reverse")
-                        , ("list_slice", "$listD_U__getslice__"), ("list_del_slice", "$listD_U__delslice__")
-                        , ("list_iterator", "$listD_U__iter__"), ("list_reversed", "$listD_U__reversed__")
-                        , ("list_add", "$listD_U__add__"), ("list_repeat", "$listD_U__mul__")
-                        , ("list_iadd", "$listD_U__iadd__"), ("list_irepeat", "$listD_U__imul__")
-                        , ("list_zero", "$listD_U__zero__")
-                        , ("ilist_slice", "$ilistD_U__getslice__"), ("ilist_iterator", "$ilistD_U__iter__")
-                        , ("ilist_reversed", "$ilistD_U__reversed__"), ("ilist_add", "$ilistD_U__add__")
-                        , ("ilist_repeat", "$ilistD_U__mul__"), ("ilist_zero", "$ilistD_U__zero__") ]
+              workers = [ ("list_read", "B_list_base_getitem"), ("ilist_read", "B_list_base_getitem")
+                        , ("list_write", "B_list_base_setitem"), ("list_delete", "B_list_base_delitem")
+                        , ("list_insert", "B_list_base_insert"), ("list_reverse", "B_list_base_reverse")
+                        , ("list_slice", "B_list_base_getslice"), ("list_del_slice", "B_list_base_delslice")
+                        , ("list_iterator", "B_list_base_iter"), ("list_reversed", "B_list_base_reversed")
+                        , ("list_add", "B_list_base_add"), ("list_repeat", "B_list_base_mul")
+                        , ("list_iadd", "B_list_base_iadd"), ("list_irepeat", "B_list_base_irepeat")
+                        , ("list_zero", "B_list_base_new")
+                        , ("ilist_slice", "B_list_base_getslice"), ("ilist_iterator", "B_list_base_iter")
+                        , ("ilist_reversed", "B_list_base_reversed"), ("ilist_add", "B_list_base_add")
+                        , ("ilist_repeat", "B_list_base_mul"), ("ilist_zero", "B_list_base_new") ]
           forM_ workers $ \(name, worker) -> do
             let c = body name
             assertBool (name ++ " should call its witness-free worker") (worker `isInfixOf` c)
             assertBool (name ++ " should have no dead receiver witness binding")
               (not (" W_" `isInfixOf` c || "G_witness" `isInfixOf` c || "$class->" `isInfixOf` c || "B_Sequence" `isInfixOf` c || "B_ISequence" `isInfixOf` c))
-          forM_ [("list_set_slice", "$listD_U__setslice__"),
-                 ("list_from_iter", "$listD_U__fromiter__"), ("ilist_from_iter", "$ilistD_U__fromiter__")] $ \(name, worker) -> do
+          assertBool "list workers should not emit the old forwarding symbols"
+            (not ("$listD_U" `isInfixOf` generated || "$ilistD_U" `isInfixOf` generated))
+          forM_ [("list_slice", "B_list"), ("list_add", "B_list"),
+                 ("list_repeat", "B_list"), ("list_zero", "B_list"), ("list_reversed", "B_list"),
+                 ("ilist_slice", "B_ilist"), ("ilist_add", "B_ilist"),
+                 ("ilist_repeat", "B_ilist"), ("ilist_zero", "B_ilist"), ("ilist_reversed", "B_ilist")] $ \(name,cls) ->
+            assertBool (name ++ " should select its concrete result class")
+              (("&" ++ cls ++ "G_methods") `isInfixOf` body name)
+          forM_ [("list_set_slice", "B_list_base_setslice"),
+                 ("list_from_iter", "B_listG_new"), ("ilist_from_iter", "B_ilistG_new")] $ \(name, worker) -> do
             let c = body name
             assertBool (name ++ " should call its worker with the input witness")
               (worker `isInfixOf` c && "B_Iterable" `isInfixOf` c)
@@ -282,9 +292,9 @@ compilerTests =
           forM_ ["list_total", "ilist_total"] $ \name -> do
             let c = body name
             assertBool (name ++ " should retain stack iterator storage")
-              ("struct B_IteratorD_list" `isInfixOf` c && "$listD_U_iter_init" `isInfixOf` c)
+              ("struct B_IteratorD_list" `isInfixOf` c && "B_list_base_iter_init" `isInfixOf` c)
             assertBool (name ++ " should not allocate its loop iterator")
-              (not ("$listD_U__iter__" `isInfixOf` c || "$ilistD_U__iter__" `isInfixOf` c))
+              (not ("B_list_base_iter(" `isInfixOf` c))
           assertBool "generic reverse should retain dispatch" ("$class->reverse" `isInfixOf` body "generic_reverse")
           assertBool "generic slicing should retain dispatch" ("$class->__getslice__" `isInfixOf` body "generic_slice")
   , testCase "builtin dict and set operations call shared native implementations" $ do

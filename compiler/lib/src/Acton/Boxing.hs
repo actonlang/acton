@@ -295,10 +295,10 @@ rawBuiltinMethod env attr es        = rawHashContainerMethod env attr es <|> raw
 -- even when its key/element witness is a function parameter. Only the Iterable of
 -- update survives; Hashable is already owned by the destination container.
 rawHashContainerMethod env attr (recv:es)
-  | attr `elem` map hcMethod hashContainerWorkers,
+  | attr `elem` map bwMethod hashContainerWorkers,
     TCon _ (TC q ts) <- unalias env (typeOf env recv),
     Just w <- hashContainerWorker q attr (1 + length es)
-                                    = Just $ tApp (eQVar $ hcName w)
+                                    = Just $ tApp (eQVar $ bwName w)
                                         (ts ++ [typeOf env (last es) | attr == name "update"])
 rawHashContainerMethod _ _ _        = Nothing
 
@@ -342,21 +342,11 @@ rawOtherBuiltinMethod env attr es@(recv:_)
                                           | Just worker <- lookup (q, n, length es) builtinSequenceWorkers
                                             -> Just $ tApp (eQVar worker) [t]
                                         (TCon _ (TC q [t]), n, [_, _])
-                                          | q == qnList, n == getitemKW
-                                            -> Just $ tApp (eQVar primUGetItem) [t]
-                                          | q == qnList, n == appendKW
-                                            -> Just $ tApp (eQVar primUListAppend) [t]
-                                          | q == qnList, n == delitemKW
-                                            -> Just $ tApp (eQVar primUListDelItem) [t]
-                                          | q == qnIList, n == getitemKW
-                                            -> Just $ tApp (eQVar primUIListGetItem) [t]
                                           | q == qnArray, t == tInt, n == getitemKW
                                             -> Just $ eQVar primUArrayGetInt
                                           | q == qnArray, t == tFloat, n == getitemKW
                                             -> Just $ eQVar primUArrayGetFloat
                                         (TCon _ (TC q [t]), n, [_, _, _])
-                                          | q == qnList, n == setitemKW
-                                            -> Just $ tApp (eQVar primUListSetItem) [t]
                                           | q == qnArray, t == tInt, n == setitemKW
                                             -> Just $ eQVar primUArraySetInt
                                           | q == qnArray, t == tFloat, n == setitemKW
@@ -398,22 +388,7 @@ rawOtherBuiltinMethod _ _ _        = Nothing
 -- construction from an iterable still pass that iterable's witness. The
 -- generic element stays boxed, while indexes/repetition counts use native int.
 builtinSequenceWorkers             =
-    [ ((qnList, insertKW, 3), primUListInsert)
-    , ((qnList, reverseKW, 1), primUListReverse)
-    , ((qnList, getsliceKW, 2), primUListGetSlice)
-    , ((qnList, delsliceKW, 2), primUListDelSlice)
-    , ((qnList, iterKW, 1), primUListIter)
-    , ((qnList, reversedKW, 1), primUListReversed)
-    , ((qnList, addKW, 2), primUListAdd)
-    , ((qnList, mulKW, 2), primUListMul)
-    , ((qnList, iaddKW, 2), primUListIAdd)
-    , ((qnList, imulKW, 2), primUListIMul)
-    , ((qnIList, getsliceKW, 2), primUIListGetSlice)
-    , ((qnIList, iterKW, 1), primUIListIter)
-    , ((qnIList, reversedKW, 1), primUIListReversed)
-    , ((qnIList, addKW, 2), primUIListAdd)
-    , ((qnIList, mulKW, 2), primUIListMul)
-    ]
+    [ ((bwType w,bwMethod w,bwArity w),bwName w) | w <- listBaseWorkers ]
 
 -- These native methods ignore the receiver witness, including the Eq/Ord
 -- defaults inherited by the three builtin text/byte-container implementations.

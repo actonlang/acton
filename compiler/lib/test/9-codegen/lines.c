@@ -230,7 +230,7 @@ $R linesQ_L_17C_9cont (linesQ_main self, $Cont C_cont, int64_t C_10res) {
         #line 68 "test/src/lines.act"
         ((B_NoneType (*) (B_tuple, B_str, B_str, bool, bool))B_print)($NEWTUPLE(2, actStrFromLiteral("loop body", 9, 9), toB_int(((int64_t)((linesQ_main)(self))->i))), actStrFromLiteral(" ", 1, 1), actStrFromLiteral("\n", 1, 1), false, false);
     }
-    B_Iterator N_3iter = $listD_U__iter__(B_mk_list(3, toB_int(1LL) , toB_int(2LL) , toB_int(3LL)));
+    B_Iterator N_3iter = B_list_base_iter(((B_list_base)B_mk_list(3, toB_int(1LL) , toB_int(2LL) , toB_int(3LL))));
     #line 73 "test/src/lines.act"
     while (true) {
         $MaybeWord N_4maybe;

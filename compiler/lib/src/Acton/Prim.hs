@@ -323,26 +323,64 @@ annot t_ann ann t e = eCall (tApp (eQVar primAnnot) [t_ann, t]) [ann, e]
 unAnnot t_ann (Call _ (TApp _ (Var _ n) [t,_]) (PosArg w (PosArg e PosNil)) KwdNil)
   | n == primAnnot && t == t_ann    = (w, e)
 
--- Compiler-private descriptions of concrete hash-container calls. The schemas
--- keep keys/elements boxed; CodeGen adapts the container to the shared C view.
--- Factories keep their protocol witness, which supplies Hashable before there
--- is a container. Dict comparisons likewise retain their value Eq witness.
-data HashContainerABI = DictBase | SetTable | SetObject | SetBuild QName
+-- Compiler-private descriptions of concrete builtin calls. The schemas keep
+-- generic elements boxed; CodeGen adapts containers to their shared C views.
+data BuiltinCallABI = DictBase | SetTable | SetObject | SetBuild QName
+                    | ListBase | ListBuild QName | ListInplace | NativeArgs
 
-data HashContainerWorker = HashContainerWorker {
-    hcType :: QName, hcMethod :: Name, hcArity :: Int,
-    hcName :: QName, hcSchema :: TSchema, hcCName :: String,
-    hcABI :: HashContainerABI, hcNegate :: Bool, hcReverse :: Bool,
-    hcDefault :: Bool, hcContainerArgs :: Int
+data BuiltinWorker = BuiltinWorker {
+    bwType :: QName, bwMethod :: Name, bwArity :: Int,
+    bwName :: QName, bwSchema :: TSchema, bwCName :: String,
+    bwABI :: BuiltinCallABI, bwNegate :: Bool, bwReverse :: Bool,
+    bwExtraArgs :: [String], bwContainerArgs :: Int
     }
 
 hashContainerWorker q attr arity = Map.lookup (q,attr,arity) hashContainerMethodMap
 
-hashContainerPrimitive q = Map.lookup q hashContainerPrimitiveMap
+builtinCallPrimitive q = Map.lookup q builtinCallPrimitiveMap
 
-hashContainerMethodMap = Map.fromList [ ((hcType w,hcMethod w,hcArity w),w) | w <- hashContainerWorkers ]
-hashContainerPrimitiveMap = Map.fromList [ (hcName w,w) | w <- hashContainerWorkers ]
+hashContainerMethodMap = Map.fromList [ ((bwType w,bwMethod w,bwArity w),w) | w <- hashContainerWorkers ]
+builtinCallPrimitiveMap = Map.fromList [ (bwName w,w) | w <- builtinCallWorkers ]
 
+builtinCallWorkers = hashContainerWorkers ++ listBaseWorkers
+
+-- Reuse the existing boxing schemas. List and ilist differ only in the result
+-- class for allocating operations; input Iterable witnesses remain explicit.
+-- The IR names are private: generated C calls the B_list_* entry points below.
+listBaseWorkers =
+    [ make qnList "__getitem__" 2 primUGetItem scUGetItem "B_list_base_getitem" ListBase 1 []
+    , make qnIList "__getitem__" 2 primUIListGetItem scUIListGetItem "B_list_base_getitem" ListBase 1 []
+    , make qnList "append" 2 primUListAppend scUListAppend "B_list_base_append" ListBase 1 []
+    , make qnList "__setitem__" 3 primUListSetItem scUListSetItem "B_list_base_setitem" ListBase 1 []
+    , make qnList "__delitem__" 2 primUListDelItem scUListDelItem "B_list_base_delitem" ListBase 1 []
+    , make qnList "__len__" 1 primUListLen scUListLen "B_list_base_len" ListBase 1 []
+    , make qnIList "__len__" 1 primUIListLen scUIListLen "B_list_base_len" ListBase 1 []
+    , make qnList "__getslice__" 2 primUListGetSlice scUListGetSlice "B_list_base_getslice" (ListBuild qnList) 1 []
+    , make qnIList "__getslice__" 2 primUIListGetSlice scUIListGetSlice "B_list_base_getslice" (ListBuild qnIList) 1 []
+    , make qnList "__iter__" 1 primUListIter scUListIter "B_list_base_iter" ListBase 1 []
+    , make qnIList "__iter__" 1 primUIListIter scUIListIter "B_list_base_iter" ListBase 1 []
+    , make qnList "__reversed__" 1 primUListReversed scUListReversed "B_list_base_reversed" (ListBuild qnList) 1 []
+    , make qnIList "__reversed__" 1 primUIListReversed scUIListReversed "B_list_base_reversed" (ListBuild qnIList) 1 []
+    , make qnList "__add__" 2 primUListAdd scUListAdd "B_list_base_add" (ListBuild qnList) 2 []
+    , make qnIList "__add__" 2 primUIListAdd scUIListAdd "B_list_base_add" (ListBuild qnIList) 2 []
+    , make qnList "__mul__" 2 primUListMul scUListMul "B_list_base_mul" (ListBuild qnList) 1 []
+    , make qnIList "__mul__" 2 primUIListMul scUIListMul "B_list_base_mul" (ListBuild qnIList) 1 []
+    , make qnList "__zero__" 0 primUListZero scUListZero "B_list_base_new" (ListBuild qnList) 0 ["0"]
+    , make qnIList "__zero__" 0 primUIListZero scUIListZero "B_list_base_new" (ListBuild qnIList) 0 ["0"]
+    , make qnList "__fromiter__" 2 primUListFromIter scUListFromIter "B_listG_new" NativeArgs 0 []
+    , make qnIList "__fromiter__" 2 primUIListFromIter scUIListFromIter "B_ilistG_new" NativeArgs 0 []
+    , make qnList "insert" 3 primUListInsert scUListInsert "B_list_base_insert" ListBase 1 []
+    , make qnList "reverse" 1 primUListReverse scUListReverse "B_list_base_reverse" ListBase 1 []
+    , make qnList "__delslice__" 2 primUListDelSlice scUListDelSlice "B_list_base_delslice" ListBase 1 []
+    , make qnList "__setslice__" 4 primUListSetSlice scUListSetSlice "B_list_base_setslice" ListBase 1 []
+    , make qnList "__iadd__" 2 primUListIAdd scUListIAdd "B_list_base_iadd" ListInplace 2 []
+    , make qnList "__imul__" 2 primUListIMul scUListIMul "B_list_base_irepeat" ListInplace 1 []
+    ]
+  where make q attr arity prim schema native abi count extra = BuiltinWorker
+            q (name attr) arity prim schema native abi False False extra count
+
+-- Hash-container factories keep their protocol witness, which supplies
+-- Hashable before there is a container. Dict comparisons retain value Eq.
 hashContainerWorkers = dictWorkers qnDict tDict True ++ dictWorkers qnIDict tIDict False ++
                        setWorkers qnSetT tSet True ++ setWorkers qnISetT tISet False
   where a = TV KType (name "A")
@@ -353,17 +391,17 @@ hashContainerWorkers = dictWorkers qnDict tDict True ++ dictWorkers qnIDict tIDi
         ct = tVar c
         pair = tTupleP (foldr posRow posNil [at,bt])
         worker q self qs attr fx args result native abi neg rev def =
-            HashContainerWorker q (name attr) (length args)
+            BuiltinWorker q (name attr) (length args)
                 (gPrim (nstr (noq q) ++ "_base_" ++ attr))
                 (tSchema qs $ tFun fx (foldr posRow posNil args) kwdNil result)
-                native abi neg rev def (length $ takeWhile (== self) args)
+                native abi neg rev ["B_None" | def] (length $ takeWhile (== self) args)
         dictWorkers q cons mutable =
           let self = cons at bt
               make attr fx args result native def = worker q self [qbind a,qbind b]
                   attr fx args result native DictBase False False def
           in [ make "__getitem__" fxPure [self,at] bt "B_dict_base_getitem" False
              , make "__contains__" fxPure [self,at] tBool "B_dict_base_contains" False
-             , (make "__containsnot__" fxPure [self,at] tBool "B_dict_base_contains" False){hcNegate=True}
+             , (make "__containsnot__" fxPure [self,at] tBool "B_dict_base_contains" False){bwNegate=True}
              , make "get" fxPure [self,at] (tOpt bt) "B_dict_base_get" True
              , make "get_def" fxPure [self,at,bt] bt "B_dict_base_get" False
              , make "__iter__" fxPure [self] (tIterator at) "B_dict_base_key_iterator" False
@@ -412,7 +450,7 @@ hashContainerWorkers = dictWorkers qnDict tDict True ++ dictWorkers qnIDict tIDi
                    | (attr,native) <- [("__ior__","B_set_base_ior"), ("__iand__","B_set_base_iand"),
                         ("__isub__","B_set_base_isub"), ("__ixor__","B_set_base_ixor")]]
 
-primEnv             = [ (noq (hcName w), NDef (hcSchema w) NoDec Nothing) | w <- hashContainerWorkers ] ++
+primEnv             = [ (noq (bwName w), NDef (bwSchema w) NoDec Nothing) | w <- builtinCallWorkers ] ++
                       [     (noq primASYNCf,        NDef scASYNCf NoDec Nothing),
                             (noq primAFTERf,        NDef scAFTERf NoDec Nothing),
                             (noq primAFTER_NOWf,    NDef scAFTERf NoDec Nothing),
@@ -500,10 +538,6 @@ primEnv             = [ (noq (hcName w), NDef (hcSchema w) NoDec Nothing) | w <-
                             (noq primMkDict,        NDef scMkDict NoDec Nothing),
                             (noq primAnnot,         NDef scAnnot NoDec Nothing),
                             (noq primRaiseValueError,NDef scRaiseValueError NoDec Nothing), 
-                            (noq primUGetItem,      NDef scUGetItem NoDec Nothing),
-                            (noq primUListAppend, NDef scUListAppend NoDec Nothing),
-                            (noq primUListLen, NDef scUListLen NoDec Nothing),
-                            (noq primUIListLen, NDef scUIListLen NoDec Nothing),
                             (noq primUDictLen, NDef scUDictLen NoDec Nothing),
                             (noq primUIDictLen, NDef scUIDictLen NoDec Nothing),
                             (noq primUSetLen, NDef scUSetLen NoDec Nothing),
@@ -512,9 +546,6 @@ primEnv             = [ (noq (hcName w), NDef (hcSchema w) NoDec Nothing) | w <-
                             (noq primUBytesLen, NDef scUBytesLen NoDec Nothing),
                             (noq primUBytearrayLen, NDef scUBytearrayLen NoDec Nothing),
                             (noq primUBitsetLen, NDef scUBitsetLen NoDec Nothing),
-                            (noq primUListSetItem,  NDef scUListSetItem NoDec Nothing),
-                            (noq primUListDelItem,  NDef scUListDelItem NoDec Nothing),
-                            (noq primUIListGetItem, NDef scUIListGetItem NoDec Nothing),
                             (noq primUStrGetItem,   NDef scUStrGetItem NoDec Nothing),
                             (noq primUStrEq,        NDef scUStrCompare NoDec Nothing),
                             (noq primUStrNe,        NDef scUStrCompare NoDec Nothing),
@@ -535,26 +566,6 @@ primEnv             = [ (noq (hcName w), NDef (hcSchema w) NoDec Nothing) | w <-
                             (noq primUBitsetContainsNot, NDef scUBitsetContains NoDec Nothing),
                             (noq primUBitsetAdd, NDef scUBitsetMutate NoDec Nothing),
                             (noq primUBitsetDiscard, NDef scUBitsetMutate NoDec Nothing),
-                            (noq primUListGetSlice, NDef scUListGetSlice NoDec Nothing),
-                            (noq primUListIter, NDef scUListIter NoDec Nothing),
-                            (noq primUListReversed, NDef scUListReversed NoDec Nothing),
-                            (noq primUListAdd, NDef scUListAdd NoDec Nothing),
-                            (noq primUListMul, NDef scUListMul NoDec Nothing),
-                            (noq primUListZero, NDef scUListZero NoDec Nothing),
-                            (noq primUListFromIter, NDef scUListFromIter NoDec Nothing),
-                            (noq primUIListGetSlice, NDef scUIListGetSlice NoDec Nothing),
-                            (noq primUIListIter, NDef scUIListIter NoDec Nothing),
-                            (noq primUIListReversed, NDef scUIListReversed NoDec Nothing),
-                            (noq primUIListAdd, NDef scUIListAdd NoDec Nothing),
-                            (noq primUIListMul, NDef scUIListMul NoDec Nothing),
-                            (noq primUIListZero, NDef scUIListZero NoDec Nothing),
-                            (noq primUIListFromIter, NDef scUIListFromIter NoDec Nothing),
-                            (noq primUListInsert, NDef scUListInsert NoDec Nothing),
-                            (noq primUListReverse, NDef scUListReverse NoDec Nothing),
-                            (noq primUListDelSlice, NDef scUListDelSlice NoDec Nothing),
-                            (noq primUListSetSlice, NDef scUListSetSlice NoDec Nothing),
-                            (noq primUListIAdd, NDef scUListIAdd NoDec Nothing),
-                            (noq primUListIMul, NDef scUListIMul NoDec Nothing),
                             (noq primUStrLt, NDef scUStrLt NoDec Nothing),
                             (noq primUStrLe, NDef scUStrLe NoDec Nothing),
                             (noq primUStrGt, NDef scUStrGt NoDec Nothing),
