@@ -14,21 +14,18 @@ B_set B_mk_set(int len, B_Hashable w,...) {
     va_start(args, w);
     for (int i=0; i < len; i++) {
         $WORD elem = va_arg(args, $WORD);
-        B_set_add_entry(res,w,elem,B_hash(w, elem));
+        B_set_add_entry(res, elem, B_hash(w, elem));
     }
     return res;
 }
 
 B_dict B_mk_dict(int len, B_Hashable w,...) {
-    B_dict res =  acton_malloc(sizeof(struct B_dict));
-    res->$class = &B_dictG_methods;
-    res->numelements = 0;
-    res->table = NULL;
+    B_dict res = B_dictG_new(w, NULL, NULL);
     va_list args;
     va_start(args, w);
     for (int i=0; i < len; i++) {
         B_tuple t =  va_arg(args, B_tuple);
-        B_dictD_setitem(res, w, t->components[0], t->components[1]);
+        B_dictD_setitem(res, t->components[0], t->components[1]);
     }
     return res;
 }

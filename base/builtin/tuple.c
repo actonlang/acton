@@ -44,12 +44,12 @@ B_str B_tupleD___str__(B_tuple self) {
 
 
 void B_tupleD___serialize__(B_tuple self, $Serial$state state) {
-    B_int prevkey = (B_int)B_dictD_get(state->done,(B_Hashable)B_HashableD_WORDG_witness,self,NULL);
+    B_int prevkey = (B_int)B_dictD_get(state->done, self, NULL);
     if (prevkey) {
         $val_serialize(-TUPLE_ID,&prevkey->val,state);
         return;
     }
-    B_dictD_setitem(state->done,(B_Hashable)B_HashableD_WORDG_witness,self,toB_int(state->row_no));
+    B_dictD_setitem(state->done, self, toB_int(state->row_no));
     long len = (long)self->size;
     $val_serialize(TUPLE_ID,&len,state);
     for (int i=0; i<self->size; i++) {
@@ -62,11 +62,11 @@ B_tuple B_tupleD___deserialize__(B_tuple self, $Serial$state state) {
     state->row = this->next;
     state->row_no++;
     if (this->class_id < 0) {
-        return (B_tuple)B_dictD_get(state->done,(B_Hashable)B_HashableD_intG_witness,toB_int((long)this->blob[0]),NULL);
+        return (B_tuple)B_dictD_get(state->done, toB_int((long)this->blob[0]), NULL);
     } else {
         int len = (int)(long)this->blob[0];
         B_tuple res = acton_malloc(sizeof(struct B_tuple) + len*sizeof($WORD));
-        B_dictD_setitem(state->done,(B_Hashable)B_HashableD_intG_witness,toB_int(state->row_no-1),res);
+        B_dictD_setitem(state->done, toB_int(state->row_no-1), res);
         res->$class = &B_tupleG_methods;
         res->size = len;
         for (int i = 0; i < len; i++) 

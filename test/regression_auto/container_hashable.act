@@ -1,0 +1,110 @@
+# Containers retain their key/element policy through construction, table
+# replacement, freezing and serialization, including for generic user keys.
+class Key[A(Hashable)](object):
+    item: A
+    def __init__(self, item: A):
+        self.item = item
+
+extension Key[A(Hashable)] (Hashable):
+    def __eq__(a, b) -> bool:
+        return a.item == b.item
+    def hash(self, h):
+        self.item.hash(h)
+
+def round_trip[A](value: A) -> A:
+    NotImplemented
+
+def native_checks() -> bool:
+    NotImplemented
+
+def same_object(a: value, b: value) -> bool:
+    NotImplemented
+
+def require(ok: bool, message: str):
+    if not ok:
+        raise ValueError(message)
+
+def check[A(Hashable)](keys: list[A]):
+    empty: dict[A,int] = {}
+    restored_empty = round_trip(empty)
+    restored_empty[keys[0]] = 42
+    require(restored_empty[keys[0]] == 42, "restored empty dict")
+    empty_set: set[A] = set()
+    restored_set = round_trip(empty_set)
+    restored_set.add(keys[0])
+    require(keys[0] in restored_set, "restored empty set")
+    empty_idict: idict[A,int] = idict()
+    require(keys[0] not in round_trip(empty_idict), "restored empty idict")
+    empty_iset: iset[A] = iset()
+    require(keys[0] not in round_trip(empty_iset), "restored empty iset")
+    small_dict: dict[A,int] = {keys[0]: 0, keys[1]: 1}
+    small_dict = round_trip(small_dict)
+    require(small_dict[keys[1]] == 1, "restored linear-search dict")
+
+    d: dict[A,int] = {}
+    for i in range(len(keys)):
+        d[keys[i]] = i
+    d = round_trip(d)
+    for i in range(len(keys)):
+        require(d[keys[i]] == i, "restored dict lookup")
+    d.setdefault(keys[0], 99)
+    require(d.pop(keys[0]) == 0, "dict pop")
+    d.update([(keys[0], 42)])
+    require(d.get(keys[0]) == 42, "dict update")
+    frozen_dict = round_trip(freeze(d))
+    require(frozen_dict[keys[0]] == 42, "restored frozen dict")
+    require(frozen_dict == idict(frozen_dict.items()), "dict comparison")
+
+    # Grow, leave tombstones, then copy a sparse table through set operations.
+    s = set(keys)
+    for k in keys[2:]:
+        s.discard(k)
+    s = round_trip(s)
+    require(len(s) == 2 and keys[0] in s, "restored sparse set")
+    whole = set(keys)
+    require((s | whole) == whole, "set union")
+    require((whole & s) == s, "set intersection")
+    require(len(whole - s) == len(keys) - 2, "set difference")
+    require(len(whole ^ s) == len(keys) - 2, "set xor")
+    # Force both intersection paths and the temporary-table replacement.
+    dense = set(keys)
+    dense &= set(keys[:2])
+    require(dense == s, "in-place intersection replacement")
+    small = set(keys[:2])
+    small &= whole
+    require(small == s, "in-place small intersection")
+    dense |= whole
+    dense -= s
+    dense ^= whole
+    require(dense == s, "in-place set operations")
+    dense ^= dense
+    dense.add(keys[0])
+    require(keys[0] in dense, "policy after clearing")
+    dense -= dense
+    dense.update(keys)
+    require(dense == whole, "policy after difference clearing")
+    frozen_set = round_trip(freeze(s))
+    require(keys[0] in frozen_set, "restored frozen set")
+    require((frozen_set | iset(keys)) == iset(keys), "immutable union")
+    require((frozen_set & iset(keys)) == frozen_set, "immutable intersection")
+    require(len(frozen_set ^ iset(keys)) == len(keys) - 2, "immutable xor")
+    require(len(iset(keys) - frozen_set) == len(keys) - 2, "immutable difference")
+    require(len(round_trip(small | set(keys[:2]))) == 2, "serialized set result")
+
+def check_shared_and_cycles():
+    d: dict[str,value] = {}
+    d["self"] = d
+    shared = round_trip([d, d])
+    shared[0]["answer"] = 42
+    require("answer" in shared[1], "shared dict reference")
+    require(same_object(shared[0], shared[0]["self"]), "cyclic dict reference")
+
+actor main(env):
+    require(native_checks(), "native calls or protocol factory")
+    check(list(range(40)))
+    check([str(i) for i in range(40)])
+    check([Key(i) for i in range(40)])
+    check([Key(str(i)) for i in range(40)])
+    check([(i, str(i)) for i in range(40)])
+    check_shared_and_cycles()
+    env.exit(0)

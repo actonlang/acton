@@ -122,11 +122,11 @@ void $step_serialize($WORD self, $Serial$state state) {
                     return;
                 }
             }
-            B_int prevkey = (B_int)B_dictD_get(state->done,(B_Hashable)B_HashableD_WORDG_witness,self,NULL);
+            B_int prevkey = (B_int)B_dictD_get(state->done, self, NULL);
             if (prevkey) {
                 $val_serialize(-class_id,&prevkey->val,state);
             } else {
-                B_dictD_setitem(state->done,(B_Hashable)B_HashableD_WORDG_witness,self,toB_int(state->row_no));
+                B_dictD_setitem(state->done, self, toB_int(state->row_no));
                 $add_header(class_id,0,state);
                 (($Serializable)self)->$class->__serialize__(self,state);
             }
@@ -146,7 +146,7 @@ $WORD $step_deserialize($Serial$state state) {
             if (key < 0)
                 return state->globmap(($WORD)key);
             else
-                return B_dictD_get(state->done,(B_Hashable)B_HashableD_intG_witness,toB_int(key),NULL);
+                return B_dictD_get(state->done, toB_int(key), NULL);
         } else
             return $GET_METHODS(this->class_id)->__deserialize__(NULL, state);
     } else
@@ -210,8 +210,7 @@ $WORD $closure_deserialize($WORD self, const struct $ClosureLayout *layout, $Ser
         if (!state)
             return self; // allocation-only phase
         // Register before restoring captures: they may lead back to this object.
-        B_dictD_setitem(state->done, (B_Hashable)B_HashableD_intG_witness,
-                       toB_int(state->row_no - 1), self);
+        B_dictD_setitem(state->done, toB_int(state->row_no - 1), self);
     }
     for (size_t i = 0; i < layout->field_count; i++) {
         const struct $ClosureField *field = &layout->fields[i];

@@ -37,7 +37,7 @@ uint64_t $checked_uint_from_u64(uint64_t value, uint64_t max, const char *type_n
 
 #define $DNEW($T, $state)   ({ $T $t = acton_malloc(sizeof(struct $T)); \
                                $t->$class = &$T ## G_methods;                                     \
-                               B_dictD_setitem($state->done,(B_Hashable)B_HashableD_intG_witness,toB_int($state->row_no-1),$t); \
+                               B_dictD_setitem($state->done, toB_int($state->row_no-1), $t); \
                                $t; })
 
 #define $AND(T, a, b)       ({ T $a = (a); ($a && ((B_value)$a)->$class->__bool__((B_value)$a)) ? (b) : $a; })

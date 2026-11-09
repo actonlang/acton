@@ -107,13 +107,13 @@ static B_str B_list_base_str(B_list_base self) {
 }
 
 static void B_list_base_serialize(B_list_base self, int class_id, $Serial$state state) {
-    B_int prevkey = (B_int)B_dictD_get(state->done, (B_Hashable)B_HashableD_WORDG_witness, self, NULL);
+    B_int prevkey = (B_int)B_dictD_get(state->done, self, NULL);
     if (prevkey) {
         long pk = fromB_int(prevkey);
         $val_serialize(-class_id, &pk, state);
         return;
     }
-    B_dictD_setitem(state->done, (B_Hashable)B_HashableD_WORDG_witness, self, toB_int(state->row_no));
+    B_dictD_setitem(state->done, self, toB_int(state->row_no));
     long len = (long)self->length;
     $val_serialize(class_id, &len, state);
     for (int i = 0; i < self->length; i++)
@@ -125,16 +125,14 @@ static B_list_base B_list_base_deserialize(B_list_base res, $SuperG_class cls, $
     state->row = row->next;
     state->row_no++;
     if (row->class_id < 0)
-        return (B_list_base)B_dictD_get(state->done, (B_Hashable)B_HashableD_intG_witness,
-                                       toB_int((long)row->blob[0]), NULL);
+        return (B_list_base)B_dictD_get(state->done, toB_int((long)row->blob[0]), NULL);
 
     int len = (int)(long)row->blob[0];
     if (!res)
         res = B_list_base_new(len, cls);
     else
         res->$class = cls;
-    B_dictD_setitem(state->done, (B_Hashable)B_HashableD_intG_witness,
-                    toB_int(state->row_no - 1), res);
+    B_dictD_setitem(state->done, toB_int(state->row_no - 1), res);
     res->length = len;
     res->capacity = len;
     if (len > 0 && res->data == NULL)

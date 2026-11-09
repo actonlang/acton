@@ -397,7 +397,7 @@ static struct B_Eq $wEqNone_instance;
 static B_Eq $wEqNoneD_deserialize(B_Eq res, $Serial$state state) {
     if (!res) {
         res = &$wEqNone_instance;
-        B_dictD_setitem(state->done,(B_Hashable)B_HashableD_intG_witness,toB_int(state->row_no-1),res);
+        B_dictD_setitem(state->done, toB_int(state->row_no-1), res);
     }
     return res;
 }
