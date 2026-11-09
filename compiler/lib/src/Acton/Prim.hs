@@ -342,7 +342,7 @@ builtinCallPrimitive q = Map.lookup q builtinCallPrimitiveMap
 hashContainerMethodMap = Map.fromList [ ((bwType w,bwMethod w,bwArity w),w) | w <- hashContainerWorkers ]
 builtinCallPrimitiveMap = Map.fromList [ (bwName w,w) | w <- builtinCallWorkers ]
 
-builtinCallWorkers = hashContainerWorkers ++ listBaseWorkers
+builtinCallWorkers = hashContainerWorkers ++ listBaseWorkers ++ numericNativeWorkers
 
 -- Reuse the existing boxing schemas. List and ilist differ only in the result
 -- class for allocating operations; input Iterable witnesses remain explicit.
@@ -378,6 +378,70 @@ listBaseWorkers =
     ]
   where make q attr arity prim schema native abi count extra = BuiltinWorker
             q (name attr) arity prim schema native abi False False extra count
+
+-- Numeric workers already perform the Acton allocation and arithmetic.
+-- Keep their representation schemas and result-conversion witnesses intact;
+-- only their native C entry point names change.
+numericNativeWorkers =
+    [ make qnBigint "__add__" 2 primUBigintAdd scUBigintAdd "B_bigint_add"
+    , make qnBigint "__zero__" 0 primUBigintZero scUBigintZero "B_bigint_zero"
+    , make qnBigint "__complex__" 1 primUBigintComplex scUBigintComplex "B_bigint_complex"
+    , make qnBigint "__fromatom__" 1 primUBigintFromatom scUBigintFromatom "B_bigint_fromatom"
+    , make qnBigint "__mul__" 2 primUBigintMul scUBigintMul "B_bigint_mul"
+    , make qnBigint "__pow__" 2 primUBigintPow scUBigintPow "B_bigint_pow"
+    , make qnBigint "__neg__" 1 primUBigintNeg scUBigintNeg "B_bigint_neg"
+    , make qnBigint "__pos__" 1 primUBigintPos scUBigintPos "B_bigint_pos"
+    , make qnBigint "real" 2 primUBigintReal scUBigintReal "B_bigint_real"
+    , make qnBigint "imag" 2 primUBigintImag scUBigintImag "B_bigint_imag"
+    , make qnBigint "__abs__" 2 primUBigintAbs scUBigintAbs "B_bigint_abs"
+    , make qnBigint "conjugate" 1 primUBigintConjugate scUBigintConjugate "B_bigint_conjugate"
+    , make qnBigint "__float__" 1 primUBigintFloat scUBigintFloat "B_bigint_float"
+    , make qnBigint "__trunc__" 2 primUBigintTrunc scUBigintTrunc "B_bigint_trunc"
+    , make qnBigint "__floor__" 2 primUBigintFloor scUBigintFloor "B_bigint_floor"
+    , make qnBigint "__ceil__" 2 primUBigintCeil scUBigintCeil "B_bigint_ceil"
+    , make qnBigint "__round__" 2 primUBigintRound scUBigintRound "B_bigint_round"
+    , make qnBigint "numerator" 2 primUBigintNumerator scUBigintNumerator "B_bigint_numerator"
+    , make qnBigint "denominator" 2 primUBigintDenominator scUBigintDenominator "B_bigint_denominator"
+    , make qnBigint "__int__" 1 primUBigintInt scUBigintInt "B_bigint_int"
+    , make qnBigint "__index__" 1 primUBigintIndex scUBigintIndex "B_bigint_index"
+    , make qnBigint "__divmod__" 2 primUBigintDivmod scUBigintDivmod "B_bigint_divmod"
+    , make qnBigint "__floordiv__" 2 primUBigintFloordiv scUBigintFloordiv "B_bigint_floordiv"
+    , make qnBigint "__mod__" 2 primUBigintMod scUBigintMod "B_bigint_mod"
+    , make qnBigint "__lshift__" 2 primUBigintLshift scUBigintLshift "B_bigint_lshift"
+    , make qnBigint "__rshift__" 2 primUBigintRshift scUBigintRshift "B_bigint_rshift"
+    , make qnBigint "__invert__" 1 primUBigintInvert scUBigintInvert "B_bigint_invert"
+    , make qnBigint "__and__" 2 primUBigintAnd scUBigintAnd "B_bigint_and"
+    , make qnBigint "__or__" 2 primUBigintOr scUBigintOr "B_bigint_or"
+    , make qnBigint "__xor__" 2 primUBigintXor scUBigintXor "B_bigint_xor"
+    , make qnBigint "__sub__" 2 primUBigintSub scUBigintSub "B_bigint_sub"
+    , make qnBigint "__truediv__" 2 primUBigintTruediv scUBigintTruediv "B_bigint_truediv"
+    , make qnBigint "__eq__" 2 primUBigintEq scUBigintEq "B_bigint_eq"
+    , make qnBigint "__ne__" 2 primUBigintNe scUBigintNe "B_bigint_ne"
+    , make qnBigint "__lt__" 2 primUBigintLt scUBigintLt "B_bigint_lt"
+    , make qnBigint "__le__" 2 primUBigintLe scUBigintLe "B_bigint_le"
+    , make qnBigint "__gt__" 2 primUBigintGt scUBigintGt "B_bigint_gt"
+    , make qnBigint "__ge__" 2 primUBigintGe scUBigintGe "B_bigint_ge"
+    , make qnBigint "hash" 2 primUBigintHash scUBigintHash "B_bigint_hash"
+    , make qnComplex "__add__" 2 primUComplexAdd scUComplexAdd "B_complex_add"
+    , make qnComplex "__zero__" 0 primUComplexZero scUComplexZero "B_complex_zero"
+    , make qnComplex "__complex__" 1 primUComplexComplex scUComplexComplex "B_complex_complex"
+    , make qnComplex "__mul__" 2 primUComplexMul scUComplexMul "B_complex_mul"
+    , make qnComplex "__fromatom__" 1 primUComplexFromatom scUComplexFromatom "B_complex_fromatom"
+    , make qnComplex "__pow__" 2 primUComplexPow scUComplexPow "B_complex_pow"
+    , make qnComplex "__neg__" 1 primUComplexNeg scUComplexNeg "B_complex_neg"
+    , make qnComplex "__pos__" 1 primUComplexPos scUComplexPos "B_complex_pos"
+    , make qnComplex "real" 2 primUComplexReal scUComplexReal "B_complex_real"
+    , make qnComplex "imag" 2 primUComplexImag scUComplexImag "B_complex_imag"
+    , make qnComplex "__abs__" 2 primUComplexAbs scUComplexAbs "B_complex_abs"
+    , make qnComplex "conjugate" 1 primUComplexConjugate scUComplexConjugate "B_complex_conjugate"
+    , make qnComplex "__truediv__" 2 primUComplexTruediv scUComplexTruediv "B_complex_truediv"
+    , make qnComplex "__sub__" 2 primUComplexSub scUComplexSub "B_complex_sub"
+    , make qnComplex "__eq__" 2 primUComplexEq scUComplexEq "B_complex_eq"
+    , make qnComplex "__ne__" 2 primUComplexNe scUComplexNe "B_complex_ne"
+    , make qnComplex "hash" 2 primUComplexHash scUComplexHash "B_complex_hash"
+    ]
+  where make q attr arity prim schema native = BuiltinWorker
+            q (name attr) arity prim schema native NativeArgs False False [] 0
 
 -- Hash-container factories keep their protocol witness, which supplies
 -- Hashable before there is a container. Dict comparisons retain value Eq.
@@ -615,62 +679,6 @@ primEnv             = [ (noq (bwName w), NDef (bwSchema w) NoDec Nothing) | w <-
                             (noq primUBytearrayMul, NDef scUBytearrayMul NoDec Nothing),
                             (noq primUBytearrayIadd, NDef scUBytearrayIadd NoDec Nothing),
                             (noq primUBytearrayImul, NDef scUBytearrayImul NoDec Nothing),
-                            (noq primUBigintAdd, NDef scUBigintAdd NoDec Nothing),
-                            (noq primUBigintZero, NDef scUBigintZero NoDec Nothing),
-                            (noq primUBigintComplex, NDef scUBigintComplex NoDec Nothing),
-                            (noq primUBigintFromatom, NDef scUBigintFromatom NoDec Nothing),
-                            (noq primUBigintMul, NDef scUBigintMul NoDec Nothing),
-                            (noq primUBigintPow, NDef scUBigintPow NoDec Nothing),
-                            (noq primUBigintNeg, NDef scUBigintNeg NoDec Nothing),
-                            (noq primUBigintPos, NDef scUBigintPos NoDec Nothing),
-                            (noq primUBigintReal, NDef scUBigintReal NoDec Nothing),
-                            (noq primUBigintImag, NDef scUBigintImag NoDec Nothing),
-                            (noq primUBigintAbs, NDef scUBigintAbs NoDec Nothing),
-                            (noq primUBigintConjugate, NDef scUBigintConjugate NoDec Nothing),
-                            (noq primUBigintFloat, NDef scUBigintFloat NoDec Nothing),
-                            (noq primUBigintTrunc, NDef scUBigintTrunc NoDec Nothing),
-                            (noq primUBigintFloor, NDef scUBigintFloor NoDec Nothing),
-                            (noq primUBigintCeil, NDef scUBigintCeil NoDec Nothing),
-                            (noq primUBigintRound, NDef scUBigintRound NoDec Nothing),
-                            (noq primUBigintNumerator, NDef scUBigintNumerator NoDec Nothing),
-                            (noq primUBigintDenominator, NDef scUBigintDenominator NoDec Nothing),
-                            (noq primUBigintInt, NDef scUBigintInt NoDec Nothing),
-                            (noq primUBigintIndex, NDef scUBigintIndex NoDec Nothing),
-                            (noq primUBigintDivmod, NDef scUBigintDivmod NoDec Nothing),
-                            (noq primUBigintFloordiv, NDef scUBigintFloordiv NoDec Nothing),
-                            (noq primUBigintMod, NDef scUBigintMod NoDec Nothing),
-                            (noq primUBigintLshift, NDef scUBigintLshift NoDec Nothing),
-                            (noq primUBigintRshift, NDef scUBigintRshift NoDec Nothing),
-                            (noq primUBigintInvert, NDef scUBigintInvert NoDec Nothing),
-                            (noq primUBigintAnd, NDef scUBigintAnd NoDec Nothing),
-                            (noq primUBigintOr, NDef scUBigintOr NoDec Nothing),
-                            (noq primUBigintXor, NDef scUBigintXor NoDec Nothing),
-                            (noq primUBigintSub, NDef scUBigintSub NoDec Nothing),
-                            (noq primUBigintTruediv, NDef scUBigintTruediv NoDec Nothing),
-                            (noq primUBigintEq, NDef scUBigintEq NoDec Nothing),
-                            (noq primUBigintNe, NDef scUBigintNe NoDec Nothing),
-                            (noq primUBigintLt, NDef scUBigintLt NoDec Nothing),
-                            (noq primUBigintLe, NDef scUBigintLe NoDec Nothing),
-                            (noq primUBigintGt, NDef scUBigintGt NoDec Nothing),
-                            (noq primUBigintGe, NDef scUBigintGe NoDec Nothing),
-                            (noq primUBigintHash, NDef scUBigintHash NoDec Nothing),
-                            (noq primUComplexAdd, NDef scUComplexAdd NoDec Nothing),
-                            (noq primUComplexZero, NDef scUComplexZero NoDec Nothing),
-                            (noq primUComplexComplex, NDef scUComplexComplex NoDec Nothing),
-                            (noq primUComplexMul, NDef scUComplexMul NoDec Nothing),
-                            (noq primUComplexFromatom, NDef scUComplexFromatom NoDec Nothing),
-                            (noq primUComplexPow, NDef scUComplexPow NoDec Nothing),
-                            (noq primUComplexNeg, NDef scUComplexNeg NoDec Nothing),
-                            (noq primUComplexPos, NDef scUComplexPos NoDec Nothing),
-                            (noq primUComplexReal, NDef scUComplexReal NoDec Nothing),
-                            (noq primUComplexImag, NDef scUComplexImag NoDec Nothing),
-                            (noq primUComplexAbs, NDef scUComplexAbs NoDec Nothing),
-                            (noq primUComplexConjugate, NDef scUComplexConjugate NoDec Nothing),
-                            (noq primUComplexTruediv, NDef scUComplexTruediv NoDec Nothing),
-                            (noq primUComplexSub, NDef scUComplexSub NoDec Nothing),
-                            (noq primUComplexEq, NDef scUComplexEq NoDec Nothing),
-                            (noq primUComplexNe, NDef scUComplexNe NoDec Nothing),
-                            (noq primUComplexHash, NDef scUComplexHash NoDec Nothing),
                             (noq primUNext,         NDef scUNext NoDec Nothing)
                       ]
 

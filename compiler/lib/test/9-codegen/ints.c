@@ -43,10 +43,10 @@ static void intsQ___init__$g0 () {
     intsQ_uint16_max = 65535;
     intsQ_uint8_min = 0;
     intsQ_uint8_max = 255;
-    intsQ_bigint_small = $bigintD_U__fromatom__(((B_atom)toB_int(42LL)));
-    intsQ_bigint_neg_small = $bigintD_U__fromatom__(((B_atom)toB_int(-1LL)));
-    intsQ_bigint_i64_max = $bigintD_U__fromatom__(((B_atom)toB_int(9223372036854775807LL)));
-    intsQ_bigint_i64_min = $bigintD_U__fromatom__(((B_atom)toB_int((-9223372036854775807LL - 1LL))));
+    intsQ_bigint_small = B_bigint_fromatom(((B_atom)toB_int(42LL)));
+    intsQ_bigint_neg_small = B_bigint_fromatom(((B_atom)toB_int(-1LL)));
+    intsQ_bigint_i64_max = B_bigint_fromatom(((B_atom)toB_int(9223372036854775807LL)));
+    intsQ_bigint_i64_min = B_bigint_fromatom(((B_atom)toB_int((-9223372036854775807LL - 1LL))));
     intsQ_bigint_i64_underflow = ((B_bigint)toB_bigint2("-9223372036854775809"));
     intsQ_bigint_u64_edge = B_bigintG_new(((B_atom)toB_u64(18446744073709551615UL)), B_None);
     intsQ_bigint_u64_edge_minus1 = B_bigintG_new(((B_atom)toB_u64(18446744073709551614UL)), B_None);
