@@ -1140,10 +1140,13 @@ sub' env info eq w t1@(TFun _ fx1 p1 k1 t1') t2@(TFun _ fx2 p2 k2 t2')
                                                  t1 <- usubst t1
                                                  t2 <- usubst t2
                                                  w' <- newWitness
+                                                 wfx <- newWitness
                                                  let (TFun _ fx1 p1 k1 t1', TFun _ fx2 p2 k2 t2') = (t1, t2)
                                                      (pp,pk) = (pPar pNames p2, kPar attrKW k2)
-                                                     lambda = eLambda [(px0,t1)] $ Lambda l0 pp pk (eCallVar w' [Call l0 (eVar px0) ap ak]) fx1
-                                                 reduce (mkEqn env w (wFun t1 t2) lambda : eq) (Cast info env fx1 fx2 : Sub info env w' t1' t2':cs1++cs2)
+                                                     adapter = Lambda l0 pp pk (eCallVar w' [Call l0 (eVar px0) ap ak]) fx1
+                                                     conversion = tApp (eVar wfx) [p2,k2,t2']
+                                                     lambda = eLambda [(px0,t1)] $ eCall conversion [adapter]
+                                                 reduce (mkEqn env w (wFun t1 t2) lambda : eq) (Sub info env wfx fx1 fx2 : Sub info env w' t1' t2':cs1++cs2)
 
 --                     existing            expected
 sub' env info eq w t1@(TTuple _ p1 k1) t2@(TTuple _ p2 k2)

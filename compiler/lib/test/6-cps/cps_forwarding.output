@@ -122,7 +122,7 @@ W_cleanup_4: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
 W_cleanup_9: __builtin__.Ord[__builtin__.int] = __builtin__.OrdD_int()
 
 proc def cleanup (C_cont : proc(__builtin__.int) -> $R, limit : __builtin__.int, out : __builtin__.list[__builtin__.int]) -> $R:
-    W_cleanup_24: __builtin__.Sequence[__builtin__.list[__builtin__.int], __builtin__.int] = __builtin__.SequenceD_list@[__builtin__.int]()
+    W_cleanup_25: __builtin__.Sequence[__builtin__.list[__builtin__.int], __builtin__.int] = __builtin__.SequenceD_list@[__builtin__.int]()
     value: $Cell[__builtin__.int] = $Cell@[__builtin__.int](W_cleanup_4.__fromatom__(0))
     proc def C_31try (C_32res : __builtin__.bool) -> $R:
         if C_32res:
@@ -146,7 +146,7 @@ proc def cleanup (C_cont : proc(__builtin__.int) -> $R, limit : __builtin__.int,
             return C_35loop(None)
         else:
             N_2xx: __builtin__.BaseException = $POP_C()
-            W_cleanup_24.append(out, W_cleanup_4.__fromatom__(99))
+            W_cleanup_25.append(out, W_cleanup_4.__fromatom__(99))
             if isinstance(N_2xx, $RET):
                 N_2xxG_RET: $RET = $CAST@[__builtin__.BaseException, $RET](N_2xx)
                 return $R_CONTc@[__builtin__.int](C_cont, $CAST@[__builtin__.value, __builtin__.int](N_2xxG_RET.val))

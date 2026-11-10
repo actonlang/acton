@@ -376,6 +376,27 @@ main = do
                                    S.kwdNil (S.tFun S.fxMut p k r)
               QuickType.typeOf witnessEnv (S.tApp (S.eVar w) [p,k,r]) `shouldBe` expected
           _ -> expectationFailure "Expected a single generic witness equation"
+      it "types function-subtyping adapters before reducing their effect witnesses" $ do
+        forM_ shapes $ \(p,k,r) -> do
+          let source = S.tFun S.fxPure p k r
+              target = S.tFun S.fxMut p k Builtin.tValue
+              (w, remaining, eqs) = TE.runTypeM $ do
+                w <- TE.newWitness
+                (remaining, eqs) <- Solver.solve env (const True) [] [] [TE.Sub info env w source target]
+                return (w, remaining, eqs)
+              f = S.name "function"
+              witnessEnv = Acton.Env.define ((f,I.NVar source) :
+                [(n,I.NDef sc S.NoDec Nothing) | TE.Eqn _ n sc _ <- eqs]) env
+              expressions = [e | TE.Eqn _ n _ e <- eqs, n == w]
+          length remaining `shouldBe` 0
+          length [() | TE.Eqn _ _ sc _ <- eqs, not (null $ S.scbind sc)] `shouldBe` 1
+          case expressions of
+            [e] -> QuickType.typeOf witnessEnv e `shouldBe`
+              S.tFun S.fxPure (S.posRow source S.posNil) S.kwdNil target
+            _ -> expectationFailure "Expected the function-subtyping adapter"
+          let use = S.sExpr $ S.eCall (S.eVar w) [S.eVar f]
+              reduced = Transform.wtrans Transform.env0 (TE.bindWits eqs ++ [use])
+          reduced `shouldBe` [S.sExpr (S.eVar f)]
       it "does not capture effect variables named A, B, or C" $ do
         forM_ [("A","B"), ("B","C"), ("C","A")] $ \(from,to) -> do
           let fx1 = S.tVar $ S.TV S.KFX (S.name from)
