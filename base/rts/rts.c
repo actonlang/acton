@@ -1352,6 +1352,10 @@ $Catcher POP_catcher($Actor a) {
     return c;
 }
 
+B_Msg $COMPLETED($WORD value) {
+    return B_MsgG_newXX(NULL, NULL, 0, value);
+}
+
 B_Msg $ASYNC($Actor to, $Cont cont) {
     $Actor self = GET_SELF();
     time_t baseline = 0;

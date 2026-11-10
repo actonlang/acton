@@ -1,0 +1,68 @@
+pure def add_one(x: int) -> int:
+    return x + 1
+
+# Keep the conversion explicit while the semantic hierarchy patch is parked.
+pure def adapt(f: pure(int) -> int) -> action(int) -> int:
+    return f
+
+pure def adapted_named() -> action(int) -> int:
+    return adapt(add_one)
+
+proc def invoke(cb: action(int) -> int, x: int) -> int:
+    return cb(x)
+
+proc def invoke_async(cb: action(int) -> int, x: int) -> int:
+    return await async cb(x)
+
+pure def keyword_source(x: int, delta: int = 2) -> int:
+    return x + delta
+
+pure def adapt_keywords(f: pure(int, delta: int) -> int) -> action(int, delta: int) -> int:
+    return f
+
+proc def invoke_keywords(cb: action(int, delta: int) -> int) -> int:
+    return cb(5, delta=7)
+
+pure def adapt_text(f: pure(str) -> str) -> action(str) -> str:
+    return f
+
+proc def invoke_text(cb: action(str) -> str) -> str:
+    return await async cb("hello")
+
+pure def adapt_none(f: pure() -> None) -> action() -> None:
+    return f
+
+proc def invoke_none(cb: action() -> None) -> None:
+    return await async cb()
+
+pure def ignore() -> None:
+    pass
+
+pure def fail(x: int) -> int:
+    raise ValueError("conversion failure")
+
+actor main(env):
+    var captures = 0
+    def factory() -> pure(int) -> int:
+        captures += 1
+        return add_one
+
+    adapted = adapt(factory())
+    assert captures == 1
+    assert invoke(adapted, 4) == 5
+    assert invoke(adapted, 8) == 9
+    assert captures == 1
+    assert invoke(adapted_named(), 10) == 11
+    assert invoke_async(adapted_named(), 20) == 21
+    assert invoke(pure lambda x: x + 2, 5) == 7
+    assert invoke_async(pure lambda x: x + 3, 5) == 8
+    assert invoke_keywords(adapt_keywords(keyword_source)) == 12
+    assert invoke_text(adapt_text(pure lambda text: text + "!")) == "hello!"
+    assert invoke_none(adapt_none(ignore)) is None
+    failing = adapt(fail)
+    try:
+        invoke_async(failing, 0)
+        assert False
+    except ValueError:
+        pass
+    env.exit(0)

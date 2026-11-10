@@ -1117,6 +1117,9 @@ sub env info eq w t1 t2                     = do t1' <- usubst t1
 sub'                                        :: Env -> ErrInfo -> Equations -> Name -> Type -> Type ->TypeM Equations
 
 sub' env info eq w t1 t2
+  | t1 == fxPure, t2 == fxAction           = do let sc = effectWitnessSchema t1 t2
+                                                    e = tApp (eQVar primPureToAction) (map tVar $ qbound $ scbind sc)
+                                                return (mkPolyEqn env w sc e : eq)
   | effectType t1 && effectType t2,
     t1 /= t2 && (isUnivar t1 || isUnivar t2)
                                             = do defer [Sub info env w t1 t2]; return eq

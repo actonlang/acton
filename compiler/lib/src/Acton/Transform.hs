@@ -150,6 +150,14 @@ instance Transform Decl where
     trans env (Typedef l n q t doc)     = Typedef l n q t doc
     trans env (Extension l q c us b doc)= Extension l q c us (wtrans (checkscope [nSelf] (typescope q env)) b) doc
 
+transCall (Var _ n) [p,k,r] [f]
+  | n == primPureToAction             = Just $ Let NoLoc [sAssign (pVar captured source) f] adapter
+  where source                       = tFun fxPure p k r
+        captured                     = head $ xNames \\ free f
+        pp                           = pPar (pNames \\ [captured]) p
+        kp                           = kPar attrKW k
+        result                       = Call NoLoc (eVar captured) (pArg pp) (kArg kp)
+        adapter                      = Lambda NoLoc pp kp (eCall (tApp (eQVar primCompleted) [r]) [result]) fxAction
 transCall (Dot _ (Var _ n) m) ts [e1,e2]
   | n == primWrapProc,  m == attrWrap   = Just e2
   | n == primWrapAction,m == attrWrap   = Just $ eCall (tApp (eQVar primWRAP) ts) [e1,e2]

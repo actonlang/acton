@@ -46,6 +46,9 @@ primActor           = gPrim "Actor"
 primR               = gPrim "R"
 primCont            = gPrim "Cont"
 
+primPureToAction    = gPrim "PURE_TO_ACTION"
+primCompleted       = gPrim "COMPLETED"
+
 primASYNCf          = gPrim "ASYNCf"
 primAFTERf          = gPrim "AFTERf"
 primAFTER_NOWf      = gPrim "AFTER_NOWf"
@@ -592,7 +595,9 @@ hashContainerWorkers = dictWorkers qnDict tDict True ++ dictWorkers qnIDict tIDi
                         ("__isub__","B_set_base_isub"), ("__ixor__","B_set_base_ixor")]]
 
 primEnv             = [ (noq (bwName w), NDef (bwSchema w) NoDec Nothing) | w <- builtinCallWorkers ] ++
-                      [     (noq primASYNCf,        NDef scASYNCf NoDec Nothing),
+                      [     (noq primPureToAction, NDef scPureToAction NoDec Nothing),
+                            (noq primCompleted,    NDef scCompleted NoDec Nothing),
+                            (noq primASYNCf,        NDef scASYNCf NoDec Nothing),
                             (noq primAFTERf,        NDef scAFTERf NoDec Nothing),
                             (noq primAFTER_NOWf,    NDef scAFTERf NoDec Nothing),
                             (noq primAWAITf,        NDef scAWAITf NoDec Nothing),
@@ -797,6 +802,18 @@ clRET               = NClass [] (leftpath [cBaseException, cValue]) te Nothing
 
 --  class $R (): pass
 clR                 = NClass [] [] [] Nothing
+
+-- Generic function adapter, eliminated by Transform before code generation.
+scPureToAction      = tSchema (map qbind [a,b,c]) $ tFun0 [fun fxPure] (fun fxAction)
+  where fun fx      = tFun fx (tVar a) (tVar b) (tVar c)
+        a           = TV PRow (name "A")
+        b           = TV KRow (name "B")
+        c           = TV KType (name "C")
+
+-- $COMPLETED : [C] => action(C) -> C
+-- The source result is C; the action calling convention returns Msg[C].
+scCompleted         = tSchema [qbind c] $ tFun fxAction (posRow (tVar c) posNil) kwdNil (tVar c)
+  where c           = TV KType (name "C")
 
 --  $ASYNCf         : [A] => action($Actor, proc()->A) -> A
 scASYNCf            = tSchema [qbind a] tASYNC

@@ -356,7 +356,7 @@ main = do
     describe "Generic effect witnesses" $ do
       let env = TE.initTypeEnv env0
           info = TE.noinfo 0
-          solveIdentity from to = TE.runTypeM $ do
+          solveEffect from to = TE.runTypeM $ do
             w <- TE.newWitness
             (remaining, eqs) <- Solver.solve env (const True) [] [] [TE.Sub info env w from to]
             return (w, remaining, eqs)
@@ -365,7 +365,7 @@ main = do
                       S.kwdRow (S.name "flag") Builtin.tBool S.kwdNil, Builtin.tStr)
                    ]
       it "gives one effect witness a generic function-transforming signature" $ do
-        let (w, remaining, eqs) = solveIdentity S.fxPure S.fxMut
+        let (w, remaining, eqs) = solveEffect S.fxPure S.fxMut
         length remaining `shouldBe` 0
         case eqs of
           [TE.Eqn _ _ sc _] -> do
@@ -397,6 +397,28 @@ main = do
           let use = S.sExpr $ S.eCall (S.eVar w) [S.eVar f]
               reduced = Transform.wtrans Transform.env0 (TE.bindWits eqs ++ [use])
           reduced `shouldBe` [S.sExpr (S.eVar f)]
+      it "types pure-to-action conversion before and after reduction and captures its argument" $ do
+        Acton.Env.castable env S.fxPure S.fxAction `shouldBe` False
+        forM_ shapes $ \(p,k,r) -> do
+          let (w, remaining, eqs) = solveEffect S.fxPure S.fxAction
+              source = S.tFun S.fxPure p k r
+              target = S.tFun S.fxAction p k r
+              factory = S.name "factory"
+              factoryType = S.tFun S.fxProc S.posNil S.kwdNil source
+              expression = S.eCall (S.eVar factory) []
+              witnessEnv = Acton.Env.define ((factory,I.NVar factoryType) :
+                [(n,I.NDef sc S.NoDec Nothing) | TE.Eqn _ n sc _ <- eqs]) env
+              use = S.eCall (S.tApp (S.eVar w) [p,k,r]) [expression]
+              reduced = Transform.wtrans Transform.env0 (TE.bindWits eqs ++ [S.sExpr use])
+          length remaining `shouldBe` 0
+          QuickType.typeOf witnessEnv use `shouldBe` target
+          QuickType.fxOf witnessEnv use `shouldBe` S.fxProc
+          case reduced of
+            [S.Expr _ e@(S.Let _ [S.Assign _ [_] captured] S.Lambda{})] -> do
+              captured `shouldBe` expression
+              QuickType.typeOf witnessEnv e `shouldBe` target
+              QuickType.fxOf witnessEnv e `shouldBe` S.fxProc
+            _ -> expectationFailure "Expected eager capture followed by an action adapter"
       it "does not capture effect variables named A, B, or C" $ do
         forM_ [("A","B"), ("B","C"), ("C","A")] $ \(from,to) -> do
           let fx1 = S.tVar $ S.TV S.KFX (S.name from)
@@ -410,7 +432,7 @@ main = do
                                  S.kwdNil (S.tFun fx2 p k r)
             QuickType.typeOf witnessEnv (S.tApp (S.eVar w) [p,k,r]) `shouldBe` expected
       it "reduces two differently instantiated uses of the same witness to identities" $ do
-        let (w, _, eqs) = solveIdentity S.fxPure S.fxMut
+        let (w, _, eqs) = solveEffect S.fxPure S.fxMut
             args = zip shapes [S.eVar (S.name "first"), S.eVar (S.name "second")]
             uses = [ S.sExpr $ S.eCall (S.tApp (S.eVar w) [p,k,r]) [f]
                    | ((p,k,r),f) <- args ]
