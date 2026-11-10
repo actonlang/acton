@@ -1116,6 +1116,15 @@ sub env info eq w t1 t2                     = do t1' <- usubst t1
 
 sub'                                        :: Env -> ErrInfo -> Equations -> Name -> Type -> Type ->TypeM Equations
 
+sub' env info eq w t1 t2
+  | effectType t1 && effectType t2,
+    t1 /= t2 && (isUnivar t1 || isUnivar t2)
+                                            = do defer [Sub info env w t1 t2]; return eq
+  | effectType t1 && effectType t2          = do cast env info t1 t2
+                                                 let sc = effectWitnessSchema t1 t2
+                                                     source = rtype $ posrow $ sctype sc
+                                                 return (mkPolyEqn env w sc (eLambda [(px0,source)] (eVar px0)) : eq)
+
 sub' env _ eq w t1@TWild{} t2               = return (idwit env w t1 t2 : eq)
 sub' env _ eq w t1 t2@TWild{}               = return (idwit env w t1 t2 : eq)
 
@@ -1173,6 +1182,7 @@ sub' env info eq w t1@(TUni _ tv1) t2@(TUni _ tv2)
 
 sub' env info eq w t1@TUni{} t2@TCon{}      = do defer [Sub info env w t1 t2]; return eq
 sub' env info eq w t1@TCon{} t2@TUni{}      = do defer [Sub info env w t1 t2]; return eq
+
 
 sub' env info eq w t1 t2                    = do cast env info t1 t2
                                                  return (idwit env w t1 t2 : eq)
@@ -1912,7 +1922,7 @@ ctxtRed env multiPBnds                  = (concat eqs, concat unis)
         red (v,wps)                     = imp v [] [] [] wps
         imp v eq uni wps ((w,p,i):wps')
           | (e,p',j):_ <- hits          = --trace ("  *" ++ prstr w ++ " (level " ++ show i ++ ") covered by " ++ prstr e ++ " (level " ++ show j ++ ")") $
-                                          imp v (Eqn (min i j) w (proto2type (tUni v) p) e : eq) ((tcargs p `zip` tcargs p') ++ uni) wps wps'
+                                          imp v (Eqn (min i j) w (monotype $ proto2type (tUni v) p) e : eq) ((tcargs p `zip` tcargs p') ++ uni) wps wps'
           | otherwise                   = --trace ("   (Not covered: " ++ prstr p ++ " in context " ++ prstrs [ w | (w,_,_) <- wps++wps' ] ++ ")") $
                                           imp v eq uni ((w,p,i):wps) wps'
           where hits                    = [ (wf $ eVar w', vsubst s p', j) | (w',p0,j) <- wps++wps', j <= i, Just (wf,p') <- [findAncestor env p0 (tcname p)] ]
@@ -1949,6 +1959,20 @@ app2nd _ tx e es                        = Lambda NoLoc p' k' (Call NoLoc e (PosA
   where TFun _ fx p k _                 = tx                    -- If it already takes a first argument, it must be a function!
         (p',k')                         = (pPar pNames p, kPar attrKW k)
         PosArg pSelf pArgs              = pArg p'
+
+-- An effect witness transforms functions and is generic in both argument
+-- rows and the result. Effects themselves are never passed as runtime values.
+effectType TFX{} = True
+effectType (TVar _ v) = tvkind v == KFX
+effectType (TUni _ v) = uvkind v == KFX
+effectType _ = False
+
+effectWitnessSchema fx1 fx2 = tSchema (map qbind [a,b,c]) $ wFun (fun fx1) (fun fx2)
+  where fun fx = tFun fx (tVar a) (tVar b) (tVar c)
+        a0:b0:c0:_ = tvarSupply \\ vfree [fx1,fx2]
+        a = a0{ tvkind = PRow }
+        b = b0{ tvkind = KRow }
+        c = c0{ tvkind = KType }
 
 idwit env w t1 t2                       = mkEqn env w (wFun t1 t2) (eLambda [(px0,t1)] (eVar px0))
 

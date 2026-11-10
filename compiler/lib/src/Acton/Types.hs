@@ -964,13 +964,14 @@ inlineWitnessExpr eq e                 = case allEqs of
         -- Boxing can then recognize their static implementations and lower
         -- numeric defaults without allocation.
         e'                              = inlineAll e
-        kept                            = [ Eqn level w t (inlineAll rhs)
-                                          | Eqn level w t rhs <- allEqs, not (inlineEq t rhs) ]
+        kept                            = [ Eqn level w sc (inlineAll rhs)
+                                          | Eqn level w sc rhs <- allEqs, not (inlineEq sc rhs) ]
         allEqs                          = witnessEquations (filter isWitness $ free e) []
-        inlineEqs                       = [ q | q@(Eqn _ _ t rhs) <- allEqs, inlineEq t rhs ]
-        inlineEq TFun{} _               = True
-        inlineEq _ rhs                  = wrapperRoot rhs `elem`
+        inlineEqs                       = [ q | q@(Eqn _ _ sc rhs) <- allEqs, inlineEq sc rhs ]
+        inlineEq (TSchema _ [] TFun{}) _ = True
+        inlineEq (TSchema _ [] _) rhs   = wrapperRoot rhs `elem`
                                               [primWrapProc, primWrapAction, primWrapMut, primWrapPure]
+        inlineEq _ _                    = False
         wrapperRoot (Var _ n)           = n
         wrapperRoot (TApp _ f _)        = wrapperRoot f
         wrapperRoot _                   = NoQ nWild

@@ -353,6 +353,69 @@ main = do
         length remaining `shouldBe` 0
         inferred `shouldBe` expected
 
+    describe "Generic effect witnesses" $ do
+      let env = TE.initTypeEnv env0
+          info = TE.noinfo 0
+          solveIdentity from to = TE.runTypeM $ do
+            w <- TE.newWitness
+            (remaining, eqs) <- Solver.solve env (const True) [] [] [TE.Sub info env w from to]
+            return (w, remaining, eqs)
+          shapes = [ (S.posNil, S.kwdNil, Builtin.tInt)
+                   , (S.posRow Builtin.tStr S.posNil,
+                      S.kwdRow (S.name "flag") Builtin.tBool S.kwdNil, Builtin.tStr)
+                   ]
+      it "gives one effect witness a generic function-transforming signature" $ do
+        let (w, remaining, eqs) = solveIdentity S.fxPure S.fxMut
+        length remaining `shouldBe` 0
+        case eqs of
+          [TE.Eqn _ _ sc _] -> do
+            map S.tvkind (S.qbound $ S.scbind sc) `shouldBe` [S.PRow, S.KRow, S.KType]
+            let witnessEnv = Acton.Env.define [(w,I.NDef sc S.NoDec Nothing)] env
+            forM_ shapes $ \(p,k,r) -> do
+              let expected = S.tFun S.fxPure (S.posRow (S.tFun S.fxPure p k r) S.posNil)
+                                   S.kwdNil (S.tFun S.fxMut p k r)
+              QuickType.typeOf witnessEnv (S.tApp (S.eVar w) [p,k,r]) `shouldBe` expected
+          _ -> expectationFailure "Expected a single generic witness equation"
+      it "does not capture effect variables named A, B, or C" $ do
+        forM_ [("A","B"), ("B","C"), ("C","A")] $ \(from,to) -> do
+          let fx1 = S.tVar $ S.TV S.KFX (S.name from)
+              fx2 = S.tVar $ S.TV S.KFX (S.name to)
+              sc = Solver.effectWitnessSchema fx1 fx2
+              w = S.Internal S.Witness "fresh" 0
+              witnessEnv = Acton.Env.define [(w,I.NDef sc S.NoDec Nothing)] env
+          map S.tvkind (S.qbound $ S.scbind sc) `shouldBe` [S.PRow, S.KRow, S.KType]
+          forM_ shapes $ \(p,k,r) -> do
+            let expected = S.tFun S.fxPure (S.posRow (S.tFun fx1 p k r) S.posNil)
+                                 S.kwdNil (S.tFun fx2 p k r)
+            QuickType.typeOf witnessEnv (S.tApp (S.eVar w) [p,k,r]) `shouldBe` expected
+      it "reduces two differently instantiated uses of the same witness to identities" $ do
+        let (w, _, eqs) = solveIdentity S.fxPure S.fxMut
+            args = zip shapes [S.eVar (S.name "first"), S.eVar (S.name "second")]
+            uses = [ S.sExpr $ S.eCall (S.tApp (S.eVar w) [p,k,r]) [f]
+                   | ((p,k,r),f) <- args ]
+        Transform.wtrans Transform.env0 (TE.bindWits eqs ++ uses)
+          `shouldBe` map (S.sExpr . snd) args
+      it "keeps unresolved effect subtyping until a typed witness can be selected" $ do
+        let (remaining, eqs, inferred) = TE.runTypeM $ do
+              fx <- TE.newUnivarOfKind S.KFX env
+              w <- TE.newWitness
+              (remaining, eqs) <- Solver.solve env (const True) [(S.name "effect", I.NVar fx)] []
+                [TE.Sub info env w S.fxMut fx]
+              inferred <- TE.usubst fx
+              return (remaining, eqs, inferred)
+        length remaining `shouldBe` 0
+        inferred `shouldBe` S.fxMut
+        case eqs of
+          [TE.Eqn _ _ sc _] -> length (S.scbind sc) `shouldBe` 3
+          _ -> expectationFailure "Expected a generic effect witness after inference"
+      it "retains monomorphic bindings for ordinary value witnesses" $ do
+        let eqs = TE.runTypeM $ do
+              w <- TE.newWitness
+              snd <$> Solver.solve env (const True) [] [] [TE.Sub info env w Builtin.tInt Builtin.tValue]
+        case TE.bindWits eqs of
+          [S.Assign{}] -> return ()
+          _ -> expectationFailure "Expected an ordinary witness assignment"
+
     describe "Raw operator result types" $ do
       let raw t n = S.UnBox t (S.eInt n)
           shifted t op = S.BinOp NoLoc (raw t 16) op (raw Builtin.tInt 1)

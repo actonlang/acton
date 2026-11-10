@@ -17,7 +17,7 @@ module Acton.Transform where
 import qualified Data.HashMap.Strict as M
 import qualified Data.IntMap.Strict as IM
 import qualified Data.HashSet as HS
-import Acton.Subst (vfree)
+import Acton.Subst (vfree, vsubst)
 import Acton.WitnessSharing (witnessHash)
 
 import Utils
@@ -45,19 +45,22 @@ type TSubst                             = M.HashMap Name (Maybe Expr)
 
 data TransEnv                           = TransEnv {
                                             eqns     :: Equations,                  -- Top-level constraint solutions
+                                            trpoly   :: M.HashMap Name (QBinds, Expr), -- Generic witness definitions
                                             trsubst  :: TSubst,                     -- Inlineable assignments and scope blockers
                                             witscope :: IM.IntMap [(Name,Type,Expr)], -- Preserved witness bindings in scope, for the purpose of duplicate removals
                                             witnames :: HS.HashSet Name,            -- Names whose shadowing invalidates the witness index
                                             final    :: Bool
                                           }
 
-env0                                    = TransEnv{ eqns = [], trsubst = M.empty, witscope = IM.empty, witnames = HS.empty, final = False }
+env0                                    = TransEnv{ eqns = [], trsubst = M.empty, trpoly = M.empty, witscope = IM.empty, witnames = HS.empty, final = False }
 
-blockscope ns env                       = env{ trsubst = foldr (`M.insert` Nothing) (trsubst env) ns }
+blockscope ns env                       = env{ trsubst = foldr (`M.insert` Nothing) (trsubst env) ns,
+                                              trpoly = foldr M.delete (trpoly env) ns }
 
 extsubst ns env                         = env{ trsubst = foldr (\(n,e) -> M.insert n (Just e)) (trsubst env) ns }
 
-limsubst ns env                         = env{ trsubst = foldr M.delete (trsubst env) ns }
+limsubst ns env                         = env{ trsubst = foldr M.delete (trsubst env) ns,
+                                              trpoly = foldr M.delete (trpoly env) ns }
 
 trfind n env                            = case M.lookup n (trsubst env) of
                                             Just (Just e) -> Just e
@@ -95,6 +98,8 @@ wtrans env ss
 wtrans env (Signature _ ws (TSchema _ [] (TWild _)) NoDec : ss)
                                         = wtrans env (bindWits eq ++ ss)
   where eq                              = findeqns ws (eqns env)
+wtrans env (Decl _ [Def _ w q p k _ [Return _ (Just e)] _ fx _] : ss)
+  | isWitness w, not (null q)          = wtrans env{ trpoly = M.insert w (q, Lambda NoLoc p k e fx) (trpoly env) } ss
 wtrans env (s@(Assign l p@[PVar _ w (Just t)] e) : ss)
   | not (isWitness w)                   = trans env s : wtrans env ss
   | Lambda{} <- e1                      = wtrans (extsubst [(w,e1)] env) ss
@@ -175,6 +180,9 @@ instance Transform Expr where
             p'                          = trans env p
             k'                          = trans env k
             es                          = posargs p'
+    trans env (TApp _ (Var _ (NoQ w)) ts)
+      | Just (q,e) <- M.lookup w (trpoly env), length q == length ts
+                                        = trans (blockscope [w] env) (vsubst (qbound q `zip` ts) e)
     trans env (TApp l e ts)             = TApp l (trans env e) ts
     trans env (Async l e)               = Async l (trans env e)
     trans env (Await l e)               = Await l (trans env e)
