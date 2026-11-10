@@ -224,10 +224,10 @@ static stdQ_reQ_Match stdQ_reQ_match_code(pcre2_code *re, B_str arg_pattern, B_s
                     PCRE2_SIZE ss_start = ovector[2*n];
                     PCRE2_SIZE ss_end = ovector[2*n+1];
                     if (ss_start == PCRE2_UNSET || ss_end == PCRE2_UNSET) {
-                        B_dictD_setitem(named_groups, hwit, group_name, B_None);
+                        B_dictD_setitem(named_groups, group_name, B_None);
                     } else {
                         B_str substring = actStrFromCStringLengthCopy((const char *)text + ss_start, ss_end - ss_start);
-                        B_dictD_setitem(named_groups, hwit, group_name, substring);
+                        B_dictD_setitem(named_groups, group_name, substring);
                     }
 
                     tabptr += name_entry_size;

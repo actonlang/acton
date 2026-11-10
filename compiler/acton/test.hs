@@ -218,13 +218,13 @@ compilerTests =
           assertEqual ("C generation should succeed:\n" ++ generated ++ err) ExitSuccess code
           let body name = unlines $ takeWhile (/= "}") $ dropWhile
                 (not . isInfixOf ("builtin_len_appendQ_" ++ name ++ " (")) (lines generated)
-              workers = [ ("list_length", "$listD_U__len"), ("ilist_length", "$ilistD_U__len")
+              workers = [ ("list_length", "B_list_base_len"), ("ilist_length", "B_list_base_len")
                         , ("dict_length", "$dictD_U__len"), ("idict_length", "$idictD_U__len")
                         , ("set_length", "$setD_U__len"), ("iset_length", "$isetD_U__len")
-                        , ("str_length", "$strD_U__len"), ("bytes_length", "$bytesD_U__len")
-                        , ("bytearray_length", "$bytearrayD_U__len"), ("bitset_length", "$bitsetD_U__len")
+                        , ("str_length", "B_str_len"), ("bytes_length", "B_bytes_len")
+                        , ("bytearray_length", "B_bytearray_len"), ("bitset_length", "$bitsetD_U__len")
                         , ("array_length", "$arrayD_U__len"), ("bitarray_length", "$bitarrayD_U__len")
-                        , ("append_value", "$listD_U_append") ]
+                        , ("append_value", "B_list_base_append") ]
           forM_ workers $ \(name, worker) -> do
             let c = body name
             assertBool (name ++ " should call its witness-free worker") (worker `isInfixOf` c)
@@ -240,8 +240,8 @@ compilerTests =
           assertEqual ("C generation should succeed:\n" ++ generated ++ err) ExitSuccess code
           let body name = unlines $ takeWhile (/= "}") $ dropWhile
                 (not . isInfixOf ("builtin_str_opsQ_" ++ name ++ " (")) (lines generated)
-              workers = [ ("string_equal", "$strD_U__eq__"), ("string_not_equal", "$strD_U__ne__")
-                        , ("string_concat", "$strD_U__add__"), ("string_iadd", "$strD_U__add__") ]
+              workers = [ ("string_equal", "B_str_eq"), ("string_not_equal", "B_str_eq")
+                        , ("string_concat", "B_str_add"), ("string_iadd", "B_str_add") ]
           forM_ workers $ \(name, worker) -> do
             let c = body name
             assertBool (name ++ " should call its witness-free worker") (worker `isInfixOf` c)
@@ -250,7 +250,7 @@ compilerTests =
           forM_ [("generic_equal", "__eq__"), ("generic_not_equal", "__ne__"),
                  ("generic_concat", "__add__"), ("generic_iadd", "__iadd__")] $ \(name, method) ->
             assertBool (name ++ " should retain protocol dispatch") (("$class->" ++ method) `isInfixOf` body name)
-  , testCase "builtin Sequence workers remove only dead receiver witnesses" $ do
+  , testCase "builtin Sequence calls use shared native implementations" $ do
         withSystemTempDirectory "acton-builtin-sequence-ops" $ \tmp -> do
           let src = tmp </> "builtin_sequence_ops.act"
           copyFile "../../test/regression_auto/builtin_sequence_ops.act" src
@@ -258,22 +258,32 @@ compilerTests =
           assertEqual ("C generation should succeed:\n" ++ generated ++ err) ExitSuccess code
           let body name = unlines $ takeWhile (/= "}") $ dropWhile
                 (not . isInfixOf ("builtin_sequence_opsQ_" ++ name ++ " (")) (lines generated)
-              workers = [ ("list_insert", "$listD_U_insert"), ("list_reverse", "$listD_U_reverse")
-                        , ("list_slice", "$listD_U__getslice__"), ("list_del_slice", "$listD_U__delslice__")
-                        , ("list_iterator", "$listD_U__iter__"), ("list_reversed", "$listD_U__reversed__")
-                        , ("list_add", "$listD_U__add__"), ("list_repeat", "$listD_U__mul__")
-                        , ("list_iadd", "$listD_U__iadd__"), ("list_irepeat", "$listD_U__imul__")
-                        , ("list_zero", "$listD_U__zero__")
-                        , ("ilist_slice", "$ilistD_U__getslice__"), ("ilist_iterator", "$ilistD_U__iter__")
-                        , ("ilist_reversed", "$ilistD_U__reversed__"), ("ilist_add", "$ilistD_U__add__")
-                        , ("ilist_repeat", "$ilistD_U__mul__"), ("ilist_zero", "$ilistD_U__zero__") ]
+              workers = [ ("list_read", "B_list_base_getitem"), ("ilist_read", "B_list_base_getitem")
+                        , ("list_write", "B_list_base_setitem"), ("list_delete", "B_list_base_delitem")
+                        , ("list_insert", "B_list_base_insert"), ("list_reverse", "B_list_base_reverse")
+                        , ("list_slice", "B_list_base_getslice"), ("list_del_slice", "B_list_base_delslice")
+                        , ("list_iterator", "B_list_base_iter"), ("list_reversed", "B_list_base_reversed")
+                        , ("list_add", "B_list_base_add"), ("list_repeat", "B_list_base_mul")
+                        , ("list_iadd", "B_list_base_iadd"), ("list_irepeat", "B_list_base_irepeat")
+                        , ("list_zero", "B_list_base_new")
+                        , ("ilist_slice", "B_list_base_getslice"), ("ilist_iterator", "B_list_base_iter")
+                        , ("ilist_reversed", "B_list_base_reversed"), ("ilist_add", "B_list_base_add")
+                        , ("ilist_repeat", "B_list_base_mul"), ("ilist_zero", "B_list_base_new") ]
           forM_ workers $ \(name, worker) -> do
             let c = body name
             assertBool (name ++ " should call its witness-free worker") (worker `isInfixOf` c)
             assertBool (name ++ " should have no dead receiver witness binding")
               (not (" W_" `isInfixOf` c || "G_witness" `isInfixOf` c || "$class->" `isInfixOf` c || "B_Sequence" `isInfixOf` c || "B_ISequence" `isInfixOf` c))
-          forM_ [("list_set_slice", "$listD_U__setslice__"),
-                 ("list_from_iter", "$listD_U__fromiter__"), ("ilist_from_iter", "$ilistD_U__fromiter__")] $ \(name, worker) -> do
+          assertBool "list workers should not emit the old forwarding symbols"
+            (not ("$listD_U" `isInfixOf` generated || "$ilistD_U" `isInfixOf` generated))
+          forM_ [("list_slice", "B_list"), ("list_add", "B_list"),
+                 ("list_repeat", "B_list"), ("list_zero", "B_list"), ("list_reversed", "B_list"),
+                 ("ilist_slice", "B_ilist"), ("ilist_add", "B_ilist"),
+                 ("ilist_repeat", "B_ilist"), ("ilist_zero", "B_ilist"), ("ilist_reversed", "B_ilist")] $ \(name,cls) ->
+            assertBool (name ++ " should select its concrete result class")
+              (("&" ++ cls ++ "G_methods") `isInfixOf` body name)
+          forM_ [("list_set_slice", "B_list_base_setslice"),
+                 ("list_from_iter", "B_listG_new"), ("ilist_from_iter", "B_ilistG_new")] $ \(name, worker) -> do
             let c = body name
             assertBool (name ++ " should call its worker with the input witness")
               (worker `isInfixOf` c && "B_Iterable" `isInfixOf` c)
@@ -282,11 +292,70 @@ compilerTests =
           forM_ ["list_total", "ilist_total"] $ \name -> do
             let c = body name
             assertBool (name ++ " should retain stack iterator storage")
-              ("struct B_IteratorD_list" `isInfixOf` c && "$listD_U_iter_init" `isInfixOf` c)
+              ("struct B_IteratorD_list" `isInfixOf` c && "B_list_base_iter_init" `isInfixOf` c)
             assertBool (name ++ " should not allocate its loop iterator")
-              (not ("$listD_U__iter__" `isInfixOf` c || "$ilistD_U__iter__" `isInfixOf` c))
+              (not ("B_list_base_iter(" `isInfixOf` c))
           assertBool "generic reverse should retain dispatch" ("$class->reverse" `isInfixOf` body "generic_reverse")
           assertBool "generic slicing should retain dispatch" ("$class->__getslice__" `isInfixOf` body "generic_slice")
+  , testCase "builtin dict and set operations call shared native implementations" $ do
+        withSystemTempDirectory "acton-builtin-hash-containers" $ \tmp -> do
+          let src = tmp </> "builtin_hash_container_ops.act"
+          copyFile "../../test/regression_auto/builtin_hash_container_ops.act" src
+          (code, generated, err) <- buildThing "--quiet --dbg-no-lines --cgen" src
+          assertEqual ("C generation should succeed:\n" ++ generated ++ err) ExitSuccess code
+          let body name = unlines $ takeWhile (/= "}") $ dropWhile
+                (not . isInfixOf ("builtin_hash_container_opsQ_" ++ name ++ " (")) (lines generated)
+              direct = [("dict_lookup", "B_dict_base_getitem"), ("idict_lookup", "B_dict_base_getitem"),
+                        ("dict_contains", "B_dict_base_contains"), ("idict_missing", "B_dict_base_contains"),
+                        ("dict_get", "B_dict_base_get"), ("idict_get_default", "B_dict_base_get"),
+                        ("dict_store", "B_dict_base_setitem"), ("dict_delete", "B_dict_base_delitem"),
+                        ("dict_pop", "B_dict_base_pop"), ("dict_pop_default", "B_dict_base_pop"),
+                        ("dict_default", "B_dict_base_setdefault"), ("dict_popitem", "B_dict_base_popitem"),
+                        ("dict_keys", "B_dict_base_key_iterator"), ("dict_values", "B_dict_base_values_iterator"),
+                        ("dict_items", "B_dict_base_items_iterator"), ("idict_items", "B_dict_base_items_iterator"),
+                        ("set_contains", "B_set_table_contains"), ("set_missing", "B_set_table_contains"),
+                        ("iset_contains", "B_set_table_contains"), ("set_add", "B_set_table_add"),
+                        ("set_discard", "B_set_table_discard"), ("set_pop", "B_set_table_pop"),
+                        ("set_iterator", "B_set_base_iter"), ("iset_iterator", "B_set_base_iter"),
+                        ("set_equal", "B_set_table_eq"), ("set_not_equal", "B_set_table_eq"),
+                        ("set_lt", "B_set_table_gt"), ("set_le", "B_set_table_ge"),
+                        ("set_gt", "B_set_table_gt"), ("set_ge", "B_set_table_ge"),
+                        ("set_disjoint", "B_set_table_isdisjoint"), ("set_union", "B_set_base_union"),
+                        ("set_intersection", "B_set_base_intersection"), ("set_difference", "B_set_base_difference"),
+                        ("set_xor", "B_set_base_symmetric_difference"), ("iset_union", "B_set_base_union"),
+                        ("named_union", "B_set_base_union"), ("set_ior", "B_set_base_ior"),
+                        ("set_iand", "B_set_base_iand"), ("set_isub", "B_set_base_isub"),
+                        ("set_ixor", "B_set_base_ixor"), ("iset_hash", "B_set_hash_table")]
+          forM_ direct $ \(name, native) -> do
+            let c = body name
+            assertBool (name ++ " should call the shared native implementation") (native `isInfixOf` c)
+            assertBool (name ++ " should discard its receiver witness")
+              (not (any (`isInfixOf` c) ["G_new", "G_witness", "$class->", "B_Mapping", "B_IMapping", "B_SetD", "B_ISetD"]))
+          forM_ [("dict_update", "B_dict_base_update"), ("set_update", "B_set_base_update")] $ \(name,native) -> do
+            let c = body name
+            assertBool (name ++ " keeps its source Iterable witness")
+              (native `isInfixOf` c && "B_Iterable" `isInfixOf` c)
+            assertBool (name ++ " discards its destination witness")
+              (not (any (`isInfixOf` c) ["B_Mapping", "B_SetD", "G_new", "$class->"]))
+          forM_ [("dict_total", "B_IteratorD_dict_items", "$dictD_U_items_init"),
+                 ("idict_total", "B_IteratorD_dict", "$dictD_U_keys_init"),
+                 ("set_total", "B_IteratorD_set", "$setD_U_iter_init"),
+                 ("iset_total", "B_IteratorD_set", "$isetD_U_iter_init")] $ \(name,storage,init) -> do
+            let c = body name
+            assertBool (name ++ " keeps its stack iterator")
+              (("struct " ++ storage) `isInfixOf` c && init `isInfixOf` c)
+          assertBool "generic membership retains dispatch" ("$class->__contains__" `isInfixOf` body "generic_contains")
+          assertBool "generic mutation retains dispatch" ("$class->add" `isInfixOf` body "generic_add")
+          assertBool "factory retains the witness supplying Hashable" ("$class->__fromiter__" `isInfixOf` body "factory")
+          assertBool "dict comparison retains value Eq" ("W_EqD_B" `isInfixOf` body "dict_compare" && "$class->__eq__" `isInfixOf` body "dict_compare")
+          let customSrc = tmp </> "builtin_hash_container_override.act"
+          copyFile "../../test/regression_auto/builtin_hash_container_override.act" customSrc
+          (customCode, customC, customErr) <- buildThing "--quiet --dbg-no-lines --cgen" customSrc
+          assertEqual ("custom protocol should compile:\n" ++ customC ++ customErr) ExitSuccess customCode
+          let customBody = unlines $ takeWhile (/= "}") $ dropWhile
+                (not . isInfixOf "builtin_hash_container_overrideQ_custom_get (") (lines customC)
+          assertBool "an unrelated user protocol keeps its implementation"
+            ("$class->get" `isInfixOf` customBody && not ("B_dict_base_get" `isInfixOf` customBody))
   , testCase "builtin text protocol workers discard dead receiver witnesses" $ do
         withSystemTempDirectory "acton-builtin-text-ops" $ \tmp -> do
           let src = tmp </> "builtin_text_ops.act"
@@ -295,55 +364,55 @@ compilerTests =
           assertEqual ("C generation should succeed:\n" ++ generated ++ err) ExitSuccess code
           let body name = unlines $ takeWhile (/= "}") $ dropWhile
                 (not . isInfixOf ("builtin_text_opsQ_" ++ name ++ " (")) (lines generated)
-              workers = [ ("str_lt", "$strD_U__lt__", False)
-                        , ("str_le", "$strD_U__le__", False)
-                        , ("str_gt", "$strD_U__gt__", False)
-                        , ("str_ge", "$strD_U__ge__", False)
-                        , ("str_hash", "$strD_U_hash", False)
-                        , ("str_zero", "$strD_U__zero__", False)
-                        , ("str_mul", "$strD_U__mul__", False)
-                        , ("str_fromiter", "$strD_U__fromiter__", True)
-                        , ("str_contains", "$strD_U__contains__", False)
-                        , ("str_containsnot", "$strD_U__containsnot__", False)
-                        , ("str_iter", "$strD_U__iter__", False)
-                        , ("str_getslice", "$strD_U__getslice__", False)
-                        , ("bytes_eq", "$bytesD_U__eq__", False)
-                        , ("bytes_ne", "$bytesD_U__ne__", False)
-                        , ("bytes_lt", "$bytesD_U__lt__", False)
-                        , ("bytes_le", "$bytesD_U__le__", False)
-                        , ("bytes_gt", "$bytesD_U__gt__", False)
-                        , ("bytes_ge", "$bytesD_U__ge__", False)
-                        , ("bytes_contains", "$bytesD_U__contains__", False)
-                        , ("bytes_containsnot", "$bytesD_U__containsnot__", False)
-                        , ("bytearray_eq", "$bytearrayD_U__eq__", False)
-                        , ("bytearray_ne", "$bytearrayD_U__ne__", False)
-                        , ("bytearray_lt", "$bytearrayD_U__lt__", False)
-                        , ("bytearray_le", "$bytearrayD_U__le__", False)
-                        , ("bytearray_gt", "$bytearrayD_U__gt__", False)
-                        , ("bytearray_ge", "$bytearrayD_U__ge__", False)
-                        , ("bytearray_contains", "$bytearrayD_U__contains__", False)
-                        , ("bytearray_containsnot", "$bytearrayD_U__containsnot__", False)
-                        , ("bytes_hash", "$bytesD_U_hash", False)
-                        , ("bytes_fromiter", "$bytesD_U__fromiter__", True)
-                        , ("bytes_iter", "$bytesD_U__iter__", False)
-                        , ("bytes_getslice", "$bytesD_U__getslice__", False)
-                        , ("bytes_add", "$bytesD_U__add__", False)
-                        , ("bytes_zero", "$bytesD_U__zero__", False)
-                        , ("bytes_mul", "$bytesD_U__mul__", False)
-                        , ("bytearray_insert", "$bytearrayD_U_insert", False)
-                        , ("bytearray_append", "$bytearrayD_U_append", False)
-                        , ("bytearray_reverse", "$bytearrayD_U_reverse", False)
-                        , ("bytearray_reversed", "$bytearrayD_U__reversed__", False)
-                        , ("bytearray_getslice", "$bytearrayD_U__getslice__", False)
-                        , ("bytearray_setslice", "$bytearrayD_U__setslice__", True)
-                        , ("bytearray_delslice", "$bytearrayD_U__delslice__", False)
-                        , ("bytearray_fromiter", "$bytearrayD_U__fromiter__", True)
-                        , ("bytearray_iter", "$bytearrayD_U__iter__", False)
-                        , ("bytearray_add", "$bytearrayD_U__add__", False)
-                        , ("bytearray_zero", "$bytearrayD_U__zero__", False)
-                        , ("bytearray_mul", "$bytearrayD_U__mul__", False)
-                        , ("bytearray_iadd", "$bytearrayD_U__iadd__", False)
-                        , ("bytearray_imul", "$bytearrayD_U__imul__", False) ]
+              workers = [ ("str_lt", "B_str_compare", False)
+                        , ("str_le", "B_str_compare", False)
+                        , ("str_gt", "B_str_compare", False)
+                        , ("str_ge", "B_str_compare", False)
+                        , ("str_hash", "B_str_hash", False)
+                        , ("str_zero", "B_str_zero", False)
+                        , ("str_mul", "B_str_mul", False)
+                        , ("str_fromiter", "B_str_fromiter", True)
+                        , ("str_contains", "B_str_contains", False)
+                        , ("str_containsnot", "B_str_contains", False)
+                        , ("str_iter", "B_str_iter", False)
+                        , ("str_getslice", "B_str_getslice", False)
+                        , ("bytes_eq", "B_bytes_eq", False)
+                        , ("bytes_ne", "B_bytes_eq", False)
+                        , ("bytes_lt", "B_bytes_lt", False)
+                        , ("bytes_le", "B_bytes_lt", False)
+                        , ("bytes_gt", "B_bytes_lt", False)
+                        , ("bytes_ge", "B_bytes_lt", False)
+                        , ("bytes_contains", "B_bytes_contains", False)
+                        , ("bytes_containsnot", "B_bytes_contains", False)
+                        , ("bytearray_eq", "B_bytearray_eq", False)
+                        , ("bytearray_ne", "B_bytearray_eq", False)
+                        , ("bytearray_lt", "B_bytearray_lt", False)
+                        , ("bytearray_le", "B_bytearray_lt", False)
+                        , ("bytearray_gt", "B_bytearray_lt", False)
+                        , ("bytearray_ge", "B_bytearray_lt", False)
+                        , ("bytearray_contains", "B_bytearray_contains", False)
+                        , ("bytearray_containsnot", "B_bytearray_contains", False)
+                        , ("bytes_hash", "B_bytes_hash", False)
+                        , ("bytes_fromiter", "B_bytesG_new", True)
+                        , ("bytes_iter", "B_bytes_iter", False)
+                        , ("bytes_getslice", "B_bytes_getslice", False)
+                        , ("bytes_add", "B_bytes_add", False)
+                        , ("bytes_zero", "B_bytes_zero", False)
+                        , ("bytes_mul", "B_bytes_mul", False)
+                        , ("bytearray_insert", "B_bytearray_insert", False)
+                        , ("bytearray_append", "B_bytearray_append", False)
+                        , ("bytearray_reverse", "B_bytearray_reverse", False)
+                        , ("bytearray_reversed", "B_bytearray_reversed", False)
+                        , ("bytearray_getslice", "B_bytearray_getslice", False)
+                        , ("bytearray_setslice", "B_bytearray_setslice", True)
+                        , ("bytearray_delslice", "B_bytearray_delslice", False)
+                        , ("bytearray_fromiter", "B_bytearray_fromiter", True)
+                        , ("bytearray_iter", "B_bytearray_iter", False)
+                        , ("bytearray_add", "B_bytearray_add", False)
+                        , ("bytearray_zero", "B_bytearray_zero", False)
+                        , ("bytearray_mul", "B_bytearray_mul", False)
+                        , ("bytearray_iadd", "B_bytearray_iadd", False)
+                        , ("bytearray_imul", "B_bytearray_imul", False) ]
           forM_ workers $ \(name, worker, inputWitness) -> do
             let c = body name
             assertBool (name ++ " should call its worker") (worker `isInfixOf` c)
@@ -355,7 +424,7 @@ compilerTests =
           forM_ [("str", "str"), ("bytes", "bytes"), ("bytearray", "bytearray")] $ \(name, ctype) -> do
             let c = body (name ++ "_loop")
             assertBool (name ++ " iteration should stay on the stack")
-              (("struct B_IteratorD_" ++ ctype) `isInfixOf` c && ("$" ++ ctype ++ "D_U_iter_init") `isInfixOf` c)
+              (("struct B_IteratorD_" ++ ctype) `isInfixOf` c && ("B_" ++ ctype ++ "_iter_init") `isInfixOf` c)
           assertBool "generic Ord retains dispatch" ("$class->__le__" `isInfixOf` body "generic_le")
           assertBool "generic Container retains dispatch" ("$class->__contains__" `isInfixOf` body "generic_contains")
   , testCase "builtin numeric workers retain result conversion witnesses" $ do
@@ -366,62 +435,62 @@ compilerTests =
           assertEqual ("C generation should succeed:\n" ++ generated ++ err) ExitSuccess code
           let body name = unlines $ takeWhile (/= "}") $ dropWhile
                 (not . isInfixOf ("builtin_number_opsQ_" ++ name ++ " (")) (lines generated)
-              workers = [ ("bigint_add", "$bigintD_U__add__", False)
-                        , ("bigint_zero", "$bigintD_U__zero__", False)
-                        , ("bigint_complex", "$bigintD_U__complex__", False)
-                        , ("bigint_fromatom", "$bigintD_U__fromatom__", False)
-                        , ("bigint_mul", "$bigintD_U__mul__", False)
-                        , ("bigint_pow", "$bigintD_U__pow__", False)
-                        , ("bigint_neg", "$bigintD_U__neg__", False)
-                        , ("bigint_pos", "$bigintD_U__pos__", False)
-                        , ("bigint_real", "$bigintD_U_real", True)
-                        , ("bigint_imag", "$bigintD_U_imag", True)
-                        , ("bigint_abs", "$bigintD_U__abs__", True)
-                        , ("bigint_conjugate", "$bigintD_U_conjugate", False)
-                        , ("bigint_float", "$bigintD_U__float__", False)
-                        , ("bigint_trunc", "$bigintD_U__trunc__", True)
-                        , ("bigint_floor", "$bigintD_U__floor__", True)
-                        , ("bigint_ceil", "$bigintD_U__ceil__", True)
-                        , ("bigint_round", "$bigintD_U__round__", False)
-                        , ("bigint_numerator", "$bigintD_U_numerator", True)
-                        , ("bigint_denominator", "$bigintD_U_denominator", True)
-                        , ("bigint_int", "$bigintD_U__int__", False)
-                        , ("bigint_index", "$bigintD_U__index__", False)
-                        , ("bigint_divmod", "$bigintD_U__divmod__", False)
-                        , ("bigint_floordiv", "$bigintD_U__floordiv__", False)
-                        , ("bigint_mod", "$bigintD_U__mod__", False)
-                        , ("bigint_lshift", "$bigintD_U__lshift__", False)
-                        , ("bigint_rshift", "$bigintD_U__rshift__", False)
-                        , ("bigint_invert", "$bigintD_U__invert__", False)
-                        , ("bigint_and", "$bigintD_U__and__", False)
-                        , ("bigint_or", "$bigintD_U__or__", False)
-                        , ("bigint_xor", "$bigintD_U__xor__", False)
-                        , ("bigint_sub", "$bigintD_U__sub__", False)
-                        , ("bigint_truediv", "$bigintD_U__truediv__", False)
-                        , ("bigint_eq", "$bigintD_U__eq__", False)
-                        , ("bigint_ne", "$bigintD_U__ne__", False)
-                        , ("bigint_lt", "$bigintD_U__lt__", False)
-                        , ("bigint_le", "$bigintD_U__le__", False)
-                        , ("bigint_gt", "$bigintD_U__gt__", False)
-                        , ("bigint_ge", "$bigintD_U__ge__", False)
-                        , ("bigint_hash", "$bigintD_U_hash", False)
-                        , ("complex_add", "$complexD_U__add__", False)
-                        , ("complex_zero", "$complexD_U__zero__", False)
-                        , ("complex_complex", "$complexD_U__complex__", False)
-                        , ("complex_mul", "$complexD_U__mul__", False)
-                        , ("complex_fromatom", "$complexD_U__fromatom__", False)
-                        , ("complex_pow", "$complexD_U__pow__", False)
-                        , ("complex_neg", "$complexD_U__neg__", False)
-                        , ("complex_pos", "$complexD_U__pos__", False)
-                        , ("complex_real", "$complexD_U_real", True)
-                        , ("complex_imag", "$complexD_U_imag", True)
-                        , ("complex_abs", "$complexD_U__abs__", True)
-                        , ("complex_conjugate", "$complexD_U_conjugate", False)
-                        , ("complex_truediv", "$complexD_U__truediv__", False)
-                        , ("complex_sub", "$complexD_U__sub__", False)
-                        , ("complex_eq", "$complexD_U__eq__", False)
-                        , ("complex_ne", "$complexD_U__ne__", False)
-                        , ("complex_hash", "$complexD_U_hash", False) ]
+              workers = [ ("bigint_add", "B_bigint_add", False)
+                        , ("bigint_zero", "B_bigint_zero", False)
+                        , ("bigint_complex", "B_bigint_complex", False)
+                        , ("bigint_fromatom", "B_bigint_fromatom", False)
+                        , ("bigint_mul", "B_bigint_mul", False)
+                        , ("bigint_pow", "B_bigint_pow", False)
+                        , ("bigint_neg", "B_bigint_neg", False)
+                        , ("bigint_pos", "B_bigint_pos", False)
+                        , ("bigint_real", "B_bigint_real", True)
+                        , ("bigint_imag", "B_bigint_imag", True)
+                        , ("bigint_abs", "B_bigint_abs", True)
+                        , ("bigint_conjugate", "B_bigint_conjugate", False)
+                        , ("bigint_float", "B_bigint_float", False)
+                        , ("bigint_trunc", "B_bigint_trunc", True)
+                        , ("bigint_floor", "B_bigint_floor", True)
+                        , ("bigint_ceil", "B_bigint_ceil", True)
+                        , ("bigint_round", "B_bigint_round", False)
+                        , ("bigint_numerator", "B_bigint_numerator", True)
+                        , ("bigint_denominator", "B_bigint_denominator", True)
+                        , ("bigint_int", "B_bigint_int", False)
+                        , ("bigint_index", "B_bigint_index", False)
+                        , ("bigint_divmod", "B_bigint_divmod", False)
+                        , ("bigint_floordiv", "B_bigint_floordiv", False)
+                        , ("bigint_mod", "B_bigint_mod", False)
+                        , ("bigint_lshift", "B_bigint_lshift", False)
+                        , ("bigint_rshift", "B_bigint_rshift", False)
+                        , ("bigint_invert", "B_bigint_invert", False)
+                        , ("bigint_and", "B_bigint_and", False)
+                        , ("bigint_or", "B_bigint_or", False)
+                        , ("bigint_xor", "B_bigint_xor", False)
+                        , ("bigint_sub", "B_bigint_sub", False)
+                        , ("bigint_truediv", "B_bigint_truediv", False)
+                        , ("bigint_eq", "B_bigint_eq", False)
+                        , ("bigint_ne", "B_bigint_ne", False)
+                        , ("bigint_lt", "B_bigint_lt", False)
+                        , ("bigint_le", "B_bigint_le", False)
+                        , ("bigint_gt", "B_bigint_gt", False)
+                        , ("bigint_ge", "B_bigint_ge", False)
+                        , ("bigint_hash", "B_bigint_hash", False)
+                        , ("complex_add", "B_complex_add", False)
+                        , ("complex_zero", "B_complex_zero", False)
+                        , ("complex_complex", "B_complex_complex", False)
+                        , ("complex_mul", "B_complex_mul", False)
+                        , ("complex_fromatom", "B_complex_fromatom", False)
+                        , ("complex_pow", "B_complex_pow", False)
+                        , ("complex_neg", "B_complex_neg", False)
+                        , ("complex_pos", "B_complex_pos", False)
+                        , ("complex_real", "B_complex_real", True)
+                        , ("complex_imag", "B_complex_imag", True)
+                        , ("complex_abs", "B_complex_abs", True)
+                        , ("complex_conjugate", "B_complex_conjugate", False)
+                        , ("complex_truediv", "B_complex_truediv", False)
+                        , ("complex_sub", "B_complex_sub", False)
+                        , ("complex_eq", "B_complex_eq", False)
+                        , ("complex_ne", "B_complex_ne", False)
+                        , ("complex_hash", "B_complex_hash", False) ]
           forM_ workers $ \(name, worker, resultWitness) -> do
             let c = body name
             assertBool (name ++ " should call its worker") (worker `isInfixOf` c)
@@ -433,8 +502,8 @@ compilerTests =
                      (not (" W_" `isInfixOf` c || "G_witness" `isInfixOf` c || "$class->" `isInfixOf` c))
           assertBool "generic addition retains dispatch" ("$class->__add__" `isInfixOf` body "generic_add")
           assertBool "generic ordering retains dispatch" ("$class->__le__" `isInfixOf` body "generic_le")
-          assertBool "generic Real result is retained" ("$complexD_U_real" `isInfixOf` body "generic_real" && "B_Real" `isInfixOf` body "generic_real")
-          assertBool "generic Integral result is retained" ("$bigintD_U__trunc__" `isInfixOf` body "generic_trunc" && "B_Integral" `isInfixOf` body "generic_trunc")
+          assertBool "generic Real result is retained" ("B_complex_real" `isInfixOf` body "generic_real" && "B_Real" `isInfixOf` body "generic_real")
+          assertBool "generic Integral result is retained" ("B_bigint_trunc" `isInfixOf` body "generic_trunc" && "B_Integral" `isInfixOf` body "generic_trunc")
   , testCase "release-mode loop-carried local survives setjmp" $ do
         -- A local assigned inside a for-loop and read afterwards must be emitted
         -- as C volatile so it survives the loop's StopIteration setjmp/longjmp.

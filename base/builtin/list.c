@@ -60,7 +60,7 @@ static void B_list_base_shrink(B_list_base lst) {
     }
 }
 
-static B_list_base B_list_base_new(int capacity, $SuperG_class cls) {
+B_list_base B_list_base_new(int capacity, $SuperG_class cls) {
     if (capacity < 0) {
         fprintf(stderr, "Internal error list_new: negative capacity");
         exit(-1);
@@ -77,7 +77,7 @@ static B_list_base B_list_base_new(int capacity, $SuperG_class cls) {
     return lst;
 }
 
-static B_NoneType B_list_base_append(B_list_base lst, $WORD elem) {
+B_NoneType B_list_base_append(B_list_base lst, $WORD elem) {
     B_list_base_expand(lst, 1);
     $WORD *data = lst->data;
     ACTON_STORE_ELEM(data, lst->length, elem);
@@ -118,13 +118,13 @@ static B_str B_list_base_str(B_list_base self) {
 }
 
 static void B_list_base_serialize(B_list_base self, int class_id, $Serial$state state) {
-    B_int prevkey = (B_int)B_dictD_get(state->done, (B_Hashable)B_HashableD_WORDG_witness, self, NULL);
+    B_int prevkey = (B_int)B_dictD_get(state->done, self, NULL);
     if (prevkey) {
         long pk = fromB_int(prevkey);
         $val_serialize(-class_id, &pk, state);
         return;
     }
-    B_dictD_setitem(state->done, (B_Hashable)B_HashableD_WORDG_witness, self, toB_int(state->row_no));
+    B_dictD_setitem(state->done, self, toB_int(state->row_no));
     long len = (long)self->length;
     $val_serialize(class_id, &len, state);
     for (int i = 0; i < self->length; i++)
@@ -136,16 +136,14 @@ static B_list_base B_list_base_deserialize(B_list_base res, $SuperG_class cls, $
     state->row = row->next;
     state->row_no++;
     if (row->class_id < 0)
-        return (B_list_base)B_dictD_get(state->done, (B_Hashable)B_HashableD_intG_witness,
-                                       toB_int((long)row->blob[0]), NULL);
+        return (B_list_base)B_dictD_get(state->done, toB_int((long)row->blob[0]), NULL);
 
     int len = (int)(long)row->blob[0];
     if (!res)
         res = B_list_base_new(len, cls);
     else
         res->$class = cls;
-    B_dictD_setitem(state->done, (B_Hashable)B_HashableD_intG_witness,
-                    toB_int(state->row_no - 1), res);
+    B_dictD_setitem(state->done, toB_int(state->row_no - 1), res);
     res->length = len;
     res->capacity = len;
     // The --db restore fills a list that an earlier pass allocated, and the
@@ -182,7 +180,7 @@ static B_NoneType B_list_base_clear(B_list_base lst) {
     return B_None;
 }
 
-static B_NoneType B_list_base_extend(B_list_base lst, B_list_base other) {
+B_NoneType B_list_base_extend(B_list_base lst, B_list_base other) {
     if (other->length == 0)
         return B_None;
     int otherlen = other->length;
@@ -265,7 +263,7 @@ static bool B_list_base_lt(B_list_base a, B_list_base b, B_Ord ordwit) {
     return ordwit->$class->__lt__(ordwit, a->data[i], b->data[i]);
 }
 
-static B_list_base B_list_base_add(B_list_base lst, B_list_base other, $SuperG_class cls) {
+B_list_base B_list_base_add(B_list_base lst, B_list_base other, $SuperG_class cls) {
     int reslen = lst->length + other->length;
     B_list_base res = B_list_base_new(reslen, cls);
     // The new array is reached through res
@@ -278,7 +276,7 @@ static B_list_base B_list_base_add(B_list_base lst, B_list_base other, $SuperG_c
     return res;
 }
 
-static B_list_base B_list_base_mul(B_list_base lst, int64_t count, $SuperG_class cls) {
+B_list_base B_list_base_mul(B_list_base lst, int64_t count, $SuperG_class cls) {
     if (lst->length == 0 || count <= 0)
         return B_list_base_new(0, cls);
     B_list_base res = B_list_base_new(lst->length * count, cls);
@@ -292,7 +290,7 @@ static B_list_base B_list_base_mul(B_list_base lst, int64_t count, $SuperG_class
 
 // Repeat the elements of lst n times in lst, or remove them if n <= 0. Only
 // the added copies are written.
-static void B_list_base_imul(B_list_base lst, int64_t count) {
+void B_list_base_imul(B_list_base lst, int64_t count) {
     int len = lst->length;
     if (count <= 0) {
         B_list_base_clear(lst);
@@ -311,7 +309,7 @@ static void B_list_base_imul(B_list_base lst, int64_t count) {
     lst->length = (int)(len * count);
 }
 
-static $WORD B_list_base_getitem(B_list_base lst, int64_t n) {
+$WORD B_list_base_getitem(B_list_base lst, int64_t n) {
     int len = lst->length;
     int64_t ix0 = n < 0 ? len + n : n;
     if (ix0 < 0 || ix0 >= len)
@@ -319,7 +317,7 @@ static $WORD B_list_base_getitem(B_list_base lst, int64_t n) {
     return lst->data[ix0];
 }
 
-static B_NoneType B_list_base_setitem(B_list_base lst, int64_t n, $WORD val) {
+B_NoneType B_list_base_setitem(B_list_base lst, int64_t n, $WORD val) {
     int len = lst->length;
     int64_t ix0 = n < 0 ? len + n : n;
     if (ix0 < 0 || ix0 >= len)
@@ -329,7 +327,7 @@ static B_NoneType B_list_base_setitem(B_list_base lst, int64_t n, $WORD val) {
     return B_None;
 }
 
-static B_NoneType B_list_base_delitem(B_list_base lst, int64_t n) {
+B_NoneType B_list_base_delitem(B_list_base lst, int64_t n) {
     int len = lst->length;
     int64_t ix0 = n < 0 ? len + n : n;
     if (ix0 < 0 || ix0 >= len)
@@ -342,7 +340,7 @@ static B_NoneType B_list_base_delitem(B_list_base lst, int64_t n) {
     return B_None;
 }
 
-static B_list_base B_list_base_getslice(B_list_base lst, B_slice slc, $SuperG_class cls) {
+B_list_base B_list_base_getslice(B_list_base lst, B_slice slc, $SuperG_class cls) {
     int64_t start, stop, step, slen;
     normalize_slice(slc, lst->length, &slen, &start, &stop, &step);
     B_list_base res = B_list_base_new(slen, cls);
@@ -354,7 +352,7 @@ static B_list_base B_list_base_getslice(B_list_base lst, B_slice slc, $SuperG_cl
     return res;
 }
 
-static B_NoneType B_list_base_setslice(B_list_base lst, B_Iterable wit, B_slice slc, $WORD iter) {
+B_NoneType B_list_base_setslice(B_list_base lst, B_Iterable wit, B_slice slc, $WORD iter) {
     B_list_base other = B_list_base_new(0, ($SuperG_class)&B_listG_methods);
     B_list_base_init(other, wit, iter);
 
@@ -397,7 +395,7 @@ static B_NoneType B_list_base_setslice(B_list_base lst, B_Iterable wit, B_slice 
     return B_None;
 }
 
-static B_NoneType B_list_base_delslice(B_list_base lst, B_slice slc) {
+B_NoneType B_list_base_delslice(B_list_base lst, B_slice slc) {
     int64_t start, stop, step, slen;
     normalize_slice(slc, lst->length, &slen, &start, &stop, &step);
     if (slen == 0)
@@ -419,7 +417,7 @@ static B_NoneType B_list_base_delslice(B_list_base lst, B_slice slc) {
     return B_None;
 }
 
-static B_NoneType B_list_base_reverse(B_list_base lst) {
+B_NoneType B_list_base_reverse(B_list_base lst) {
     ACTON_WBAR_RANGE(lst->data, lst->data, lst->length * sizeof($WORD));
     for (int i = 0; i < lst->length / 2; i++) {
         $WORD tmp = lst->data[i];
@@ -429,7 +427,7 @@ static B_NoneType B_list_base_reverse(B_list_base lst) {
     return B_None;
 }
 
-static B_NoneType B_list_base_insert(B_list_base lst, int64_t n, $WORD elem) {
+B_NoneType B_list_base_insert(B_list_base lst, int64_t n, $WORD elem) {
     int len = lst->length;
     B_list_base_expand(lst, 1);
     int64_t ix0 = n < 0 ? (len + n < 0 ? 0 : len + n) : (n < len ? n : len);
@@ -567,21 +565,24 @@ static bool B_IteratorD_listD_next(B_IteratorD_list self, $WORD *out) {
     return true;
 }
 
-static B_Iterator B_list_base_iter_init(B_IteratorD_list iter, $WORD src, B_list_base data) {
+B_Iterator B_list_base_iter_init(B_IteratorD_list iter, $WORD src) {
     iter->$class = &B_IteratorD_listG_methods;
     iter->src = src;
-    iter->data = data;
+    iter->data = (B_list_base)src;
     iter->nxt = 0;
     return (B_Iterator)iter;
 }
 
-B_Iterator $listD_U_iter_init(B_IteratorD_list iter, $WORD src) {
-    return B_list_base_iter_init(iter, src, (B_list_base)src);
+B_Iterator B_list_base_iter(B_list_base src) {
+    B_IteratorD_list iter = acton_malloc(sizeof(struct B_IteratorD_list));
+    return B_list_base_iter_init(iter, src);
 }
 
-static B_Iterator B_list_base_iter($WORD src, B_list_base data) {
-    B_IteratorD_list iter = acton_malloc(sizeof(struct B_IteratorD_list));
-    return B_list_base_iter_init(iter, src, data);
+// reversed() owns a copy, so later mutation of the source is independent.
+B_Iterator B_list_base_reversed(B_list_base src, $SuperG_class cls) {
+    B_list_base copy = B_list_base_copy_as(src, cls);
+    B_list_base_reverse(copy);
+    return B_list_base_iter(copy);
 }
 
 B_IteratorD_list B_IteratorD_listG_new(B_list lst) {
@@ -622,120 +623,10 @@ struct B_IteratorD_listG_class B_IteratorD_listG_methods = {
     B_IteratorD_listD_bool, B_IteratorD_listD_str, B_IteratorD_listD_str, B_IteratorD_listD_next
 };
 
-// Unboxed helpers used by generated code //////////////////////////////////////////////////////////
-
-B_NoneType $listD_U_append(B_list lst, $WORD elem) {
-    return B_list_base_append((B_list_base)lst, elem);
-}
-
-$WORD $listD_U__getitem__(B_list lst, int64_t n) {
-    return B_list_base_getitem((B_list_base)lst, n);
-}
-
-B_NoneType $listD_U__setitem__(B_list lst, int64_t n, $WORD val) {
-    return B_list_base_setitem((B_list_base)lst, n, val);
-}
-
-B_NoneType $listD_U__delitem__(B_list lst, int64_t n) {
-    return B_list_base_delitem((B_list_base)lst, n);
-}
-
-$WORD $ilistD_U__getitem__(B_ilist lst, int64_t n) {
-    return B_list_base_getitem((B_list_base)lst, n);
-}
-
-// Witness-free Sequence workers /////////////////////////////////////////////////////////////////
-
-B_list $listD_U__getslice__(B_list lst, B_slice slc) {
-    return (B_list)B_list_base_getslice((B_list_base)lst, slc, ($SuperG_class)&B_listG_methods);
-}
-
-B_Iterator $listD_U__iter__(B_list lst) {
-    return B_list_base_iter(lst, (B_list_base)lst);
-}
-
-B_Iterator $listD_U__reversed__(B_list lst) {
-    B_list_base copy = B_list_base_copy_as((B_list_base)lst, ($SuperG_class)&B_listG_methods);
-    B_list_base_reverse(copy);
-    return B_list_base_iter(copy, copy);
-}
-
-B_list $listD_U__add__(B_list lst, B_list other) {
-    return (B_list)B_list_base_add((B_list_base)lst, (B_list_base)other, ($SuperG_class)&B_listG_methods);
-}
-
-B_list $listD_U__mul__(B_list lst, int64_t n) {
-    return (B_list)B_list_base_mul((B_list_base)lst, n, ($SuperG_class)&B_listG_methods);
-}
-
-B_list $listD_U__zero__(void) {
-    return B_listD_new(0);
-}
-
-B_list $listD_U__fromiter__(B_Iterable wit, $WORD src) {
-    return B_listG_new(wit, src);
-}
-
-B_ilist $ilistD_U__getslice__(B_ilist lst, B_slice slc) {
-    return (B_ilist)B_list_base_getslice((B_list_base)lst, slc, ($SuperG_class)&B_ilistG_methods);
-}
-
-B_Iterator $ilistD_U__iter__(B_ilist lst) {
-    return B_list_base_iter(lst, (B_list_base)lst);
-}
-
-B_Iterator $ilistD_U__reversed__(B_ilist lst) {
-    B_list_base copy = B_list_base_copy_as((B_list_base)lst, ($SuperG_class)&B_ilistG_methods);
-    B_list_base_reverse(copy);
-    return B_list_base_iter(copy, copy);
-}
-
-B_ilist $ilistD_U__add__(B_ilist lst, B_ilist other) {
-    return (B_ilist)B_list_base_add((B_list_base)lst, (B_list_base)other, ($SuperG_class)&B_ilistG_methods);
-}
-
-B_ilist $ilistD_U__mul__(B_ilist lst, int64_t n) {
-    return (B_ilist)B_list_base_mul((B_list_base)lst, n, ($SuperG_class)&B_ilistG_methods);
-}
-
-B_ilist $ilistD_U__zero__(void) {
-    return B_ilistD_new(0);
-}
-
-B_ilist $ilistD_U__fromiter__(B_Iterable wit, $WORD src) {
-    return B_ilistG_new(wit, src);
-}
-
-B_NoneType $listD_U_insert(B_list lst, int64_t n, $WORD elem) {
-    return B_list_base_insert((B_list_base)lst, n, elem);
-}
-
-B_NoneType $listD_U_reverse(B_list lst) {
-    return B_list_base_reverse((B_list_base)lst);
-}
-
-B_NoneType $listD_U__delslice__(B_list lst, B_slice slc) {
-    return B_list_base_delslice((B_list_base)lst, slc);
-}
-
-B_NoneType $listD_U__setslice__(B_list lst, B_Iterable wit, B_slice slc, $WORD src) {
-    return B_list_base_setslice((B_list_base)lst, wit, slc, src);
-}
-
-B_list $listD_U__iadd__(B_list lst, B_list other) {
-    B_list_base_extend((B_list_base)lst, (B_list_base)other);
-    return lst;
-}
-
-B_list $listD_U__imul__(B_list lst, int64_t n) {
-    B_list_base_imul((B_list_base)lst, n);
-    return lst;
-}
-
 // Sequence[list] wrappers /////////////////////////////////////////////////////////////////////////
 
 $WORD B_SequenceD_listD___getitem__(B_SequenceD_list wit, B_list lst, B_int n) {
-    return $listD_U__getitem__(lst, n->val);
+    return B_list_base_getitem((B_list_base)lst, n->val);
 }
 
 B_list B_SequenceD_listD___getslice__(B_SequenceD_list wit, B_list lst, B_slice slc) {
@@ -743,9 +634,7 @@ B_list B_SequenceD_listD___getslice__(B_SequenceD_list wit, B_list lst, B_slice 
 }
 
 B_Iterator B_SequenceD_listD___reversed__(B_SequenceD_list wit, B_list lst) {
-    B_list_base copy = B_list_base_copy_as((B_list_base)lst, ($SuperG_class)&B_listG_methods);
-    B_list_base_reverse(copy);
-    return B_list_base_iter(copy, copy);
+    return B_list_base_reversed((B_list_base)lst, ($SuperG_class)&B_listG_methods);
 }
 
 B_NoneType B_SequenceD_listD_insert(B_SequenceD_list wit, B_list lst, int64_t n, $WORD elem) {
@@ -784,16 +673,16 @@ $WORD B_IndexedD_SliceableD_SequenceD_listD___getitem__(B_IndexedD_SliceableD_Se
 
 B_NoneType B_IndexedD_SliceableD_SequenceD_listD___setitem__(B_IndexedD_SliceableD_SequenceD_list wit,
                                                              B_list lst, B_int n, $WORD val) {
-    return $listD_U__setitem__(lst, n->val, val);
+    return B_list_base_setitem((B_list_base)lst, n->val, val);
 }
 
 B_NoneType B_IndexedD_SliceableD_SequenceD_listD___delitem__(B_IndexedD_SliceableD_SequenceD_list wit,
                                                              B_list lst, B_int n) {
-    return $listD_U__delitem__(lst, n->val);
+    return B_list_base_delitem((B_list_base)lst, n->val);
 }
 
 B_Iterator B_CollectionD_SequenceD_listD___iter__(B_CollectionD_SequenceD_list wit, B_list lst) {
-    return B_list_base_iter(lst, (B_list_base)lst);
+    return B_list_base_iter((B_list_base)lst);
 }
 
 B_list B_CollectionD_SequenceD_listD___fromiter__(B_CollectionD_SequenceD_list wit,
@@ -847,7 +736,7 @@ bool B_OrdD_listD___lt__(B_OrdD_list wit, B_list a, B_list b) {
 // ISequence[ilist] wrappers ///////////////////////////////////////////////////////////////////////
 
 $WORD B_ISequenceD_ilistD___getitem__(B_ISequenceD_ilist wit, B_ilist lst, B_int n) {
-    return $ilistD_U__getitem__(lst, n->val);
+    return B_list_base_getitem((B_list_base)lst, n->val);
 }
 
 B_ilist B_ISequenceD_ilistD___getslice__(B_ISequenceD_ilist wit, B_ilist lst, B_slice slc) {
@@ -855,13 +744,11 @@ B_ilist B_ISequenceD_ilistD___getslice__(B_ISequenceD_ilist wit, B_ilist lst, B_
 }
 
 B_Iterator B_ISequenceD_ilistD___reversed__(B_ISequenceD_ilist wit, B_ilist lst) {
-    B_list_base copy = B_list_base_copy_as((B_list_base)lst, ($SuperG_class)&B_ilistG_methods);
-    B_list_base_reverse(copy);
-    return B_list_base_iter(copy, copy);
+    return B_list_base_reversed((B_list_base)lst, ($SuperG_class)&B_ilistG_methods);
 }
 
 B_Iterator B_CollectionD_ISequenceD_ilistD___iter__(B_CollectionD_ISequenceD_ilist wit, B_ilist lst) {
-    return B_list_base_iter(lst, (B_list_base)lst);
+    return B_list_base_iter((B_list_base)lst);
 }
 
 B_ilist B_CollectionD_ISequenceD_ilistD___fromiter__(B_CollectionD_ISequenceD_ilist wit,

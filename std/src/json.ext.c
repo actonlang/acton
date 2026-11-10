@@ -259,7 +259,7 @@ static B_dict stdQ_jsonQ_decode_obj(yyjson_val *obj) {
     while ((key = yyjson_obj_iter_next(&iter))) {
         B_str name = actStrFromCStringLengthCopy(yyjson_get_str(key), yyjson_get_len(key));
         B_value v = stdQ_jsonQ_decode_value(yyjson_obj_iter_get_val(key));
-        B_dictD_setitem(res, wit, name, v);
+        B_dictD_setitem(res, name, v);
     }
     return res;
 }

@@ -1,4 +1,16 @@
 # Concrete Sequence calls discard their receiver witness, keeping input witnesses.
+def list_read[A](xs: list[A], n: int) -> A:
+    return xs[n]
+
+def ilist_read[A](xs: ilist[A], n: int) -> A:
+    return xs[n]
+
+mut def list_write[A](xs: list[A], n: int, value: A):
+    xs[n] = value
+
+mut def list_delete[A](xs: list[A], n: int):
+    del xs[n]
+
 mut def list_insert[A](xs: list[A], n: int, value: A) -> None:
     xs.insert(n, value)
 
@@ -147,4 +159,12 @@ actor main(env):
     data = bytearray(b"abc")
     generic_reverse(data)
     assert data == bytearray(b"cba")
+    # Native indexes stay unboxed; generic elements retain their boxes.
+    numbers = [1.5, 2.5, 3.5]
+    assert list_read(numbers, -1) == 3.5
+    list_write(numbers, -2, 4.5)
+    list_delete(numbers, 0)
+    assert numbers == [4.5, 3.5]
+    assert ilist_read(ilist([1.5, 2.5]), -1) == 2.5
+    assert list_read(objects, 0).values == [7]
     env.exit(0)

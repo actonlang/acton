@@ -330,8 +330,7 @@ B_array B_arrayD___deserialize__(B_array self, $Serial$state state) {
     if (!self) {
         self = acton_malloc(sizeof(struct B_array));
         self->$class = &B_arrayG_methods;
-        B_dictD_setitem(state->done, (B_Hashable)B_HashableD_intG_witness,
-                        toB_int(state->row_no - 1), self);
+        B_dictD_setitem(state->done, toB_int(state->row_no - 1), self);
     }
 
     $ROW row = state->row;

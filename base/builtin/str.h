@@ -84,7 +84,7 @@ struct B_IteratorD_str {
 
 extern struct  B_IteratorD_strG_class  B_IteratorD_strG_methods;
 B_IteratorD_str B_IteratorD_strG_new(B_str);
-B_Iterator $strD_U_iter_init(B_IteratorD_str iter, B_str src);
+B_Iterator B_str_iter_init(B_IteratorD_str iter, B_str src);
 
 // bytearray /////////////////////////////////////////////////////////////////////////////////////
 
@@ -126,7 +126,7 @@ struct B_IteratorD_bytearray {
 
 extern struct  B_IteratorD_bytearrayG_class  B_IteratorD_bytearrayG_methods;
 B_IteratorD_bytearray B_IteratorD_bytearrayG_new(B_bytearray);
-B_Iterator $bytearrayD_U_iter_init(B_IteratorD_bytearray iter, B_bytearray src);
+B_Iterator B_bytearray_iter_init(B_IteratorD_bytearray iter, B_bytearray src);
 
 // bytes /////////////////////////////////////////////////////////////////////////////////////
 
@@ -180,7 +180,7 @@ struct B_IteratorD_bytes {
 
 extern struct  B_IteratorD_bytesG_class  B_IteratorD_bytesG_methods;
 B_IteratorD_bytes B_IteratorD_bytesG_new(B_bytes);
-B_Iterator $bytesD_U_iter_init(B_IteratorD_bytes iter, B_bytes src);
+B_Iterator B_bytes_iter_init(B_IteratorD_bytes iter, B_bytes src);
 
 // Internal auxiliary function /////////////////////////////////////////////
 
@@ -190,81 +190,63 @@ B_str B_strD_join_par(char lpar,B_list elems, char rpar);
 B_str $default__str__(B_value);
 
 // Raw indexing workers used when the compiler resolves a builtin witness.
-B_str $strD_U__getitem__(B_str s, int64_t i);
-int64_t $bytesD_U__getitem__(B_bytes str, int64_t i);
-int64_t $bytearrayD_U__getitem__(B_bytearray self, int64_t i);
-B_NoneType $bytearrayD_U__setitem__(B_bytearray self, int64_t i, int64_t val);
-B_NoneType $bytearrayD_U__delitem__(B_bytearray self, int64_t i);
+B_str B_str_getitem(B_str s, int64_t i);
+int64_t B_bytes_getitem(B_bytes str, int64_t i);
+int64_t B_bytearray_getitem(B_bytearray self, int64_t i);
+B_NoneType B_bytearray_setitem(B_bytearray self, int64_t i, int64_t val);
+B_NoneType B_bytearray_delitem(B_bytearray self, int64_t i);
 
 // Witness-free length getters used by generated code.
-static inline int64_t $strD_U__len(B_str self) {
+static inline int64_t B_str_len(B_str self) {
     return (int64_t)self->nchars;
 }
-static inline int64_t $bytesD_U__len(B_bytes self) {
+static inline int64_t B_bytes_len(B_bytes self) {
     return (int64_t)self->nbytes;
 }
-static inline int64_t $bytearrayD_U__len(B_bytearray self) {
+static inline int64_t B_bytearray_len(B_bytearray self) {
     return (int64_t)self->nbytes;
 }
 
 // Witness-free string operations used by generated code and protocol wrappers.
-static inline bool $strD_U__eq__(B_str a, B_str b) {
+static inline bool B_str_eq(B_str a, B_str b) {
     if (a == b)
         return true;
     return a->nbytes == b->nbytes && memcmp(a->str, b->str, a->nbytes) == 0;
 }
-static inline bool $strD_U__ne__(B_str a, B_str b) {
-    return !$strD_U__eq__(a, b);
-}
-B_str $strD_U__add__(B_str s, B_str t);
+B_str B_str_add(B_str s, B_str t);
 
-// Remaining witness-free string and byte-container protocol workers.
-bool $strD_U__lt__(B_str a, B_str b);
-bool $strD_U__le__(B_str a, B_str b);
-bool $strD_U__gt__(B_str a, B_str b);
-bool $strD_U__ge__(B_str a, B_str b);
-B_NoneType $strD_U_hash(B_str a, B_hasher h);
-B_str $strD_U__zero__(void);
-B_str $strD_U__mul__(B_str a, int64_t n);
-B_str $strD_U__fromiter__(B_Iterable wit2, $WORD iter);
-bool $strD_U__contains__(B_str s, B_str sub);
-bool $strD_U__containsnot__(B_str s, B_str sub);
-B_Iterator $strD_U__iter__(B_str s);
-B_str $strD_U__getslice__(B_str s, B_slice slc);
-bool $bytesD_U__eq__(B_bytes a, B_bytes b);
-bool $bytesD_U__ne__(B_bytes a, B_bytes b);
-bool $bytesD_U__lt__(B_bytes a, B_bytes b);
-bool $bytesD_U__le__(B_bytes a, B_bytes b);
-bool $bytesD_U__gt__(B_bytes a, B_bytes b);
-bool $bytesD_U__ge__(B_bytes a, B_bytes b);
-bool $bytesD_U__contains__(B_bytes str, int64_t n);
-bool $bytesD_U__containsnot__(B_bytes str, int64_t n);
-bool $bytearrayD_U__eq__(B_bytearray a, B_bytearray b);
-bool $bytearrayD_U__ne__(B_bytearray a, B_bytearray b);
-bool $bytearrayD_U__lt__(B_bytearray a, B_bytearray b);
-bool $bytearrayD_U__le__(B_bytearray a, B_bytearray b);
-bool $bytearrayD_U__gt__(B_bytearray a, B_bytearray b);
-bool $bytearrayD_U__ge__(B_bytearray a, B_bytearray b);
-bool $bytearrayD_U__contains__(B_bytearray self, int64_t n);
-bool $bytearrayD_U__containsnot__(B_bytearray self, int64_t n);
-B_NoneType $bytesD_U_hash(B_bytes a, B_hasher h);
-B_bytes $bytesD_U__fromiter__(B_Iterable wit2, $WORD iter);
-B_Iterator $bytesD_U__iter__(B_bytes str);
-B_bytes $bytesD_U__getslice__(B_bytes str, B_slice slc);
-B_bytes $bytesD_U__add__(B_bytes s, B_bytes t);
-B_bytes $bytesD_U__zero__(void);
-B_bytes $bytesD_U__mul__(B_bytes a, int64_t n);
-B_NoneType $bytearrayD_U_insert(B_bytearray self, int64_t n, int64_t elem);
-B_NoneType $bytearrayD_U_append(B_bytearray self, int64_t elem);
-B_NoneType $bytearrayD_U_reverse(B_bytearray self);
-B_Iterator $bytearrayD_U__reversed__(B_bytearray self);
-B_bytearray $bytearrayD_U__getslice__(B_bytearray self, B_slice slc);
-B_NoneType $bytearrayD_U__setslice__(B_bytearray self, B_Iterable wit2, B_slice slc, $WORD iter);
-B_NoneType $bytearrayD_U__delslice__(B_bytearray self, B_slice slc);
-B_bytearray $bytearrayD_U__fromiter__(B_Iterable wit2, $WORD iter);
-B_Iterator $bytearrayD_U__iter__(B_bytearray str);
-B_bytearray $bytearrayD_U__add__(B_bytearray a, B_bytearray b);
-B_bytearray $bytearrayD_U__zero__(void);
-B_bytearray $bytearrayD_U__mul__(B_bytearray a, int64_t n);
-B_bytearray $bytearrayD_U__iadd__(B_bytearray a, B_bytearray b);
-B_bytearray $bytearrayD_U__imul__(B_bytearray a, int64_t n);
+// Native string and byte-container operations shared with protocol wrappers.
+int B_str_compare(B_str a, B_str b);
+B_NoneType B_str_hash(B_str a, B_hasher h);
+B_str B_str_zero(void);
+B_str B_str_mul(B_str a, int64_t n);
+B_str B_str_fromiter(B_Iterable wit2, $WORD iter);
+bool B_str_contains(B_str s, B_str sub);
+B_Iterator B_str_iter(B_str s);
+B_str B_str_getslice(B_str s, B_slice slc);
+bool B_bytes_eq(B_bytes a, B_bytes b);
+bool B_bytes_lt(B_bytes a, B_bytes b);
+bool B_bytes_contains(B_bytes str, int64_t n);
+bool B_bytearray_eq(B_bytearray a, B_bytearray b);
+bool B_bytearray_lt(B_bytearray a, B_bytearray b);
+bool B_bytearray_contains(B_bytearray self, int64_t n);
+B_NoneType B_bytes_hash(B_bytes a, B_hasher h);
+B_Iterator B_bytes_iter(B_bytes str);
+B_bytes B_bytes_getslice(B_bytes str, B_slice slc);
+B_bytes B_bytes_add(B_bytes s, B_bytes t);
+B_bytes B_bytes_zero(void);
+B_bytes B_bytes_mul(B_bytes a, int64_t n);
+B_NoneType B_bytearray_insert(B_bytearray self, int64_t n, int64_t elem);
+B_NoneType B_bytearray_append(B_bytearray self, int64_t elem);
+B_NoneType B_bytearray_reverse(B_bytearray self);
+B_Iterator B_bytearray_reversed(B_bytearray self);
+B_bytearray B_bytearray_getslice(B_bytearray self, B_slice slc);
+B_NoneType B_bytearray_setslice(B_bytearray self, B_Iterable wit2, B_slice slc, $WORD iter);
+B_NoneType B_bytearray_delslice(B_bytearray self, B_slice slc);
+B_bytearray B_bytearray_fromiter(B_Iterable wit2, $WORD iter);
+B_Iterator B_bytearray_iter(B_bytearray str);
+B_bytearray B_bytearray_add(B_bytearray a, B_bytearray b);
+B_bytearray B_bytearray_zero(void);
+B_bytearray B_bytearray_mul(B_bytearray a, int64_t n);
+B_bytearray B_bytearray_iadd(B_bytearray a, B_bytearray b);
+B_bytearray B_bytearray_imul(B_bytearray a, int64_t n);

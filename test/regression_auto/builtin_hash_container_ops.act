@@ -1,0 +1,194 @@
+# Concrete container operations keep keys boxed and discard receiver witnesses.
+def dict_lookup[A(Hashable),B](d: dict[A,B], k: A) -> B:
+    return d[k]
+def idict_lookup[A(Hashable),B](d: idict[A,B], k: A) -> B:
+    return d[k]
+def dict_contains[A(Hashable),B](d: dict[A,B], k: A) -> bool:
+    return k in d
+def idict_missing[A(Hashable),B](d: idict[A,B], k: A) -> bool:
+    return k not in d
+def dict_get[A(Hashable),B](d: dict[A,B], k: A) -> ?B:
+    return d.get(k)
+def idict_get_default[A(Hashable),B](d: idict[A,B], k: A, default: B) -> B:
+    return d.get_def(k, default)
+mut def dict_store[A(Hashable),B](d: dict[A,B], k: A, v: B):
+    d[k] = v
+mut def dict_delete[A(Hashable),B](d: dict[A,B], k: A):
+    del d[k]
+mut def dict_pop[A(Hashable),B](d: dict[A,B], k: A) -> ?B:
+    return d.pop(k)
+mut def dict_pop_default[A(Hashable),B](d: dict[A,B], k: A, default: B) -> B:
+    return d.pop_def(k, default)
+mut def dict_default[A(Hashable),B](d: dict[A,B], k: A, default: B) -> ?B:
+    return d.setdefault(k, default)
+mut def dict_update[A(Hashable),B](d: dict[A,B], src: Iterable[(A,B)]):
+    d.update(src)
+mut def dict_popitem[A(Hashable),B](d: dict[A,B]) -> (A,B):
+    return d.popitem()
+def dict_keys[A(Hashable),B](d: dict[A,B]) -> Iterator[A]:
+    return d.keys()
+def dict_values[A(Hashable),B](d: dict[A,B]) -> Iterator[B]:
+    return d.values()
+def dict_items[A(Hashable),B](d: dict[A,B]) -> Iterator[(A,B)]:
+    return d.items()
+def idict_items[A(Hashable),B](d: idict[A,B]) -> Iterator[(A,B)]:
+    return d.items()
+def set_contains[A(Hashable)](s: set[A], key: A) -> bool:
+    return key in s
+def set_missing[A(Hashable)](s: set[A], key: A) -> bool:
+    return key not in s
+def iset_contains[A(Hashable)](s: iset[A], key: A) -> bool:
+    return key in s
+mut def set_add[A(Hashable)](s: set[A], key: A):
+    s.add(key)
+mut def set_discard[A(Hashable)](s: set[A], key: A):
+    s.discard(key)
+mut def set_pop[A(Hashable)](s: set[A]) -> A:
+    return s.pop()
+mut def set_update[A(Hashable)](s: set[A], src: Iterable[A]):
+    s.update(src)
+def set_iterator[A(Hashable)](s: set[A]) -> Iterator[A]:
+    return iter(s)
+def iset_iterator[A(Hashable)](s: iset[A]) -> Iterator[A]:
+    return iter(s)
+def set_equal[A(Hashable)](a: set[A], b: set[A]) -> bool:
+    return a == b
+def set_not_equal[A(Hashable)](a: set[A], b: set[A]) -> bool:
+    return a != b
+def set_lt[A(Hashable)](a: set[A], b: set[A]) -> bool:
+    return a < b
+def set_le[A(Hashable)](a: set[A], b: set[A]) -> bool:
+    return a <= b
+def set_gt[A(Hashable)](a: set[A], b: set[A]) -> bool:
+    return a > b
+def set_ge[A(Hashable)](a: set[A], b: set[A]) -> bool:
+    return a >= b
+def set_disjoint[A(Hashable)](a: set[A], b: set[A]) -> bool:
+    return ISet.isdisjoint(a, b)
+def set_union[A(Hashable)](a: set[A], b: set[A]) -> set[A]:
+    return a | b
+def set_intersection[A(Hashable)](a: set[A], b: set[A]) -> set[A]:
+    return a & b
+def set_difference[A(Hashable)](a: set[A], b: set[A]) -> set[A]:
+    return a - b
+def set_xor[A(Hashable)](a: set[A], b: set[A]) -> set[A]:
+    return a ^ b
+def iset_union[A(Hashable)](a: iset[A], b: iset[A]) -> iset[A]:
+    return a | b
+def named_union[A(Hashable)](a: set[A], b: set[A]) -> set[A]:
+    return ISet.union(a, b)
+mut def set_ior[A(Hashable)](a: set[A], b: set[A]) -> set[A]:
+    a |= b
+    return a
+mut def set_iand[A(Hashable)](a: set[A], b: set[A]) -> set[A]:
+    a &= b
+    return a
+mut def set_isub[A(Hashable)](a: set[A], b: set[A]) -> set[A]:
+    a -= b
+    return a
+mut def set_ixor[A(Hashable)](a: set[A], b: set[A]) -> set[A]:
+    a ^= b
+    return a
+def iset_hash[A(Hashable)](s: iset[A], h: hasher):
+    s.hash(h)
+
+# Direct loops must continue to place their iterators on the stack.
+def dict_total(d: dict[int,int]) -> int:
+    total = 0
+    for k,v in d.items():
+        total += k + v
+    return total
+def idict_total(d: idict[int,int]) -> int:
+    total = 0
+    for k in d:
+        total += k
+    return total
+def set_total(s: set[int]) -> int:
+    total = 0
+    for k in s:
+        total += k
+    return total
+def iset_total(s: iset[int]) -> int:
+    total = 0
+    for k in s:
+        total += k
+    return total
+
+def generic_contains[S(Container[int])](s: S, k: int) -> bool:
+    return k in s
+mut def generic_add[S(Set[int])](s: S, k: int):
+    s.add(k)
+def factory[A(Hashable)](src: Iterable[A]) -> set[A]:
+    return Collection.__fromiter__(src)
+def dict_compare[A(Hashable),B(Eq)](a: dict[A,B], b: dict[A,B]) -> bool:
+    return a == b
+
+# Reversing the comparison's native arguments must not repeat evaluation or
+# change the source evaluation order.
+mut def tracked_set(log: list[int], tag: int, s: set[int]) -> set[int]:
+    log.append(tag)
+    return s
+
+actor main(env):
+    d = {"a": 1.5}
+    assert dict_lookup(d, "a") == 1.5
+    dict_store(d, "b", 2.5)
+    assert dict_contains(d, "b")
+    assert dict_get(d, "absent") is None
+    assert dict_default(d, "c", 3.5) == 3.5
+    dict_delete(d, "a")
+    assert dict_pop(d, "b") == 2.5
+    assert dict_pop_default(d, "absent", 4.5) == 4.5
+    dict_update(d, [("d", 5.5)])
+    assert dict_popitem(d) == ("d", 5.5)
+    assert list(dict_keys(d)) == ["c"]
+    assert list(dict_values(d)) == [3.5]
+    assert list(dict_items(d)) == [("c", 3.5)]
+    frozen = idict(dict_items(d))
+    assert idict_lookup(frozen, "c") == 3.5
+    assert idict_get_default(frozen, "missing", 4.5) == 4.5
+    assert idict_missing(frozen, "missing")
+    assert list(idict_items(frozen)) == [("c", 3.5)]
+    s = {1, 2}
+    set_add(s, 3)
+    set_discard(s, 2)
+    set_update(s, [4, 5])
+    assert set_contains(s, 3) and set_missing(s, 2)
+    assert set_equal(s, {1, 3, 4, 5}) and set_not_equal(s, {1})
+    assert set_lt({1}, s) and set_le(s, s)
+    assert set_gt(s, {1}) and set_ge(s, s)
+    assert set_disjoint(s, {10})
+    assert set_union({1}, {2}) == {1, 2}
+    assert named_union({1}, {2}) == {1, 2}
+    assert set_intersection(s, {1, 4}) == {1, 4}
+    assert set_difference(s, {1, 4}) == {3, 5}
+    assert set_xor({1, 2}, {2, 3}) == {1, 3}
+    assert iset_union(iset([1]), iset([2])) == iset([1, 2])
+    assert iset_contains(iset([1]), 1)
+    assert set_ior(s, {6}) == {1, 3, 4, 5, 6}
+    assert set_iand(s, {3, 5, 6}) == {3, 5, 6}
+    assert set_isub(s, {6}) == {3, 5}
+    assert set_ixor(s, {3}) == {5}
+    assert set_pop(s) == 5
+    assert len(s) == 0
+    assert set(set_iterator({1, 2})) == {1, 2}
+    assert set(iset_iterator(iset([1, 2]))) == {1, 2}
+    assert dict_total({1:2, 3:4}) == 10
+    assert idict_total(idict([(1, 2), (3, 4)])) == 4
+    assert set_total({1, 2}) == 3
+    assert iset_total(iset([1, 2])) == 3
+    assert generic_contains([1, 2], 2)
+    generic_add(s, 7)
+    assert s == {7}
+    assert factory([1, 2]) == {1, 2}
+    assert dict_compare({1: "one"}, {1: "one"})
+    # A container key is an ordinary boxed key, not a table-pointer argument.
+    nested = {iset([1]), iset([2])}
+    assert set_contains(nested, iset([2]))
+    log: list[int] = []
+    assert tracked_set(log, 1, {1}) < tracked_set(log, 2, {1, 2})
+    assert log == [1, 2]
+    log = []
+    assert tracked_set(log, 1, {1}) <= tracked_set(log, 2, {1, 2})
+    assert log == [1, 2]
+    env.exit(0)

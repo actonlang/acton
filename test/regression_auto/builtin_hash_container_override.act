@@ -1,0 +1,14 @@
+protocol Alternate:
+    @staticmethod
+    get: (Self, int) -> int
+
+extension dict[A(Hashable),B] (Alternate):
+    def get(self, key: int) -> int:
+        return 42
+
+def custom_get(d: dict[str,float], key: int) -> int:
+    return Alternate.get(d, key)
+
+actor main(env):
+    assert custom_get({}, 10) == 42
+    env.exit(0)

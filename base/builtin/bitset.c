@@ -486,8 +486,7 @@ B_bitset B_bitsetD___deserialize__(B_bitset self, $Serial$state state) {
     if (!self) {
         self = acton_malloc(sizeof(struct B_bitset));
         self->$class = &B_bitsetG_methods;
-        B_dictD_setitem(state->done, (B_Hashable)B_HashableD_intG_witness,
-                        toB_int(state->row_no - 1), self);
+        B_dictD_setitem(state->done, toB_int(state->row_no - 1), self);
     }
 
     $ROW row = state->row;

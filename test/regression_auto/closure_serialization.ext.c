@@ -13,7 +13,7 @@ $WORD closure_serializationQ_round_trip_alloc($WORD value) {
         .row = row->next, .row_no = 1, .globmap = NULL,
         .done = $NEW(B_dict, (B_Hashable)B_HashableD_intG_witness, NULL, NULL)
     };
-    B_dictD_setitem(state.done, (B_Hashable)B_HashableD_intG_witness, toB_int(0), restored);
+    B_dictD_setitem(state.done, toB_int(0), restored);
     return methods->__deserialize__(restored, &state);
 }
 
@@ -212,7 +212,7 @@ $R closure_serializationQ_layout_snapshot($Cont cont, int64_t arity, $WORD value
             .row = row->next, .row_no = 1, .globmap = closure_serialization_globmap,
             .done = $NEW(B_dict, (B_Hashable)B_HashableD_intG_witness, NULL, NULL)
         };
-        B_dictD_setitem(state.done, (B_Hashable)B_HashableD_intG_witness, toB_int(0), restored);
+        B_dictD_setitem(state.done, toB_int(0), restored);
         restored = ($Cont)methods->__deserialize__(($Serializable)restored, &state);
     } else {
         restored = ($Cont)$deserialize(row, closure_serialization_globmap);
@@ -301,7 +301,7 @@ $R closure_serializationQ_proc0_message($Cont cont, closure_serializationQ_Sampl
             .row = row->next, .row_no = 1, .globmap = closure_serialization_globmap,
             .done = $NEW(B_dict, (B_Hashable)B_HashableD_intG_witness, NULL, NULL)
         };
-        B_dictD_setitem(state.done, (B_Hashable)B_HashableD_intG_witness, toB_int(0), restored);
+        B_dictD_setitem(state.done, toB_int(0), restored);
         restored = B_MsgD___deserialize__(restored, &state);
     } else {
         restored = (B_Msg)$deserialize(row, closure_serialization_globmap);
@@ -334,7 +334,7 @@ $WORD closure_serializationQ_action_round_trip($WORD value, closure_serializatio
             .row = row->next, .row_no = 1, .globmap = closure_serialization_globmap,
             .done = $NEW(B_dict, (B_Hashable)B_HashableD_intG_witness, NULL, NULL)
         };
-        B_dictD_setitem(state.done, (B_Hashable)B_HashableD_intG_witness, toB_int(0), restored);
+        B_dictD_setitem(state.done, toB_int(0), restored);
         restored = methods->__deserialize__(restored, &state);
     } else {
         restored = $deserialize(row, closure_serialization_globmap);

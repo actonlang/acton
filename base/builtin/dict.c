@@ -45,16 +45,16 @@ struct $table_struct {
 // Internal routines //////////////////////////////////////////////////////////////////
 
 /*
-  Internal routine used by dictresize() to build a hashtable of entries.
+  Internal routine used by B_dict_resize() to build a hashtable of entries.
 %*/
-static void build_indices(B_Hashable hashwit, $table oldtable, $table newtable, $entry_t ep, long n) {
+static void B_dict_build_indices(B_dict_base dict, $table oldtable, $table newtable, $entry_t ep, long n) {
     long mask = newtable->tb_size - 1;
     for (int ix = 0; ix < n; ix++, ep++) {
         uint64_t hash;
         if (oldtable->tb_size > INIT_SIZE)
             hash = ep->hash;
         else {
-            hash = B_hash(hashwit, ep->key);
+            hash = B_hash(dict->hashwit, ep->key);
             ep->hash = hash;
         }
         unsigned long i = (unsigned long)hash & mask;
@@ -72,7 +72,7 @@ static void build_indices(B_Hashable hashwit, $table oldtable, $table newtable, 
   actually be smaller than the old one.
 */
 
-static int dictresize(B_Hashable hashwit, B_dict_base d) {
+static int B_dict_resize(B_dict_base d) {
     $table oldtable = d->table;
     long numelements = d->numelements;
     long newsize, minsize = 3*numelements;
@@ -98,7 +98,7 @@ static int dictresize(B_Hashable hashwit, B_dict_base d) {
             }
         }
         if (newsize > INIT_SIZE)
-            build_indices(hashwit, oldtable, newtable, newentries, numelements);
+            B_dict_build_indices(d, oldtable, newtable, newentries, numelements);
     }
     // for (int i=0; i < newsize; i++) printf("%d -> %d\n",i,newtable->tb_indices[i]);
     // for (int i=0; i < newtable->tb_nentries; i++){
@@ -114,7 +114,7 @@ static int dictresize(B_Hashable hashwit, B_dict_base d) {
 
 // Search index of hash table from offset of entry table
 // Only called when the dict is a hashtable (i.e. table->tb_size > INIT_SIZE)
-static int $lookdict_index($table table, uint64_t hash, int index) {
+static int B_dict_lookup_index($table table, uint64_t hash, int index) {
     unsigned long mask =  (table->tb_size)-1;
     unsigned long perturb = hash;
     unsigned long i = (unsigned long)hash & mask;
@@ -136,7 +136,8 @@ static int $lookdict_index($table table, uint64_t hash, int index) {
 // Returns index into compact array where hash/key is found
 // (and returns corresponding value in *res)
 // or DKIX_EMPTY if no such entry exists
-static int $lookdict(B_dict_base dict, B_Hashable hashwit, uint64_t hash, $WORD key, $WORD *res) {
+static int B_dict_lookup(B_dict_base dict, uint64_t hash, $WORD key, $WORD *res) {
+    B_Hashable hashwit = dict->hashwit;
     $table table = dict->table;
     if (!table) {
         *res = NULL;
@@ -147,7 +148,7 @@ static int $lookdict(B_dict_base dict, B_Hashable hashwit, uint64_t hash, $WORD 
         // Ignore hash and do linear search
         for (int ix = 0; ix < table->tb_nentries; ix++) {
             $entry_t entry = &TB_ENTRIES(table)[ix];
-            if (entry->value != DELETED && (entry->key == key || (hashwit->$class->__eq__(hashwit,key,entry->key)))) {
+            if (entry->value != DELETED && (entry->key == key || (hashwit->$class->__eq__(hashwit, key, entry->key)))) {
                 // found an entry with the same or equal key
                 *res = entry->value; 
                 return ix;
@@ -169,7 +170,7 @@ static int $lookdict(B_dict_base dict, B_Hashable hashwit, uint64_t hash, $WORD 
             }
             if (ix >= 0) {
                 $entry_t entry = &TB_ENTRIES(table)[ix];
-                if (entry->value != DELETED && (entry->key == key || (entry->hash == hash && hashwit->$class->__eq__(hashwit,key,entry->key)))) {
+                if (entry->value != DELETED && (entry->key == key || (entry->hash == hash && hashwit->$class->__eq__(hashwit, key, entry->key)))) {
                     // found an entry with the same or equal key
                     *res = entry->value;
                     return ix;
@@ -201,15 +202,15 @@ static long find_empty_slot($table table, uint64_t hash) {
     return i;
 }
 
-static void insertdict(B_dict_base dict, B_Hashable hashwit, uint64_t hash, $WORD key, $WORD value) {
+static void B_dict_insert(B_dict_base dict, uint64_t hash, $WORD key, $WORD value) {
     $WORD old_value;
     $table table;
     $entry_t ep;
     if (!dict->table || dict->table->tb_usable <= 0)
-        dictresize(hashwit,dict);
+        B_dict_resize(dict);
     if (dict->table->tb_size == 2*INIT_SIZE)
-         hash = B_hash(hashwit, key);
-    int ix = $lookdict(dict,hashwit,hash,key,&old_value);
+         hash = B_hash(dict->hashwit, key);
+    int ix = B_dict_lookup(dict, hash, key, &old_value);
     if (ix == DKIX_EMPTY) {
         table = dict->table;
         long newpos = find_empty_slot(table,hash);
@@ -242,6 +243,7 @@ static B_dict_base B_dict_base_new($SuperG_class cls, B_Hashable hashwit,
     if (dict == NULL)
         RAISE_EXC(&B_dict_allocation_failed_error);
     dict->$class = cls;
+    dict->hashwit = hashwit;
     dict->numelements = 0;
     dict->table = NULL;
     if (wit && iterable) {
@@ -251,7 +253,7 @@ static B_dict_base B_dict_base_new($SuperG_class cls, B_Hashable hashwit,
             B_tuple val = (B_tuple)nxt;
             uint64_t hash = dict->table && dict->table->tb_size > INIT_SIZE
                 ? B_hash(hashwit, val->components[0]) : 0;
-            insertdict(dict, hashwit, hash, val->components[0], val->components[1]);
+            B_dict_insert(dict, hash, val->components[0], val->components[1]);
         }
     }
     return dict;
@@ -259,6 +261,7 @@ static B_dict_base B_dict_base_new($SuperG_class cls, B_Hashable hashwit,
 
 static B_NoneType B_dict_base_init(B_dict_base dict, B_Hashable hashwit,
                                    B_Iterable wit, $WORD iterable) {
+    ACTON_STORE(dict, dict->hashwit, hashwit);
     dict->numelements = 0;
     dict->table = NULL;
     if (wit && iterable) {
@@ -268,7 +271,7 @@ static B_NoneType B_dict_base_init(B_dict_base dict, B_Hashable hashwit,
             B_tuple val = (B_tuple)nxt;
             uint64_t hash = dict->table && dict->table->tb_size > INIT_SIZE
                 ? B_hash(hashwit, val->components[0]) : 0;
-            insertdict(dict, hashwit, hash, val->components[0], val->components[1]);
+            B_dict_insert(dict, hash, val->components[0], val->components[1]);
         }
     }
     return B_None;
@@ -314,11 +317,20 @@ static void B_dict_base_serialize_payload(B_dict_base self, int class_id,
     row->blob[1] = ($WORD)tb_size;
     row->blob[2] = ($WORD)(self->table ? self->table->tb_usable : 0);
     row->blob[3] = ($WORD)(self->table ? self->table->tb_nentries : 0);
+    // Empty containers need their Hashable witness too. Traverse it normally
+    // so generic/user-defined witnesses retain their fields and sharing.
+    $step_serialize(self->hashwit, state);
     if (!self->table)
         return;
     memcpy(&row->blob[4], self->table->tb_indices, tb_size * sizeof(int));
     for (int i = 0; i < self->table->tb_nentries; i++) {
         $entry_t entry = &TB_ENTRIES(self->table)[i];
+        // Live entries start with a u64 hash. A None row marks a deleted slot;
+        // DELETED is an internal pointer sentinel, not a serializable value.
+        if (entry->value == DELETED) {
+            $step_serialize(NULL, state);
+            continue;
+        }
         $step_serialize(toB_u64(entry->hash), state);
         $step_serialize(entry->key, state);
         $step_serialize(entry->value, state);
@@ -326,20 +338,19 @@ static void B_dict_base_serialize_payload(B_dict_base self, int class_id,
 }
 
 static void B_dict_base_serialize(B_dict_base self, int class_id, $Serial$state state) {
-    B_int prevkey = (B_int)B_dictD_get(state->done, (B_Hashable)B_HashableD_WORDG_witness,
-                                      self, NULL);
+    B_int prevkey = (B_int)B_dictD_get(state->done, self, NULL);
     if (prevkey) {
         long pk = fromB_int(prevkey);
         $val_serialize(-class_id, &pk, state);
         return;
     }
-    B_dictD_setitem(state->done, (B_Hashable)B_HashableD_WORDG_witness,
-                    self, toB_int(state->row_no));
+    B_dictD_setitem(state->done, self, toB_int(state->row_no));
     B_dict_base_serialize_payload(self, class_id, state);
 }
 
 static void B_dict_base_deserialize_payload(B_dict_base res, $ROW row,
                                             $Serial$state state) {
+    ACTON_STORE(res, res->hashwit, (B_Hashable)$step_deserialize(state));
     res->numelements = (long)row->blob[0];
     long tb_size = (long)row->blob[1];
     if (tb_size == 0) {
@@ -356,6 +367,13 @@ static void B_dict_base_deserialize_payload(B_dict_base res, $ROW row,
     memcpy(table->tb_indices, &row->blob[4], tb_size * sizeof(int));
     for (int i = 0; i < table->tb_nentries; i++) {
         $entry_t entry = &TB_ENTRIES(table)[i];
+        if (state->row->class_id == NONE_ID) {
+            (void)$step_deserialize(state);
+            entry->hash = 0;
+            entry->key = NULL;
+            entry->value = DELETED;
+            continue;
+        }
         entry->hash = fromB_u64((B_u64)$step_deserialize(state));
         entry->key = $step_deserialize(state);
         entry->value = $step_deserialize(state);
@@ -370,13 +388,11 @@ static B_dict_base B_dict_base_deserialize(B_dict_base res, $SuperG_class cls,
     state->row = row->next;
     state->row_no++;
     if (row->class_id < 0)
-        return (B_dict_base)B_dictD_get(state->done, (B_Hashable)B_HashableD_intG_witness,
-                                       toB_int((long)row->blob[0]), NULL);
+        return (B_dict_base)B_dictD_get(state->done, toB_int((long)row->blob[0]), NULL);
 
     if (!res)
         res = acton_malloc(sizeof(struct B_dict_base));
-    B_dictD_setitem(state->done, (B_Hashable)B_HashableD_intG_witness,
-                    toB_int(state->row_no - 1), res);
+    B_dictD_setitem(state->done, toB_int(state->row_no - 1), res);
     res->$class = cls;
     B_dict_base_deserialize_payload(res, row, state);
     return res;
@@ -452,8 +468,7 @@ B_idict B_idictD___deserialize__(B_idict res, $Serial$state state) {
     if (!res) {
         res = acton_malloc(sizeof(struct B_idict));
         res->$class = &B_idictG_methods;
-        B_dictD_setitem(state->done, (B_Hashable)B_HashableD_intG_witness,
-                        toB_int(state->row_no - 1), res);
+        B_dictD_setitem(state->done, toB_int(state->row_no - 1), res);
     }
     $ROW row = state->row;
     state->row = row->next;
@@ -465,7 +480,7 @@ B_idict B_idictD___deserialize__(B_idict res, $Serial$state state) {
 
 // Generic equality and ordering //////////////////////////////////////////////////////////////////
 
-static bool B_dict_base_rel(bool directfalse, B_Hashable hashwit, B_Eq valuewit,
+static bool B_dict_base_rel(bool directfalse, B_Eq valuewit,
                             B_dict_base a, B_dict_base b) {
     if (directfalse)
         return false;
@@ -478,9 +493,9 @@ static bool B_dict_base_rel(bool directfalse, B_Hashable hashwit, B_Eq valuewit,
         $entry_t entry = &TB_ENTRIES(a->table)[i];
         if (entry->value == DELETED)
             continue;
-        uint64_t hash = b->table->tb_size > INIT_SIZE ? B_hash(hashwit, entry->key) : 0;
+        uint64_t hash = b->table->tb_size > INIT_SIZE ? B_hash(b->hashwit, entry->key) : 0;
         $WORD other;
-        int ix = $lookdict(b, hashwit, hash, entry->key, &other);
+        int ix = B_dict_lookup(b, hash, entry->key, &other);
         if (ix < 0 || valuewit->$class->__ne__(valuewit, entry->value, other))
             return false;
     }
@@ -492,8 +507,7 @@ static bool B_dict_base_rel(bool directfalse, B_Hashable hashwit, B_Eq valuewit,
 bool B_OrdD_dictD___eq__(B_OrdD_dict wit, B_dict a, B_dict b) {
     if (a == b)
         return true;
-    return B_dict_base_rel(a->numelements != b->numelements,
-                           wit->W_HashableD_AD_OrdD_dict, wit->W_EqD_BD_OrdD_dict,
+    return B_dict_base_rel(a->numelements != b->numelements, wit->W_EqD_BD_OrdD_dict,
                            (B_dict_base)a, (B_dict_base)b);
 }
 
@@ -502,14 +516,12 @@ bool B_OrdD_dictD___ne__(B_OrdD_dict wit, B_dict a, B_dict b) {
 }
 
 bool B_OrdD_dictD___lt__(B_OrdD_dict wit, B_dict a, B_dict b) {
-    return B_dict_base_rel(a->numelements >= b->numelements,
-                           wit->W_HashableD_AD_OrdD_dict, wit->W_EqD_BD_OrdD_dict,
+    return B_dict_base_rel(a->numelements >= b->numelements, wit->W_EqD_BD_OrdD_dict,
                            (B_dict_base)a, (B_dict_base)b);
 }
 
 bool B_OrdD_dictD___le__(B_OrdD_dict wit, B_dict a, B_dict b) {
-    return B_dict_base_rel(a->numelements > b->numelements,
-                           wit->W_HashableD_AD_OrdD_dict, wit->W_EqD_BD_OrdD_dict,
+    return B_dict_base_rel(a->numelements > b->numelements, wit->W_EqD_BD_OrdD_dict,
                            (B_dict_base)a, (B_dict_base)b);
 }
 
@@ -526,8 +538,7 @@ bool B_OrdD_dictD___ge__(B_OrdD_dict wit, B_dict a, B_dict b) {
 bool B_OrdD_idictD___eq__(B_OrdD_idict wit, B_idict a, B_idict b) {
     if (a == b)
         return true;
-    return B_dict_base_rel(a->numelements != b->numelements,
-                           wit->W_HashableD_AD_OrdD_idict, wit->W_EqD_BD_OrdD_idict,
+    return B_dict_base_rel(a->numelements != b->numelements, wit->W_EqD_BD_OrdD_idict,
                            (B_dict_base)a, (B_dict_base)b);
 }
 
@@ -536,14 +547,12 @@ bool B_OrdD_idictD___ne__(B_OrdD_idict wit, B_idict a, B_idict b) {
 }
 
 bool B_OrdD_idictD___lt__(B_OrdD_idict wit, B_idict a, B_idict b) {
-    return B_dict_base_rel(a->numelements >= b->numelements,
-                           wit->W_HashableD_AD_OrdD_idict, wit->W_EqD_BD_OrdD_idict,
+    return B_dict_base_rel(a->numelements >= b->numelements, wit->W_EqD_BD_OrdD_idict,
                            (B_dict_base)a, (B_dict_base)b);
 }
 
 bool B_OrdD_idictD___le__(B_OrdD_idict wit, B_idict a, B_idict b) {
-    return B_dict_base_rel(a->numelements > b->numelements,
-                           wit->W_HashableD_AD_OrdD_idict, wit->W_EqD_BD_OrdD_idict,
+    return B_dict_base_rel(a->numelements > b->numelements, wit->W_EqD_BD_OrdD_idict,
                            (B_dict_base)a, (B_dict_base)b);
 }
 
@@ -580,9 +589,9 @@ B_Iterator $dictD_U_keys_init(B_IteratorD_dict iter, $WORD src) {
     return (B_Iterator)B_dict_base_key_iterator_init(iter, src, (B_dict_base)src);
 }
 
-static B_IteratorD_dict B_dict_base_key_iterator($WORD src, B_dict_base dict) {
+B_Iterator B_dict_base_key_iterator(B_dict_base dict) {
     B_IteratorD_dict iter = acton_malloc(sizeof(struct B_IteratorD_dict));
-    return B_dict_base_key_iterator_init(iter, src, dict);
+    return (B_Iterator)B_dict_base_key_iterator_init(iter, dict, dict);
 }
 
 static bool B_IteratorD_dictD_next(B_IteratorD_dict self, $WORD *out) {
@@ -644,7 +653,7 @@ struct B_IteratorD_dictG_class B_IteratorD_dictG_methods = {"B_IteratorD_dict",U
 
 
 B_Iterator B_MappingD_dictD___iter__ (B_MappingD_dict wit, B_dict dict) {
-    return (B_Iterator)B_dict_base_key_iterator(dict, (B_dict_base)dict);
+    return (B_Iterator)B_dict_base_key_iterator((B_dict_base)dict);
 }
 
 B_dict B_MappingD_dictD___fromiter__ (B_MappingD_dict wit, B_Iterable wit2, $WORD iter) {
@@ -655,63 +664,63 @@ static int64_t B_dict_base_len(B_dict_base dict) {
     return dict->numelements;
 }
 
-static bool B_dict_base_contains(B_dict_base dict, B_Hashable hashwit, $WORD key) {
+bool B_dict_base_contains(B_dict_base dict, $WORD key) {
     if (dict->numelements == 0)
         return false;
     $WORD res;
     long h = 0;
     if (dict->table->tb_size > INIT_SIZE)
-        h = B_hash(hashwit, key);
-    return $lookdict(dict, hashwit, h, key, &res) >= 0;
+        h = B_hash(dict->hashwit, key);
+    return B_dict_lookup(dict, h, key, &res) >= 0;
 }
 
-static $WORD B_dict_base_get(B_dict_base dict, B_Hashable hashwit, $WORD key, $WORD deflt) {
+$WORD B_dict_base_get(B_dict_base dict, $WORD key, $WORD deflt) {
     if (!dict->table)
         return deflt;
     uint64_t hash = 0;
     if (dict->table->tb_size > INIT_SIZE)
-        hash = B_hash(hashwit, key);
+        hash = B_hash(dict->hashwit, key);
     $WORD res;
-    int ix = $lookdict(dict, hashwit, hash, key, &res);
+    int ix = B_dict_lookup(dict, hash, key, &res);
     if (ix < 0)
         return deflt;
     return res;
 }
 
-static $WORD B_dict_base_getitem(B_dict_base dict, B_Hashable hashwit, $WORD key) {
+$WORD B_dict_base_getitem(B_dict_base dict, $WORD key) {
     if (dict->numelements == 0)
         RAISE(B_KeyError, key, actStrFromCString("getitem: empty dictionary"));
     uint64_t hash = 0;
     if (dict->table->tb_size > INIT_SIZE)
-        hash = B_hash(hashwit, key);
+        hash = B_hash(dict->hashwit, key);
     $WORD res;
-    int ix = $lookdict(dict, hashwit, hash, key, &res);
+    int ix = B_dict_lookup(dict, hash, key, &res);
     if (ix < 0)
         RAISE(B_KeyError, key, actStrFromCString("getitem: key not in dictionary"));
     return res;
 }
 
-static $WORD B_dict_base_pop(B_dict_base dict, B_Hashable hashwit, $WORD key, $WORD deflt) {
+$WORD B_dict_base_pop(B_dict_base dict, $WORD key, $WORD deflt) {
     if (dict->numelements == 0)
         return deflt;
     $table table = dict->table;
     uint64_t hash = 0;
     if (table->tb_size > INIT_SIZE)
-        hash = B_hash(hashwit, key);
+        hash = B_hash(dict->hashwit, key);
     $WORD res;
-    int ix = $lookdict(dict, hashwit, hash, key, &res);
+    int ix = B_dict_lookup(dict, hash, key, &res);
     if (ix < 0)
         return deflt;
     $entry_t entry = &TB_ENTRIES(table)[ix];
     if (table->tb_size > INIT_SIZE) {
-        int i = $lookdict_index(table, hash, ix);
+        int i = B_dict_lookup_index(table, hash, ix);
         table->tb_indices[i] = DKIX_DUMMY;
     }
     res = entry->value;
     entry->value = DELETED;
     dict->numelements--;
     if (10 * dict->numelements < dict->table->tb_size)
-        dictresize(hashwit, dict);
+        B_dict_resize(dict);
     return res;
 }
 
@@ -720,8 +729,7 @@ int64_t B_MappingD_dictD___len__(B_MappingD_dict wit, B_dict dict) {
 }
 
 bool B_MappingD_dictD___contains__(B_MappingD_dict wit, B_dict dict, $WORD key) {
-    B_Hashable hashwit = wit->W_HashableD_AD_MappingD_dict;
-    return B_dict_base_contains((B_dict_base)dict, hashwit, key);
+    return B_dict_base_contains((B_dict_base)dict, key);
 }
 
 bool B_MappingD_dictD___containsnot__(B_MappingD_dict wit, B_dict dict, $WORD key) {
@@ -729,23 +737,23 @@ bool B_MappingD_dictD___containsnot__(B_MappingD_dict wit, B_dict dict, $WORD ke
 }
 
 $WORD B_MappingD_dictD_get(B_MappingD_dict wit, B_dict dict, $WORD key) {
-    return B_dict_base_get((B_dict_base)dict, wit->W_HashableD_AD_MappingD_dict, key, B_None);
+    return B_dict_base_get((B_dict_base)dict, key, B_None);
 }
 
 $WORD B_MappingD_dictD_get_def(B_MappingD_dict wit, B_dict dict, $WORD key, $WORD deflt) {
-    return B_dict_base_get((B_dict_base)dict, wit->W_HashableD_AD_MappingD_dict, key, deflt);
+    return B_dict_base_get((B_dict_base)dict, key, deflt);
 }
 
 $WORD B_MappingD_dictD_pop(B_MappingD_dict wit, B_dict dict, $WORD key) {
-    return B_dict_base_pop((B_dict_base)dict, wit->W_HashableD_AD_MappingD_dict, key, B_None);
+    return B_dict_base_pop((B_dict_base)dict, key, B_None);
 }
 
 $WORD B_MappingD_dictD_pop_def(B_MappingD_dict wit, B_dict dict, $WORD key, $WORD deflt) {
-    return B_dict_base_pop((B_dict_base)dict, wit->W_HashableD_AD_MappingD_dict, key, deflt);
+    return B_dict_base_pop((B_dict_base)dict, key, deflt);
 }
 
 B_Iterator B_MappingD_dictD_keys (B_MappingD_dict wit, B_dict dict) {
-    return (B_Iterator)B_dict_base_key_iterator(dict, (B_dict_base)dict);
+    return (B_Iterator)B_dict_base_key_iterator((B_dict_base)dict);
 }
 
 // Iterator classes for values and items
@@ -785,9 +793,9 @@ B_Iterator $dictD_U_values_init(B_IteratorD_dict_values iter, $WORD src) {
     return (B_Iterator)B_dict_base_values_iterator_init(iter, src, (B_dict_base)src);
 }
 
-static B_IteratorD_dict_values B_dict_base_values_iterator($WORD src, B_dict_base dict) {
+B_Iterator B_dict_base_values_iterator(B_dict_base dict) {
     B_IteratorD_dict_values iter = acton_malloc(sizeof(struct B_IteratorD_dict_values));
-    return B_dict_base_values_iterator_init(iter, src, dict);
+    return (B_Iterator)B_dict_base_values_iterator_init(iter, dict, dict);
 }
  
 void B_IteratorD_dict_values_init(B_IteratorD_dict_values self, B_dict dict) {
@@ -858,9 +866,9 @@ B_Iterator $dictD_U_items_init(B_IteratorD_dict_items iter, $WORD src) {
     return (B_Iterator)B_dict_base_items_iterator_init(iter, src, (B_dict_base)src);
 }
 
-static B_IteratorD_dict_items B_dict_base_items_iterator($WORD src, B_dict_base dict) {
+B_Iterator B_dict_base_items_iterator(B_dict_base dict) {
     B_IteratorD_dict_items iter = acton_malloc(sizeof(struct B_IteratorD_dict_items));
-    return B_dict_base_items_iterator_init(iter, src, dict);
+    return (B_Iterator)B_dict_base_items_iterator_init(iter, dict, dict);
 }
  
 void B_IteratorD_dict_items_init(B_IteratorD_dict_items self, B_dict dict) {
@@ -900,17 +908,17 @@ struct B_IteratorD_dict_itemsG_class B_IteratorD_dict_itemsG_methods = {"B_Itera
 
 
 B_Iterator B_MappingD_dictD_values (B_MappingD_dict wit, B_dict dict) {
-    return (B_Iterator)B_dict_base_values_iterator(dict, (B_dict_base)dict);
+    return (B_Iterator)B_dict_base_values_iterator((B_dict_base)dict);
 }
 
 B_Iterator B_MappingD_dictD_items (B_MappingD_dict wit, B_dict dict) {
-    return (B_Iterator)B_dict_base_items_iterator(dict, (B_dict_base)dict);
+    return (B_Iterator)B_dict_base_items_iterator((B_dict_base)dict);
 }
 
 // IMapping[idict] wrappers ///////////////////////////////////////////////////////////////////////
 
 B_Iterator B_IMappingD_idictD___iter__(B_IMappingD_idict wit, B_idict dict) {
-    return (B_Iterator)B_dict_base_key_iterator(dict, (B_dict_base)dict);
+    return (B_Iterator)B_dict_base_key_iterator((B_dict_base)dict);
 }
 
 B_idict B_IMappingD_idictD___fromiter__(B_IMappingD_idict wit, B_Iterable wit2, $WORD iter) {
@@ -922,8 +930,7 @@ int64_t B_IMappingD_idictD___len__(B_IMappingD_idict wit, B_idict dict) {
 }
 
 bool B_IMappingD_idictD___contains__(B_IMappingD_idict wit, B_idict dict, $WORD key) {
-    return B_dict_base_contains((B_dict_base)dict,
-                                wit->W_HashableD_AD_IMappingD_idict, key);
+    return B_dict_base_contains((B_dict_base)dict, key);
 }
 
 bool B_IMappingD_idictD___containsnot__(B_IMappingD_idict wit, B_idict dict, $WORD key) {
@@ -931,52 +938,52 @@ bool B_IMappingD_idictD___containsnot__(B_IMappingD_idict wit, B_idict dict, $WO
 }
 
 $WORD B_IMappingD_idictD_get(B_IMappingD_idict wit, B_idict dict, $WORD key) {
-    return B_dict_base_get((B_dict_base)dict, wit->W_HashableD_AD_IMappingD_idict,
-                           key, B_None);
+    return B_dict_base_get((B_dict_base)dict, key, B_None);
 }
 
 $WORD B_IMappingD_idictD_get_def(B_IMappingD_idict wit, B_idict dict,
                                  $WORD key, $WORD deflt) {
-    return B_dict_base_get((B_dict_base)dict, wit->W_HashableD_AD_IMappingD_idict,
-                           key, deflt);
+    return B_dict_base_get((B_dict_base)dict, key, deflt);
 }
 
 B_Iterator B_IMappingD_idictD_keys(B_IMappingD_idict wit, B_idict dict) {
-    return (B_Iterator)B_dict_base_key_iterator(dict, (B_dict_base)dict);
+    return (B_Iterator)B_dict_base_key_iterator((B_dict_base)dict);
 }
 
 B_Iterator B_IMappingD_idictD_values(B_IMappingD_idict wit, B_idict dict) {
-    return (B_Iterator)B_dict_base_values_iterator(dict, (B_dict_base)dict);
+    return (B_Iterator)B_dict_base_values_iterator((B_dict_base)dict);
 }
 
 B_Iterator B_IMappingD_idictD_items(B_IMappingD_idict wit, B_idict dict) {
-    return (B_Iterator)B_dict_base_items_iterator(dict, (B_dict_base)dict);
+    return (B_Iterator)B_dict_base_items_iterator((B_dict_base)dict);
 }
 
-B_NoneType B_MappingD_dictD_update (B_MappingD_dict wit, B_dict dict, B_Iterable wit2, $WORD other) {
-    B_Hashable hashwit = wit->W_HashableD_AD_MappingD_dict;
+B_NoneType B_dict_base_update(B_dict_base dict, B_Iterable wit2, $WORD other) {
     B_Iterator it = wit2->$class->__iter__(wit2,other);
     $WORD next;
     while (it->$class->__next__(it, &next)) {
         B_tuple item = (B_tuple)next;
-        B_dictD_setitem(dict,hashwit,item->components[0],item->components[1]);
+        B_dict_base_setitem(dict, item->components[0], item->components[1]);
     }
     return B_None;
 }
 
-B_tuple B_MappingD_dictD_popitem (B_MappingD_dict wit, B_dict dict) {
+B_NoneType B_MappingD_dictD_update (B_MappingD_dict wit, B_dict dict, B_Iterable wit2, $WORD other) {
+    return B_dict_base_update((B_dict_base)dict, wit2, other);
+}
+
+B_tuple B_dict_base_popitem(B_dict_base dict) {
     if (dict->numelements == 0)  {
         return NULL;
     }
-    B_Hashable hashwit = wit->W_HashableD_AD_MappingD_dict;
     $table table = dict->table;
     int ix = table->tb_nentries-1;
     while (ix >= 0) {
         $entry_t entry =  &TB_ENTRIES(table)[ix];
         if (entry->value != DELETED) {
             if (table->tb_size > INIT_SIZE) {
-                uint64_t hash = B_hash(hashwit, entry->key);
-                int i = $lookdict_index(table,hash,ix);
+                uint64_t hash = B_hash(dict->hashwit, entry->key);
+                int i = B_dict_lookup_index(table, hash, ix);
                 table->tb_indices[i] = DKIX_DUMMY;
             }
             dict->numelements--;
@@ -988,72 +995,74 @@ B_tuple B_MappingD_dictD_popitem (B_MappingD_dict wit, B_dict dict) {
     return NULL;
 }
 
-$WORD B_MappingD_dictD_setdefault (B_MappingD_dict wit, B_dict dict, $WORD key, $WORD deflt) {
+B_tuple B_MappingD_dictD_popitem (B_MappingD_dict wit, B_dict dict) {
+    return B_dict_base_popitem((B_dict_base)dict);
+}
+
+$WORD B_dict_base_setdefault(B_dict_base dict, $WORD key, $WORD deflt) {
     if (!deflt) deflt = B_None;
-    B_Hashable hashwit = wit->W_HashableD_AD_MappingD_dict;
-    uint64_t hash = B_hash(hashwit, key);
+    uint64_t hash = B_hash(dict->hashwit, key);
     $WORD value;
-    int ix = $lookdict((B_dict_base)dict, hashwit, hash, key, &value);
+    int ix = B_dict_lookup((B_dict_base)dict, hash, key, &value);
     if (ix >= 0)
         return value;
-    insertdict((B_dict_base)dict, hashwit, hash, key, deflt);
+    B_dict_insert((B_dict_base)dict, hash, key, deflt);
     return deflt;
+}
+
+$WORD B_MappingD_dictD_setdefault (B_MappingD_dict wit, B_dict dict, $WORD key, $WORD deflt) {
+    return B_dict_base_setdefault((B_dict_base)dict, key, deflt);
 }
  
 
 // B_IndexedD_MappingD_dict ///////////////////////////////////////////////////////////////////////
 
 $WORD B_IndexedD_MappingD_dictD___getitem__(B_IndexedD_MappingD_dict wit, B_dict dict, $WORD key) {
-    B_Hashable hashwit = ((B_MappingD_dict)wit->W_Mapping)->W_HashableD_AD_MappingD_dict;
-    return B_dict_base_getitem((B_dict_base)dict, hashwit, key);
+    return B_dict_base_getitem((B_dict_base)dict, key);
 }
 
 $WORD B_IIndexedD_MappingD_dictD___getitem__(B_IIndexedD_MappingD_dict wit,
                                              B_dict dict, $WORD key) {
-    B_Hashable hashwit = ((B_MappingD_dict)wit->W_Mapping)->W_HashableD_AD_MappingD_dict;
-    return B_dict_base_getitem((B_dict_base)dict, hashwit, key);
+    return B_dict_base_getitem((B_dict_base)dict, key);
 }
 
 B_NoneType B_IndexedD_MappingD_dictD___setitem__ (B_IndexedD_MappingD_dict wit, B_dict dict, $WORD key, $WORD value) {
-    B_Hashable hashwit = ((B_MappingD_dict)wit->W_Mapping)->W_HashableD_AD_MappingD_dict;
-    uint64_t hash = 0;
-    if (dict->table && dict->table->tb_size > INIT_SIZE) {
-        hash = B_hash(hashwit, key);
-    }
-    insertdict((B_dict_base)dict, hashwit, hash, key, value);
+    return B_dict_base_setitem((B_dict_base)dict, key, value);
+}
+
+B_NoneType B_dict_base_delitem(B_dict_base dict, $WORD key) {
+    B_dict_base_pop((B_dict_base)dict, key, B_None);
     return B_None;
 }
 
 B_NoneType B_IndexedD_MappingD_dictD___delitem__(B_IndexedD_MappingD_dict wit,
                                                  B_dict dict, $WORD key) {
-    B_Hashable hashwit = ((B_MappingD_dict)wit->W_Mapping)->W_HashableD_AD_MappingD_dict;
-    B_dict_base_pop((B_dict_base)dict, hashwit, key, B_None);
-    return B_None;
+    return B_dict_base_delitem((B_dict_base)dict, key);
 }
 
 // IIndexed[IMapping[idict]] //////////////////////////////////////////////////////////////////////
 
 $WORD B_IIndexedD_IMappingD_idictD___getitem__(B_IIndexedD_IMappingD_idict wit,
                                                B_idict dict, $WORD key) {
-    B_Hashable hashwit = ((B_IMappingD_idict)wit->W_IMapping)
-        ->W_HashableD_AD_IMappingD_idict;
-    return B_dict_base_getitem((B_dict_base)dict, hashwit, key);
+    return B_dict_base_getitem((B_dict_base)dict, key);
 }
 
-void B_dictD_setitem(B_dict dict, B_Hashable hashwit, $WORD key, $WORD value) {
+B_NoneType B_dict_base_setitem(B_dict_base dict, $WORD key, $WORD value) {
     uint64_t hash = 0;
     if (dict->table && dict->table->tb_size > INIT_SIZE) {
-        hash = B_hash(hashwit, key);
+        hash = B_hash(dict->hashwit, key);
     }
-    insertdict((B_dict_base)dict, hashwit, hash, key, value);
+    B_dict_insert((B_dict_base)dict, hash, key, value);
+    return B_None;
 }
 
-$WORD B_dictD_get(B_dict dict, B_Hashable hashwit, $WORD key, $WORD deflt) {
-    return B_dict_base_get((B_dict_base)dict, hashwit, key, deflt);
+
+$WORD B_dictD_get(B_dict dict, $WORD key, $WORD deflt) {
+    return B_dict_base_get((B_dict_base)dict, key, deflt);
 }
 
-$WORD B_dictD_pop(B_dict dict, B_Hashable hashwit, $WORD key, $WORD deflt) {
-    return B_dict_base_pop((B_dict_base)dict, hashwit, key, deflt);
+$WORD B_dictD_pop(B_dict dict, $WORD key, $WORD deflt) {
+    return B_dict_base_pop((B_dict_base)dict, key, deflt);
 }
 
 /*

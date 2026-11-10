@@ -212,21 +212,21 @@ B_tuple actonQ_rtsQ_perf_snapshot (B_SysCap cap) {
 B_dict actonQ_rtsQ_perf_info (B_SysCap cap) {
     B_Hashable wit = (B_Hashable)B_HashableD_strG_witness;
     B_dict info = $NEW(B_dict, wit, NULL, NULL);
-    B_dictD_setitem(info, wit, actStrFromCString("version"), actStrFromCString("1"));
-    B_dictD_setitem(info, wit, actStrFromCString("backend"), actStrFromCString(rts_perf_backend()));
-    B_dictD_setitem(info, wit, actStrFromCString("scope"), actStrFromCString(rts_perf_scope()));
-    B_dictD_setitem(info, wit, actStrFromCString("status"), actStrFromCString(rts_perf_status()));
+    B_dictD_setitem(info, actStrFromCString("version"), actStrFromCString("1"));
+    B_dictD_setitem(info, actStrFromCString("backend"), actStrFromCString(rts_perf_backend()));
+    B_dictD_setitem(info, actStrFromCString("scope"), actStrFromCString(rts_perf_scope()));
+    B_dictD_setitem(info, actStrFromCString("status"), actStrFromCString(rts_perf_status()));
     uv_utsname_t system;
     if (uv_os_uname(&system) == 0) {
-        B_dictD_setitem(info, wit, actStrFromCString("os"), actStrFromCStringCopy(system.sysname));
-        B_dictD_setitem(info, wit, actStrFromCString("release"), actStrFromCStringCopy(system.release));
-        B_dictD_setitem(info, wit, actStrFromCString("arch"), actStrFromCStringCopy(system.machine));
+        B_dictD_setitem(info, actStrFromCString("os"), actStrFromCStringCopy(system.sysname));
+        B_dictD_setitem(info, actStrFromCString("release"), actStrFromCStringCopy(system.release));
+        B_dictD_setitem(info, actStrFromCString("arch"), actStrFromCStringCopy(system.machine));
     }
     uv_cpu_info_t *cpus;
     int count;
     if (uv_cpu_info(&cpus, &count) == 0) {
         if (count > 0)
-            B_dictD_setitem(info, wit, actStrFromCString("cpu"), actStrFromCStringCopy(cpus[0].model));
+            B_dictD_setitem(info, actStrFromCString("cpu"), actStrFromCStringCopy(cpus[0].model));
         uv_free_cpu_info(cpus, count);
     }
     return info;
@@ -261,7 +261,6 @@ B_NoneType actonQ_rtsQ_sleep (B_SysCap cap, double sleep_time) {
 
 struct actonQ_rtsQ_io_handles_walk_res {
     B_dict d;
-    B_Hashable wit;
 };
 
 void actonQ_rtsQ_io_handles_walk_cb (uv_handle_t *handle, void *arg) {
@@ -280,7 +279,7 @@ void actonQ_rtsQ_io_handles_walk_cb (uv_handle_t *handle, void *arg) {
                                 );
     }
 
-    B_dictD_setitem(walk_res->d, walk_res->wit, toB_u64((long)handle), val);
+    B_dictD_setitem(walk_res->d, toB_u64((long)handle), val);
 }
 
 B_dict actonQ_rtsQ__io_handles (B_SysCap cap) {
@@ -288,7 +287,6 @@ B_dict actonQ_rtsQ__io_handles (B_SysCap cap) {
     B_dict d = $NEW(B_dict, wit, NULL, NULL);
 
     struct actonQ_rtsQ_io_handles_walk_res walk_res;
-    walk_res.wit = wit;
     walk_res.d = d;
     uv_walk(get_uv_loop(), actonQ_rtsQ_io_handles_walk_cb, (void *)&walk_res);
 
@@ -330,7 +328,7 @@ B_dict actonQ_rtsQ_rts_stats (B_SysCap cap) {
                             toB_u64(WT(bkeep_100s)),
                             toB_u64(WT(bkeep_inf))
                             );
-        B_dictD_setitem(d, wit, toB_u64(i), stats);
+        B_dictD_setitem(d, toB_u64(i), stats);
     }
 #undef WT
     return d;

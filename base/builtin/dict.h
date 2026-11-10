@@ -1,26 +1,31 @@
 typedef struct $table_struct *$table;
 
 /*
- * Common storage shared by dict and idict.  Keep the concrete structures: C
- * runtime clients access dict fields directly.  dict.c uses B_dict_base so the
- * hash-table implementation is independent of the public mutability wrapper.
+ * Common storage shared by dict and idict. Hashable is installed once by the
+ * constructor, retained by freeze(), and serialized with the container.
+ * Keep the concrete structures: C runtime clients access dict fields directly.
+ * dict.c uses B_dict_base so the hash-table implementation is independent of
+ * the public mutability wrapper.
  */
 typedef struct B_dict_base *B_dict_base;
 
 struct __attribute__((__may_alias__)) B_dict_base {
     $SuperG_class $class;
+    B_Hashable hashwit;             // key hashing/equality policy, set at construction
     long numelements;
     $table table;
 };
 
 struct B_dict {
     struct B_dictG_class *$class;
+    B_Hashable hashwit;             // key hashing/equality policy, set at construction
     long numelements;               // nr of elements in dictionary
     $table table;                   // the hashtable
 };
 
 struct B_idict {
     struct B_idictG_class *$class;
+    B_Hashable hashwit;             // key hashing/equality policy, set at construction
     long numelements;
     $table table;
 };
@@ -37,6 +42,11 @@ _Static_assert(offsetof(struct B_dict_base, table) == offsetof(struct B_dict, ta
                "generic dict and dict must have the same table offset");
 _Static_assert(offsetof(struct B_dict_base, table) == offsetof(struct B_idict, table),
                "generic dict and idict must have the same table offset");
+
+_Static_assert(offsetof(struct B_dict_base, hashwit) == offsetof(struct B_dict, hashwit),
+               "generic dict and dict must have the same Hashable offset");
+_Static_assert(offsetof(struct B_dict_base, hashwit) == offsetof(struct B_idict, hashwit),
+               "generic dict and idict must have the same Hashable offset");
 
 // Iterators over dicts ///////////////////////////////////////////////////////
 
@@ -125,9 +135,25 @@ B_IteratorD_dict_items B_IteratorD_dict_itemsG_new(B_dict);
 B_Iterator $dictD_U_items_init(B_IteratorD_dict_items iter, $WORD src);
 
 
-// Convenience methods used for (de)serialization
-void B_dictD_setitem(B_dict dict, B_Hashable hashwit, $WORD key, $WORD value);
-$WORD B_dictD_get(B_dict dict, B_Hashable hashwit, $WORD key, $WORD deflt);
+// Shared operations used directly by generated code and by protocol wrappers.
+bool B_dict_base_contains(B_dict_base, $WORD);
+$WORD B_dict_base_getitem(B_dict_base, $WORD);
+$WORD B_dict_base_get(B_dict_base, $WORD, $WORD);
+$WORD B_dict_base_pop(B_dict_base, $WORD, $WORD);
+B_NoneType B_dict_base_setitem(B_dict_base, $WORD, $WORD);
+B_NoneType B_dict_base_delitem(B_dict_base, $WORD);
+B_NoneType B_dict_base_update(B_dict_base, B_Iterable, $WORD);
+B_tuple B_dict_base_popitem(B_dict_base);
+$WORD B_dict_base_setdefault(B_dict_base, $WORD, $WORD);
+B_Iterator B_dict_base_key_iterator(B_dict_base);
+B_Iterator B_dict_base_values_iterator(B_dict_base);
+B_Iterator B_dict_base_items_iterator(B_dict_base);
+
+// Native operations use the Hashable witness stored in the dictionary.
+static inline __attribute__((always_inline)) void B_dictD_setitem(B_dict dict, $WORD key, $WORD value) {
+    B_dict_base_setitem((B_dict_base)dict, key, value);
+}
+$WORD B_dictD_get(B_dict dict, $WORD key, $WORD deflt);
 
 // Witness-free length getters used by generated code.
 static inline int64_t $dictD_U__len(B_dict self) {

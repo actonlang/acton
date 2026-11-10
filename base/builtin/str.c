@@ -1830,69 +1830,53 @@ B_str B_strD_zfill(B_str s, int64_t width) {
 // The comparisons below do lexicographic byte-wise comparisons.
 // Thus they do not in general reflect locale-dependent order conventions.
 
-static int str_compare(B_str a, B_str b) {
+int B_str_compare(B_str a, B_str b) {
     int64_t size = a->nbytes < b->nbytes ? a->nbytes : b->nbytes;
     int order = memcmp(a->str, b->str, size);
     return order != 0 ? order : (a->nbytes > b->nbytes) - (a->nbytes < b->nbytes);
 }
 
 bool B_OrdD_strD___eq__ (B_OrdD_str wit, B_str a, B_str b) {
-    return $strD_U__eq__(a, b);
+    return B_str_eq(a, b);
 }
 
 bool B_OrdD_strD___ne__ (B_OrdD_str wit, B_str a, B_str b) {
-    return $strD_U__ne__(a, b);
+    return !B_str_eq(a, b);
 }
 
 bool B_OrdD_strD___lt__(B_OrdD_str wit, B_str a, B_str b) {
-    return $strD_U__lt__(a, b);
-}
-
-bool $strD_U__lt__(B_str a, B_str b) {
-    return str_compare(a, b) < 0;
+    return B_str_compare(a, b) < 0;
 }
 
 bool B_OrdD_strD___le__(B_OrdD_str wit, B_str a, B_str b) {
-    return $strD_U__le__(a, b);
-}
-
-bool $strD_U__le__(B_str a, B_str b) {
-    return str_compare(a, b) <= 0;
+    return B_str_compare(a, b) <= 0;
 }
 
 bool B_OrdD_strD___gt__(B_OrdD_str wit, B_str a, B_str b) {
-    return $strD_U__gt__(a, b);
-}
-
-bool $strD_U__gt__(B_str a, B_str b) {
-    return str_compare(a, b) > 0;
+    return B_str_compare(a, b) > 0;
 }
 
 bool B_OrdD_strD___ge__(B_OrdD_str wit, B_str a, B_str b) {
-    return $strD_U__ge__(a, b);
-}
-
-bool $strD_U__ge__(B_str a, B_str b) {
-    return str_compare(a, b) >= 0;
+    return B_str_compare(a, b) >= 0;
 }
 
 // B_Hashable ///////////////////////////////////////////////////////////////////////////////////
 
 B_NoneType B_HashableD_strD_hash(B_HashableD_str wit, B_str a, B_hasher h) {
-    return $strD_U_hash(a, h);
+    return B_str_hash(a, h);
 }
 
-B_NoneType $strD_U_hash(B_str a, B_hasher h) {
+B_NoneType B_str_hash(B_str a, B_hasher h) {
     zig_hash_wyhash_update(h->_hasher, (const uint8_t *)a->str, a->nbytes);
     return B_None;
 }
 // B_Times /////////////////////////////////////////////////////////////////////////////////////////////
 
 B_str B_TimesD_strD___add__ (B_TimesD_str wit, B_str s, B_str t) {
-    return $strD_U__add__(s, t);
+    return B_str_add(s, t);
 }
 
-B_str $strD_U__add__(B_str s, B_str t) {
+B_str B_str_add(B_str s, B_str t) {
     int64_t nbytes = (int64_t)s->nbytes + t->nbytes;
     check_result_len(nbytes);
     B_str res;
@@ -1903,18 +1887,18 @@ B_str $strD_U__add__(B_str s, B_str t) {
 }
 
 B_str B_TimesD_strD___zero__(B_TimesD_str wit) {
-    return $strD_U__zero__();
+    return B_str_zero();
 }
 
-B_str $strD_U__zero__(void) {
+B_str B_str_zero(void) {
     return null_str;
 }
 
 B_str B_TimesD_strD___mul__(B_TimesD_str wit, B_str a, B_int n) {
-    return $strD_U__mul__(a, n->val);
+    return B_str_mul(a, n->val);
 }
 
-B_str $strD_U__mul__(B_str a, int64_t n) {
+B_str B_str_mul(B_str a, int64_t n) {
     int64_t nval = n;
     if (nval <= 0 || a->nbytes == 0)
         return null_str;
@@ -1934,10 +1918,10 @@ B_str $strD_U__mul__(B_str a, int64_t n) {
 
 
 B_str B_ContainerD_strD___fromiter__(B_ContainerD_str wit, B_Iterable wit2, $WORD iter) {
-    return $strD_U__fromiter__(wit2, iter);
+    return B_str_fromiter(wit2, iter);
 }
 
-B_str $strD_U__fromiter__(B_Iterable wit2, $WORD iter) {
+B_str B_str_fromiter(B_Iterable wit2, $WORD iter) {
     return B_strD_join(null_str,wit2,iter);
 }
 
@@ -1949,19 +1933,15 @@ int64_t B_ContainerD_strD___len__ (B_ContainerD_str wit, B_str s){
 
 
 bool B_ContainerD_strD___contains__(B_ContainerD_str wit, B_str s, B_str sub) {
-    return $strD_U__contains__(s, sub);
+    return B_str_contains(s, sub);
 }
 
-bool $strD_U__contains__(B_str s, B_str sub) {
+bool B_str_contains(B_str s, B_str sub) {
     return bmh(s->str,sub->str,s->nbytes,sub->nbytes) >= 0;
 }
 
 bool B_ContainerD_strD___containsnot__(B_ContainerD_str wit, B_str s, B_str sub) {
-    return $strD_U__containsnot__(s, sub);
-}
-
-bool $strD_U__containsnot__(B_str s, B_str sub) {
-    return !$strD_U__contains__(s, sub);
+    return !B_str_contains(s, sub);
 }
 
 // Iterable ///////////////////////////////////////////////////////////////////////////
@@ -1978,7 +1958,7 @@ B_NoneType B_IteratorD_strD_init(B_IteratorD_str self, B_str str) {
     return B_None;
 }
 
-B_Iterator $strD_U_iter_init(B_IteratorD_str iter, B_str src) {
+B_Iterator B_str_iter_init(B_IteratorD_str iter, B_str src) {
     iter->$class = &B_IteratorD_strG_methods;
     B_IteratorD_strD_init(iter, src);
     return (B_Iterator)iter;
@@ -2030,17 +2010,17 @@ struct B_IteratorD_strG_class B_IteratorD_strG_methods = {"B_IteratorD_str",UNAS
 // now, define __iter__
 
 B_Iterator B_ContainerD_strD___iter__(B_ContainerD_str wit, B_str s) {
-    return $strD_U__iter__(s);
+    return B_str_iter(s);
 }
 
-B_Iterator $strD_U__iter__(B_str s) {
+B_Iterator B_str_iter(B_str s) {
     return (B_Iterator)$NEW(B_IteratorD_str,s);
 }
 
 
 // IIndexed //////////////////////////////////////////////////////////////////////////
 
-B_str $strD_U__getitem__(B_str s, int64_t i) {
+B_str B_str_getitem(B_str s, int64_t i) {
     unsigned char *p = s->str;
     int64_t ix = get_index(i, s->nchars);
     p = skip_chars(p,ix,s->nchars == s->nbytes);
@@ -2048,16 +2028,16 @@ B_str $strD_U__getitem__(B_str s, int64_t i) {
 }
 
 B_str B_ISliceableD_strD___getitem__ (B_ISliceableD_str wit, B_str s, B_int i) {
-    return $strD_U__getitem__(s, i->val);
+    return B_str_getitem(s, i->val);
 }
 
 // ISliceable /////////////////////////////////////////////////////////////////////////////////////
 
 B_str B_ISliceableD_strD___getslice__(B_ISliceableD_str wit, B_str s, B_slice slc) {
-    return $strD_U__getslice__(s, slc);
+    return B_str_getslice(s, slc);
 }
 
-B_str $strD_U__getslice__(B_str s, B_slice slc) {
+B_str B_str_getslice(B_str s, B_slice slc) {
     int isascii = s->nchars == s->nbytes;
     int64_t nchars = s->nchars;
     int64_t nbytes = 0;
@@ -2902,55 +2882,39 @@ B_bytearray B_bytearrayD_zfill(B_bytearray s, int64_t width) {
 
 
 bool B_OrdD_bytearrayD___eq__(B_OrdD_bytearray wit, B_bytearray a, B_bytearray b) {
-    return $bytearrayD_U__eq__(a, b);
+    return B_bytearray_eq(a, b);
 }
 
-bool $bytearrayD_U__eq__(B_bytearray a, B_bytearray b) {
+bool B_bytearray_eq(B_bytearray a, B_bytearray b) {
     if (a == b)
         return true;
     return a->nbytes == b->nbytes && memcmp(a->str,b->str,a->nbytes)==0;
 }
 
 bool B_OrdD_bytearrayD___ne__(B_OrdD_bytearray wit, B_bytearray a, B_bytearray b) {
-    return $bytearrayD_U__ne__(a, b);
-}
-
-bool $bytearrayD_U__ne__(B_bytearray a, B_bytearray b) {
-    return !$bytearrayD_U__eq__(a, b);
+    return !B_bytearray_eq(a, b);
 }
 
 bool B_OrdD_bytearrayD___lt__(B_OrdD_bytearray wit, B_bytearray a, B_bytearray b) {
-    return $bytearrayD_U__lt__(a, b);
+    return B_bytearray_lt(a, b);
 }
 
-bool $bytearrayD_U__lt__(B_bytearray a, B_bytearray b) {
+bool B_bytearray_lt(B_bytearray a, B_bytearray b) {
     int64_t minl = a->nbytes<b->nbytes ? a->nbytes : b->nbytes;
     int c = memcmp(a->str,b->str,minl);
     return c<0 || (c==0 && a->nbytes<b->nbytes);
 }
 
 bool B_OrdD_bytearrayD___le__(B_OrdD_bytearray wit, B_bytearray a, B_bytearray b) {
-    return $bytearrayD_U__le__(a, b);
-}
-
-bool $bytearrayD_U__le__(B_bytearray a, B_bytearray b) {
-    return !$bytearrayD_U__lt__(b, a);
+    return !B_bytearray_lt(b, a);
 }
 
 bool B_OrdD_bytearrayD___gt__(B_OrdD_bytearray wit, B_bytearray a, B_bytearray b) {
-    return $bytearrayD_U__gt__(a, b);
-}
-
-bool $bytearrayD_U__gt__(B_bytearray a, B_bytearray b) {
-    return $bytearrayD_U__lt__(b, a);
+    return B_bytearray_lt(b, a);
 }
 
 bool B_OrdD_bytearrayD___ge__(B_OrdD_bytearray wit, B_bytearray a, B_bytearray b) {
-    return $bytearrayD_U__ge__(a, b);
-}
-
-bool $bytearrayD_U__ge__(B_bytearray a, B_bytearray b) {
-    return !$bytearrayD_U__lt__(a, b);
+    return !B_bytearray_lt(a, b);
 }
 
 // Container
@@ -2969,7 +2933,7 @@ B_NoneType B_IteratorD_bytearrayD_init(B_IteratorD_bytearray self, B_bytearray b
     return B_None;
 }
 
-B_Iterator $bytearrayD_U_iter_init(B_IteratorD_bytearray iter, B_bytearray src) {
+B_Iterator B_bytearray_iter_init(B_IteratorD_bytearray iter, B_bytearray src) {
     iter->$class = &B_IteratorD_bytearrayG_methods;
     B_IteratorD_bytearrayD_init(iter, src);
     return (B_Iterator)iter;
@@ -3010,10 +2974,10 @@ struct B_IteratorD_bytearrayG_class B_IteratorD_bytearrayG_methods = {
 };
 
 bool B_ContainerD_bytearrayD___contains__(B_ContainerD_bytearray wit, B_bytearray self, B_int n) {
-    return $bytearrayD_U__contains__(self, n->val);
+    return B_bytearray_contains(self, n->val);
 }
 
-bool $bytearrayD_U__contains__(B_bytearray self, int64_t n) {
+bool B_bytearray_contains(B_bytearray self, int64_t n) {
     if (n < 0 || n > 255)
         return false;
     bool res = false;
@@ -3027,23 +2991,19 @@ bool $bytearrayD_U__contains__(B_bytearray self, int64_t n) {
 }
 
 bool B_ContainerD_bytearrayD___containsnot__(B_ContainerD_bytearray wit, B_bytearray self, B_int n) {
-    return $bytearrayD_U__containsnot__(self, n->val);
-}
-
-bool $bytearrayD_U__containsnot__(B_bytearray self, int64_t n) {
-    return !$bytearrayD_U__contains__(self, n);
+    return !B_bytearray_contains(self, n->val);
 }
 
 // Sequence
 
-int64_t $bytearrayD_U__getitem__(B_bytearray self, int64_t ix) {
+int64_t B_bytearray_getitem(B_bytearray self, int64_t ix) {
     int64_t ix0 = ix < 0 ? self->nbytes + ix : ix;
     if (ix0<0 || ix0 >= self->nbytes)
         RAISE(B_IndexError, ix0, actStrFromCString("getitem: index outside bytearray"));
     return (int64_t)self->str[ix0];
 }
 
-B_NoneType $bytearrayD_U__setitem__(B_bytearray self, int64_t ix, int64_t val) {
+B_NoneType B_bytearray_setitem(B_bytearray self, int64_t ix, int64_t val) {
     int64_t ix0 = ix < 0 ? self->nbytes + ix : ix;
     if (ix0<0 || ix0 >= self->nbytes)
         RAISE(B_IndexError, ix0, actStrFromCString("setitem: index outside bytearray"));
@@ -3053,7 +3013,7 @@ B_NoneType $bytearrayD_U__setitem__(B_bytearray self, int64_t ix, int64_t val) {
     return B_None;
 }
 
-B_NoneType $bytearrayD_U__delitem__(B_bytearray self, int64_t ix) {
+B_NoneType B_bytearray_delitem(B_bytearray self, int64_t ix) {
     int64_t ix0 = ix < 0 ? self->nbytes + ix : ix;
     int64_t len = self->nbytes;
     if (ix0 < 0 || ix0 >= len)
@@ -3064,22 +3024,22 @@ B_NoneType $bytearrayD_U__delitem__(B_bytearray self, int64_t ix) {
 }
 
 B_int B_SequenceD_bytearrayD___getitem__ (B_SequenceD_bytearray wit, B_bytearray self, B_int n) {
-    return toB_int($bytearrayD_U__getitem__(self, n->val));
+    return toB_int(B_bytearray_getitem(self, n->val));
 }
 
 B_NoneType B_SequenceD_bytearrayD___setitem__ (B_SequenceD_bytearray wit, B_bytearray self, B_int n, B_int v) {
-    return $bytearrayD_U__setitem__(self, n->val, v->val);
+    return B_bytearray_setitem(self, n->val, v->val);
 }
 
 B_NoneType B_SequenceD_bytearrayD___delitem__ (B_SequenceD_bytearray wit, B_bytearray self, B_int n) {
-    return $bytearrayD_U__delitem__(self, n->val);
+    return B_bytearray_delitem(self, n->val);
 }
 
 B_NoneType B_SequenceD_bytearrayD_insert(B_SequenceD_bytearray wit, B_bytearray self, int64_t n, B_int elem) {
-    return $bytearrayD_U_insert(self, n, elem->val);
+    return B_bytearray_insert(self, n, elem->val);
 }
 
-B_NoneType $bytearrayD_U_insert(B_bytearray self, int64_t n, int64_t elem) {
+B_NoneType B_bytearray_insert(B_bytearray self, int64_t n, int64_t elem) {
     if (elem < 0 || elem > 255)
         RAISE_EXC(&B_str_invalid_bytearray_insert_error);
     int64_t ix = n;
@@ -3095,10 +3055,10 @@ B_NoneType $bytearrayD_U_insert(B_bytearray self, int64_t n, int64_t elem) {
 }
 
 B_NoneType B_SequenceD_bytearrayD_append(B_SequenceD_bytearray wit, B_bytearray self, B_int elem) {
-    return $bytearrayD_U_append(self, elem->val);
+    return B_bytearray_append(self, elem->val);
 }
 
-B_NoneType $bytearrayD_U_append(B_bytearray self, int64_t elem) {
+B_NoneType B_bytearray_append(B_bytearray self, int64_t elem) {
     if (elem < 0 || elem > 255)
         RAISE_EXC(&B_str_invalid_bytearray_append_error);
     expand_bytearray(self,1);
@@ -3107,10 +3067,10 @@ B_NoneType $bytearrayD_U_append(B_bytearray self, int64_t elem) {
 }
 
 B_NoneType B_SequenceD_bytearrayD_reverse(B_SequenceD_bytearray wit, B_bytearray self) {
-    return $bytearrayD_U_reverse(self);
+    return B_bytearray_reverse(self);
 }
 
-B_NoneType $bytearrayD_U_reverse(B_bytearray self) {
+B_NoneType B_bytearray_reverse(B_bytearray self) {
     int64_t len = self->nbytes;
     for (int64_t i = 0; i < len/2; i++) {
         unsigned char tmp = self->str[i];
@@ -3121,20 +3081,20 @@ B_NoneType $bytearrayD_U_reverse(B_bytearray self) {
 }
 
 B_Iterator B_SequenceD_bytearrayD___reversed__(B_SequenceD_bytearray wit, B_bytearray self) {
-    return $bytearrayD_U__reversed__(self);
+    return B_bytearray_reversed(self);
 }
 
-B_Iterator $bytearrayD_U__reversed__(B_bytearray self) {
+B_Iterator B_bytearray_reversed(B_bytearray self) {
     B_bytearray copy = B_bytearrayD_copy(self);
-    $bytearrayD_U_reverse(copy);
+    B_bytearray_reverse(copy);
     return (B_Iterator)$NEW(B_IteratorD_bytearray,copy);
 }
 
 B_bytearray B_SequenceD_bytearrayD___getslice__(B_SequenceD_bytearray wit, B_bytearray self, B_slice slc) {
-    return $bytearrayD_U__getslice__(self, slc);
+    return B_bytearray_getslice(self, slc);
 }
 
-B_bytearray $bytearrayD_U__getslice__(B_bytearray self, B_slice slc) {
+B_bytearray B_bytearray_getslice(B_bytearray self, B_slice slc) {
     int64_t len = self->nbytes;
     int64_t start, stop, step, slen;
     normalize_slice(slc, len, &slen, &start, &stop, &step);
@@ -3149,17 +3109,17 @@ B_bytearray $bytearrayD_U__getslice__(B_bytearray self, B_slice slc) {
 }
 
 B_NoneType B_SequenceD_bytearrayD___setslice__(B_SequenceD_bytearray wit, B_bytearray self, B_Iterable wit2, B_slice slc, $WORD iter) {
-    return $bytearrayD_U__setslice__(self, wit2, slc, iter);
+    return B_bytearray_setslice(self, wit2, slc, iter);
 }
 
-B_NoneType $bytearrayD_U__setslice__(B_bytearray self, B_Iterable wit2, B_slice slc, $WORD iter) {
+B_NoneType B_bytearray_setslice(B_bytearray self, B_Iterable wit2, B_slice slc, $WORD iter) {
     B_Iterator it = wit2->$class->__iter__(wit2,iter);
     int64_t len = self->nbytes;
     B_bytearray other;
     NEW_UNFILLED_BYTEARRAY(other,0);
     $WORD next;
     while (it->$class->__next__(it, &next)) {
-        $bytearrayD_U_append(other, fromB_int((B_int)(next)));
+        B_bytearray_append(other, fromB_int((B_int)(next)));
     }
     int64_t olen = other->nbytes;
     int64_t start, stop, step, slen;
@@ -3197,10 +3157,10 @@ B_NoneType $bytearrayD_U__setslice__(B_bytearray self, B_Iterable wit2, B_slice 
 }
 
 B_NoneType B_SequenceD_bytearrayD___delslice__(B_SequenceD_bytearray wit, B_bytearray self, B_slice slc) {
-    return $bytearrayD_U__delslice__(self, slc);
+    return B_bytearray_delslice(self, slc);
 }
 
-B_NoneType $bytearrayD_U__delslice__(B_bytearray self, B_slice slc) {
+B_NoneType B_bytearray_delslice(B_bytearray self, B_slice slc) {
     int64_t len = self->nbytes;
     int64_t start, stop, step, slen;
     normalize_slice(slc, len, &slen, &start, &stop, &step);
@@ -3263,18 +3223,18 @@ B_NoneType B_IndexedD_SliceableD_SequenceD_bytearrayD___delitem__(B_IndexedD_Sli
 
 
 B_Iterator B_CollectionD_SequenceD_bytearrayD___iter__(B_CollectionD_SequenceD_bytearray wit, B_bytearray str) {
-    return $bytearrayD_U__iter__(str);
+    return B_bytearray_iter(str);
 }
 
-B_Iterator $bytearrayD_U__iter__(B_bytearray str) {
+B_Iterator B_bytearray_iter(B_bytearray str) {
     return (B_Iterator)$NEW(B_IteratorD_bytearray,str);
 }
 
 B_bytearray B_CollectionD_SequenceD_bytearrayD___fromiter__(B_CollectionD_SequenceD_bytearray wit, B_Iterable wit2, $WORD iter) {
-    return $bytearrayD_U__fromiter__(wit2, iter);
+    return B_bytearray_fromiter(wit2, iter);
 }
 
-B_bytearray $bytearrayD_U__fromiter__(B_Iterable wit2, $WORD iter) {
+B_bytearray B_bytearray_fromiter(B_Iterable wit2, $WORD iter) {
     struct bytes_buffer b = bytes_from_iter(wit2, iter);
     B_bytearray result = acton_malloc(sizeof(struct B_bytearray));
     result->$class = &B_bytearrayG_methods;
@@ -3291,10 +3251,10 @@ int64_t B_CollectionD_SequenceD_bytearrayD___len__ (B_CollectionD_SequenceD_byte
 // Times
 
 B_bytearray B_TimesD_SequenceD_bytearrayD___add__(B_TimesD_SequenceD_bytearray wit, B_bytearray a, B_bytearray b) {
-    return $bytearrayD_U__add__(a, b);
+    return B_bytearray_add(a, b);
 }
 
-B_bytearray $bytearrayD_U__add__(B_bytearray a, B_bytearray b) {
+B_bytearray B_bytearray_add(B_bytearray a, B_bytearray b) {
     int64_t nbytes = (int64_t)a->nbytes + b->nbytes;
     check_result_len(nbytes);
     B_bytearray res;
@@ -3305,18 +3265,18 @@ B_bytearray $bytearrayD_U__add__(B_bytearray a, B_bytearray b) {
 }
 
 B_bytearray B_TimesD_SequenceD_bytearrayD___zero__(B_TimesD_SequenceD_bytearray wit) {
-    return $bytearrayD_U__zero__();
+    return B_bytearray_zero();
 }
 
-B_bytearray $bytearrayD_U__zero__(void) {
+B_bytearray B_bytearray_zero(void) {
     return toB_bytearray("");
 }
 
 B_bytearray B_TimesD_SequenceD_bytearrayD___mul__(B_TimesD_SequenceD_bytearray wit, B_bytearray a, B_int n) {
-    return $bytearrayD_U__mul__(a, n->val);
+    return B_bytearray_mul(a, n->val);
 }
 
-B_bytearray $bytearrayD_U__mul__(B_bytearray a, int64_t n) {
+B_bytearray B_bytearray_mul(B_bytearray a, int64_t n) {
     int64_t nval = n;
     if (nval <= 0 || a->nbytes == 0)
         return toB_bytearray("");
@@ -3333,10 +3293,10 @@ B_bytearray $bytearrayD_U__mul__(B_bytearray a, int64_t n) {
 }
 
 B_bytearray B_TimesD_SequenceD_bytearrayD___iadd__(B_TimesD_SequenceD_bytearray wit, B_bytearray a, B_bytearray b) {
-    return $bytearrayD_U__iadd__(a, b);
+    return B_bytearray_iadd(a, b);
 }
 
-B_bytearray $bytearrayD_U__iadd__(B_bytearray a, B_bytearray b) {
+B_bytearray B_bytearray_iadd(B_bytearray a, B_bytearray b) {
     // b can be a, so its length is read before a grows
     int64_t n = b->nbytes;
     if (n == 0)
@@ -3350,10 +3310,10 @@ B_bytearray $bytearrayD_U__iadd__(B_bytearray a, B_bytearray b) {
 // Repeat the bytes of a n times in a, or remove them if n <= 0. Only the added
 // copies are written.
 B_bytearray B_TimesD_SequenceD_bytearrayD___imul__(B_TimesD_SequenceD_bytearray wit, B_bytearray a, B_int n) {
-    return $bytearrayD_U__imul__(a, n->val);
+    return B_bytearray_imul(a, n->val);
 }
 
-B_bytearray $bytearrayD_U__imul__(B_bytearray a, int64_t n) {
+B_bytearray B_bytearray_imul(B_bytearray a, int64_t n) {
     int64_t nval = n;
     int64_t len = a->nbytes;
     if (nval <= 0) {
@@ -4155,10 +4115,10 @@ B_bytes B_bytesD_zfill(B_bytes s, int64_t width) {
 
 
 bool B_OrdD_bytesD___eq__(B_OrdD_bytes wit, B_bytes a, B_bytes b) {
-    return $bytesD_U__eq__(a, b);
+    return B_bytes_eq(a, b);
 }
 
-bool $bytesD_U__eq__(B_bytes a, B_bytes b) {
+bool B_bytes_eq(B_bytes a, B_bytes b) {
     if (a == b)
         return true;
     if (a->nbytes != b->nbytes)
@@ -4170,18 +4130,14 @@ bool $bytesD_U__eq__(B_bytes a, B_bytes b) {
 }
 
 bool B_OrdD_bytesD___ne__(B_OrdD_bytes wit, B_bytes a, B_bytes b) {
-    return $bytesD_U__ne__(a, b);
-}
-
-bool $bytesD_U__ne__(B_bytes a, B_bytes b) {
-    return !$bytesD_U__eq__(a, b);
+    return !B_bytes_eq(a, b);
 }
 
 bool B_OrdD_bytesD___lt__(B_OrdD_bytes wit, B_bytes a, B_bytes b) {
-    return $bytesD_U__lt__(a, b);
+    return B_bytes_lt(a, b);
 }
 
-bool $bytesD_U__lt__(B_bytes a, B_bytes b) {
+bool B_bytes_lt(B_bytes a, B_bytes b) {
     int64_t minl = a->nbytes<b->nbytes ? a->nbytes : b->nbytes;
     int64_t i=0;
     while (i<minl && a->str[i]==b->str[i]) i++;
@@ -4193,27 +4149,15 @@ bool $bytesD_U__lt__(B_bytes a, B_bytes b) {
 }
 
 bool B_OrdD_bytesD___le__(B_OrdD_bytes wit, B_bytes a, B_bytes b) {
-    return $bytesD_U__le__(a, b);
-}
-
-bool $bytesD_U__le__(B_bytes a, B_bytes b) {
-    return !$bytesD_U__lt__(b, a);
+    return !B_bytes_lt(b, a);
 }
 
 bool B_OrdD_bytesD___gt__(B_OrdD_bytes wit, B_bytes a, B_bytes b) {
-    return $bytesD_U__gt__(a, b);
-}
-
-bool $bytesD_U__gt__(B_bytes a, B_bytes b) {
-    return $bytesD_U__lt__(b, a);
+    return B_bytes_lt(b, a);
 }
 
 bool B_OrdD_bytesD___ge__(B_OrdD_bytes wit, B_bytes a, B_bytes b) {
-    return $bytesD_U__ge__(a, b);
-}
-
-bool $bytesD_U__ge__(B_bytes a, B_bytes b) {
-    return !$bytesD_U__lt__(a, b);
+    return !B_bytes_lt(a, b);
 }
 
 // Container
@@ -4230,7 +4174,7 @@ B_NoneType B_IteratorD_bytesD_init(B_IteratorD_bytes self, B_bytes str) {
     return B_None;
 }
 
-B_Iterator $bytesD_U_iter_init(B_IteratorD_bytes iter, B_bytes src) {
+B_Iterator B_bytes_iter_init(B_IteratorD_bytes iter, B_bytes src) {
     iter->$class = &B_IteratorD_bytesG_methods;
     B_IteratorD_bytesD_init(iter, src);
     return (B_Iterator)iter;
@@ -4270,18 +4214,14 @@ struct B_IteratorD_bytesG_class B_IteratorD_bytesG_methods = {"B_IteratorD_bytes
                                                         B_IteratorD_bytesD_next};
 
 B_Iterator B_ContainerD_bytesD___iter__(B_ContainerD_bytes wit, B_bytes str) {
-    return $bytesD_U__iter__(str);
+    return B_bytes_iter(str);
 }
 
-B_Iterator $bytesD_U__iter__(B_bytes str) {
+B_Iterator B_bytes_iter(B_bytes str) {
     return (B_Iterator)$NEW(B_IteratorD_bytes,str);
 }
 
 B_bytes B_ContainerD_bytesD___fromiter__(B_ContainerD_bytes wit, B_Iterable wit2, $WORD iter) {
-    return $bytesD_U__fromiter__(wit2, iter);
-}
-
-B_bytes $bytesD_U__fromiter__(B_Iterable wit2, $WORD iter) {
     return B_bytesG_new(wit2, iter);
 }
 
@@ -4290,10 +4230,10 @@ int64_t B_ContainerD_bytesD___len__ (B_ContainerD_bytes wit, B_bytes str) {
 }
 
 bool B_ContainerD_bytesD___contains__(B_ContainerD_bytes wit, B_bytes str, B_int n) {
-    return $bytesD_U__contains__(str, n->val);
+    return B_bytes_contains(str, n->val);
 }
 
-bool $bytesD_U__contains__(B_bytes str, int64_t n) {
+bool B_bytes_contains(B_bytes str, int64_t n) {
     if (n < 0 || n > 255)
         return false;
     bool res = false;
@@ -4307,16 +4247,12 @@ bool $bytesD_U__contains__(B_bytes str, int64_t n) {
 }
 
 bool B_ContainerD_bytesD___containsnot__(B_ContainerD_bytes wit, B_bytes str, B_int n) {
-    return $bytesD_U__containsnot__(str, n->val);
-}
-
-bool $bytesD_U__containsnot__(B_bytes str, int64_t n) {
-    return !$bytesD_U__contains__(str, n);
+    return !B_bytes_contains(str, n->val);
 }
 
 // ISliceable
 
-int64_t $bytesD_U__getitem__(B_bytes str, int64_t ix) {
+int64_t B_bytes_getitem(B_bytes str, int64_t ix) {
     int64_t ix0 = ix < 0 ? str->nbytes + ix : ix;
     if (ix0<0 || ix0 >= str->nbytes)
         RAISE(B_IndexError, ix0, actStrFromCString("getitem: index outside bytesarray"));
@@ -4324,14 +4260,14 @@ int64_t $bytesD_U__getitem__(B_bytes str, int64_t ix) {
 }
 
 B_int B_ISliceableD_bytesD___getitem__ (B_ISliceableD_bytes wit, B_bytes str, B_int n) {
-    return toB_int($bytesD_U__getitem__(str, n->val));
+    return toB_int(B_bytes_getitem(str, n->val));
 }
 
 B_bytes B_ISliceableD_bytesD___getslice__(B_ISliceableD_bytes wit, B_bytes str, B_slice slc) {
-    return $bytesD_U__getslice__(str, slc);
+    return B_bytes_getslice(str, slc);
 }
 
-B_bytes $bytesD_U__getslice__(B_bytes str, B_slice slc) {
+B_bytes B_bytes_getslice(B_bytes str, B_slice slc) {
     int64_t start, stop, step, slen;
     normalize_slice(slc, str->nbytes, &slen, &start, &stop, &step);
     //slice notation has been eliminated and default values applied
@@ -4349,10 +4285,10 @@ B_bytes $bytesD_U__getslice__(B_bytes str, B_slice slc) {
 
 
 B_bytes B_TimesD_bytesD___add__(B_TimesD_bytes wit, B_bytes s, B_bytes t) {
-    return $bytesD_U__add__(s, t);
+    return B_bytes_add(s, t);
 }
 
-B_bytes $bytesD_U__add__(B_bytes s, B_bytes t) {
+B_bytes B_bytes_add(B_bytes s, B_bytes t) {
     int64_t nbytes = (int64_t)s->nbytes + t->nbytes;
     check_result_len(nbytes);
     B_bytes res;
@@ -4363,18 +4299,18 @@ B_bytes $bytesD_U__add__(B_bytes s, B_bytes t) {
 }
 
 B_bytes B_TimesD_bytesD___zero__(B_TimesD_bytes wit) {
-    return $bytesD_U__zero__();
+    return B_bytes_zero();
 }
 
-B_bytes $bytesD_U__zero__(void) {
+B_bytes B_bytes_zero(void) {
     return actBytesFromCStringCopy("");
 }
 
 B_bytes B_TimesD_bytesD___mul__(B_TimesD_bytes wit, B_bytes a, B_int n) {
-    return $bytesD_U__mul__(a, n->val);
+    return B_bytes_mul(a, n->val);
 }
 
-B_bytes $bytesD_U__mul__(B_bytes a, int64_t n) {
+B_bytes B_bytes_mul(B_bytes a, int64_t n) {
     int64_t nval = n;
     if (nval <= 0 || a->nbytes == 0)
         return actBytesFromCStringCopy("");
@@ -4394,10 +4330,10 @@ B_bytes $bytesD_U__mul__(B_bytes a, int64_t n) {
 
 
 B_NoneType B_HashableD_bytesD_hash(B_HashableD_bytes wit, B_bytes a, B_hasher h) {
-    return $bytesD_U_hash(a, h);
+    return B_bytes_hash(a, h);
 }
 
-B_NoneType $bytesD_U_hash(B_bytes a, B_hasher h) {
+B_NoneType B_bytes_hash(B_bytes a, B_hasher h) {
     zig_hash_wyhash_update(h->_hasher, a->str, a->nbytes);
     return B_None;
 }

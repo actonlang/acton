@@ -19,6 +19,7 @@ import Acton.Syntax
 import Acton.Builtin
 import Acton.Names
 import Acton.NameInfo
+import qualified Data.Map.Strict as Map
 
 nPrim               = name "$"
 mPrim               = ModName [nPrim]
@@ -322,7 +323,269 @@ annot t_ann ann t e = eCall (tApp (eQVar primAnnot) [t_ann, t]) [ann, e]
 unAnnot t_ann (Call _ (TApp _ (Var _ n) [t,_]) (PosArg w (PosArg e PosNil)) KwdNil)
   | n == primAnnot && t == t_ann    = (w, e)
 
-primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec Nothing),
+-- Compiler-private descriptions of concrete builtin calls. The schemas keep
+-- generic elements boxed; CodeGen adapts containers to their shared C views.
+-- NativeCompare uses the sign of an ordinary C comparison function's result.
+data BuiltinCallABI = DictBase | SetTable | SetObject | SetBuild QName
+                    | ListBase | ListBuild QName | ListInplace | NativeArgs | NativeCompare String
+
+data BuiltinWorker = BuiltinWorker {
+    bwType :: QName, bwMethod :: Name, bwArity :: Int,
+    bwName :: QName, bwSchema :: TSchema, bwCName :: String,
+    bwABI :: BuiltinCallABI, bwNegate :: Bool, bwReverse :: Bool,
+    bwExtraArgs :: [String], bwContainerArgs :: Int
+    }
+
+hashContainerWorker q attr arity = Map.lookup (q,attr,arity) hashContainerMethodMap
+
+builtinCallPrimitive q = Map.lookup q builtinCallPrimitiveMap
+
+hashContainerMethodMap = Map.fromList [ ((bwType w,bwMethod w,bwArity w),w) | w <- hashContainerWorkers ]
+builtinCallPrimitiveMap = Map.fromList [ (bwName w,w) | w <- builtinCallWorkers ]
+
+builtinCallWorkers = hashContainerWorkers ++ listBaseWorkers ++ numericNativeWorkers ++ textNativeWorkers
+
+-- Reuse the existing boxing schemas. List and ilist differ only in the result
+-- class for allocating operations; input Iterable witnesses remain explicit.
+-- The IR names are private: generated C calls the B_list_* entry points below.
+listBaseWorkers =
+    [ make qnList "__getitem__" 2 primUGetItem scUGetItem "B_list_base_getitem" ListBase 1 []
+    , make qnIList "__getitem__" 2 primUIListGetItem scUIListGetItem "B_list_base_getitem" ListBase 1 []
+    , make qnList "append" 2 primUListAppend scUListAppend "B_list_base_append" ListBase 1 []
+    , make qnList "__setitem__" 3 primUListSetItem scUListSetItem "B_list_base_setitem" ListBase 1 []
+    , make qnList "__delitem__" 2 primUListDelItem scUListDelItem "B_list_base_delitem" ListBase 1 []
+    , make qnList "__len__" 1 primUListLen scUListLen "B_list_base_len" ListBase 1 []
+    , make qnIList "__len__" 1 primUIListLen scUIListLen "B_list_base_len" ListBase 1 []
+    , make qnList "__getslice__" 2 primUListGetSlice scUListGetSlice "B_list_base_getslice" (ListBuild qnList) 1 []
+    , make qnIList "__getslice__" 2 primUIListGetSlice scUIListGetSlice "B_list_base_getslice" (ListBuild qnIList) 1 []
+    , make qnList "__iter__" 1 primUListIter scUListIter "B_list_base_iter" ListBase 1 []
+    , make qnIList "__iter__" 1 primUIListIter scUIListIter "B_list_base_iter" ListBase 1 []
+    , make qnList "__reversed__" 1 primUListReversed scUListReversed "B_list_base_reversed" (ListBuild qnList) 1 []
+    , make qnIList "__reversed__" 1 primUIListReversed scUIListReversed "B_list_base_reversed" (ListBuild qnIList) 1 []
+    , make qnList "__add__" 2 primUListAdd scUListAdd "B_list_base_add" (ListBuild qnList) 2 []
+    , make qnIList "__add__" 2 primUIListAdd scUIListAdd "B_list_base_add" (ListBuild qnIList) 2 []
+    , make qnList "__mul__" 2 primUListMul scUListMul "B_list_base_mul" (ListBuild qnList) 1 []
+    , make qnIList "__mul__" 2 primUIListMul scUIListMul "B_list_base_mul" (ListBuild qnIList) 1 []
+    , make qnList "__zero__" 0 primUListZero scUListZero "B_list_base_new" (ListBuild qnList) 0 ["0"]
+    , make qnIList "__zero__" 0 primUIListZero scUIListZero "B_list_base_new" (ListBuild qnIList) 0 ["0"]
+    , make qnList "__fromiter__" 2 primUListFromIter scUListFromIter "B_listG_new" NativeArgs 0 []
+    , make qnIList "__fromiter__" 2 primUIListFromIter scUIListFromIter "B_ilistG_new" NativeArgs 0 []
+    , make qnList "insert" 3 primUListInsert scUListInsert "B_list_base_insert" ListBase 1 []
+    , make qnList "reverse" 1 primUListReverse scUListReverse "B_list_base_reverse" ListBase 1 []
+    , make qnList "__delslice__" 2 primUListDelSlice scUListDelSlice "B_list_base_delslice" ListBase 1 []
+    , make qnList "__setslice__" 4 primUListSetSlice scUListSetSlice "B_list_base_setslice" ListBase 1 []
+    , make qnList "__iadd__" 2 primUListIAdd scUListIAdd "B_list_base_iadd" ListInplace 2 []
+    , make qnList "__imul__" 2 primUListIMul scUListIMul "B_list_base_irepeat" ListInplace 1 []
+    ]
+  where make q attr arity prim schema native abi count extra = BuiltinWorker
+            q (name attr) arity prim schema native abi False False extra count
+
+-- Numeric workers already perform the Acton allocation and arithmetic.
+-- Keep their representation schemas and result-conversion witnesses intact;
+-- only their native C entry point names change.
+numericNativeWorkers =
+    [ make qnBigint "__add__" 2 primUBigintAdd scUBigintAdd "B_bigint_add"
+    , make qnBigint "__zero__" 0 primUBigintZero scUBigintZero "B_bigint_zero"
+    , make qnBigint "__complex__" 1 primUBigintComplex scUBigintComplex "B_bigint_complex"
+    , make qnBigint "__fromatom__" 1 primUBigintFromatom scUBigintFromatom "B_bigint_fromatom"
+    , make qnBigint "__mul__" 2 primUBigintMul scUBigintMul "B_bigint_mul"
+    , make qnBigint "__pow__" 2 primUBigintPow scUBigintPow "B_bigint_pow"
+    , make qnBigint "__neg__" 1 primUBigintNeg scUBigintNeg "B_bigint_neg"
+    , make qnBigint "__pos__" 1 primUBigintPos scUBigintPos "B_bigint_pos"
+    , make qnBigint "real" 2 primUBigintReal scUBigintReal "B_bigint_real"
+    , make qnBigint "imag" 2 primUBigintImag scUBigintImag "B_bigint_imag"
+    , make qnBigint "__abs__" 2 primUBigintAbs scUBigintAbs "B_bigint_abs"
+    , make qnBigint "conjugate" 1 primUBigintConjugate scUBigintConjugate "B_bigint_conjugate"
+    , make qnBigint "__float__" 1 primUBigintFloat scUBigintFloat "B_bigint_float"
+    , make qnBigint "__trunc__" 2 primUBigintTrunc scUBigintTrunc "B_bigint_trunc"
+    , make qnBigint "__floor__" 2 primUBigintFloor scUBigintFloor "B_bigint_floor"
+    , make qnBigint "__ceil__" 2 primUBigintCeil scUBigintCeil "B_bigint_ceil"
+    , make qnBigint "__round__" 2 primUBigintRound scUBigintRound "B_bigint_round"
+    , make qnBigint "numerator" 2 primUBigintNumerator scUBigintNumerator "B_bigint_numerator"
+    , make qnBigint "denominator" 2 primUBigintDenominator scUBigintDenominator "B_bigint_denominator"
+    , make qnBigint "__int__" 1 primUBigintInt scUBigintInt "B_bigint_int"
+    , make qnBigint "__index__" 1 primUBigintIndex scUBigintIndex "B_bigint_index"
+    , make qnBigint "__divmod__" 2 primUBigintDivmod scUBigintDivmod "B_bigint_divmod"
+    , make qnBigint "__floordiv__" 2 primUBigintFloordiv scUBigintFloordiv "B_bigint_floordiv"
+    , make qnBigint "__mod__" 2 primUBigintMod scUBigintMod "B_bigint_mod"
+    , make qnBigint "__lshift__" 2 primUBigintLshift scUBigintLshift "B_bigint_lshift"
+    , make qnBigint "__rshift__" 2 primUBigintRshift scUBigintRshift "B_bigint_rshift"
+    , make qnBigint "__invert__" 1 primUBigintInvert scUBigintInvert "B_bigint_invert"
+    , make qnBigint "__and__" 2 primUBigintAnd scUBigintAnd "B_bigint_and"
+    , make qnBigint "__or__" 2 primUBigintOr scUBigintOr "B_bigint_or"
+    , make qnBigint "__xor__" 2 primUBigintXor scUBigintXor "B_bigint_xor"
+    , make qnBigint "__sub__" 2 primUBigintSub scUBigintSub "B_bigint_sub"
+    , make qnBigint "__truediv__" 2 primUBigintTruediv scUBigintTruediv "B_bigint_truediv"
+    , make qnBigint "__eq__" 2 primUBigintEq scUBigintEq "B_bigint_eq"
+    , make qnBigint "__ne__" 2 primUBigintNe scUBigintNe "B_bigint_ne"
+    , make qnBigint "__lt__" 2 primUBigintLt scUBigintLt "B_bigint_lt"
+    , make qnBigint "__le__" 2 primUBigintLe scUBigintLe "B_bigint_le"
+    , make qnBigint "__gt__" 2 primUBigintGt scUBigintGt "B_bigint_gt"
+    , make qnBigint "__ge__" 2 primUBigintGe scUBigintGe "B_bigint_ge"
+    , make qnBigint "hash" 2 primUBigintHash scUBigintHash "B_bigint_hash"
+    , make qnComplex "__add__" 2 primUComplexAdd scUComplexAdd "B_complex_add"
+    , make qnComplex "__zero__" 0 primUComplexZero scUComplexZero "B_complex_zero"
+    , make qnComplex "__complex__" 1 primUComplexComplex scUComplexComplex "B_complex_complex"
+    , make qnComplex "__mul__" 2 primUComplexMul scUComplexMul "B_complex_mul"
+    , make qnComplex "__fromatom__" 1 primUComplexFromatom scUComplexFromatom "B_complex_fromatom"
+    , make qnComplex "__pow__" 2 primUComplexPow scUComplexPow "B_complex_pow"
+    , make qnComplex "__neg__" 1 primUComplexNeg scUComplexNeg "B_complex_neg"
+    , make qnComplex "__pos__" 1 primUComplexPos scUComplexPos "B_complex_pos"
+    , make qnComplex "real" 2 primUComplexReal scUComplexReal "B_complex_real"
+    , make qnComplex "imag" 2 primUComplexImag scUComplexImag "B_complex_imag"
+    , make qnComplex "__abs__" 2 primUComplexAbs scUComplexAbs "B_complex_abs"
+    , make qnComplex "conjugate" 1 primUComplexConjugate scUComplexConjugate "B_complex_conjugate"
+    , make qnComplex "__truediv__" 2 primUComplexTruediv scUComplexTruediv "B_complex_truediv"
+    , make qnComplex "__sub__" 2 primUComplexSub scUComplexSub "B_complex_sub"
+    , make qnComplex "__eq__" 2 primUComplexEq scUComplexEq "B_complex_eq"
+    , make qnComplex "__ne__" 2 primUComplexNe scUComplexNe "B_complex_ne"
+    , make qnComplex "hash" 2 primUComplexHash scUComplexHash "B_complex_hash"
+    ]
+  where make q attr arity prim schema native = BuiltinWorker
+            q (name attr) arity prim schema native NativeArgs False False [] 0
+
+-- Text operations have native typed implementations. Comparisons reuse the
+-- equality/ordering worker instead of adding a forwarding C function; negate
+-- or reverse only normalized arguments, each evaluated once. Iterable inputs
+-- and the mutable bytearray allocation policy retain their existing ABI.
+textNativeWorkers =
+    [ make qnStr "__len__" 1 primUStrLen scUStrLen "B_str_len" NativeArgs
+    , make qnBytes "__len__" 1 primUBytesLen scUBytesLen "B_bytes_len" NativeArgs
+    , make qnBytearray "__len__" 1 primUBytearrayLen scUBytearrayLen "B_bytearray_len" NativeArgs
+    , make qnStr "__getitem__" 2 primUStrGetItem scUStrGetItem "B_str_getitem" NativeArgs
+    , make qnStr "__eq__" 2 primUStrEq scUStrCompare "B_str_eq" NativeArgs
+    , (make qnStr "__ne__" 2 primUStrNe scUStrCompare "B_str_eq" NativeArgs){bwNegate=True}
+    , make qnStr "__add__" 2 primUStrAdd scUStrAdd "B_str_add" NativeArgs
+    , make qnBytes "__getitem__" 2 primUBytesGetItem scUBytesGetItem "B_bytes_getitem" NativeArgs
+    , make qnBytearray "__getitem__" 2 primUBytearrayGetItem scUBytearrayGetItem "B_bytearray_getitem" NativeArgs
+    , make qnBytearray "__setitem__" 3 primUBytearraySetItem scUBytearraySetItem "B_bytearray_setitem" NativeArgs
+    , make qnBytearray "__delitem__" 2 primUBytearrayDelItem scUBytearrayDelItem "B_bytearray_delitem" NativeArgs
+    , make qnStr "__lt__" 2 primUStrLt scUStrLt "B_str_compare" (NativeCompare "<")
+    , make qnStr "__le__" 2 primUStrLe scUStrLe "B_str_compare" (NativeCompare "<=")
+    , make qnStr "__gt__" 2 primUStrGt scUStrGt "B_str_compare" (NativeCompare ">")
+    , make qnStr "__ge__" 2 primUStrGe scUStrGe "B_str_compare" (NativeCompare ">=")
+    , make qnStr "hash" 2 primUStrHash scUStrHash "B_str_hash" NativeArgs
+    , make qnStr "__zero__" 0 primUStrZero scUStrZero "B_str_zero" NativeArgs
+    , make qnStr "__mul__" 2 primUStrMul scUStrMul "B_str_mul" NativeArgs
+    , make qnStr "__fromiter__" 2 primUStrFromIter scUStrFromIter "B_str_fromiter" NativeArgs
+    , make qnStr "__contains__" 2 primUStrContains scUStrContains "B_str_contains" NativeArgs
+    , (make qnStr "__containsnot__" 2 primUStrContainsnot scUStrContainsnot "B_str_contains" NativeArgs){bwNegate=True}
+    , make qnStr "__iter__" 1 primUStrIter scUStrIter "B_str_iter" NativeArgs
+    , make qnStr "__getslice__" 2 primUStrGetslice scUStrGetslice "B_str_getslice" NativeArgs
+    , make qnBytes "__eq__" 2 primUBytesEq scUBytesEq "B_bytes_eq" NativeArgs
+    , (make qnBytes "__ne__" 2 primUBytesNe scUBytesNe "B_bytes_eq" NativeArgs){bwNegate=True}
+    , make qnBytes "__lt__" 2 primUBytesLt scUBytesLt "B_bytes_lt" NativeArgs
+    , (make qnBytes "__le__" 2 primUBytesLe scUBytesLe "B_bytes_lt" NativeArgs){bwNegate=True, bwReverse=True}
+    , (make qnBytes "__gt__" 2 primUBytesGt scUBytesGt "B_bytes_lt" NativeArgs){bwReverse=True}
+    , (make qnBytes "__ge__" 2 primUBytesGe scUBytesGe "B_bytes_lt" NativeArgs){bwNegate=True}
+    , make qnBytes "__contains__" 2 primUBytesContains scUBytesContains "B_bytes_contains" NativeArgs
+    , (make qnBytes "__containsnot__" 2 primUBytesContainsnot scUBytesContainsnot "B_bytes_contains" NativeArgs){bwNegate=True}
+    , make qnBytearray "__eq__" 2 primUBytearrayEq scUBytearrayEq "B_bytearray_eq" NativeArgs
+    , (make qnBytearray "__ne__" 2 primUBytearrayNe scUBytearrayNe "B_bytearray_eq" NativeArgs){bwNegate=True}
+    , make qnBytearray "__lt__" 2 primUBytearrayLt scUBytearrayLt "B_bytearray_lt" NativeArgs
+    , (make qnBytearray "__le__" 2 primUBytearrayLe scUBytearrayLe "B_bytearray_lt" NativeArgs){bwNegate=True, bwReverse=True}
+    , (make qnBytearray "__gt__" 2 primUBytearrayGt scUBytearrayGt "B_bytearray_lt" NativeArgs){bwReverse=True}
+    , (make qnBytearray "__ge__" 2 primUBytearrayGe scUBytearrayGe "B_bytearray_lt" NativeArgs){bwNegate=True}
+    , make qnBytearray "__contains__" 2 primUBytearrayContains scUBytearrayContains "B_bytearray_contains" NativeArgs
+    , (make qnBytearray "__containsnot__" 2 primUBytearrayContainsnot scUBytearrayContainsnot "B_bytearray_contains" NativeArgs){bwNegate=True}
+    , make qnBytes "hash" 2 primUBytesHash scUBytesHash "B_bytes_hash" NativeArgs
+    , make qnBytes "__fromiter__" 2 primUBytesFromIter scUBytesFromIter "B_bytesG_new" NativeArgs
+    , make qnBytes "__iter__" 1 primUBytesIter scUBytesIter "B_bytes_iter" NativeArgs
+    , make qnBytes "__getslice__" 2 primUBytesGetslice scUBytesGetslice "B_bytes_getslice" NativeArgs
+    , make qnBytes "__add__" 2 primUBytesAdd scUBytesAdd "B_bytes_add" NativeArgs
+    , make qnBytes "__zero__" 0 primUBytesZero scUBytesZero "B_bytes_zero" NativeArgs
+    , make qnBytes "__mul__" 2 primUBytesMul scUBytesMul "B_bytes_mul" NativeArgs
+    , make qnBytearray "insert" 3 primUBytearrayInsert scUBytearrayInsert "B_bytearray_insert" NativeArgs
+    , make qnBytearray "append" 2 primUBytearrayAppend scUBytearrayAppend "B_bytearray_append" NativeArgs
+    , make qnBytearray "reverse" 1 primUBytearrayReverse scUBytearrayReverse "B_bytearray_reverse" NativeArgs
+    , make qnBytearray "__reversed__" 1 primUBytearrayReversed scUBytearrayReversed "B_bytearray_reversed" NativeArgs
+    , make qnBytearray "__getslice__" 2 primUBytearrayGetslice scUBytearrayGetslice "B_bytearray_getslice" NativeArgs
+    , make qnBytearray "__setslice__" 4 primUBytearraySetslice scUBytearraySetslice "B_bytearray_setslice" NativeArgs
+    , make qnBytearray "__delslice__" 2 primUBytearrayDelslice scUBytearrayDelslice "B_bytearray_delslice" NativeArgs
+    , make qnBytearray "__fromiter__" 2 primUBytearrayFromIter scUBytearrayFromIter "B_bytearray_fromiter" NativeArgs
+    , make qnBytearray "__iter__" 1 primUBytearrayIter scUBytearrayIter "B_bytearray_iter" NativeArgs
+    , make qnBytearray "__add__" 2 primUBytearrayAdd scUBytearrayAdd "B_bytearray_add" NativeArgs
+    , make qnBytearray "__zero__" 0 primUBytearrayZero scUBytearrayZero "B_bytearray_zero" NativeArgs
+    , make qnBytearray "__mul__" 2 primUBytearrayMul scUBytearrayMul "B_bytearray_mul" NativeArgs
+    , make qnBytearray "__iadd__" 2 primUBytearrayIadd scUBytearrayIadd "B_bytearray_iadd" NativeArgs
+    , make qnBytearray "__imul__" 2 primUBytearrayImul scUBytearrayImul "B_bytearray_imul" NativeArgs
+    ]
+  where make q attr arity prim schema native abi = BuiltinWorker
+            q (name attr) arity prim schema native abi False False [] 0
+
+-- Hash-container factories keep their protocol witness, which supplies
+-- Hashable before there is a container. Dict comparisons retain value Eq.
+hashContainerWorkers = dictWorkers qnDict tDict True ++ dictWorkers qnIDict tIDict False ++
+                       setWorkers qnSetT tSet True ++ setWorkers qnISetT tISet False
+  where a = TV KType (name "A")
+        b = TV KType (name "B")
+        c = TV KType (name "C")
+        at = tVar a
+        bt = tVar b
+        ct = tVar c
+        pair = tTupleP (foldr posRow posNil [at,bt])
+        worker q self qs attr fx args result native abi neg rev def =
+            BuiltinWorker q (name attr) (length args)
+                (gPrim (nstr (noq q) ++ "_base_" ++ attr))
+                (tSchema qs $ tFun fx (foldr posRow posNil args) kwdNil result)
+                native abi neg rev ["B_None" | def] (length $ takeWhile (== self) args)
+        dictWorkers q cons mutable =
+          let self = cons at bt
+              make attr fx args result native def = worker q self [qbind a,qbind b]
+                  attr fx args result native DictBase False False def
+          in [ make "__getitem__" fxPure [self,at] bt "B_dict_base_getitem" False
+             , make "__contains__" fxPure [self,at] tBool "B_dict_base_contains" False
+             , (make "__containsnot__" fxPure [self,at] tBool "B_dict_base_contains" False){bwNegate=True}
+             , make "get" fxPure [self,at] (tOpt bt) "B_dict_base_get" True
+             , make "get_def" fxPure [self,at,bt] bt "B_dict_base_get" False
+             , make "__iter__" fxPure [self] (tIterator at) "B_dict_base_key_iterator" False
+             , make "keys" fxPure [self] (tIterator at) "B_dict_base_key_iterator" False
+             , make "values" fxPure [self] (tIterator bt) "B_dict_base_values_iterator" False
+             , make "items" fxPure [self] (tIterator pair) "B_dict_base_items_iterator" False
+             ] ++ if not mutable then [] else
+             [ make "__setitem__" fxMut [self,at,bt] tNone "B_dict_base_setitem" False
+             , make "__delitem__" fxMut [self,at] tNone "B_dict_base_delitem" False
+             , make "pop" fxMut [self,at] (tOpt bt) "B_dict_base_pop" True
+             , make "pop_def" fxMut [self,at,bt] bt "B_dict_base_pop" False
+             , make "popitem" fxMut [self] pair "B_dict_base_popitem" False
+             , make "setdefault" fxMut [self,at,bt] (tOpt bt) "B_dict_base_setdefault" False
+             , worker q self [qbind a,qbind b,qbind c] "update" fxMut
+                 [self,tCon (TC qnIterable [ct,pair]),ct] tNone
+                 "B_dict_base_update" DictBase False False False
+             ]
+        setWorkers q cons mutable =
+          let self = cons at
+              make attr fx args result native abi neg rev = worker q self [qbind a]
+                  attr fx args result native abi neg rev False
+          in [ make "__contains__" fxPure [self,at] tBool "B_set_table_contains" SetTable False False
+             , make "__containsnot__" fxPure [self,at] tBool "B_set_table_contains" SetTable True False
+             , make "__iter__" fxPure [self] (tIterator at) "B_set_base_iter" SetObject False False
+             ] ++ [make attr fxPure [self,self] tBool native SetTable neg rev
+                   | (attr,native,neg,rev) <-
+                       [("__eq__","B_set_table_eq",False,False), ("__ne__","B_set_table_eq",True,False),
+                        ("__gt__","B_set_table_gt",False,False), ("__ge__","B_set_table_ge",False,False),
+                        ("__lt__","B_set_table_gt",False,True), ("__le__","B_set_table_ge",False,True),
+                        ("isdisjoint","B_set_table_isdisjoint",False,False)]] ++
+             [make attr fxPure [self,self] self native (SetBuild q) False False
+                   | (attrs,native) <- [(["__or__","union"],"B_set_base_union"),
+                        (["__and__","intersection"],"B_set_base_intersection"),
+                        (["__sub__","difference"],"B_set_base_difference"),
+                        (["__xor__","symmetric_difference"],"B_set_base_symmetric_difference")], attr <- attrs] ++
+             if not mutable then
+               [make "hash" fxPure [self,tCon (TC (gBuiltin (name "hasher")) [])] tNone
+                   "B_set_hash_table" SetTable False False]
+             else [make "add" fxMut [self,at] tNone "B_set_table_add" SetTable False False,
+                   make "discard" fxMut [self,at] tNone "B_set_table_discard" SetTable False False,
+                   make "pop" fxMut [self] at "B_set_table_pop" SetTable False False,
+                   worker q self [qbind a,qbind c] "update" fxMut
+                     [self,tCon (TC qnIterable [ct,at]),ct] tNone
+                     "B_set_base_update" SetObject False False False] ++
+               [make attr fxMut [self,self] self native SetObject False False
+                   | (attr,native) <- [("__ior__","B_set_base_ior"), ("__iand__","B_set_base_iand"),
+                        ("__isub__","B_set_base_isub"), ("__ixor__","B_set_base_ixor")]]
+
+primEnv             = [ (noq (bwName w), NDef (bwSchema w) NoDec Nothing) | w <- builtinCallWorkers ] ++
+                      [     (noq primASYNCf,        NDef scASYNCf NoDec Nothing),
                             (noq primAFTERf,        NDef scAFTERf NoDec Nothing),
                             (noq primAFTER_NOWf,    NDef scAFTERf NoDec Nothing),
                             (noq primAWAITf,        NDef scAWAITf NoDec Nothing),
@@ -409,29 +672,11 @@ primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec Nothing)
                             (noq primMkDict,        NDef scMkDict NoDec Nothing),
                             (noq primAnnot,         NDef scAnnot NoDec Nothing),
                             (noq primRaiseValueError,NDef scRaiseValueError NoDec Nothing), 
-                            (noq primUGetItem,      NDef scUGetItem NoDec Nothing),
-                            (noq primUListAppend, NDef scUListAppend NoDec Nothing),
-                            (noq primUListLen, NDef scUListLen NoDec Nothing),
-                            (noq primUIListLen, NDef scUIListLen NoDec Nothing),
                             (noq primUDictLen, NDef scUDictLen NoDec Nothing),
                             (noq primUIDictLen, NDef scUIDictLen NoDec Nothing),
                             (noq primUSetLen, NDef scUSetLen NoDec Nothing),
                             (noq primUISetLen, NDef scUISetLen NoDec Nothing),
-                            (noq primUStrLen, NDef scUStrLen NoDec Nothing),
-                            (noq primUBytesLen, NDef scUBytesLen NoDec Nothing),
-                            (noq primUBytearrayLen, NDef scUBytearrayLen NoDec Nothing),
                             (noq primUBitsetLen, NDef scUBitsetLen NoDec Nothing),
-                            (noq primUListSetItem,  NDef scUListSetItem NoDec Nothing),
-                            (noq primUListDelItem,  NDef scUListDelItem NoDec Nothing),
-                            (noq primUIListGetItem, NDef scUIListGetItem NoDec Nothing),
-                            (noq primUStrGetItem,   NDef scUStrGetItem NoDec Nothing),
-                            (noq primUStrEq,        NDef scUStrCompare NoDec Nothing),
-                            (noq primUStrNe,        NDef scUStrCompare NoDec Nothing),
-                            (noq primUStrAdd,       NDef scUStrAdd NoDec Nothing),
-                            (noq primUBytesGetItem, NDef scUBytesGetItem NoDec Nothing),
-                            (noq primUBytearrayGetItem, NDef scUBytearrayGetItem NoDec Nothing),
-                            (noq primUBytearraySetItem, NDef scUBytearraySetItem NoDec Nothing),
-                            (noq primUBytearrayDelItem, NDef scUBytearrayDelItem NoDec Nothing),
                             (noq primUArrayGetInt, NDef scUArrayGetInt NoDec Nothing),
                             (noq primUArrayGetFloat, NDef scUArrayGetFloat NoDec Nothing),
                             (noq primUArraySetInt, NDef scUArraySetInt NoDec Nothing),
@@ -444,131 +689,6 @@ primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec Nothing)
                             (noq primUBitsetContainsNot, NDef scUBitsetContains NoDec Nothing),
                             (noq primUBitsetAdd, NDef scUBitsetMutate NoDec Nothing),
                             (noq primUBitsetDiscard, NDef scUBitsetMutate NoDec Nothing),
-                            (noq primUListGetSlice, NDef scUListGetSlice NoDec Nothing),
-                            (noq primUListIter, NDef scUListIter NoDec Nothing),
-                            (noq primUListReversed, NDef scUListReversed NoDec Nothing),
-                            (noq primUListAdd, NDef scUListAdd NoDec Nothing),
-                            (noq primUListMul, NDef scUListMul NoDec Nothing),
-                            (noq primUListZero, NDef scUListZero NoDec Nothing),
-                            (noq primUListFromIter, NDef scUListFromIter NoDec Nothing),
-                            (noq primUIListGetSlice, NDef scUIListGetSlice NoDec Nothing),
-                            (noq primUIListIter, NDef scUIListIter NoDec Nothing),
-                            (noq primUIListReversed, NDef scUIListReversed NoDec Nothing),
-                            (noq primUIListAdd, NDef scUIListAdd NoDec Nothing),
-                            (noq primUIListMul, NDef scUIListMul NoDec Nothing),
-                            (noq primUIListZero, NDef scUIListZero NoDec Nothing),
-                            (noq primUIListFromIter, NDef scUIListFromIter NoDec Nothing),
-                            (noq primUListInsert, NDef scUListInsert NoDec Nothing),
-                            (noq primUListReverse, NDef scUListReverse NoDec Nothing),
-                            (noq primUListDelSlice, NDef scUListDelSlice NoDec Nothing),
-                            (noq primUListSetSlice, NDef scUListSetSlice NoDec Nothing),
-                            (noq primUListIAdd, NDef scUListIAdd NoDec Nothing),
-                            (noq primUListIMul, NDef scUListIMul NoDec Nothing),
-                            (noq primUStrLt, NDef scUStrLt NoDec Nothing),
-                            (noq primUStrLe, NDef scUStrLe NoDec Nothing),
-                            (noq primUStrGt, NDef scUStrGt NoDec Nothing),
-                            (noq primUStrGe, NDef scUStrGe NoDec Nothing),
-                            (noq primUStrHash, NDef scUStrHash NoDec Nothing),
-                            (noq primUStrZero, NDef scUStrZero NoDec Nothing),
-                            (noq primUStrMul, NDef scUStrMul NoDec Nothing),
-                            (noq primUStrFromIter, NDef scUStrFromIter NoDec Nothing),
-                            (noq primUStrContains, NDef scUStrContains NoDec Nothing),
-                            (noq primUStrContainsnot, NDef scUStrContainsnot NoDec Nothing),
-                            (noq primUStrIter, NDef scUStrIter NoDec Nothing),
-                            (noq primUStrGetslice, NDef scUStrGetslice NoDec Nothing),
-                            (noq primUBytesEq, NDef scUBytesEq NoDec Nothing),
-                            (noq primUBytesNe, NDef scUBytesNe NoDec Nothing),
-                            (noq primUBytesLt, NDef scUBytesLt NoDec Nothing),
-                            (noq primUBytesLe, NDef scUBytesLe NoDec Nothing),
-                            (noq primUBytesGt, NDef scUBytesGt NoDec Nothing),
-                            (noq primUBytesGe, NDef scUBytesGe NoDec Nothing),
-                            (noq primUBytesContains, NDef scUBytesContains NoDec Nothing),
-                            (noq primUBytesContainsnot, NDef scUBytesContainsnot NoDec Nothing),
-                            (noq primUBytearrayEq, NDef scUBytearrayEq NoDec Nothing),
-                            (noq primUBytearrayNe, NDef scUBytearrayNe NoDec Nothing),
-                            (noq primUBytearrayLt, NDef scUBytearrayLt NoDec Nothing),
-                            (noq primUBytearrayLe, NDef scUBytearrayLe NoDec Nothing),
-                            (noq primUBytearrayGt, NDef scUBytearrayGt NoDec Nothing),
-                            (noq primUBytearrayGe, NDef scUBytearrayGe NoDec Nothing),
-                            (noq primUBytearrayContains, NDef scUBytearrayContains NoDec Nothing),
-                            (noq primUBytearrayContainsnot, NDef scUBytearrayContainsnot NoDec Nothing),
-                            (noq primUBytesHash, NDef scUBytesHash NoDec Nothing),
-                            (noq primUBytesFromIter, NDef scUBytesFromIter NoDec Nothing),
-                            (noq primUBytesIter, NDef scUBytesIter NoDec Nothing),
-                            (noq primUBytesGetslice, NDef scUBytesGetslice NoDec Nothing),
-                            (noq primUBytesAdd, NDef scUBytesAdd NoDec Nothing),
-                            (noq primUBytesZero, NDef scUBytesZero NoDec Nothing),
-                            (noq primUBytesMul, NDef scUBytesMul NoDec Nothing),
-                            (noq primUBytearrayInsert, NDef scUBytearrayInsert NoDec Nothing),
-                            (noq primUBytearrayAppend, NDef scUBytearrayAppend NoDec Nothing),
-                            (noq primUBytearrayReverse, NDef scUBytearrayReverse NoDec Nothing),
-                            (noq primUBytearrayReversed, NDef scUBytearrayReversed NoDec Nothing),
-                            (noq primUBytearrayGetslice, NDef scUBytearrayGetslice NoDec Nothing),
-                            (noq primUBytearraySetslice, NDef scUBytearraySetslice NoDec Nothing),
-                            (noq primUBytearrayDelslice, NDef scUBytearrayDelslice NoDec Nothing),
-                            (noq primUBytearrayFromIter, NDef scUBytearrayFromIter NoDec Nothing),
-                            (noq primUBytearrayIter, NDef scUBytearrayIter NoDec Nothing),
-                            (noq primUBytearrayAdd, NDef scUBytearrayAdd NoDec Nothing),
-                            (noq primUBytearrayZero, NDef scUBytearrayZero NoDec Nothing),
-                            (noq primUBytearrayMul, NDef scUBytearrayMul NoDec Nothing),
-                            (noq primUBytearrayIadd, NDef scUBytearrayIadd NoDec Nothing),
-                            (noq primUBytearrayImul, NDef scUBytearrayImul NoDec Nothing),
-                            (noq primUBigintAdd, NDef scUBigintAdd NoDec Nothing),
-                            (noq primUBigintZero, NDef scUBigintZero NoDec Nothing),
-                            (noq primUBigintComplex, NDef scUBigintComplex NoDec Nothing),
-                            (noq primUBigintFromatom, NDef scUBigintFromatom NoDec Nothing),
-                            (noq primUBigintMul, NDef scUBigintMul NoDec Nothing),
-                            (noq primUBigintPow, NDef scUBigintPow NoDec Nothing),
-                            (noq primUBigintNeg, NDef scUBigintNeg NoDec Nothing),
-                            (noq primUBigintPos, NDef scUBigintPos NoDec Nothing),
-                            (noq primUBigintReal, NDef scUBigintReal NoDec Nothing),
-                            (noq primUBigintImag, NDef scUBigintImag NoDec Nothing),
-                            (noq primUBigintAbs, NDef scUBigintAbs NoDec Nothing),
-                            (noq primUBigintConjugate, NDef scUBigintConjugate NoDec Nothing),
-                            (noq primUBigintFloat, NDef scUBigintFloat NoDec Nothing),
-                            (noq primUBigintTrunc, NDef scUBigintTrunc NoDec Nothing),
-                            (noq primUBigintFloor, NDef scUBigintFloor NoDec Nothing),
-                            (noq primUBigintCeil, NDef scUBigintCeil NoDec Nothing),
-                            (noq primUBigintRound, NDef scUBigintRound NoDec Nothing),
-                            (noq primUBigintNumerator, NDef scUBigintNumerator NoDec Nothing),
-                            (noq primUBigintDenominator, NDef scUBigintDenominator NoDec Nothing),
-                            (noq primUBigintInt, NDef scUBigintInt NoDec Nothing),
-                            (noq primUBigintIndex, NDef scUBigintIndex NoDec Nothing),
-                            (noq primUBigintDivmod, NDef scUBigintDivmod NoDec Nothing),
-                            (noq primUBigintFloordiv, NDef scUBigintFloordiv NoDec Nothing),
-                            (noq primUBigintMod, NDef scUBigintMod NoDec Nothing),
-                            (noq primUBigintLshift, NDef scUBigintLshift NoDec Nothing),
-                            (noq primUBigintRshift, NDef scUBigintRshift NoDec Nothing),
-                            (noq primUBigintInvert, NDef scUBigintInvert NoDec Nothing),
-                            (noq primUBigintAnd, NDef scUBigintAnd NoDec Nothing),
-                            (noq primUBigintOr, NDef scUBigintOr NoDec Nothing),
-                            (noq primUBigintXor, NDef scUBigintXor NoDec Nothing),
-                            (noq primUBigintSub, NDef scUBigintSub NoDec Nothing),
-                            (noq primUBigintTruediv, NDef scUBigintTruediv NoDec Nothing),
-                            (noq primUBigintEq, NDef scUBigintEq NoDec Nothing),
-                            (noq primUBigintNe, NDef scUBigintNe NoDec Nothing),
-                            (noq primUBigintLt, NDef scUBigintLt NoDec Nothing),
-                            (noq primUBigintLe, NDef scUBigintLe NoDec Nothing),
-                            (noq primUBigintGt, NDef scUBigintGt NoDec Nothing),
-                            (noq primUBigintGe, NDef scUBigintGe NoDec Nothing),
-                            (noq primUBigintHash, NDef scUBigintHash NoDec Nothing),
-                            (noq primUComplexAdd, NDef scUComplexAdd NoDec Nothing),
-                            (noq primUComplexZero, NDef scUComplexZero NoDec Nothing),
-                            (noq primUComplexComplex, NDef scUComplexComplex NoDec Nothing),
-                            (noq primUComplexMul, NDef scUComplexMul NoDec Nothing),
-                            (noq primUComplexFromatom, NDef scUComplexFromatom NoDec Nothing),
-                            (noq primUComplexPow, NDef scUComplexPow NoDec Nothing),
-                            (noq primUComplexNeg, NDef scUComplexNeg NoDec Nothing),
-                            (noq primUComplexPos, NDef scUComplexPos NoDec Nothing),
-                            (noq primUComplexReal, NDef scUComplexReal NoDec Nothing),
-                            (noq primUComplexImag, NDef scUComplexImag NoDec Nothing),
-                            (noq primUComplexAbs, NDef scUComplexAbs NoDec Nothing),
-                            (noq primUComplexConjugate, NDef scUComplexConjugate NoDec Nothing),
-                            (noq primUComplexTruediv, NDef scUComplexTruediv NoDec Nothing),
-                            (noq primUComplexSub, NDef scUComplexSub NoDec Nothing),
-                            (noq primUComplexEq, NDef scUComplexEq NoDec Nothing),
-                            (noq primUComplexNe, NDef scUComplexNe NoDec Nothing),
-                            (noq primUComplexHash, NDef scUComplexHash NoDec Nothing),
                             (noq primUNext,         NDef scUNext NoDec Nothing)
                       ]
 

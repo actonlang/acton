@@ -2,8 +2,8 @@
 /*
  * Common prefix shared by list and ilist.  The concrete structs deliberately
  * retain their historical field layout: quite a bit of runtime C code reads
- * list fields directly.  list.c operates on B_list_base and exposes only thin
- * concrete-class wrappers.
+ * list fields directly. Shared base entry points serve both generic protocol
+ * wrappers and concrete calls in generated C.
  */
 typedef struct B_list_base *B_list_base;
 
@@ -75,45 +75,41 @@ struct B_IteratorD_list {
 
 extern struct  B_IteratorD_listG_class  B_IteratorD_listG_methods;
 B_IteratorD_list B_IteratorD_listG_new(B_list);
-B_Iterator $listD_U_iter_init(B_IteratorD_list iter, $WORD src);
+B_Iterator B_list_base_iter_init(B_IteratorD_list iter, $WORD src);
 
 //convenience functions used at various places.
 B_list B_listD_new(int capacity);
 B_list B_listD_copy(B_list lst);
 B_ilist B_ilistD_new(int capacity);
 
-B_NoneType $listD_U_append(B_list lst, $WORD elem);
-$WORD $listD_U__getitem__(B_list lst, int64_t n);
-B_NoneType $listD_U__setitem__(B_list lst, int64_t n, $WORD val);
-B_NoneType $listD_U__delitem__(B_list lst, int64_t n);
-$WORD $ilistD_U__getitem__(B_ilist lst, int64_t n);
+// Shared operations called directly by generated code and protocol wrappers.
+B_list_base B_list_base_new(int capacity, $SuperG_class cls);
+B_NoneType B_list_base_append(B_list_base lst, $WORD elem);
+$WORD B_list_base_getitem(B_list_base lst, int64_t n);
+B_NoneType B_list_base_setitem(B_list_base lst, int64_t n, $WORD val);
+B_NoneType B_list_base_delitem(B_list_base lst, int64_t n);
+B_list_base B_list_base_getslice(B_list_base lst, B_slice slc, $SuperG_class cls);
+B_Iterator B_list_base_iter(B_list_base lst);
+B_Iterator B_list_base_reversed(B_list_base lst, $SuperG_class cls);
+B_list_base B_list_base_add(B_list_base lst, B_list_base other, $SuperG_class cls);
+B_list_base B_list_base_mul(B_list_base lst, int64_t n, $SuperG_class cls);
+B_NoneType B_list_base_insert(B_list_base lst, int64_t n, $WORD elem);
+B_NoneType B_list_base_reverse(B_list_base lst);
+B_NoneType B_list_base_delslice(B_list_base lst, B_slice slc);
+B_NoneType B_list_base_setslice(B_list_base lst, B_Iterable wit, B_slice slc, $WORD src);
 
-// Witness-free length getters used by generated code.
-static inline int64_t $listD_U__len(B_list self) {
-    return (int64_t)self->length;
-}
-static inline int64_t $ilistD_U__len(B_ilist self) {
-    return (int64_t)self->length;
+static inline int64_t B_list_base_len(B_list_base lst) {
+    return (int64_t)lst->length;
 }
 
-// Witness-free Sequence workers; input iterable witnesses remain explicit.
-B_list $listD_U__getslice__(B_list lst, B_slice slc);
-B_Iterator $listD_U__iter__(B_list lst);
-B_Iterator $listD_U__reversed__(B_list lst);
-B_list $listD_U__add__(B_list lst, B_list other);
-B_list $listD_U__mul__(B_list lst, int64_t n);
-B_list $listD_U__zero__(void);
-B_list $listD_U__fromiter__(B_Iterable wit, $WORD src);
-B_ilist $ilistD_U__getslice__(B_ilist lst, B_slice slc);
-B_Iterator $ilistD_U__iter__(B_ilist lst);
-B_Iterator $ilistD_U__reversed__(B_ilist lst);
-B_ilist $ilistD_U__add__(B_ilist lst, B_ilist other);
-B_ilist $ilistD_U__mul__(B_ilist lst, int64_t n);
-B_ilist $ilistD_U__zero__(void);
-B_ilist $ilistD_U__fromiter__(B_Iterable wit, $WORD src);
-B_NoneType $listD_U_insert(B_list lst, int64_t n, $WORD elem);
-B_NoneType $listD_U_reverse(B_list lst);
-B_NoneType $listD_U__delslice__(B_list lst, B_slice slc);
-B_NoneType $listD_U__setslice__(B_list lst, B_Iterable wit, B_slice slc, $WORD src);
-B_list $listD_U__iadd__(B_list lst, B_list other);
-B_list $listD_U__imul__(B_list lst, int64_t n);
+// Retain the receiver result without adding an out-of-line adapter call.
+B_NoneType B_list_base_extend(B_list_base lst, B_list_base other);
+void B_list_base_imul(B_list_base lst, int64_t n);
+static inline __attribute__((always_inline)) B_list_base B_list_base_iadd(B_list_base lst, B_list_base other) {
+    B_list_base_extend(lst, other);
+    return lst;
+}
+static inline __attribute__((always_inline)) B_list_base B_list_base_irepeat(B_list_base lst, int64_t n) {
+    B_list_base_imul(lst, n);
+    return lst;
+}
