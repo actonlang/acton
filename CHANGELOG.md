@@ -42,10 +42,12 @@
   by default arguments. Use `--witness-stats` to report the constructions left
   after sharing as one JSON line per compiled module. [#3354]
 - Reduce protocol-dispatch overhead for builtin operations, including `len()`,
-  `list.append()`, list slicing, string and byte comparisons, and `bigint` and
-  `complex` arithmetic. Calls on known builtin types use native implementations
-  directly, omitting unused protocol arguments while preserving generic and
-  user-defined dispatch. [#3383]
+  list operations, dictionary lookups and updates, set operations, string and
+  byte comparisons, and `bigint` and `complex` arithmetic. Calls on known
+  builtin types use shared native implementations directly, omitting unused
+  protocol arguments while preserving generic and user-defined dispatch. This
+  also covers dictionaries and sets with generic key or element types,
+  including immutable variants. [#3383] [#3391]
 - Generate less C and smaller binaries for programs with many closures by
   sharing equivalent closure classes, call adapters, and serialization code.
   Avoid redundant boxing in identity lambdas and unnecessary forwarding
@@ -326,6 +328,15 @@
   heap. [#3244] [#3290]
 
 ### Runtime
+- Reduce long garbage-collection pauses on large heaps with opt-in
+  generational collection. Minor collections collect young objects, and
+  parallel marking runs in steps with the program stopped. Select
+  `"gc_mode": "generational"` in `Build.act` or
+  `ACTON_GC_MODE=generational` at startup; ordinary full-heap collection
+  remains the default. `ACTON_GC_PAUSE_MS` sets the marking time target per
+  step (50 ms by default, 0 for one stop per collection). Stopping threads
+  and finishing a collection can exceed that target.
+  `acton.rts.get_gc_info()` reports the active mode and pause target. [#3390]
 - Reduce allocation overhead and memory use by disabling GC object end padding
   by default: a 16-byte object now occupies 16 bytes instead of 32. Across nine
   of ten benchmark loads on x86_64 Linux and an M1 Mac, this used 6% to 24%
@@ -353,12 +364,12 @@
   concurrent garbage collection. On Linux, thread exit and cancellation no
   longer leave collection permanently disabled. Incremental collection no
   longer scans unmapped thread stacks or heap blocks, preventing macOS
-  `SIGBUS` crashes, and Linux `userfaultfd` modes avoid aborts during concurrent
-  heap growth. Forked children no longer free live objects because of inherited
-  mark counts. Also fix collector thread-suspension deadlocks involving glibc,
-  macOS deadlocks when logging time-limit stops with `GC_PRINT_STATS`, and
-  crashes in collector assertion builds. `GC_FULL_FREQUENCY=0` now makes every
-  incremental collection a full one. [#3320] [#3339]
+  `SIGBUS` crashes. Forked children no longer free live objects because of
+  inherited mark counts. Also fix collector thread-suspension deadlocks
+  involving glibc, macOS deadlocks when logging time-limit stops with
+  `GC_PRINT_STATS`, and crashes in collector assertion builds.
+  `GC_FULL_FREQUENCY=0` now makes every incremental collection a full one.
+  [#3320] [#3339]
 - Reduce garbage-collector CPU time and metadata size by storing marks as
   packed bits by default. Measured workloads on an Apple M1 and a Ryzen 9
   5950X used 2% to 14% less CPU time and 3% to 6% less peak memory than with
@@ -420,10 +431,8 @@
   avoid treating stale thread-context data as live pointers, prevent
   cancellation from leaving exiting threads registered, recover from stale
   stack faults on Windows when external threads are registered, and reduce
-  allocation, marking, heap-walk, and sweeping overhead. Incremental and
-  generational modes also gain asynchronous `userfaultfd` write protection
-  on supported Linux 6.10+ kernels and fixes for collection after `fork()`.
-  [#3253] [#3259] [#3312]
+  allocation, marking, heap-walk, and sweeping overhead. Also fix collection
+  after `fork()`. [#3253] [#3259] [#3312]
 - Keep objects reachable from an actor's `__cleanup__` alive when marking
   overflows the GC mark stack, preventing incorrect results or crashes during
   cleanup. Grow the mark stack without dropping work when the collecting
@@ -472,6 +481,9 @@
 - Reduce per-message statistics bookkeeping by reusing each worker's
   statistics entry, and use consistent 64-bit counters, worker indices, and
   timing values across platforms, including Windows. [#3279] [#3281]
+- Send garbage-collector errors to stderr on Windows and terminate
+  immediately with exit code 3 on fatal collector errors, avoiding dialogs
+  that leave unattended programs waiting. [#3390]
 
 ### Packages & Distribution
 - Install stable Homebrew releases from prebuilt tarballs for macOS and Linux
@@ -496,6 +508,11 @@
   capture timing, purity requirements, and callback behavior. [#3242]
 
 ### Testing & CI
+- Check runtime and C-extension pointer stores with `acton test --gc-check`.
+  Tests run in generational mode with frequent collections and short marking
+  steps, bypassing cached test results and failing when the checker detects
+  a missing write barrier. CI also runs runtime and library tests with the
+  checker. [#3390]
 - Calculate non-GC memory changes in `acton test` with signed samples,
   avoiding overflow when resident memory is smaller than GC-managed memory.
   Errors during test setup or result processing now report the original
@@ -533,6 +550,23 @@
   anchored to the original test start. [#3245]
 
 ### Compatibility Notes
+- Update C extensions for changed builtin helper names and container layouts.
+  Dictionaries and sets now retain their `Hashable` witness, so
+  `B_dictD_setitem()` and `B_dictD_get()` no longer take it as an argument.
+  `list` and `ilist` helpers now use `B_list_base_*`; `str`, `bytes`,
+  `bytearray`, `bigint`, and `complex` helpers use `B_<type>_*` names. [#3391]
+- C extensions that store GC pointers in existing GC objects must use
+  `ACTON_STORE` or `ACTON_WBAR`, and call `ACTON_WBAR_RANGE` before bulk
+  copies or moves, to keep referenced objects alive in generational mode.
+  Use `acton_malloc_rescanned()` for GC objects whose pointer fields native
+  libraries update without barriers. [#3390]
+- Remove `gc_dirty_tracking_backend` from `Build.act`; the collector now
+  uses manual write barriers instead of `mprotect`, `soft_dirty`, or
+  `userfaultfd`. `acton.rts.get_gc_info()` drops `configured_backend` and
+  reports `mode` as `"ordinary"` or `"generational"`; use `pause_target_ms`
+  to inspect the marking time target. [#3390]
+- Targets without thread support, including WebAssembly, can no longer
+  build with the bundled collector. [#3390]
 - Replace `parse_message()`, `parse_request()`, and `parse_response()` in
   `http` and `std.http` with one `MessageParser` per connection. Call
   `feed(data)`, check `error`, and convert completed messages with
@@ -6071,6 +6105,8 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#3384]: https://github.com/actonlang/acton/pull/3384
 [#3385]: https://github.com/actonlang/acton/pull/3385
 [#3388]: https://github.com/actonlang/acton/pull/3388
+[#3390]: https://github.com/actonlang/acton/pull/3390
+[#3391]: https://github.com/actonlang/acton/pull/3391
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
