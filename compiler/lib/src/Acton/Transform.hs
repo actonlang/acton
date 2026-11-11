@@ -178,6 +178,9 @@ instance Transform Expr where
       | Just e <- trfind n env          = if final env then e else trans (blockscope [n] env) e
 
     trans env ee@(Call l e p k)
+      | Let l' ss body <- e',
+        null (bound ss `intersect` (free p' ++ free k'))
+                                        = trans env (Let l' ss (Call l body p' k'))
       | Lambda{} <- e',
         Just s1 <- pzip (ppar e') p',
         Just s2 <- kzip (kpar e') k'    = termsubst (s1++s2) (exp1 e')     -- TODO: check that e' is linear in all its parameters!
@@ -194,7 +197,22 @@ instance Transform Expr where
     trans env (TApp l e ts)             = TApp l (trans env e) ts
     trans env (Async l e)               = Async l (trans env e)
     trans env (Await l e)               = Await l (trans env e)
-    trans env (Let l ss e)              = Let l (trans env ss) (trans env e)
+    trans env (Let l [Assign l' [p@(PVar _ n _)] value] e)
+      | Var _ (NoQ n') <- e', n == n'  = value'
+      | Call cl (Var _ (NoQ n')) ap ak <- e', n == n',
+        n `notElem` (free ap ++ free ak)
+                                        = trans env (Call cl value' ap ak)
+      -- An eagerly captured function followed by a forwarding adapter is an
+      -- identity only when the adapter and the captured function have the same
+      -- effect. Standalone lambdas do not carry that proof.
+      | PVar _ _ (Just TFun{effect=fx}) <- p,
+        Lambda{efx=fx'} <- e', fx == fx',
+        Just callee <- forwarding e', callee == eVar n
+                                        = value'
+      | otherwise                     = Let l [Assign l' [p] value'] e'
+      where value'                    = trans env value
+            e'                        = trans (blockscope [n] env) e
+    trans env (Let l ss e)              = Let l (trans env ss) (trans (blockscope (bound ss) env) e)
     trans env (Index l e is)            = Index l (trans env e) (trans env is)
     trans env (Slice l e sl)            = Slice l (trans env e) (trans env sl)
     trans env (Cond l e1 e2 e3)         = Cond l (trans env e1) (trans env e2) (trans env e3)
@@ -247,8 +265,9 @@ instance Transform Expr where
     trans env (Paren l e)               = trans env e
     trans env e                         = e
 
-eta (Lambda _ p k (Call _ e p' k') fx)
-  | eq1 p p' && eq2 k k'                = e
+-- Recognize forwarding syntax; callers check whether its effect permits reduction.
+forwarding (Lambda _ p k (Call _ e p' k') _)
+  | eq1 p p' && eq2 k k'                = Just e
   where
     eq1 (PosPar n _ _ p) (PosArg e p')  = eVar n == e && eq1 p p'
     eq1 (PosSTAR n _) (PosStar e)       = eVar n == e
@@ -258,6 +277,10 @@ eta (Lambda _ p k (Call _ e p' k') fx)
     eq2 (KwdSTAR n _) (KwdStar e)       = eVar n == e
     eq2 KwdNIL KwdNil                   = True
     eq2 _ _                             = False
+forwarding _                            = Nothing
+
+eta e@Lambda{efx=fx}
+  | fx == fxPure, Just f <- forwarding e = f
 eta ee@(Lambda _ (PosPar n (Just t) Nothing PosNIL) KwdNIL (Tuple _ p k) (TFX _ FXPure))
   | idtup t p k                         = eLambda [(n,t)] (eVar n)
   where idtup (TTuple _ prow krow) p k  = ptup (eVar n) 0 prow p && ktup (eVar n) krow k

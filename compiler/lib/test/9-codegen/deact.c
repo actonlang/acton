@@ -433,8 +433,8 @@ B_NoneType deactQ_BepaD___init__ (deactQ_Bepa self) {
 $R deactQ_BepaD_callbackG_local (deactQ_Bepa self, $Cont C_cont, int64_t i) {
     #line 20 "test/src/deact.act"
     ((B_NoneType (*) (B_tuple, B_str, B_str, bool, bool))B_print)($NEWTUPLE(2, actStrFromLiteral("callback", 8, 8), toB_int(i)), actStrFromLiteral(" ", 1, 1), actStrFromLiteral("\n", 1, 1), false, false);
-    int64_t N_2tmp = (((int64_t)(i + 1LL)));
-    return $R_CONT(C_cont, toB_int(N_2tmp));
+    int64_t N_3tmp = (((int64_t)(i + 1LL)));
+    return $R_CONT(C_cont, toB_int(N_3tmp));
 }
 #line 23 "test/src/deact.act"
 $R deactQ_BepaD___startup__G_local (deactQ_Bepa self, $Cont C_cont) {

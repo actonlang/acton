@@ -728,7 +728,7 @@ reduce' eq c@(Sel info env w t1@(TTuple _ _ r) n t2)
                                                  select r
   where select (TRow _ _ n' t _ r)
           | n == n'                         = do w' <- newWitness
-                                                 let e = eLambda [(px0,t1)] (eDot (eCallVar w' [eVar px0]) n)
+                                                 let e = eLambda [(px0,t1)] (eCallVar w' [eDot (eVar px0) n])
                                                  reduce (mkEqn env w (wFun t1 t2) e : eq) [Sub info env w' t t2]
           | otherwise                       = select r
         select (TStar _ _ r)                = do w' <- newWitness
@@ -1146,9 +1146,10 @@ sub' env info eq w t1@(TFun _ fx1 p1 k1 t1') t2@(TFun _ fx2 p2 k2 t2')
                                                  wfx <- newWitness
                                                  let (TFun _ fx1 p1 k1 t1', TFun _ fx2 p2 k2 t2') = (t1, t2)
                                                      (pp,pk) = (pPar pNames p2, kPar attrKW k2)
-                                                     adapter = Lambda l0 pp pk (eCallVar w' [Call l0 (eVar px0) ap ak]) fx1
+                                                     captured = head $ xNames \\ (px0 : free ap ++ free ak)
+                                                     adapter = Lambda l0 pp pk (eCallVar w' [Call l0 (eVar captured) ap ak]) fx1
                                                      conversion = tApp (eVar wfx) [p2,k2,t2']
-                                                     lambda = eLambda [(px0,t1)] $ eCall conversion [adapter]
+                                                     lambda = eLambda [(px0,t1)] $ Let l0 [sAssign (pVar captured t1) (eVar px0)] (eCall conversion [adapter])
                                                  reduce (mkEqn env w (wFun t1 t2) lambda : eq) (Sub info env wfx fx1 fx2 : Sub info env w' t1' t2':cs1++cs2)
 
 --                     existing            expected

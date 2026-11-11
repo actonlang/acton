@@ -353,6 +353,52 @@ main = do
         length remaining `shouldBe` 0
         inferred `shouldBe` expected
 
+    describe "Effect-preserving eta reduction" $ do
+      let f = S.eVar (S.name "callee")
+          x = S.name "argument"
+          forwarded fx = S.Lambda NoLoc (S.pospar [(x,Builtin.tInt)]) S.KwdNIL
+                           (S.eCall f [S.eVar x]) fx
+      forM_ [("Transform", Transform.eta), ("Normalizer", Acton.Normalizer.eta)] $ \(label, eta) ->
+        describe label $ do
+          it "reduces a pure forwarding lambda" $
+            eta (forwarded S.fxPure) `shouldBe` f
+          forM_ [("mut",S.fxMut),("proc",S.fxProc),("action",S.fxAction)] $ \(effect,fx) ->
+            it ("preserves the " ++ effect ++ " calling convention") $
+              eta (forwarded fx) `shouldBe` forwarded fx
+
+      let captured = S.name "captured"
+          producer = S.eCall (S.eVar $ S.name "producer") []
+          capturedAdapter sourceFX targetFX =
+            S.Let NoLoc [S.sAssign (S.pVar captured $ S.tFun sourceFX
+                            (S.posRow Builtin.tInt S.posNil) S.kwdNil Builtin.tInt) producer]
+              (S.Lambda NoLoc (S.pospar [(x,Builtin.tInt)]) S.KwdNIL
+                (S.eCall (S.eVar captured) [S.eVar x]) targetFX)
+      forM_ [("mut",S.fxMut),("proc",S.fxProc),("action",S.fxAction)] $ \(effect,fx) ->
+        it ("eliminates an identity " ++ effect ++ " adapter without delaying its producer") $
+          Transform.trans Transform.env0 (capturedAdapter fx fx) `shouldBe` producer
+      it "keeps an adapter whose effect differs from its captured function" $
+        Transform.trans Transform.env0 (capturedAdapter S.fxAction S.fxProc)
+          `shouldBe` capturedAdapter S.fxAction S.fxProc
+
+    describe "Tuple field conversions" $ do
+      it "converts the selected callback rather than its containing tuple" $ do
+        let env = TE.initTypeEnv env0
+            info = TE.noinfo 0
+            field = S.name "callback"
+            callback = S.tFun S.fxProc (S.posRow Builtin.tInt S.posNil) S.kwdNil Builtin.tInt
+            tuple = S.tTupleK (S.kwdRow field callback S.kwdNil)
+            (w, eqs) = TE.runTypeM $ do
+              w <- TE.newWitness
+              eqs <- Solver.reduce [] [TE.Sel info env w tuple field callback]
+              return (w,eqs)
+            value = S.eVar (S.name "callbacks")
+            use = S.eCall (S.eVar w) [value]
+            reduced = Transform.wtrans Transform.env0 (TE.bindWits eqs ++ [S.sExpr use])
+            valueEnv = Acton.Env.define [(S.name "callbacks",I.NVar tuple)] env
+        case reduced of
+          [S.Expr _ e] -> QuickType.typeOf valueEnv e `shouldBe` callback
+          _ -> expectationFailure "Expected a selected callback expression"
+
     describe "Generic effect witnesses" $ do
       let env = TE.initTypeEnv env0
           info = TE.noinfo 0

@@ -383,13 +383,16 @@ instance Lift Expr where
                                              p' <- ll env p
                                              return $ Call l e' p' KwdNil
 
-    ll env (Async l e)
-      | closedType env e                = do e <- ll env e
-                                             let vts = restrict (locals env) (free e)
-                                                 call = Call l0 (eDot e attr_asyn_) (pArg par) KwdNil
-                                             closureConvert env (Lambda l0 par KwdNIL call fxProc) (tMsg t) vts (map (eVar . fst) vts)
-      | otherwise                       = do e <- ll env e
-                                             return $ Async l e
+    -- An async function value is a proc returning a Msg. Build its CPS
+    -- continuation explicitly and capture the action at construction time.
+    ll env (Async l e)                  = do e' <- ll env e
+                                             captured <- newName "action"
+                                             let call = Call l0 (eDot (eVar captured) attr_asyn_) (pArg par) KwdNil
+                                                 result = eCall (tApp (eQVar primRCont) [conv $ tMsg t]) [eVar llCont,call]
+                                                 cont = tFun fxProc (posRow (tMsg t) posNil) kwdNil tR
+                                                 params = PosPar llCont (Just cont) Nothing par
+                                             closureConvert env (Lambda l0 params KwdNIL result fxProc)
+                                                               tR [(captured,typeOf env e)] [e']
       where par                         = pPar paramNames p
             TFun _ fx p _ t             = typeOf env e
 

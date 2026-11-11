@@ -281,7 +281,7 @@ instance Deact Expr where
     deact env (DotI l e i)          = DotI l <$> deact env e <*> return i
     deact env (RestI l e i)         = RestI l <$> deact env e <*> return i
     deact env (Lambda l p KwdNIL e fx)
-      | Call l' e' as KwdNil <- e   = Lambda l p KwdNIL <$> deactCall env1 False l' e' as <*> return fx
+      | Call l' e' as KwdNil <- e   = Lambda l p KwdNIL <$> deactCall env1 (fx /= fxAction) l' e' as <*> return fx
       | otherwise                   = Lambda l p KwdNIL <$> deact env1 e <*> return fx
       where env1                    = defineAndShadow (envOf p) env
     deact env (Yield l e)           = Yield l <$> deact env e

@@ -47,12 +47,34 @@ proc def async_pure_direct(x: int) -> int:
 proc def async_pure_lambda(x: int) -> int:
     return await async (pure lambda n: n + 4)(x)
 
+proc def call_both(first: proc(int) -> int, second: proc(int) -> int) -> int:
+    return first(1) * 10 + second(1)
+
+pure def deferred(cb: action(int) -> int) -> proc(int) -> Msg[int]:
+    return async cb
+
 actor main(env):
     var captures = 0
     def factory() -> pure(int) -> int:
         captures += 1
         return add_one
 
+    proc def proc_callback(x: int) -> int:
+        return x + 1
+
+    proc def other_proc_callback(x: int) -> int:
+        return x + 2
+
+    proc def proc_factory() -> proc(int) -> int:
+        captures += 1
+        return proc_callback
+
+    proc_adapted: proc(int) -> int = proc_factory()
+    assert captures == 1
+    assert proc_adapted(4) == 5
+    assert captures == 1
+    assert call_both(proc_callback, other_proc_callback) == 23
+    captures = 0
     adapted = adapt(factory())
     assert captures == 1
     assert async_pure_direct(4) == 5
@@ -60,6 +82,12 @@ actor main(env):
     assert invoke(adapted, 4) == 5
     assert invoke(adapted, 8) == 9
     assert captures == 1
+    proc_forwarded: proc(int) -> int = proc lambda x: adapted(x)
+    action_forwarded: action(int) -> int = action lambda x: adapted(x)
+    assert proc_forwarded(4) == 5
+    assert await async action_forwarded(5) == 6
+    delayed: proc(int) -> Msg[int] = deferred(adapted)
+    assert await delayed(6) == 7
     assert invoke(adapted_named(), 10) == 11
     assert invoke_async(adapted_named(), 20) == 21
     assert invoke(pure lambda x: x + 2, 5) == 7
