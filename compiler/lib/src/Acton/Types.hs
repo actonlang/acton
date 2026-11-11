@@ -1219,6 +1219,12 @@ liveCombine te Nothing                  = Nothing
 liveCombine Nothing te'                 = Nothing
 liveCombine (Just te) (Just te')        = Just $ te++te'
 
+-- Ambient effect requirements use semantic subtyping. The witness is proof
+-- only: no function value is being converted at these sites.
+requireEffect env info required         = do fx <- currFX
+                                             w <- newWitness
+                                             return $ Sub info env w required fx
+
 fxUnwrapSc env sc                       = sc{ sctype = fxUnwrap env $ sctype sc }
 
 fxUnwrap env (TFun l fx p k t)          = TFun l (fxUnwrap env fx) p k t
@@ -1325,8 +1331,8 @@ instance InfEnv Stmt where
     infEnv env (After l now e1 e2)      = do (cs1,e1') <- inferSub env tFloat e1
                                              (cs2,t,e2') <- infer env e2
                                              -- TODO: constrain t
-                                             fx <- currFX
-                                             return (Cast (locinfo l 34) env fxProc fx :
+                                             requirement <- requireEffect env (locinfo l 34) fxProc
+                                             return (requirement :
                                                      cs1++cs2, [], After l now e1' e2')
 
     infEnv env (Signature l ns sc@(TSchema _ q t) dec)
@@ -1449,19 +1455,19 @@ infTarg env e@(Var l (NoQ n))           = case findName n env of
                                              NVar t ->
                                                  return ([], t, e, TgVar n)
                                              NSVar t -> do
-                                                 fx <- currFX
-                                                 return ([Cast (locinfo l 51) env fxProc fx], t, e, TgVar n)
+                                                 requirement <- requireEffect env (locinfo l 51) fxProc
+                                                 return ([requirement], t, e, TgVar n)
                                              _ ->
                                                  err1 n "Variable not assignable:"
 infTarg env (Index l e ix)              = do (cs,t,e) <- infer env e
-                                             fx <- currFX
-                                             return (Cast (locinfo l 52) env fxMut fx : Cast (locinfo' l 53 e) env t tObject : cs, t, e, TgIndex ix)
+                                             requirement <- requireEffect env (locinfo l 52) fxMut
+                                             return (requirement : Cast (locinfo' l 53 e) env t tObject : cs, t, e, TgIndex ix)
 infTarg env (Slice l e sl)              = do (cs,t,e) <- infer env e
-                                             fx <- currFX
-                                             return (Cast (locinfo l 54) env fxMut fx : Cast (locinfo' l 55 e) env t tObject : cs, t, e, TgSlice sl)
+                                             requirement <- requireEffect env (locinfo l 54) fxMut
+                                             return (requirement : Cast (locinfo' l 55 e) env t tObject : cs, t, e, TgSlice sl)
 infTarg env (Dot l e n)                 = do (cs,t,e) <- infer env e
-                                             fx <- currFX
-                                             return (Cast (locinfo l 56) env fxMut fx : Cast (locinfo' l 57 e) env t tObject : cs, t, e, TgDot n)
+                                             requirement <- requireEffect env (locinfo l 56) fxMut
+                                             return (requirement : Cast (locinfo' l 57 e) env t tObject : cs, t, e, TgDot n)
 
 sliz2exp (Sliz _ e1 e2 e3)              = eCall (eQVar qnSlice) $ map (maybe eNone id) [e1,e2,e3]
 
@@ -2611,8 +2617,8 @@ instance Infer Expr where
     infer env x@(Var l n)               = case findQName n env of
                                             NVar t -> return ([], t, x)
                                             NSVar t -> do
-                                                fx <- currFX
-                                                return ([Cast info env fxProc fx], t, x)
+                                                requirement <- requireEffect env info fxProc
+                                                return ([requirement], t, x)
                                               where info = Simple l ("State variable may only be accessed in a proc")
                                             NDef sc d _ -> do
                                                 (cs,tvs,t) <- instantiateDefaults env sc
@@ -2668,13 +2674,14 @@ instance Infer Expr where
                                              prow <- newUnivarOfKind PRow env
                                              krow <- newUnivarOfKind KRow env
                                              t' <- newUnivar env
+                                             w <- newWitness
                                              let tf fx = tFun fx prow krow
-                                             return (Cast (locinfo2 74 e) env t (tf fxAction t') :
-                                                     cs, tf fxCom (tMsg t'), Async l e)     -- enqueue without waiting
+                                             return (Sub (locinfo2 74 e) env w t (tf fxAction t') :
+                                                     cs, tf fxCom (tMsg t'), Async l (eCallVar w [e]))    -- enqueue without waiting
     infer env (Await l e)               = do t0 <- newUnivar env
                                              (cs1,e') <- inferSub env (tMsg t0) e
-                                             fx <- currFX
-                                             return (Cast (locinfo2 75 e) env fxProc fx :
+                                             requirement <- requireEffect env (locinfo2 75 e) fxProc
+                                             return (requirement :
                                                      cs1, t0, Await l e')
     infer env (Index l e ix)            = do (cs2,t,e') <- infer env e
                                              ti <- newUnivar env
@@ -3248,8 +3255,8 @@ instance InfEnvT Pattern where
                                                    | otherwise ->
                                                      return ([], t', PVar l n Nothing)
                                                  NSVar t' -> do
-                                                     fx <- currFX
-                                                     solveAll env [(n,NVar t)] [Cast (locinfo l 106) env fxProc fx, Cast (locinfo l 107) env t t']
+                                                     requirement <- requireEffect env (locinfo l 106) fxProc
+                                                     solveAll env [(n,NVar t)] [requirement, Cast (locinfo l 107) env t t']
                                                      return ([], t', PVar l n Nothing)
                                                  _ ->
                                                      err1 n "Variable not assignable:"

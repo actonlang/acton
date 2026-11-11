@@ -41,6 +41,12 @@ pure def ignore() -> None:
 pure def fail(x: int) -> int:
     raise ValueError("conversion failure")
 
+proc def async_pure_direct(x: int) -> int:
+    return await async add_one(x)
+
+proc def async_pure_lambda(x: int) -> int:
+    return await async (pure lambda n: n + 4)(x)
+
 actor main(env):
     var captures = 0
     def factory() -> pure(int) -> int:
@@ -49,6 +55,8 @@ actor main(env):
 
     adapted = adapt(factory())
     assert captures == 1
+    assert async_pure_direct(4) == 5
+    assert async_pure_lambda(4) == 8
     assert invoke(adapted, 4) == 5
     assert invoke(adapted, 8) == 9
     assert captures == 1
