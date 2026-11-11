@@ -369,8 +369,9 @@ solve' env select hist te eq cs
                 cond (RTry v as r : rs)     = RTry v (if rev' then subrev ts' else ts') rev'
                   where ts                  = foldr (typeIntersect env) as $ map alts rs
                         ts'                 = if v `elem` optvs then typeDiff env ts [tOpt tWild] else ts
---                        rev'                = (or $ r : map rev rs) || v `elem` posvs       -- (new, matches new solver but picks bad order for lower None)
-                        rev'                = (and $ r : map rev rs) || v `elem` posvs ||
+                        -- Prefer smaller candidates whenever a lower bound exists,
+                        -- or the variable occurs positively.
+                        rev'                = (or $ r : map rev rs) || v `elem` posvs ||
                                                 v `Set.member` protocolReceivers
                 cond (RVar v as : rs)       = RVar v (foldr (typeUnion env) as $ map alts rs)
                 cond (RSkip : rs)           = RSkip

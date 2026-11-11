@@ -57,7 +57,7 @@ import Text.Megaparsec (ParseErrorBundle, ParseError(..), ErrorFancy(..), PosSta
 import Text.Megaparsec.Pos (sourceLine, unPos)
 import qualified Data.Text as T
 import qualified Data.Text.Short as TS
-import Data.List (foldl', isInfixOf, isPrefixOf, nub, sort, subsequences)
+import Data.List (foldl', isInfixOf, isPrefixOf, nub, sort, subsequences, permutations)
 import Data.Maybe (listToMaybe)
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as M
@@ -351,6 +351,41 @@ main = do
               candidates = Solver.allBelowProto env wrapped
           length candidates `shouldBe` length expected
           forM_ expected $ \candidate -> candidates `shouldSatisfy` elem candidate
+      it "prefers pure across a Wrapped bound in every constraint order" $ do
+        forM_ (permutations [0,1,2,3]) $ \order -> do
+          let (remaining, inferred) = TE.runTypeM $ do
+                signature <- TE.newUnivarOfKind S.KFX env
+                body <- TE.newUnivarOfKind S.KFX env
+                selected <- TE.newUnivarOfKind S.KFX env
+                unwrapped <- TE.newUnivarOfKind S.KFX env
+                selectW <- TE.newWitness
+                unwrapW <- TE.newWitness
+                callW <- TE.newWitness
+                let wrapped = S.TC (S.GName (S.modName ["$"]) (S.name "Wrapped")) [unwrapped]
+                    cs = [ TE.Sub info env selectW S.fxPure selected
+                         , TE.Proto info env unwrapW selected wrapped
+                         , TE.Sub info env callW unwrapped body
+                         , TE.Cast info env body signature ]
+                    te = [(S.name "method", I.NVar (S.tFun signature S.posNil S.kwdNil S.tNone))]
+                remaining <- solve te [cs !! i | i <- order]
+                inferred <- TE.usubst [signature,body,selected,unwrapped]
+                return (remaining,inferred)
+          length remaining `shouldBe` 0
+          inferred `shouldBe` replicate 4 S.fxPure
+      it "infers optional int when None lower bounds meet integer results" $ do
+        typed <- typecheckSource env0 "none_lower_bounds" $ unlines
+          [ "pure def choose(flag: bool, n: int):"
+          , "    return None if flag else n"
+          , "def last(items: list[int]):"
+          , "    result = None"
+          , "    for item in items:"
+          , "        result = item"
+          , "    return result"
+          ]
+        forM_ ["choose","last"] $ \function ->
+          case lookup (S.name function) (QuickType.envOf $ S.mbody typed) of
+            Just (I.NDef sc _ _) -> S.restype (S.sctype sc) `shouldBe` S.tOpt Builtin.tInt
+            _ -> expectationFailure ("Expected the inferred signature of " ++ function)
       it "places pure below action while retaining action below proc" $ do
         Acton.Env.subeffect S.FXPure S.FXAction `shouldBe` True
         Acton.Env.castable env S.fxPure S.fxAction `shouldBe` False

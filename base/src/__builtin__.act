@@ -17,9 +17,9 @@ class value:
     __init__ : () -> None
     def __bool__(self) -> bool:
         NotImplemented
-    pure def __str__(self) -> str:
+    def __str__(self) -> str:
         NotImplemented
-    pure def __repr__(self) -> str:
+    def __repr__(self) -> str:
         NotImplemented
 
 class object (value):
