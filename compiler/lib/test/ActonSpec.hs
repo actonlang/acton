@@ -385,6 +385,33 @@ main = do
           Just (I.NDef sc _ _) -> S.effect (S.restype $ S.sctype sc) `shouldBe` S.fxAction
           _ -> expectationFailure "Expected the inferred signature of combine"
 
+      it "infers proc for a non-tail action call outside an actor" $ do
+        typed <- typecheckSource env0 "non_tail_action_lambda" $ unlines
+          [ "pure def combine(p: pure() -> int, a: action() -> bool):"
+          , "    return lambda: p() if a() else p()"
+          ]
+        case lookup (S.name "combine") (QuickType.envOf $ S.mbody typed) of
+          Just (I.NDef sc _ _) -> S.effect (S.restype $ S.sctype sc) `shouldBe` S.fxProc
+          _ -> expectationFailure "Expected the inferred signature of combine"
+
+      it "keeps str calls pure outside an actor" $ do
+        typed <- typecheckSource env0 "pure_string_conversion" $ unlines
+          [ "pure def stringify(value: int) -> str:"
+          , "    return str(value)"
+          ]
+        case lookup (S.name "stringify") (QuickType.envOf $ S.mbody typed) of
+          Just (I.NDef sc _ _) -> S.effect (S.sctype sc) `shouldBe` S.fxPure
+          _ -> expectationFailure "Expected the inferred signature of stringify"
+
+      it "keeps native value formatting pure outside an actor" $ do
+        typed <- typecheckSource env0 "pure_value_formatting" $ unlines
+          [ "pure def show(item: value) -> str:"
+          , "    return item.__str__() + item.__repr__() + repr(item)"
+          ]
+        case lookup (S.name "show") (QuickType.envOf $ S.mbody typed) of
+          Just (I.NDef sc _ _) -> S.effect (S.sctype sc) `shouldBe` S.fxPure
+          _ -> expectationFailure "Expected the inferred signature of show"
+
       it "joins pure and action function values at action" $ do
         typed <- typecheckSource env0 "pure_action_choice" $ unlines
           [ "pure def choose(flag: bool, p: pure(int) -> int, a: action(int) -> int):"

@@ -9,11 +9,11 @@ class Cls (__builtin__.value):
         return $R_CONTc@[None](C_cont, None)
 
 proc def maybe_log (C_cont : proc(None) -> $R, c : ?Cls) -> $R:
-    V_maybe_log_11: ?Cls = c
+    V_maybe_log_18: ?Cls = c
     proc def C_1cont (C_2res : None) -> $R:
         return $R_CONTc@[None](C_cont, None)
-    if $ISNOTNONE@[Cls](V_maybe_log_11):
-        return $CAST@[?Cls, Cls](V_maybe_log_11).f($SKIPRESc@[None](C_1cont), "\"boom\"")
+    if $ISNOTNONE@[Cls](V_maybe_log_18):
+        return $CAST@[?Cls, Cls](V_maybe_log_18).f($SKIPRESc@[None](C_1cont), "\"boom\"")
     else:
         None
         return $R_CONTc@[None](C_cont, None)
@@ -43,15 +43,15 @@ com def LoggerG_newact () -> Logger:
     return G_act
 # (recursive group)
 
-action def must_log (a : ?Logger) -> None:
-    V_must_log_11: ?Logger = a
-    if $ISNOTNONE@[Logger](V_must_log_11):
-        (async $CAST@[?Logger, Logger](V_must_log_11).log)("\"bang\"")
+proc def must_log (C_cont : proc(None) -> $R, a : ?Logger) -> $R:
+    V_must_log_18: ?Logger = a
+    if $ISNOTNONE@[Logger](V_must_log_18):
+        (async $CAST@[?Logger, Logger](V_must_log_18).log)("\"bang\"")
     else:
         $raiseValueError@[None]("\"Forced unwrapping applied to None\"")
-    V_must_log_21: ?Logger = a
-    if $ISNOTNONE@[Logger](V_must_log_21):
-        (async $CAST@[?Logger, Logger](V_must_log_21).log)("\"chain\"")
+    V_must_log_35: ?Logger = a
+    if $ISNOTNONE@[Logger](V_must_log_35):
+        (async $CAST@[?Logger, Logger](V_must_log_35).log)("\"chain\"")
     else:
         None
-    return None
+    return $R_CONTc@[None](C_cont, None)

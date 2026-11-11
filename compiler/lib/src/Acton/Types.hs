@@ -3004,7 +3004,7 @@ instance Infer Expr where
 -- Adapting arguments is separate from permission to perform the call. In
 -- particular, a pure call in an action must still produce its ordinary result.
 inferCall env unwrap l e ps ks          = do (cs1,t,e') <- infer env e{eloc = l}
-                                             (cs1,t,e') <- if unwrap && actorSelf env then wrapped l attrUnwrap env cs1 [t] [e'] else pure (cs1,t,e')
+                                             (cs1,t,e') <- if unwrap then wrapped l attrUnwrap env cs1 [t] [e'] else pure (cs1,t,e')
                                              (cs2,prow,ps') <- infer env ps
                                              (cs3,krow,ks') <- infer env ks
                                              t0 <- newUnivar env

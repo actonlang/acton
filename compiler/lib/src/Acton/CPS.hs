@@ -208,6 +208,11 @@ instance CPS [Stmt] where
                                              return $ sDecl ds' : ss'
       where env1                        = define (envOf ds) env
 
+    -- Raising never reaches the current sequence continuation. That
+    -- continuation may capture locals not bound on this exception path.
+    cps env (s@(Expr _ e) : _)
+      | isRAISE e                       = return [conv env s]
+
     cps env (s : ss)
       | not (needCont env s)            = do ss' <- cps env1 ss
                                              --traceM ("### SIMPLE: " ++ prstr s)

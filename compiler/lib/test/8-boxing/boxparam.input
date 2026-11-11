@@ -1,6 +1,6 @@
-W_Base_36: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+W_Base_50: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
 
-W_Base_38: __builtin__.Ord[__builtin__.int] = __builtin__.OrdD_int()
+W_Base_52: __builtin__.Ord[__builtin__.int] = __builtin__.OrdD_int()
 
 # recursive group:
 class Base[T] (__builtin__.object, __builtin__.value):
@@ -28,11 +28,11 @@ class Deriv (Base[__builtin__.int], __builtin__.object, __builtin__.value):
         Base.G_init@[__builtin__.int](self)
         return None
     pure def cmp (self : Self, x : __builtin__.int) -> __builtin__.bool:
-        N_tmp: __builtin__.bool = W_Base_38.__gt__(x, W_Base_36.__fromatom__(3))
+        N_tmp: __builtin__.bool = W_Base_52.__gt__(x, W_Base_50.__fromatom__(3))
         return N_tmp
     pure def bump (self : Self, x : __builtin__.int) -> __builtin__.int:
-        W_Base_45: __builtin__.Plus[__builtin__.int] = __builtin__.IntegralD_int()
-        x = W_Base_45.__iadd__(x, W_Base_36.__fromatom__(1))
+        W_Base_59: __builtin__.Plus[__builtin__.int] = __builtin__.IntegralD_int()
+        x = W_Base_59.__iadd__(x, W_Base_50.__fromatom__(1))
         return x
     pure def fwd (self : Self, x : __builtin__.int) -> __builtin__.int:
         N_1tmp: __builtin__.int = self.bump(x)
