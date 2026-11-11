@@ -615,7 +615,7 @@ allBelow env (TFun _ _ _ _ _)       = [tFun tWild tWild tWild tWild]
 allBelow env (TTuple _ _ _)         = [tTuple tWild tWild]
 allBelow env (TFX _ fx)             = [tTFX candidate | candidate <- effectsInProgramOrder, subeffect candidate fx]
 
-allBelowProto env (TC n [t@TFX{},_])
+allBelowProto env (TC n [t@TFX{}])
   | n == primWrappedP               = [ schematic (wtype w) | w <- witsByPName env n, t == (head $ tcargs $ proto w) ]
 allBelowProto env p
   | p == pIdentity                  = ts ++ [ schematic $ tCon tc | tc <- tyactorsAll env ++ importedActors env ]

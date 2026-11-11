@@ -144,10 +144,10 @@ tR                  = tCon $ TC primR []
 tCont t             = tCon $ TC primCont [t]
 
 primWrappedP        = gPrim "Wrapped"
-pWrapped x y        = TC primWrappedP [x,y]
+pWrapped x          = TC primWrappedP [x]
 
 primWrappedC        = gPrim "WrappedC"
-tWrapped s x y      = tCon $ TC primWrappedC [s,x,y]
+tWrapped s x        = tCon $ TC primWrappedC [s,x]
 
 attrVal             = name "val"
 attrWrap            = name "wrap"
@@ -681,8 +681,8 @@ primEnv             = [ (noq (bwName w), NDef (bwSchema w) NoDec Nothing) | w <-
 
                             (noq primWrappedP,      proWrapped),
                             (noq primWrappedC,      clWrapped),
---                            (noq primWrapProc,      NVar $ tWrapped fxProc fxProc fxProc),
---                            (noq primWrapAction,    NVar $ tWrapped fxAction fxProc fxProc),
+--                            (noq primWrapProc,      NVar $ tWrapped fxProc fxProc),
+--                            (noq primWrapAction,    NVar $ tWrapped fxAction fxProc),
 
                             (noq primWRAP,          NDef scWRAP NoDec Nothing),
 
@@ -1327,55 +1327,50 @@ scWRAP              = tSchema [qbind a, qbind b, qbind c] tWRAP
         b           = TV KType (name "B")
         c           = TV KType (name "C")
 
---  protocol $Wrapped[X,Y]:
+--  protocol $Wrapped[X]:
 --      @static
 --      wrap        : [A,B,C] => ($Actor, X(*A,**B)->C) -> Self(*A,**B)->C
 --      @static
---      unwrap      : [A,B,C] => (Self(*A,**B)->C) -> Y(*A,**B)->C
-proWrapped          = NProto [qbind x, qbind y] [] te Nothing
+--      unwrap      : [A,B,C] => (Self(*A,**B)->C) -> X(*A,**B)->C
+proWrapped          = NProto [qbind x] [] te Nothing
   where te          = [(attrWrap,scWrap), (attrUnwrap,scUnwrap)]
         scWrap      = NSig (tSchema q (tFun0 [tActor, fxFun tX] (fxFun tSelf)))  Static Nothing
-        scUnwrap    = NSig (tSchema q (tFun0 [fxFun tSelf] (fxFun tY))) Static Nothing
+        scUnwrap    = NSig (tSchema q (tFun0 [fxFun tSelf] (fxFun tX))) Static Nothing
         fxFun fx    = tFun fx (tVar a) (tVar b) (tVar c)
         tX          = tVar x
-        tY          = tVar y
         tSelf       = tVar fxSelf
         q           = [qbind a, qbind b, qbind c]
         x           = TV KFX (name "X")
-        y           = TV KFX (name "Y")
         a           = TV PRow (name "A")
         b           = TV KRow (name "B")
         c           = TV KType (name "C")
 
---  class $WrappedC[S,X,Y]: pass
+--  class $WrappedC[S,X]: pass
 --      wrap        : [A,B,C] => ($Actor, X(*A,**B)->C) -> S(*A,**B)->C
 --      unwrap      : [A,B,C] => (S(*A,**B)->C) -> X(*A,**B)->C
-clWrapped           = NClass [qbind s, qbind x, qbind y] [] te Nothing
+clWrapped           = NClass [qbind s, qbind x] [] te Nothing
   where te          = [(attrWrap,scWrap), (attrUnwrap,scUnwrap)]
         scWrap      = NDef (tSchema q (tFun0 [tActor, fxFun tX] (fxFun tS))) NoDec Nothing
-        scUnwrap    = NDef (tSchema q (tFun0 [fxFun tS] (fxFun tY))) NoDec Nothing
+        scUnwrap    = NDef (tSchema q (tFun0 [fxFun tS] (fxFun tX))) NoDec Nothing
         fxFun fx    = tFun fx (tVar a) (tVar b) (tVar c)
         tS          = tVar s
         tX          = tVar x
-        tY          = tVar y
         q           = [qbind a, qbind b, qbind c]
         s           = TV KFX (name "S")
         x           = TV KFX (name "X")
-        y           = TV KFX (name "Y")
         a           = TV PRow (name "A")
         b           = TV KRow (name "B")
         c           = TV KType (name "C")
 
 
 
-primWits            = [ WInst []        fxAction (pWrapped fxProc fxProc)   primWrapAction path,
-                        WInst []        fxProc   (pWrapped fxProc fxProc)   primWrapProc path,
-                        WInst []        fxMut    (pWrapped fxMut  fxMut)    primWrapMut path,
-                        WInst []        fxCom    (pWrapped fxCom   fxCom)   primWrapCom path,
-                        WInst [qbind y] fxPure   (pWrapped fxPure (tVar y)) primWrapPure path
+primWits            = [ WInst []        fxAction (pWrapped fxProc)   primWrapAction path,
+                        WInst []        fxProc   (pWrapped fxProc)   primWrapProc path,
+                        WInst []        fxMut    (pWrapped fxMut)    primWrapMut path,
+                        WInst []        fxCom    (pWrapped fxCom)    primWrapCom path,
+                        WInst []        fxPure   (pWrapped fxPure)   primWrapPure path
                       ]
   where path        = [Left (noQ "_")]
-        y           = TV KFX (name "Y")
 
 isPUSH (Call _ (Var _ x) _ _)   = x `elem` [primPUSH,primPUSHF]
 isPUSH _                        = False

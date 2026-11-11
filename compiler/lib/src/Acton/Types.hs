@@ -1233,13 +1233,11 @@ fxUnwrap env (TFX l FXAction)
 fxUnwrap env t                          = t
 
 wrap env t@TFun{}                       = do tvx <- newUnivarOfKind KFX env
-                                             tvy <- newUnivarOfKind KFX env
                                              w <- newWitness
-                                             return (Proto (locinfo t 28) env w tvx (pWrapped (effect t) tvy), t{ effect = tvx })
+                                             return (Proto (locinfo t 28) env w tvx (pWrapped (effect t)), t{ effect = tvx })
 
 wrapped l kw env cs ts args             = do tvx <- newUnivarOfKind KFX env
-                                             tvy <- newUnivarOfKind KFX env
-                                             let p = pWrapped tvx tvy
+                                             let p = pWrapped tvx
                                                  Just (_, sc, Just Static) = findAttr env p kw
                                              (_,tvs,t0) <- instantiateDefaults env sc
                                              fx <- newUnivarOfKind KFX env

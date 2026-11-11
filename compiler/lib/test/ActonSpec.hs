@@ -331,6 +331,26 @@ main = do
         Acton.Env.castable env S.fxMut S.fxPure `shouldBe` True
         Solver.allAbove env S.fxMut `shouldSatisfy` notElem S.fxPure
         Solver.allBelow env S.fxPure `shouldSatisfy` notElem S.fxMut
+      forM_ [("pure",S.fxPure,S.fxPure), ("mut",S.fxMut,S.fxMut),
+             ("proc",S.fxProc,S.fxProc), ("action",S.fxAction,S.fxProc)] $ \(label,source,expected) ->
+        it ("resolves the shared wrap/unwrap effect for " ++ label ++ " without contextual bounds") $ do
+          let (remaining, inferred) = TE.runTypeM $ do
+                fx <- TE.newUnivarOfKind S.KFX env
+                w <- TE.newWitness
+                let wrapped = S.TC (S.GName (S.modName ["$"]) (S.name "Wrapped")) [fx]
+                _ <- Solver.reduce [] [TE.Proto info env w source wrapped]
+                remaining <- TE.collectDeferred
+                inferred <- TE.usubst fx
+                return (remaining,inferred)
+          length remaining `shouldBe` 0
+          inferred `shouldBe` expected
+      it "finds wrapped effects using the single shared effect parameter" $ do
+        forM_ [(S.fxPure,[S.fxPure]), (S.fxMut,[S.fxMut]),
+               (S.fxProc,[S.fxProc,S.fxAction]), (S.fxAction,[])] $ \(fx,expected) -> do
+          let wrapped = S.TC (S.GName (S.modName ["$"]) (S.name "Wrapped")) [fx]
+              candidates = Solver.allBelowProto env wrapped
+          length candidates `shouldBe` length expected
+          forM_ expected $ \candidate -> candidates `shouldSatisfy` elem candidate
       it "places pure below action while retaining action below proc" $ do
         Acton.Env.subeffect S.FXPure S.FXAction `shouldBe` True
         Acton.Env.castable env S.fxPure S.fxAction `shouldBe` False
