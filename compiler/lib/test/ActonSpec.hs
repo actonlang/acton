@@ -331,6 +331,48 @@ main = do
         Acton.Env.castable env S.fxMut S.fxPure `shouldBe` True
         Solver.allAbove env S.fxMut `shouldSatisfy` notElem S.fxPure
         Solver.allBelow env S.fxPure `shouldSatisfy` notElem S.fxMut
+      it "places pure below action while retaining action below proc" $ do
+        Acton.Env.subeffect S.FXPure S.FXAction `shouldBe` True
+        Acton.Env.castable env S.fxPure S.fxAction `shouldBe` False
+        Acton.Env.castable env S.fxAction S.fxProc `shouldBe` True
+        Acton.Env.castable env S.fxAction S.fxPure `shouldBe` False
+        Solver.allAbove env S.fxPure `shouldSatisfy` elem S.fxAction
+        Solver.allBelow env S.fxAction `shouldSatisfy` elem S.fxPure
+        Solver.dnClosed env S.fxAction `shouldBe` False
+      it "joins pure with action at action and mut with action at proc" $ do
+        forM_ [(S.fxPure, S.fxAction, S.fxAction), (S.fxMut, S.fxAction, S.fxProc)] $ \(a,b,expected) -> do
+          Acton.Env.lub env a b `shouldBe` Just expected
+          Acton.Env.lub env b a `shouldBe` Just expected
+          Acton.Env.glb env a b `shouldBe` Just S.fxPure
+          Acton.Env.glb env b a `shouldBe` Just S.fxPure
+      it "accepts pure functions and lambdas as action callbacks" $ do
+        typed <- typecheckSource env0 "pure_action_callback" $ unlines
+          [ "pure def pure_value() -> int:"
+          , "    return 1"
+          , "pure def accept(cb: action() -> int) -> None:"
+          , "    pass"
+          , "pure def use() -> None:"
+          , "    accept(pure_value)"
+          , "    accept(lambda: 1)"
+          ]
+        typed `shouldSatisfy` const True
+      it "infers action when a pure argument computation precedes a tail action call" $ do
+        typed <- typecheckSource env0 "pure_action_lambda" $ unlines
+          [ "pure def combine(p: pure(int) -> int, a: action(int) -> int):"
+          , "    return lambda x: a(p(x))"
+          ]
+        case lookup (S.name "combine") (QuickType.envOf $ S.mbody typed) of
+          Just (I.NDef sc _ _) -> S.effect (S.restype $ S.sctype sc) `shouldBe` S.fxAction
+          _ -> expectationFailure "Expected the inferred signature of combine"
+
+      it "joins pure and action function values at action" $ do
+        typed <- typecheckSource env0 "pure_action_choice" $ unlines
+          [ "pure def choose(flag: bool, p: pure(int) -> int, a: action(int) -> int):"
+          , "    return p if flag else a"
+          ]
+        case lookup (S.name "choose") (QuickType.envOf $ S.mbody typed) of
+          Just (I.NDef sc _ _) -> S.effect (S.restype $ S.sctype sc) `shouldBe` S.fxAction
+          _ -> expectationFailure "Expected the inferred signature of choose"
       it "keeps callback effects general under a proc upper bound" $ do
         let (remaining, inferred) = TE.runTypeM $ do
               fx <- TE.newUnivarOfKind S.KFX env
@@ -342,6 +384,7 @@ main = do
         length remaining `shouldBe` 0
         inferred `shouldBe` S.fxProc
       forM_ [ ("prefers pure under a proc upper bound", \fx -> [TE.Cast info env fx S.fxProc], S.fxPure)
+            , ("requires action under a Cast action upper bound", \fx -> [TE.Cast info env fx S.fxAction], S.fxAction)
             , ("preserves a mut lower bound", \fx -> [TE.Cast info env S.fxMut fx], S.fxMut)
             , ("preserves an action lower bound", \fx -> [TE.Cast info env S.fxAction fx], S.fxAction)
             ] $ \(name, constraints, expected) -> it name $ do
@@ -352,6 +395,16 @@ main = do
               return (remaining, inferred)
         length remaining `shouldBe` 0
         inferred `shouldBe` expected
+
+      it "prefers pure under a witnessed action upper bound" $ do
+        let (remaining, inferred) = TE.runTypeM $ do
+              fx <- TE.newUnivarOfKind S.KFX env
+              w <- TE.newWitness
+              remaining <- solve [(S.name "effect", I.NVar fx)] [TE.Sub info env w fx S.fxAction]
+              inferred <- TE.usubst fx
+              return (remaining,inferred)
+        length remaining `shouldBe` 0
+        inferred `shouldBe` S.fxPure
 
     describe "Effect-preserving eta reduction" $ do
       let f = S.eVar (S.name "callee")

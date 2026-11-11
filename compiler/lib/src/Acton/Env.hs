@@ -1194,17 +1194,20 @@ castable env t1 t2                          = False
 -- Built-in program order: parents precede their subeffects, just as class
 -- declarations precede subclasses. The solver decides when to reverse it.
 effectsInProgramOrder :: [FX]
-effectsInProgramOrder = [FXProc, FXMut, FXCom, FXPure, FXAction]
+effectsInProgramOrder = [FXProc, FXMut, FXCom, FXAction, FXPure]
 
 -- Semantic inclusion, excluding the temporary mut-to-pure cast.
 subeffect :: FX -> FX -> Bool
 subeffect a b | a == b = True
 subeffect _ FXProc = True
-subeffect FXPure b = b `elem` [FXMut, FXCom]
+subeffect FXPure b = b `elem` [FXMut, FXCom, FXAction]
 subeffect _ _ = False
 
--- Keep the temporary mut-to-pure cast out of semantic bounds and preference.
+-- Pure-to-action needs a runtime adapter, so semantic inclusion does not
+-- make it a cast. Mutable builtins retain their temporary mut-to-pure cast;
+-- that exception must not change effect bounds or preference.
 castEffect :: FX -> FX -> Bool
+castEffect FXPure FXAction = False
 castEffect fx1 fx2 = subeffect fx1 fx2 || (fx1 == FXMut && fx2 == FXPure)
 
 headcast env t1 t2                          = castable env (schematic t1) (schematic t2)
@@ -1254,7 +1257,6 @@ glb env t1@(TFX _ fx1) t2@(TFX _ fx2)
   where glfx a b
           | subeffect a b              = Just a
           | subeffect b a              = Just b
-          | FXAction `elem` [a,b]      = Nothing
           | otherwise                  = Just FXPure
 
 glb env (TNil _ k1) (TNil _ k2)

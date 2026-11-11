@@ -1853,7 +1853,6 @@ multiLBounds cs                         = Map.assocs $ Map.map deEnv $ Map.filte
 
 dnClosed env (TCon _ c)                 = isActor env (tcname c)
 dnClosed env (TFX _ FXPure)             = True
-dnClosed env (TFX _ FXAction)           = True
 dnClosed env (TNone _)                  = True
 dnClosed env (TNil _ _)                 = True
 dnClosed env _                          = False

@@ -3003,12 +3003,14 @@ instance Infer Expr where
     infer env (Paren l e)               = do (cs,t,e') <- infer env e
                                              return (cs, t, Paren l e')
 
+-- Adapting arguments is separate from permission to perform the call. In
+-- particular, a pure call in an action must still produce its ordinary result.
 inferCall env unwrap l e ps ks          = do (cs1,t,e') <- infer env e{eloc = l}
                                              (cs1,t,e') <- if unwrap && actorSelf env then wrapped l attrUnwrap env cs1 [t] [e'] else pure (cs1,t,e')
                                              (cs2,prow,ps') <- infer env ps
                                              (cs3,krow,ks') <- infer env ks
                                              t0 <- newUnivar env
-                                             fx <- currFX
+                                             fx <- newUnivarOfKind KFX env
                                              w <- newWitness
                                              let i = case e of
                                                         Var _ n@(NoQ n')
@@ -3016,7 +3018,8 @@ inferCall env unwrap l e ps ks          = do (cs1,t,e') <- infer env e{eloc = l}
                                                             Just l2 <- findDefLoc n' env ->
                                                                    DeclInfo l l2 n' sc ("Type incompatibility between definition of and call of "++Pretty.print n')
                                                         _ -> DfltInfo l 837 (Just (Call l e ps ks)) []
-                                             return (Sub i env w t (tFun fx prow krow t0)  :
+                                             requirement <- requireEffect env i fx
+                                             return (Sub i env w t (tFun fx prow krow t0) : requirement :
                                             -- return (Sub (DfltInfo l 837 (Just (Call l e ps ks)) []) w [] t (tFun fx prow krow t0) :
                                                      cs1++cs2++cs3, t0, Call l (eCall (eVar w) [e']) ps' ks')
 

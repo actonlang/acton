@@ -1,9 +1,15 @@
 pure def add_one(x: int) -> int:
     return x + 1
 
-# Keep the conversion explicit while the semantic hierarchy patch is parked.
+# Check explicit conversion as well as inferred joins of pure and action values.
 pure def adapt(f: pure(int) -> int) -> action(int) -> int:
     return f
+
+pure def choose(flag: bool, p: pure(int) -> int, a: action(int) -> int):
+    return p if flag else a
+
+pure def compose(p: pure(int) -> int, a: action(int) -> int):
+    return lambda x: a(p(x))
 
 pure def adapted_named() -> action(int) -> int:
     return adapt(add_one)
@@ -82,6 +88,10 @@ actor main(env):
     assert invoke(adapted, 4) == 5
     assert invoke(adapted, 8) == 9
     assert captures == 1
+    assert invoke(choose(True, add_one, adapted), 6) == 7
+    assert invoke_async(choose(False, add_one, adapted), 7) == 8
+    assert invoke(compose(add_one, adapted), 1) == 3
+    assert invoke_async(compose(add_one, adapted), 2) == 4
     proc_forwarded: proc(int) -> int = proc lambda x: adapted(x)
     action_forwarded: action(int) -> int = action lambda x: adapted(x)
     assert proc_forwarded(4) == 5
