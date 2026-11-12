@@ -20,6 +20,7 @@ import qualified Data.Map.Strict as Map
 import Data.Map.Strict (Map)
 import qualified Data.IntSet as IntSet
 import qualified Data.Set as Set
+import qualified Data.IntMap.Strict as IntMap
 import qualified Control.Exception
 import Control.DeepSeq
 
@@ -1645,35 +1646,48 @@ varinfo cs                                  = f cs (VInfo [] [] [] Map.empty Map
     f []                                    = Just
     f (_ : cs)                              = \_ -> Nothing
 
-varclose xys                                = clos [] xys
-  where clos cl []                          = Right cl
-        clos cl ((x,y):xys)
-          | (x,y) `elem` cl                 = clos cl xys
+-- Keep adjacency lists in closure insertion order. The indexes avoid repeated
+-- scans without changing the first cycle found or the returned edge order.
+varclose xys                                = clos [] IntMap.empty IntMap.empty IntMap.empty xys
+  where clos cl _ _ _ []                    = Right cl
+        clos cl seen down up ((x,y):xys)
+          | uvid y `IntSet.member` outgoing = clos cl seen down up xys
           | not $ null common               = Left (x,y:common)
-          | otherwise                       = clos ((x,y):cl)  (new_below++new_above++xys)
-          where below_x                     = below x cl
-                above_y                     = above y cl
-                common                      = below_x `intersect` above_y
+          | otherwise                       = clos ((x,y):cl) seen' down' up' (new_below++new_above++xys)
+          where outgoing                    = IntMap.findWithDefault IntSet.empty (uvid x) seen
+                below_x                     = IntMap.findWithDefault [] (uvid x) down
+                above_y                     = IntMap.findWithDefault [] (uvid y) up
+                above_y_set                 = IntMap.findWithDefault IntSet.empty (uvid y) seen
+                common                      = filter (\v -> uvid v `IntSet.member` above_y_set) below_x
                 new_below                   = [ (w,y) | w <- below_x ]
                 new_above                   = [ (x,v) | v <- above_y ]
+                seen'                       = IntMap.insert (uvid x) (IntSet.insert (uvid y) outgoing) seen
+                down'                       = IntMap.insertWith (++) (uvid y) [x] down
+                up'                         = IntMap.insertWith (++) (uvid x) [y] up
 
 below x cl                                  = [ v | (v,w) <- cl, w==x ]
 above y cl                                  = [ w | (v,w) <- cl, v==y ]
 
-gsimp vi cl obs []                      = []
-gsimp vi cl obs ((x,y):xys)
-  | not subsumed                        = gsimp vi cl obs xys
-  | x_obs && y_obs                      = gsimp vi cl obs xys
-  | x_obs                               = (x,y) : gsimp vi cl (y:obs) xys
-  | y_obs                               = (x,y) : gsimp vi cl (x:obs) xys
-  | otherwise                           = (x,y) : gsimp vi cl obs xys
-  where subsumed                        = (above x cl \\ [y]) `eq` above y cl && (below y cl \\ [x]) `eq` below x cl &&
-                                          lookup' x (ubounds vi) `subset` lookup' y (ubounds vi) && lookup' y (lbounds vi) `subset` lookup' x (lbounds vi) &&
-                                          rng (lookup' x (pbounds vi)) `eq` rng (lookup' y (pbounds vi))
-        a `eq` b                        = a `subset` b && b `subset` a
-        a `subset` b                    = all (`elem` b) a
-        x_obs                           = x `elem` obs
-        y_obs                           = y `elem` obs
+-- Reuse ordered adjacency lists throughout this simplification pass.
+gsimp vi cl obs xys                         = go (IntSet.fromList $ map uvid obs) xys
+  where ups                                 = foldr (\(x,y) -> IntMap.insertWith (++) (uvid x) [y]) IntMap.empty cl
+        downs                               = foldr (\(x,y) -> IntMap.insertWith (++) (uvid y) [x]) IntMap.empty cl
+        above' x                            = IntMap.findWithDefault [] (uvid x) ups
+        below' x                            = IntMap.findWithDefault [] (uvid x) downs
+        go obs []                           = []
+        go obs ((x,y):xys)
+          | not subsumed                    = go obs xys
+          | x_obs && y_obs                  = go obs xys
+          | x_obs                           = (x,y) : go (IntSet.insert (uvid y) obs) xys
+          | y_obs                           = (x,y) : go (IntSet.insert (uvid x) obs) xys
+          | otherwise                       = (x,y) : go (IntSet.insert (uvid x) obs) xys
+          where subsumed                    = (above' x \\ [y]) `eq` above' y && (below' y \\ [x]) `eq` below' x &&
+                                              lookup' x (ubounds vi) `subset` lookup' y (ubounds vi) && lookup' y (lbounds vi) `subset` lookup' x (lbounds vi) &&
+                                              rng (lookup' x (pbounds vi)) `eq` rng (lookup' y (pbounds vi))
+                x_obs                       = uvid x `IntSet.member` obs
+                y_obs                       = uvid y `IntSet.member` obs
+        a `eq` b                            = a `subset` b && b `subset` a
+        a `subset` b                        = all (`elem` b) a
 
 instwild env k (TWild _)                = newUnivarOfKind k env
 instwild env _ (TFun l e p k t)         = TFun l <$> instwild env KFX e <*> instwild env PRow p <*> instwild env KRow k <*> instwild env KType t

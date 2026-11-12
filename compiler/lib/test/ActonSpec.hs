@@ -57,7 +57,7 @@ import Text.Megaparsec (ParseErrorBundle, ParseError(..), ErrorFancy(..), PosSta
 import Text.Megaparsec.Pos (sourceLine, unPos)
 import qualified Data.Text as T
 import qualified Data.Text.Short as TS
-import Data.List (foldl', isInfixOf, isPrefixOf, nub, sort, subsequences, permutations)
+import Data.List (foldl', isInfixOf, isPrefixOf, nub, sort, subsequences, permutations, intersect, (\\))
 import Data.Maybe (listToMaybe)
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as M
@@ -237,6 +237,31 @@ hashDecl l doc =
 -- | The interface directories that tests type check against: std's, then base's.
 systemTypes :: [FilePath]
 systemTypes = Project.systemTypePaths (".." </> ".." </> "dist")
+-- Reference implementations retain the original list traversal so indexing
+-- changes must preserve both cycle selection and simplification order.
+referenceVarclose xys = clos [] xys
+  where clos cl [] = Right cl
+        clos cl ((x,y):rest)
+          | (x,y) `elem` cl = clos cl rest
+          | not (null common) = Left (x,y:common)
+          | otherwise = clos ((x,y):cl) ([(w,y) | w <- belowX] ++ [(x,v) | v <- aboveY] ++ rest)
+          where belowX = Solver.below x cl
+                aboveY = Solver.above y cl
+                common = belowX `intersect` aboveY
+
+referenceGsimp vi cl obs [] = []
+referenceGsimp vi cl obs ((x,y):rest)
+  | not subsumed = referenceGsimp vi cl obs rest
+  | x `elem` obs && y `elem` obs = referenceGsimp vi cl obs rest
+  | x `elem` obs = (x,y) : referenceGsimp vi cl (y:obs) rest
+  | otherwise = (x,y) : referenceGsimp vi cl (x:obs) rest
+  where subsumed = (Solver.above x cl \\ [y]) `eq` Solver.above y cl &&
+                   (Solver.below y cl \\ [x]) `eq` Solver.below x cl &&
+                   Solver.lookup' x (Solver.ubounds vi) `subset` Solver.lookup' y (Solver.ubounds vi) &&
+                   Solver.lookup' y (Solver.lbounds vi) `subset` Solver.lookup' x (Solver.lbounds vi) &&
+                   map snd (Solver.lookup' x $ Solver.pbounds vi) `eq` map snd (Solver.lookup' y $ Solver.pbounds vi)
+        a `eq` b = a `subset` b && b `subset` a
+        a `subset` b = all (`elem` b) a
 
 main :: IO ()
 main = do
@@ -246,10 +271,10 @@ main = do
   sydTest $ do
     describe "Communication effects" $ do
       let hierarchy =
-            [ (S.FXPure, [S.FXPure,S.FXMut,S.FXCom,S.FXProc])
+            [ (S.FXPure, [S.FXPure,S.FXMut,S.FXCom,S.FXProc,S.FXAction])
             , (S.FXMut, [S.FXMut,S.FXProc])
             , (S.FXProc, [S.FXProc])
-            , (S.FXAction, [S.FXAction,S.FXProc])
+            , (S.FXAction, [S.FXAction])
             , (S.FXCom, [S.FXCom,S.FXProc])
             ]
           effects = map fst hierarchy
@@ -273,7 +298,7 @@ main = do
           it ("compares and combines " ++ show a ++ " with " ++ show b) $ do
             Acton.Env.subeffect a b `shouldBe` included a b
             Acton.Env.castable env0 (S.tTFX a) (S.tTFX b) `shouldBe`
-              (included a b || (a == S.FXMut && b == S.FXPure))
+              ((included a b && (a,b) /= (S.FXPure,S.FXAction)) || (a == S.FXMut && b == S.FXPure))
             let lower = [c | c <- effects, included c a, included c b]
                 upper = [c | c <- effects, included a c, included b c]
                 greatest = [c | c <- lower, all (`included` c) lower]
@@ -323,6 +348,25 @@ main = do
           case result of
             Left (_ :: TypeError) -> pure ()
             Right _ -> expectationFailure "Unexpectedly accepted incompatible effects"
+    describe "Constraint variable graph indexes" $ do
+      let vs = [S.UV S.KType 0 n | n <- [5,11,29]]
+          graphs = [ordered | edges <- subsequences [(x,y) | x <- vs, y <- vs],
+                              ordered <- [edges,reverse edges,edges ++ take 1 edges]]
+          env = TE.initTypeEnv env0
+          info = TE.noinfo 0
+      it "preserves closure order and the first reported cycle" $
+        forM_ graphs $ \edges ->
+          Solver.varclose edges `shouldBe` referenceVarclose edges
+      it "preserves simplifications for every observable subset" $
+        forM_ graphs $ \edges -> case referenceVarclose edges of
+          Left _ -> pure ()
+          Right cl -> do
+            let Just vi = Solver.varinfo $
+                  [TE.Cast info env (S.tUni x) (S.tUni y) | (x,y) <- edges] ++
+                  [TE.Cast info env (S.tUni $ head vs) Builtin.tInt,
+                   TE.Cast info env Builtin.tInt (S.tUni $ last vs)]
+            forM_ (subsequences vs) $ \obs ->
+              Solver.gsimp vi cl obs edges `shouldBe` referenceGsimp vi cl obs edges
     describe "Effect inference" $ do
       let env = TE.initTypeEnv env0
           info = TE.noinfo 0
