@@ -1889,23 +1889,14 @@ matchActorAssumption env n0 p k te      = do --traceM ("## matchActorAssumption 
           | TUni{} <- sctype sc0        = do (cs0,_,t0) <- instantiateDefaults env sc
                                              (c0,t') <- wrap env t0
                                              let c1 = Cast (locinfo n 63) env t' (sctype sc0)
-                                                 cs1 = maybeSeal env n (leaves sc0)
+                                                 cs1 = maybeSeal env n [sctype sc0]
                                              (cs2,eq) <- markScoped env n0 (scbind sc0) obs
                                                                   (c0:c1:cs0++cs1)
                                              return (cs2, eq)
           | otherwise                   = do (c0,t') <- wrap env0 t
                                              let c1 = Cast (locinfo n 63) env0 t' (sctype sc0)
+                                                 cs1 = maybeSeal env0 n [sctype sc0]
                                              --traceM ("## matchActorAssumption for method " ++ prstr n ++ ": " ++ prstr c1)
-                                             -- A structured provisional interface retains
-                                             -- defaults or an explicit quantified scope.  Do
-                                             -- not seal each still-unknown leaf here: method-body
-                                             -- constraints are combined only by the enclosing
-                                             -- actor solve, and early sealing prevents those
-                                             -- constraints from completing inference. The
-                                             -- inferred interface effect must still be sealed,
-                                             -- so a proc body is exposed as an action.
-                                             let cs1 | isNothing (findSigLoc n env) = maybeSeal env0 n [effect $ sctype sc0]
-                                                     | otherwise = []
                                              (cs2,eq) <- markScoped env n0 q0 obs (c0:c1:cs1)
                                              return (cs2, eq)
           where Just (NDef sc _ _)      = lookup n te1
