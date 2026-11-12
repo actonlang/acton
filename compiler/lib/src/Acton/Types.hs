@@ -193,6 +193,10 @@ freshDefaultWits s (Let l ss e)         = do ws <- mapM (const newWitness) ns
         rebind r (Assign l [PVar l' n t] e)
                                         = Assign l [PVar l' (rename r n) t] e
         rebind r (Signature l ns sc d)  = Signature l (map (rename r) ns) sc d
+        rebind r (Decl l ds)           = Decl l (map (rebindDef r) ds)
+        rebind _ stmt                 = stmt
+        rebindDef r d@Def{dname=n}     = d{ dname = rename r n }
+        rebindDef _ d                  = d
 freshDefaultWits s e                    = return (termsubst s e)
 
 
@@ -1878,7 +1882,7 @@ matchActorAssumption env n0 p k te      = do --traceM ("## matchActorAssumption 
         ns                              = dom te0
         obs                             = te0 ++ te
         te1                             = nTerms $ te `restrict` ns
-        check1 (n, NSig _ _ _)          = return ([], [])
+        check1 (n, NSig sc _ _)         = return (maybeSeal (tydefineVars (scbind sc) env) n [sctype sc], [])
         check1 (n, NVar t0)             = do --traceM ("## matchActorAssumption for attribute " ++ prstr n)
                                              return (Cast (locinfo n 62) env t t0 : maybeSeal env n [t0], [])
           where Just (NVar t)           = lookup n te1
@@ -3005,7 +3009,9 @@ inferCall env unwrap l e ps ks          = do (cs1,t,e') <- infer env e{eloc = l}
                                              (cs2,prow,ps') <- infer env ps
                                              (cs3,krow,ks') <- infer env ks
                                              t0 <- newUnivar env
-                                             fx <- newUnivarOfKind KFX env
+                                             fx <- case t of
+                                                       TFun{effect=fx} -> return fx
+                                                       _ -> newUnivarOfKind KFX env
                                              w <- newWitness
                                              let i = case e of
                                                         Var _ n@(NoQ n')

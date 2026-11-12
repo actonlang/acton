@@ -328,12 +328,13 @@ main = do
           info = TE.noinfo 0
           solve te cs = fst <$> Solver.solve env (const True) te [] cs
       forM_ ["pure", "action", "mut", "proc"] $ \fx ->
-        forM_ [False, True] $ \defaults -> do
-          let label = fx ++ if defaults then " with defaults" else ""
-              source method = unlines
-                [ "actor Worker():"
-                , "    def " ++ method ++ "(cb: " ++ fx ++ "() -> None" ++
-                    (if defaults then ", count: int = 1" else "") ++ "):"
+        forM_ ["inferred", "defaults", "signature"] $ \form -> do
+          let label = fx ++ " (" ++ form ++ ")"
+              source method = unlines $ ["actor Worker():"] ++
+                ["    " ++ method ++ ": action(" ++ fx ++ "() -> None) -> None" | form == "signature"] ++
+                [ "    def " ++ method ++ "(cb" ++
+                    (if form == "signature" then "" else ": " ++ fx ++ "() -> None") ++
+                    (if form == "defaults" then ", count: int = 1" else "") ++ "):"
                 , "        cb()"
                 ]
           it ("seals public actor callback effects: " ++ label) $ do
@@ -353,6 +354,14 @@ main = do
         Acton.Env.castable env S.fxMut S.fxPure `shouldBe` True
         Solver.allAbove env S.fxMut `shouldSatisfy` notElem S.fxPure
         Solver.allBelow env S.fxPure `shouldSatisfy` notElem S.fxMut
+      forM_ [("mut_callback_in_pure", unlines
+                [ "pure def apply(cb: mut() -> int) -> int:"
+                , "    return cb()" ])
+            , ("nested_sum_comprehension",
+                "values = [sum([i * i for i in range(k)]) for k in range(1, 4)]\n")] $ \(label,src) ->
+        it ("retains temporary mut-to-pure compatibility for " ++ label) $ do
+          typed <- typecheckSource env0 label src
+          E.evaluate (rnf typed)
       forM_ [("pure",S.fxPure,S.fxPure), ("mut",S.fxMut,S.fxMut),
              ("proc",S.fxProc,S.fxProc), ("action",S.fxAction,S.fxProc)] $ \(label,source,expected) ->
         it ("resolves the shared wrap/unwrap effect for " ++ label ++ " without contextual bounds") $ do

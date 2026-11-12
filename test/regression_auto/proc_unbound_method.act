@@ -1,0 +1,26 @@
+class Base(object):
+    proc def __init__(self):
+        self.value = 1
+
+    proc def add(self, n: int) -> int:
+        return self.value + n
+
+    @static
+    proc def twice(n: int) -> int:
+        return 2 * n
+
+class Child(Base):
+    proc def __init__(self):
+        Base.__init__(self)
+        self.value += 2
+
+    proc def add(self, n: int) -> int:
+        return Base.add(self, n) + 1
+
+actor main(env):
+    child = Child()
+    assert child.value == 3
+    assert child.add(4) == 8
+    assert Base.add(child, 4) == 7
+    assert Base.twice(4) == 8
+    env.exit(0)

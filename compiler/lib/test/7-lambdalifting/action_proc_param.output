@@ -13,31 +13,31 @@ class Box (__builtin__.object, __builtin__.value):
         return None
 
 # recursive group:
-proc def L_1C_1cont (W_assign_20 : __builtin__.Plus[__builtin__.float], W_assign_18 : __builtin__.RealFloat[__builtin__.float], C_cont : $Cont[__builtin__.float], C_2res : __builtin__.float) -> $R:
+proc def L_1C_1cont (W_assign_19 : __builtin__.Plus[__builtin__.float], W_assign_17 : __builtin__.RealFloat[__builtin__.float], C_cont : $Cont[__builtin__.float], C_2res : __builtin__.float) -> $R:
     r: __builtin__.float = C_2res
-    N_tmp: __builtin__.float = W_assign_20.__add__(r, W_assign_18.__fromatom__(0.25))
+    N_tmp: __builtin__.float = W_assign_19.__add__(r, W_assign_17.__fromatom__(0.25))
     return $R_CONT@[__builtin__.float](C_cont, N_tmp)
 class L_2Cont ($Cont[__builtin__.float], __builtin__.value):
     @property
-    W_assign_20 : __builtin__.Plus[__builtin__.float]
+    W_assign_19 : __builtin__.Plus[__builtin__.float]
     @property
-    W_assign_18 : __builtin__.RealFloat[__builtin__.float]
+    W_assign_17 : __builtin__.RealFloat[__builtin__.float]
     @property
     C_cont : $Cont[__builtin__.float]
-    pure def __init__ (L_self : Self, W_assign_20 : __builtin__.Plus[__builtin__.float], W_assign_18 : __builtin__.RealFloat[__builtin__.float], C_cont : $Cont[__builtin__.float]) -> None:
-        L_self.W_assign_20 = W_assign_20
-        L_self.W_assign_18 = W_assign_18
+    pure def __init__ (L_self : Self, W_assign_19 : __builtin__.Plus[__builtin__.float], W_assign_17 : __builtin__.RealFloat[__builtin__.float], C_cont : $Cont[__builtin__.float]) -> None:
+        L_self.W_assign_19 = W_assign_19
+        L_self.W_assign_17 = W_assign_17
         L_self.C_cont = C_cont
         return None
     proc def __call__ (L_self : Self, G_1 : __builtin__.float) -> $R:
-        W_assign_20: __builtin__.Plus[__builtin__.float] = L_self.W_assign_20
-        W_assign_18: __builtin__.RealFloat[__builtin__.float] = L_self.W_assign_18
+        W_assign_19: __builtin__.Plus[__builtin__.float] = L_self.W_assign_19
+        W_assign_17: __builtin__.RealFloat[__builtin__.float] = L_self.W_assign_17
         C_cont: $Cont[__builtin__.float] = L_self.C_cont
-        return L_1C_1cont(W_assign_20, W_assign_18, C_cont, G_1)
+        return L_1C_1cont(W_assign_19, W_assign_17, C_cont, G_1)
 proc def assign (C_cont : $Cont[__builtin__.float], f : $proc[(__builtin__.int,), __builtin__.float], x : __builtin__.int) -> $R:
-    W_assign_18: __builtin__.RealFloat[__builtin__.float] = __builtin__.RealFloatD_float()
-    W_assign_20: __builtin__.Plus[__builtin__.float] = __builtin__.RealFloatD_float()
-    return f.__call__(L_2Cont(W_assign_20, W_assign_18, C_cont), x)
+    W_assign_17: __builtin__.RealFloat[__builtin__.float] = __builtin__.RealFloatD_float()
+    W_assign_19: __builtin__.Plus[__builtin__.float] = __builtin__.RealFloatD_float()
+    return f.__call__(L_2Cont(W_assign_19, W_assign_17, C_cont), x)
 # (recursive group)
 
 proc def tail (C_cont : $Cont[__builtin__.float], f : $proc[(__builtin__.int,), __builtin__.float], x : __builtin__.int) -> $R:
@@ -139,9 +139,9 @@ class L_12Cont ($Cont[None], __builtin__.value):
         C_cont: $Cont[None] = L_self.C_cont
         return L_11C_11cont(C_cont, G_1)
 proc def discard_bang (C_cont : $Cont[None], f : ?$proc[(__builtin__.int,), __builtin__.float], x : __builtin__.int) -> $R:
-    V_discard_bang_16: ?$proc[(__builtin__.int,), __builtin__.float] = f
-    if $ISNOTNONE@[$proc[(__builtin__.int,), __builtin__.float]](V_discard_bang_16):
-        return $CAST@[?$proc[(__builtin__.int,), __builtin__.float], $proc[(__builtin__.int,), __builtin__.float]](V_discard_bang_16).__exec__($SKIPRES@[__builtin__.float](L_12Cont(C_cont)), x)
+    V_discard_bang_15: ?$proc[(__builtin__.int,), __builtin__.float] = f
+    if $ISNOTNONE@[$proc[(__builtin__.int,), __builtin__.float]](V_discard_bang_15):
+        return $CAST@[?$proc[(__builtin__.int,), __builtin__.float], $proc[(__builtin__.int,), __builtin__.float]](V_discard_bang_15).__exec__($SKIPRES@[__builtin__.float](L_12Cont(C_cont)), x)
     else:
         $raiseValueError@[__builtin__.float]("\"Forced unwrapping applied to None\"")
         return $R_CONT@[None](C_cont, None)
@@ -160,12 +160,12 @@ class L_14Cont ($Cont[None], __builtin__.value):
         C_cont: $Cont[None] = L_self.C_cont
         return L_13C_13cont(C_cont, G_1)
 proc def discard_cond (C_cont : $Cont[None], f : $proc[(__builtin__.int,), __builtin__.float], x : __builtin__.int, flag : __builtin__.bool) -> $R:
-    W_discard_cond_25: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
-    W_discard_cond_27: __builtin__.Plus[__builtin__.int] = __builtin__.IntegralD_int()
+    W_discard_cond_24: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+    W_discard_cond_26: __builtin__.Plus[__builtin__.int] = __builtin__.IntegralD_int()
     if flag:
         return f.__exec__($SKIPRES@[__builtin__.float](L_14Cont(C_cont)), x)
     else:
-        return f.__exec__($SKIPRES@[__builtin__.float](L_14Cont(C_cont)), W_discard_cond_27.__add__(x, W_discard_cond_25.__fromatom__(1)))
+        return f.__exec__($SKIPRES@[__builtin__.float](L_14Cont(C_cont)), W_discard_cond_26.__add__(x, W_discard_cond_24.__fromatom__(1)))
 # (recursive group)
 
 # recursive group:

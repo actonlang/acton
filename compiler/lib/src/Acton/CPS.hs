@@ -307,7 +307,17 @@ instance CPS Branch where
 kJump k nts                             = sReturn (eCall (eVar k) $ eNone : map eVar (dom nts)) : []
 
 
-addContArg env (Call l e p KwdNil) c    = Call NoLoc e (PosArg c p) KwdNil
+addContArg env (Call l e p KwdNil) c
+  | unboundMethod env e,
+    PosArg self args <- p              = Call NoLoc e (PosArg self (PosArg c args)) KwdNil
+  | otherwise                           = Call NoLoc e (PosArg c p) KwdNil
+
+-- A call through a class supplies self explicitly. Method definitions put
+-- their continuation after self; static and bound calls prepend it to args.
+unboundMethod env (TApp _ e _)          = unboundMethod env e
+unboundMethod env e@(Dot _ (Var _ n) _)
+  | NClass{} <- findQName n env         = snd (schemaOf env e) == Just NoDec
+unboundMethod _ _                       = False
 
 addContPar env dec (PosPar n a Nothing p) fx t
   | inClass env && dec /= Static        = PosPar n a Nothing (addContPar0 p fx t)

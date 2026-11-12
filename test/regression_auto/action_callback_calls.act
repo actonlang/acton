@@ -1,4 +1,4 @@
-# An action passed as a proc-typed argument: when the caller uses the result,
+# Calls through action-typed arguments: when the caller uses the result,
 # as in r = f(x), return f(x) or b.v = f(x), the call must await the action's
 # reply. A call in statement position, whose result is unused, sends the
 # message without waiting. That includes a statement-position unwrap f!(x),
@@ -12,32 +12,32 @@ class Box(object):
     def __init__(self):
         self.v = 0.0
 
-def assign(f: proc(int, float) -> float, x: int, y: float) -> float:
+def assign(f: action(int, float) -> float, x: int, y: float) -> float:
     r = f(x, y)
     return r + 0.25
 
-def tail(f: proc(int, float) -> float, x: int, y: float) -> float:
+def tail(f: action(int, float) -> float, x: int, y: float) -> float:
     return f(x, y)
 
-def mutate(f: proc(int, float) -> float, b: Box, x: int, y: float) -> None:
+def mutate(f: action(int, float) -> float, b: Box, x: int, y: float) -> None:
     b.v = f(x, y)
 
-def tail_str(f: proc() -> str) -> str:
+def tail_str(f: action() -> str) -> str:
     return f()
 
-def discard(f: proc(int) -> int, x: int) -> None:
+def discard(f: action(int) -> int, x: int) -> None:
     f(x)
 
-def discard_bang(f: ?proc(int) -> int, x: int) -> None:
+def discard_bang(f: ?action(int) -> int, x: int) -> None:
     f!(x)
 
-def discard_cond(f: proc(int) -> int, x: int, flag: bool) -> None:
+def discard_cond(f: action(int) -> int, x: int, flag: bool) -> None:
     f(x) if flag else f(2 * x)
 
-def discard_none(g: proc(int) -> None, x: int) -> None:
+def discard_none(g: action(int) -> None, x: int) -> None:
     g(x)
 
-def discard_none_last(g: proc(int) -> None, x: int, flag: bool) -> None:
+def discard_none_last(g: action(int) -> None, x: int, flag: bool) -> None:
     if flag:
         g(x)
 
@@ -68,7 +68,7 @@ actor Poked():
         return hits
 
 actor Runner():
-    def run(f: proc(int) -> int, g: proc(int) -> None, mode: int) -> int:
+    def run(f: action(int) -> int, g: action(int) -> None, mode: int) -> int:
         if mode == 0:
             discard(f, 1)
         elif mode == 1:

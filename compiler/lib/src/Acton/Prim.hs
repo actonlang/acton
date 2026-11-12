@@ -727,6 +727,8 @@ clProc              = NClass [qbind r, qbind t] (leftpath [cValue]) te Nothing
 
 --  class $action[R,T] ($proc[R,T], value):
 --      __asyn__    : action(*R) -> T
+-- The shared closure representation does not imply action < proc in the
+-- source effect hierarchy.
 clAction            = NClass [qbind r, qbind t] (leftpath [ cProc (tVar r) (tVar t), cValue]) te Nothing
   where te          = [ (attr_asyn_, NSig (monotype $ tFun fxAction (tVar r) kwdNil (tVar t)) NoDec Nothing) ]
         r           = TV PRow (name "R")

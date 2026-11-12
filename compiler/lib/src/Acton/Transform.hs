@@ -212,7 +212,12 @@ instance Transform Expr where
       | otherwise                     = Let l [Assign l' [p] value'] e'
       where value'                    = trans env value
             e'                        = trans (blockscope [n] env) e
-    trans env (Let l ss e)              = Let l (trans env ss) (trans (blockscope (bound ss) env) e)
+    -- Defaults can bind generic effect witnesses inside a Let. Process the
+    -- bindings and result together so their type applications are specialized.
+    trans env (Let l ss e)              = case reverse $ wtrans (bindscope (bound ss) env) (ss ++ [sReturn e]) of
+                                            Return _ (Just e') : [] -> e'
+                                            Return _ (Just e') : ss' -> Let l (reverse ss') e'
+                                            _ -> error "Transform: missing Let result"
     trans env (Index l e is)            = Index l (trans env e) (trans env is)
     trans env (Slice l e sl)            = Slice l (trans env e) (trans env sl)
     trans env (Cond l e1 e2 e3)         = Cond l (trans env e1) (trans env e2) (trans env e3)
