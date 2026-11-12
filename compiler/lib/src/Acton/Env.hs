@@ -1199,7 +1199,7 @@ effectsInProgramOrder = [FXProc, FXMut, FXCom, FXAction, FXPure]
 -- Semantic inclusion, excluding the temporary mut-to-pure cast.
 subeffect :: FX -> FX -> Bool
 subeffect a b | a == b = True
-subeffect _ FXProc = True
+subeffect a FXProc = a /= FXAction
 subeffect FXPure b = b `elem` [FXMut, FXCom, FXAction]
 subeffect _ _ = False
 
@@ -1337,11 +1337,12 @@ lub env t1 (TNone _)                    = pure $ tOpt t1
 lub env (TOpt _ t1) t2                  = tOpt <$> lub env t1 t2
 lub env t1 (TOpt _ t2)                  = tOpt <$> lub env t1 t2
 
-lub env t1@(TFX _ fx1) t2@(TFX _ fx2)   = pure $ tTFX (lufx fx1 fx2)
+lub env t1@(TFX _ fx1) t2@(TFX _ fx2)   = tTFX <$> lufx fx1 fx2
   where lufx a b
-          | subeffect a b              = b
-          | subeffect b a              = a
-          | otherwise                  = FXProc
+          | subeffect a b              = Just b
+          | subeffect b a              = Just a
+          | FXAction `elem` [a,b]      = Nothing
+          | otherwise                  = Just FXProc
 
 lub env (TNil _ k1) (TNil _ k2)
   | k1 == k2                            = pure $ tNil k1

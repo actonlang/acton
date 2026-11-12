@@ -182,7 +182,7 @@ instance QType Expr where
                                     = error ("###### qType Fun " ++ prstr e ++ " : " ++ prstr t)
       where (t, fx, e')             = qType env f e
             (p, fxp, ps')           = qTypeGeneratedPos env f (posrow t) ps
-            fx'                     = upbound env [fx,fxp,effect t]
+            fx'                     = upbound env [fx,fxp,callEffect t]
     qType env f e0@(Call l e ps ks)
       | TFun{} <- expanded env t    = --trace ("## qType Call " ++ prstr e0 ++ ", t = " ++ prstr t) $
                                       (restype t, fx', Call l e' (qMatch f p (posrow t) ps') (qMatch f k (kwdrow t) ks'))
@@ -190,7 +190,7 @@ instance QType Expr where
       where (t, fx, e')             = qType env f e
             (p, fxp, ps')           = qType env f ps
             (k, fxk, ks')           = qType env f ks
-            fx'                     = upbound env [fx,fxp,fxk,effect t]
+            fx'                     = upbound env [fx,fxp,fxk,callEffect t]
     qType env f (Let l ss e)        = (t, upbound env [fx1, fx2], Let l ss' e')
        where te                     = envOf ss
              (t,fx1,e')             = qType (define te env) f e
@@ -499,6 +499,12 @@ instance EnvOf Elem where
 instance EnvOf Assoc where
     envOf _                         = []
 
+
+-- Action calls execute with proc effect after unwrapping. Transform erases
+-- unwrap, so recover that effect when inspecting the resulting call syntax.
+callEffect t
+  | effect t == fxAction            = fxProc
+  | otherwise                       = effect t
 
 upbound env ts                      = case lubfold env ts of Just u -> u
 

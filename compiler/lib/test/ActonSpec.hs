@@ -386,20 +386,42 @@ main = do
           case lookup (S.name function) (QuickType.envOf $ S.mbody typed) of
             Just (I.NDef sc _ _) -> S.restype (S.sctype sc) `shouldBe` S.tOpt Builtin.tInt
             _ -> expectationFailure ("Expected the inferred signature of " ++ function)
-      it "places pure below action while retaining action below proc" $ do
+      it "places pure below action while keeping action separate from proc" $ do
         Acton.Env.subeffect S.FXPure S.FXAction `shouldBe` True
         Acton.Env.castable env S.fxPure S.fxAction `shouldBe` False
-        Acton.Env.castable env S.fxAction S.fxProc `shouldBe` True
+        Acton.Env.subeffect S.FXAction S.FXProc `shouldBe` False
+        Acton.Env.castable env S.fxAction S.fxProc `shouldBe` False
         Acton.Env.castable env S.fxAction S.fxPure `shouldBe` False
         Solver.allAbove env S.fxPure `shouldSatisfy` elem S.fxAction
         Solver.allBelow env S.fxAction `shouldSatisfy` elem S.fxPure
+        Solver.allAbove env S.fxAction `shouldBe` [S.fxAction]
+        Solver.allBelow env S.fxProc `shouldSatisfy` notElem S.fxAction
         Solver.dnClosed env S.fxAction `shouldBe` False
-      it "joins pure with action at action and mut with action at proc" $ do
-        forM_ [(S.fxPure, S.fxAction, S.fxAction), (S.fxMut, S.fxAction, S.fxProc)] $ \(a,b,expected) -> do
-          Acton.Env.lub env a b `shouldBe` Just expected
-          Acton.Env.lub env b a `shouldBe` Just expected
-          Acton.Env.glb env a b `shouldBe` Just S.fxPure
-          Acton.Env.glb env b a `shouldBe` Just S.fxPure
+      it "joins pure with action but has no join of action with mut or proc" $ do
+        forM_ [(S.fxPure, Just S.fxAction), (S.fxMut, Nothing), (S.fxProc, Nothing)] $ \(a,expected) -> do
+          Acton.Env.lub env a S.fxAction `shouldBe` expected
+          Acton.Env.lub env S.fxAction a `shouldBe` expected
+          Acton.Env.glb env a S.fxAction `shouldBe` Just S.fxPure
+          Acton.Env.glb env S.fxAction a `shouldBe` Just S.fxPure
+      it "reports proc effect for action calls after unwrap is erased" $ do
+        let callback = S.name "callback"
+            fn = S.tFun S.fxAction S.posNil S.kwdNil Builtin.tInt
+            callEnv = Acton.Env.define [(callback,I.NVar fn)] env
+        QuickType.typeOf callEnv (S.eCall (S.eVar callback) []) `shouldBe` Builtin.tInt
+        QuickType.fxOf callEnv (S.eCall (S.eVar callback) []) `shouldBe` S.fxProc
+      forM_ [("action_as_proc", unlines
+                [ "pure def as_proc(a: action() -> int) -> proc() -> int:"
+                , "    return a" ])
+            , ("action_proc_join", unlines
+                [ "pure def choose(flag: bool, a: action() -> int, p: proc() -> int):"
+                , "    return a if flag else p" ])] $ \(label,src) ->
+        it ("rejects " ++ label ++ " without an explicit adapter") $ do
+          result <- E.try (do
+            typed <- typecheckSource env0 label src
+            E.evaluate (rnf typed)) :: IO (Either TypeError ())
+          case result of
+            Left _ -> pure ()
+            Right _ -> expectationFailure "Expected incompatible action and proc effects"
       it "accepts pure functions and lambdas as action callbacks" $ do
         typed <- typecheckSource env0 "pure_action_callback" $ unlines
           [ "pure def pure_value() -> int:"
@@ -411,6 +433,19 @@ main = do
           , "    accept(lambda: 1)"
           ]
         typed `shouldSatisfy` const True
+      it "exposes a stateful actor method with defaults as an action" $ do
+        typed <- typecheckSource env0 "default_actor_effect" $ unlines
+          [ "actor Counter():"
+          , "    var count = 0"
+          , "    def add(n: int = 1) -> int:"
+          , "        count += n"
+          , "        return count"
+          , "pure def callback(counter: Counter):"
+          , "    return counter.add"
+          ]
+        case lookup (S.name "callback") (QuickType.envOf $ S.mbody typed) of
+          Just (I.NDef sc _ _) -> S.effect (S.restype $ S.sctype sc) `shouldBe` S.fxAction
+          _ -> expectationFailure "Expected the inferred signature of callback"
       it "infers action when a pure argument computation precedes a tail action call" $ do
         typed <- typecheckSource env0 "pure_action_lambda" $ unlines
           [ "pure def combine(p: pure(int) -> int, a: action(int) -> int):"

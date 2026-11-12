@@ -1901,8 +1901,12 @@ matchActorAssumption env n0 p k te      = do --traceM ("## matchActorAssumption 
                                              -- not seal each still-unknown leaf here: method-body
                                              -- constraints are combined only by the enclosing
                                              -- actor solve, and early sealing prevents those
-                                             -- constraints from completing inference.
-                                             (cs2,eq) <- markScoped env n0 q0 obs [c0,c1]
+                                             -- constraints from completing inference. The
+                                             -- inferred interface effect must still be sealed,
+                                             -- so a proc body is exposed as an action.
+                                             let cs1 | isNothing (findSigLoc n env) = maybeSeal env0 n [effect $ sctype sc0]
+                                                     | otherwise = []
+                                             (cs2,eq) <- markScoped env n0 q0 obs (c0:c1:cs1)
                                              return (cs2, eq)
           where Just (NDef sc _ _)      = lookup n te1
                 q0                      = scbind sc0
@@ -2942,8 +2946,10 @@ instance Infer Expr where
                                              (cs0,te0,p') <- infEnv env1 p
                                              (cs1,te1,k') <- infEnv (define te0 env1) k
                                              let env2 = define te1 $ define te0 env1
+                                             -- Inferred lambdas can forward an action directly;
+                                             -- an explicit proc lambda must unwrap the call.
                                              (cs2,t,e') <- case e of
-                                                             Call l' e' ps ks -> inferCall env2 False l' e' ps ks
+                                                             Call l' e' ps ks -> inferCall env2 (fx == fxProc) l' e' ps ks
                                                              _ -> infer env2 e
                                              popFX
                                              return (cs0++cs1++cs2, tFun fx (prowOf p') (krowOf k') t, Lambda l (noDefaultsP p') (noDefaultsK k') e' fx)
