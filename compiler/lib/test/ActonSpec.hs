@@ -327,6 +327,28 @@ main = do
       let env = TE.initTypeEnv env0
           info = TE.noinfo 0
           solve te cs = fst <$> Solver.solve env (const True) te [] cs
+      forM_ ["pure", "action", "mut", "proc"] $ \fx ->
+        forM_ [False, True] $ \defaults -> do
+          let label = fx ++ if defaults then " with defaults" else ""
+              source method = unlines
+                [ "actor Worker():"
+                , "    def " ++ method ++ "(cb: " ++ fx ++ "() -> None" ++
+                    (if defaults then ", count: int = 1" else "") ++ "):"
+                , "        cb()"
+                ]
+          it ("seals public actor callback effects: " ++ label) $ do
+            result <- E.try (do
+              typed <- typecheckSource env0 "actor_callback_seal" (source "apply")
+              E.evaluate (rnf typed)) :: IO (Either TypeError ())
+            case result of
+              Right _ | fx `elem` ["pure", "action"] -> pure ()
+              Left (TypeError _ message) | fx `elem` ["mut", "proc"] ->
+                message `shouldSatisfy` isPrefixOf "Leaking actor seal:"
+              Left err -> expectationFailure (show err)
+              Right _ -> expectationFailure "Expected the callback effect to leak the actor seal"
+          it ("allows private actor callback effects: " ++ label) $ do
+            typed <- typecheckSource env0 "private_actor_callback" (source "_apply")
+            E.evaluate (rnf typed)
       it "keeps the temporary mut-to-pure cast out of effect bounds" $ do
         Acton.Env.castable env S.fxMut S.fxPure `shouldBe` True
         Solver.allAbove env S.fxMut `shouldSatisfy` notElem S.fxPure

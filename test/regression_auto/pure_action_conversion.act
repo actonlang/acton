@@ -78,13 +78,14 @@ actor main(env):
     proc def other_proc_callback(x: int) -> int:
         return x + 2
 
-    proc def proc_factory() -> proc(int) -> int:
+    proc def _proc_factory() -> proc(int) -> int:
         captures += 1
         return proc_callback
 
-    proc_adapted: proc(int) -> int = proc_factory()
+    # Proc-valued helpers and fields remain private to the actor.
+    _proc_adapted: proc(int) -> int = _proc_factory()
     assert captures == 1
-    assert proc_adapted(4) == 5
+    assert _proc_adapted(4) == 5
     assert captures == 1
     assert call_both(proc_callback, other_proc_callback) == 23
     captures = 0
@@ -99,22 +100,22 @@ actor main(env):
     assert invoke_async(choose(False, add_one, adapted), 7) == 8
     assert invoke(compose(add_one, adapted), 1) == 3
     assert invoke_async(compose(add_one, adapted), 2) == 4
-    mixed: proc(int) -> int = non_tail(add_one, adapted)
-    assert mixed(2) == 4
-    assert mixed(-2) == -1
+    _mixed: proc(int) -> int = non_tail(add_one, adapted)
+    assert _mixed(2) == 4
+    assert _mixed(-2) == -1
     callback_actor = Callback()
-    actor_mixed: proc(int) -> int = non_tail(add_one, callback_actor.plus_one)
-    assert actor_mixed(3) == 5
+    _actor_mixed: proc(int) -> int = non_tail(add_one, callback_actor.plus_one)
+    assert _actor_mixed(3) == 5
     # Pure nested calls stay pure when the outer lambda returns an action.
     local_composed: action(int) -> int = lambda x: adapted(add_one(x))
     assert invoke(local_composed, 3) == 5
     assert invoke_async(local_composed, 4) == 6
-    proc_forwarded: proc(int) -> int = proc lambda x: adapted(x)
+    _proc_forwarded: proc(int) -> int = proc lambda x: adapted(x)
     action_forwarded: action(int) -> int = action lambda x: adapted(x)
-    assert proc_forwarded(4) == 5
+    assert _proc_forwarded(4) == 5
     assert await async action_forwarded(5) == 6
-    delayed: proc(int) -> Msg[int] = deferred(adapted)
-    assert await delayed(6) == 7
+    _delayed: proc(int) -> Msg[int] = deferred(adapted)
+    assert await _delayed(6) == 7
     assert invoke(adapted_named(), 10) == 11
     assert invoke_async(adapted_named(), 20) == 21
     assert invoke(pure lambda x: x + 2, 5) == 7
