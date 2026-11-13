@@ -1,7 +1,7 @@
-name: Trigger rebuild of Acton Web page
+name: Trigger rebuild of Acton websites
 
 # When there are changes to files under docs/acton-guide on main branch,
-# trigger the workflow to rebuild the Acton web page
+# trigger the workflows to rebuild the Acton websites
 on:
   push:
     branches:
@@ -12,19 +12,19 @@ on:
 jobs:
   trigger_web_rebuild:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        repo:
+          - actonlang/acton.now
+          - actonlang/www.acton-lang.org
+          - actonlang/acton.guide
 
     steps:
-      - name: "Trigger build of acton.now"
+      - name: "Trigger build of ${{ matrix.repo }}"
         uses: benc-uk/workflow-dispatch@v1
         with:
-          repo: actonlang/www.acton-lang.org
-          token: ${{ secrets.ACTBOT_PAT }}
-          workflow: main.yml
-          ref: main
-      - name: "Trigger build of acton.guide"
-        uses: benc-uk/workflow-dispatch@v1
-        with:
-          repo: actonlang/acton.guide
+          repo: ${{ matrix.repo }}
           token: ${{ secrets.ACTBOT_PAT }}
           workflow: main.yml
           ref: main
