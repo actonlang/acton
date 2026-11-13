@@ -66,6 +66,7 @@ library:
   exposed-modules:
     - Acton.ArchiveDownload
     - Acton.Analytics
+    - Acton.Artifact
     - Acton.Boxing
     - Acton.BuildSpec
     - Acton.Builtin

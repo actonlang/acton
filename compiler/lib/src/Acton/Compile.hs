@@ -629,6 +629,7 @@ data BuildEnv = BuildEnv
   , emit            :: BuildEvent -> IO ()
   , buildCache      :: ModuleCache
   , buildOutputs    :: OutputJobs                       -- the background outputs started so far
+  , buildPrebuilt   :: Data.Set.Set FilePath             -- artifact-only project roots
   }
 
 -- | Report a line that only --verbose shows.
@@ -820,7 +821,7 @@ runCompilePlan sp gopts sched gen plan onEvent = withAnalytics $ \analytics -> d
           _             -> return ()
         whenCurrent gen (onEvent event)
   outputs <- OutputJobs <$> newIORef []
-  compileModules (BuildEnv sp gopts gen events (schedulerCache sched) outputs) plan
+  compileModules (BuildEnv sp gopts gen events (schedulerCache sched) outputs Data.Set.empty) plan
 
 -- | The services of a run outside any scheduler: a generation that stays
 -- current, a module cache of its own, no back queue, so BackReady reaches
@@ -831,7 +832,7 @@ standaloneBuild sp gopts onEvent = do
   counter <- newIORef 0
   cache <- newModuleCache
   outputs <- OutputJobs <$> newIORef []
-  return (BuildEnv sp gopts (Generation 0 counter) onEvent cache outputs)
+  return (BuildEnv sp gopts (Generation 0 counter) onEvent cache outputs Data.Set.empty)
 
 -- | Compile a plan outside any scheduler, as acton sig does. Analytics do
 -- not sample it.
@@ -935,7 +936,7 @@ prepareCompilePlan :: Source.SourceProvider -> C.GlobalOptions -> CompileSchedul
 prepareCompilePlan sp gopts sched ctx request = do
     specChanged <- (/= stamp) <$> readIORef (schedulerBuildSpec sched)
     when specChanged $ do
-      fetchDependencies gopts (ccPathsRoot ctx) (C.dep_overrides (ccOpts ctx))
+      fetchDependencies gopts (ccPathsRoot ctx) (C.dep_overrides (ccOpts ctx)) (C.artifact_repos (ccOpts ctx))
       writeIORef (schedulerBuildSpec sched) stamp
     planFetched sp gopts ctx (if specChanged then request { requestChanged = Nothing } else request)
   where
@@ -983,7 +984,7 @@ buildProjects gopts ctx = withoutTestLibraries <$> projects
     projects
       | isTmp paths = return (M.singleton root scratch)
       | otherwise   = discoverProjects gopts sys root (C.dep_overrides opts)
-    scratch = ProjCtx { projRoot = root, projSrcDir = srcDir paths, projSysPath = sys, projBuildSpec = scratchBuildSpec root, projDeps = [] }
+    scratch = ProjCtx { projRoot = root, projSrcDir = srcDir paths, projSysPath = sys, projBuildSpec = scratchBuildSpec root, projDeps = [], projPrebuilt = False }
     withoutTestLibraries
       | C.test opts = M.adjust (\p -> p { projBuildSpec = (projBuildSpec p) { BuildSpec.libraries = M.empty } }) root
       | otherwise   = id
@@ -1266,19 +1267,22 @@ buildGlobalTasks sp gopts opts projects pathsByProject seedFiles = do
 
     discover index key = do
         createModuleDirectories paths (tkMod key)
-        discovered <- readModuleTask sp gopts opts paths (tkMod key) file
+        discovered <- if prebuilt
+                        then TyTask <$> InterfaceFiles.readHeaderSummary file
+                        else readModuleTask sp gopts opts paths (tkMod key) file
         -- A cached header stores canonical imports, which spell a bare
         -- dependency import as dep.lib.  When such a namespace has become
         -- local, the source is parsed again, so that its spelling resolves to
         -- the local module and its interface is rebuilt.
         task       <- case discovered of
-                        TyTask _ | any (overlapsLocal index paths) (importsOf discovered)
+                        TyTask _ | not prebuilt && any (overlapsLocal index paths) (importsOf discovered)
                           -> either ParseErrorTask (uncurry ActonTask) <$> materialize sp opts (tkMod key) file Nothing discovered
                         _ -> return discovered
         let imports = restoredImportsOf paths task
         either throwProjectError return (checkImportPrefixes index paths imports >> checkImportDependencies index paths (tkMod key) imports)
         return GlobalTask { gtKey = key, gtPaths = paths, gtTask = task, gtImportProviders = resolveProviders index paths imports }
-      where file  = indexSources index M.! key
+      where prebuilt = projPrebuilt (projects M.! tkProj key)
+            file  = indexSources index M.! key
             paths = pathsByProject M.! tkProj key
 
 -- | A module in the cheapest form discovery can use.  Its .tydb header is
@@ -1915,7 +1919,7 @@ assess env header = do
     case dependencyAction env header hasNotImpl changes of
       Just action -> return action
       Nothing
-        | C.altOutput (moduleOptions env) || isJust deferred -> return (Reuse header deferred)
+        | C.skip_backpass (moduleOptions env) || C.altOutput (moduleOptions env) || isJust deferred -> return (Reuse header deferred)
         | otherwise -> do
             status <- codegenStatus (pathsOf env) (nameOf env) (InterfaceFiles.summaryImplHash header)
             return (if codegenUpToDate status then Reuse header deferred else RefreshCodegen header status)
@@ -2151,6 +2155,9 @@ recomputeImpl env header hasNotImpl = do
             case deferredJob env hasNotImpl implHash (length names) of
               Just job -> maybe InterfaceGone (\shell -> result (shellModuleInfo shell) (shellPubHash shell) (DeferredBack job))
                             <$> readInterfaceShell env (Just (InterfaceFiles.summaryPubHash header))
+              Nothing | C.skip_backpass (moduleOptions env) ->
+                maybe InterfaceGone (\shell -> result (shellModuleInfo shell) (shellPubHash shell) NoBack)
+                  <$> readInterfaceShell env (Just (InterfaceFiles.summaryPubHash header))
               Nothing  -> do
                 full <- InterfaceFiles.readFileMaybe tydb
                 case full of
@@ -2314,10 +2321,12 @@ storedBackJob env module' = loadBackJob (moduleBuild env) (moduleBase env) (keyO
 -- again, its environment rebuilt with protocols converted.
 loadBackJob :: BuildEnv -> Acton.Env.Env0 -> TaskKey -> Paths -> C.CompileOptions -> A.Module -> B.ByteString -> IO BackJob
 loadBackJob build base key paths opts typed codegenHash = do
-    snap  <- Source.readSource (buildSources build) (srcFile paths (tkMod key))
+    source <- if Data.Set.member (tkProj key) (buildPrebuilt build)
+                then return ""
+                else Source.ssText <$> Source.readSource (buildSources build) (srcFile paths (tkMod key))
     scope <- Acton.Env.mkEnv (searchPath paths) base typed
     return BackJob { bjKey = key, bjPaths = paths, bjOpts = opts, bjTypeEnv = Converter.convEnvProtos scope
-                   , bjModule = typed, bjSource = Source.ssText snap, bjCodegenHash = codegenHash }
+                   , bjModule = typed, bjSource = source, bjCodegenHash = codegenHash }
 
 
 -- Front passes -------------------------------------------------------------------------------------
@@ -2422,7 +2431,7 @@ runFrontPasses env source parsed = do
         { frModuleInfo   = interfaceModuleInfo mn interface escapes
         , frHashes       = ModuleHashes { mhPub = hashedPub hashed, mhImpl = hashedImpl hashed, mhNames = Just (publicNameMap names) }
         , frInterest     = interestDeps names
-        , frBack         = maybe (EagerBack job) DeferredBack (deferredJob env (A.hasNotImpl (A.mbody typed)) (hashedImpl hashed) (length names))
+        , frBack         = if C.skip_backpass opts then NoBack else maybe (EagerBack job) DeferredBack (deferredJob env (A.hasNotImpl (A.mbody typed)) (hashedImpl hashed) (length names))
         , frFrontTime    = reportedTime gopts opts (end - start)
         , frFrontTiming  = if C.timing gopts then Just timing else Nothing
         , frInferredSigs = signatures }
@@ -2715,6 +2724,7 @@ deferrable opts blocked hasNotImpl k
 -- its impl hash and its name count, when its back passes can wait.
 deferredJob :: ModuleEnv -> Bool -> B.ByteString -> Int -> Maybe DeferredBackJob
 deferredJob env hasNotImpl implHash nameCount
+  | C.skip_backpass (moduleOptions env) = Nothing
   | deferrable (moduleOptions env) (moduleBlocked env) hasNotImpl (keyOf env)
               = Just (DeferredBackJob (keyOf env) (pathsOf env) (moduleOptions env) implHash nameCount)
   | otherwise = Nothing
@@ -2914,7 +2924,7 @@ runBackPasses gopts job shouldWrite onProgress = do
       (converted, env3)   <- transform BackPassCPS        fst (Acton.CPS.convert env2 deactorized)
       (lifted, env4)      <- transform BackPassLLift      fst (Acton.LambdaLifter.liftModule env3 converted)
       boxed               <- transform BackPassBoxing     id  (Acton.Boxing.doBoxing env4 lifted >>= witnessStats env4 lifted)
-      (_, h, c, support)  <- pass BackPassCodeGen             (Acton.CodeGen.generateCode supportInclude env4 relSrcBase (bjSource job) (not (C.dbg_no_lines opts)) boxed (Hashing.hashHex (bjCodegenHash job)))
+      (_, h, c, support)  <- pass BackPassCodeGen             (Acton.CodeGen.generateCode supportInclude env4 relSrcBase (bjSource job) (not (C.dbg_no_lines opts) && not (null (bjSource job))) boxed (Hashing.hashHex (bjCodegenHash job)))
       case output of
         PrintHeader -> pass BackPassRender (render h) >> putStrLn h
         PrintCode   -> pass BackPassRender (render c) >> putStrLn c
@@ -2998,11 +3008,12 @@ altOutputFor ctx k                      = C.altOutput (optionsFor ctx k) && tkMo
 -- never cancelled, and startCompile waits for this before it starts the
 -- next generation.
 compileModules :: BuildEnv -> CompilePlan -> IO (Either CompileFailure (Acton.Env.Env0, Bool))
-compileModules build plan = do
+compileModules build0 plan = do
     started <- newIORef []
     ((compileAll started `finally` (readIORef started >>= mapM_ cancel)) >>= withOutputFailure)
       `finally` void (awaitOutputs build)
   where
+    build              = build0 { buildPrebuilt = Data.Set.fromList [ projRoot p | p <- M.elems (cpProjMap plan), projPrebuilt p ] }
     ctx                = cpContext plan
     (builtins, others) = partition (isBuiltin . gtKey) (cpNeededTasks plan)
     modules            = importGraph others

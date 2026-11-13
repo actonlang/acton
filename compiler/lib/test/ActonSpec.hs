@@ -32,6 +32,8 @@ import qualified Acton.Graph as Graph
 import qualified Acton.Project as Project
 import qualified Acton.Zon as Zon
 import qualified Acton.CommandLineParser as C
+import qualified Acton.Artifact as Artifact
+import qualified Acton.SourceProvider as Source
 import qualified Acton.Fingerprint as Fingerprint
 import qualified Acton.Completion as Completion
 import qualified Acton.Hashing as Hashing
@@ -53,7 +55,6 @@ import qualified Data.Text.Short as TS
 import Data.List (foldl', isInfixOf, isPrefixOf, nub, sort, subsequences)
 import Data.Maybe (listToMaybe)
 import qualified Data.List.NonEmpty as NE
-import qualified Data.Map as M
 import qualified Data.Set as Set
 import Data.IORef
 import Data.Bits (shiftL, (.|.))
@@ -77,6 +78,7 @@ import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Char8 as B8
 import qualified Data.Aeson as Ae
 import qualified Data.Aeson.Types as AeTypes
+import qualified Data.Map as M
 import qualified System.IO.Unsafe
 
 
@@ -1818,6 +1820,96 @@ main = do
               , Graph.affectedBy g isProvider changed /= searchedSelection adjacency isProvider changed
               ]
         mismatches `shouldBe` []
+    describe "Artifacts" $ do
+      it "derives default OCI refs from GitHub repo URLs" $ do
+        Artifact.deriveOciRef "https://github.com/actonlang/acton-yang" "1220abcdef"
+          `shouldBe` Just ("oci://ghcr.io/actonlang/acton-yang/acton-out:1220abcdef-iface" ++ Artifact.currentInterfaceVersionText)
+
+      it "derives OCI refs from explicit artifact repositories" $ do
+        Artifact.ociRefForRepository "local-registry.local-domain.com/acton-out" "1220abcdef"
+          `shouldBe` Just ("oci://local-registry.local-domain.com/acton-out:1220abcdef-iface" ++ Artifact.currentInterfaceVersionText)
+
+      it "derives OCI layout refs from local artifact repositories" $ do
+        let ref = "oci-layout:///tmp/acton-out:1220abcdef-iface" ++ Artifact.currentInterfaceVersionText
+        Artifact.ociRefForRepository "/tmp/acton-out" "1220abcdef" `shouldBe` Just ref
+        Artifact.ociRefIsLocal ref `shouldBe` True
+        Artifact.ociRefOrasOptions ref `shouldBe` ["--oci-layout"]
+        Artifact.ociRefOrasTarget ref `shouldBe` "/tmp/acton-out:1220abcdef-iface" ++ Artifact.currentInterfaceVersionText
+
+      it "validates manifests against source hash and interface version" $ do
+        let manifest = Artifact.expectedManifest "1220abcdef"
+        Artifact.validateManifest "1220abcdef" manifest `shouldBe` Right ()
+        Artifact.validateManifest "other" manifest
+          `shouldBe` Left "artifact source hash 1220abcdef does not match dependency source hash other"
+
+      it "enumerates prebuilt artifact modules from .tydb files" $ do
+        withSystemTempDirectory "acton-artifact-root" $ \dir -> do
+          let mn = S.modName ["prebuilt", "mod"]
+              tyFile = (dir </> "out" </> "types" </> "prebuilt" </> "mod") ++ InterfaceFiles.interfaceExt
+              fp = Fingerprint.formatFingerprint
+                (Fingerprint.updateFingerprintPrefix (Fingerprint.fingerprintPrefixForName "prebuilt") 1)
+              spec = BuildSpec.BuildSpec "prebuilt" Nothing fp M.empty M.empty M.empty M.empty
+              ctx = Project.ProjCtx
+                    { Project.projRoot = dir
+                    , Project.projSrcDir = dir </> "src"
+                    , Project.projSysPath = dir
+                    , Project.projBuildSpec = spec
+                    , Project.projDeps = []
+                    , Project.projPrebuilt = True
+                    }
+              gopts = C.GlobalOptions C.Never True True False False False False 0
+          createDirectoryIfMissing True (takeDirectory tyFile)
+          InterfaceFiles.writeFile tyFile B8.empty B8.empty B8.empty Nothing [] [] [] [] [] [] Nothing
+            (I.NModule [] [] Nothing)
+            (S.Module mn [] Nothing [])
+          Artifact.writeManifest dir (Artifact.expectedManifest "1220abcdef")
+          mods <- Project.enumerateProjectModules ctx
+          mods `shouldBe` [(tyFile, mn)]
+          writeFile (dir </> "Build.act") $ unlines
+            [ "name = " ++ show ("prebuilt" :: String), "fingerprint = " ++ fp ]
+          createDirectoryIfMissing True (dir </> "src" </> "nested")
+          writeFile (dir </> "src" </> "nested" </> "mod.ext.c") "/* native implementation */\n"
+          Project.isActonArtifactOnlyRoot dir `shouldReturn` True
+          Project.findProjectDir dir `shouldReturn` Nothing
+          stamp <- Project.readBuildSpecStamp dir
+          let paths = Project.projectPaths C.defaultCompileOptions (M.singleton dir ctx) ctx
+              cctx = Compile.CompileContext
+                { Compile.ccOpts = C.defaultCompileOptions
+                , Compile.ccPathsRoot = paths
+                , Compile.ccRootModule = mn
+                , Compile.ccRootProj = dir
+                , Compile.ccSysAbs = dir
+                , Compile.ccBuildStamp = stamp
+                }
+          plan <- Compile.planFetched Source.diskSourceProvider gopts cctx
+            (Compile.PlanRequest [dir </> "Build.act"] Compile.WholeProject Nothing)
+          map (Compile.tkMod . Compile.gtKey) (Compile.cpGlobalTasks plan) `shouldBe` [mn]
+
+      it "keeps source projects in source mode even with artifact files present" $ do
+        withSystemTempDirectory "acton-source-with-artifact-files" $ \dir -> do
+          let name = "source_with_artifact_files"
+              fp = Fingerprint.formatFingerprint
+                (Fingerprint.updateFingerprintPrefix
+                  (Fingerprint.fingerprintPrefixForName name) 1)
+              src = dir </> "src" </> "foo.act"
+              gopts = C.GlobalOptions C.Never True True False False False False 0
+          createDirectoryIfMissing True (takeDirectory src)
+          createDirectoryIfMissing True (dir </> "out" </> "types")
+          writeFile (dir </> "Build.act") $ unlines
+            [ "name = " ++ show name
+            , "fingerprint = " ++ fp
+            , "dependencies = {}"
+            , "zig_dependencies = {}"
+            ]
+          writeFile src "def marker() -> int:\n    return 1\n"
+          Artifact.writeManifest dir (Artifact.expectedManifest "1220abcdef")
+          projMap <- Project.discoverProjects gopts dir dir []
+          case M.elems projMap of
+            [ctx] -> do
+              Project.projPrebuilt ctx `shouldBe` False
+              mods <- Project.enumerateProjectModules ctx
+              map snd mods `shouldBe` [S.modName ["source_with_artifact_files", "foo"]]
+            _ -> expectationFailure "expected one discovered project"
 
     describe "Environment" $ do
       it "forgets defaults when row expressions are no longer available" $ do
