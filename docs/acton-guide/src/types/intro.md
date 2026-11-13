@@ -107,6 +107,8 @@ This is especially useful when:
   local value, or make inference easier to follow
 - [Generics](generics.md) when one definition should work for many
   concrete types without losing safety
+- [Type aliases](aliases.md) when you want a readable name for an
+  existing type or a recurring type expression
 - [Effects (`pure`, `mut`, `proc`, `action`)](effects.md) when you want
   to treat side effects as part of the type information
 - [Troubleshooting type errors](troubleshooting.md) when you want to

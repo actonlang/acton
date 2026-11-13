@@ -46,6 +46,7 @@
   - [Working with types](types/intro.md)
     - [Explicit types](types/explicit.md)
     - [Generics](types/generics.md)
+    - [Type aliases](types/aliases.md)
     - [Effects (`pure`, `mut`, `proc`, `action`)](types/effects.md)
     - [Troubleshooting type errors](types/troubleshooting.md)
   - [Actors & concurrency](language/state_concurrency.md)
