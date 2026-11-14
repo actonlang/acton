@@ -524,6 +524,9 @@
   compiler regressions, including cached modules and dependency APIs. [#3352]
 - Render tables in Webex merge notifications as aligned text in code blocks,
   preserving other Markdown and existing code blocks. [#3351]
+- Rebuild `acton.now`, `www.acton-lang.org`, and `acton.guide` after guide
+  source changes. Dispatch each rebuild independently so a failed trigger does
+  not cancel updates to the other sites. [#3395]
 - Let `compiler-bench --pipeline` measure both frontend and backend work for
   ordinary modules instead of failing after the frontend measurement. [#3325]
 - Build and test the external `actonlang/textfsm` package in CI with the newly
@@ -6107,6 +6110,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#3388]: https://github.com/actonlang/acton/pull/3388
 [#3390]: https://github.com/actonlang/acton/pull/3390
 [#3391]: https://github.com/actonlang/acton/pull/3391
+[#3395]: https://github.com/actonlang/acton/pull/3395
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
