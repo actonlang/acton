@@ -351,20 +351,17 @@ dist/deps/libargp: deps-download/$(LIBARGP_REF).tar.gz $(LIBARGP_BUILD_ZIG)
 	touch "$(TD)/$@"
 
 # /deps/libbsdnt --------------------------------------------
-LIBBSDNT_REF=cf7db3414867b8b4a5561bc9aa94a8050d0225c4
-LIBBSDNT_BUILD_ZIG=deps/libbsdnt/build.zig
-LIBBSDNT_TYPES=deps/libbsdnt/types_arch.h
+LIBBSDNT_REF=09444670cab0f5b3a1cd81c2c37d761c2eecc15a
 deps-download/$(LIBBSDNT_REF).tar.gz:
 	mkdir -p deps-download
 	$(CURL) -o $@ https://github.com/actonlang/bsdnt/archive/$(LIBBSDNT_REF).tar.gz
 
-dist/deps/libbsdnt: deps-download/$(LIBBSDNT_REF).tar.gz $(LIBBSDNT_BUILD_ZIG) $(LIBBSDNT_TYPES)
+dist/deps/libbsdnt: deps-download/$(LIBBSDNT_REF).tar.gz
 	rm -rf "$@"
 	mkdir -p "$@"
 	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<"
-	cp "$(TD)/$(LIBBSDNT_BUILD_ZIG)" "$@/build.zig"
-	cp "$(TD)/$(LIBBSDNT_TYPES)" "$@/types_arch.h"
-	rm -rf "$@/.github" "$@/configure" "$@/test"
+	# Keep the fork's tests so zig build test works in the extracted tree.
+	rm -rf "$@/.github" "$@/configure"
 	touch "$(TD)/$@"
 
 # /deps/libgc --------------------------------------------
