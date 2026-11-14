@@ -518,9 +518,10 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
             return 0
       else do
         buildOptions <- BuildSpec.build_options <$> loadBuildSpec (projPath paths)
+        environment <- getEnvironment
         let maxNameLen = maximum (0 : map (length . tsDisplay) specs)
             nameWidth = max 20 (maxNameLen + 5)
-            runContext = mkRunContext opts topts mode buildOptions
+            runContext = mkRunContext opts topts mode buildOptions (testRunEnvironment environment)
             ctxHash = contextHashBytes runContext
             useCache = not (C.testNoCache topts) && not (C.testGcCheck topts) && mode == TestModeRun
         when (mode == TestModePerf) $ forM_ (C.testCompare topts) $ \path -> do
@@ -729,13 +730,14 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
               _ <- printTestSummary (tpuUseColor ui) (timeEnd - timeStart) showCached results
               return (testExitCode results)
   where
-    mkRunContext opts' topts' mode' buildOptions = TestRunContext
+    mkRunContext opts' topts' mode' buildOptions runEnvironment = TestRunContext
       { trcCompilerVersion = getVer
       , trcTarget = C.target opts'
       , trcOptimize = show (C.optimize opts')
       , trcMode = show mode'
       , trcArgs = testCmdArgs mode' topts'
       , trcBuildOptions = buildOptions
+      , trcEnvironment = runEnvironment
       }
 
 testExitCode :: [TestResult] -> Int
@@ -952,7 +954,7 @@ runModuleTestStreaming opts paths topts mode perfHostInfo baselineScale limits m
           { cwd = Just (projPath paths)
           , env = Just ((if mode `elem` [TestModePerf, TestModeScale] then [("ACTON_TEST_PERF", "1")] else [])
               ++ (if C.testGcCheck topts then [("ACTON_GC_CHECK", "1")] else [])
-              ++ filter ((`notElem` ["ACTON_TEST_PERF", "ACTON_GC_CHECK"]) . fst) environment)
+              ++ filter ((`notElem` testRunnerVariables) . fst) environment)
           , create_group = C.watch opts || isJust limits
           , delegate_ctlc = not (C.watch opts || isJust limits)
           }
