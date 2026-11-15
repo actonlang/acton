@@ -29,7 +29,7 @@
 #include <termios.h>
 #endif
 #include <unistd.h>
-#ifdef ACTON_THREADS
+#if defined(ACTON_THREADS) || defined(__APPLE__) || defined(__linux__)
 #include <pthread.h>
 #endif
 #include <stdio.h>
@@ -2708,6 +2708,22 @@ static WorkerCtx new_worker_ctx(void) {
     return acton_gc_malloc_rescanned_aligned(_Alignof(struct WorkerCtx), sizeof(struct WorkerCtx));
 }
 
+static uint64_t current_stack_size(void) {
+#if defined(__APPLE__)
+    return pthread_get_stacksize_np(pthread_self());
+#elif defined(__linux__)
+    pthread_attr_t attr;
+    if (pthread_getattr_np(pthread_self(), &attr) != 0)
+        return 0;
+    size_t size = 0;
+    int err = pthread_attr_getstacksize(&attr, &size);
+    pthread_attr_destroy(&attr);
+    return err ? 0 : (uint64_t)size;
+#else
+    return 0;
+#endif
+}
+
 void *main_loop(void *idx) {
     WorkerCtx wctx = new_worker_ctx();
     wctxs[(intptr_t)idx] = wctx;
@@ -2738,6 +2754,7 @@ void *main_loop(void *idx) {
     uv_check_start(&work_ev[wctx->id], (uv_check_cb)wt_work_cb);
 
     WT_STAT_SET(wt_stats[wctx->id].state, WT_Idle);
+    WT_STAT_SET(wt_stats[wctx->id].stack_size, current_stack_size());
     int r = uv_run(wctx->uv_loop, UV_RUN_DEFAULT);
     WT_STAT_SET(wt_stats[wctx->id].state, WT_NoExist);
     rtsd_printf("Exiting...");
@@ -3531,6 +3548,44 @@ static void raise_open_file_limit(void) {
 #endif
 
 int main(int argc, char **argv) {
+#ifdef ACTON_THREADS
+    // Match the stack available to workers in macOS executables. Keep finite
+    // increases from ulimit, but never copy an unlimited or huge main stack
+    // into every worker: pthread_create can fail to reserve that much space.
+    uint64_t primary_thread_stack_size = 0;
+#if defined(IS_MACOS)
+    primary_thread_stack_size = pthread_get_stacksize_np(pthread_self());
+#else
+    struct rlimit stack_limit;
+    if (getrlimit(RLIMIT_STACK, &stack_limit) == 0 && stack_limit.rlim_cur != RLIM_INFINITY)
+        primary_thread_stack_size = stack_limit.rlim_cur;
+#endif
+    uint64_t target_thread_stack_size = REQUIRED_STACK_SIZE > primary_thread_stack_size ? REQUIRED_STACK_SIZE : primary_thread_stack_size;
+    if (target_thread_stack_size > MAX_STACK_SIZE)
+        target_thread_stack_size = MAX_STACK_SIZE;
+
+    pthread_attr_t ss_attr;
+    int err = pthread_attr_init(&ss_attr);
+    if (err) {
+        fprintf(stderr, "ERROR: pthread_attr_init failed: %s\n", strerror(err));
+        exit(1);
+    }
+    err = pthread_attr_setstacksize(&ss_attr, (size_t)target_thread_stack_size);
+    if (err) {
+        fprintf(stderr, "ERROR: pthread_attr_setstacksize failed: %s\n", strerror(err));
+        exit(1);
+    }
+
+#ifdef __GLIBC__
+    // GC marker threads and library threads initialize their own attributes.
+    // Bound glibc's inherited default before either kind can be created.
+    err = pthread_setattr_default_np(&ss_attr);
+    if (err) {
+        fprintf(stderr, "ERROR: pthread_setattr_default_np failed: %s\n", strerror(err));
+        exit(1);
+    }
+#endif
+#endif
 #ifndef _WIN32
     raise_open_file_limit();
 #endif
@@ -3886,6 +3941,7 @@ int main(int argc, char **argv) {
         wt_stats[i].idx = i;
         sprintf(wt_stats[i].key, "%d", i);
         wt_stats[i].state = 0;
+        wt_stats[i].stack_size = 0;
         wt_stats[i].sleeps = 0;
 
         wt_stats[i].conts_count = 0;
@@ -3995,6 +4051,7 @@ int main(int argc, char **argv) {
     thread_wctx = wctx;
 #endif
     start_keys(FIRST_KEY);
+    WT_STAT_SET(wt_stats[0].stack_size, current_stack_size());
 
     $ROOTINIT();
     acton_replace_allocator(GC_malloc, GC_malloc_atomic, GC_realloc, GC_calloc, acton_noop_free, GC_strdup, GC_strndup);
@@ -4073,32 +4130,7 @@ int main(int argc, char **argv) {
 #ifdef ACTON_THREADS
     cpu_set_t cpu_set;
 
-    size_t primary_thread_stack_size;
-    size_t target_thread_stack_size;
-#if defined(IS_MACOS)
-    primary_thread_stack_size = pthread_get_stacksize_np(pthread_self());
-#else
-    pthread_attr_t attr;
-    pthread_getattr_np(pthread_self(), &attr);
-    pthread_attr_getstacksize(&attr, &primary_thread_stack_size);
-    pthread_attr_destroy(&attr);
-#endif
-    target_thread_stack_size = REQUIRED_STACK_SIZE > primary_thread_stack_size ? (size_t)REQUIRED_STACK_SIZE : primary_thread_stack_size;
-
-    if (primary_thread_stack_size < target_thread_stack_size)
-        log_warn("Current primary thread stack size: %u, required thread stack size: %u", primary_thread_stack_size, target_thread_stack_size);
-
-    pthread_attr_t ss_attr;
-    size_t secondary_thread_stack_size = 0;
-    pthread_attr_init(&ss_attr);
-    pthread_attr_getstacksize(&ss_attr, &secondary_thread_stack_size);
-    if (secondary_thread_stack_size < target_thread_stack_size)
-    {
-        log_debug("Secondary thread stack size: %d, required thread stack size: %d", secondary_thread_stack_size, target_thread_stack_size);
-        int err = pthread_attr_setstacksize(&ss_attr, target_thread_stack_size);
-        if (err)
-            log_error("pthread_attr_setstacksize failed: %s", strerror(err));
-    }
+    log_debug("Worker thread stack size: %" PRIu64, target_thread_stack_size);
 
     // RTS Monitor Log
     pthread_t mon_log_thread;
@@ -4129,7 +4161,11 @@ int main(int argc, char **argv) {
     // branches we start. Worker threads get no CPU affinity: a process that
     // a worker spawns inherits it, and zig then builds on a single CPU.
     for (int idx = 1; idx <= num_wthreads; idx++) {
-        pthread_create(&threads[idx-1], &ss_attr, main_loop, (void*)(intptr_t)idx);
+        err = pthread_create(&threads[idx-1], &ss_attr, main_loop, (void*)(intptr_t)idx);
+        if (err) {
+            fprintf(stderr, "ERROR: pthread_create failed for worker %d: %s\n", idx, strerror(err));
+            exit(1);
+        }
     }
     sync_pause_workers_started();
 

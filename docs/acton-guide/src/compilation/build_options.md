@@ -1024,8 +1024,15 @@ Runtime services are available through `env.rts`, an `EnvRTS` class. Pass this
 object to code that needs runtime access. It replaces the `acton.rts` module
 and its `SysCap` argument.
 
-`worker_info()` describes the main thread (ID 0) and workers. `worker_stats()`
-reports their current states and cumulative continuation, bookkeeping, queue
+`worker_info()` describes the main thread (ID 0) and workers, including actual
+stack sizes captured at startup. A stack size is `None` until that worker has
+finished initializing, or when the platform cannot report it. Threaded builds
+use a worker stack of at least 16 MiB. A larger finite main-thread stack
+limit raises the worker request up to a cap of 64 MiB; an unlimited limit
+uses the minimum. This also bounds the default stack for GC helper threads
+on glibc Linux.
+
+`worker_stats()` reports current states and cumulative continuation, bookkeeping, queue
 wait, stealing and balancing counters. Durations are nanoseconds. Queue wait
 measurement runs only when RTS monitoring is enabled; `waits_enabled` tells
 whether those counters are collected. Values are independent observations,

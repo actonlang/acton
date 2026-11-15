@@ -285,7 +285,9 @@ B_dict B_EnvRTSD_worker_info(B_EnvRTS self) {
     B_dict res = $NEW(B_dict, (B_Hashable)B_HashableD_intG_witness, NULL, NULL);
     for (int64_t i = 0; i <= num_wthreads; i++) {
         B_str name = i == 0 ? actStrFromCString("main") : $FORMAT("Worker %" PRId64, i);
-        B_dictD_setitem(res, toB_int(i), $NEWTUPLE(1, name));
+        uint64_t size = WT_STAT_GET(wt_stats[i].stack_size);
+        B_dictD_setitem(res, toB_int(i), $NEWTUPLE(2, name,
+            size ? toB_u64(size) : (B_u64)B_None));
     }
     return res;
 }

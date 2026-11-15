@@ -37,7 +37,8 @@
 #define SHARED_RQ 0
 #endif
 
-#define REQUIRED_STACK_SIZE 8*1024*1024
+#define REQUIRED_STACK_SIZE (UINT64_C(16)*1024*1024)
+#define MAX_STACK_SIZE (UINT64_C(64)*1024*1024)
 
 #include "q.h"
 
@@ -48,6 +49,7 @@ struct wt_stat {
     unsigned int idx;          // worker thread index
     char key[10];              // thread index as string for convenience
     unsigned int state;        // current thread state
+    uint64_t stack_size;       // actual stack bytes, or 0 until known
     uint64_t sleeps;           // number of times thread slept
 
     // Executing actor continuations is the primary work of the RTS, we measure

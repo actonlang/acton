@@ -24,6 +24,7 @@ import System.Process
 import System.TimeIt
 import System.IO.Temp (withSystemTempDirectory)
 import qualified System.Info
+import qualified System.Timeout
 
 import Test.Tasty
 import Test.Tasty.ExpectedFailure
@@ -3665,11 +3666,45 @@ actonRootArgTests =
   ]
 
 
+workerStackTests = testGroup "worker stacks" $
+  [ testCase "worker information during startup" $ do
+      testBuildThing "" ExitSuccess False "../../test/rts/worker_stack.act"
+      result <- System.Timeout.timeout (20*1000000) $
+          runThing "--rts-wthreads 2" "../../test/rts/worker_stack.act"
+      case result of
+        Nothing -> assertFailure "worker stack information timed out"
+        Just (code, out, err) ->
+          assertEqual ("worker stack information\n" ++ out ++ err) ExitSuccess code
+  | System.Info.os `elem` ["darwin", "linux"]
+  ] ++
+  [ after AllFinish "worker information during startup" $
+    testCase "finite and unlimited Linux stack limits" $ do
+      testBuildThing "" ExitSuccess False "../../test/rts/worker_stack.act"
+      exe <- canonicalizePath "../../test/rts/worker_stack"
+      forM_ [("8192", 16777216), ("16384", 16777216),
+             ("32768", 33554432), ("65536", 67108864),
+             ("2097152", 67108864), ("4294967296", 67108864),
+             ("18014398509481982", 67108864), ("unlimited", 16777216)] $ \(limit, expected) ->
+        forM_ [1, 2, 8] $ \workers -> do
+          result <- System.Timeout.timeout (20*1000000) $ readCreateProcessWithExitCode
+            (proc "bash" ["-c", "ulimit -s \"$1\" || exit; shift; exec \"$@\"",
+                          "worker-stack", limit, exe, "--rts-wthreads", show workers]) ""
+          case result of
+            Nothing -> assertFailure ("worker startup timed out with stack limit " ++ limit)
+            Just (code, out, err) -> do
+              assertEqual ("stack limit " ++ limit ++ "\n" ++ out ++ err) ExitSuccess code
+              assertEqual ("worker stacks with limit " ++ limit)
+                          (concat (replicate workers (show expected ++ "\n"))) out
+  | System.Info.os == "linux"
+  ]
+
 rtsTests =
   testGroup "RTS"
   [
       testCase "arg parsing: foo --bar --rts-verbose" $ do
           testBuildAndRun "" "foo --bar --rts-verbose" ExitSuccess False "../../test/rts/argv1.act"
+
+  ,   workerStackTests
 
   ,   testCase "arg parsing: --rts-verbose --rts-wthreads 7 foo --bar" $ do
           testBuildAndRun "" "--rts-verbose --rts-wthreads 7 foo --bar" ExitSuccess False "../../test/rts/argv2.act"

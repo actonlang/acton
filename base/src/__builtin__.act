@@ -1645,8 +1645,12 @@ class EnvRTS:
         """
         NotImplemented
 
-    def worker_info(self) -> dict[int, (name: str)]:
-        """Describe the main thread (ID 0) and worker threads."""
+    def worker_info(self) -> dict[int, (name: str, stack_size: ?u64)]:
+        """Describe the main thread (ID 0) and worker threads.
+
+        stack_size is the actual stack size in bytes captured at startup,
+        or None before that worker finishes initializing or when unavailable.
+        """
         NotImplemented
 
     def worker_stats(self) -> dict[int, (state: str, waits_enabled: bool, sleeps: u64, conts_count: u64, conts_sum: u64, conts_100ns: u64, conts_1us: u64, conts_10us: u64, conts_100us: u64, conts_1ms: u64, conts_10ms: u64, conts_100ms: u64, conts_1s: u64, conts_10s: u64, conts_100s: u64, conts_inf: u64, bkeep_count: u64, bkeep_sum: u64, bkeep_100ns: u64, bkeep_1us: u64, bkeep_10us: u64, bkeep_100us: u64, bkeep_1ms: u64, bkeep_10ms: u64, bkeep_100ms: u64, bkeep_1s: u64, bkeep_10s: u64, bkeep_100s: u64, bkeep_inf: u64, wait_count: u64, wait_sum: u64, wait_max: u64, wait_1us: u64, wait_10us: u64, wait_100us: u64, wait_1ms: u64, wait_10ms: u64, wait_100ms: u64, wait_1s: u64, wait_inf: u64, steal_ops: u64, steal_actors: u64, balance_ops: u64, balance_actors: u64, balance_looks: u64, balance_young: u64, balance_stale: u64)]:
