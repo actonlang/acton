@@ -1,6 +1,5 @@
 #!/usr/bin/env runacton
 
-import acton.rts
 import random
 import net
 

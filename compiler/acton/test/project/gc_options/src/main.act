@@ -1,5 +1,3 @@
-import acton.rts
-
 def small_object_size() -> int:
     """GC_size of a new 16-byte object"""
     NotImplemented
@@ -23,7 +21,7 @@ actor Worker(wid: int, report: action(int, int) -> None):
 
 actor main(env):
     # The test compares these lines with the settings it built.
-    info = acton.rts.get_gc_info(env.syscap)
+    info = env.rts.gc_info()
     print("mode=" + info.mode)
     print("backend=" + info.backend)
     pause = info.pause_target_ms

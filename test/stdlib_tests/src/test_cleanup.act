@@ -1,4 +1,3 @@
-import acton.rts
 import testing
 
 actor Foo(cb):
@@ -24,6 +23,6 @@ actor _test_Cleanup(t: testing.EnvT):
     def _collect():
         if done:
             return
-        acton.rts.gc(t.env.syscap)
+        t.env.rts.gc()
         after 0.1: _collect()
     after 0: _collect()

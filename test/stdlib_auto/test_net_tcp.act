@@ -2,7 +2,6 @@
 # and then creating a TCP client connection which connects to the server, sends
 # a message and expects a reply. This exercices both ends of the TCP connection.
 
-import acton.rts
 import net
 import random
 
@@ -89,7 +88,7 @@ actor main(env):
 
     after 2: timeout_error()
 
-    rts_monitor = acton.rts.Monitor(env)
+    rts_monitor = env.rts
 
     port4 = random.randint(10000, 20000)
     port6 = port4+1

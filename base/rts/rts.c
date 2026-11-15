@@ -1088,7 +1088,7 @@ struct $Cont $StartRoot$cont = {
 };
 
 $R $InitEnvD___call__ ($Cont $this, $WORD args) {
-    return env_actor->$class->__init__(env_actor, &$StartRoot$cont, B_WorldCapG_new(), B_SysCapG_new(), (B_list)args, num_wthreads, B__EnvCapG_new());
+    return env_actor->$class->__init__(env_actor, &$StartRoot$cont, B_WorldCapG_new(), (B_list)args, num_wthreads, B__EnvCapG_new());
 }
 
 extern struct $ContG_class $InitEnvG_methods;

@@ -121,7 +121,7 @@ extern struct wt_stat wt_stats[MAX_WTHREADS];
 
 // Only the worker that an entry belongs to writes it. Other threads read
 // entries while the workers run (stats_to_json on the monitor threads,
-// rts_stats in acton.rts), so once the workers run, every write and every
+// worker_stats in EnvRTS), so once the workers run, every write and every
 // read by another thread of a field that the workers write is a relaxed
 // atomic load or store. idx and key are written only before the workers
 // start. The worker adds with a relaxed load and a relaxed store: it is the

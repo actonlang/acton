@@ -1,4 +1,3 @@
-import acton.rts
 import logging
 import net
 import random
@@ -514,7 +513,7 @@ actor _test_TCPAcceptLeavesNoHandles(t: testing.EnvT):
     """Accepting and closing connections leaves no TCP handles behind"""
     tcp_cap = net.TCPCap(net.NetCap(t.env.cap))
     base = tcp_test_result(t, "accepted handles")
-    monitor = acton.rts.Monitor(t.env)
+    monitor = t.env.rts
     CONNECTIONS = 3
     var baseline = 0
     var closed = 0
@@ -641,7 +640,7 @@ actor _test_TCPDroppedConnectionsClosed(t: testing.EnvT):
 
     def collect():
         if not base.is_done():
-            acton.rts.gc(t.env.syscap)
+            t.env.rts.gc()
             after 0.05: collect()
 
     def on_connect(c: net.TCPConnection):

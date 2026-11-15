@@ -2912,16 +2912,15 @@ gcBuildOptionTests = testGroup "GC metadata build options"
         forM_ [(app, "gc_app"), (other, "gc_other")] $ \(dir, name) -> do
           writeApp dir name (gcOptions False False)
           writeFile (dir </> "src/main.act") $ unlines
-            [ "import acton.rts"
-            , "import bridge"
+            [ "import bridge"
             , "import std.json as json"
             , ""
             , "actor main(env):"
             , "    records = bridge.make()"
             , "    large = \"x\" * 16384"
-            , "    acton.rts.gc(env.syscap)"
+            , "    env.rts.gc()"
             , "    assert bridge.churn() == 8128"
-            , "    acton.rts.gc(env.syscap)"
+            , "    env.rts.gc()"
             , "    assert large == \"x\" * 16384"
             , "    print(json.encode({\"count\": bridge.verify(records)}))"
             , "    env.exit(0)"
@@ -3177,7 +3176,7 @@ gcCollectorOptionTests = testGroup "GC collector options"
             (key `isInfixOf` (out ++ err))
   ]
   where
-    -- Reported get_gc_info fields for a build without settings.
+    -- Reported gc_info fields for a build without settings.
     defaults = [("mode", "ordinary"), ("backend", "none"),
                 ("pause_target_us", "None"),
                 ("alloc_budget_percent", "250"), ("block_size", "16384"),
@@ -3258,7 +3257,7 @@ gcCollectorOptionTests = testGroup "GC collector options"
     -- default build, and on in the tuned build, which turned them off.
     -- GC_MEMORY_LIMIT sets a limit in the default build and replaces the
     -- tuned build's limit. The limits of this test are below the memory of
-    -- the machines that run it, so get_gc_info reports them as set.
+    -- the machines that run it, so gc_info reports them as set.
     overrides = [("GC_ALLOC_BUDGET_PERCENT", "50"), ("GC_REALLOC_NO_FREE", "0"),
                  ("GC_NO_THREAD_LOCAL_WARMUP", "0"),
                  ("GC_BYTES_PER_MARKER", "0"), ("GC_TL_REFILL_MAX", "4"),

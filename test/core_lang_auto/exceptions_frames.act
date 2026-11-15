@@ -1,5 +1,3 @@
-import acton.rts
-
 # A plain (not CPS converted) try keeps its exception frame in a local of the
 # C function that runs it. These tests leave tries in every possible way, with
 # a try in every level of deep recursions, raise across calls without tries,
@@ -201,7 +199,7 @@ def test_churn() -> bool:
 # 5. Collections run while exceptions are on their way to their handlers: in
 # finally clauses, in handlers that re-raise, and at the bottom of a deep
 # recursion with an active try in every level.
-def gc_in_flight(cap: SysCap, rounds: int) -> bool:
+def gc_in_flight(cap: EnvRTS, rounds: int) -> bool:
     for r in range(rounds):
         tag = "p" + str(r)
         try:
@@ -210,32 +208,32 @@ def gc_in_flight(cap: SysCap, rounds: int) -> bool:
                     raise Payload(r, make_items(50, tag))
                 finally:
                     garbage(2000)
-                    acton.rts.gc(cap)
+                    cap.gc()
             except Payload as e:
                 garbage(2000)
-                acton.rts.gc(cap)
+                cap.gc()
                 raise e
         except Payload as e:
-            acton.rts.gc(cap)
+            cap.gc()
             if e.depth != r or not check_items(e.items, 50, tag):
                 print("Bad gc_in_flight payload:", r)
                 return False
     return True
 
 
-def deep_gc(cap: SysCap, level: int, bottom: int) -> int:
+def deep_gc(cap: EnvRTS, level: int, bottom: int) -> int:
     try:
         if level == bottom:
-            acton.rts.gc(cap)
+            cap.gc()
             raise Payload(level, make_items(20, "g"))
         return deep_gc(cap, level + 1, bottom)
     finally:
         if level % 100 == 0:
             garbage(200)
-            acton.rts.gc(cap)
+            cap.gc()
 
 
-def test_gc(cap: SysCap) -> bool:
+def test_gc(cap: EnvRTS) -> bool:
     if not gc_in_flight(cap, 20):
         return False
     try:
@@ -243,7 +241,7 @@ def test_gc(cap: SysCap) -> bool:
         print("Bad deep_gc: no exception", res)
         return False
     except Payload as e:
-        acton.rts.gc(cap)
+        cap.gc()
         if e.depth != 1000 or not check_items(e.items, 20, "g"):
             print("Bad deep_gc payload")
             return False
@@ -303,7 +301,7 @@ def test_iterators() -> bool:
 # 7. Actors. raise_deep() raises from inside a plain try and lets the
 # exception reach the worker loop's frame, and so does churn_then_raise()
 # after many tries. The caller's try is CPS converted because it awaits.
-actor Callee(cap: SysCap):
+actor Callee(cap: EnvRTS):
     def raise_deep(n: int) -> int:
         try:
             return raiser(n)
@@ -314,7 +312,7 @@ actor Callee(cap: SysCap):
         out = []
         res = outer(n, out)
         garbage(1000)
-        acton.rts.gc(cap)
+        cap.gc()
         return res if out == ["mf", "ok"] else -1
 
     def payload(r: int) -> int:
@@ -329,7 +327,7 @@ actor Callee(cap: SysCap):
         raise KeyError("after churn")
 
 
-actor Caller(cap: SysCap):
+actor Caller(cap: EnvRTS):
     callee = Callee(cap)
 
     def run() -> bool:
@@ -358,7 +356,7 @@ actor Caller(cap: SysCap):
                 ok = False
             except Payload as e:
                 garbage(1000)
-                acton.rts.gc(cap)
+                cap.gc()
                 if e.depth != r or not check_items(e.items, 30, "a" + str(r)):
                     print("Bad actor payload:", r)
                     ok = False
@@ -373,8 +371,8 @@ actor main(env):
     ok = test_deep_loops(2000) and ok
     ok = test_across_calls() and ok
     ok = test_churn() and ok
-    ok = test_gc(env.syscap) and ok
+    ok = test_gc(env.rts) and ok
     ok = test_iterators() and ok
-    c = Caller(env.syscap)
+    c = Caller(env.rts)
     ok = c.run() and ok
     env.exit(0 if ok else 1)

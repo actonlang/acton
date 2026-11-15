@@ -1,14 +1,13 @@
-import acton.rts
 import time
 
 actor sleeper(cap):
     def sleep(sleep_time):
-        acton.rts.sleep(cap, sleep_time)
+        cap.sleep(sleep_time)
 
 actor main(env):
     def work() -> bool:
-        s1 = sleeper(env.syscap)
-        s2 = sleeper(env.syscap)
+        s1 = sleeper(env.rts)
+        s2 = sleeper(env.rts)
         s = time.Stopwatch()
         # this is not an assignment, so sleep() should run async and thus take
         # like 0 time

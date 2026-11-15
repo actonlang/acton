@@ -1,5 +1,3 @@
-import acton.rts
-
 def list_total(xs: list[int]) -> int:
     total = 0
     for value in xs:
@@ -178,11 +176,11 @@ def check_mutation() -> None:
 def temporary_rows() -> list[list[int]]:
     return [[n, n + 1] for n in range(20)]
 
-def check_gc(cap: SysCap) -> None:
+def check_gc(cap: EnvRTS) -> None:
     total = 0
     # The collection and its remaining elements are owned by the iterator.
     for row in temporary_rows():
-        acton.rts.gc(cap)
+        cap.gc()
         total += row[0] + row[1]
     assert total == 400
 
@@ -194,7 +192,7 @@ actor main(env):
     check_collections()
     check_control()
     check_mutation()
-    check_gc(env.syscap)
+    check_gc(env.rts)
     counter = Counter()
 
     def suspended():

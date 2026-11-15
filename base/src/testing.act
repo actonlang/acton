@@ -1,4 +1,3 @@
-import acton.rts
 import argparse
 import diff
 import file
@@ -1414,12 +1413,14 @@ def perf_delta(before: (user_ns: ?u64, system_ns: ?u64, instructions: ?u64, cycl
             counters["ipc"] = float(instructions) / float(cycles)
     return counters
 
-def non_gc_mem_usage(rss: u64, gc_usage: u64) -> int:
+def non_gc_mem_usage(rss: ?u64, gc_usage: u64) -> int:
     # GC usage can include nonresident pages. Keep the estimate signed, as
     # clamping samples to zero would hide changes while RSS is below GC usage.
-    return int(rss) - int(gc_usage)
+    if rss is None:
+        raise RuntimeError("Process resident memory is unavailable")
+    return int(rss!) - int(gc_usage)
 
-actor TestExecutor(syscap: SysCap, config: TestRunnerConfig, t: Test, report_complete, report_progress, env: Env, executor_id: int, stress_workers: int, stress_nodrift_workers: int, request_timeout: ?action(float) -> None=None):
+actor TestExecutor(rts: EnvRTS, config: TestRunnerConfig, t: Test, report_complete, report_progress, env: Env, executor_id: int, stress_workers: int, stress_nodrift_workers: int, request_timeout: ?action(float) -> None=None):
     """The actual executor of tests
     """
     log_handler = logging.Handler()
@@ -1556,7 +1557,7 @@ actor TestExecutor(syscap: SysCap, config: TestRunnerConfig, t: Test, report_com
             return 0
         if not stress_startup_done:
             if stress_startup_offset_us > 0:
-                acton.rts.sleep(syscap, float(stress_startup_offset_us) / 1000000.0)
+                rts.sleep(float(stress_startup_offset_us) / 1000000.0)
                 stress_total_drift_us += stress_startup_offset_us
             stress_startup_done = True
         drift_us = stress_worker_drift_us
@@ -1564,7 +1565,7 @@ actor TestExecutor(syscap: SysCap, config: TestRunnerConfig, t: Test, report_com
             drift_us = max([1, stress_drift_rank + 1])
         stress_last_drift_us = drift_us
         stress_total_drift_us += drift_us
-        acton.rts.sleep(syscap, float(drift_us) / 1000000.0)
+        rts.sleep(float(drift_us) / 1000000.0)
         return drift_us
 
     def _read_expected(path: str) -> ?str:
@@ -1592,7 +1593,7 @@ actor TestExecutor(syscap: SysCap, config: TestRunnerConfig, t: Test, report_com
         measurement_duration_ms = perf_phase_sw.elapsed().to_float() * 1000.0
         elapsed_ms = test_sw.elapsed().to_float() * 1000.0
         if test_info is not None and config.output_enabled:
-            peak_rss = acton.rts.get_peak_rss(syscap) if config.perf_mode and complete else None
+            peak_rss = rts.process_stats().peak_rss if config.perf_mode and complete else None
             payload = test_info.to_json(include_perf=config.perf_mode and complete)
             if peak_rss is not None:
                 payload["peak_rss"] = int(peak_rss)
@@ -1654,12 +1655,14 @@ actor TestExecutor(syscap: SysCap, config: TestRunnerConfig, t: Test, report_com
 
     def _process_result(test: Test, loop: PerfLoop, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, counter_start, success: ?bool, exception: ?Exception, val: ?str):
         full_dur = sw.elapsed().to_float() * 1000.0
-        gc_time_end = acton.rts.get_gc_time(syscap).total
+        gc_end = rts.gc_stats()
+        non_gc_mem_usage_after = 0 if config.perf_mode else non_gc_mem_usage(rts.process_stats().rss, gc_end.mem_usage)
+        gc_time_end = gc_end.total_ms
         gc_dur = float(gc_time_end - gc_time_start)
         testiter_dur = full_dur - gc_dur
-        gc_total_bytes_end = int(acton.rts.get_gc_total_bytes(syscap))
+        gc_total_bytes_end = int(gc_end.total_bytes)
         mem_usage_delta = gc_total_bytes_end - gc_total_bytes_start
-        counters = perf_delta(counter_start, acton.rts.perf_snapshot(syscap)) if counter_start is not None else None
+        counters = perf_delta(counter_start, rts.perf_stats()) if counter_start is not None else None
         test_dur = test_sw.elapsed().to_float()
         # Snapshot comparison is correctness work, outside the measured interval.
         if val is not None:
@@ -1673,7 +1676,6 @@ actor TestExecutor(syscap: SysCap, config: TestRunnerConfig, t: Test, report_com
                 stress_calib_samples += 1
                 if stress_calib_samples >= stress_calib_target_samples:
                     _finalize_stress_calibration()
-        non_gc_mem_usage_after = 0 if config.perf_mode else non_gc_mem_usage(acton.rts.get_rss(syscap), acton.rts.get_mem_usage(syscap))
         non_gc_mem_usage_delta = non_gc_mem_usage_after - non_gc_mem_usage_before
         #print(f"non-GC memory before: {non_gc_mem_usage_before}  after: {non_gc_mem_usage_after}  delta: {non_gc_mem_usage_delta}")
 
@@ -1798,11 +1800,13 @@ actor TestExecutor(syscap: SysCap, config: TestRunnerConfig, t: Test, report_com
             accepting_result = True
             print("\n== Running test, iteration:", invocation_id)
             print("\n== Running test, iteration:", invocation_id, err=True)
-            non_gc_mem_usage_before = 0 if config.perf_mode else non_gc_mem_usage(acton.rts.get_rss(syscap), acton.rts.get_mem_usage(syscap))
+            rss_before = None if config.perf_mode else rts.process_stats().rss
             loop = perf_run.next_loop(iteration) if perf_run is not None else PerfLoop()
-            counter_start = acton.rts.perf_snapshot(syscap) if config.perf_mode else None
-            gc_total_bytes_start = int(acton.rts.get_gc_total_bytes(syscap))
-            gc_time_start = acton.rts.get_gc_time(syscap).total
+            counter_start = rts.perf_stats() if config.perf_mode else None
+            gc_start = rts.gc_stats()
+            non_gc_mem_usage_before = 0 if config.perf_mode else non_gc_mem_usage(rss_before, gc_start.mem_usage)
+            gc_total_bytes_start = int(gc_start.total_bytes)
+            gc_time_start = gc_start.total_ms
             sw = time.Stopwatch()
 
             def repres(s: ?bool, e: ?Exception, val: ?str) -> None:
@@ -1827,7 +1831,7 @@ actor TestExecutor(syscap: SysCap, config: TestRunnerConfig, t: Test, report_com
             return
         try:
             test_sw = time.Stopwatch()
-            test_info = TestInfo(t, counter_info=acton.rts.perf_info(syscap) if config.perf_mode else None)
+            test_info = TestInfo(t, counter_info=rts.perf_info() if config.perf_mode else None)
             perf_phase_sw.reset()
             if perf_run is not None:
                 perf_run._sw.reset()
@@ -2199,7 +2203,7 @@ actor test_runner(env: Env,
     proc def _run_tests(args, perf_mode: bool=False, stress_mode: bool=False):
         config = TestRunnerConfig(perf_mode, stress_mode, args)
         if config.perf_mode:
-            acton.rts.start_gc_performance_measurement(env.syscap)
+            env.rts.start_gc_performance_measurement()
 
         def _default_stress_workers() -> int:
             # Stress runs benefit from oversubscription so worker actors must
@@ -2505,7 +2509,7 @@ actor test_runner(env: Env,
 
         test_executors = []
         for idx in range(test_concurrency):
-            te = TestExecutor(env.syscap, config, the_test, report_complete, report_progress, env, idx, test_concurrency, stress_nodrift_workers, request_timeout)
+            te = TestExecutor(env.rts, config, the_test, report_complete, report_progress, env, idx, test_concurrency, stress_nodrift_workers, request_timeout)
             test_executors.append(te)
         if config.stress_mode:
             after 0.08: _emit_stress_live()
