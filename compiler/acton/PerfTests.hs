@@ -770,14 +770,15 @@ perfIntegrationTests =
           , "    t.success()"
           , ""
           , "actor _test_counter_activation(t: testing.EnvT):"
-          , "    assert t.scale() == 1"
-          , "    assert t.env.vars.getenv(\"ACTON_TEST_PERF\") is None"
+          , "    assert \"--rts-perf\" not in t.env.argv"
           , "    info = t.env.rts.perf_info()"
           , "    if \"perf\" in t.env.argv:"
           , "        assert info[\"status\"] != \"not enabled at process start\""
           , "    else:"
           , "        assert info[\"status\"] == \"not enabled at process start\""
           , "        assert t.env.rts.perf_stats().instructions is None"
+          , "    for scale in t.loop():"
+          , "        pass"
           , "    t.success()"
           ]
         _ <- runOK ["--name", "counter_activation"]
@@ -806,8 +807,13 @@ perfIntegrationTests =
               singleJsonTest out >>= requireObject "performance"
         (ordinaryCode, ordinaryOut, ordinaryErr) <- readCreateProcessWithExitCode
           (proc acton ["test", "--iter", "1", "--name", "counter_activation", "--no-cache"])
-            { cwd = Just proj, env = Just (("ACTON_TEST_PERF", "1") : filter ((/= "ACTON_TEST_PERF") . fst) environment) } ""
+            { cwd = Just proj } ""
         assertEqual (ordinaryOut ++ ordinaryErr) ExitSuccess ordinaryCode
+        (scaleCode, scaleOut, scaleErr) <- readCreateProcessWithExitCode
+          (proc acton ["test", "scale", "--name", "counter_activation", "--start-scale", "1",
+                       "--end-scale", "1", "--max-time", "20s"])
+            { cwd = Just proj } ""
+        assertEqual (scaleOut ++ scaleErr) ExitSuccess scaleCode
         workersInfo <- runOK ["--name", "first", "--rts-wthreads", "3", "--json"]
           >>= singleJsonTest >>= requireObject "performance" >>= requireObject "measurements" >>= requireObject "perf_info"
         assertEqual "perf runs use the requested worker count" (Just (Aeson.Number 3)) (KM.lookup "workers" workersInfo)

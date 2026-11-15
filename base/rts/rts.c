@@ -3589,25 +3589,8 @@ int main(int argc, char **argv) {
 #ifndef _WIN32
     raise_open_file_limit();
 #endif
-    rts_perf_init();
     init_counter();
     init_clock();
-    // Init garbage collector and suppress warnings
-#ifdef _WIN32
-    GC_set_abort_func(gc_abort);
-#endif
-#ifdef ACTON_GC_DISABLE_THP
-    GC_set_on_os_get_mem(gc_disable_thp);
-#endif
-    gc_select_mode();
-    if (getenv("GC_WBAR_VERIFY") != NULL)
-        GC_set_wbar_verify_describe(gc_wbar_describe);
-    GC_INIT();
-    gc_env_restore();
-    acton_init_write_barrier();
-    GC_set_warn_proc(DaveNull);
-    acton_init_alloc();
-    acton_replace_allocator(GC_malloc, GC_malloc_atomic, GC_realloc, GC_calloc, acton_noop_free, GC_strdup, GC_strndup);
     int ddb_no_host = 0;
     char **ddb_host = NULL;
     char *rts_host = "localhost";
@@ -3620,11 +3603,7 @@ int main(int argc, char **argv) {
     int cpu_pin;
     uv_cpu_info_t* cpu_infos;
     int num_cores;
-    if (uv_cpu_info(&cpu_infos, &num_cores) != 0) {
-        log_fatal("Unable to get CPU info");
-        exit(1);
-    }
-    uv_free_cpu_info(cpu_infos, num_cores);
+    bool perf_requested = false;
     bool mon_on_exit = false;
     bool auto_backtrace = true;
     bool interactive_backtrace = false;
@@ -3636,53 +3615,11 @@ int main(int argc, char **argv) {
     appname = argv[0];
     pid = getpid();
 
-#ifndef _WIN32
-    // Do line buffered output
-    setlinebuf(stdout);
-
-    // Signal handling
-    sigfillset(&sa_abrt.sa_mask);
-    sigfillset(&sa_ill.sa_mask);
-    sigfillset(&sa_int.sa_mask);
-    sigfillset(&sa_pipe.sa_mask);
-    sigfillset(&sa_segv.sa_mask);
-    sigfillset(&sa_term.sa_mask);
-    sa_abrt.sa_flags = SA_RESTART;
-    sa_ill.sa_flags = SA_RESTART;
-    sa_int.sa_flags = SA_RESTART;
-    sa_pipe.sa_flags = SA_RESTART;
-    sa_segv.sa_flags = SA_RESTART;
-    sa_term.sa_flags = SA_RESTART;
-
-    // Ignore SIGPIPE, like we get if the other end talking to us on the Monitor
-    // socket (which is a Unix domain socket) goes away.
-    sa_pipe.sa_handler = SIG_IGN;
-    // Handle signals
-    sa_int.sa_handler = &sigint_handler;
-    sa_term.sa_handler = &sigterm_handler;
-
-    if (sigaction(SIGPIPE, &sa_pipe, NULL) == -1) {
-        log_fatal("Failed to install signal handler for SIGPIPE: %s", strerror(errno));
-        exit(1);
-    }
-    if (sigaction(SIGINT, &sa_int, NULL) == -1) {
-        log_fatal("Failed to install signal handler for SIGINT: %s", strerror(errno));
-        exit(1);
-    }
-    if (sigaction(SIGTERM, &sa_term, NULL) == -1) {
-        log_fatal("Failed to install signal handler for SIGTERM: %s", strerror(errno));
-        exit(1);
-    }
-#endif
-
-#ifndef ACTON_THREADS
-    self_actor = NULL;
-#endif
-
     log_set_quiet(true);
     /*
-     * A note on argument parsing: The RTS has its own command line arguments,
-     * all prefixed with --rts-, which we need to parse out. The remainder of
+     * Parse before GC startup so performance events reach all runtime threads.
+     * The RTS has its own command line arguments, all prefixed with --rts-,
+     * which we need to parse out. The remainder of
      * the arguments should be passed on to the Acton program, thus we need to
      * fiddle with argv. To avoid modifying argv in place, we create a new argc
      * and argv which we bootstrap the Acton program with. The special -- means
@@ -3717,6 +3654,7 @@ int main(int argc, char **argv) {
         {"rts-mon-on-exit", NULL, 'E', "Print RTS mon stats to stdout on exit"},
         {"rts-mon-socket-path", "PATH", 'm', "Path to unix socket to expose RTS mon stats"},
         {"rts-no-bt", NULL, 'B', "Disable automatic backtrace"},
+        {"rts-perf", NULL, 'P', "Enable process hardware performance counters"},
         {"rts-log-path", "PATH", 'L', "Path to RTS log"},
         {"rts-log-stderr", NULL, 's', "Log to stderr in addition to log file"},
         {"rts-verbose", NULL, 'v', "Enable verbose RTS output"},
@@ -3728,19 +3666,23 @@ int main(int argc, char **argv) {
 
     int ch = 0;
     // where we map current (i) argc position into new_argc
-    int new_argc_dst = 0;
+    int new_argc_dst = 1;
     // stop scanning once we've seen '--', passing the rest verbatim
     int opt_scan = 1;
     char **new_argv = acton_malloc((argc+1) * sizeof *new_argv);
+    new_argv[0] = argv[0];
     char *optarg = NULL;
-    for (int i = 0; i < argc; i++) {
+    for (int i = 1; i < argc; i++) {
         ch = 0;
         optarg = NULL;
         if (strcmp(argv[i], "--") == 0) opt_scan = 0;
         if (opt_scan) {
             for (int j=0; j<OPTLEN; j++) {
-                if (strlen(argv[i]) > 2
-                    && strncmp(argv[i]+2, long_options[j].name, strlen(long_options[j].name)) == 0) {
+                size_t name_len = strlen(long_options[j].name);
+                if (strncmp(argv[i], "--", 2) == 0
+                    && strncmp(argv[i]+2, long_options[j].name, name_len) == 0
+                    && (argv[i][2+name_len] == '\0'
+                        || (long_options[j].arg_name && argv[i][2+name_len] == '='))) {
                     // argv[i] matches one of our options!
                     ch = long_options[j].val;
                     new_argc--;
@@ -3808,6 +3750,9 @@ int main(int argc, char **argv) {
             case 'm':
                 mon_socket_path = optarg;
                 break;
+            case 'P':
+                perf_requested = true;
+                break;
             case 'p':
                 ddb_port = atoi(optarg);
                 break;
@@ -3843,6 +3788,73 @@ int main(int argc, char **argv) {
         }
     }
     new_argv[new_argc] = NULL;
+
+    rts_perf_init(perf_requested);
+    // Init garbage collector and suppress warnings
+#ifdef _WIN32
+    GC_set_abort_func(gc_abort);
+#endif
+#ifdef ACTON_GC_DISABLE_THP
+    GC_set_on_os_get_mem(gc_disable_thp);
+#endif
+    gc_select_mode();
+    if (getenv("GC_WBAR_VERIFY") != NULL)
+        GC_set_wbar_verify_describe(gc_wbar_describe);
+    GC_INIT();
+    gc_env_restore();
+    acton_init_write_barrier();
+    GC_set_warn_proc(DaveNull);
+    acton_init_alloc();
+    acton_replace_allocator(GC_malloc, GC_malloc_atomic, GC_realloc, GC_calloc, acton_noop_free, GC_strdup, GC_strndup);
+
+    if (uv_cpu_info(&cpu_infos, &num_cores) != 0) {
+        log_fatal("Unable to get CPU info");
+        exit(1);
+    }
+    uv_free_cpu_info(cpu_infos, num_cores);
+
+#ifndef _WIN32
+    // Do line buffered output
+    setlinebuf(stdout);
+
+    // Signal handling
+    sigfillset(&sa_abrt.sa_mask);
+    sigfillset(&sa_ill.sa_mask);
+    sigfillset(&sa_int.sa_mask);
+    sigfillset(&sa_pipe.sa_mask);
+    sigfillset(&sa_segv.sa_mask);
+    sigfillset(&sa_term.sa_mask);
+    sa_abrt.sa_flags = SA_RESTART;
+    sa_ill.sa_flags = SA_RESTART;
+    sa_int.sa_flags = SA_RESTART;
+    sa_pipe.sa_flags = SA_RESTART;
+    sa_segv.sa_flags = SA_RESTART;
+    sa_term.sa_flags = SA_RESTART;
+
+    // Ignore SIGPIPE, like we get if the other end talking to us on the Monitor
+    // socket (which is a Unix domain socket) goes away.
+    sa_pipe.sa_handler = SIG_IGN;
+    // Handle signals
+    sa_int.sa_handler = &sigint_handler;
+    sa_term.sa_handler = &sigterm_handler;
+
+    if (sigaction(SIGPIPE, &sa_pipe, NULL) == -1) {
+        log_fatal("Failed to install signal handler for SIGPIPE: %s", strerror(errno));
+        exit(1);
+    }
+    if (sigaction(SIGINT, &sa_int, NULL) == -1) {
+        log_fatal("Failed to install signal handler for SIGINT: %s", strerror(errno));
+        exit(1);
+    }
+    if (sigaction(SIGTERM, &sa_term, NULL) == -1) {
+        log_fatal("Failed to install signal handler for SIGTERM: %s", strerror(errno));
+        exit(1);
+    }
+#endif
+
+#ifndef ACTON_THREADS
+    self_actor = NULL;
+#endif
 
 #ifndef _WIN32
     capture_exe_path();

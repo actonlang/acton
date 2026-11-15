@@ -12,7 +12,7 @@ struct rts_perf_sample {
     uint64_t cycles_enabled, cycles_running;
 };
 
-void rts_perf_init(void);
+void rts_perf_init(bool enabled);
 void rts_perf_read(struct rts_perf_sample *sample);
 bool rts_perf_peak_rss(uint64_t *bytes);
 const char *rts_perf_backend(void);

@@ -3741,6 +3741,34 @@ rtsTests =
               assertEqual ("RTS wthreads " ++ n ++ " error cmdErr")
                           ("ERROR: --rts-wthreads requires a whole number of at least 1, got '" ++ n ++ "'.\n") cmdErr
 
+  ,   testCase "hardware counters use an RTS option" $ do
+          testBuildThing "" ExitSuccess False "../../test/rts/perf.act"
+          exe <- canonicalizePath "../../test/rts/perf"
+          forM_ [([], False, []),
+                 (["--rts-perf"], True, []),
+                 (["app", "--rts-perf", "tail"], True, ["app", "tail"]),
+                 (["--rts-perf", "--rts-perf"], True, []),
+                 (["--", "--rts-perf"], False, ["--", "--rts-perf"]),
+                 (["--rts-perf", "--", "--rts-perf"], True, ["--", "--rts-perf"]),
+                 (["--rts-performance"], False, ["--rts-performance"]),
+                 (["--rts-perf=0"], False, ["--rts-perf=0"]),
+                 (["--rts-perf=1"], False, ["--rts-perf=1"]),
+                 (["xxrts-perf"], False, ["xxrts-perf"]),
+                 (["--rts-host", "--rts-perf"], False, []),
+                 (["--rts-host=--rts-perf"], False, [])] $ \(args, enabled, appArgs) -> do
+              (code, out, err) <- readCreateProcessWithExitCode (proc exe args) ""
+              assertEqual (unwords args ++ "\n" ++ out ++ err) ExitSuccess code
+              assertEqual ("application arguments: " ++ unwords args)
+                  (unlines ((if enabled then "enabled" else "disabled") : appArgs)) out
+          (code, out, err) <- readCreateProcessWithExitCode (proc exe ["--rts-help"]) ""
+          assertEqual (out ++ err) ExitSuccess code
+          assertBool "RTS help lists --rts-perf" ("--rts-perf " `isInfixOf` out)
+          when (System.Info.os `elem` ["darwin", "linux"]) $ do
+              (code, out, err) <- readCreateProcessWithExitCode
+                  (proc "bash" ["-c", "exec -a --rts-perf \"$1\"", "perf-argv0", exe]) ""
+              assertEqual (out ++ err) ExitSuccess code
+              assertEqual "argv[0] is not an RTS option" "disabled\n" out
+
   ,   testCase "raise the open file limit" $ do
           testBuildThing "" ExitSuccess False "../../test/rts/wthreads1.act"
           -- Each worker thread has a libuv loop with file descriptors of its

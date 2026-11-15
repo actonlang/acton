@@ -1638,7 +1638,7 @@ class EnvRTS:
     def perf_stats(self) -> (user_ns: ?u64, system_ns: ?u64, instructions: ?u64, cycles: ?u64, instructions_enabled: u64, instructions_running: u64, cycles_enabled: u64, cycles_running: u64):
         """Read cumulative process CPU and hardware counters.
 
-        CPU times are nanoseconds. Hardware counts require ACTON_TEST_PERF=1
+        CPU times are nanoseconds. Hardware counts require --rts-perf
         at process start. Unavailable measurements are None. Coverage values
         detect intervals with uncounted work. Subtract integers before
         converting to float, and reject incomplete counter coverage.

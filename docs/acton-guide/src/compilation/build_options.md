@@ -1042,7 +1042,8 @@ so fields can reflect different moments while workers run.
 and process user and system CPU time in nanoseconds. Unavailable values are
 `None`. `perf_info()` describes the counter backend and machine, while
 `perf_stats()` reads cumulative CPU and hardware counters. Hardware counters
-require `ACTON_TEST_PERF=1` at startup.
+require `--rts-perf` at startup. `acton test perf` and `acton test scale`
+pass this option automatically.
 
 `io_handles()` inspects each event loop and returns handles grouped by worker
 ID. `gc()`, `enable_gc()`, `disable_gc()` and
