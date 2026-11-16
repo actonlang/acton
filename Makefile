@@ -588,7 +588,7 @@ test-syntaxerrors:
 	cd compiler && stack test acton --ta '-p "syntax errors"'
 
 test-syntaxerrors-accept:
-	cd compiler/acton && stack runghc -- test.hs -p "syntax errors" --accept
+	cd compiler && stack test acton:test_acton --ta '-p "syntax errors" --accept'
 
 test-typeerrors:
 	cd compiler && stack test acton --ta '-p "type errors"'
