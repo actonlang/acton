@@ -351,7 +351,7 @@ dist/deps/libargp: deps-download/$(LIBARGP_REF).tar.gz $(LIBARGP_BUILD_ZIG)
 	touch "$(TD)/$@"
 
 # /deps/libbsdnt --------------------------------------------
-LIBBSDNT_REF=09444670cab0f5b3a1cd81c2c37d761c2eecc15a
+LIBBSDNT_REF=dfee908e3d8570f5a8cfc5c8f31f3ab8fea6c701
 deps-download/$(LIBBSDNT_REF).tar.gz:
 	mkdir -p deps-download
 	$(CURL) -o $@ https://github.com/actonlang/bsdnt/archive/$(LIBBSDNT_REF).tar.gz
