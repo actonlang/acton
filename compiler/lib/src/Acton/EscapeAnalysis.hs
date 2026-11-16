@@ -413,6 +413,7 @@ localTypes = M.unions . map stmtTypes
     stmtTypes (Try _ b hs els fin) = M.unions (localTypes b : map handlerTypes hs ++ [localTypes els, localTypes fin])
     stmtTypes (With _ items b) = M.unions (map itemTypes items ++ [localTypes b])
     stmtTypes (Data _ mbp b) = maybe M.empty patternTypes mbp `M.union` localTypes b
+    stmtTypes (After _ mbp _ _ _) = maybe M.empty patternTypes mbp
     stmtTypes (Signature _ ns sc _) = M.fromList [ (n, sctype sc) | n <- ns ]
     stmtTypes _ = M.empty
 
@@ -540,7 +541,7 @@ scanStmt c stmt = case stmt of
             mapM_ (\p -> bindPattern c p e) mbp
         scanSuite c b
     Data _ mbp b -> mapM_ (\p -> bindPattern c p (Tuple NoLoc PosNil KwdNil)) mbp >> scanSuite c b
-    After l _ e e' -> do
+    After l _ _ e e' -> do
         scanExpr c e
         scanExpr c e'
         addEscapeNames c (Asynchronous l) (free e ++ free e')

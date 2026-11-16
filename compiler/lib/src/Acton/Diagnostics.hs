@@ -56,6 +56,9 @@ customParseErrorToDiagnostic InvalidTopLevelAssignmentPattern  = ("Module top-le
 customParseErrorToDiagnostic (DuplicateTopLevelAssignment name) = ("Module top-level name '" ++ name ++ "' cannot be assigned more than once",
                                                                    [Note "Module top-level assignments define constants",
                                                                     Hint "Use a fresh name or move mutable state into an actor"])
+customParseErrorToDiagnostic AfterTargetNotName                 = ("An after statement binds its timer to a plain name only",
+                                                                   [Note "The statement h = after d: f() binds the timer to h",
+                                                                    Hint "Bind the timer to a plain name and assign that name where the timer should go"])
 customParseErrorToDiagnostic MisplacedImport                    = ("Import statements must appear at the beginning of a module, preceded only by a possible docstring",
                                                                    [Hint "Move all imports before the module's top-level definitions"])
 customParseErrorToDiagnostic (CyclicTypedef names)              = ("Type definitions " ++ show names ++ " are cyclically dependent",

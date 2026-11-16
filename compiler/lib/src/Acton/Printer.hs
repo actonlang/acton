@@ -76,8 +76,9 @@ instance Pretty Stmt where
     pretty (Data _ (Just e) b)      = pretty e <> colon $+$ prettySuite b
     pretty (Data _ Nothing b)       = text "return" <> colon $+$ prettySuite b
     pretty (VarAssign _ ps e)       = text "var" <+> (hsep . punctuate (space <> equals) $ map pretty ps ++ [pretty e])
-    pretty (After _ True e e')      = text "after now" <+> pretty e <> colon <+> pretty e'
-    pretty (After _ False e e')     = text "after" <+> pretty e <> colon <+> pretty e'
+    pretty (After _ mbp now e e')   = prettyTarget mbp <> text (if now then "after now" else "after") <+> pretty e <> colon <+> pretty e'
+      where prettyTarget Nothing    = empty
+            prettyTarget (Just p)   = pretty p <+> equals <> space
     pretty (Decl _ [d])             = pretty d
     pretty (Decl _ ds)              = text "# recursive group:" $+$ (vcat $ map pretty ds) $+$ text "# (recursive group)"
     pretty (Signature _ vs sc d)    = prettyDec d $ commaList vs <+> colon <+> pretty sc

@@ -36,6 +36,45 @@ actor main(env):
 - pacing repeated work
 - scheduling a follow-up action
 
+## Cancelling a timer
+
+The statement `h = after d: f()` sets a timer like `after d: f()` does, and
+binds a `TimerHandle` for it to `h`, which has to be a plain name. The
+handle's `cancel()` method cancels the timer:
+
+```python
+actor main(env):
+    def on_timeout():
+        print("timed out")
+        env.exit(1)
+
+    timeout = after 5: on_timeout()
+
+    def on_reply():
+        # the reply arrived in time: stop the timeout
+        timeout.cancel()
+        env.exit(0)
+
+    after 0.1: on_reply()
+```
+
+A handle that a method sets, or that is replaced later, is kept in a `var`
+of type `?TimerHandle`, as in `var pending: ?TimerHandle = None`.
+
+Cancelling a timer before its code has started to run means that the code
+never runs. Cancelling after the code has started, and cancelling twice, do
+nothing. An actor runs one message at a time, so a cancel by the actor that
+set the timer always stops code that has not started. The handle can also be
+passed to other actors, and any actor that holds it can cancel. A cancel from
+another actor can race the start of the code and come too late, and the code
+then runs. The timer of `after now`, described below, is bound and cancelled
+the same way.
+
+A cancelled timer that is not due yet stays in the runtime's timer queue until
+its due time, and until then it keeps the actor that set it alive, so a long
+timeout that is cancelled early still holds that actor's memory until it would
+have fired.
+
 ## Why not `sleep`?
 
 Normal actor code should avoid blocking waits. A delayed callback with

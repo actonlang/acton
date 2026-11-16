@@ -1,12 +1,20 @@
 # Basic test case of the Acton RTS together with the database backend. We want
 # to focus on things that lead to database interaction, so in essence calling
 # actor methods / sending methods and execution of continuations. We also want
-# to test the timer queue.
+# to test the timer queue, also with timers that are cancelled.
 #
-# main -> Foo."init" -> timerQ after 0 -> Foo.callback() -> main.final() -> exit
+# main -> Foo."init" -> timerQ after 0.1 -> Foo.callback() -> main.final()
+#   -> exit
+#
+# Foo's init also sets two timers and cancels them at once. The one due after
+# 0.05 s goes through the DB timer queue, and handle_timeout consumes its entry
+# without putting it in Foo's queue. The after 0 one goes straight to Foo's
+# queue, where the worker drops it. The app does not restart, so it checks
+# only that no cancelled timer runs and that the cancel transactions succeed,
+# not which DB timer queue entry is consumed or what recovery restores.
 
 
-actor Foo(cb_method):
+actor Foo(cb_method, fail_method):
     # 2160 bytes of ASCII. test_db_app runs this app with --rts-debug, which
     # logs every DB row the RTS writes as text. Each word of the row that holds
     # this value prints as 19 digits, so its text is far longer than the
@@ -17,8 +25,16 @@ actor Foo(cb_method):
         print("Calling cb_method()")
         cb_method()
 
-    print("Scheduling after 0")
-    after 0: callback()
+    def boom():
+        print("A cancelled timer ran")
+        fail_method()
+
+    print("Scheduling after 0.1, and two timers that are cancelled")
+    h1 = after 0.05: boom()
+    h1.cancel()
+    h0 = after 0: boom()
+    h0.cancel()
+    after 0.1: callback()
 
 actor main(env):
     def final():
@@ -26,8 +42,12 @@ actor main(env):
         print("exiting...")
         env.exit(0)
 
+    def fail():
+        print("exiting with an error...")
+        env.exit(1)
+
     def test():
         print("Creating Foo() instance")
-        f = Foo(final)
+        f = Foo(final, fail)
 
     test()

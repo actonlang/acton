@@ -585,6 +585,7 @@ B_Msg B_MsgG_newXX( $Actor to, $Cont cont, time_t baseline, $WORD value) {
     // No other thread can see the new message yet, so the store needs no
     // ordering
     atomic_store_explicit(&m->$wait_lock, 0, memory_order_relaxed);
+    m->$timer = TIMER_NONE;
     m->$globkey = get_next_key();
     return m;
 }
@@ -605,11 +606,21 @@ B_str B_MsgD___repr__(B_Msg self) {
 }
 
 void B_MsgD___serialize__(B_Msg self, $Serial$state state) {
-    $step_serialize(self->$to,state);
-    $step_serialize(self->$cont,state);
+    // A timer message can be saved by one thread while another changes it.
+    // cancel() stores NULL into $cont, maybe while the worker that drops the
+    // message saves it. Under --db, cancel() saves the row of the timer it
+    // cancelled, while the message may be dropped, which stores NULL into
+    // $to, $cont and value (see drop_timer): by handle_timeout on thread 0,
+    // whichever actor cancelled, or by the worker that takes the message from
+    // the mailbox, when another actor cancelled. So these fields are loaded
+    // with atomic operations.
+    $step_serialize(__atomic_load_n(&self->$to, __ATOMIC_RELAXED),state);
+    $step_serialize(__atomic_load_n(&self->$cont, __ATOMIC_RELAXED),state);
     time_t wall = self->$baseline + wall_offset_us();
     $val_serialize(ITEM_ID,&wall,state);
-    $step_serialize(self->value,state);
+    $step_serialize(__atomic_load_n(&self->value, __ATOMIC_RELAXED),state);
+    $int64 timer = __atomic_load_n(&self->$timer, __ATOMIC_RELAXED);
+    $val_serialize(ITEM_ID,&timer,state);       // a cancelled timer stays cancelled after recovery
 }
 
 
@@ -628,7 +639,57 @@ B_Msg B_MsgD___deserialize__(B_Msg res, $Serial$state state) {
     res->$waiting = NULL;
     res->$baseline = (time_t)$val_deserialize(state) - wall_offset_us();
     ACTON_STORE(res, res->value, $step_deserialize(state));
+    res->$timer = (uint8_t)($int64)$val_deserialize(state);
     atomic_store_explicit(&res->$wait_lock, 0, memory_order_relaxed);
+    return res;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////
+
+// B_TimerHandle is the TimerHandle builtin (from __builtin__.act) that $AFTER
+// and $AFTER_NOW return. The compiler puts an __init__ stub into the method
+// table, and this never-called definition satisfies it.
+B_NoneType B_TimerHandleD___init__(B_TimerHandle self) {
+    // Must (and will) never be called!
+    return B_None;
+}
+
+// Allocate a handle for timer message "m". The name is not
+// B_TimerHandleG_new, which the compiler declares for a TimerHandle() call in
+// Acton code: such a handle would refer to no timer, so the call fails to link.
+B_TimerHandle B_TimerHandleG_newX(B_Msg m) {
+    B_TimerHandle h = GC_malloc(sizeof(struct B_TimerHandle));
+    h->$class = &B_TimerHandleG_methods;
+    h->$msg = m;
+    return h;
+}
+
+bool B_TimerHandleD___bool__(B_TimerHandle self) {
+  return true;
+}
+
+B_str B_TimerHandleD___str__(B_TimerHandle self) {
+  return $FORMAT("<TimerHandle object at %p>", self);
+}
+
+B_str B_TimerHandleD___repr__(B_TimerHandle self) {
+  return B_TimerHandleD___str__(self);
+}
+
+void B_TimerHandleD___serialize__(B_TimerHandle self, $Serial$state state) {
+    $step_serialize(self->$msg,state);          // the timer message, a reference by globkey under --db
+}
+
+B_TimerHandle B_TimerHandleD___deserialize__(B_TimerHandle res, $Serial$state state) {
+    if (!res) {
+        if (!state) {
+            res = GC_malloc(sizeof (struct B_TimerHandle));
+            res->$class = &B_TimerHandleG_methods;
+            return res;
+        }
+        res = $DNEW(B_TimerHandle,state);
+    }
+    ACTON_STORE(res, res->$msg, $step_deserialize(state));   // the timer message (resolved via globdict)
     return res;
 }
 
@@ -1193,24 +1254,47 @@ B_Msg $ASYNC($Actor to, $Cont cont) {
     return m;
 }
 
-B_Msg $AFTER(B_float sec, $Cont cont) {
+// The message of a timer, sent when the current message is done or waits in
+// an await, and the handle that can cancel it. Nothing can await a timer: the
+// handle is the only reference to its message that Acton code gets.
+static B_TimerHandle new_timer($Actor self, $Cont cont, time_t baseline) {
+    B_Msg m = B_MsgG_newXX(self, cont, baseline, &$Done$instance);
+    m->$timer = TIMER_PENDING;
+    PUSH_outgoing(self, m);
+    return B_TimerHandleG_newX(m);
+}
+
+// Clear the recipient, the continuation and its argument of a timer message,
+// when its continuation is done or the RTS drops it after a cancel. Nothing
+// can await a timer, but a TimerHandle keeps its message reachable, and should
+// keep neither what the timer's code held nor the actor that set the timer
+// alive. An actor that keeps its own handle would otherwise reach itself
+// through $to, and the collector never runs the finalizer of an object that
+// reaches itself, so its __cleanup__ would never run. Nothing that delivers
+// or runs the message reads these fields afterwards: handle_timeout reads $to
+// before it delivers a message, and delivers only a timer whose continuation
+// has not started. The stores of NULL need no write barrier. They are atomic,
+// since cancel() stores NULL into $cont after its compare-and-swap, maybe
+// while the message is dropped, and under --db a cancel() may be saving the
+// message's row at the same time (see B_MsgD___serialize__).
+static inline void drop_timer(B_Msg m) {
+    __atomic_store_n(&m->$to, NULL, __ATOMIC_RELAXED);
+    __atomic_store_n(&m->$cont, NULL, __ATOMIC_RELAXED);
+    __atomic_store_n(&m->value, NULL, __ATOMIC_RELAXED);
+}
+
+B_TimerHandle $AFTER(B_float sec, $Cont cont) {
     $Actor self = GET_SELF();
     rtsd_printf("# AFTER by %" PRId64, self->$globkey);
-    time_t baseline = self->B_Msg->$baseline + sec->val * 1000000;
-    B_Msg m = B_MsgG_newXX(self, cont, baseline, &$Done$instance);
-    PUSH_outgoing(self, m);
-    return m;
+    return new_timer(self, cont, self->B_Msg->$baseline + sec->val * 1000000);
 }
 
 // Like $AFTER, but the delay counts from the current time instead of from the
 // baseline of the message being handled
-B_Msg $AFTER_NOW(B_float sec, $Cont cont) {
+B_TimerHandle $AFTER_NOW(B_float sec, $Cont cont) {
     $Actor self = GET_SELF();
     rtsd_printf("# AFTER_NOW by %" PRId64, self->$globkey);
-    time_t baseline = current_time() + sec->val * 1000000;
-    B_Msg m = B_MsgG_newXX(self, cont, baseline, &$Done$instance);
-    PUSH_outgoing(self, m);
-    return m;
+    return new_timer(self, cont, current_time() + sec->val * 1000000);
 }
 
 $R $AWAIT($Cont cont, B_Msg m) {
@@ -1406,8 +1490,23 @@ bool handle_timeout(time_t now) {
     B_Msg m = DEQ_timed(now);
     if (m) {
         rtsd_printf("## Dequeued timed msg with baseline %ld (now is %ld)", m->$baseline, now);
-        if (ENQ_msg(m, m->$to)) {
-            int32_t wtid = ENQ_ready(m->$to, stamp_us(now_ns()));
+        // Read before the message goes to the mailbox: a worker may then run
+        // it and clear $to when it is done (drop_timer)
+        $Actor to = __atomic_load_n(&m->$to, __ATOMIC_RELAXED);
+        // Only a pending timer goes on to the mailbox, and a cancelled one is
+        // dropped here. A timer whose continuation has started is left alone:
+        // under --db, recovery can put a timer back in the timer queue when
+        // the DB timer queue kept its entry, although the timer has run. A
+        // pending timer that recovery put both in its actor's mailbox and in
+        // the timer queue still goes to the mailbox a second time. Under --db,
+        // one entry is consumed from the head of the DB timer queue below all
+        // the same, as for every timer that comes due.
+        uint8_t state = __atomic_load_n(&m->$timer, __ATOMIC_RELAXED);
+        bool deliver = state == TIMER_PENDING;
+        if (state == TIMER_CANCELLED) {
+            drop_timer(m);
+        } else if (deliver && ENQ_msg(m, to)) {
+            int32_t wtid = ENQ_ready(to, stamp_us(now_ns()));
             wake_wt(wtid);
         }
 #ifdef ACTON_DB
@@ -1435,10 +1534,12 @@ bool handle_timeout(time_t now) {
                 if(handle_status_and_schema_mismatch(ret1, minority_status, key))
                     continue;
 
-                int ret2 = remote_enqueue_in_txn(($WORD*)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)m->$to->$globkey, &minority_status, txnid, db);
-                rtsd_printf("   # (timed) enqueue msg %" PRId64 " to queue %" PRId64 " returns %d", m->$globkey, m->$to->$globkey, ret2);
-                if(handle_status_and_schema_mismatch(ret2, minority_status, key))
-                    continue;
+                if (deliver) {
+                    int ret2 = remote_enqueue_in_txn(($WORD*)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)to->$globkey, &minority_status, txnid, db);
+                    rtsd_printf("   # (timed) enqueue msg %" PRId64 " to queue %" PRId64 " returns %d", m->$globkey, to->$globkey, ret2);
+                    if(handle_status_and_schema_mismatch(ret2, minority_status, key))
+                        continue;
+                }
 
                 int ret3 = remote_commit_txn(txnid, &minority_status, db);
                 rtsd_printf("############## Commit returned %d, minority_status %d", ret3, minority_status);
@@ -1784,6 +1885,64 @@ void serialize_actor($Actor a, uuid_t *txnid) {
     }
 }
 #endif
+
+// TimerHandle.cancel(): stops the timer unless the continuation it scheduled
+// has already started. A timer that is stopped never runs its continuation.
+// Cancelling a timer whose continuation has started, and cancelling twice, do
+// nothing. Any actor that holds the handle can cancel. The actor that set the
+// timer runs one message at a time, so its own cancel always stops a timer
+// whose continuation has not started. A cancel from another actor can race
+// the start of the continuation and come too late (see TIMER_PENDING in
+// rts.h).
+//
+// cancel() leaves the message where it is, in the outgoing queue of the actor
+// that set the timer, in the timer queue or in that actor's mailbox. It goes
+// on like any timer, and the RTS drops it where it gets to it (see
+// TIMER_CANCELLED in rts.h). cancel() sets $cont to NULL, since nothing will
+// run it, so the continuation and what it holds can be collected before the
+// timer is due. The message still refers to the actor that set the timer,
+// through $to, until the RTS drops it (see drop_timer), so a timer in the
+// timer queue keeps that actor alive until its due time, cancelled or not.
+//
+// Under --db, the message's row is saved, with TIMER_CANCELLED and no
+// continuation, in a transaction of its own. So the cancel is durable when
+// cancel() returns, before the message that called it is saved, and the timer
+// stays cancelled after recovery even when that message runs again then. The
+// DB timer queue keeps the message's entry: when the timer is due, one entry
+// is consumed from the head of that queue, as for any timer that comes due.
+// The number of entries stays right only if every timer comes due.
+B_NoneType B_TimerHandleD_cancel(B_TimerHandle self) {
+    B_Msg m = self->$msg;
+    uint8_t pending = TIMER_PENDING;
+    if (!__atomic_compare_exchange_n(&m->$timer, &pending, TIMER_CANCELLED, false,
+                                     __ATOMIC_RELAXED, __ATOMIC_RELAXED))
+        return B_None;
+    // A NULL store needs no write barrier. It is atomic, since a worker or
+    // handle_timeout may drop the message and store NULL there at the same
+    // time (drop_timer).
+    __atomic_store_n(&m->$cont, NULL, __ATOMIC_RELAXED);
+    rtsd_printf("# Cancelled timer Msg %" PRId64, m->$globkey);
+#ifdef ACTON_DB
+    if (db) {
+        int success = 0, ret = 0, minority_status = 0;
+        while(!success && !rts_exit) {
+            uuid_t * txnid = remote_new_txn(db);
+            if(txnid == NULL)
+                continue;
+            serialize_msg(m, txnid);
+            ret = remote_commit_txn(txnid, &minority_status, db);
+            rtsd_printf("############## Commit returned %d, minority_status %d", ret, minority_status);
+            // The transaction has no queue operation, so the queue key is 0,
+            // as in insert_row
+            if(handle_status_and_schema_mismatch(ret, minority_status, 0))
+                continue;
+            if(ret == VAL_STATUS_COMMIT)
+                success = 1;
+        }
+    }
+#endif
+    return B_None;
+}
 
 void BOOTSTRAP(int argc, char *argv[]) {
     B_list args = B_listG_new(NULL,NULL);
@@ -2469,8 +2628,14 @@ void wt_work_cb(uv_check_t *ev) {
         // m is volatile like the variables above. Its stores go through
         // ACTON_STORE, which reads m once for the store and the barrier.
         volatile B_Msg m = current->B_Msg;
-        $Cont cont = m->$cont;
-        $WORD val = m->value;
+        // A timer's continuation runs only if the timer was not cancelled
+        // first (see TIMER_PENDING). The message of a cancelled timer is done
+        // without running anything.
+        uint8_t state = __atomic_load_n(&m->$timer, __ATOMIC_RELAXED);
+        if (state == TIMER_PENDING)
+            __atomic_compare_exchange_n(&m->$timer, &state, TIMER_STARTED, false,
+                                        __ATOMIC_RELAXED, __ATOMIC_RELAXED);
+        bool dropped = state == TIMER_CANCELLED;
 
 #ifdef ACTON_THREADS
         if (wctx->id > 0)
@@ -2503,8 +2668,16 @@ void wt_work_cb(uv_check_t *ev) {
         $R r;
         // The first continuation on this worker pushes jump0, which then
         // stays at the bottom of the frame stack.
-        if (wctx->jump_top == &wctx->jump0 || $PUSH(&wctx->jump0)) {   // Normal path
+        if (dropped) {
+            rtsd_printf("## Dropping cancelled timer Msg %" PRId64 " for actor %" PRId64, m->$globkey, current->$globkey);
+            end_ns = now_ns();
+            r = $R_DONE(B_None);
+        } else if (wctx->jump_top == &wctx->jump0 || $PUSH(&wctx->jump0)) {   // Normal path
             rtsd_printf("## Running actor %" PRId64 " : %s", current->$globkey, current->$class->$GCINFO);
+            // Read only here: cancel() sets the $cont of a dropped message to
+            // NULL
+            $Cont cont = m->$cont;
+            $WORD val = m->value;
             r = cont->$class->__call__(cont, val);
             assert(wctx->jump_top == &wctx->jump0);     // the continuation popped every try it pushed
 
@@ -2541,17 +2714,21 @@ void wt_work_cb(uv_check_t *ev) {
         switch (r.tag) {
         case $RDONE: {
             save_actor_state(current, m, end_us);
-            ACTON_STORE(m, m->value, r.value);              // m->value holds the message result,
-            $Actor b = FREEZE_waiting(m, MARK_RESULT);      // so mark this and stop further m->waiting additions
-            while (b) {
-                B_Msg bm = b->B_Msg;
-                bm->value = r.value;
-                ACTON_WBAR(bm, &bm->value, r.value);
-                b->$waitsfor = NULL;
-                $Actor c = b->$next;
-                ENQ_ready(b, end_us);
-                rtsd_printf("## Waking up actor %" PRId64 " : %s", b->$globkey, b->$class->$GCINFO);
-                b = c;
+            if (__atomic_load_n(&m->$timer, __ATOMIC_RELAXED) != TIMER_NONE) {
+                drop_timer(m);                              // nothing can await a timer
+            } else {
+                ACTON_STORE(m, m->value, r.value);              // m->value holds the message result,
+                $Actor b = FREEZE_waiting(m, MARK_RESULT);      // so mark this and stop further m->waiting additions
+                while (b) {
+                    B_Msg bm = b->B_Msg;
+                    bm->value = r.value;
+                    ACTON_WBAR(bm, &bm->value, r.value);
+                    b->$waitsfor = NULL;
+                    $Actor c = b->$next;
+                    ENQ_ready(b, end_us);
+                    rtsd_printf("## Waking up actor %" PRId64 " : %s", b->$globkey, b->$class->$GCINFO);
+                    b = c;
+                }
             }
             rtsd_printf("## DONE actor %" PRId64 " : %s", current->$globkey, current->$class->$GCINFO);
             if (DEQ_msg(current)) {
@@ -2579,8 +2756,13 @@ void wt_work_cb(uv_check_t *ev) {
             } else {                            // An unhandled exception
                 save_actor_state(current, m, end_us);
                 B_BaseException ex = (B_BaseException)r.value;
-                ACTON_STORE(m, m->value, r.value);                  // m->value holds the raised exception,
-                $Actor b = FREEZE_waiting(m, MARK_EXCEPTION);       // so mark this and stop further m->waiting additions
+                $Actor b = NULL;
+                if (__atomic_load_n(&m->$timer, __ATOMIC_RELAXED) != TIMER_NONE) {
+                    drop_timer(m);                                  // nothing can await a timer
+                } else {
+                    ACTON_STORE(m, m->value, r.value);                  // m->value holds the raised exception,
+                    b = FREEZE_waiting(m, MARK_EXCEPTION);              // so mark this and stop further m->waiting additions
+                }
                 // If any other actor is waiting for our result / exception,
                 // then we consider the exception handled and we can avoid
                 // printing the exception both in the originating actor and in
@@ -2748,6 +2930,7 @@ void *main_loop(void *idx) {
 
 void $register_rts () {
   $register_force(MSG_ID,&B_MsgG_methods);
+  $register_force(TIMERHANDLE_ID,&B_TimerHandleG_methods);
   $register_force(ACTOR_ID,&$ActorG_methods);
   $register_force(CATCHER_ID,&$CatcherG_methods);
   $register_force(PROC_ID,&$procG_methods);

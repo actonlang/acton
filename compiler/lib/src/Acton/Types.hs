@@ -923,7 +923,7 @@ qualifyDefaultExprExcept env excluded e
         qstmt (With l items ss)          = With l (map qitem items) (map qstmt ss)
         qstmt (Data l p ss)              = Data l (fmap qpat p) (map qstmt ss)
         qstmt (VarAssign l ps x)         = VarAssign l (map qpat ps) (qexpr x)
-        qstmt (After l now x y)          = After l now (qexpr x) (qexpr y)
+        qstmt (After l mbp now x y)      = After l (fmap qpat mbp) now (qexpr x) (qexpr y)
         qstmt (Signature l ns sc d)      = Signature l ns (unalias env sc) d
         qstmt (Decl l ds)                = Decl l (map qdecl ds)
         qstmt s                          = s
@@ -1323,12 +1323,16 @@ instance InfEnv Stmt where
                                              let te' = [ (n, NSVar t) | n <- bound pats, let NVar t = findName n (define te env) ]
                                              return (cs, te', VarAssign l pats' e')
 
-    infEnv env (After l now e1 e2)      = do (cs1,e1') <- inferSub env tFloat e1
+    infEnv env (After l mbp now e1 e2)  = do (cs1,e1') <- inferSub env tFloat e1
                                              (cs2,t,e2') <- infer env e2
                                              -- TODO: constrain t
+                                             (cs3,te,mbp') <- infTarget mbp
                                              fx <- currFX
                                              return (Cast (locinfo l 34) env fxProc fx :
-                                                     cs1++cs2, [], After l now e1' e2')
+                                                     cs1++cs2++cs3, te, After l mbp' now e1' e2')
+      where infTarget Nothing           = return ([], [], Nothing)
+            infTarget (Just p)          = do (te,t,p') <- infEnvT env p
+                                             return ([Cast (locinfo l 34) env tTimerHandle t], te, Just p')
 
     infEnv env (Signature l ns sc@(TSchema _ q t) dec)
       | not $ null bad                  = illegalSigOverride (head bad)
@@ -1850,6 +1854,7 @@ infActorEnv env ss                      = do dsigs <- mapM mkNDef ddefs         
         pvarsF ss                       = nub $ concat $ map pvs ss
           where pvs (Assign _ ps _)     = bound ps                   -- svars only excluded until we move stateful actor cmds to __init__
                 pvs (VarAssign _ ps _)  = bound ps
+                pvs (After _ mbp _ _ _) = bound mbp
                 pvs (If _ bs els)       = foldr intersect (pvarsF els) [ pvarsF ss | Branch _ ss <- bs ]
                 pvs _                   = []
         mkNVar n                        = do t <- newUnivar env

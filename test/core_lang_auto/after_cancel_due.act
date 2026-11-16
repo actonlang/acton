@@ -1,0 +1,38 @@
+# Cancel a timer that is due but whose code has not run yet. A message of main
+# keeps its worker busy past the timer's due time, while handle_timeout on the
+# event loop of thread 0 puts the timer's message in main's mailbox. The cancel
+# comes before main gets to that message, which the worker then drops.
+
+actor Watchdog(env):
+    after 10.0: env.exit(1)
+
+actor main(env):
+    wd = Watchdog(env)
+    var pending: ?TimerHandle = None
+
+    def boom():
+        print("BOOM: timer cancelled after it was due still ran")
+        env.exit(1)
+
+    def spin(n: int) -> int:
+        acc = 0
+        for i in range(n):
+            acc += i % 7
+        return acc
+
+    def busy_then_cancel():
+        # Stay in this message well past the timer's due time
+        if spin(20000000) >= 0:
+            p = pending
+            if p is not None:
+                p.cancel()
+
+    def check():
+        print("timer cancelled after it was due did not run")
+        env.exit(0)
+
+    # The after 0 message goes to the mailbox when this code is done, before
+    # the timer gets to the timer queue, so it runs first whatever the timing
+    after 0: busy_then_cancel()
+    pending = after 0.001: boom()
+    after 0.5: check()

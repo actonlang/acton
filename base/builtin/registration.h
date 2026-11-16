@@ -98,14 +98,16 @@
 #define BITSETITERATOR_ID 77
 #define ARRAYITERATOR_ID 78
 
-#define PREASSIGNED 79
+#define TIMERHANDLE_ID 79   // TimerHandle builtin (RTS-implemented, see rts.h)
+
+#define PREASSIGNED 80
 
 
 /*
- * Register the builtin classes (those with the above class id's except MSG_ID  -- CONSTCONT_ID).
+ * Register the builtin classes (those with the above class id's except the rts class id's).
  * This must be the first registration call, since it also initializes the data structures containing the mapping.
- * This call does *not* register the rts class id's MSG_ID  -- CONSTCONT_ID, which must be registered by
- * a call to register_rts in rts.h.
+ * This call does *not* register the rts class id's, which must be registered by a call to $register_rts, declared in
+ * rts.h. $register_rts in rts.c lists them.
  */
 
 void $register_builtin();

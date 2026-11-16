@@ -1,0 +1,55 @@
+# Cancel a timer before its code runs: the code must not run. The timers are
+# cancelled by the code that set them, before it ends, and by a later message
+# of the same actor, which runs before the timer's message. An after 0 timer
+# goes straight to the actor's mailbox, where the worker drops it. Cancelling
+# a pending timer twice is the same as cancelling it once.
+
+actor Watchdog(env):
+    after 10.0: env.exit(1)
+
+actor main(env):
+    wd = Watchdog(env)
+    var pending: ?TimerHandle = None
+
+    def boom_set_here():
+        print("BOOM: timer cancelled by the code that set it still ran")
+        env.exit(1)
+
+    def boom_zero():
+        print("BOOM: after 0 timer cancelled by the code that set it still ran")
+        env.exit(1)
+
+    def boom_queued():
+        print("BOOM: timer cancelled by a later message still ran")
+        env.exit(1)
+
+    def boom_now():
+        print("BOOM: after now timer cancelled by its own code still ran")
+        env.exit(1)
+
+    def cancel_queued():
+        p = pending
+        if p is not None:
+            p.cancel()
+
+    def check():
+        print("cancelled timers did not run")
+        env.exit(0)
+
+    # Cancelled by the code that set it
+    h1 = after 0.3: boom_set_here()
+    h1.cancel()
+    h1.cancel()
+    h3 = after now 0.3: boom_now()
+    h3.cancel()
+    h0 = after 0: boom_zero()
+    h0.cancel()
+
+    # Cancelled by a later message. The earlier timer is set first: when the
+    # code here ends late and both timers are already due, the RTS still
+    # delivers them in due order
+    after 0.1: cancel_queued()
+    h2 = after 0.5: boom_queued()
+    pending = h2
+
+    after now 0.8: check()

@@ -1,0 +1,29 @@
+# A TimerHandle can be sent to another actor, which may cancel the timer for
+# the actor that set it. main waits for the call, so the cancel comes before
+# main's message is done and before main can run the timer's code.
+
+actor Watchdog(env):
+    after 10.0: env.exit(1)
+
+actor Canceller():
+    def cancel_it(h: TimerHandle) -> int:
+        h.cancel()
+        return 1
+
+actor main(env):
+    wd = Watchdog(env)
+
+    def boom():
+        print("BOOM: timer cancelled by another actor still ran")
+        env.exit(1)
+
+    def check():
+        print("timer cancelled by another actor did not run")
+        env.exit(0)
+
+    h = after 0.5: boom()
+    c = Canceller()
+    if c.cancel_it(h) != 1:
+        print("BOOM: the cancel call did not return")
+        env.exit(1)
+    after now 0.8: check()

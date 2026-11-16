@@ -1286,8 +1286,14 @@ main = do
           sourceHashFor (hashDecl NoLoc (Just "doc äx"))
 
       it "keeps source AST hashes sensitive to the after baseline" $ do
-        let afterDecl now = (hashDecl NoLoc Nothing) { S.dbody = [S.After NoLoc now (S.Float NoLoc 1.0 "1.0") (S.eCallVar (S.name "f") [])] }
+        let afterDecl now = (hashDecl NoLoc Nothing) { S.dbody = [S.After NoLoc Nothing now (S.Float NoLoc 1.0 "1.0") (S.eCallVar (S.name "f") [])] }
         sourceHashFor (afterDecl True) `shouldNotBe` sourceHashFor (afterDecl False)
+
+      it "keeps source AST hashes sensitive to the after binding target" $ do
+        let afterDecl mbp = (hashDecl NoLoc Nothing) { S.dbody = [S.After NoLoc mbp False (S.Float NoLoc 1.0 "1.0") (S.eCallVar (S.name "f") [])] }
+            bound n       = afterDecl (Just (S.PVar NoLoc (S.name n) Nothing))
+        sourceHashFor (afterDecl Nothing) `shouldNotBe` sourceHashFor (bound "h")
+        sourceHashFor (bound "h") `shouldNotBe` sourceHashFor (bound "k")
 
       it "pins the source AST feed-operation hash format" $ do
         Base16.encode (sourceHashFor (hashDecl NoLoc (Just "doc"))) `shouldBe`
@@ -1669,6 +1675,19 @@ main = do
           implSplitDepSetMapsSlow env mn localNames items
         M.lookup value directLocalDeps `shouldBe` Just []
         M.lookup value directExtDeps `shouldBe` Just [ext]
+
+      it "keeps a name bound by an after statement out of impl dependencies" $ do
+        let value = hashTestName
+            h = S.name "h"
+            mn = S.modName ["hash_after_local"]
+            env = Acton.Env.setMod mn env0
+            localNames = Set.fromList [value, h]
+        case parseStmtAst "def value():\n    h = after 1.0: g()\n    h.cancel()" of
+          Right [S.Decl _ [decl@S.Def{}]] -> do
+            let items = [Hashing.TLDecl value decl]
+                (directLocalDeps, _) = Hashing.implSplitDepsFromItems mn env localNames items
+            M.lookup value directLocalDeps `shouldBe` Just []
+          other -> expectationFailure $ "Unexpected parse: " ++ show other
 
       it "keeps shadowed imported aliases out of impl dependencies" $ do
         let value = hashTestName
@@ -2200,7 +2219,10 @@ main = do
       describe "After statements" $ do
         let afterIn body = parseStmtAst ("def f():\n    " ++ body)
             afterParts body = case afterIn body of
-              Right [S.Decl _ [S.Def{S.dbody = [S.After _ now e _]}]] -> Right (now, e)
+              Right [S.Decl _ [S.Def{S.dbody = [S.After _ _ now e _]}]] -> Right (now, e)
+              other -> Left (show other)
+            afterTarget body = case afterIn body of
+              Right [S.Decl _ [S.Def{S.dbody = [S.After _ mbp _ _ _]}]] -> Right [ n | Just (S.PVar _ n _) <- [mbp] ]
               other -> Left (show other)
             expectAfter body now delay = afterParts body `shouldBe` fmap ((,) now) (parseExprAst delay)
 
@@ -2219,6 +2241,18 @@ main = do
         it "prints the now keyword" $
           case afterIn "after now 3.8: g()" of
             Right [S.Decl _ [S.Def{S.dbody = [s]}]] -> Pretty.print s `shouldBe` "after now 3.8: g()"
+            other -> expectationFailure $ "Unexpected parse: " ++ show other
+        it "binds the timer of an after statement to a name" $ do
+          afterTarget "h = after 3.8: g()" `shouldBe` Right [S.name "h"]
+          expectAfter "h = after 3.8: g()" False "3.8"
+        it "binds the timer of an after now statement to a name" $ do
+          afterTarget "h = after now 3.8: g()" `shouldBe` Right [S.name "h"]
+          expectAfter "h = after now 3.8: g()" True "3.8"
+        it "leaves a plain after statement without a binding" $
+          afterTarget "after 3.8: g()" `shouldBe` Right []
+        it "prints the binding of an after statement" $
+          case afterIn "h = after now 3.8: g()" of
+            Right [S.Decl _ [S.Def{S.dbody = [s]}]] -> Pretty.print s `shouldBe` "h = after now 3.8: g()"
             other -> expectationFailure $ "Unexpected parse: " ++ show other
 
       describe "Completion" $ do

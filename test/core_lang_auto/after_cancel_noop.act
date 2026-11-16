@@ -1,0 +1,29 @@
+# Cancelling a timer whose code has already run does nothing, and neither does
+# cancelling the same timer twice.
+
+actor Watchdog(env):
+    after 10.0: env.exit(1)
+
+actor main(env):
+    wd = Watchdog(env)
+    var fired = False
+    var pending: ?TimerHandle = None
+
+    def fire():
+        fired = True
+        print("timer fired")
+
+    def late_cancel():
+        if not fired:
+            print("BOOM: the timer should have run before late_cancel")
+            env.exit(1)
+        p = pending
+        if p is not None:
+            p.cancel()      # the timer has run: does nothing
+            p.cancel()      # cancelled twice: does nothing
+        print("cancel after the timer ran and a second cancel did nothing")
+        env.exit(0)
+
+    h = after 0.1: fire()
+    pending = h
+    after 0.5: late_cancel()

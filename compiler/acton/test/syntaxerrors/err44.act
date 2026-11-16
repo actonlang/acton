@@ -1,0 +1,8 @@
+actor main(env):
+    def tick():
+        pass
+
+    def start():
+        h: TimerHandle = after 1.0: tick()
+
+    start()

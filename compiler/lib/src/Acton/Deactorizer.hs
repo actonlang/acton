@@ -117,9 +117,16 @@ instance Deact Stmt where
     deact env (VarAssign l [p@(PVar _ n _)] e)
                                     = MutAssign l (selfRef n) <$> deact env e
       where t                       = typeOf env p
-    deact env (After l now e1 e2)   = do delta <- deact env e1
+    deact env (After l mbp now e1 e2)
+                                    = do delta <- deact env e1
                                          lambda <- deact env $ Lambda l0 PosNIL KwdNIL e2 fxProc
-                                         return $ Expr l $ Call l0 (tApp (eQVar prim) [t2]) (PosArg delta $ PosArg lambda PosNil) KwdNil
+                                         let call = Call l0 (tApp (eQVar prim) [t2]) (PosArg delta $ PosArg lambda PosNil) KwdNil
+                                         return $ case mbp of
+                                            Just p@(PVar _ n _)
+                                              | n `elem` locals env -> MutAssign l (selfRef n) call
+                                              | otherwise           -> Assign l [p] call
+                                            Just p                  -> error ("deact unexpected after target: " ++ prstr p)
+                                            Nothing                 -> Expr l call
       where t2                      = typeOf env e2
             t                       = tFun fxProc posNil kwdNil t2
             prim                    = if now then primAFTER_NOWf else primAFTERf
@@ -154,6 +161,7 @@ instance Deact Decl where
 
             props (VarAssign _ p _) = [ (n, t) | PVar _ n (Just t) <- p ]
             props (Assign _ p _)    = [ (n, t) | PVar _ n (Just t) <- p, n `elem` locals ]
+            props s@After{}         = [ (n, t) | Just (PVar _ n (Just t)) <- [mbpat s], n `elem` locals ]
             props (If _ bs els)     = restrict (concat $ map props els) (foldr1 intersect [ assigned b | Branch _ b <- bs ])
             props _                 = []
 
@@ -214,9 +222,10 @@ addSelfPar p                        = PosPar selfKW (Just tSelf) Nothing p
 selfRef n                           = Dot l0 (Var l0 (NoQ selfKW)) n
 
 
--- $ASYNCf : [A] => action($Actor, proc()->A) -> Msg[A]
--- $AFTERf : [A] => proc(int,      proc()->A) -> Msg[A]
--- $AWAITf : [A] => proc(Msg[A])              -> A
+-- $ASYNCf     : [A] => action($Actor, proc()->A) -> Msg[A]
+-- $AFTERf     : [A] => action(float,  proc()->A) -> TimerHandle
+-- $AFTER_NOWf : [A] => action(float,  proc()->A) -> TimerHandle
+-- $AWAITf     : [A] => proc(Msg[A])              -> A
 
 
 instance Deact Branch where
@@ -331,7 +340,7 @@ instance LambdaFree Stmt where
     lamfree (If _ bs els)           = concat [ lamfree e | Branch e ss <- bs ]
     lamfree (While _ e b els)       = lamfree e
     lamfree (VarAssign _ p e)       = lamfree e
-    lamfree (After l _ e1 e2)       = lamfree e1 ++ free e2         -- deact will turn e2 into a lambda
+    lamfree (After l _ _ e1 e2)     = lamfree e1 ++ free e2         -- deact will turn e2 into a lambda
     lamfree _                       = []
 
 instance LambdaFree Expr where

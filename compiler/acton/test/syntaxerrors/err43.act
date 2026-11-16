@@ -1,0 +1,2 @@
+actor main(env):
+    var h = after 1.0: env.exit(0)
