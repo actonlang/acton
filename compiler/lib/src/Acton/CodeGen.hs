@@ -2806,9 +2806,18 @@ genBoxed env t e                    = text ("toB_"++render(pretty (noq (tcname(t
 -- expression appears once, including when comparisons reverse their operands.
 -- Base routines perform the real work. The receiver-returning inplace
 -- adapters are header-inline, so they introduce no out-of-line call layer.
-genBuiltinCall env call w p = result $ negateResult $ text (bwCName w) <> parens (commaSep id args)
+genBuiltinCall env call w p = scope $ result $ negateResult $ text (bwCName w) <> parens (commaSep id args)
   where actuals = zip [0..] (posargs p)
-        converted = [ if i < bwContainerArgs w then container e else gen env e | (i,e) <- actuals ]
+        slices = [ (i,ds,d) | (i,e) <- actuals, Just i == builtinSliceArgument w,
+                             Just (ds,d) <- [genTemporarySlice env e] ]
+        converted = [ case lookup i [(i,d) | (i,_,d) <- slices] of
+                        Just d -> d
+                        _ | i < bwContainerArgs w -> container e
+                          | otherwise -> gen env e
+                    | (i,e) <- actuals ]
+        scope d = case concat [ds | (_,ds,_) <- slices] of
+            [] -> d
+            ds -> text "({" <+> hsep ds <+> d <> semi <+> text "})"
         ordered = if bwReverse w then reverse converted else converted
         args = ordered ++ map text (bwExtraArgs w) ++ classArg
         cast ty e = parens (parens (text ty) <> gen env e)
@@ -2838,6 +2847,43 @@ genBuiltinCall env call w p = result $ negateResult $ text (bwCName w) <> parens
                 -> castResult d
             _ -> d
         castResult d = parens (parens (gen env $ boxedRepType $ typeOf env call) <> d)
+
+-- These synchronous builtin workers only read their slice argument during the
+-- call (including slice assignment, which first consumes its input iterable).
+-- Never use this proof for generic/user dispatch, a stored slice, or an
+-- arbitrary slice-taking function. It also applies inside CPS functions: the
+-- native worker finishes before the current C activation can suspend.
+builtinSliceArgument w
+  | bwType w `elem` [qnList,qnIList,qnStr,qnBytes,qnBytearray],
+    bwMethod w `elem` [getsliceKW,delsliceKW], bwArity w == 2
+                                    = Just 1
+  | bwType w `elem` [qnList,qnBytearray],
+    bwMethod w == setsliceKW, bwArity w == 4
+                                    = Just 2
+  | otherwise                       = Nothing
+
+-- C compound literals give both the descriptor and its bound cells automatic
+-- storage. Generate known integer bounds directly, avoiding their boxes too.
+-- Optional bounds are evaluated once into boxed locals; the enclosing statement
+-- expression must include the CONSUMING CALL, so its compound literals remain
+-- alive until that call returns. Returning a pointer from a statement expression
+-- around just the descriptor would instead leave dangling stack pointers.
+genTemporarySlice env (Call _ f p KwdNil)
+  | Var _ q <- stripTApp f, unalias env q == qnSlice,
+    [_,_,_] <- posargs p           = Just (concatMap fst bounds, descriptor)
+  where bounds = zipWith bound ["start","stop","step"] (posargs p)
+        descriptor = text "&(struct B_slice)" <> braces (commaSep id
+            (text ".$class = &B_sliceG_methods" :
+             [text ('.':field ++ " = ") <> d | (field,(_,d)) <- zip ["start","stop","step"] bounds]))
+        cell d = text "&(int64_t)" <> braces d
+        bound field e
+          | missingRangeArg e       = ([],text "NULL")
+          | rawIntArg env e         = ([],cell $ genRawExprAs env tInt e)
+          | otherwise               = ([text "B_int" <+> v <+> char '=' <+> gen env e <> semi],
+                                       parens (v <+> char '?' <+> cell (text "fromB_int" <> parens v) <+>
+                                               text ": NULL"))
+          where v = text ("$slice_" ++ field)
+genTemporarySlice _ _              = Nothing
 
 instance Gen Expr where
     gen env (Var _ (NoQ n))
