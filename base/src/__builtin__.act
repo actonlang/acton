@@ -2055,20 +2055,23 @@ actor Process(envcap: _EnvCap,
         terminate()
         after 1.0: kill()
 
-    # Handle PATH inheritance for custom environments
-    # When PATH is not explicitly set in the provided environment, inherit it
-    # from the current environment (if set in the current environment).
-    if env is not None and "PATH" not in env:
-        parent_path = vars.getenv("PATH")
-        if parent_path is not None:
-            new = dict(env.items())
-            new["PATH"] = parent_path
-            new_env = new
+    proc def __startup__():
+        # Handle PATH inheritance for custom environments
+        # When PATH is not explicitly set in the provided environment, inherit it
+        # from the current environment (if set in the current environment).
+        if env is not None and "PATH" not in env:
+            parent_path = vars.getenv("PATH")
+            if parent_path is not None:
+                new = dict(env.items())
+                new["PATH"] = parent_path
+                new_env = new
 
-    _create_process()
+        _create_process()
 
-    if timeout is not None:
-        after timeout: stop()
+        if timeout is not None:
+            after timeout: stop()
+
+    __startup__()
 
 actor RunProcess(envcap: _EnvCap,
                  vars: EnvVar,

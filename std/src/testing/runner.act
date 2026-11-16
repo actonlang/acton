@@ -731,7 +731,6 @@ actor TestExecutor(rts: EnvRTS, config: TestRunnerConfig, t: Test, report_comple
     """The actual executor of tests
     """
     log_handler = logging.Handler()
-    log_handler.add_sink(logging.ConsoleSink())
     fcap = file.FileCap(env.cap)
     rfcap = file.ReadFileCap(fcap)
     fs = file.FS(fcap)
@@ -1199,7 +1198,11 @@ actor TestExecutor(rts: EnvRTS, config: TestRunnerConfig, t: Test, report_comple
         except Exception as e:
             _report_error(e)
 
-    after 0: _run_test()
+    proc def __startup__():
+        log_handler.add_sink(logging.ConsoleSink())
+        after 0: _run_test()
+
+    __startup__()
 
 
 class ProjectTestResults(object):
@@ -1908,11 +1911,14 @@ actor test_runner(env: Env,
             _cmd(args)
         else:
             env.exit(0)
-    try:
-        _parse_args()
-    except argparse.PrintUsage as exc:
-        print(exc.error_message)
-        env.exit(0)
-    except argparse.ArgumentError as arg_error:
-        print(arg_error.error_message)
-        env.exit(1)
+    proc def __startup__():
+        try:
+            _parse_args()
+        except argparse.PrintUsage as exc:
+            print(exc.error_message)
+            env.exit(0)
+        except argparse.ArgumentError as arg_error:
+            print(arg_error.error_message)
+            env.exit(1)
+
+    __startup__()
