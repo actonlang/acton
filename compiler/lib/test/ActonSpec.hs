@@ -15,6 +15,7 @@ import qualified Acton.Printer as AP
 import qualified Acton.DocPrinter as DocP
 import qualified Acton.Env
 import qualified Acton.EscapeAnalysis as Escape
+import qualified Acton.InitializationAnalysis as Init
 import Acton.Env (CompilationError(..))
 import qualified Acton.Kinds
 import qualified Acton.Types
@@ -3135,6 +3136,216 @@ main = do
           Left NoItem{} -> pure ()
           Left err -> expectationFailure $ "Expected NoItem error, got " ++ show err
           Right _ -> expectationFailure "Expected type check failure for private name access"
+
+    describe "Constructor cycle-safety analysis" $ do
+      let analyze src = liftIO $ Init.analyzeModule <$> P.parseModuleSerial (S.modName ["cycles"]) "cycles.act" (unlines src) Nothing
+          usage report path param = listToMaybe
+            [ safe | (q,ps) <- M.toList report, [S.nstr (S.noq q)] == path
+                   , (n,safe) <- ps, S.nstr n == param ]
+          selfSafe report path = usage report path "probe"
+          expect report path param answer = usage report path param `shouldBe` Just answer
+          box = [ "class Box:", "    def __init__(self, p):", "        self.saved = p" ]
+      it "uses graph module identities for dump requests in special projects" $
+        withSystemTempDirectory "initialization-module-name" $ \dir ->
+          forM_ ["base", "acton_scratch", "ordinary"] $ \projectName -> do
+            let root = dir </> projectName
+                source = root </> "src" </> "__builtin__.act"
+            createDirectoryIfMissing True (root </> "src")
+            let prefix = Fingerprint.fingerprintPrefixForName projectName
+                fp = Fingerprint.formatFingerprint ((fromIntegral prefix `shiftL` 32) .|. 0x1)
+            writeFile (root </> "Build.act") ("name = \"" ++ projectName ++ "\"\nfingerprint = " ++ fp ++ "\n")
+            writeFile source ""
+            let opts = C.defaultCompileOptions { C.syspath = dir, C.initialization_analysis = True }
+            (paths, requested) <- Project.findPaths source opts
+            graphName <- Project.moduleNameFromFile (Project.srcDir paths) projectName source
+            requested `shouldBe` graphName
+      it "accepts unused parameters and references used only in methods" $ do
+        report <- analyze
+          [ "actor Child(parent, unused):", "    def get():", "        return parent.result" ]
+        expect report ["Child"] "parent" True
+        expect report ["Child"] "unused" True
+      it "propagates unsafe uses backwards through actor aliases" $ do
+        report <- analyze
+          [ "actor Safe(p):", "    a = p", "    b = a"
+          , "actor Unsafe(p):", "    a = p", "    b = a", "    value = b.item" ]
+        expect report ["Safe"] "p" True
+        expect report ["Unsafe"] "p" False
+      it "equates bare actor fields with explicit self selections" $ do
+        report <- analyze
+          [ "actor Child(p):", "    saved = p", "    value = self.saved.item" ]
+        expect report ["Child"] "p" False
+      it "distinguishes class parameter names from their stored fields" $ do
+        report <- analyze $ box ++
+          [ "class Bad:", "    def __init__(self, saved):", "        self.saved = saved", "        value = self.saved.item" ]
+        expect report ["Box"] "p" True
+        expect report ["Bad"] "saved" False
+      it "forwards positional and reordered keyword arguments" $ do
+        report <- analyze
+          [ "actor Child(parent, number=0):", "    saved = parent", "    n = number + 1"
+          , "actor Forward(p):", "    child = Child(number=0, parent=p)"
+          , "actor Bad(p):", "    child = Child(parent=None, number=p)" ]
+        expect report ["Forward"] "p" True
+        expect report ["Bad"] "p" False
+      it "allows mutually recursive constructor contracts with no unsafe use" $ do
+        report <- analyze
+          [ "actor Alpha(p):", "    b = Beta(p)"
+          , "actor Beta(p):", "    a = Alpha(p)"
+          , "actor Root(probe):", "    child = Alpha(self)" ]
+        expect report ["Alpha"] "p" True
+        expect report ["Beta"] "p" True
+        selfSafe report ["Root"] `shouldBe` Just True
+      it "propagates a bad use through a recursive constructor group" $ do
+        report <- analyze
+          [ "actor Alpha(p):", "    b = Beta(p)"
+          , "actor Beta(p):", "    a = Alpha(p)", "    value = p.item"
+          , "actor Root(probe):", "    child = Alpha(self)" ]
+        expect report ["Alpha"] "p" False
+        expect report ["Beta"] "p" False
+        selfSafe report ["Root"] `shouldBe` Just False
+        finished <- liftIO $ timeout 2000000 $ E.evaluate $ length (show report)
+        finished `shouldSatisfy` (/= Nothing)
+      it "supports callback forwarding through class fields into actors" $ do
+        report <- analyze
+          [ "actor Driver(cb):", "    def run():", "        cb()"
+          , "class Adapter:", "    def __init__(self, cb):", "        self.callback = cb"
+          , "        self.driver = Driver(self.callback)"
+          , "actor Parent(probe):", "    def done():", "        pass", "    adapter = Adapter(done)" ]
+        expect report ["Driver"] "cb" True
+        expect report ["Adapter"] "cb" True
+        selfSafe report ["Parent"] `shouldBe` Just True
+      it "distinguishes constructor parameters from class methods with the same name" $ do
+        report <- analyze
+          [ "class Box:", "    def __init__(self, cb, loop):"
+          , "        self.callback = cb", "        if loop is not None:", "            self.saved = loop"
+          , "    def loop(self):", "        pass"
+          , "actor Parent(probe):", "    def done():", "        pass", "    box = Box(done, None)" ]
+        expect report ["Box"] "cb" True
+        expect report ["Box"] "loop" False
+        selfSafe report ["Parent"] `shouldBe` Just True
+      it "treats ordinary functions as opaque even when their body is available" $ do
+        report <- analyze
+          [ "def identity(x):", "    return x"
+          , "actor Child(p):", "    saved = identity(p)"
+          , "actor Parent(probe):", "    child = Child(self)" ]
+        expect report ["Child"] "p" False
+        selfSafe report ["Parent"] `shouldBe` Just False
+      it "propagates parameter unsafety through constructor arguments" $ do
+        report <- analyze
+          [ "actor Child(env):", "    cap = env.cap"
+          , "actor Parent(env):", "    child = Child(env)" ]
+        expect report ["Child"] "env" False
+        expect report ["Parent"] "env" False
+      it "rejects initialization-time calls to own methods that hide parameter uses" $ do
+        report <- analyze
+          [ "actor Child(p):", "    def initial():", "        return p.item", "    value = initial()" ]
+        expect report ["Child"] "p" False
+      it "ignores only the terminal startup dispatch and defers its body" $ do
+        report <- analyze
+          [ "actor Good(p):", "    proc def __startup__():", "        print(p.item)", "    __startup__()"
+          , "actor Bad(p):", "    proc def __startup__():", "        print(p.item)", "    __startup__()", "    saved = p" ]
+        expect report ["Good"] "p" True
+        expect report ["Bad"] "p" False
+      it "retains self provenance through bound callback aliases and lambdas" $ do
+        report <- analyze
+          [ "actor Child(cb):", "    def run():", "        cb()"
+          , "actor Good(probe):", "    def done():", "        pass", "    cb = done", "    child = Child(cb)"
+          , "actor Lambda(probe):", "    def done():", "        pass", "    child = Child(lambda: self.done())"
+          , "actor Bad(probe):", "    def done():", "        pass", "    cb = done", "    cb()" ]
+        selfSafe report ["Good"] `shouldBe` Just True
+        selfSafe report ["Lambda"] `shouldBe` Just True
+        selfSafe report ["Bad"] `shouldBe` Just False
+      it "recognizes implicit self captures in actor lambdas" $ do
+        report <- analyze
+          [ "actor Toucher(cb):", "    cb()"
+          , "actor Parent(p):", "    child = Toucher(lambda: p.item)" ]
+        expect report ["Parent"] "p" False
+      it "retains provenance through constructor results and self aliases" $ do
+        report <- analyze $ box ++
+          [ "actor Good(probe):", "    me = self", "    child = Box(me)"
+          , "actor Bad(probe):", "    child = Box(self)", "    value = child.saved.result" ]
+        selfSafe report ["Good"] `shouldBe` Just True
+        selfSafe report ["Bad"] `shouldBe` Just False
+      it "propagates constructor result use into conditional parameter contracts" $ do
+        report <- analyze $ box ++
+          [ "actor Wrapper(p):", "    box = Box(p)", "    value = box.saved.item"
+          , "actor Parent(probe):", "    wrapped = Wrapper(self)" ]
+        expect report ["Wrapper"] "p" False
+        selfSafe report ["Parent"] `shouldBe` Just False
+      it "handles nonobserving tuple storage but rejects inspection" $ do
+        report <- analyze
+          [ "actor Child(p):", "    saved = p"
+          , "actor Good(probe):", "    child = Child((self,))"
+          , "actor Inspect(p):", "    x = p.0"
+          , "actor Bad(probe):", "    child = Inspect((self,))" ]
+        selfSafe report ["Good"] `shouldBe` Just True
+        selfSafe report ["Bad"] `shouldBe` Just False
+      it "does not borrow constructor contracts for shadowed callable parameters" $ do
+        report <- analyze $ box ++
+          [ "actor Parent(Box):", "    child = Box(self)" ]
+        expect report ["Parent"] "Box" False
+      it "rejects unmatched expanded arguments and existing-object publication" $ do
+        report <- analyze $ box ++
+          [ "actor Spread(probe):", "    args = (self,)", "    child = Box(*args)"
+          , "actor Publish(dst):", "    dst.saved = self" ]
+        selfSafe report ["Spread"] `shouldBe` Just False
+        expect report ["Publish"] "dst" False
+      it "does not certify opaque native or inherited initializers" $ do
+        report <- analyze
+          [ "class Native:", "    def __init__(self, p):", "        NotImplemented"
+          , "class Inherited(Native):", "    pass"
+          , "actor Parent(probe):", "    child = Inherited(self)" ]
+        expect report ["Native"] "p" False
+        selfSafe report ["Parent"] `shouldBe` Just False
+      it "uses imported constructor contracts" $ do
+        provider <- liftIO $ P.parseModuleSerial (S.modName ["provider"]) "provider.act" (unlines box) Nothing
+        consumer <- liftIO $ P.parseModuleSerial (S.modName ["consumer"]) "consumer.act"
+          "from provider import Box\nactor Parent(probe):\n    child = Box(self)\n" Nothing
+        let resolve (S.NoQ n) | S.nstr n == "Box" = S.QName (S.modName ["provider"]) n
+            resolve q = q
+            report = Init.analyzeModules [(provider,id),(consumer,resolve)]
+        selfSafe report ["Parent"] `shouldBe` Just True
+      it "does not resolve arbitrary member calls as module-qualified constructors" $ do
+        ast <- liftIO $ P.parseModuleSerial (S.modName ["cycles"]) "cycles.act"
+          "actor Child(p):\n    saved = witness.method(p)\n" Nothing
+        let resolve S.QName{} = error "member access was incorrectly treated as a module name"
+            resolve q = q
+            report = Init.analyzeModules [(ast,resolve)]
+        expect report ["Child"] "p" False
+      it "matches source module aliases for imported constructor calls" $ do
+        provider <- liftIO $ P.parseModuleSerial (S.modName ["provider"]) "provider.act" (unlines box) Nothing
+        consumer <- liftIO $ P.parseModuleSerial (S.modName ["consumer"]) "consumer.act"
+          "import provider as dep\nactor Parent(probe):\n    child = dep.Box(self)\n" Nothing
+        let resolve (S.QName m n) | S.modPath m == ["dep"] = S.QName (S.modName ["provider"]) n
+            resolve q = q
+            report = Init.analyzeModules [(provider,id),(consumer,resolve)]
+        selfSafe report ["Parent"] `shouldBe` Just True
+      it "analyzes reconstructed class and actor syntax including wrapped callbacks" $ do
+        typed <- typecheckSource env0 "cycle_typed" $ unlines
+          [ "actor Child(cb: action() -> None):", "    def run():", "        cb()"
+          , "actor Parent(probe):", "    def done():", "        pass", "    child = Child(done)" ]
+        selfSafe (Init.analyzeModule typed) ["Parent"] `shouldBe` Just True
+      it "analyzes typed class storage of a partially initialized actor" $ do
+        typed <- typecheckSource env0 "cycle_typed_class" $ unlines
+          [ "class Box(object):", "    parent: Parent"
+          , "    def __init__(self, parent: Parent):", "        self.parent = parent"
+          , "actor Parent(probe):", "    box = Box(self)" ]
+        let report = Init.analyzeModule typed
+        expect report ["Box"] "parent" True
+        selfSafe report ["Parent"] `shouldBe` Just True
+      it "matches reconstructed generic class constructors with protocol witnesses" $ do
+        typed <- typecheckSource env0 "cycle_typed_generic" $ unlines
+          [ "class Box[T(Hashable)](object):", "    key: T", "    parent: Parent"
+          , "    def __init__(self, key: T, parent: Parent):", "        self.key = key", "        self.parent = parent"
+          , "actor Parent(probe):", "    box = Box(\"key\", self)" ]
+        let report = Init.analyzeModule typed
+        expect report ["Box"] "parent" True
+        selfSafe report ["Parent"] `shouldBe` Just True
+      it "solves long constructor dependency chains without executing their bodies" $ do
+        let actor i = ["actor Chain" ++ show i ++ "(p):", "    next = Chain" ++ show (i+1) ++ "(p)"]
+        report <- analyze $ concatMap actor [0..199 :: Int] ++ ["actor Chain200(p):", "    value = p.item"]
+        finished <- liftIO $ timeout 2000000 $ E.evaluate $ length (show report)
+        finished `shouldSatisfy` (/= Nothing)
+        expect report ["Chain0"] "p" False
 
     describe "Experimental parameter escape analysis" $ do
       it "propagates aliases and direct calls to escape sinks" $ do

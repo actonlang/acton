@@ -289,6 +289,7 @@ import qualified Acton.CommandLineParser as C
 import Acton.Printer (prettyFunRow)
 import qualified Acton.Env
 import qualified Acton.EscapeAnalysis
+import qualified Acton.InitializationAnalysis as InitAnalysis
 import qualified Acton.TypeEnv
 import Acton.Env (simp, define, setMod)
 import qualified Acton.Hashing as Hashing
@@ -2326,10 +2327,15 @@ loadBackJob build base key paths opts typed codegenHash = do
 -- imports resolve through the module cache, and it is checked in the given
 -- environment.
 checkModule :: BuildEnv -> GlobalTask -> C.CompileOptions -> Acton.Env.Env0 -> ModuleSource -> A.Module -> IO (Either [Diagnostic String] FrontResult)
-checkModule build t opts base = runFrontPasses ModuleEnv
+checkModule = checkModuleWithDump False
+
+-- Builtin compilation also runs outside the stage graph, but may itself be
+-- the module explicitly requested for alternative output.
+checkModuleWithDump :: Bool -> BuildEnv -> GlobalTask -> C.CompileOptions -> Acton.Env.Env0 -> ModuleSource -> A.Module -> IO (Either [Diagnostic String] FrontResult)
+checkModuleWithDump requested build t opts base = runFrontPasses ModuleEnv
     { moduleBuild = build, moduleTask = t, moduleCurrent = gtTask t, moduleOptions = opts
     , moduleResolver = cacheResolver (buildCache build) (gtPaths t), moduleBase = base
-    , moduleBlocked = False, moduleDump = False }
+    , moduleBlocked = False, moduleDump = requested }
 
 -- | A module after its kinds, types and escape analysis.
 data Checked = Checked
@@ -2388,6 +2394,7 @@ runFrontPasses env source parsed = do
       forceTypeResult interface typed typeEnv tests
       forceDone       <- now
       escapes         <- escapePass env scope typed
+      initializationPass env scope typed
       escapeDone      <- now
       let checked = Checked { checkedScope = scope, checkedInterface = interface, checkedModule = typed
                             , checkedTypeEnv = typeEnv, checkedTests = tests, checkedEscapes = escapes }
@@ -2499,6 +2506,30 @@ escapePass env scope typed = do
   where
     report    = Acton.EscapeAnalysis.analyzeModuleWithImports (importedEscapeSummary scope) typed
     summaries = Acton.EscapeAnalysis.interfaceSummaries report
+
+initializationPass :: ModuleEnv -> Acton.Env.Env0 -> A.Module -> IO ()
+initializationPass env scope typed =
+    when (C.initialization_analysis (moduleOptions env) && moduleDump env) $ do
+      imported <- catMaybes <$> mapM load modules
+      let safety = InitAnalysis.analyzeModules ((typed, Acton.Env.unalias scope) : imported)
+      dumpWhen (moduleOptions env) (nameOf env) C.initialization_analysis "initialization-analysis" $ unlines
+        [prstr q ++ ": " ++ Data.List.intercalate ", " [A.nstr n ++ "=" ++ show safe | (n,safe) <- ps]
+        | (q,ps) <- M.toList safety, A.mname q == nameOf env]
+  where
+    paths = searchPath (pathsOf env)
+    modules = filter (/= nameOf env) (Acton.Env.transitiveImports scope)
+    load m = do
+      file <- Acton.Env.findTyFile paths m
+      case file of
+        Nothing -> return Nothing
+        Just path -> do
+          cached <- InterfaceFiles.readFileMaybe path
+          case cached of
+            Nothing -> return Nothing
+            Just stored -> do
+              let ast = InterfaceFiles.storedTyped stored
+              importedScope <- Acton.Env.mkEnv paths (moduleBase env) ast
+              return (Just (ast, Acton.Env.unalias importedScope))
 
 -- | The escape summary that a module checked in this environment reads for
 -- an imported function, following import aliases.
@@ -3062,7 +3093,7 @@ compileBuiltin build ctx t
         Right (source, m) -> do
           emit build (FrontStarted t)
           base   <- Acton.Env.initEnv (projTypes (gtPaths t)) True
-          result <- checkModule build t opts base source m
+          result <- checkModuleWithDump (altOutputFor ctx k) build t opts base source m
           case result of
             Left diags -> Left BuiltinFailed <$ reportFrontFailure build t diags
             Right fr   -> do
