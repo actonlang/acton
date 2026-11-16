@@ -1718,6 +1718,8 @@ protocol Random:
     seeded sequences do not change.
 
     env.random is a source of secure random numbers from the operating system.
+    The std.random module has seeded generators, and shuffle and shuffled,
+    which reorder a sequence using any source.
     """
     rand_u64 : mut() -> u64
     rand_int : mut() -> int
@@ -1819,7 +1821,8 @@ class EnvRandom():
     return their result at once, without a message to Env.
 
     EnvRandom implements the Random protocol, which adds rand_int, rand_float,
-    below and between.
+    below and between. The seeded generators in std.random can take their seed
+    from here.
     """
     def __init__(self, envcap: _EnvCap):
         pass

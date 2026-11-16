@@ -1,0 +1,254 @@
+import testing
+
+import std.random as random
+
+# Xoshiro256 is seeded the way Zig's std.Random.Xoshiro256.init is, and these
+# values come from Zig. The values for the helpers come from a separate Python
+# model of the same algorithms. A seeded sequence must not change between
+# releases, so if one of these tests fails after a change to std.random, the
+# change is what needs fixing.
+
+def _test_xoshiro256_matches_zig():
+    g = random.Xoshiro256(0)
+    testing.assertEqual([g.rand_u64(), g.rand_u64(), g.rand_u64()],
+                        [u64(5987356902031041503), u64(7051070477665621255), u64(6633766593972829180)])
+    g = random.Xoshiro256(42)
+    testing.assertEqual([g.rand_u64(), g.rand_u64(), g.rand_u64()],
+                        [u64(15021278609987233951), u64(5881210131331364753), u64(18149643915985481100)])
+    g = random.Xoshiro256(18446744073709551615)
+    testing.assertEqual(g.rand_u64(), u64(6254647548650071986))
+
+def _test_rand_bytes_matches_zig_fill():
+    """rand_bytes takes each u64 least significant byte first, as Zig's fill does"""
+    testing.assertEqual(random.Xoshiro256(42).rand_bytes(11), bytes.from_hex("9f6876444f4d76d091376f"))
+
+def _test_seeded_helpers():
+    g = random.Xoshiro256(42)
+    testing.assertEqual([g.below(10) for _ in range(10)], [1, 3, 0, 4, 1, 5, 8, 0, 5, 8])
+    g = random.Xoshiro256(42)
+    testing.assertEqual([g.between(-3, 4) for _ in range(10)], [0, -3, 2, 0, -1, -3, -3, -1, 0, 1])
+    g = random.Xoshiro256(42)
+    testing.assertEqual([g.rand_float(), g.rand_float()], [0.8143051451229099, 0.3188210400616611])
+    g = random.Xoshiro256(42)
+    items = list(range(10))
+    random.shuffle(g, items)
+    testing.assertEqual(items, [6, 9, 7, 8, 0, 5, 3, 4, 2, 1])
+    g = random.Xoshiro256(42)
+    testing.assertEqual(random.shuffled(g, list(range(10))), [6, 9, 7, 8, 0, 5, 3, 4, 2, 1])
+
+def _test_rand_int_seeded():
+    """rand_int is the top 63 bits of rand_u64"""
+    g = random.Xoshiro256(42)
+    testing.assertEqual([g.rand_int(), g.rand_int(), g.rand_int()],
+                        [7510639304993616975, 2940605065665682376, 9074821957992740550])
+
+def _test_rand_int():
+    """rand_int is never negative, and reaches the top of the int range"""
+    g = random.Xoshiro256(1)
+    big = 0
+    for _ in range(1000):
+        x = g.rand_int()
+        testing.assertTrue(x >= 0, f"rand_int() returned {x}")
+        if x > 4611686018427387904: # 2**62
+            big += 1
+    testing.assertTrue(big > 400 and big < 600, f"{big} of 1000 values were above 2**62")
+
+def _test_same_seed_same_sequence():
+    a = random.Xoshiro256(7)
+    b = random.Xoshiro256(7)
+    c = random.Xoshiro256(8)
+    sa = [a.rand_u64() for _ in range(100)]
+    testing.assertEqual(sa, [b.rand_u64() for _ in range(100)])
+    testing.assertNotEqual(sa, [c.rand_u64() for _ in range(100)])
+
+def _test_below():
+    g = random.Xoshiro256(1)
+    seen = set()
+    for _ in range(1000):
+        x = g.below(7)
+        testing.assertTrue(x >= 0 and x < 7, f"below(7) returned {x}")
+        seen.add(x)
+    testing.assertEqual(len(seen), 7)
+    testing.assertEqual(g.below(1), 0)
+    big = g.below(9223372036854775807)
+    testing.assertTrue(big >= 0, f"below(max int) returned {big}")
+
+def _test_below_uniform():
+    """Each of 6 outcomes in 60000 draws lands within 3% of 10000"""
+    g = random.Xoshiro256(3)
+    counts = [0] * 6
+    for _ in range(60000):
+        counts[g.below(6)] += 1
+    for c in counts:
+        testing.assertTrue(c > 9700 and c < 10300, f"uneven counts {counts}")
+
+def _test_below_invalid():
+    g = random.Xoshiro256(1)
+    for n in [0, -1, -9223372036854775807]:
+        try:
+            g.below(n)
+        except ValueError as e:
+            testing.assertEqual(e.error_message, f"below: n must be positive, got {n}")
+        else:
+            testing.error(f"below accepted {n}")
+
+def _test_between():
+    g = random.Xoshiro256(1)
+    seen = set()
+    for _ in range(1000):
+        x = g.between(-3, 3)
+        testing.assertTrue(x >= -3 and x < 3, f"between(-3, 3) returned {x}")
+        seen.add(x)
+    testing.assertEqual(seen, {-3, -2, -1, 0, 1, 2})
+    testing.assertEqual(g.between(5, 6), 5)
+    testing.assertEqual(g.between(-9223372036854775807 - 1, -9223372036854775807), -9223372036854775807 - 1)
+
+def _test_between_full_range():
+    """A span wider than the largest int still gives values on both sides of 0"""
+    g = random.Xoshiro256(1)
+    lo = -9223372036854775807 - 1
+    hi = 9223372036854775807
+    neg = 0
+    for _ in range(1000):
+        x = g.between(lo, hi)
+        testing.assertTrue(x < hi, f"between(min, max) returned {x}")
+        if x < 0:
+            neg += 1
+    testing.assertTrue(neg > 400 and neg < 600, f"{neg} of 1000 values were negative")
+
+def _test_between_invalid():
+    g = random.Xoshiro256(1)
+    for lo, hi in [(0, 0), (5, 4), (9223372036854775807, -9223372036854775807)]:
+        try:
+            g.between(lo, hi)
+        except ValueError as e:
+            testing.assertEqual(e.error_message, f"between: lo must be less than hi, got {lo} and {hi}")
+        else:
+            testing.error(f"between accepted {lo} and {hi}")
+
+def _test_rand_float():
+    g = random.Xoshiro256(1)
+    total = 0.0
+    for _ in range(10000):
+        x = g.rand_float()
+        testing.assertTrue(x >= 0.0 and x < 1.0, f"rand_float() returned {x}")
+        total += x
+    mean = total / 10000.0
+    testing.assertTrue(mean > 0.49 and mean < 0.51, f"mean of 10000 floats was {mean}")
+
+def _test_rand_bytes():
+    g = random.Xoshiro256(1)
+    testing.assertEqual(g.rand_bytes(0), b"")
+    for n in [1, 7, 8, 9, 100]:
+        testing.assertEqual(len(g.rand_bytes(n)), n)
+    try:
+        g.rand_bytes(-1)
+    except ValueError as e:
+        testing.assertEqual(e.error_message, "rand_bytes: n must not be negative, got -1")
+    else:
+        testing.error("rand_bytes accepted -1")
+
+def _test_shuffle():
+    g = random.Xoshiro256(1)
+    empty: list[int] = []
+    random.shuffle(g, empty)
+    testing.assertEqual(empty, [])
+    one = [1]
+    random.shuffle(g, one)
+    testing.assertEqual(one, [1])
+    items = list(range(50))
+    random.shuffle(g, items)
+    testing.assertNotEqual(items, list(range(50)))
+    testing.assertEqual(sorted(items), list(range(50)))
+
+def _test_shuffle_every_order():
+    """All 6 orders of 3 elements turn up"""
+    g = random.Xoshiro256(1)
+    seen = set()
+    for _ in range(200):
+        items = [1, 2, 3]
+        random.shuffle(g, items)
+        seen.add(str(items))
+    testing.assertEqual(len(seen), 6)
+
+def _test_shuffled():
+    """shuffled returns a new value of the same type and leaves items alone"""
+    for seed in [1, 2, 3]:
+        g = random.Xoshiro256(seed)
+        items = list(range(20))
+        s = random.shuffled(g, items)
+        testing.assertEqual(items, list(range(20)))
+        testing.assertEqual(sorted(s), items)
+        # The same draws give the same order as shuffle
+        g = random.Xoshiro256(seed)
+        copy = list(range(20))
+        random.shuffle(g, copy)
+        testing.assertEqual(s, copy)
+    empty: list[int] = []
+    testing.assertEqual(random.shuffled(random.Xoshiro256(1), empty), [])
+
+def _test_sequence_types():
+    """shuffle and shuffled take other sequences than list"""
+    # Seed 42 shuffles 10 elements into positions [6, 9, 7, 8, 0, 5, 3, 4, 2, 1]
+    testing.assertEqual(random.shuffled(random.Xoshiro256(42), "abcdefghij"), "gjhiafdecb")
+    testing.assertEqual(random.shuffled(random.Xoshiro256(42), b"abcdefghij"), b"gjhiafdecb")
+    testing.assertEqual(random.shuffled(random.Xoshiro256(42), ilist(range(10))), ilist([6, 9, 7, 8, 0, 5, 3, 4, 2, 1]))
+    testing.assertEqual(random.shuffled(random.Xoshiro256(42), bytearray(b"abcdefghij")), bytearray(b"gjhiafdecb"))
+    ba = bytearray(b"abcdefghij")
+    random.shuffle(random.Xoshiro256(42), ba)
+    testing.assertEqual(ba, bytearray(b"gjhiafdecb"))
+
+mut def _roll[R(Random)](r: R) -> int:
+    return r.between(1, 7)
+
+def _test_env_random(t: testing.EnvT):
+    r = t.env.random
+    testing.assertNotEqual([r.rand_u64() for _ in range(4)], [r.rand_u64() for _ in range(4)])
+    testing.assertEqual(r.rand_bytes(0), b"")
+    testing.assertEqual(len(r.rand_bytes(1000)), 1000)
+    testing.assertNotEqual(r.rand_bytes(32), r.rand_bytes(32))
+    try:
+        r.rand_bytes(-1)
+    except ValueError as e:
+        testing.assertEqual(e.error_message, "rand_bytes: n must not be negative, got -1")
+    else:
+        testing.error("env.random.rand_bytes accepted -1")
+    t.success()
+
+def _test_env_random_protocol(t: testing.EnvT):
+    """env.random gets the other methods through the Random protocol"""
+    r = t.env.random
+    seen = set()
+    for _ in range(200):
+        x = _roll(r)
+        testing.assertTrue(x >= 1 and x <= 6, f"roll returned {x}")
+        seen.add(x)
+    testing.assertEqual(len(seen), 6)
+    x = r.rand_float()
+    testing.assertTrue(x >= 0.0 and x < 1.0, f"rand_float() returned {x}")
+    n = r.rand_int()
+    testing.assertTrue(n >= 0, f"rand_int() returned {n}")
+    testing.assertEqual(sorted(random.shuffled(r, [1, 2, 3])), [1, 2, 3])
+    t.success()
+
+def _test_seed_from_env_random(t: testing.EnvT):
+    """A generator seeded from env.random gives a different sequence each time"""
+    a = random.Xoshiro256(t.env.random.rand_u64())
+    b = random.Xoshiro256(t.env.random.rand_u64())
+    testing.assertNotEqual([a.rand_u64() for _ in range(4)], [b.rand_u64() for _ in range(4)])
+    t.success()
+
+actor _EnvRandomUser(r: EnvRandom):
+    def draw() -> bytes:
+        return r.rand_bytes(16)
+
+def _test_env_random_in_other_actors(t: testing.EnvT):
+    """Each actor can draw from env.random, and gets different bytes"""
+    a = _EnvRandomUser(t.env.random)
+    b = _EnvRandomUser(t.env.random)
+    da = a.draw()
+    db = b.draw()
+    testing.assertEqual(len(da), 16)
+    testing.assertNotEqual(da, db)
+    testing.assertNotEqual(da, a.draw())
+    t.success()

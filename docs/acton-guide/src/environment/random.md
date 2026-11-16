@@ -41,7 +41,9 @@ small values the way `rand_u64() % n` would. Invalid arguments, such as
 
 The methods come from the builtin `Random` protocol. A source of random
 numbers implements `rand_u64()`, and the protocol builds the other
-methods on it. `env.random` implements it.
+methods on it. `env.random` implements it, and so do the seeded
+generators in [`std.random`](../stdlib/random.md), which also has
+`shuffle` and `shuffled` for sequences.
 
 Write code that needs random numbers to take a source as an argument.
 Take any `Random` when the numbers need not be secret, so callers can

@@ -203,6 +203,12 @@
   `rand_int()`, `rand_float()`, `below(n)` and `between(lo, hi)`, with
   half-open ranges and no modulo bias. Take `EnvRandom` where the numbers must
   be secure, and any `Random` where they need not be.
+- Add the seeded `Xoshiro256` generator to `std.random`, and the functions
+  `shuffle(r, items)` and `shuffled(r, items)`, which take any `Random` and
+  any sequence with a length and `int` indexes, such as `list`, `str` or
+  `bytes`. `shuffle` reorders a mutable sequence in place; `shuffled` returns
+  a reordered copy of the same type. A seed gives the same sequence on every
+  platform and from one release to the next.
 - Use private CAs and client certificates with `net.TLSConnection` and
   `net.TLSListener` through `ca_pem`, `cert_pem`, and `key_pem`.
   Listeners request client certificates with `client_auth=True`. Set

@@ -69,4 +69,5 @@ ownership requirement. See [Freezing a set](../../collections/sets.md#freezing-a
 `Random` is a source of random numbers. A source implements
 `rand_u64() -> u64`, and the protocol builds `rand_int()`, `rand_float()`,
 `rand_bytes(n)`, `below(n)` and `between(lo, hi)` on it. `env.random`
-implements it. See [Random numbers](../../environment/random.md).
+implements it, and so do the seeded generators in `std.random`. See
+[Random numbers](../../environment/random.md).

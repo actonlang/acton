@@ -10,5 +10,6 @@ scope.</p>
 Modules:
 
 - [std.math](math.md)
+- [std.random](random.md)
 - [std.re](re.md)
 - [std.syslog](syslog.md)

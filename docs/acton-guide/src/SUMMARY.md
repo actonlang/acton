@@ -80,6 +80,7 @@
     - [Collection protocols](stdlib/builtin_protocols/collection.md)
   - [Standard Library](stdlib/standard_library.md)
     - [std.math](stdlib/math.md)
+    - [std.random](stdlib/random.md)
     - [std.re](stdlib/re.md)
     - [std.syslog](stdlib/syslog.md)
 

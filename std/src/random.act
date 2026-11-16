@@ -1,3 +1,120 @@
+"""Seeded random number generators, and shuffling of sequences
+
+Every source of random numbers implements the builtin Random protocol, which
+provides rand_u64, rand_int, rand_float, rand_bytes, below and between.
+env.random is the source of secure random numbers from the operating system.
+Use it for keys, tokens and anything else that must not be guessable, and to
+seed the generators here.
+
+Seeded generators, such as Xoshiro256, produce a fixed sequence from a seed.
+They are fast but predictable, so they suit simulations, tests and sampling,
+never secrets. The same seed gives the same sequence on every platform and from
+one Acton release to the next.
+
+shuffle and shuffled reorder a sequence, using any source.
+
+    import std.random as random
+
+    mut def roll[R(Random)](r: R) -> int:
+        return r.between(1, 7)
+
+    actor main(env):
+        print(roll(env.random))            # unpredictable
+        g = random.Xoshiro256(42)
+        print(roll(g), roll(g))            # the same every run
+        cards = ["ace", "king", "queen"]
+        print(random.shuffled(g, cards))   # the same order every run
+        g2 = random.Xoshiro256(env.random.rand_u64())
+        print(g2.rand_float())             # a fresh sequence every run
+        env.exit(0)
+"""
+
+# shuffled takes any sequence with a length and int indexes, such as list,
+# ilist, str, bytes or bytearray. shuffle also needs to assign by index, so it
+# takes a mutable sequence, such as list or bytearray.
+
+mut def shuffle[R(Random), S(object, Collection[A], MutIndexed[int, A]), A](r: R, items: S) -> None:
+    """Put the elements of items in a random order, in place
+
+    Every order is equally likely, as far as the source allows: a sequence of
+    more than 57 elements has more than 2**256 orders, more than a generator
+    with 256 bits of state, such as Xoshiro256, can produce.
+    """
+    # Fisher-Yates, from the end towards the start
+    i = len(items) - 1
+    while i > 0:
+        j = r.below(i + 1)
+        tmp = items[i]
+        items[i] = items[j]
+        items[j] = tmp
+        i -= 1
+
+mut def shuffled[R(Random), S(Collection[A], IIndexed[int, A]), A](r: R, items: S) -> S:
+    """Return a copy of items with the elements in a random order
+
+    The copy has the same type as items, and items itself is not changed, so
+    this works for immutable sequences such as str and bytes too. The order is
+    the one shuffle would give a list of the same elements, drawing the same
+    values from r.
+    """
+    res = [x for x in items]
+    shuffle(r, res)
+    return Collection.__fromiter__(res)
+
+class Xoshiro256(object):
+    """xoshiro256++, a fast generator with 256 bits of state
+
+    The same seed always gives the same sequence. The seed is spread over the
+    state with SplitMix64, as the algorithm's authors recommend, so the
+    sequence matches Zig's std.Random.Xoshiro256.init(seed). Its output is
+    predictable from a few values, so never use it for secrets; use env.random
+    for those, or to get a seed that differs between runs.
+
+    See https://prng.di.unimi.it/ for the algorithm.
+    """
+    s0: u64
+    s1: u64
+    s2: u64
+    s3: u64
+
+    def __init__(self, seed: u64):
+        golden: u64 = 0x9e3779b97f4a7c15
+        self.s0 = _splitmix64(seed + golden)
+        self.s1 = _splitmix64(seed + 2 * golden)
+        self.s2 = _splitmix64(seed + 3 * golden)
+        self.s3 = _splitmix64(seed + 4 * golden)
+
+    mut def rand_u64(self) -> u64:
+        """Return the next u64 in the sequence"""
+        res = _rotl(self.s0 + self.s3, 23) + self.s0
+        t = self.s1 << 17
+        self.s2 ^= self.s0
+        self.s3 ^= self.s1
+        self.s1 ^= self.s2
+        self.s0 ^= self.s3
+        self.s2 ^= t
+        self.s3 = _rotl(self.s3, 45)
+        return res
+
+extension Xoshiro256(Random):
+    mut def rand_u64(self) -> u64:
+        return self.rand_u64()
+
+def _splitmix64(s: u64) -> u64:
+    """The output function of SplitMix64 for state s"""
+    z = s
+    z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9
+    z = (z ^ (z >> 27)) * 0x94d049bb133111eb
+    return z ^ (z >> 31)
+
+def _rotl(x: u64, k: int) -> u64:
+    return (x << k) | (x >> (64 - k))
+
+
+# The functions below are the old interface, which is being replaced by the
+# Random protocol and the functions above. They will be removed once nothing
+# uses them.
+
 _empty_choice_error = ValueError('Cannot choose from an empty sequence')
 _sample_size_error = ValueError("Sample larger than population or is negative")
 _decimal_length_error = ValueError('decimal length of int must be positive')
