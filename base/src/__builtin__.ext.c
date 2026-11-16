@@ -1,4 +1,5 @@
 #include "rts/rts.c"
+#include "builtin/env_rts.c"
 
 static struct B_ValueError B_EnvVar_nul_name_error =
     STATIC_EXCEPTION(B_ValueError, "environment variable name contains a NUL byte");

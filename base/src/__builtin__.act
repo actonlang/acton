@@ -1519,13 +1519,8 @@ class WorldCap():
     """
     pass
 
-class SysCap():
-    """SysCap has the capability to access the internals of the Acton RTS system
-    """
-    pass
-
 class _EnvCap():
-    """_EnvCap authorizes construction of Env and its service actors.
+    """_EnvCap authorizes construction of Env and its services.
 
     Only the RTS creates one, when it bootstraps Env, with the constructor
     the compiler generates from this __init__. The name is private to
@@ -1534,15 +1529,181 @@ class _EnvCap():
     def __init__(self):
         pass
 
-actor Env (wc: WorldCap, sc: SysCap, args: list[str], wthreads: int, envcap: _EnvCap):
+class EnvRTS:
+    """Runtime information and controls, reached as env.rts.
+
+    Each query returns fresh values. Worker counters are independent
+    observations and can change while a query is being read.
+    """
+    def __init__(self, envcap: _EnvCap, wthreads: int):
+        self._wthreads = wthreads
+
+    def gc(self) -> None:
+        """Run a full collection, retaining free memory for reuse."""
+        NotImplemented
+
+    def enable_gc(self) -> None:
+        """Enable garbage collection."""
+        NotImplemented
+
+    def disable_gc(self) -> None:
+        """Disable garbage collection until enable_gc is called."""
+        NotImplemented
+
+    def start_gc_performance_measurement(self) -> None:
+        """Enable measurement of time spent collecting garbage."""
+        NotImplemented
+
+    def gc_info(self) -> (mode: str, backend: str, supported_backends: list[str], page_hash_table_log2: u64, block_size: u64, end_padding: bool, thread_local_size_limit: u64, no_thread_local_warmup: bool, thread_local_refill_blocks: u64, realloc_no_free: bool, markers: u64, bytes_per_marker: u64, mark_range_stealing: bool, mark_bits: bool, initial_mark_stack_size: u64, pause_target_ms: ?float, free_space_divisor: u64, full_frequency: u64, heap_growth_divisor: u64, alloc_budget_percent: u64, memory_limit: u64, heap_ceiling_percent: u64):
+        """Read the collector's build configuration and current policy.
+
+        mode is ordinary or generational. backend is the active dirty-tracking
+        backend, or none in ordinary mode. supported_backends lists the mechanisms
+        the collector is built with.
+
+        page_hash_table_log2 describes 2**n page-hash bits per table, used by dirty
+        tracking and blacklisting. block_size is the heap block size in bytes.
+        end_padding tells whether objects are padded by a byte, so that a pointer
+        just past the end of an object keeps it alive. thread_local_size_limit is
+        the largest object size, including any padding, that threads allocate
+        from their own free lists, or 0 without thread-local allocation.
+        no_thread_local_warmup tells whether a new thread takes its own free
+        list of a size at its first allocation of that size, instead of after
+        allocating about a heap block of that size under the allocator lock. It
+        includes the effect of the GC_NO_THREAD_LOCAL_WARMUP environment
+        variable, and is False without thread-local allocation.
+        thread_local_refill_blocks is the largest number of heap blocks that one
+        refill of a thread's free list takes under the allocator lock, including
+        the effect of the GC_TL_REFILL_MAX environment variable, or 0 without
+        thread-local allocation.
+        realloc_no_free tells whether GC_realloc leaves a small collectable
+        object it has moved to the collector instead of freeing it, including
+        the effect of the GC_REALLOC_NO_FREE environment variable.
+        markers includes the initiating thread and is the available marking
+        parallelism, not the number active in every slice. bytes_per_marker,
+        when nonzero, gives a mark phase one marker per that many bytes it is
+        estimated to scan, so that a small phase is marked by fewer threads, or
+        by the initiating thread alone; 0 gives every phase all the markers.
+        mark_range_stealing tells whether markers claim ranges of the global
+        mark stack. mark_bits tells whether the collector keeps its marks as
+        bits instead of bytes.
+        initial_mark_stack_size is the number of entries the global mark stack
+        starts with; it grows when marking overflows it.
+        pause_target_ms is a best-effort marking time target, including any
+        fractional millisecond, or None in ordinary mode and in generational mode
+        with one stop per collection.
+        full_frequency is the number of partial collections between full ones;
+        other conditions can trigger full collections sooner. heap_growth_divisor
+        limits one automatic heap expansion to the heap size divided by it, or to
+        the collector's fixed increment if that is larger; 0 means the fixed
+        increment. alloc_budget_percent, when nonzero, starts a collection after
+        allocating that percentage of the data live at the previous collection
+        instead of using the free space divisor.
+        memory_limit is the memory limit of the process in bytes: the smallest of
+        the physical memory, on Linux the cgroup memory limit, and the limit set
+        with gc_memory_limit or the GC_MEMORY_LIMIT environment variable, or 0 if
+        none is known. heap_ceiling_percent is the heap ceiling as a percentage
+        of memory_limit, including the effect of the GC_HEAP_CEILING_PERCENT
+        environment variable. When it, alloc_budget_percent and memory_limit are
+        nonzero, the allocation between collections is at most half the distance
+        from the live data to the ceiling, but at least 10% of the live data, and
+        in ordinary mode the heap grows to the live data plus that allocation at
+        once instead of by heap_growth_divisor.
+
+        """
+        NotImplemented
+
+    def gc_stats(self) -> (heap_size: u64, free_bytes: u64, unmapped_bytes: u64, mem_usage: u64, total_bytes: u64, bytes_since_gc: u64, total_ms: u64, mark_ms: u64, sweep_ms: u64):
+        """Read collector memory and cumulative collection time.
+
+        Memory values are bytes. heap_size and free_bytes both include
+        unmapped_bytes. mem_usage is their difference: approximate occupied
+        heap, rather than resident memory. total_bytes counts allocations
+        since startup, and bytes_since_gc since the latest collection.
+        Time values are milliseconds, after performance measurement starts.
+        """
+        NotImplemented
+
+    def process_stats(self) -> (rss: ?u64, peak_rss: ?u64, user_ns: ?u64, system_ns: ?u64):
+        """Read process resident memory in bytes and CPU time in nanoseconds.
+
+        Includes startup and all threads. Unavailable values are None.
+        """
+        NotImplemented
+
+    def perf_info(self) -> dict[str, str]:
+        """Describe the performance counter backend, scope and machine."""
+        NotImplemented
+
+    def perf_stats(self) -> (user_ns: ?u64, system_ns: ?u64, instructions: ?u64, cycles: ?u64, instructions_enabled: u64, instructions_running: u64, cycles_enabled: u64, cycles_running: u64):
+        """Read cumulative process CPU and hardware counters.
+
+        CPU times are nanoseconds. Hardware counts require --rts-perf
+        at process start. Unavailable measurements are None. Coverage values
+        detect intervals with uncounted work. Subtract integers before
+        converting to float, and reject incomplete counter coverage.
+        """
+        NotImplemented
+
+    def worker_info(self) -> dict[int, (name: str, stack_size: ?u64)]:
+        """Describe the main thread (ID 0) and worker threads.
+
+        stack_size is the actual stack size in bytes captured at startup,
+        or None before that worker finishes initializing or when unavailable.
+        """
+        NotImplemented
+
+    def worker_stats(self) -> dict[int, (state: str, waits_enabled: bool, sleeps: u64, conts_count: u64, conts_sum: u64, conts_100ns: u64, conts_1us: u64, conts_10us: u64, conts_100us: u64, conts_1ms: u64, conts_10ms: u64, conts_100ms: u64, conts_1s: u64, conts_10s: u64, conts_100s: u64, conts_inf: u64, bkeep_count: u64, bkeep_sum: u64, bkeep_100ns: u64, bkeep_1us: u64, bkeep_10us: u64, bkeep_100us: u64, bkeep_1ms: u64, bkeep_10ms: u64, bkeep_100ms: u64, bkeep_1s: u64, bkeep_10s: u64, bkeep_100s: u64, bkeep_inf: u64, wait_count: u64, wait_sum: u64, wait_max: u64, wait_1us: u64, wait_10us: u64, wait_100us: u64, wait_1ms: u64, wait_10ms: u64, wait_100ms: u64, wait_1s: u64, wait_inf: u64, steal_ops: u64, steal_actors: u64, balance_ops: u64, balance_actors: u64, balance_looks: u64, balance_young: u64, balance_stale: u64)]:
+        """Read worker states, cumulative counters and duration histograms.
+
+        state is poof, work, idle or sleep. ID 0 is the main thread.
+        conts measures actor continuations; bkeep measures bookkeeping
+        between continuations. Sums and wait_max are nanoseconds. Each
+        histogram bucket counts durations below its named upper bound
+        and above the preceding bound; inf holds the remaining durations.
+        Queue waits are collected only when RTS monitoring is enabled,
+        as indicated by waits_enabled. steal and balance count operations
+        and actors taken from other workers' queues.
+        """
+        NotImplemented
+
+    proc def io_handles(self) -> dict[int, dict[u64, (typ: str, act: u64)]]:
+        """Inspect I/O handles on each worker's event loop.
+
+        Keys are worker IDs, then handle addresses. act is the actor
+        address for TCP handles, or 0 for other handles.
+        """
+        monitors = {i: _RTSWorkerMonitor(i) for i in range(self._wthreads + 1)}
+        return {i: monitor.io_handles() for i, monitor in monitors.items()}
+
+    def sleep(self, duration: float) -> None:
+        """Put the calling worker thread to sleep for duration seconds.
+
+        Used to simulate work in tests and benchmarks. Other actors on
+        that worker also wait while it sleeps.
+        """
+        NotImplemented
+
+actor _RTSWorkerMonitor(wthread_id: int):
+    def io_handles():
+        return _rts_io_handles()
+
+    proc def _init():
+        NotImplemented
+    _init()
+
+def _rts_io_handles() -> dict[u64, (typ: str, act: u64)]:
+    NotImplemented
+
+actor Env (wc: WorldCap, args: list[str], wthreads: int, envcap: _EnvCap):
     cap = wc
     auth = wc
-    syscap = sc
     argv = args
     nr_wthreads = wthreads
     vars = EnvVar(envcap)
     stdio = Stdio(envcap, vars)
     process = EnvProcess(envcap, vars)
+    rts = EnvRTS(envcap, wthreads)
 
     action def exit(n: int):
         NotImplemented

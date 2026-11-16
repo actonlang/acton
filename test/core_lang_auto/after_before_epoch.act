@@ -2,7 +2,6 @@
 # overdue like any other timer whose due time has passed: it must fire at
 # once, and timers after it must still fire.
 
-import acton.rts
 import time
 
 actor Watchdog(env, start: action() -> None):
@@ -12,7 +11,7 @@ actor Watchdog(env, start: action() -> None):
     var rounds = 0
 
     def run():
-        acton.rts.sleep(env.syscap, 0.1)
+        env.rts.sleep(0.1)
         rounds += 1
         if rounds == 1:
             # A plain message, once the runtime has started and no timer is

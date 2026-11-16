@@ -1,0 +1,21 @@
+def stack_sizes(rts: EnvRTS, workers: int) -> list[?u64]:
+    info = rts.worker_info()
+    assert set(info) == set(range(workers + 1))
+    assert all(row.stack_size is None or row.stack_size! > 0 for row in info.values())
+    del info[0]
+    assert 0 in rts.worker_info()
+    return [info[i].stack_size for i in range(1, workers + 1)]
+
+
+actor main(env):
+    var sizes = stack_sizes(env.rts, env.nr_wthreads)
+    if "pending" in env.argv:
+        assert any(size is None for size in sizes)
+        print("pending")
+    # Stack-size checks can wait in the test; introspection itself never waits.
+    while any(size is None for size in sizes):
+        await async env.stdio.out("")
+        sizes = stack_sizes(env.rts, env.nr_wthreads)
+    for size in sizes:
+        print(int(size!))
+    env.exit(0)

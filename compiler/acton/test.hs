@@ -24,6 +24,7 @@ import System.Process
 import System.TimeIt
 import System.IO.Temp (withSystemTempDirectory)
 import qualified System.Info
+import qualified System.Timeout
 
 import Test.Tasty
 import Test.Tasty.ExpectedFailure
@@ -2912,16 +2913,15 @@ gcBuildOptionTests = testGroup "GC metadata build options"
         forM_ [(app, "gc_app"), (other, "gc_other")] $ \(dir, name) -> do
           writeApp dir name (gcOptions False False)
           writeFile (dir </> "src/main.act") $ unlines
-            [ "import acton.rts"
-            , "import bridge"
+            [ "import bridge"
             , "import std.json as json"
             , ""
             , "actor main(env):"
             , "    records = bridge.make()"
             , "    large = \"x\" * 16384"
-            , "    acton.rts.gc(env.syscap)"
+            , "    env.rts.gc()"
             , "    assert bridge.churn() == 8128"
-            , "    acton.rts.gc(env.syscap)"
+            , "    env.rts.gc()"
             , "    assert large == \"x\" * 16384"
             , "    print(json.encode({\"count\": bridge.verify(records)}))"
             , "    env.exit(0)"
@@ -3177,7 +3177,7 @@ gcCollectorOptionTests = testGroup "GC collector options"
             (key `isInfixOf` (out ++ err))
   ]
   where
-    -- Reported get_gc_info fields for a build without settings.
+    -- Reported gc_info fields for a build without settings.
     defaults = [("mode", "ordinary"), ("backend", "none"),
                 ("pause_target_us", "None"),
                 ("alloc_budget_percent", "250"), ("block_size", "16384"),
@@ -3258,7 +3258,7 @@ gcCollectorOptionTests = testGroup "GC collector options"
     -- default build, and on in the tuned build, which turned them off.
     -- GC_MEMORY_LIMIT sets a limit in the default build and replaces the
     -- tuned build's limit. The limits of this test are below the memory of
-    -- the machines that run it, so get_gc_info reports them as set.
+    -- the machines that run it, so gc_info reports them as set.
     overrides = [("GC_ALLOC_BUDGET_PERCENT", "50"), ("GC_REALLOC_NO_FREE", "0"),
                  ("GC_NO_THREAD_LOCAL_WARMUP", "0"),
                  ("GC_BYTES_PER_MARKER", "0"), ("GC_TL_REFILL_MAX", "4"),
@@ -3666,11 +3666,45 @@ actonRootArgTests =
   ]
 
 
+workerStackTests = testGroup "worker stacks" $
+  [ testCase "worker information during startup" $ do
+      testBuildThing "" ExitSuccess False "../../test/rts/worker_stack.act"
+      result <- System.Timeout.timeout (20*1000000) $
+          runThing "--rts-wthreads 2" "../../test/rts/worker_stack.act"
+      case result of
+        Nothing -> assertFailure "worker stack information timed out"
+        Just (code, out, err) ->
+          assertEqual ("worker stack information\n" ++ out ++ err) ExitSuccess code
+  | System.Info.os `elem` ["darwin", "linux"]
+  ] ++
+  [ after AllFinish "worker information during startup" $
+    testCase "finite and unlimited Linux stack limits" $ do
+      testBuildThing "" ExitSuccess False "../../test/rts/worker_stack.act"
+      exe <- canonicalizePath "../../test/rts/worker_stack"
+      forM_ [("8192", 16777216), ("16384", 16777216),
+             ("32768", 33554432), ("65536", 67108864),
+             ("2097152", 67108864), ("4294967296", 67108864),
+             ("18014398509481982", 67108864), ("unlimited", 16777216)] $ \(limit, expected) ->
+        forM_ [1, 2, 8] $ \workers -> do
+          result <- System.Timeout.timeout (20*1000000) $ readCreateProcessWithExitCode
+            (proc "bash" ["-c", "ulimit -s \"$1\" || exit; shift; exec \"$@\"",
+                          "worker-stack", limit, exe, "--rts-wthreads", show workers]) ""
+          case result of
+            Nothing -> assertFailure ("worker startup timed out with stack limit " ++ limit)
+            Just (code, out, err) -> do
+              assertEqual ("stack limit " ++ limit ++ "\n" ++ out ++ err) ExitSuccess code
+              assertEqual ("worker stacks with limit " ++ limit)
+                          (concat (replicate workers (show expected ++ "\n"))) out
+  | System.Info.os == "linux"
+  ]
+
 rtsTests =
   testGroup "RTS"
   [
       testCase "arg parsing: foo --bar --rts-verbose" $ do
           testBuildAndRun "" "foo --bar --rts-verbose" ExitSuccess False "../../test/rts/argv1.act"
+
+  ,   workerStackTests
 
   ,   testCase "arg parsing: --rts-verbose --rts-wthreads 7 foo --bar" $ do
           testBuildAndRun "" "--rts-verbose --rts-wthreads 7 foo --bar" ExitSuccess False "../../test/rts/argv2.act"
@@ -3706,6 +3740,34 @@ rtsTests =
               assertEqual ("RTS wthreads " ++ n ++ " error retCode") (ExitFailure 1) returnCode
               assertEqual ("RTS wthreads " ++ n ++ " error cmdErr")
                           ("ERROR: --rts-wthreads requires a whole number of at least 1, got '" ++ n ++ "'.\n") cmdErr
+
+  ,   testCase "hardware counters use an RTS option" $ do
+          testBuildThing "" ExitSuccess False "../../test/rts/perf.act"
+          exe <- canonicalizePath "../../test/rts/perf"
+          forM_ [([], False, []),
+                 (["--rts-perf"], True, []),
+                 (["app", "--rts-perf", "tail"], True, ["app", "tail"]),
+                 (["--rts-perf", "--rts-perf"], True, []),
+                 (["--", "--rts-perf"], False, ["--", "--rts-perf"]),
+                 (["--rts-perf", "--", "--rts-perf"], True, ["--", "--rts-perf"]),
+                 (["--rts-performance"], False, ["--rts-performance"]),
+                 (["--rts-perf=0"], False, ["--rts-perf=0"]),
+                 (["--rts-perf=1"], False, ["--rts-perf=1"]),
+                 (["xxrts-perf"], False, ["xxrts-perf"]),
+                 (["--rts-host", "--rts-perf"], False, []),
+                 (["--rts-host=--rts-perf"], False, [])] $ \(args, enabled, appArgs) -> do
+              (code, out, err) <- readCreateProcessWithExitCode (proc exe args) ""
+              assertEqual (unwords args ++ "\n" ++ out ++ err) ExitSuccess code
+              assertEqual ("application arguments: " ++ unwords args)
+                  (unlines ((if enabled then "enabled" else "disabled") : appArgs)) out
+          (code, out, err) <- readCreateProcessWithExitCode (proc exe ["--rts-help"]) ""
+          assertEqual (out ++ err) ExitSuccess code
+          assertBool "RTS help lists --rts-perf" ("--rts-perf " `isInfixOf` out)
+          when (System.Info.os `elem` ["darwin", "linux"]) $ do
+              (code, out, err) <- readCreateProcessWithExitCode
+                  (proc "bash" ["-c", "exec -a --rts-perf \"$1\"", "perf-argv0", exe]) ""
+              assertEqual (out ++ err) ExitSuccess code
+              assertEqual "argv[0] is not an RTS option" "disabled\n" out
 
   ,   testCase "raise the open file limit" $ do
           testBuildThing "" ExitSuccess False "../../test/rts/wthreads1.act"

@@ -132,7 +132,7 @@ actor _test_executor_completes(t: testing.EnvT):
         def progress(executor_id: int, iterations: int, drift_us: int, drift_total_us: int, est_iter_ms: float, phase_resolution_us: int, target_sweep_iters: int, calibrating: bool):
             t.failure(AssertionError("Unexpected stress progress"))
 
-        executor = testing.TestExecutor(t.env.syscap, cfg, definition, complete, progress, t.env, executor_id, 1, 1)
+        executor = testing.TestExecutor(t.env.rts, cfg, definition, complete, progress, t.env, executor_id, 1, 1)
 
     for performance in [False, True]:
         run(performance, success, "success")

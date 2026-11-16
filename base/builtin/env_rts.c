@@ -1,4 +1,3 @@
-#define GC_THREADS 1
 #include <gc.h>
 #include <acton_gc_config.h>
 
@@ -9,43 +8,24 @@
 #include "rts/log.h"
 #include "rts/perf.h"
 
-void actonQ_rtsQ___ext_init__() {
-    // NOP
-}
-
-B_NoneType actonQ_rtsQ_gc (B_SysCap cap) {
+B_NoneType B_EnvRTSD_gc (B_EnvRTS self) {
     GC_gcollect();
     return B_None;
 }
 
-B_NoneType actonQ_rtsQ_enable_gc (B_SysCap cap) {
+B_NoneType B_EnvRTSD_enable_gc (B_EnvRTS self) {
     GC_enable();
     return B_None;
 }
 
-B_NoneType actonQ_rtsQ_disable_gc (B_SysCap cap) {
+B_NoneType B_EnvRTSD_disable_gc (B_EnvRTS self) {
     GC_disable();
     return B_None;
 }
 
-// def start_gc_performance_measurement(cap: SysCap) -> None:
-B_NoneType actonQ_rtsQ_start_gc_performance_measurement (B_SysCap cap) {
+B_NoneType B_EnvRTSD_start_gc_performance_measurement (B_EnvRTS self) {
     GC_start_performance_measurement();
     return B_None;
-}
-
-// def get_gc_time(cap: SysCap) -> (total: u64, mark: u64, sweep: u64):
-B_tuple actonQ_rtsQ_get_gc_time (B_SysCap cap) {
-    unsigned long total = GC_get_full_gc_total_time();
-    unsigned long mark = GC_get_stopped_mark_total_time();
-    unsigned long sweep = total - mark;
-
-    B_tuple res = $NEWTUPLE(3,
-                            toB_u64(total),
-                            toB_u64(mark),
-                            toB_u64(sweep)
-                            );
-    return res;
 }
 
 struct acton_gc_info {
@@ -106,7 +86,7 @@ static const struct {
     {GC_VDB_UFFDWP, "userfaultfd"},
 };
 
-B_tuple actonQ_rtsQ_get_gc_info (B_SysCap cap) {
+B_tuple B_EnvRTSD_gc_info (B_EnvRTS self) {
     struct acton_gc_info info;
 #if ACTON_GC_THREADS
     GC_call_with_reader_lock(read_gc_info, &info, 0);
@@ -138,7 +118,7 @@ B_tuple actonQ_rtsQ_get_gc_info (B_SysCap cap) {
         pause_target = to$float((double)info.time_limit.tv_ms
                                + (double)info.time_limit.tv_nsec / 1000000.0);
 
-    return $NEWTUPLE(25,
+    return $NEWTUPLE(22,
         actStrFromCString(mode), actStrFromCString(backend), supported,
         toB_u64(acton_gc_get_page_hash_table_log2()),
         toB_u64(acton_gc_get_block_size()),
@@ -153,51 +133,59 @@ B_tuple actonQ_rtsQ_get_gc_info (B_SysCap cap) {
         toB_u64(acton_gc_get_initial_mark_stack_size()), pause_target,
         toB_u64(info.free_space_divisor), toB_u64(info.full_frequency),
         toB_u64(info.heap_growth_divisor), toB_u64(info.alloc_budget_percent),
-        toB_u64(info.memory_limit), toB_u64(info.heap_ceiling_percent),
-        toB_u64(info.stats.heapsize_full),
-        toB_u64(info.stats.free_bytes_full),
-        toB_u64(info.stats.unmapped_bytes));
+        toB_u64(info.memory_limit), toB_u64(info.heap_ceiling_percent));
 }
 
-B_u64 actonQ_rtsQ_get_heap_size (B_SysCap cap) {
-    return toB_u64(GC_get_heap_size());
+struct rts_gc_stats {
+    struct GC_prof_stats_s heap;
+    uint64_t total_ms;
+    uint64_t mark_ms;
+};
+
+static void *GC_CALLBACK read_gc_stats(void *data) {
+    struct rts_gc_stats *stats = data;
+#if ACTON_GC_THREADS
+    GC_get_prof_stats_unsafe(&stats->heap, sizeof(stats->heap));
+#else
+    GC_get_prof_stats(&stats->heap, sizeof(stats->heap));
+#endif
+    stats->total_ms = GC_get_full_gc_total_time();
+    stats->mark_ms = GC_get_stopped_mark_total_time();
+    return NULL;
 }
 
-uint64_t actonQ_rtsQ_get_mem_usage (B_SysCap cap) {
-    return GC_get_heap_size() - GC_get_free_bytes();
+B_tuple B_EnvRTSD_gc_stats(B_EnvRTS self) {
+    struct rts_gc_stats stats;
+#if ACTON_GC_THREADS
+    GC_call_with_reader_lock(read_gc_stats, &stats, 0);
+#else
+    read_gc_stats(&stats);
+#endif
+    return $NEWTUPLE(9,
+        toB_u64(stats.heap.heapsize_full), toB_u64(stats.heap.free_bytes_full),
+        toB_u64(stats.heap.unmapped_bytes),
+        toB_u64(stats.heap.heapsize_full - stats.heap.free_bytes_full),
+        toB_u64(stats.heap.allocd_bytes_before_gc + stats.heap.bytes_allocd_since_gc),
+        toB_u64(stats.heap.bytes_allocd_since_gc),
+        toB_u64(stats.total_ms), toB_u64(stats.mark_ms),
+        toB_u64(stats.total_ms - stats.mark_ms));
 }
 
-// def get_gc_total_bytes(cap: SysCap) -> u64:
-uint64_t actonQ_rtsQ_get_gc_total_bytes (B_SysCap cap) {
-    return GC_get_total_bytes();
+B_tuple B_EnvRTSD_process_stats(B_EnvRTS self) {
+    size_t rss;
+    uint64_t peak;
+    B_u64 resident = uv_resident_set_memory(&rss) == 0 ? toB_u64(rss) : (B_u64)B_None;
+    B_u64 peak_rss = rts_perf_peak_rss(&peak) ? toB_u64(peak) : (B_u64)B_None;
+    uv_rusage_t usage;
+    int available = uv_getrusage(&usage) == 0;
+    return $NEWTUPLE(4, resident, peak_rss,
+        available ? toB_u64((uint64_t)usage.ru_utime.tv_sec * UINT64_C(1000000000)
+                           + (uint64_t)usage.ru_utime.tv_usec * 1000) : (B_u64)B_None,
+        available ? toB_u64((uint64_t)usage.ru_stime.tv_sec * UINT64_C(1000000000)
+                           + (uint64_t)usage.ru_stime.tv_usec * 1000) : (B_u64)B_None);
 }
 
-//def get_gc_bytes_since_gc(cap: SysCap) -> u64:
-uint64_t actonQ_rtsQ_get_gc_bytes_since_gc (B_SysCap cap) {
-    return GC_get_bytes_since_gc();
-}
-
-// def get_rss(cap: SysCap) -> u64:
-uint64_t actonQ_rtsQ_get_rss (B_SysCap cap) {
-    size_t rsm;
-    int r = uv_resident_set_memory(&rsm);
-    return (uint64_t)rsm;
-}
-
-int64_t actonQ_rtsQ_rss (B_SysCap cap) {
-    size_t rsm;
-    int r = uv_resident_set_memory(&rsm);
-    return (int64_t)rsm;
-}
-
-B_u64 actonQ_rtsQ_get_peak_rss (B_SysCap cap) {
-    uint64_t bytes;
-    if (!rts_perf_peak_rss(&bytes))
-        return (B_u64)B_None;
-    return toB_u64(bytes);
-}
-
-B_tuple actonQ_rtsQ_perf_snapshot (B_SysCap cap) {
+B_tuple B_EnvRTSD_perf_stats (B_EnvRTS self) {
     struct rts_perf_sample s;
     rts_perf_read(&s);
     return $NEWTUPLE(8,
@@ -209,7 +197,7 @@ B_tuple actonQ_rtsQ_perf_snapshot (B_SysCap cap) {
         toB_u64(s.cycles_enabled), toB_u64(s.cycles_running));
 }
 
-B_dict actonQ_rtsQ_perf_info (B_SysCap cap) {
+B_dict B_EnvRTSD_perf_info (B_EnvRTS self) {
     B_Hashable wit = (B_Hashable)B_HashableD_strG_witness;
     B_dict info = $NEW(B_dict, wit, NULL, NULL);
     B_dictD_setitem(info, actStrFromCString("version"), actStrFromCString("1"));
@@ -232,7 +220,7 @@ B_dict actonQ_rtsQ_perf_info (B_SysCap cap) {
     return info;
 }
 
-B_NoneType actonQ_rtsQ_sleep (B_SysCap cap, double sleep_time) {
+B_NoneType B_EnvRTSD_sleep (B_EnvRTS self, double sleep_time) {
     double st = sleep_time;
     struct timespec ts;
     ts.tv_sec = (int)st;
@@ -259,18 +247,18 @@ B_NoneType actonQ_rtsQ_sleep (B_SysCap cap, double sleep_time) {
     return B_None;
 }
 
-struct actonQ_rtsQ_io_handles_walk_res {
+struct rts_io_handles_walk_res {
     B_dict d;
 };
 
-void actonQ_rtsQ_io_handles_walk_cb (uv_handle_t *handle, void *arg) {
-    struct actonQ_rtsQ_io_handles_walk_res *walk_res = (struct actonQ_rtsQ_io_handles_walk_res *)arg;
+static void rts_io_handles_walk_cb (uv_handle_t *handle, void *arg) {
+    struct rts_io_handles_walk_res *walk_res = (struct rts_io_handles_walk_res *)arg;
     B_tuple val;
     if (uv_handle_get_type(handle) == UV_TCP) {
         $Actor hactor = handle->data;
         val = (B_tuple)$NEWTUPLE(2,
                                 actStrFromCString(uv_handle_type_name(uv_handle_get_type(handle))),
-                                toB_u64((unsigned long)hactor)
+                                toB_u64((uint64_t)(uintptr_t)hactor)
                                 );
     } else {
         val = (B_tuple)$NEWTUPLE(2,
@@ -279,62 +267,89 @@ void actonQ_rtsQ_io_handles_walk_cb (uv_handle_t *handle, void *arg) {
                                 );
     }
 
-    B_dictD_setitem(walk_res->d, toB_u64((long)handle), val);
+    B_dictD_setitem(walk_res->d, toB_u64((uint64_t)(uintptr_t)handle), val);
 }
 
-B_dict actonQ_rtsQ__io_handles (B_SysCap cap) {
+B_dict B__rts_io_handles (void) {
     B_Hashable wit = (B_Hashable)B_HashableD_u64G_witness;
     B_dict d = $NEW(B_dict, wit, NULL, NULL);
 
-    struct actonQ_rtsQ_io_handles_walk_res walk_res;
+    struct rts_io_handles_walk_res walk_res;
     walk_res.d = d;
-    uv_walk(get_uv_loop(), actonQ_rtsQ_io_handles_walk_cb, (void *)&walk_res);
+    uv_walk(get_uv_loop(), rts_io_handles_walk_cb, (void *)&walk_res);
 
     return d;
 }
 
-B_dict actonQ_rtsQ_rts_stats (B_SysCap cap) {
-    B_Hashable wit = (B_Hashable)B_HashableD_u64G_witness;
-    B_dict d = $NEW(B_dict, wit, NULL, NULL);
+B_dict B_EnvRTSD_worker_info(B_EnvRTS self) {
+    B_dict res = $NEW(B_dict, (B_Hashable)B_HashableD_intG_witness, NULL, NULL);
+    for (int64_t i = 0; i <= num_wthreads; i++) {
+        B_str name = i == 0 ? actStrFromCString("main") : $FORMAT("Worker %" PRId64, i);
+        uint64_t size = WT_STAT_GET(wt_stats[i].stack_size);
+        B_dictD_setitem(res, toB_int(i), $NEWTUPLE(2, name,
+            size ? toB_u64(size) : (B_u64)B_None));
+    }
+    return res;
+}
+
+B_dict B_EnvRTSD_worker_stats(B_EnvRTS self) {
+    B_dict res = $NEW(B_dict, (B_Hashable)B_HashableD_intG_witness, NULL, NULL);
 #define WT(f) WT_STAT_GET(wt_stats[i].f)
-    for (int i = 0; i <= num_wthreads; i++) {
-        B_tuple stats = $NEWTUPLE(28,
-                            actStrFromCString("TODO"), // state
-                            toB_u64(WT(sleeps)),
-                            toB_u64(WT(conts_count)),
-                            toB_u64(WT(conts_sum)),
-                            toB_u64(WT(conts_100ns)),
-                            toB_u64(WT(conts_1us)),
-                            toB_u64(WT(conts_10us)),
-                            toB_u64(WT(conts_100us)),
-                            toB_u64(WT(conts_1ms)),
-                            toB_u64(WT(conts_10ms)),
-                            toB_u64(WT(conts_100ms)),
-                            toB_u64(WT(conts_1s)),
-                            toB_u64(WT(conts_10s)),
-                            toB_u64(WT(conts_100s)),
-                            toB_u64(WT(conts_inf)),
-                            toB_u64(WT(bkeep_count)),
-                            toB_u64(WT(bkeep_sum)),
-                            toB_u64(WT(bkeep_100ns)),
-                            toB_u64(WT(bkeep_1us)),
-                            toB_u64(WT(bkeep_10us)),
-                            toB_u64(WT(bkeep_100us)),
-                            toB_u64(WT(bkeep_1ms)),
-                            toB_u64(WT(bkeep_10ms)),
-                            toB_u64(WT(bkeep_100ms)),
-                            toB_u64(WT(bkeep_1s)),
-                            toB_u64(WT(bkeep_10s)),
-                            toB_u64(WT(bkeep_100s)),
-                            toB_u64(WT(bkeep_inf))
-                            );
-        B_dictD_setitem(d, toB_u64(i), stats);
+    for (int64_t i = 0; i <= num_wthreads; i++) {
+        B_tuple stats = $NEWTUPLE(47,
+            actStrFromCString(WT_State_name[WT(state)]), toB_bool(record_waits),
+            toB_u64(WT(sleeps)),
+            toB_u64(WT(conts_count)),
+            toB_u64(WT(conts_sum)),
+            toB_u64(WT(conts_100ns)),
+            toB_u64(WT(conts_1us)),
+            toB_u64(WT(conts_10us)),
+            toB_u64(WT(conts_100us)),
+            toB_u64(WT(conts_1ms)),
+            toB_u64(WT(conts_10ms)),
+            toB_u64(WT(conts_100ms)),
+            toB_u64(WT(conts_1s)),
+            toB_u64(WT(conts_10s)),
+            toB_u64(WT(conts_100s)),
+            toB_u64(WT(conts_inf)),
+            toB_u64(WT(bkeep_count)),
+            toB_u64(WT(bkeep_sum)),
+            toB_u64(WT(bkeep_100ns)),
+            toB_u64(WT(bkeep_1us)),
+            toB_u64(WT(bkeep_10us)),
+            toB_u64(WT(bkeep_100us)),
+            toB_u64(WT(bkeep_1ms)),
+            toB_u64(WT(bkeep_10ms)),
+            toB_u64(WT(bkeep_100ms)),
+            toB_u64(WT(bkeep_1s)),
+            toB_u64(WT(bkeep_10s)),
+            toB_u64(WT(bkeep_100s)),
+            toB_u64(WT(bkeep_inf)),
+            toB_u64(WT(wait_count)),
+            toB_u64(WT(wait_sum)),
+            toB_u64(WT(wait_max)),
+            toB_u64(WT(wait_1us)),
+            toB_u64(WT(wait_10us)),
+            toB_u64(WT(wait_100us)),
+            toB_u64(WT(wait_1ms)),
+            toB_u64(WT(wait_10ms)),
+            toB_u64(WT(wait_100ms)),
+            toB_u64(WT(wait_1s)),
+            toB_u64(WT(wait_inf)),
+            toB_u64(WT(steal_ops)),
+            toB_u64(WT(steal_actors)),
+            toB_u64(WT(balance_ops)),
+            toB_u64(WT(balance_actors)),
+            toB_u64(WT(balance_looks)),
+            toB_u64(WT(balance_young)),
+            toB_u64(WT(balance_stale)));
+        B_dictD_setitem(res, toB_int(i), stats);
     }
 #undef WT
-    return d;
+    return res;
 }
 
-$R actonQ_rtsQ_WThreadMonitorD__initG_local (actonQ_rtsQ_WThreadMonitor self, $Cont C_cont) {
+$R B__RTSWorkerMonitorD__initG_local (B__RTSWorkerMonitor self, $Cont C_cont) {
     set_actor_affinity((int)self->wthread_id);
     return $R_CONT(C_cont, B_None);
 }

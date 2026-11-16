@@ -950,9 +950,8 @@ runModuleTestStreaming opts paths topts mode perfHostInfo baselineScale limits m
                           Nothing -> addStdErr line
     let procSpec = (proc binPath cmd)
           { cwd = Just (projPath paths)
-          , env = Just ((if mode `elem` [TestModePerf, TestModeScale] then [("ACTON_TEST_PERF", "1")] else [])
-              ++ (if C.testGcCheck topts then [("ACTON_GC_CHECK", "1")] else [])
-              ++ filter ((`notElem` ["ACTON_TEST_PERF", "ACTON_GC_CHECK"]) . fst) environment)
+          , env = Just ((if C.testGcCheck topts then [("ACTON_GC_CHECK", "1")] else [])
+              ++ filter ((/= "ACTON_GC_CHECK") . fst) environment)
           , create_group = C.watch opts || isJust limits
           , delegate_ctlc = not (C.watch opts || isJust limits)
           }
@@ -1338,7 +1337,7 @@ effectiveTestTiming mode topts =
 testCmdArgs :: TestMode -> C.TestOptions -> [String]
 testCmdArgs mode topts
   | mode `elem` [TestModePerf, TestModeScale] = ["--time", show (C.testTime topts)]
-      ++ ["--scaling" | mode == TestModeScale] ++ tagArgs ++ rtsArgs
+      ++ ["--scaling" | mode == TestModeScale] ++ ["--rts-perf"] ++ tagArgs ++ rtsArgs
   | otherwise =
     let iter = C.testIter topts
         rawMaxIter = C.testMaxIter topts

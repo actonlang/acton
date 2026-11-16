@@ -1,8 +1,5 @@
-import acton.rts
-
-
 actor main(env):
-    before = acton.rts.get_gc_info(env.syscap)
+    before = env.rts.gc_info()
     assert before.mode in ["ordinary", "generational"]
     assert before.page_hash_table_log2 > 0
     assert before.block_size >= 4096
@@ -30,8 +27,8 @@ actor main(env):
     retained = [[i, i + 1] for i in range(2048)]
     for iteration in range(4):
         garbage = [[i, iteration] for i in range(2048)]
-        acton.rts.gc(env.syscap)
-        info = acton.rts.get_gc_info(env.syscap)
+        env.rts.gc()
+        info = env.rts.gc_info()
         assert info.mode == before.mode
         assert info.backend == before.backend
         assert info.supported_backends == before.supported_backends
@@ -50,9 +47,10 @@ actor main(env):
         assert info.alloc_budget_percent == before.alloc_budget_percent
         assert info.memory_limit == before.memory_limit
         assert info.heap_ceiling_percent == before.heap_ceiling_percent
-        assert info.heap_size > 0
-        assert info.heap_size >= info.free_bytes
-        assert info.free_bytes >= info.unmapped_bytes
+        stats = env.rts.gc_stats()
+        assert stats.heap_size > 0
+        assert stats.heap_size >= stats.free_bytes
+        assert stats.free_bytes >= stats.unmapped_bytes
         assert len(garbage) == 2048
         for i, pair in enumerate(retained):
             assert pair == [i, i + 1]

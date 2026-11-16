@@ -647,7 +647,6 @@ perfIntegrationTests =
         writeFile (proj </> "Build.act") $ unlines ["name = " ++ show name, "fingerprint = " ++ fp]
         writeFile (proj </> "src/sample.act") $ unlines
           [ "import testing"
-          , "import acton.rts"
           , "import time"
           , ""
           , "actor _test_first(t: testing.AsyncT):"
@@ -669,19 +668,19 @@ perfIntegrationTests =
           , "    after 3.5: t.success()"
           , ""
           , "actor _test_peak_rss(t: testing.EnvT):"
-          , "    peak = acton.rts.get_peak_rss(t.env.syscap)"
+          , "    peak = t.env.rts.process_stats().peak_rss"
           , "    assert peak is not None and peak < 64 * 1048576"
           , "    t.success()"
           , ""
           , "actor _test_slow_setup(t: testing.EnvT):"
-          , "    acton.rts.sleep(t.env.syscap, 0.2)"
+          , "    t.env.rts.sleep(0.2)"
           , "    for scale in t.loop():"
           , "        pass"
           , "    t.success()"
           , ""
           , "actor _test_slow_body(t: testing.EnvT):"
           , "    for scale in t.loop():"
-          , "        acton.rts.sleep(t.env.syscap, 0.2)"
+          , "        t.env.rts.sleep(0.2)"
           , "    t.success()"
           , ""
           , "actor _test_looped(t: testing.EnvT):"
@@ -756,12 +755,12 @@ perfIntegrationTests =
           , "    t.success()"
           , ""
           , "actor _test_timed_body(t: testing.EnvT):"
-          , "    acton.rts.sleep(t.env.syscap, 0.02)"
+          , "    t.env.rts.sleep(0.02)"
           , "    for scale in t.loop():"
           , "        start = time.monotonic().unix_ns()"
           , "        while time.monotonic().unix_ns() - start < 1000000:"
           , "            pass"
-          , "    acton.rts.sleep(t.env.syscap, 0.02)"
+          , "    t.env.rts.sleep(0.02)"
           , "    t.success()"
           , ""
           , "actor _test_workers(t: testing.EnvT):"
@@ -771,14 +770,15 @@ perfIntegrationTests =
           , "    t.success()"
           , ""
           , "actor _test_counter_activation(t: testing.EnvT):"
-          , "    assert t.scale() == 1"
-          , "    assert t.env.vars.getenv(\"ACTON_TEST_PERF\") is None"
-          , "    info = acton.rts.perf_info(t.env.syscap)"
+          , "    assert \"--rts-perf\" not in t.env.argv"
+          , "    info = t.env.rts.perf_info()"
           , "    if \"perf\" in t.env.argv:"
           , "        assert info[\"status\"] != \"not enabled at process start\""
           , "    else:"
           , "        assert info[\"status\"] == \"not enabled at process start\""
-          , "        assert acton.rts.perf_snapshot(t.env.syscap).instructions is None"
+          , "        assert t.env.rts.perf_stats().instructions is None"
+          , "    for scale in t.loop():"
+          , "        pass"
           , "    t.success()"
           ]
         _ <- runOK ["--name", "counter_activation"]
@@ -807,8 +807,13 @@ perfIntegrationTests =
               singleJsonTest out >>= requireObject "performance"
         (ordinaryCode, ordinaryOut, ordinaryErr) <- readCreateProcessWithExitCode
           (proc acton ["test", "--iter", "1", "--name", "counter_activation", "--no-cache"])
-            { cwd = Just proj, env = Just (("ACTON_TEST_PERF", "1") : filter ((/= "ACTON_TEST_PERF") . fst) environment) } ""
+            { cwd = Just proj } ""
         assertEqual (ordinaryOut ++ ordinaryErr) ExitSuccess ordinaryCode
+        (scaleCode, scaleOut, scaleErr) <- readCreateProcessWithExitCode
+          (proc acton ["test", "scale", "--name", "counter_activation", "--start-scale", "1",
+                       "--end-scale", "1", "--max-time", "20s"])
+            { cwd = Just proj } ""
+        assertEqual (scaleOut ++ scaleErr) ExitSuccess scaleCode
         workersInfo <- runOK ["--name", "first", "--rts-wthreads", "3", "--json"]
           >>= singleJsonTest >>= requireObject "performance" >>= requireObject "measurements" >>= requireObject "perf_info"
         assertEqual "perf runs use the requested worker count" (Just (Aeson.Number 3)) (KM.lookup "workers" workersInfo)

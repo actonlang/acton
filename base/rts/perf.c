@@ -99,11 +99,8 @@ static bool perf_read_event(int fd, uint64_t *count, uint64_t *enabled, uint64_t
 }
 #endif
 
-void rts_perf_init(void) {
-    const char *enabled = getenv("ACTON_TEST_PERF");
-    perf_enabled = enabled != NULL && strcmp(enabled, "1") == 0;
-    // Do not change the behaviour of Acton subprocesses launched by a test.
-    uv_os_unsetenv("ACTON_TEST_PERF");
+void rts_perf_init(bool enabled) {
+    perf_enabled = enabled;
     if (!perf_enabled)
         return;
 #if defined(__linux__) && defined(PERF_ATTR_SIZE_VER7)
