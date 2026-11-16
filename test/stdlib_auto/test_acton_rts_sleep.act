@@ -1,16 +1,15 @@
-import acton.rts
 import time
 
 actor Interruptor(cap):
     def interrupt():
-        acton.rts.gc(cap)
+        cap.gc()
         after 0.001: interrupt()
     interrupt()
 
 actor main(env):
     def test():
         s = time.Stopwatch()
-        acton.rts.sleep(env.syscap, 0.1)
+        env.rts.sleep(0.1)
         d = s.elapsed()
         if d.to_float() < 0.1:
             print("Sleep seems to have been below 1 second :(")
@@ -18,6 +17,6 @@ actor main(env):
         else:
             return 0
 
-#    i = Interruptor(env.syscap)
+#    i = Interruptor(env.rts)
     r = test()
     env.exit(r)

@@ -29,7 +29,7 @@
 #include <termios.h>
 #endif
 #include <unistd.h>
-#ifdef ACTON_THREADS
+#if defined(ACTON_THREADS) || defined(__APPLE__) || defined(__linux__)
 #include <pthread.h>
 #endif
 #include <stdio.h>
@@ -1088,7 +1088,7 @@ struct $Cont $StartRoot$cont = {
 };
 
 $R $InitEnvD___call__ ($Cont $this, $WORD args) {
-    return env_actor->$class->__init__(env_actor, &$StartRoot$cont, B_WorldCapG_new(), B_SysCapG_new(), (B_list)args, num_wthreads, B__EnvCapG_new());
+    return env_actor->$class->__init__(env_actor, &$StartRoot$cont, B_WorldCapG_new(), (B_list)args, num_wthreads, B__EnvCapG_new());
 }
 
 extern struct $ContG_class $InitEnvG_methods;
@@ -2708,6 +2708,22 @@ static WorkerCtx new_worker_ctx(void) {
     return acton_gc_malloc_rescanned_aligned(_Alignof(struct WorkerCtx), sizeof(struct WorkerCtx));
 }
 
+static uint64_t current_stack_size(void) {
+#if defined(__APPLE__)
+    return pthread_get_stacksize_np(pthread_self());
+#elif defined(__linux__)
+    pthread_attr_t attr;
+    if (pthread_getattr_np(pthread_self(), &attr) != 0)
+        return 0;
+    size_t size = 0;
+    int err = pthread_attr_getstacksize(&attr, &size);
+    pthread_attr_destroy(&attr);
+    return err ? 0 : (uint64_t)size;
+#else
+    return 0;
+#endif
+}
+
 void *main_loop(void *idx) {
     WorkerCtx wctx = new_worker_ctx();
     wctxs[(intptr_t)idx] = wctx;
@@ -2738,6 +2754,7 @@ void *main_loop(void *idx) {
     uv_check_start(&work_ev[wctx->id], (uv_check_cb)wt_work_cb);
 
     WT_STAT_SET(wt_stats[wctx->id].state, WT_Idle);
+    WT_STAT_SET(wt_stats[wctx->id].stack_size, current_stack_size());
     int r = uv_run(wctx->uv_loop, UV_RUN_DEFAULT);
     WT_STAT_SET(wt_stats[wctx->id].state, WT_NoExist);
     rtsd_printf("Exiting...");
@@ -3531,28 +3548,49 @@ static void raise_open_file_limit(void) {
 #endif
 
 int main(int argc, char **argv) {
+#ifdef ACTON_THREADS
+    // Match the stack available to workers in macOS executables. Keep finite
+    // increases from ulimit, but never copy an unlimited or huge main stack
+    // into every worker: pthread_create can fail to reserve that much space.
+    uint64_t primary_thread_stack_size = 0;
+#if defined(IS_MACOS)
+    primary_thread_stack_size = pthread_get_stacksize_np(pthread_self());
+#else
+    struct rlimit stack_limit;
+    if (getrlimit(RLIMIT_STACK, &stack_limit) == 0 && stack_limit.rlim_cur != RLIM_INFINITY)
+        primary_thread_stack_size = stack_limit.rlim_cur;
+#endif
+    uint64_t target_thread_stack_size = REQUIRED_STACK_SIZE > primary_thread_stack_size ? REQUIRED_STACK_SIZE : primary_thread_stack_size;
+    if (target_thread_stack_size > MAX_STACK_SIZE)
+        target_thread_stack_size = MAX_STACK_SIZE;
+
+    pthread_attr_t ss_attr;
+    int err = pthread_attr_init(&ss_attr);
+    if (err) {
+        fprintf(stderr, "ERROR: pthread_attr_init failed: %s\n", strerror(err));
+        exit(1);
+    }
+    err = pthread_attr_setstacksize(&ss_attr, (size_t)target_thread_stack_size);
+    if (err) {
+        fprintf(stderr, "ERROR: pthread_attr_setstacksize failed: %s\n", strerror(err));
+        exit(1);
+    }
+
+#ifdef __GLIBC__
+    // GC marker threads and library threads initialize their own attributes.
+    // Bound glibc's inherited default before either kind can be created.
+    err = pthread_setattr_default_np(&ss_attr);
+    if (err) {
+        fprintf(stderr, "ERROR: pthread_setattr_default_np failed: %s\n", strerror(err));
+        exit(1);
+    }
+#endif
+#endif
 #ifndef _WIN32
     raise_open_file_limit();
 #endif
-    rts_perf_init();
     init_counter();
     init_clock();
-    // Init garbage collector and suppress warnings
-#ifdef _WIN32
-    GC_set_abort_func(gc_abort);
-#endif
-#ifdef ACTON_GC_DISABLE_THP
-    GC_set_on_os_get_mem(gc_disable_thp);
-#endif
-    gc_select_mode();
-    if (getenv("GC_WBAR_VERIFY") != NULL)
-        GC_set_wbar_verify_describe(gc_wbar_describe);
-    GC_INIT();
-    gc_env_restore();
-    acton_init_write_barrier();
-    GC_set_warn_proc(DaveNull);
-    acton_init_alloc();
-    acton_replace_allocator(GC_malloc, GC_malloc_atomic, GC_realloc, GC_calloc, acton_noop_free, GC_strdup, GC_strndup);
     int ddb_no_host = 0;
     char **ddb_host = NULL;
     char *rts_host = "localhost";
@@ -3565,11 +3603,7 @@ int main(int argc, char **argv) {
     int cpu_pin;
     uv_cpu_info_t* cpu_infos;
     int num_cores;
-    if (uv_cpu_info(&cpu_infos, &num_cores) != 0) {
-        log_fatal("Unable to get CPU info");
-        exit(1);
-    }
-    uv_free_cpu_info(cpu_infos, num_cores);
+    bool perf_requested = false;
     bool mon_on_exit = false;
     bool auto_backtrace = true;
     bool interactive_backtrace = false;
@@ -3581,53 +3615,11 @@ int main(int argc, char **argv) {
     appname = argv[0];
     pid = getpid();
 
-#ifndef _WIN32
-    // Do line buffered output
-    setlinebuf(stdout);
-
-    // Signal handling
-    sigfillset(&sa_abrt.sa_mask);
-    sigfillset(&sa_ill.sa_mask);
-    sigfillset(&sa_int.sa_mask);
-    sigfillset(&sa_pipe.sa_mask);
-    sigfillset(&sa_segv.sa_mask);
-    sigfillset(&sa_term.sa_mask);
-    sa_abrt.sa_flags = SA_RESTART;
-    sa_ill.sa_flags = SA_RESTART;
-    sa_int.sa_flags = SA_RESTART;
-    sa_pipe.sa_flags = SA_RESTART;
-    sa_segv.sa_flags = SA_RESTART;
-    sa_term.sa_flags = SA_RESTART;
-
-    // Ignore SIGPIPE, like we get if the other end talking to us on the Monitor
-    // socket (which is a Unix domain socket) goes away.
-    sa_pipe.sa_handler = SIG_IGN;
-    // Handle signals
-    sa_int.sa_handler = &sigint_handler;
-    sa_term.sa_handler = &sigterm_handler;
-
-    if (sigaction(SIGPIPE, &sa_pipe, NULL) == -1) {
-        log_fatal("Failed to install signal handler for SIGPIPE: %s", strerror(errno));
-        exit(1);
-    }
-    if (sigaction(SIGINT, &sa_int, NULL) == -1) {
-        log_fatal("Failed to install signal handler for SIGINT: %s", strerror(errno));
-        exit(1);
-    }
-    if (sigaction(SIGTERM, &sa_term, NULL) == -1) {
-        log_fatal("Failed to install signal handler for SIGTERM: %s", strerror(errno));
-        exit(1);
-    }
-#endif
-
-#ifndef ACTON_THREADS
-    self_actor = NULL;
-#endif
-
     log_set_quiet(true);
     /*
-     * A note on argument parsing: The RTS has its own command line arguments,
-     * all prefixed with --rts-, which we need to parse out. The remainder of
+     * Parse before GC startup so performance events reach all runtime threads.
+     * The RTS has its own command line arguments, all prefixed with --rts-,
+     * which we need to parse out. The remainder of
      * the arguments should be passed on to the Acton program, thus we need to
      * fiddle with argv. To avoid modifying argv in place, we create a new argc
      * and argv which we bootstrap the Acton program with. The special -- means
@@ -3662,6 +3654,7 @@ int main(int argc, char **argv) {
         {"rts-mon-on-exit", NULL, 'E', "Print RTS mon stats to stdout on exit"},
         {"rts-mon-socket-path", "PATH", 'm', "Path to unix socket to expose RTS mon stats"},
         {"rts-no-bt", NULL, 'B', "Disable automatic backtrace"},
+        {"rts-perf", NULL, 'P', "Enable process hardware performance counters"},
         {"rts-log-path", "PATH", 'L', "Path to RTS log"},
         {"rts-log-stderr", NULL, 's', "Log to stderr in addition to log file"},
         {"rts-verbose", NULL, 'v', "Enable verbose RTS output"},
@@ -3673,19 +3666,23 @@ int main(int argc, char **argv) {
 
     int ch = 0;
     // where we map current (i) argc position into new_argc
-    int new_argc_dst = 0;
+    int new_argc_dst = 1;
     // stop scanning once we've seen '--', passing the rest verbatim
     int opt_scan = 1;
     char **new_argv = acton_malloc((argc+1) * sizeof *new_argv);
+    new_argv[0] = argv[0];
     char *optarg = NULL;
-    for (int i = 0; i < argc; i++) {
+    for (int i = 1; i < argc; i++) {
         ch = 0;
         optarg = NULL;
         if (strcmp(argv[i], "--") == 0) opt_scan = 0;
         if (opt_scan) {
             for (int j=0; j<OPTLEN; j++) {
-                if (strlen(argv[i]) > 2
-                    && strncmp(argv[i]+2, long_options[j].name, strlen(long_options[j].name)) == 0) {
+                size_t name_len = strlen(long_options[j].name);
+                if (strncmp(argv[i], "--", 2) == 0
+                    && strncmp(argv[i]+2, long_options[j].name, name_len) == 0
+                    && (argv[i][2+name_len] == '\0'
+                        || (long_options[j].arg_name && argv[i][2+name_len] == '='))) {
                     // argv[i] matches one of our options!
                     ch = long_options[j].val;
                     new_argc--;
@@ -3753,6 +3750,9 @@ int main(int argc, char **argv) {
             case 'm':
                 mon_socket_path = optarg;
                 break;
+            case 'P':
+                perf_requested = true;
+                break;
             case 'p':
                 ddb_port = atoi(optarg);
                 break;
@@ -3788,6 +3788,73 @@ int main(int argc, char **argv) {
         }
     }
     new_argv[new_argc] = NULL;
+
+    rts_perf_init(perf_requested);
+    // Init garbage collector and suppress warnings
+#ifdef _WIN32
+    GC_set_abort_func(gc_abort);
+#endif
+#ifdef ACTON_GC_DISABLE_THP
+    GC_set_on_os_get_mem(gc_disable_thp);
+#endif
+    gc_select_mode();
+    if (getenv("GC_WBAR_VERIFY") != NULL)
+        GC_set_wbar_verify_describe(gc_wbar_describe);
+    GC_INIT();
+    gc_env_restore();
+    acton_init_write_barrier();
+    GC_set_warn_proc(DaveNull);
+    acton_init_alloc();
+    acton_replace_allocator(GC_malloc, GC_malloc_atomic, GC_realloc, GC_calloc, acton_noop_free, GC_strdup, GC_strndup);
+
+    if (uv_cpu_info(&cpu_infos, &num_cores) != 0) {
+        log_fatal("Unable to get CPU info");
+        exit(1);
+    }
+    uv_free_cpu_info(cpu_infos, num_cores);
+
+#ifndef _WIN32
+    // Do line buffered output
+    setlinebuf(stdout);
+
+    // Signal handling
+    sigfillset(&sa_abrt.sa_mask);
+    sigfillset(&sa_ill.sa_mask);
+    sigfillset(&sa_int.sa_mask);
+    sigfillset(&sa_pipe.sa_mask);
+    sigfillset(&sa_segv.sa_mask);
+    sigfillset(&sa_term.sa_mask);
+    sa_abrt.sa_flags = SA_RESTART;
+    sa_ill.sa_flags = SA_RESTART;
+    sa_int.sa_flags = SA_RESTART;
+    sa_pipe.sa_flags = SA_RESTART;
+    sa_segv.sa_flags = SA_RESTART;
+    sa_term.sa_flags = SA_RESTART;
+
+    // Ignore SIGPIPE, like we get if the other end talking to us on the Monitor
+    // socket (which is a Unix domain socket) goes away.
+    sa_pipe.sa_handler = SIG_IGN;
+    // Handle signals
+    sa_int.sa_handler = &sigint_handler;
+    sa_term.sa_handler = &sigterm_handler;
+
+    if (sigaction(SIGPIPE, &sa_pipe, NULL) == -1) {
+        log_fatal("Failed to install signal handler for SIGPIPE: %s", strerror(errno));
+        exit(1);
+    }
+    if (sigaction(SIGINT, &sa_int, NULL) == -1) {
+        log_fatal("Failed to install signal handler for SIGINT: %s", strerror(errno));
+        exit(1);
+    }
+    if (sigaction(SIGTERM, &sa_term, NULL) == -1) {
+        log_fatal("Failed to install signal handler for SIGTERM: %s", strerror(errno));
+        exit(1);
+    }
+#endif
+
+#ifndef ACTON_THREADS
+    self_actor = NULL;
+#endif
 
 #ifndef _WIN32
     capture_exe_path();
@@ -3886,6 +3953,7 @@ int main(int argc, char **argv) {
         wt_stats[i].idx = i;
         sprintf(wt_stats[i].key, "%d", i);
         wt_stats[i].state = 0;
+        wt_stats[i].stack_size = 0;
         wt_stats[i].sleeps = 0;
 
         wt_stats[i].conts_count = 0;
@@ -3995,6 +4063,7 @@ int main(int argc, char **argv) {
     thread_wctx = wctx;
 #endif
     start_keys(FIRST_KEY);
+    WT_STAT_SET(wt_stats[0].stack_size, current_stack_size());
 
     $ROOTINIT();
     acton_replace_allocator(GC_malloc, GC_malloc_atomic, GC_realloc, GC_calloc, acton_noop_free, GC_strdup, GC_strndup);
@@ -4073,32 +4142,7 @@ int main(int argc, char **argv) {
 #ifdef ACTON_THREADS
     cpu_set_t cpu_set;
 
-    size_t primary_thread_stack_size;
-    size_t target_thread_stack_size;
-#if defined(IS_MACOS)
-    primary_thread_stack_size = pthread_get_stacksize_np(pthread_self());
-#else
-    pthread_attr_t attr;
-    pthread_getattr_np(pthread_self(), &attr);
-    pthread_attr_getstacksize(&attr, &primary_thread_stack_size);
-    pthread_attr_destroy(&attr);
-#endif
-    target_thread_stack_size = REQUIRED_STACK_SIZE > primary_thread_stack_size ? (size_t)REQUIRED_STACK_SIZE : primary_thread_stack_size;
-
-    if (primary_thread_stack_size < target_thread_stack_size)
-        log_warn("Current primary thread stack size: %u, required thread stack size: %u", primary_thread_stack_size, target_thread_stack_size);
-
-    pthread_attr_t ss_attr;
-    size_t secondary_thread_stack_size = 0;
-    pthread_attr_init(&ss_attr);
-    pthread_attr_getstacksize(&ss_attr, &secondary_thread_stack_size);
-    if (secondary_thread_stack_size < target_thread_stack_size)
-    {
-        log_debug("Secondary thread stack size: %d, required thread stack size: %d", secondary_thread_stack_size, target_thread_stack_size);
-        int err = pthread_attr_setstacksize(&ss_attr, target_thread_stack_size);
-        if (err)
-            log_error("pthread_attr_setstacksize failed: %s", strerror(err));
-    }
+    log_debug("Worker thread stack size: %" PRIu64, target_thread_stack_size);
 
     // RTS Monitor Log
     pthread_t mon_log_thread;
@@ -4129,7 +4173,11 @@ int main(int argc, char **argv) {
     // branches we start. Worker threads get no CPU affinity: a process that
     // a worker spawns inherits it, and zig then builds on a single CPU.
     for (int idx = 1; idx <= num_wthreads; idx++) {
-        pthread_create(&threads[idx-1], &ss_attr, main_loop, (void*)(intptr_t)idx);
+        err = pthread_create(&threads[idx-1], &ss_attr, main_loop, (void*)(intptr_t)idx);
+        if (err) {
+            fprintf(stderr, "ERROR: pthread_create failed for worker %d: %s\n", idx, strerror(err));
+            exit(1);
+        }
     }
     sync_pause_workers_started();
 

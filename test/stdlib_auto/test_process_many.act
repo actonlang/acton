@@ -1,9 +1,6 @@
-import acton.rts
-
-
 actor GC(env):
     def _tihi():
-        acton.rts.gc(env.syscap)
+        env.rts.gc()
         after 0.0001: _tihi()
 
     after 0: _tihi()

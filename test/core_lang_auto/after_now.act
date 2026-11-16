@@ -3,13 +3,12 @@
 # handler puts the baseline 0.3 s behind the current time, so the plain
 # after 0.25 is already due and must fire before after now 0.2.
 
-import acton.rts
 import time
 
 actor main(env):
     var order = []
 
-    acton.rts.sleep(env.syscap, 0.3)
+    env.rts.sleep(0.3)
     scheduled = time.Stopwatch()
 
     def inherited():

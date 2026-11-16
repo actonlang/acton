@@ -4060,7 +4060,6 @@ main = do
           , ("GC_MARKERS", "2")
           , ("PATH", "/usr/bin")
           , ("HOME", "/home/user")
-          , ("ACTON_TEST_PERF", "1")
           , ("ACTON_GC_CHECK", "1")
           ]
           `shouldBe` M.fromList

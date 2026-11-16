@@ -1,4 +1,3 @@
-import acton.rts
 import shared
 
 def check(page_hash_log2: int, generational: bool) -> int:
@@ -11,7 +10,7 @@ actor main(env):
     records = shared.make()
     assert check(log2, generational) == 0
 
-    info = acton.rts.get_gc_info(env.syscap)
+    info = env.rts.gc_info()
     # The collector is built with the manual dirty-bit mode only, whose bits
     # the write barrier sets
     assert info.backend == ("manual" if generational else "none")
@@ -23,9 +22,10 @@ actor main(env):
     assert info.markers == 2
     assert info.free_space_divisor == 5
     assert info.full_frequency == 7
-    assert info.heap_size > 0
-    assert info.heap_size >= info.free_bytes
-    assert info.free_bytes >= info.unmapped_bytes
+    stats = env.rts.gc_stats()
+    assert stats.heap_size > 0
+    assert stats.heap_size >= stats.free_bytes
+    assert stats.free_bytes >= stats.unmapped_bytes
 
     if generational:
         # Steps of the default 50 ms

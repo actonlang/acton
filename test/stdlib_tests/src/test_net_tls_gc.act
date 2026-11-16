@@ -1,4 +1,3 @@
-import acton.rts
 import net
 import random
 import test_net_tls
@@ -7,8 +6,8 @@ import time
 
 
 def _force_gc(t: testing.EnvT):
-    acton.rts.gc(t.env.syscap)
-    acton.rts.gc(t.env.syscap)
+    t.env.rts.gc()
+    t.env.rts.gc()
 
 WATCHDOG_INTERVAL_S = 0.25
 TLS_GC_TEST_TIMEOUT_S = 10.0

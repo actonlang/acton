@@ -33,6 +33,7 @@ arguments can be passed either with --rts-option=ARG or --rts-option ARG
   --rts-mon-on-exit                 Print RTS mon stats to stdout on exit
   --rts-mon-socket-path=PATH        Path to unix socket to expose RTS mon stats
   --rts-no-bt                       Disable automatic backtrace
+  --rts-perf                        Enable process hardware performance counters
   --rts-log-path=PATH               Path to RTS log
   --rts-log-stderr                  Log to stderr in addition to log file
   --rts-verbose                     Enable verbose RTS output
@@ -48,6 +49,18 @@ Per default, the RTS starts as many worker threads as there are CPU threads avai
 It is possible to specify the number of worker threads with `--rts-wthreads=COUNT`, up to the same limit.
 
 Actor method continuations run to completion, which is why it is wise not to set this value too low. Per default a minimum of 4 threads are started even when there are fewer CPU threads available, which means the operating system will switch between the threads inducing context switching overhead.
+
+# Performance counters
+
+Use `--rts-perf` to enable cumulative process instructions and CPU cycles,
+read through `env.rts.perf_stats()`. The RTS sets up counters before creating
+collector and worker threads. `acton test perf` and `acton test scale` pass
+this option automatically. Child processes need their own option to enable
+counters.
+
+`env.rts.perf_info()` reports whether counters are available. Hardware
+measurements are `None` when unsupported or denied by the operating system.
+Process CPU time and memory measurements do not require this option.
 
 # Open files
 

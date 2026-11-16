@@ -118,9 +118,10 @@ instance Aeson.FromJSON TestRunContext where
       <*> o Aeson..:? AesonKey.fromString "environment" Aeson..!= M.empty
 
 -- | The environment variables that the test runner sets for a test process
--- from its own options.  A test process never inherits them.
+-- from its own options (ACTON_GC_CHECK from --gc-check).  A test process
+-- never inherits them.
 testRunnerVariables :: [String]
-testRunnerVariables = ["ACTON_TEST_PERF", "ACTON_GC_CHECK"]
+testRunnerVariables = ["ACTON_GC_CHECK"]
 
 -- | The part of acton test's environment that a cached test result depends
 -- on: the variables of the Acton RTS (ACTON_) and of its garbage collector

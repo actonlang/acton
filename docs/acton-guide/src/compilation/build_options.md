@@ -500,7 +500,7 @@ memory limit is known. In incremental and generational mode, the heap grows in
 steps, but the amount allocated between collections still shrinks near the
 ceiling.
 
-`get_gc_info` reports the limit in effect as `memory_limit`, 0 if none is
+`env.rts.gc_info()` reports the limit in effect as `memory_limit`, 0 if none is
 known, and the ceiling percentage as `heap_ceiling_percent`. With
 `GC_PRINT_STATS=1`, the collector logs the limit and where it came from when
 the program starts, and after each collection the amount allocated between
@@ -754,7 +754,7 @@ time off the cold inventory at the same wall time, and 8 MiB took 11% for 5%
 more wall time.
 
 The setting has no effect on a target without threads, where
-`get_gc_info` reports 0. This is a build setting shared by the application
+`env.rts.gc_info()` reports 0. This is a build setting shared by the application
 and its dependencies, including database support.
 
 ## GC object end padding
@@ -901,7 +901,7 @@ devices, the small cold inventory, `coro-prime-sieve`, `secp256k1` and
 `fasta`. On larger heaps the peak did not change beyond its spread between
 runs.
 
-The setting has no effect on a target without threads, where `get_gc_info`
+The setting has no effect on a target without threads, where `env.rts.gc_info()`
 reports 0. This is a build setting shared by the application and its
 dependencies, including database support.
 
@@ -986,10 +986,9 @@ ways.
 An application can inspect its current collector configuration:
 
 ```python
-import acton.rts
 
 actor main(env):
-    info = acton.rts.get_gc_info(env.syscap)
+    info = env.rts.gc_info()
     print(info.mode)
     print(info.backend)
     env.exit(0)
@@ -1007,14 +1006,47 @@ The result also reports `page_hash_table_log2`, `block_size`, `end_padding`,
 the initiating thread), `bytes_per_marker`, `mark_range_stealing`, `mark_bits`,
 `initial_mark_stack_size`, `pause_target_ms`, `free_space_divisor`,
 `full_frequency`, `heap_growth_divisor`, `alloc_budget_percent`,
-`memory_limit`, `heap_ceiling_percent`, `heap_size`, `free_bytes` and
-`unmapped_bytes`. The pause target is `None` for ordinary and unlimited
-generational collection, and is not a guaranteed maximum pause. Available
+`memory_limit` and `heap_ceiling_percent`. The pause target is `None` for
+ordinary and unlimited generational collection, and is not a guaranteed maximum pause. Available
 markers need not participate in every incremental marking attempt. Settings
 that an environment variable can override are reported as in effect, after the
 override.
 
-Heap sizes are bytes; both `heap_size` and `free_bytes` include unmapped
+`env.rts.gc_stats()` reports heap sizes, allocation counts and collection
+time. Heap sizes are bytes; both `heap_size` and `free_bytes` include unmapped
 capacity. Their difference approximates occupied GC heap, not resident memory
 or deployment memory. The query takes a consistent snapshot and does not
 change collector policy or force a collection.
+
+## Inspecting the runtime
+
+Runtime services are available through `env.rts`, an `EnvRTS` class. Pass this
+object to code that needs runtime access. It replaces the `acton.rts` module
+and its `SysCap` argument.
+
+`worker_info()` describes the main thread (ID 0) and workers, including actual
+stack sizes captured at startup. A stack size is `None` until that worker has
+finished initializing, or when the platform cannot report it. Threaded builds
+use a worker stack of at least 16 MiB. A larger finite main-thread stack
+limit raises the worker request up to a cap of 64 MiB; an unlimited limit
+uses the minimum. This also bounds the default stack for GC helper threads
+on glibc Linux.
+
+`worker_stats()` reports current states and cumulative continuation, bookkeeping, queue
+wait, stealing and balancing counters. Durations are nanoseconds. Queue wait
+measurement runs only when RTS monitoring is enabled; `waits_enabled` tells
+whether those counters are collected. Values are independent observations,
+so fields can reflect different moments while workers run.
+
+`process_stats()` reports resident memory and peak resident memory in bytes,
+and process user and system CPU time in nanoseconds. Unavailable values are
+`None`. `perf_info()` describes the counter backend and machine, while
+`perf_stats()` reads cumulative CPU and hardware counters. Hardware counters
+require `--rts-perf` at startup. `acton test perf` and `acton test scale`
+pass this option automatically.
+
+`io_handles()` inspects each event loop and returns handles grouped by worker
+ID. `gc()`, `enable_gc()`, `disable_gc()` and
+`start_gc_performance_measurement()` control the collector. `sleep(seconds)`
+puts the calling worker thread to sleep, including other actors on that worker;
+it is intended to simulate work in tests and benchmarks.

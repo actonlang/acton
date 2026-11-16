@@ -1,6 +1,3 @@
-import acton.rts
-
-
 actor main(env):
     # Each chunk is a large object in its own heap blocks.
     chunk_size = 4 * 1024 * 1024
@@ -13,9 +10,9 @@ actor main(env):
 
     # The first collection frees the chunks. A collection that unmaps free
     # memory would return them to the system in the second one.
-    acton.rts.gc(env.syscap)
-    acton.rts.gc(env.syscap)
-    info = acton.rts.get_gc_info(env.syscap)
+    env.rts.gc()
+    env.rts.gc()
+    info = env.rts.gc_stats()
 
     # A stale word on the stack may keep a chunk or two reachable.
     mapped_free = info.free_bytes - info.unmapped_bytes

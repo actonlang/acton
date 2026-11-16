@@ -6,7 +6,6 @@
 # 70.
 #
 # wbar_init_call [ROUNDS KEEP]
-import acton.rts
 
 class Pad(object):
     def __init__(self):
@@ -90,7 +89,7 @@ actor main(env):
     # A full collection marks every Thing and leaves their blocks clean.
     # Then a re-initialized Thing is the only object that points to its new
     # tuple, and the garbage starts minor collections.
-    acton.rts.gc(env.syscap)
+    env.rts.gc()
     for r in range(rounds):
         reinit(keep[r % nkeep], r)
         expect[r % nkeep] = r

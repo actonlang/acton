@@ -669,14 +669,11 @@ actor main(env: Env):
     proc def run_acton(threads: int, test: str) -> None:
         scale, time_ms = sizes(test)
         time_ms = budget if budget > 0 else time_ms
-        if counters == "off":
-            await async env.vars.unsetenv("ACTON_TEST_PERF")
-        else:
-            await async env.vars.setenv("ACTON_TEST_PERF", "1")
+        perf_args = [] if counters == "off" else ["--rts-perf"]
         binary = paths["acton"]
         # The test/perf project directory, as `acton test perf` runs it
         project = "/".join(binary.split("/")[:-3])
-        run([binary, "--rts-wthreads", str(threads), "test", "_test_" + test + "_wrapper",
+        run([binary] + perf_args + ["--rts-wthreads", str(threads), "test", "_test_" + test + "_wrapper",
              "perf", "--scale", str(scale), "--time", str(time_ms)], project if project != "" else None, acton_done)
 
     proc def acton_done(code: int, stdout: str, stderr: str) -> None:
