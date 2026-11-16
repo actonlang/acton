@@ -79,6 +79,7 @@
     - [Numeric protocols](stdlib/builtin_protocols/numeric.md)
     - [Collection protocols](stdlib/builtin_protocols/collection.md)
   - [Standard Library](stdlib/standard_library.md)
+    - [std.crypto.aead.aes_gcm](stdlib/crypto_aead_aes_gcm.md)
     - [std.math](stdlib/math.md)
     - [std.random](stdlib/random.md)
     - [std.re](stdlib/re.md)
