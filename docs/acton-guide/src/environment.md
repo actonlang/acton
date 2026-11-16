@@ -29,12 +29,14 @@ piece instead of the whole environment.</p>
 - `env.vars` for environment variables
 - `env.stdio` for stdin, stdout, stderr and terminal settings
 - `env.process` for starting child processes
+- `env.random` for secure random numbers
 - `env.exit(n)` to terminate the program
 
 - [Environment variables](environment/variables.md)
 - [Reading stdin input](environment/stdin.md)
 - [Interactive stdin input](environment/interactive_stdin.md)
 - [Child processes](environment/processes.md)
+- [Random numbers](environment/random.md)
 
 `env.vars`, `env.stdio` and `env.process` are actors. A call to one of
 them works like any other actor call: a call whose result is not used
@@ -58,11 +60,14 @@ Exit does not wait for other actors to finish their work. Await the output,
 cleanup or other operation that must finish before requesting exit; awaiting
 `env.exit(n)` itself does not provide that ordering.
 
+`env.random` is a class, so its methods run directly in the calling
+actor. See [Random numbers](environment/random.md).
+
 Use `env` when code needs process arguments, environment variables,
-standard input, terminal configuration or child processes. Pass it only
-to the code that actually needs that access. When a helper needs only
-one of the services, pass it that service, such as `env.vars`, instead
-of the whole `env`.
+standard input, terminal configuration, child processes or random
+numbers. Pass it only to the code that actually needs that access. When
+a helper needs only one of the services, pass it that service, such as
+`env.vars`, instead of the whole `env`.
 
 <div class="advanced-content">
 <p><code>env</code> is best understood as a bundle of process-level

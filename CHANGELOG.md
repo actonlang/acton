@@ -196,6 +196,13 @@
   outermost named handler; set `app_name` to override it.
   The guide includes runnable UDP and TCP examples and TLS configuration.
   [#3323] [#3344] [#3375] [#3384]
+- Add `env.random`, the capability to draw secure random numbers, and the
+  builtin `Random` protocol it implements. `rand_u64()` and `rand_bytes(n)`
+  come from a per-thread ChaCha8 generator seeded from the operating system,
+  and run in the calling actor without a message to `Env`. The protocol adds
+  `rand_int()`, `rand_float()`, `below(n)` and `between(lo, hi)`, with
+  half-open ranges and no modulo bias. Take `EnvRandom` where the numbers must
+  be secure, and any `Random` where they need not be.
 - Use private CAs and client certificates with `net.TLSConnection` and
   `net.TLSListener` through `ca_pem`, `cert_pem`, and `key_pem`.
   Listeners request client certificates with `client_auth=True`. Set

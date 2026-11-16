@@ -1704,9 +1704,142 @@ actor Env (wc: WorldCap, args: list[str], wthreads: int, envcap: _EnvCap):
     stdio = Stdio(envcap, vars)
     process = EnvProcess(envcap, vars)
     rts = EnvRTS(envcap, wthreads)
+    random = EnvRandom(envcap)
 
     action def exit(n: int):
         NotImplemented
+
+protocol Random:
+    """A source of uniformly distributed random numbers
+
+    A source implements rand_u64, and the protocol builds the other methods on
+    it. A source may override them with a faster equivalent, but must then
+    return exactly what the default would for the same rand_u64 values, so that
+    seeded sequences do not change.
+
+    env.random is a source of secure random numbers from the operating system.
+    """
+    rand_u64 : mut() -> u64
+    rand_int : mut() -> int
+    rand_float : mut() -> float
+    rand_bytes : mut(int) -> bytes
+    below : mut(int) -> int
+    between : mut(int, int) -> int
+
+    mut def rand_int(self) -> int:
+        """Return a random int x with x >= 0
+
+        Every non-negative int is equally likely. For an int in a range, use
+        below or between.
+        """
+        return int(self.rand_u64() >> 1)
+
+    mut def rand_float(self) -> float:
+        """Return a random float x with 0.0 <= x < 1.0
+
+        x is a multiple of 2**-53, and each of the 2**53 multiples in the range
+        is equally likely.
+        """
+        return float(self.rand_u64() >> 11) * 1.1102230246251565e-16 # 2**-53
+
+    mut def rand_bytes(self, n: int) -> bytes:
+        """Return n random bytes
+
+        Each rand_u64 value supplies 8 bytes, least significant first. Raises
+        ValueError if n < 0.
+        """
+        if n < 0:
+            raise ValueError(f"rand_bytes: n must not be negative, got {n}")
+        res: list[int] = []
+        x: u64 = 0
+        for i in range(n):
+            if i % 8 == 0:
+                x = self.rand_u64()
+            res.append(int(x & 255))
+            x = x >> 8
+        return bytes(res)
+
+    mut def below(self, n: int) -> int:
+        """Return a random int x with 0 <= x < n
+
+        Every such x is equally likely. Raises ValueError if n <= 0.
+        """
+        if n <= 0:
+            raise ValueError(f"below: n must be positive, got {n}")
+        return int(_random_uniform(self, u64(n)))
+
+    mut def between(self, lo: int, hi: int) -> int:
+        """Return a random int x with lo <= x < hi
+
+        hi itself is never returned, so a die roll is between(1, 7). Every such
+        x is equally likely, even when hi - lo does not fit in an int. Raises
+        ValueError if lo >= hi.
+        """
+        if lo >= hi:
+            raise ValueError(f"between: lo must be less than hi, got {lo} and {hi}")
+        # The arithmetic is done in u64, where it wraps, so the span and the
+        # offset from lo are exact whatever lo and hi are.
+        ulo = _random_as_u64(lo)
+        return _random_as_int(ulo + _random_uniform(self, _random_as_u64(hi) - ulo))
+
+mut def _random_uniform[R(Random)](r: R, n: u64) -> u64:
+    """Return a random u64 x with 0 <= x < n, for n > 0"""
+    # Reject the 2**64 % n smallest values, leaving a multiple of n values to
+    # reduce mod n, so that no remainder is more likely than another. At least
+    # half of all values are kept, whatever n is.
+    threshold = (18446744073709551615 - n + 1) % n
+    x = r.rand_u64()
+    while x < threshold:
+        x = r.rand_u64()
+    return x % n
+
+def _random_as_u64(x: int) -> u64:
+    """The u64 with the same 64 bits as x, as two's complement"""
+    if x >= 0:
+        return u64(x)
+    return u64(x + 9223372036854775807 + 1) + 9223372036854775808
+
+def _random_as_int(x: u64) -> int:
+    """The int with the same 64 bits as x, as two's complement"""
+    if x < 9223372036854775808:
+        return int(x)
+    return int(x - 9223372036854775808) - 9223372036854775807 - 1
+
+class EnvRandom():
+    """Secure random numbers from the operating system, reached as env.random
+
+    Use it for keys, nonces, tokens and anything else that must not be
+    guessable. Each thread draws from its own ChaCha8 generator with forward
+    secrecy, seeded from the operating system's entropy source the first time
+    that thread asks for random data. If the operating system cannot provide
+    entropy, the methods raise OSError rather than fall back to something
+    weaker.
+
+    EnvRandom is a class, so its methods run directly in the calling actor and
+    return their result at once, without a message to Env.
+
+    EnvRandom implements the Random protocol, which adds rand_int, rand_float,
+    below and between.
+    """
+    def __init__(self, envcap: _EnvCap):
+        pass
+
+    mut def rand_u64(self) -> u64:
+        """Return a random u64"""
+        NotImplemented
+
+    mut def rand_bytes(self, n: int) -> bytes:
+        """Return n random bytes"""
+        NotImplemented
+
+# The methods of EnvRandom itself are written in C, and its rand_bytes fills
+# the result straight from the generator rather than 8 bytes at a time.
+extension EnvRandom(Random):
+    mut def rand_u64(self) -> u64:
+        return self.rand_u64()
+
+    mut def rand_bytes(self, n: int) -> bytes:
+        return self.rand_bytes(n)
 
 actor EnvVar(envcap: _EnvCap):
     """Environment variables of the process, reached as env.vars"""

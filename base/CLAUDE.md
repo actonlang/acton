@@ -38,6 +38,16 @@ cd base && zig build
 - Env and its service actors: env.vars (EnvVar), env.stdio (Stdio) and
   env.process (EnvProcess, which starts Process and RunProcess), with their
   C in `__builtin__.ext.c` and `builtin/env.c`
+- env.random (EnvRandom), a class whose methods run in the calling actor,
+  with secure random bytes from a per-thread ChaCha8 generator in
+  `base/__root.zig`, and the Random protocol it implements
+- An extension written in `__builtin__.act`, such as EnvRandom(Random), needs
+  its witness object (`B_RandomD_EnvRandomG_witness`) defined by hand in
+  `builtin/staticWitnesses.c` and declared in `builtin/staticWitnesses.h`;
+  the compiler generates only its class
+- A method in `__builtin__.act` cannot share its name with a builtin type
+  (`int`, `bytes`, `u64`, ...): inside the class or protocol body the method
+  hides the type
 
 #### `file.act` / `file.ext.c`
 - File I/O operations

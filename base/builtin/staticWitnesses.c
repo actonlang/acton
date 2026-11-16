@@ -117,6 +117,7 @@ extern struct B_LogicalD_IntegralD_bigint B_LogicalD_IntegralD_bigintG_instance;
 extern struct B_MinusD_IntegralD_bigint B_MinusD_IntegralD_bigintG_instance;
 extern struct B_IntegralD_bigint B_IntegralD_bigintG_instance;
 extern struct B_HashableD_bool B_HashableD_boolG_instance;
+extern struct B_RandomD_EnvRandom B_RandomD_EnvRandomG_instance;
 struct B_HashableD_bytes B_HashableD_bytesG_instance = {&B_HashableD_bytesG_methods};
 struct B_TimesD_bytes B_TimesD_bytesG_instance = {&B_TimesD_bytesG_methods};
 struct B_ContainerD_bytes B_ContainerD_bytesG_instance = {&B_ContainerD_bytesG_methods, (B_Eq)&B_OrdD_intG_instance};
@@ -427,6 +428,7 @@ struct B_MinusD_IntegralD_bigint B_MinusD_IntegralD_bigintG_instance = {
 };
 struct B_IntegralD_bigint B_IntegralD_bigintG_instance = {&B_IntegralD_bigintG_methods, (B_Minus)&B_MinusD_IntegralD_bigintG_instance, (B_Logical)&B_LogicalD_IntegralD_bigintG_instance};
 struct B_HashableD_bool  B_HashableD_boolG_instance = {&B_HashableD_boolG_methods};
+struct B_RandomD_EnvRandom B_RandomD_EnvRandomG_instance = {&B_RandomD_EnvRandomG_methods};
 
 
 B_HashableD_bytes B_HashableD_bytesG_witness = &B_HashableD_bytesG_instance;
@@ -538,6 +540,7 @@ B_LogicalD_IntegralD_bigint B_LogicalD_IntegralD_bigintG_witness = &B_LogicalD_I
 B_MinusD_IntegralD_bigint B_MinusD_IntegralD_bigintG_witness = &B_MinusD_IntegralD_bigintG_instance;
 B_IntegralD_bigint B_IntegralD_bigintG_witness = &B_IntegralD_bigintG_instance;
 B_HashableD_bool B_HashableD_boolG_witness = &B_HashableD_boolG_instance;
+B_RandomD_EnvRandom B_RandomD_EnvRandomG_witness = &B_RandomD_EnvRandomG_instance;
 
 struct B_OrdD_list B_OrdD_listD_bytesG_instance = {&B_OrdD_listG_methods, (B_Ord)&B_OrdD_bytesG_instance};
 B_OrdD_list B_OrdD_listD_bytesG_witness = &B_OrdD_listD_bytesG_instance;

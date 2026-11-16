@@ -70,6 +70,7 @@
       - [Reading stdin input](environment/stdin.md)
       - [Interactive stdin input](environment/interactive_stdin.md)
       - [Child processes](environment/processes.md)
+      - [Random numbers](environment/random.md)
   
 - [Built-in & Standard Library](stdlib.md)
   - [Built-in protocols](stdlib/builtin_protocols.md)
