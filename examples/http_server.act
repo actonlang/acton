@@ -65,7 +65,7 @@ actor main(env):
         server.cb_install(on_request, on_error)
 
     def on_request(server, request, respond):
-        respond(200, {"Content-Type": "text/plain"}, "Hello from the Acton HTTPS server")
+        respond(200, {"Content-Type": "text/plain"}, b"Hello from the Acton HTTPS server")
 
     def on_error(server, error):
         print("HTTPS server error:", error)

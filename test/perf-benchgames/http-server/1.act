@@ -51,9 +51,9 @@ actor main(env):
             print(total)
             env.exit(0)
 
-    def request(server: http.Server, req: http.Request, respond: action(int, dict[str, str], str) -> None):
+    def request(server: http.Server, req: http.Request, respond: action(int, dict[str, str], bytes) -> None):
         obj = json.decode(req.body.decode())
-        respond(200, {"Content-Type": "application/json"}, str(obj["value"]))
+        respond(200, {"Content-Type": "application/json"}, str(obj["value"]).encode())
 
     def server_error(server: http.Server, message: str):
         fail(message)

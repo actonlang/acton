@@ -115,8 +115,7 @@ def build_request(host: str, method: bytes, path: bytes, version: bytes, headers
     return res
 
 
-def build_response(version: bytes, status: int, headers: dict[str, str], body: str):
-    b = body.encode()
+def build_response(version: bytes, status: int, headers: dict[str, str], body: bytes) -> bytes:
     # TODO: Add Connection?
     status_line: bytes = b"HTTP/" + version + b" " + str(status).encode()
     if status in responses:
@@ -137,11 +136,11 @@ def build_response(version: bytes, status: int, headers: dict[str, str], body: s
             continue
         r.append(k.encode() + b": " + v.encode())
 
-    r.append(b"Content-Length: " + str(len(b)).encode())
+    r.append(b"Content-Length: " + str(len(body)).encode())
     r.append(b"\r\n")
     res = b"\r\n".join(r)
-    if len(b) > 0:
-       res += b
+    if len(body) > 0:
+        res += body
 
     return res
 
@@ -593,12 +592,12 @@ actor Server(conn: net.TCPListenConnection, on_accept: action(Server) -> None, l
     have been sent.
     """
     _log = logging.Logger(log_handler)
-    var on_request_cb: ?action(Server, Request, action(int, dict[str, str], str) -> None) -> None = None
+    var on_request_cb: ?action(Server, Request, action(int, dict[str, str], bytes) -> None) -> None = None
     var on_error_cb: ?action(Server, str) -> None = None
     var version: ?bytes = None
     var query_count: u64 = 0
     var response_count: u64 = 0
-    var outstanding_responses: dict[u64, (int, dict[str, str], str)] = {}
+    var outstanding_responses: dict[u64, (int, dict[str, str], bytes)] = {}
     # Id of the request whose response ends the connection, 0 while there is none
     var close_after: u64 = 0
     _parser = MessageParser()
@@ -607,7 +606,7 @@ actor Server(conn: net.TCPListenConnection, on_accept: action(Server) -> None, l
     # Requests received but not yet handed to the request handler
     var _requests: list[Request] = []
 
-    def cb_install(new_on_request: action(Server, Request, action(int, dict[str, str], str) -> None) -> None, new_on_error: action(Server, str) -> None):
+    def cb_install(new_on_request: action(Server, Request, action(int, dict[str, str], bytes) -> None) -> None, new_on_error: action(Server, str) -> None):
         on_request_cb = new_on_request
         on_error_cb = new_on_error
         # Dispatch any requests that arrived before the callbacks were installed
@@ -657,7 +656,7 @@ actor Server(conn: net.TCPListenConnection, on_accept: action(Server) -> None, l
             close_after = req_id
             _requests = []
 
-        def respond(status_code: int, headers: dict[str, str], body: str):
+        def respond(status_code: int, headers: dict[str, str], body: bytes):
             _log.trace("Going to respond to query", {"query_id": req_id})
             if req_id == response_count + 1:
                 # In order, send response immediately
@@ -692,7 +691,7 @@ actor Server(conn: net.TCPListenConnection, on_accept: action(Server) -> None, l
     def close():
         conn.close()
 
-    def send_response(status_code: int, headers: dict[str, str], data: str):
+    def send_response(status_code: int, headers: dict[str, str], data: bytes):
         if version is not None:
             res = build_response(version, status_code, headers, data)
             conn.write(res)
@@ -708,12 +707,12 @@ actor TLSServer(conn: net.TLSListenConnection, on_accept: action(TLSServer) -> N
     have been sent.
     """
     _log = logging.Logger(log_handler)
-    var on_request_cb: ?action(TLSServer, Request, action(int, dict[str, str], str) -> None) -> None = None
+    var on_request_cb: ?action(TLSServer, Request, action(int, dict[str, str], bytes) -> None) -> None = None
     var on_error_cb: ?action(TLSServer, str) -> None = None
     var version: ?bytes = None
     var query_count: u64 = 0
     var response_count: u64 = 0
-    var outstanding_responses: dict[u64, (int, dict[str, str], str)] = {}
+    var outstanding_responses: dict[u64, (int, dict[str, str], bytes)] = {}
     # Id of the request whose response ends the connection, 0 while there is none
     var close_after: u64 = 0
     _parser = MessageParser()
@@ -722,7 +721,7 @@ actor TLSServer(conn: net.TLSListenConnection, on_accept: action(TLSServer) -> N
     # Requests received but not yet handed to the request handler
     var _requests: list[Request] = []
 
-    def cb_install(new_on_request: action(TLSServer, Request, action(int, dict[str, str], str) -> None) -> None, new_on_error: action(TLSServer, str) -> None):
+    def cb_install(new_on_request: action(TLSServer, Request, action(int, dict[str, str], bytes) -> None) -> None, new_on_error: action(TLSServer, str) -> None):
         on_request_cb = new_on_request
         on_error_cb = new_on_error
         # Dispatch any requests that arrived before the callbacks were installed
@@ -772,7 +771,7 @@ actor TLSServer(conn: net.TLSListenConnection, on_accept: action(TLSServer) -> N
             close_after = req_id
             _requests = []
 
-        def respond(status_code: int, headers: dict[str, str], body: str):
+        def respond(status_code: int, headers: dict[str, str], body: bytes):
             _log.trace("Going to respond to query", {"query_id": req_id})
             if req_id == response_count + 1:
                 # In order, send response immediately
@@ -807,7 +806,7 @@ actor TLSServer(conn: net.TLSListenConnection, on_accept: action(TLSServer) -> N
     def close():
         conn.close()
 
-    def send_response(status_code: int, headers: dict[str, str], data: str):
+    def send_response(status_code: int, headers: dict[str, str], data: bytes):
         if version is not None:
             res = build_response(version, status_code, headers, data)
             conn.write(res)
