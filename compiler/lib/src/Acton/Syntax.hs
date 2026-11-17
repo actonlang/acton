@@ -280,7 +280,7 @@ uniwild k l i   = UV k l (-(i*2+1))
 
 data TCon       = TC { tcname::QName, tcargs::[Type] } deriving (Eq,Show,Read,Generic,NFData)
 
-data FX         = FXPure | FXMut | FXProc | FXAction deriving (Eq,Show,Read,Generic,NFData)
+data FX         = FXPure | FXMut | FXProc | FXAction | FXSpawn | FXSend | FXCom deriving (Eq,Show,Read,Generic,NFData)
 
 data QBind      = QBind TVar [TCon] deriving (Eq,Show,Read,Generic,NFData)
 
@@ -437,6 +437,9 @@ fxPure          = tTFX FXPure
 fxMut           = tTFX FXMut
 fxProc          = tTFX FXProc
 fxAction        = tTFX FXAction
+fxSpawn         = tTFX FXSpawn
+fxSend          = tTFX FXSend
+fxCom           = tTFX FXCom
 fxWild          = tWild
 
 fxFun fx1 fx2   = tFun fxPure (posRow (tF0 fx1) posNil) kwdNil (tF0 fx2)
@@ -1005,13 +1008,14 @@ isIdent s@(c:cs)                    = isAlpha c && all isAlphaNum cs && not (isK
 
 isKeyword x                         = x `Data.Set.member` rws
   where rws                         = Data.Set.fromDistinctAscList [
-                                        "False","None","NotImplemented","Self","True","action","after","and","as",
+                                        "False","None","NotImplemented","Self","True","after","and","as",
                                         "assert","async","await","break","continue","def","del","elif","else",
                                         "except","finally","for","if","in","is","isinstance",
-                                        "lambda","mut","not","or","pass","proc","pure","raise","return","try",
+                                        "lambda","not","or","pass","raise","return","try",
                                         "var","while","with","yield","_"
                                         -- The following are soft keywords and not included in the above list:
-                                        -- "actor","class","extension","from","import","protocol","type"
+                                        -- "action","actor","class","com","extension","from","import",
+                                        -- "mut","proc","protocol","pure","send","spawn","type"
                                       ]
 
 isSig Signature{}                   = True

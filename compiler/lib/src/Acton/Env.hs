@@ -1168,19 +1168,7 @@ castable env (TOpt _ t1) (TOpt _ t2)        = castable env t1 t2
 castable env (TNone _) (TOpt _ t)           = True
 castable env (TNone _) (TNone _)            = True
 
-castable env (TFX _ fx1) (TFX _ fx2)        = castable' fx1 fx2
-  where castable' FXPure   FXPure           = True
-        castable' FXPure   FXMut            = True
-        castable' FXPure   FXProc           = True
-        castable' FXMut    FXMut            = True
-        castable' FXMut    FXProc           = True
-        castable' FXProc   FXProc           = True
-        castable' FXAction FXAction         = True
-        castable' FXAction FXProc           = True
-
-        castable' FXMut    FXPure           = True      -- Hideous lie! But a temporarily justifiable deception.
-
-        castable' fx1      fx2              = False
+castable env (TFX _ fx1) (TFX _ fx2)        = castEffect fx1 fx2
 
 castable env (TNil _ k1) (TNil _ k2)
   | k1 == k2                                = True
@@ -1202,6 +1190,24 @@ castable env t1 (TOpt _ t2)                 = castable env t1 t2
 
 castable env t1 t2                          = False
 
+
+-- Built-in program order: parents precede their subeffects, just as class
+-- declarations precede subclasses. The solver decides when to reverse it.
+effectsInProgramOrder :: [FX]
+effectsInProgramOrder = [FXProc, FXMut, FXCom, FXSpawn, FXSend, FXPure, FXAction]
+
+-- Semantic inclusion, excluding the temporary mut-to-pure cast.
+subeffect :: FX -> FX -> Bool
+subeffect a b | a == b = True
+subeffect _ FXProc = True
+subeffect FXPure b = b `elem` [FXMut, FXSpawn, FXSend, FXCom]
+subeffect FXSpawn FXCom = True
+subeffect FXSend FXCom = True
+subeffect _ _ = False
+
+-- Keep the temporary mut-to-pure cast out of semantic bounds and preference.
+castEffect :: FX -> FX -> Bool
+castEffect fx1 fx2 = subeffect fx1 fx2 || (fx1 == FXMut && fx2 == FXPure)
 
 headcast env t1 t2                          = castable env (schematic t1) (schematic t2)
 
@@ -1247,22 +1253,11 @@ glb env t1 (TOpt _ t2)                  = glb env t1 t2
 
 glb env t1@(TFX _ fx1) t2@(TFX _ fx2)
   | Just fx <- glfx fx1 fx2             = pure $ tTFX fx
-  where glfx FXPure   FXPure            = Just FXPure
-        glfx FXPure   FXMut             = Just FXPure
-        glfx FXPure   FXProc            = Just FXPure
-        glfx FXPure   FXAction          = Nothing
-        glfx FXMut    FXPure            = Just FXPure
-        glfx FXMut    FXMut             = Just FXMut
-        glfx FXMut    FXProc            = Just FXMut
-        glfx FXMut    FXAction          = Nothing
-        glfx FXProc   FXPure            = Just FXPure
-        glfx FXProc   FXMut             = Just FXMut
-        glfx FXProc   FXProc            = Just FXProc
-        glfx FXProc   FXAction          = Just FXAction
-        glfx FXAction FXPure            = Nothing
-        glfx FXAction FXMut             = Nothing
-        glfx FXAction FXProc            = Just FXAction
-        glfx FXAction FXAction          = Just FXAction
+  where glfx a b
+          | subeffect a b              = Just a
+          | subeffect b a              = Just b
+          | FXAction `elem` [a,b]      = Nothing
+          | otherwise                  = Just FXPure
 
 glb env (TNil _ k1) (TNil _ k2)
   | k1 == k2                            = pure $ tNil k1
@@ -1343,22 +1338,12 @@ lub env (TOpt _ t1) t2                  = tOpt <$> lub env t1 t2
 lub env t1 (TOpt _ t2)                  = tOpt <$> lub env t1 t2
 
 lub env t1@(TFX _ fx1) t2@(TFX _ fx2)   = pure $ tTFX (lufx fx1 fx2)
-  where lufx FXPure   FXPure            = FXPure
-        lufx FXPure   FXMut             = FXMut
-        lufx FXPure   FXProc            = FXProc
-        lufx FXPure   FXAction          = FXProc
-        lufx FXMut    FXPure            = FXMut
-        lufx FXMut    FXMut             = FXMut
-        lufx FXMut    FXProc            = FXProc
-        lufx FXMut    FXAction          = FXProc
-        lufx FXProc   FXPure            = FXProc
-        lufx FXProc   FXMut             = FXProc
-        lufx FXProc   FXProc            = FXProc
-        lufx FXProc   FXAction          = FXProc
-        lufx FXAction FXPure            = FXProc
-        lufx FXAction FXMut             = FXProc
-        lufx FXAction FXProc            = FXProc
-        lufx FXAction FXAction          = FXAction
+  where lufx a b
+          | subeffect a b              = b
+          | subeffect b a              = a
+          | a `elem` [FXSpawn,FXSend], b `elem` [FXSpawn,FXSend]
+                                        = FXCom
+          | otherwise                  = FXProc
 
 lub env (TNil _ k1) (TNil _ k2)
   | k1 == k2                            = pure $ tNil k1

@@ -1996,7 +1996,7 @@ decorator sig = do
 
 funcdef :: Parser S.Decl
 funcdef =  addLoc $ do
-              (p,(deco,fx,l)) <- withPos (((,,) <$> decorator False <*> optional effect <*> rwordLoc "def"))
+              (p,(deco,fx,l)) <- withPos (((,,) <$> decorator False <*> optional (try (effect <* lookAhead (rword "def"))) <*> rwordLoc "def"))
               assertNotData l "def"
               n <- name
               q <- optbinds
@@ -2240,7 +2240,7 @@ exprlist :: Parser S.Expr
 exprlist = addLoc $ tuple_or_single posarg S.posArgHead S.singlePosArg (\p -> S.Tuple NoLoc p S.KwdNil)
 
 
-expr_nocond = or_expr <|> lambdef_nocond
+expr_nocond = lambdef_nocond <|> or_expr
 
 lambdefGen t = addLoc $ do
             fx <- optional effect
@@ -2594,6 +2594,9 @@ effect  = addLoc $
         <|> rword "mut" *> return S.fxMut
         <|> rword "pure" *> return S.fxPure
         <|> rword "action" *> return S.fxAction
+        <|> rword "spawn" *> return S.fxSpawn
+        <|> rword "send" *> return S.fxSend
+        <|> rword "com" *> return S.fxCom
 
 posrow :: Parser S.PosRow
 posrow = posItems S.posRow S.posStar' S.posNil ttype (optional tvar)

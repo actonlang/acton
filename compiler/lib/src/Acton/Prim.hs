@@ -148,6 +148,9 @@ primWrapProc        = gPrim "wWrapProc"
 primWrapAction      = gPrim "wWrapAction"
 primWrapMut         = gPrim "wWrapMut"
 primWrapPure        = gPrim "wWrapPure"
+primWrapSpawn       = gPrim "wWrapSpawn"
+primWrapSend        = gPrim "wWrapSend"
+primWrapCom         = gPrim "wWrapCom"
 
 primWRAP            = gPrim "WRAP"
 
@@ -1336,6 +1339,9 @@ clWrapped           = NClass [qbind s, qbind x, qbind y] [] te Nothing
 primWits            = [ WInst []        fxAction (pWrapped fxProc fxProc)   primWrapAction path,
                         WInst []        fxProc   (pWrapped fxProc fxProc)   primWrapProc path,
                         WInst []        fxMut    (pWrapped fxMut  fxMut)    primWrapMut path,
+                        WInst []        fxSpawn  (pWrapped fxSpawn fxSpawn) primWrapSpawn path,
+                        WInst []        fxSend   (pWrapped fxSend  fxSend)  primWrapSend path,
+                        WInst []        fxCom    (pWrapped fxCom   fxCom)   primWrapCom path,
                         WInst [qbind y] fxPure   (pWrapped fxPure (tVar y)) primWrapPure path
                       ]
   where path        = [Left (noQ "_")]

@@ -752,11 +752,14 @@ feedDeco dec sink = feedTag (case dec of
   A.Static   -> 243) sink
 
 feedFX :: A.FX -> HashFeed
-feedFX fx sink = feedTag (case fx of
-  A.FXPure   -> 244
-  A.FXMut    -> 245
-  A.FXProc   -> 246
-  A.FXAction -> 247) sink
+feedFX fx sink = case fx of
+  A.FXPure   -> feedTag 244 sink
+  A.FXMut    -> feedTag 245 sink
+  A.FXProc   -> feedTag 246 sink
+  A.FXAction -> feedTag 247 sink
+  A.FXSpawn  -> feedTag 255 sink >> feedTag 0 sink
+  A.FXSend   -> feedTag 255 sink >> feedTag 1 sink
+  A.FXCom    -> feedTag 255 sink >> feedTag 2 sink
 
 feedNameInfo :: I.NameInfo -> HashFeed
 feedNameInfo info sink = feedTag 249 sink >> case info of

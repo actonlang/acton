@@ -14,12 +14,14 @@ import qualified Acton.Names as Names
 import qualified Acton.Printer as AP
 import qualified Acton.DocPrinter as DocP
 import qualified Acton.Env
+import qualified Acton.Solver as Solver
+import qualified Acton.TypeEnv as TypeEnv
 import qualified Acton.EscapeAnalysis as Escape
 import qualified Acton.InitializationAnalysis as Init
 import Acton.Env (CompilationError(..))
 import qualified Acton.Kinds
 import qualified Acton.Types
-import Acton.TypeEnv (TypeError(..),typeReport)
+import Acton.TypeEnv (TypeError(..),typeReport,initTypeEnv)
 import qualified Acton.Normalizer
 import qualified Acton.Deactorizer
 import qualified Acton.CPS
@@ -40,6 +42,7 @@ import qualified Acton.Testing as Testing
 import qualified Acton.Transform as Transform
 import qualified Acton.WitnessSharing as Witness
 import qualified Data.IntMap.Strict as IM
+import qualified Data.IntSet as IS
 import qualified InterfaceFiles
 import Pretty (print, prettyText)
 import qualified Pretty
@@ -234,6 +237,88 @@ main = do
   env0 <- Acton.Env.initEnv sysTypesPath False
 
   sydTest $ do
+    describe "Communication effects" $ do
+      let hierarchy =
+            [ (S.FXPure, [S.FXPure,S.FXMut,S.FXSpawn,S.FXSend,S.FXCom,S.FXProc])
+            , (S.FXMut, [S.FXMut,S.FXProc])
+            , (S.FXProc, [S.FXProc])
+            , (S.FXAction, [S.FXAction,S.FXProc])
+            , (S.FXSpawn, [S.FXSpawn,S.FXCom,S.FXProc])
+            , (S.FXSend, [S.FXSend,S.FXCom,S.FXProc])
+            , (S.FXCom, [S.FXCom,S.FXProc])
+            ]
+          effects = map fst hierarchy
+          included a b = maybe False (elem b) (lookup a hierarchy)
+          ordered = sort . map show
+      forM_ effects $ \a -> do
+        it ("enumerates the bounds of " ++ show a) $ do
+          ordered (Solver.allAbove env0 (S.tTFX a)) `shouldBe`
+            ordered [S.tTFX b | b <- effects, included a b]
+          ordered (Solver.allBelow (initTypeEnv env0) (S.tTFX a)) `shouldBe`
+            ordered [S.tTFX b | b <- effects, included b a]
+          let infos = TypeEnv.tyinfos0
+              matching = [info | info <- IM.elems infos, TypeEnv.tywild info == S.tTFX a]
+          length matching `shouldBe` 1
+          forM_ matching $ \info -> do
+            ordered [TypeEnv.tywild (infos IM.! i) | i <- IS.toList (TypeEnv.tyabove info)] `shouldBe`
+              ordered [S.tTFX b | b <- effects, included a b]
+            ordered [TypeEnv.tywild (infos IM.! i) | i <- IS.toList (TypeEnv.tybelow info)] `shouldBe`
+              ordered [S.tTFX b | b <- effects, included b a]
+        forM_ effects $ \b ->
+          it ("compares and combines " ++ show a ++ " with " ++ show b) $ do
+            Acton.Env.subeffect a b `shouldBe` included a b
+            Acton.Env.castable env0 (S.tTFX a) (S.tTFX b) `shouldBe`
+              (included a b || (a == S.FXMut && b == S.FXPure))
+            let lower = [c | c <- effects, included c a, included c b]
+                upper = [c | c <- effects, included a c, included b c]
+                greatest = [c | c <- lower, all (`included` c) lower]
+                least = [c | c <- upper, all (included c) upper]
+            Acton.Env.glb env0 (S.tTFX a) (S.tTFX b) `shouldBe`
+              (S.tTFX <$> listToMaybe greatest)
+            Acton.Env.lub env0 (S.tTFX a) (S.tTFX b) `shouldBe`
+              (S.tTFX <$> listToMaybe least)
+      it "preserves old binary tags and round-trips the new effects" $ do
+        forM_ (zip [0..] effects) $ \(tag,fx) -> do
+          Data.Binary.encode fx `shouldBe` BL.pack [tag]
+          Data.Binary.decode (Data.Binary.encode fx) `shouldBe` fx
+      it "distinguishes the public hashes of all seven effects" $ do
+        let info fx = I.NDef (S.monotype $ S.tFun (S.tTFX fx) S.posNil S.kwdNil S.tNone) S.NoDec Nothing
+        length (nub $ map (publicHashFor . info) effects) `shouldBe` length effects
+      forM_ effects $ \fx -> do
+        let word = prettyText fx
+        it ("uses " ++ word ++ " as an annotation and as an ordinary name") $ do
+          S.isKeyword word `shouldBe` False
+          let src = unlines
+                [ word ++ " def annotated() -> int:"
+                , "    return 1"
+                , "def " ++ word ++ "(" ++ word ++ ": int) -> int:"
+                , "    return " ++ word
+                , "def closures():"
+                , "    f = " ++ word ++ " lambda: 1"
+                , "    xs = [x for x in [1] if " ++ word ++ " lambda: True]"
+                , "    return (f, xs)"
+                ]
+          expectChunkedParseMatchesSerial src
+          ast <- liftIO $ P.parseModuleSerial (S.modName ["communication"]) "communication.act" src Nothing
+          let defs = [d | S.Decl _ ds <- S.mbody ast, d@S.Def{} <- ds]
+          map S.dfx (take 1 defs) `shouldBe` [S.tTFX fx]
+          reparsed <- liftIO $ P.parseModuleSerial (S.modName ["communication"]) "communication.act" (prettyText ast) Nothing
+          prettyText reparsed `shouldBe` prettyText ast
+      it "infers com when a function calls both spawn and send functions" $ do
+        ast <- typecheckSource env0 "communication_join" $ unlines
+          [ "def combine(f: spawn() -> None, g: send() -> None):"
+          , "    f()"
+          , "    g()"
+          ]
+        fmap S.dfx (findTypedDef "combine" ast) `shouldBe` Just S.fxCom
+      forM_ [("spawn","send"),("send","spawn"),("pure","com"),("mut","com"),("com","proc")] $ \(bodyFx,callFx) ->
+        it ("rejects " ++ callFx ++ " calls in a " ++ bodyFx ++ " body") $ do
+          let src = unlines [bodyFx ++ " def invalid(f: " ++ callFx ++ "() -> None):", "    f()"]
+          result <- liftIO $ E.try (typecheckSource env0 "communication_invalid" src)
+          case result of
+            Left (_ :: TypeError) -> pure ()
+            Right _ -> expectationFailure "Unexpectedly accepted incompatible effects"
+
     describe "Raw operator result types" $ do
       let raw t n = S.UnBox t (S.eInt n)
           shifted t op = S.BinOp NoLoc (raw t 16) op (raw Builtin.tInt 1)

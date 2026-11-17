@@ -117,11 +117,11 @@ tyinfos0                        = IntMap.fromDistinctAscList pairs
                                     (wOpt,      [wOpt],                 [wOpt,tNone]),      -- Watch out for tNone here!
                                     (tNone,     [wOpt,tNone],           [tNone]),
                                     (wFun,      [wOpt, wFun],           [wFun]),
-                                    (wTuple,    [wOpt, wTuple],         [wTuple]),
-                                    (fxProc,    [fxProc],               [fxProc,fxMut,fxPure,fxAction]),
-                                    (fxMut,     [fxProc,fxMut],         [fxMut,fxPure]),
-                                    (fxPure,    [fxProc,fxMut,fxPure],  [fxPure]),
-                                    (fxAction,  [fxProc,fxAction],      [fxAction])
+                                    (wTuple,    [wOpt, wTuple],         [wTuple])
+                                  ] ++
+                                  [ (tTFX fx, [tTFX g | g <- effectsInProgramOrder, subeffect fx g],
+                                              [tTFX g | g <- effectsInProgramOrder, subeffect g fx])
+                                  | fx <- effectsInProgramOrder
                                   ]
         wFun                    = tFun tWild tWild tWild tWild
         wTuple                  = tTuple tWild tWild
