@@ -2,6 +2,8 @@ import testing
 
 import std.argparse as argparse
 import std.base64 as base64
+import std.compress.gzip as gzip
+import std.compress.zlib as zlib
 import std.crypto.hash.md5 as md5
 import std.diff as diff
 import std.hash.wyhash as wyhash
@@ -20,6 +22,8 @@ from std.uri import URI, quote, unquote
 
 def _test_std_namespace_data_modules():
     testing.assertEqual(base64.decode(base64.encode(b"hello")), b"hello")
+    testing.assertEqual(gzip.compress(b"hello")[:2], b"\x1f\x8b")
+    testing.assertEqual(zlib.compress(b"hello")[:1], b"\x78")
     testing.assertEqual(json.encode({"answer": 42}), r"""{"answer":42}""")
     json_numbers = r"""{"a":1000000000000,"b":-1000000000000,"c":18446744073709551615}"""
     testing.assertEqual(json.encode(json.decode(json_numbers)), json_numbers)

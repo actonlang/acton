@@ -1,0 +1,58 @@
+import compress.gzip as gzip
+import compress.zlib as zlib
+import testing
+
+
+def _text() -> bytes:
+    return ",".join([r'{"name":"cpe-' + str(i) + r'","schedule":"europe"}' for i in range(200)]).encode()
+
+
+def _test_gzip():
+    data = _text()
+    gzipped = gzip.compress(data)
+    testing.assertTrue(len(gzipped) < len(data) // 4, "gzip compresses text")
+    # gzip starts with ID1, ID2 and CM 8 (deflate)
+    testing.assertEqual(gzipped[:3], b"\x1f\x8b\x08")
+    testing.assertEqual(gzip.decompress(gzipped), data)
+    testing.assertEqual(gzip.decompress(gzip.compress(b"")), b"")
+
+
+def _test_zlib():
+    data = _text()
+    deflated = zlib.compress(data)
+    testing.assertTrue(len(deflated) < len(data) // 4, "zlib compresses text")
+    # zlib starts with CMF 0x78: deflate with a 32 KiB window
+    testing.assertEqual(deflated[:1], b"\x78")
+    testing.assertEqual(zlib.decompress(deflated), data)
+    testing.assertEqual(zlib.decompress(zlib.compress(b"")), b"")
+
+
+def _test_decompress_rejects_bad_streams():
+    gzipped = gzip.compress(_text())
+    deflated = zlib.compress(_text())
+    bad_gzip: list[(bytes, str)] = [
+        (b"not compressed", "not gzip"),
+        (deflated, "zlib given as gzip"),
+        (gzipped[:len(gzipped) - 4], "truncated stream"),
+        (gzipped + b"x", "data after the stream"),
+    ]
+    for data, what in bad_gzip:
+        raised = False
+        try:
+            gzip.decompress(data)
+        except ValueError:
+            raised = True
+        testing.assertTrue(raised, "gzip: " + what)
+    bad_zlib: list[(bytes, str)] = [
+        (b"not compressed", "not zlib"),
+        (gzipped, "gzip given as zlib"),
+        (deflated[:len(deflated) - 2], "truncated stream"),
+        (deflated + b"x", "data after the stream"),
+    ]
+    for data, what in bad_zlib:
+        raised = False
+        try:
+            zlib.decompress(data)
+        except ValueError:
+            raised = True
+        testing.assertTrue(raised, "zlib: " + what)
