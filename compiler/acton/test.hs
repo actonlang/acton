@@ -298,6 +298,32 @@ compilerTests =
               (not ("B_list_base_iter(" `isInfixOf` c))
           assertBool "generic reverse should retain dispatch" ("$class->reverse" `isInfixOf` body "generic_reverse")
           assertBool "generic slicing should retain dispatch" ("$class->__getslice__" `isInfixOf` body "generic_slice")
+  , testCase "builtin slice temporaries stay within their native consumer" $ do
+        withSystemTempDirectory "acton-builtin-slice-temporaries" $ \tmp -> do
+          let src = tmp </> "builtin_slice_temporaries.act"
+          copyFile "../../test/regression_auto/builtin_slice_temporaries.act" src
+          (code, generated, err) <- buildThing "--quiet --dbg-no-lines --cgen" src
+          assertEqual ("C generation should succeed:\n" ++ generated ++ err) ExitSuccess code
+          let body name = unlines $ takeWhile (/= "}") $ dropWhile
+                (not . isInfixOf ("builtin_slice_temporariesQ_" ++ name ++ " (")) (lines generated)
+          forM_ ["list_slice", "ilist_slice", "str_slice", "bytes_slice", "bytearray_slice",
+                 "optional_slice", "nested_slices", "list_set_slice", "list_del_slice",
+                 "bytearray_set_slice", "bytearray_del_slice"] $ \name -> do
+            let c = body name
+            assertBool (name ++ " should use an automatic descriptor")
+              ("&(struct B_slice)" `isInfixOf` c)
+            assertBool (name ++ " should not allocate its descriptor or bound boxes")
+              (not ("B_sliceG_new(" `isInfixOf` c || "toB_int(" `isInfixOf` c))
+          assertBool "optional bounds should be evaluated into locals"
+            ("B_int $slice_start = a;" `isInfixOf` body "optional_slice")
+          forM_ ["make_slice", "generic_slice", "custom_slice"] $ \name -> do
+            assertBool (name ++ " must keep its heap descriptor")
+              ("B_sliceG_new(" `isInfixOf` body name)
+            assertBool (name ++ " must not use automatic descriptor storage")
+              (not ("&(struct B_slice)" `isInfixOf` body name))
+          assertBool "an existing descriptor should pass through unchanged"
+            ("span" `isInfixOf` body "stored_slice" &&
+             not ("&(struct B_slice)" `isInfixOf` body "stored_slice"))
   , testCase "builtin dict and set operations call shared native implementations" $ do
         withSystemTempDirectory "acton-builtin-hash-containers" $ \tmp -> do
           let src = tmp </> "builtin_hash_container_ops.act"
