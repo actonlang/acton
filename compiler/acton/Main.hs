@@ -429,7 +429,7 @@ createProject name = do
       ++ "```sh\nacton build\n./out/bin/" ++ name ++ "\n```\n"
       )
     createDirectoryIfMissing True (srcDir paths)
-    writeFile (joinPath [(srcDir paths), name ++ ".act"]) "#\n#\n\nactor main(env):\n    print(\"Hello World!\")\n    env.exit(0)\n"
+    writeFile (joinPath [(srcDir paths), name ++ ".act"]) "#\n#\n\nactor main(env):\n    proc def __startup__():\n        print(\"Hello World!\")\n        env.exit(0)\n\n    __startup__()\n"
     putStrLn("Created project " ++ name)
     putStrLn("Next: cd " ++ name ++ " && acton build && ./out/bin/" ++ name)
     gitAvailable <- isGitAvailable

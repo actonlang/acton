@@ -1542,17 +1542,6 @@ actor test_runner(env: Env,
     var all_tests = {}
     var test_timeout = 0.0
 
-    for name, t in unit_tests.items():
-        all_tests[name] = t
-    for name, t in simple_sync_tests.items():
-        all_tests[name] = t
-    for name, t in sync_tests.items():
-        all_tests[name] = t
-    for name, t in async_tests.items():
-        all_tests[name] = t
-    for name, t in env_tests.items():
-        all_tests[name] = t
-
     proc def _cmd_list(args):
         res = {}
         for test_name, test_def in all_tests.items():
@@ -1912,6 +1901,17 @@ actor test_runner(env: Env,
         else:
             env.exit(0)
     proc def __startup__():
+        for name, t in unit_tests.items():
+            all_tests[name] = t
+        for name, t in simple_sync_tests.items():
+            all_tests[name] = t
+        for name, t in sync_tests.items():
+            all_tests[name] = t
+        for name, t in async_tests.items():
+            all_tests[name] = t
+        for name, t in env_tests.items():
+            all_tests[name] = t
+
         try:
             _parse_args()
         except argparse.PrintUsage as exc:

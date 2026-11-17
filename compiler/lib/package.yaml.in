@@ -112,6 +112,17 @@ library:
     - -Wno-x-partial
 
 tests:
+  test_parser:
+    main: DeclarativeParserSpec.hs
+    source-dirs: test
+    other-modules: []
+    dependencies:
+      - libacton
+    ghc-options:
+      - -main-is DeclarativeParserSpec
+      - -threaded
+      - -rtsopts
+      - -Wno-x-partial
   test_lib:
     main: ActonSpec.hs
     source-dirs: test

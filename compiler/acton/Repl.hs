@@ -559,12 +559,14 @@ renderReplMainSource st =
       [ "import " ++ replEvalModuleName
       , ""
       , "actor main(env: Env):"
-      , "    try:"
-      , "        " ++ replEvalModuleName ++ ".eval()"
-      , "        env.exit(0)"
-      , "    except Exception as exc:"
-      , "        print(exc)"
-      , "        env.exit(1)"
+      , "    proc def __startup__():"
+      , "        try:"
+      , "            " ++ replEvalModuleName ++ ".eval()"
+      , "            env.exit(0)"
+      , "        except Exception as exc:"
+      , "            print(exc)"
+      , "            env.exit(1)"
+      , "    __startup__()"
       ])
 
 renderReplEvalPlaceholderSource :: String

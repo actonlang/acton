@@ -764,8 +764,8 @@ compilerTests =
               , "answer = 42"
               , "import std.math"
               , "class Box(object):\n    def __init__(self, name: str):\n        self.name = name\n    def describe(self) -> str:\n        return \"class \" + self.name"
-              , "actor Foo():\n    print(\"old Foo\")"
-              , "actor Foo():\n    print(\"hello from Foo\")"
+              , "actor Foo():\n    proc def __startup__():\n        print(\"old Foo\")\n    __startup__()"
+              , "actor Foo():\n    proc def __startup__():\n        print(\"hello from Foo\")\n    __startup__()"
               ]
         st <- foldM Repl.addReplInput Repl.emptyReplState inputs
         let sessionSrc = Repl.renderReplSessionSource st
@@ -839,10 +839,14 @@ compilerTests =
               , ""
               , "Other().say()"
               , "actor Foo():"
-              , "    print(\"old Foo\")"
+              , "    proc def __startup__():"
+              , "        print(\"old Foo\")"
+              , "    __startup__()"
               , ""
               , "actor Foo():"
-              , "    print(\"hello from Foo\")"
+              , "    proc def __startup__():"
+              , "        print(\"hello from Foo\")"
+              , "    __startup__()"
               , ""
               , "f = Foo()"
               , "def gone() -> str:"

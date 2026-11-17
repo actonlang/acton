@@ -332,13 +332,16 @@ actor FS(cap: FileCap):
 
     __startup__()
 
+def _initial_fd(filename: str) -> int:
+    if "\x00" in filename:
+        raise _path_nul_error
+    return -1
+
+
 actor ReadFile(cap: ReadFileCap, filename: str, lock=False):
     """Read a file
     """
-    if "\x00" in filename:
-        raise _path_nul_error
-
-    var _fd = -1
+    var _fd = _initial_fd(filename)
 
     proc def _open_file():
         """C magic"""
@@ -369,10 +372,7 @@ actor WriteFile(cap: WriteFileCap, filename: str, lock=False, append=False):
     unless append is set: then the content is kept and every write goes to
     the end of the file.
     """
-    if "\x00" in filename:
-        raise _path_nul_error
-
-    var _fd = -1
+    var _fd = _initial_fd(filename)
 
     proc def _open_file():
         """C magic"""

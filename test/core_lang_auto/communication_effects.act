@@ -42,7 +42,7 @@ class Names(object):
     def action(self, pure: int) -> int:
         return pure + 1
 
-actor main(env):
+proc def run_checks(env):
     s = spawn lambda x: produce(x)
     t = send lambda x: deliver(x)
     c = com lambda x: combine(x)
@@ -66,3 +66,9 @@ actor main(env):
     action = pure.proc(action=proc)
     assert pure.action(pure=action) == 9
     env.exit(0)
+
+actor main(env):
+    proc def __startup__():
+        run_checks(env)
+
+    __startup__()

@@ -26,7 +26,7 @@ import Control.Concurrent.Async (Async, async, cancel, wait)
 import Control.Concurrent.Chan
 import Control.Concurrent.MVar
 import Control.Concurrent.QSem
-import Control.Monad (replicateM, replicateM_, void, when, join)
+import Control.Monad (replicateM, replicateM_, void, when, join, forM_, foldM, foldM_, unless)
 import Control.DeepSeq (rnf)
 import Data.IORef
 import Data.List (isPrefixOf, elemIndex)
@@ -60,6 +60,9 @@ data CustomParseError = TypeVariableNameError String  -- Name that looks like ty
                       | MissingClosingQuote String  -- String is the quote type (e.g., "\"\"\"" or "'")
                       | TooManyQuotesError String
                       | InvalidModuleStatement
+                      | StartupMustBeLast
+                      | InvalidActorAssignmentPattern
+                      | DuplicateActorAssignment String
                       | InvalidTopLevelAssignmentPattern
                       | DuplicateTopLevelAssignment String
                       | MisplacedImport
@@ -93,6 +96,12 @@ instance ShowErrorComponent CustomParseError where
   showErrorComponent (TooManyQuotesError quote) = "too many quote characters"
   showErrorComponent InvalidModuleStatement =
     "Only declarations and assignments are allowed at the module top level"
+  showErrorComponent StartupMustBeLast =
+    "The temporary __startup__() call must be the last statement of an actor body"
+  showErrorComponent InvalidActorAssignmentPattern =
+    "Actor-body assignments must bind at least one name"
+  showErrorComponent (DuplicateActorAssignment name) =
+    "Actor-body name '" ++ name ++ "' cannot be initialized more than once"
   showErrorComponent InvalidTopLevelAssignmentPattern =
     "Module top-level assignments must bind at least one name"
   showErrorComponent (DuplicateTopLevelAssignment name) =
@@ -146,7 +155,7 @@ parseModule qn fileName fileContent mReportProgress = do
         Right h  -> return h
     parsed <- parseTopLevelChunks fileName contentWithNewline bodyStart mReportProgress
     let suite = regroupTopDecls (concat parsed)
-    case runParser (St.evalStateT (validateModuleSuite suite) initState) fileName contentWithNewline of
+    case runParser (St.evalStateT (checkModuleBindings suite) initState) fileName contentWithNewline of
       Left err -> Control.Exception.throwIO err
       Right () -> do
         reportFinalParseProgress contentWithNewline mReportProgress
@@ -1251,8 +1260,8 @@ file_input = scn *> do
     -- Allow optional module docstring before imports
     mbDocstring <- optional (try (L.nonIndented scn module_docstring <* eol <* scn))
     is <- imports
-    s <-  withCtx TOP top_suite
-    validateModuleSuite s
+    s <- regroupTopDecls <$> withCtx TOP top_suite
+    checkModuleBindings s
     eof
     return (is, mbDocstring, s)
 
@@ -1274,33 +1283,37 @@ imports :: Parser [S.Import]
 imports = S.withTestRunner <$> many (L.nonIndented scn import_stmt <* eol <* scn <* reportParseProgress)
 
 top_suite :: Parser S.Suite
-top_suite = concat <$> (many (L.nonIndented scn (top_stmt <* reportParseProgress) <|> (newline1 <* reportParseProgress)))
+top_suite = concat <$> (many (L.nonIndented scn (module_stmt <* reportParseProgress) <|> (newline1 <* reportParseProgress)))
 
-validateModuleSuite :: S.Suite -> Parser ()
-validateModuleSuite = go Set.empty
+-- These are binding/dependency checks, not a statement-shape whitelist.
+-- module_stmt defines the module grammar for both parser entry points.
+checkModuleBindings :: S.Suite -> Parser ()
+checkModuleBindings ss = do
+    checkBindingNames InvalidTopLevelAssignmentPattern DuplicateTopLevelAssignment
+      [pats | S.Assign _ pats _ <- ss]
+    forM_ [ds | S.Decl _ ds <- ss] $ \ds -> do
+      let cycles = [map S.dname ds | CyclicSCC ds <- stronglyConnComp
+                     [(d, S.dname d, Names.free d) | d@S.Typedef{} <- ds]]
+      unless (null cycles) $ parseException (loc ds) (CyclicTypedef $ map S.nstr $ head cycles)
+
+checkActorBindings :: S.Suite -> Parser ()
+checkActorBindings ss = checkBindingNames InvalidActorAssignmentPattern DuplicateActorAssignment
+    (concatMap bindings ss)
   where
-    go seen [] = return ()
-    go seen (stmt:stmts) =
-      case stmt of
-        S.Assign _ pats _ -> do
-          let names = Names.bound pats
-          if null names
-            then parseException (loc pats) InvalidTopLevelAssignmentPattern
-            else do
-              seen' <- addNames seen names
-              go seen' stmts
-        S.Signature{} -> go seen stmts
-        S.Decl _ ds
-          | null cycles -> go seen stmts
-          | otherwise -> parseException (S.sloc stmt) (CyclicTypedef $ map S.nstr $ head cycles)
-          where cycles = [ map S.dname ds | CyclicSCC ds <- stronglyConnComp tdefs ]
-                tdefs  = [ (d, S.dname d, Names.free d) | d@S.Typedef{} <- ds ]
-        _             -> parseException (S.sloc stmt) InvalidModuleStatement
+    bindings (S.Assign _ pats _) = [pats]
+    bindings (S.VarAssign _ pats _) = [pats]
+    bindings _ = []
 
-    addNames seen [] = return seen
-    addNames seen (n:ns)
-      | n `Set.member` seen = parseException (loc n) (DuplicateTopLevelAssignment (S.nstr n))
-      | otherwise           = addNames (Set.insert n seen) ns
+checkBindingNames :: CustomParseError -> (String -> CustomParseError) -> [[S.Pattern]] -> Parser ()
+checkBindingNames empty duplicate = foldM_ addAssignment Set.empty
+  where
+    addAssignment seen pats
+      | null names = parseException (loc pats) empty
+      | otherwise = foldM addName seen names
+      where names = Names.bound pats
+    addName seen n
+      | n `Set.member` seen = parseException (loc n) (duplicate $ S.nstr n)
+      | otherwise = return $ Set.insert n seen
 
 data SourceSpan = SourceSpan !Int !Int deriving (Eq, Show)
 
@@ -1682,7 +1695,7 @@ top_chunk_input fileName chunk = do
         , statePosState = startPosState
         }
   setParserState chunkState
-  ss <- withCtx TOP (L.nonIndented scn top_chunk_stmt)
+  ss <- withCtx TOP (L.nonIndented scn module_stmt)
   scn
   off <- getOffset
   if off == end
@@ -1820,23 +1833,68 @@ target = try $ do
 -- Statements ----------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------------
 
-top_stmt :: Parser [S.Stmt]
-top_stmt = ((:[]) <$> compound_stmt)  <|> try ((:[]) <$> (signature <* newline1)) <|> decl_group <|> bad_import <|> simple_stmt <?> "top statement"
-
-top_chunk_stmt :: Parser [S.Stmt]
-top_chunk_stmt =
-       ((:[]) <$> compound_stmt)
-  <|> try ((:[]) <$> (signature <* newline1))
+-- Source-level declarative grammars. Shared ASTs remain Suites; only these
+-- productions decide which statement forms can enter each kind of body.
+module_stmt :: Parser S.Suite
+module_stmt =
+       try ((:[]) <$> (signature <* newline1))
   <|> ((\d -> [S.Decl (loc d) [d]]) <$> decl)
+  <|> simpleStatements binding_stmt
   <|> bad_import
-  <|> simple_stmt
-  <?> "top statement"
+  <|> (lookAhead anySingle *> (getOffset >>= \o -> parseException (Loc o o) InvalidModuleStatement))
+  <?> "module declaration, signature or binding"
+
+class_stmt :: Parser S.Suite
+class_stmt = try ((:[]) <$> (signature <* newline1))
+         <|> def_group
+         <|> simpleStatements class_small_stmt
+         <?> "class signature or method"
+
+class_small_stmt :: Parser S.Stmt
+class_small_stmt = pass_stmt <|> addLoc (S.Expr NoLoc . S.NotImplemented <$> rwordLoc "NotImplemented")
+
+actor_stmt :: Pos -> Parser S.Suite
+actor_stmt parent = try ((:[]) <$> (signature <* newline1))
+                <|> def_group
+                <|> simpleStatements (actor_small_stmt parent)
+                <?> "actor binding, signature or method"
+
+actor_declaration :: Parser S.Stmt
+actor_declaration = var_binding <|> binding_stmt <|> pass_stmt
+  where var_binding = addLoc $ rword "var" *> (S.VarAssign NoLoc <$> some (try assign) <*> exprlist)
+
+-- Transitional tail, deliberately separate from actor_declaration. Looking
+-- past the newline also enforces terminality across semicolon-separated lines.
+actor_small_stmt :: Pos -> Parser S.Stmt
+actor_small_stmt parent = actor_declaration <|> startup_tail
+  where
+    startup_tail = addLoc $ do
+      e <- addLoc $ do
+        l <- rwordLoc "__startup__"
+        parens (return ())
+        return $ S.Call NoLoc (S.Var l $ S.NoQ $ S.Name l $ S.packText "__startup__") S.PosNil S.KwdNil
+      lookAhead $ do
+        optional semicolon
+        newline1
+        done <- optional eof
+        case done of
+          Just _ -> return ()
+          Nothing -> do
+            p <- L.indentLevel
+            when (p > parent) $ customFailure StartupMustBeLast
+      return $ S.Expr NoLoc e
+
+binding_stmt :: Parser S.Stmt
+binding_stmt = addLoc $ S.Assign NoLoc <$> some (try assign) <*> exprlist
+
+simpleStatements :: Parser S.Stmt -> Parser S.Suite
+simpleStatements item = (item `sepEndBy1` semicolon) <* newline1
 
 stmt :: Parser [S.Stmt]
 stmt = ((:[]) <$> compound_stmt)  <|> try ((:[]) <$> (signature <* newline1)) <|> def_group <|> simple_stmt <?> "statement"
 
 simple_stmt :: Parser [S.Stmt]
-simple_stmt = (small_stmt `sepEndBy1` semicolon) <* newline1 <?> "simple statement"
+simple_stmt = simpleStatements small_stmt <?> "simple statement"
 
 bad_import = do i <- rwordLoc "import" <|> rwordLoc "from"
                 parseException (loc i) MisplacedImport
@@ -1844,7 +1902,7 @@ bad_import = do i <- rwordLoc "import" <|> rwordLoc "from"
 --- Small statements ---------------------------------------------------------------------------------
 
 small_stmt :: Parser S.Stmt
-small_stmt = del_stmt <|> pass_stmt <|> flow_stmt <|> assert_stmt <|> var_stmt <|> after_stmt  <|> expr_stmt
+small_stmt = del_stmt <|> pass_stmt <|> flow_stmt <|> assert_stmt <|> after_stmt  <|> expr_stmt
 
 expr_stmt :: Parser S.Stmt
 expr_stmt = addLoc $ do
@@ -1888,11 +1946,6 @@ after_stmt = addLoc $ do
                 e' <- expr
                 return $ S.After NoLoc now e e'
 
-var_stmt :: Parser S.Stmt
-var_stmt = addLoc $ do
-             l <- rwordLoc "var"
-             assertActBody l "var"
-             S.VarAssign NoLoc <$> trysome assign <*> rhs
 
 del_stmt = addLoc $ do
             l <- rwordLoc "del"
@@ -1962,10 +2015,6 @@ signature = addLoc (do dec <- decorator True; (ns,t) <- tsig; return $ S.Signatu
 
 -- Declaration groups ------------------------------------------------------------------
 
-decl_group :: Parser [S.Stmt]
-decl_group = do p <- L.indentLevel
-                g <- some (atPos p decl)
-                return [ S.Decl (loc ds) ds | ds <- Names.splitDeclGroup g ]
 
 decl :: Parser S.Decl
 decl = funcdef <|> classdef <|> protodef <|> typedef <|> extdef <|> actordef
@@ -2002,7 +2051,7 @@ funcdef =  addLoc $ do
               q <- optbinds
               (ppar,kpar) <- params
               t <- optional (arrow *> ttype)
-              (ss, docstring) <- suiteWithDocstring DEF p
+              (ss, docstring) <- function_suite p
               return $ S.Def NoLoc n q ppar kpar t ss deco (maybe S.tWild id fx) docstring
 
 params :: Parser (S.PosPar, S.KwdPar)
@@ -2021,7 +2070,8 @@ actordef = addLoc $ do
                 nm <- name <?> "actor name"
                 q <- optbinds
                 (ppar,kpar) <- params
-                (ss, docstring) <- suiteWithDocstring ACTOR s
+                (ss, docstring) <- actor_suite s
+                checkActorBindings ss
                 return $ S.Actor NoLoc nm q ppar kpar ss docstring
 
 -- classdef: 'class' NAME ['(' [arglist] ')'] ':' suite
@@ -2038,7 +2088,7 @@ classdefGen k pname ctx con = addLoc $ do
                 nm <- pname
                 q <- optbinds
                 cs <- optbounds
-                (ss, docstring) <- suiteWithDocstring ctx s
+                (ss, docstring) <- class_suite ctx s
                 return $ con NoLoc nm q cs ss docstring
 
 typedef = addLoc $ do
@@ -2055,7 +2105,7 @@ extdef = addLoc $ do
                 assertTop l "extension"
                 (q,c) <- try head1 <|> try head2 <|> head3
                 cs <- optbounds
-                (ss, docstring) <- suiteWithDocstring EXT s
+                (ss, docstring) <- class_suite EXT s
                 return $ S.Extension NoLoc q c cs ss docstring
   where head1 = do q <- binds
                    fatarrow
@@ -2140,65 +2190,84 @@ data_stmt = addLoc $
               assertDef l "data"
               S.Data NoLoc Nothing <$> suite DATA s
 
-suiteWithDocstring :: CTX -> Pos -> Parser (S.Suite, Maybe String)
-suiteWithDocstring c p = do
+-- Layout and docstring handling are shared, while callers supply the
+-- actual grammar. Compound executable suites always use function statements.
+data BodyGrammar = BodyGrammar
+    { bodyStatement :: Parser S.Suite
+    , bodySmallStatement :: Parser S.Stmt
+    }
+
+function_suite :: Pos -> Parser (S.Suite, Maybe String)
+function_suite = suiteWithDocstring DEF (BodyGrammar stmt small_stmt)
+
+class_suite :: CTX -> Pos -> Parser (S.Suite, Maybe String)
+class_suite ctx = suiteWithDocstring ctx (BodyGrammar class_stmt class_small_stmt)
+
+actor_suite :: Pos -> Parser (S.Suite, Maybe String)
+actor_suite p = suiteWithDocstring ACTOR (BodyGrammar (actor_stmt p) (actor_small_stmt p)) p
+
+suiteWithDocstring :: CTX -> BodyGrammar -> Pos -> Parser (S.Suite, Maybe String)
+suiteWithDocstring c grammar p = do
     withCtx c colon
-    withCtx c (indentSuiteWithDocstring p <|> (simple_stmt_with_docstring <* reportParseProgress))
+    withCtx c (indentSuiteWithDocstring grammar p <|>
+      (simple_stmt_with_docstring (bodySmallStatement grammar) <* reportParseProgress))
 
 suite :: CTX -> Pos -> Parser S.Suite
 suite c p = do
-    o <- getOffset
     withCtx c colon
-    stmts <- withCtx c (indentSuite p <|> (simple_stmt <* reportParseProgress))
-    return stmts
-  where indentSuite p = do
-          newline1
-          p1 <- L.indentGuard sc1 GT p
-          concat <$> some (stmtAtIndent p1)
+    withCtx c (indentSuite <|> (simple_stmt <* reportParseProgress))
+  where
+    indentSuite = do
+      newline1
+      p1 <- L.indentGuard sc1 GT p
+      (++) <$> stmtAtIndent stmt p1 <*> suiteRest stmt p1
 
-indentSuiteWithDocstring :: Pos -> Parser (S.Suite, Maybe String)
-indentSuiteWithDocstring p = do
+indentSuiteWithDocstring :: BodyGrammar -> Pos -> Parser (S.Suite, Maybe String)
+indentSuiteWithDocstring grammar p = do
     newline1
     p1 <- L.indentGuard sc1 GT p
-    (firstStmts, mbDoc) <- stmtAtIndentWithDocstring p1
-    rest <- concat <$> many (stmtAtIndent p1)
+    (firstStmts, mbDoc) <- stmtAtIndent (stmtWithDocstring grammar) p1
+    rest <- suiteRest (bodyStatement grammar) p1
     return (firstStmts ++ rest, mbDoc)
 
-stmtAtIndentWithDocstring :: Pos -> Parser (S.Suite, Maybe String)
-stmtAtIndentWithDocstring p1 = do
+-- Only dedentation or EOF ends a suite. A malformed item at the body's
+-- indentation must fail here, not silently terminate an enclosing declaration.
+suiteRest :: Parser S.Suite -> Pos -> Parser S.Suite
+suiteRest item p = do
+    end <- optional $ lookAhead eof
+    case end of
+      Just _ -> return []
+      Nothing -> do
+        next <- L.indentLevel
+        if next < p then return []
+        else (++) <$> stmtAtIndent item p <*> suiteRest item p
+
+stmtAtIndent :: Parser a -> Pos -> Parser a
+stmtAtIndent item p1 = do
     p2 <- L.indentLevel
     case compare p1 p2 of
         LT -> do o <- getOffset
                  Control.Exception.throw $ IndentationError (Loc o o)
-        EQ -> stmtWithDocstring <* reportParseProgress
+        EQ -> item <* reportParseProgress
         GT -> L.incorrectIndent GT p2 p1
 
-stmtAtIndent :: Pos -> Parser S.Suite
-stmtAtIndent p1 = do
-    p2 <- L.indentLevel
-    case compare p1 p2 of
-        LT -> do o <- getOffset
-                 Control.Exception.throw $ IndentationError (Loc o o)
-        EQ -> stmt <* reportParseProgress
-        GT -> L.incorrectIndent GT p2 p1
-
-stmtWithDocstring :: Parser (S.Suite, Maybe String)
-stmtWithDocstring = (
-    ((\s -> ([s], Nothing)) <$> compound_stmt)
-    <|> try ((\s -> ([s], Nothing)) <$> (signature <* newline1))
-    <|> ((\s -> (s, Nothing)) <$> def_group)
-    <|> simple_stmt_with_docstring
-  ) <?> "statement"
-
-simple_stmt_with_docstring :: Parser (S.Suite, Maybe String)
-simple_stmt_with_docstring = (
-    do
-      (mbDoc, firstStmts) <- try docstringSmallStmt <|> ((\s -> (Nothing, [s])) <$> small_stmt)
-      rest <- many (try (semicolon *> small_stmt))
-      _ <- optional semicolon
+stmtWithDocstring :: BodyGrammar -> Parser (S.Suite, Maybe String)
+stmtWithDocstring grammar = docline <|> ((\ss -> (ss, Nothing)) <$> bodyStatement grammar)
+  where
+    docline = do
+      (doc, _) <- try docstringSmallStmt
+      rest <- many (try (semicolon *> bodySmallStatement grammar))
+      optional semicolon
       newline1
-      return (firstStmts ++ rest, mbDoc)
-  ) <?> "simple statement"
+      return (rest, doc)
+
+simple_stmt_with_docstring :: Parser S.Stmt -> Parser (S.Suite, Maybe String)
+simple_stmt_with_docstring small = do
+    (mbDoc, firstStmts) <- try docstringSmallStmt <|> ((\s -> (Nothing, [s])) <$> small)
+    rest <- many (try (semicolon *> small))
+    optional semicolon
+    newline1
+    return (firstStmts ++ rest, mbDoc)
 
 docstringSmallStmt :: Parser (Maybe String, S.Suite)
 docstringSmallStmt = do

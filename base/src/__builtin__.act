@@ -1458,6 +1458,13 @@ def type(a: ?value) -> str:
 def actorid() -> str:
     NotImplemented
 
+def _string_decoder_buffer(encoding: ?str) -> bytes:
+    if encoding is not None:
+        if encoding.lower() != "utf-8":
+            raise _unsupported_encoding_error
+    return b""
+
+
 actor StringDecoder(cb_out: action(str) -> None, encoding: ?str="utf-8", on_error: ?action(str, bytes) -> None=None):
     """Bytes to string decoder
 
@@ -1466,11 +1473,7 @@ actor StringDecoder(cb_out: action(str) -> None, encoding: ?str="utf-8", on_erro
     byte characters.
     """
     MAX_UNICODE_CHAR_SIZE: int = 4
-    var buf: bytes = b""
-
-    if encoding is not None:
-        if encoding.lower() != "utf-8":
-            raise _unsupported_encoding_error
+    var buf: bytes = _string_decoder_buffer(encoding)
 
     def decode(input: bytes) -> None:
         buf += input
@@ -2119,7 +2122,6 @@ actor RunProcess(envcap: _EnvCap,
                 on_exit(_process, _exit_code, _signal, out_buf, err_buf)
 
     _p = Process(envcap, vars, cmd, _on_stdout, _on_stderr, _on_exit, on_error, workdir, env, timeout)
-    _process = _p
 
     def signal(sig: int):
         """Send signal to process"""
@@ -2143,6 +2145,11 @@ actor RunProcess(envcap: _EnvCap,
         stopped.
         """
         _p.stop()
+
+    proc def __startup__():
+        _process = _p
+
+    __startup__()
 
 actor EnvProcess(envcap: _EnvCap, vars: EnvVar):
     """Spawning of child processes, reached as env.process"""
