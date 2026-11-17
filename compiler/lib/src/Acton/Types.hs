@@ -3453,7 +3453,7 @@ data TestType = UnitTest | SimpleSyncTest | SyncTest | AsyncTest | EnvTest
 testType (NDef (TSchema _ [] (TFun _ fx ppar kpar res)) _ _)
                                         = case (res, fx, row2list ppar, row2list kpar) of
                                              -- Functions with no parameters
-                                             (r, fx', [], [])  | validReturn r && fx' `elem` [fxPure,fxMut,fxSpawn,fxSend,fxCom] -> Just UnitTest
+                                             (r, fx', [], [])  | validReturn r && fx' `elem` [fxPure,fxMut,fxCom] -> Just UnitTest
                                              (r, fx', [], [])  | validReturn r && fx' == fxProc                   -> Just SimpleSyncTest
                                              -- Functions with positional test parameters
                                              (r, fx', [t], []) | t == syncT  && validReturn r                     -> Just SyncTest

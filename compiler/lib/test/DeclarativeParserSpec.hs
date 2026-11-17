@@ -153,6 +153,26 @@ spec = describe "Declarative body grammars" $ do
           ] $ \(label,e,expected) -> it ("recognizes guaranteed exits: " ++ label) $
             Env.exprRaises e `shouldBe` expected
 
+  describe "Communication effect" $ do
+    let hierarchy =
+          [ (S.FXPure, [S.FXPure,S.FXMut,S.FXCom,S.FXProc])
+          , (S.FXMut, [S.FXMut,S.FXProc])
+          , (S.FXProc, [S.FXProc])
+          , (S.FXAction, [S.FXAction,S.FXProc])
+          , (S.FXCom, [S.FXCom,S.FXProc])
+          ]
+    forM_ hierarchy $ \(a,above) -> forM_ hierarchy $ \(b,_) ->
+      it ("compares " ++ show a ++ " with " ++ show b) $ do
+        Env.subeffect a b `shouldBe` (b `elem` above)
+        Env.castEffect a b `shouldBe` (b `elem` above || (a == S.FXMut && b == S.FXPure))
+    it "accepts com annotations and contextual names" $
+      accepted "com def com(send: int, spawn: int) -> int: return send + spawn"
+    forM_ ["send", "spawn"] $ \word -> do
+      it ("accepts " ++ word ++ " as an ordinary function") $
+        accepted ("def " ++ word ++ "(): return 1\nvalue = " ++ word ++ "()")
+      it ("rejects the retired " ++ word ++ " effect") $
+        rejected (word ++ " def f(): pass")
+
 initializer :: String -> IO S.Expr
 initializer source = do
   m <- P.parseModuleSerial (S.modName ["raise_expr"]) "raise_expr.act" ("value = " ++ source ++ "\n") Nothing

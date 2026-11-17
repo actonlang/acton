@@ -757,8 +757,6 @@ feedFX fx sink = case fx of
   A.FXMut    -> feedTag 245 sink
   A.FXProc   -> feedTag 246 sink
   A.FXAction -> feedTag 247 sink
-  A.FXSpawn  -> feedTag 255 sink >> feedTag 0 sink
-  A.FXSend   -> feedTag 255 sink >> feedTag 1 sink
   A.FXCom    -> feedTag 255 sink >> feedTag 2 sink
 
 feedNameInfo :: I.NameInfo -> HashFeed

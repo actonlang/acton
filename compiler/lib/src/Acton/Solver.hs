@@ -36,7 +36,7 @@ import Acton.TypeEnv
 
 
 -- Candidates for effects of functions exposed through an actor interface.
-sealedEffects = [fxAction, fxPure, fxSpawn, fxSend, fxCom]
+sealedEffects = [fxAction, fxPure, fxCom]
 
 run_new_solver = False
 
@@ -502,8 +502,6 @@ typeKey _ (TFX _ fx)                        = Just $ case fx of
                                                     FXMut -> -6
                                                     FXPure -> -7
                                                     FXAction -> -8
-                                                    FXSpawn -> -9
-                                                    FXSend -> -10
                                                     FXCom -> -11
 typeKey _ _                                 = Nothing
 

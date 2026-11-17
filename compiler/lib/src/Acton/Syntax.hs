@@ -34,7 +34,7 @@ import Control.DeepSeq
 import Prelude hiding((<>))
 
 version :: [Int]
-version = [0,40]
+version = [0,41]
 
 data Module     = Module        { modname::ModName, imps::[Import], mdoc::Maybe String, mbody::Suite } deriving (Eq,Show,Generic,NFData)
 
@@ -280,7 +280,7 @@ uniwild k l i   = UV k l (-(i*2+1))
 
 data TCon       = TC { tcname::QName, tcargs::[Type] } deriving (Eq,Show,Read,Generic,NFData)
 
-data FX         = FXPure | FXMut | FXProc | FXAction | FXSpawn | FXSend | FXCom deriving (Eq,Show,Read,Generic,NFData)
+data FX         = FXPure | FXMut | FXProc | FXAction | FXCom deriving (Eq,Show,Read,Generic,NFData)
 
 data QBind      = QBind TVar [TCon] deriving (Eq,Show,Read,Generic,NFData)
 
@@ -438,8 +438,6 @@ fxPure          = tTFX FXPure
 fxMut           = tTFX FXMut
 fxProc          = tTFX FXProc
 fxAction        = tTFX FXAction
-fxSpawn         = tTFX FXSpawn
-fxSend          = tTFX FXSend
 fxCom           = tTFX FXCom
 fxWild          = tWild
 
@@ -1016,7 +1014,7 @@ isKeyword x                         = x `Data.Set.member` rws
                                         "var","while","with","yield","_"
                                         -- The following are soft keywords and not included in the above list:
                                         -- "action","actor","class","com","extension","from","import",
-                                        -- "mut","proc","protocol","pure","send","spawn","type"
+                                        -- "mut","proc","protocol","pure","type"
                                       ]
 
 isSig Signature{}                   = True

@@ -1,7 +1,7 @@
-spawn def produce(x: int) -> int:
+com def produce(x: int) -> int:
     return x + 1
 
-send def deliver(x: int) -> int:
+com def deliver(x: int) -> int:
     return x * 2
 
 com def combine(x: int) -> int:
@@ -10,19 +10,13 @@ com def combine(x: int) -> int:
 pure def increment(x: int) -> int:
     return x + 1
 
-spawn def apply_spawn(f: spawn(int) -> int, x: int) -> int:
-    return f(x)
-
-send def apply_send(f: send(int) -> int, x: int) -> int:
-    return f(x)
-
 com def apply_com(f: com(int) -> int, x: int) -> int:
     return f(x)
 
 proc def apply_proc(f: proc(int) -> int, x: int) -> int:
     return f(x)
 
-# The new effect names also remain ordinary method and parameter names.
+# Effect names are contextual; send and spawn are also ordinary names.
 class Names(object):
     def __init__(self):
         pass
@@ -43,16 +37,10 @@ class Names(object):
         return pure + 1
 
 proc def run_checks(env):
-    s = spawn lambda x: produce(x)
-    t = send lambda x: deliver(x)
     c = com lambda x: combine(x)
-    assert s(2) == 3
-    assert t(3) == 6
     assert c(4) == 10
-    assert apply_spawn(produce, 5) == 6
-    assert apply_send(deliver, 6) == 12
     assert apply_com(combine, 7) == 16
-    assert apply_spawn(increment, 8) == 9
+    assert apply_com(increment, 8) == 9
     assert apply_com(produce, 9) == 10
     assert apply_com(deliver, 10) == 20
     assert apply_proc(produce, 11) == 12

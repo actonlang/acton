@@ -1194,15 +1194,13 @@ castable env t1 t2                          = False
 -- Built-in program order: parents precede their subeffects, just as class
 -- declarations precede subclasses. The solver decides when to reverse it.
 effectsInProgramOrder :: [FX]
-effectsInProgramOrder = [FXProc, FXMut, FXCom, FXSpawn, FXSend, FXPure, FXAction]
+effectsInProgramOrder = [FXProc, FXMut, FXCom, FXPure, FXAction]
 
 -- Semantic inclusion, excluding the temporary mut-to-pure cast.
 subeffect :: FX -> FX -> Bool
 subeffect a b | a == b = True
 subeffect _ FXProc = True
-subeffect FXPure b = b `elem` [FXMut, FXSpawn, FXSend, FXCom]
-subeffect FXSpawn FXCom = True
-subeffect FXSend FXCom = True
+subeffect FXPure b = b `elem` [FXMut, FXCom]
 subeffect _ _ = False
 
 -- Keep the temporary mut-to-pure cast out of semantic bounds and preference.
@@ -1341,8 +1339,6 @@ lub env t1@(TFX _ fx1) t2@(TFX _ fx2)   = pure $ tTFX (lufx fx1 fx2)
   where lufx a b
           | subeffect a b              = b
           | subeffect b a              = a
-          | a `elem` [FXSpawn,FXSend], b `elem` [FXSpawn,FXSend]
-                                        = FXCom
           | otherwise                  = FXProc
 
 lub env (TNil _ k1) (TNil _ k2)

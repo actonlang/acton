@@ -2667,8 +2667,6 @@ effect  = addLoc $
         <|> rword "mut" *> return S.fxMut
         <|> rword "pure" *> return S.fxPure
         <|> rword "action" *> return S.fxAction
-        <|> rword "spawn" *> return S.fxSpawn
-        <|> rword "send" *> return S.fxSend
         <|> rword "com" *> return S.fxCom
 
 posrow :: Parser S.PosRow

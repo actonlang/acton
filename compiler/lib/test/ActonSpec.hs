@@ -239,12 +239,10 @@ main = do
   sydTest $ do
     describe "Communication effects" $ do
       let hierarchy =
-            [ (S.FXPure, [S.FXPure,S.FXMut,S.FXSpawn,S.FXSend,S.FXCom,S.FXProc])
+            [ (S.FXPure, [S.FXPure,S.FXMut,S.FXCom,S.FXProc])
             , (S.FXMut, [S.FXMut,S.FXProc])
             , (S.FXProc, [S.FXProc])
             , (S.FXAction, [S.FXAction,S.FXProc])
-            , (S.FXSpawn, [S.FXSpawn,S.FXCom,S.FXProc])
-            , (S.FXSend, [S.FXSend,S.FXCom,S.FXProc])
             , (S.FXCom, [S.FXCom,S.FXProc])
             ]
           effects = map fst hierarchy
@@ -281,7 +279,7 @@ main = do
         forM_ (zip [0..] effects) $ \(tag,fx) -> do
           Data.Binary.encode fx `shouldBe` BL.pack [tag]
           Data.Binary.decode (Data.Binary.encode fx) `shouldBe` fx
-      it "distinguishes the public hashes of all seven effects" $ do
+      it "distinguishes the public hashes of all five effects" $ do
         let info fx = I.NDef (S.monotype $ S.tFun (S.tTFX fx) S.posNil S.kwdNil S.tNone) S.NoDec Nothing
         length (nub $ map (publicHashFor . info) effects) `shouldBe` length effects
       forM_ effects $ \fx -> do
@@ -304,14 +302,14 @@ main = do
           map S.dfx (take 1 defs) `shouldBe` [S.tTFX fx]
           reparsed <- liftIO $ P.parseModuleSerial (S.modName ["communication"]) "communication.act" (prettyText ast) Nothing
           prettyText reparsed `shouldBe` prettyText ast
-      it "infers com when a function calls both spawn and send functions" $ do
+      it "infers com when a function calls both pure and com functions" $ do
         ast <- typecheckSource env0 "communication_join" $ unlines
-          [ "def combine(f: spawn() -> None, g: send() -> None):"
+          [ "def combine(f: pure() -> None, g: com() -> None):"
           , "    f()"
           , "    g()"
           ]
         fmap S.dfx (findTypedDef "combine" ast) `shouldBe` Just S.fxCom
-      forM_ [("spawn","send"),("send","spawn"),("pure","com"),("mut","com"),("com","proc")] $ \(bodyFx,callFx) ->
+      forM_ [("pure","com"),("mut","com"),("com","mut"),("com","proc")] $ \(bodyFx,callFx) ->
         it ("rejects " ++ callFx ++ " calls in a " ++ bodyFx ++ " body") $ do
           let src = unlines [bodyFx ++ " def invalid(f: " ++ callFx ++ "() -> None):", "    f()"]
           result <- liftIO $ E.try (typecheckSource env0 "communication_invalid" src)

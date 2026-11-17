@@ -534,8 +534,6 @@ instance Pretty FX where
     pretty FXMut                    = text "mut"
     pretty FXPure                   = text "pure"
     pretty FXAction                 = text "action"
-    pretty FXSpawn                  = text "spawn"
-    pretty FXSend                   = text "send"
     pretty FXCom                    = text "com"
 
 instance Pretty Kind where
