@@ -160,6 +160,8 @@ qInst env f ts e                    = case qSchema env f e of
                                         (sc, _, _, _) -> error ("###### qInst [" ++ prstrs ts ++ "] " ++ prstr e ++ " is " ++ prstr sc)
 
 instance QType Expr where
+    qType env f (Raise l e t)       = (t, fx, Raise l e' t)
+      where (_,fx,e')              = qType env f e
     qType env f e@Var{}             = qInst env f [] e
     qType env f e@Dot{}             = qInst env f [] e
     qType env f (TApp _ e ts)       = qInst env f ts e

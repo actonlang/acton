@@ -121,7 +121,6 @@ instance Transform Stmt where
     trans env (Assert l e mbe)          = Assert l (trans env e) (trans env mbe)
     trans env (Delete l t)              = Delete l (trans env t)
     trans env (Return l mbe)            = Return l (trans env mbe)
-    trans env (Raise l e)               = Raise l (trans env e)
     trans env (If l bs els)             = If l (trans env bs) (trans env els)
     trans env (While l e b els)         = While l (trans env e) (trans env b) (trans env els)
     trans env (For l p e b els)         = For l p (trans env e) (trans env1 b) (trans env els)
@@ -161,6 +160,7 @@ transCall (Dot _ (Var _ n) m) ts [e1]
 transCall _ _ _                         = Nothing
 
 instance Transform Expr where
+    trans env (Raise l e t)           = Raise l (trans env e) t
     trans env (Var l (NoQ n))
       | Just e <- trfind n env          = if final env then e else trans (blockscope [n] env) e
 

@@ -1393,16 +1393,89 @@ instance Flows a => Flows [a] where
     flows (s : ss)                  = flows s `seq` flows ss
       where f1 `seq` f2             = if SEQ `elem` f1 then (f1\\[SEQ])++f2 else f1
 
+-- True only when evaluating the expression must raise. Deferred and
+-- conditionally evaluated operands cannot make their enclosing expression raise.
+exprRaises :: Expr -> Bool
+exprRaises e = case e of
+    Raise{}                    -> True
+    _ | isRAISE e              -> True
+    Call _ f ps ks             -> exprRaises f || (not (optional f) && any exprRaises (pos ps ++ kwd ks))
+    Let _ ss x                 -> any stmtRaises ss || exprRaises x
+    Cond _ x c y               -> exprRaises c || (exprRaises x && exprRaises y)
+    BinOp _ x op y             -> exprRaises x || (op `notElem` [And,Or] && exprRaises y)
+    CompOp _ x ops             -> exprRaises x || case ops of OpArg _ y : _ -> exprRaises y; _ -> False
+    TApp _ x _                 -> exprRaises x
+    Async _ x                  -> exprRaises x
+    Await _ x                  -> exprRaises x
+    Index _ x y                -> exprRaises x || (not (optional x) && exprRaises y)
+    Slice _ x (Sliz _ a b c)    -> exprRaises x || (not (optional x) && any exprRaises (catMaybes [a,b,c]))
+    IsInstance _ x _           -> exprRaises x
+    UnOp _ _ x                 -> exprRaises x
+    Dot _ x _                  -> exprRaises x
+    Rest _ x _                 -> exprRaises x
+    DotI _ x _                 -> exprRaises x
+    RestI _ x _                -> exprRaises x
+    Opt _ x _                  -> exprRaises x
+    OptChain _ x               -> exprRaises x
+    Paren _ x                  -> exprRaises x
+    Box _ x                    -> exprRaises x
+    UnBox _ x                  -> exprRaises x
+    Tuple _ ps ks              -> any exprRaises (pos ps ++ kwd ks)
+    List _ es                  -> any (exprRaises . element) es
+    Set _ es                   -> any (exprRaises . element) es
+    Dict _ as                  -> any (any exprRaises . assoc) as
+    _                          -> False
+  where
+    pos (PosArg x xs) = x : pos xs
+    pos (PosStar x) = [x]
+    pos PosNil = []
+    kwd (KwdArg _ x xs) = x : kwd xs
+    kwd (KwdStar x) = [x]
+    kwd KwdNil = []
+    element (Elem x) = x
+    element (Star x) = x
+    assoc (Assoc x y) = [x,y]
+    assoc (StarStar x) = [x]
+    optional OptChain{} = True
+    optional (Opt _ _ True) = True
+    optional (Opt _ x False) = optional x
+    optional (Dot _ x _) = optional x
+    optional (DotI _ x _) = optional x
+    optional (Rest _ x _) = optional x
+    optional (RestI _ x _) = optional x
+    optional (Slice _ x _) = optional x
+    optional (Index _ x _) = optional x
+    optional (Call _ x _ _) = optional x
+    optional (TApp _ x _) = optional x
+    optional _ = False
+
+stmtRaises :: Stmt -> Bool
+stmtRaises s = case s of
+    Expr _ e                   -> exprRaises e
+    Assign _ _ e               -> exprRaises e
+    VarAssign _ _ e            -> exprRaises e
+    MutAssign _ t e            -> exprRaises t || exprRaises e
+    AugAssign _ t _ e          -> exprRaises t || exprRaises e
+    Return _ e                 -> maybe False exprRaises e
+    Assert _ e _               -> exprRaises e
+    Delete _ e                 -> exprRaises e
+    While _ e _ _              -> exprRaises e
+    For _ _ e _ _              -> exprRaises e
+    With _ is _                -> any (\(WithItem e _) -> exprRaises e) is
+    _                          -> False
+
 instance Flows Stmt where
+    flows s | stmtRaises s          = []
     flows (Expr _ e)
       | e == eNotImpl               = []                -- Not tracked
-      | Call _ (Var _ n) _ _ <- e,
-        n == primRAISE              = []                -- Not tracked
-    flows Raise{}                   = []                -- Not tracked
     flows Return{}                  = [RET]
     flows Break{}                   = [BRK]
     flows Continue{}                = [CNT]
-    flows (If _ bs els)             = concatMap flows bs ++ flows els
+    flows (If _ bs els)             = branches bs
+      where branches []            = flows els
+            branches (Branch e ss : rest)
+              | exprRaises e        = []
+              | otherwise           = flows ss ++ branches rest
     flows (While _ _ b els)         = brkseq (flows b) ++ flows els
     flows (For _ _ _ b els)         = brkseq (flows b) ++ flows els
     flows (With _ _ b)              = flows b

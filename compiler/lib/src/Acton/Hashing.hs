@@ -443,7 +443,6 @@ feedStmt stmt sink = case stmt of
   A.Pass _               -> feedTag 15 sink
   A.Delete _ t           -> feedTag 16 sink >> feedExpr t sink
   A.Return _ mbe         -> feedTag 17 sink >> feedMaybe feedExpr mbe sink
-  A.Raise _ e            -> feedTag 18 sink >> feedExpr e sink
   A.Break _              -> feedTag 19 sink
   A.Continue _           -> feedTag 20 sink
   A.If _ bs els          -> feedTag 21 sink >> feedList feedBranch bs sink >> feedSuite els sink
@@ -484,6 +483,7 @@ feedDecl decl sink = case decl of
 
 feedExpr :: A.Expr -> HashFeed
 feedExpr expr sink = case expr of
+  A.Raise _ e t         -> feedTag 92 sink >> feedExpr e sink >> feedType t sink
   A.Var _ qn            -> feedTag 50 sink >> feedQName qn sink
   A.Int _ i s           -> feedTag 51 sink >> feedInteger i sink >> feedString s sink
   A.Float _ d s         -> feedTag 52 sink >> feedDouble d sink >> feedString s sink
@@ -1248,7 +1248,6 @@ implItemSplitDeps mn env localNames item =
       A.Pass _               -> acc
       A.Delete _ t           -> splitExprDirect bound t acc
       A.Return _ mbe         -> splitMaybeInto (splitExprDirect bound) mbe acc
-      A.Raise _ e            -> splitExprDirect bound e acc
       A.Break _              -> acc
       A.Continue _           -> acc
       A.If _ bs els          -> splitSuiteDirect bound els (splitListInto (splitBranchDirect bound) bs acc)
@@ -1301,6 +1300,7 @@ implItemSplitDeps mn env localNames item =
       in splitSuiteDirect bound' ss (splitExceptDirect bound ex acc)
 
     splitExprDirect bound expr acc = case expr of
+      A.Raise _ e t         -> splitTypeDirect bound t (splitExprDirect bound e acc)
       A.Var _ qn            -> splitQName bound qn acc
       A.Int{}               -> acc
       A.Float{}             -> acc

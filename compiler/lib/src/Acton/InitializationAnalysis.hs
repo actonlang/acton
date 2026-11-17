@@ -142,7 +142,6 @@ constraints cs c = execWriter $ do
       Try _ b hs es fin -> mapM_ stmt (b++concat [x | Handler _ x <- hs]++es++fin)
       Assert _ e me -> inspect (e:maybe [] (:[]) me)
       Return _ me -> inspect (maybe [] (:[]) me)
-      Raise _ e -> inspect [e]
       Delete _ e -> inspect [e]
       After _ _ delay e -> inspect [delay,e]
       Data _ p b -> mapM_ (bind S.empty) p >> mapM_ stmt b
@@ -207,6 +206,7 @@ expanded PosNil (KwdStar e) = [e]
 expanded PosNil KwdNil = []
 arguments ps ks = posArgs ps ++ map snd (kwdArgs ks) ++ expanded ps ks
 children e = case e of
+    Raise _ x _ -> [x]
     Call _ f ps ks -> f : arguments ps ks
     Async _ x -> [x]
     Await _ x -> [x]

@@ -1,0 +1,11 @@
+# A conditionally evaluated raise cannot excuse missing initialization.
+class Invalid(object):
+    value: int
+
+    def __init__(self, valid: bool):
+        if valid:
+            self.value = 42
+        else:
+            ignored = valid or (raise ValueError())
+
+actor main(env): pass

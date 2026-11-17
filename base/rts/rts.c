@@ -1277,11 +1277,12 @@ void $DROP() {
     wctx->jump_top = current->prev;
 }
 
-void $RAISE(B_BaseException e) {
+_Noreturn B_value $RAISE(B_BaseException e) {
     WorkerCtx wctx = GET_WCTX();
     JumpBuf jump = wctx->jump_top;
     jump->xval = e;
     $LONGJMP(jump->buf, 1);
+    __builtin_unreachable();
 }
 
 #ifdef ACTON_DB

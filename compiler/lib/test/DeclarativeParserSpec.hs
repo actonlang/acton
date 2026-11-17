@@ -2,6 +2,9 @@ module DeclarativeParserSpec (spec, main) where
 
 import qualified Acton.Parser as P
 import qualified Acton.Syntax as S
+import qualified Acton.Env as Env
+import Acton.Printer ()
+import Utils (SrcLoc(..), prstr)
 import qualified Control.Exception as E
 import Control.Monad (forM_)
 import Data.List (isInfixOf)
@@ -107,6 +110,55 @@ spec = describe "Declarative body grammars" $ do
       , "        after 0: function()"
       , "        return"
       ]
+
+  describe "Raise expressions" $ do
+    forM_ [ "value = 1 if valid else raise ValueError()"
+          , "actor Example(): value = 1 if valid else raise ValueError()"
+          , "actor Example(): var value = (raise ValueError()) if invalid else 1"
+          , "def f(): return raise ValueError()"
+          , "def f(): raise first if condition else second"
+          , "value = lambda: raise ValueError()"
+          , "value = function(raise ValueError())"
+          , "value = [(raise ValueError())]"
+          ] $ \source -> it ("accepts " ++ source) $ accepted source
+    it "preserves the precedence of a standalone conditional raise" $ do
+      e <- initializer "raise first if condition else second"
+      case e of
+        S.Raise _ S.Cond{} _ -> return ()
+        _ -> expectationFailure (show e)
+    forM_ [ "1 if valid else raise error"
+          , "(raise error) if invalid else 1"
+          , "(raise error) + 1"
+          , "(raise error) == value"
+          , "lambda: raise error"
+          ] $ \source -> it ("roundtrips " ++ source) $ do
+            e <- initializer source
+            printed <- initializer (prstr e)
+            printed `shouldBe` e
+    forM_ [ "value?.method(raise error)"
+          , "value?[raise error]"
+          , "value?[0:1](raise error)"
+          ] $ \source -> it ("keeps optional-chain exits conditional: " ++ source) $ do
+            e <- initializer source
+            Env.exprRaises e `shouldBe` False
+    let raise = S.eRaise (S.eVar (S.name "error"))
+        value = S.eInt 1
+    forM_ [ ("raise", raise, True)
+          , ("strict operand", S.BinOp NoLoc value S.Plus raise, True)
+          , ("conditional alternative", S.Cond NoLoc value (S.eBool True) raise, False)
+          , ("both alternatives", S.Cond NoLoc raise (S.eBool True) raise, True)
+          , ("short-circuit and", S.BinOp NoLoc value S.And raise, False)
+          , ("short-circuit or", S.BinOp NoLoc value S.Or raise, False)
+          , ("deferred lambda", S.Lambda NoLoc S.PosNIL S.KwdNIL raise S.fxPure, False)
+          ] $ \(label,e,expected) -> it ("recognizes guaranteed exits: " ++ label) $
+            Env.exprRaises e `shouldBe` expected
+
+initializer :: String -> IO S.Expr
+initializer source = do
+  m <- P.parseModuleSerial (S.modName ["raise_expr"]) "raise_expr.act" ("value = " ++ source ++ "\n") Nothing
+  case S.mbody m of
+    [S.Assign _ _ e] -> return e
+    _ -> expectationFailure (show m) >> return S.eNone
 
 forbidden :: [String]
 forbidden =

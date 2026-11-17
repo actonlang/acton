@@ -1,0 +1,8 @@
+proc def error() -> ValueError:
+    return ValueError()
+
+# Raising adds no effect, but computing the exception still has its own effect.
+pure def invalid() -> int:
+    return raise error()
+
+actor main(env): pass

@@ -1458,13 +1458,6 @@ def type(a: ?value) -> str:
 def actorid() -> str:
     NotImplemented
 
-def _string_decoder_buffer(encoding: ?str) -> bytes:
-    if encoding is not None:
-        if encoding.lower() != "utf-8":
-            raise _unsupported_encoding_error
-    return b""
-
-
 actor StringDecoder(cb_out: action(str) -> None, encoding: ?str="utf-8", on_error: ?action(str, bytes) -> None=None):
     """Bytes to string decoder
 
@@ -1473,7 +1466,10 @@ actor StringDecoder(cb_out: action(str) -> None, encoding: ?str="utf-8", on_erro
     byte characters.
     """
     MAX_UNICODE_CHAR_SIZE: int = 4
-    var buf: bytes = _string_decoder_buffer(encoding)
+    var buf: bytes = (
+        (b"" if encoding.lower() == "utf-8" else raise _unsupported_encoding_error)
+        if encoding is not None else b""
+    )
 
     def decode(input: bytes) -> None:
         buf += input

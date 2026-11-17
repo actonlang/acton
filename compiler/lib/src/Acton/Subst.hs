@@ -108,7 +108,6 @@ instance VFree Stmt where
     vfree (Assert _ e mbe)         = vfree e ++ vfree mbe
     vfree (Delete _ t)             = vfree t
     vfree (Return _ mbe)           = vfree mbe
-    vfree (Raise _ e)              = vfree e
     vfree (If _ bs els)            = vfree bs ++ vfree els
     vfree (While _ e b els)        = vfree e ++ vfree b ++ vfree els
     vfree (For _ p e b els)        = vfree p ++ vfree e ++ vfree b ++ vfree els
@@ -130,6 +129,7 @@ instance VFree WithItem where
     vfree (WithItem e p)            = vfree e ++ vfree p
 
 instance VFree Expr where
+    vfree (Raise _ e t)           = vfree e ++ vfree t
     vfree (Call l e p k)            = vfree e ++ vfree p ++ vfree k
     vfree (TApp l e ts)             = vfree e ++ vfree ts
     vfree (Let l ss e)              = vfree ss ++ vfree e
@@ -297,7 +297,6 @@ instance VSubst Stmt where
     vsubst s (Assert l e mbe)       = Assert l (vsubst s e) (vsubst s mbe)
     vsubst s (Delete l t)           = Delete l (vsubst s t)
     vsubst s (Return l mbe)         = Return l (vsubst s mbe)
-    vsubst s (Raise l e)            = Raise l (vsubst s e)
     vsubst s (If l bs els)          = If l (vsubst s bs) (vsubst s els)
     vsubst s (While l e b els)      = While l (vsubst s e) (vsubst s b) (vsubst s els)
     vsubst s (For l p e b els)      = For l (vsubst s p) (vsubst s e) (vsubst s b) (vsubst s els)
@@ -310,6 +309,7 @@ instance VSubst Stmt where
     vsubst s stmt                   = stmt
 
 instance VSubst Expr where
+    vsubst s (Raise l e t)        = Raise l (vsubst s e) (vsubst s t)
     vsubst s (Call l e p k)         = Call l (vsubst s e) (vsubst s p) (vsubst s k)
     vsubst s (TApp l e ts)          = TApp l (vsubst s e) (vsubst s ts)
     vsubst s (Let l ss e)           = Let l (vsubst s ss) (vsubst s e)
@@ -471,7 +471,6 @@ instance UFree Stmt where
     ufree (Assert _ e mbe)          = ufree e ++ ufree mbe
     ufree (Delete _ t)              = ufree t
     ufree (Return _ mbe)            = ufree mbe
-    ufree (Raise _ e)               = ufree e
     ufree (If _ bs els)             = ufree bs ++ ufree els
     ufree (While _ e b els)         = ufree e ++ ufree b ++ ufree els
     ufree (For _ p e b els)         = ufree p ++ ufree e ++ ufree b ++ ufree els
@@ -484,6 +483,7 @@ instance UFree Stmt where
     ufree s                         = []
 
 instance UFree Expr where
+    ufree (Raise _ e t)           = ufree e ++ ufree t
     ufree (Call l e p k)            = ufree e ++ ufree p ++ ufree k
     ufree (TApp l e ts)             = ufree e ++ ufree ts
     ufree (Let l ss e)              = ufree ss ++ ufree e

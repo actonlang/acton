@@ -849,6 +849,7 @@ qualifyDefaultExprExcept env excluded e
         temporaryDefaultRef (Internal Tempvar _ _) = True
         temporaryDefaultRef _                      = False
 
+        qexpr (Raise l e t)             = Raise l (qexpr e) t
         qexpr (Var l q@QName{})         = Var l (unalias env q)
         qexpr (Call l f p k)            = Call l (qexpr f) (qposarg p) (qkwdarg k)
         qexpr (Let l ss x)              = Let l (map qstmt ss) (qexpr x)
@@ -913,7 +914,6 @@ qualifyDefaultExprExcept env excluded e
         qstmt (Assert l x msg)           = Assert l (qexpr x) (fmap qexpr msg)
         qstmt (Delete l x)               = Delete l (qexpr x)
         qstmt (Return l x)               = Return l (fmap qexpr x)
-        qstmt (Raise l x)                = Raise l (qexpr x)
         qstmt (If l bs els)              = If l (map qbranch bs) (map qstmt els)
         qstmt (While l x ss els)         = While l (qexpr x) (map qstmt ss) (map qstmt els)
         qstmt (For l p x ss els)         = For l (qpat p) (qexpr x) (map qstmt ss) (map qstmt els)
@@ -1281,8 +1281,6 @@ instance InfEnv Stmt where
     infEnv env (Return l (Just e))      = do t <- currRet
                                              (cs,e') <- inferSub env t e
                                              return (cs, [], Return l (Just e'))
-    infEnv env (Raise l e)              = do (cs,t,e') <- infer env e
-                                             return (Cast (locinfo2 32 e) env t tException : cs, [], Raise l e')
     infEnv env s@(Break _)              = return ([], [], s)
     infEnv env s@(Continue _)           = return ([], [], s)
     infEnv env (If l bs els)            = do (css,tes,bs') <- fmap unzip3 $ mapM (infLiveEnv env) bs
@@ -1929,8 +1927,9 @@ scanSelfAssigns env self classBody stmts = scanSuite [] stmts
     -- Return would give back an uninitialized object, so it doesn't excuse initialization
     branchExitsEarly :: Suite -> Bool
     branchExitsEarly []                 = False
-    branchExitsEarly stmts              = case last stmts of
-                                              Raise _ _ -> True  -- Only raise truly prevents object creation
+    branchExitsEarly stmts
+      | stmtRaises (last stmts)         = True
+      | otherwise                      = case last stmts of
                                               -- Recursively check nested if/else
                                               If _ branches elseBranch ->
                                                   all (\(Branch _ body) -> branchExitsEarly body) branches &&
@@ -1946,6 +1945,7 @@ scanSelfAssigns env self classBody stmts = scanSuite [] stmts
                                                          (null elseBranch || branchExitsEarly elseBranch)
                                               _ -> False
     scanSuite seen []                   = []
+    scanSuite _ (s:_) | stmtRaises s     = []
     -- Handle assignments
     scanSuite seen (MutAssign _ (Dot _ (Var _ qn) n) e : rest)
         | noq qn == self                = if checkNoSelfReference self seen e
@@ -2111,7 +2111,6 @@ scanSelfAssigns env self classBody stmts = scanSuite [] stmts
                                         = scanSuite seen rest  -- Continue: assert doesn't leak self
         | otherwise                     = []  -- STOP: assert references self
     scanSuite _ (Return _ _ : _)        = []  -- STOP: early exit
-    scanSuite _ (Raise _ _ : _)         = []  -- STOP: raises exception
     -- Skip past break and continue - they are loop control flow, and we skip loops anyway
     scanSuite seen (Break _ : rest)     = scanSuite seen rest
     scanSuite seen (Continue _ : rest)  = scanSuite seen rest
@@ -2159,6 +2158,7 @@ checkNoSelfReference self seen expr = checkExpr expr
   where
     -- Check if an expression is allowed
     checkExpr :: Expr -> Bool
+    checkExpr (Raise _ e _)             = checkExpr e
     checkExpr (Await _ _)               = False  -- Await is not allowed
     checkExpr (Var _ qn) | noq qn == self
                                         = False  -- Direct reference to self not allowed
@@ -2669,6 +2669,9 @@ instance Infer Expr where
                                              w <- newWitness
                                              return (Proto (locinfo2 77 e) env w t (pISliceable t0) :
                                                      cs1++cs2, t, eCall (eDot (eVar w) getsliceKW) [e', sliz2exp sl'])
+    infer env (Raise l e _)             = do (cs,e') <- inferSub env tException e
+                                             t <- newUnivar env
+                                             return (cs, t, Raise l e' t)
     infer env (Cond l e1 e e2)          = do t0 <- newUnivar env
                                              (cs0,env',s,_,e') <- inferTest env e
                                              (cs1,e1') <- inferSub env' t0 e1

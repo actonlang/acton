@@ -300,7 +300,6 @@ instance KCheck Stmt where
     kchk env (Pass l)               = return $ Pass l
     kchk env (Delete l t)           = Delete l <$> kchk env t
     kchk env (Return l mbe)         = Return l <$> kchk env mbe
-    kchk env (Raise l e)            = Raise l <$> kchk env e
     kchk env (Break l)              = return $ Break l
     kchk env (Continue l)           = return $ Continue l
     kchk env (If l bs els)          = If l <$> kchk env bs <*> kchkSuite env els
@@ -364,6 +363,7 @@ instance KCheck Decl where
             vs                      = closeDepVarsQ (vfree c) q
 
 instance KCheck Expr where
+    kchk env (Raise l e t)           = Raise l <$> kchk env e <*> pure t
     kchk env (Var l n)              = return $ Var l n
     kchk env (Int l i s)            = return $ Int l i s
     kchk env (Float l f s)          = return $ Float l f s
@@ -662,7 +662,6 @@ instance KSubst Stmt where
     ksubst g (Pass l)               = return $ Pass l
     ksubst g (Delete l t)           = Delete l <$> ksubst g t
     ksubst g (Return l mbe)         = Return l <$> ksubst g mbe
-    ksubst g (Raise l e)            = Raise l <$> ksubst g e
     ksubst g (Break l)              = return $ Break l
     ksubst g (Continue l)           = return $ Continue l
     ksubst g (If l bs els)          = If l <$> ksubst g bs <*> ksubst g els
@@ -690,6 +689,7 @@ instance KSubst Decl where
                                     = Extension l <$> ksubst g q <*> ksubst g c <*> ksubst g as <*> ksubst g b <*> return doc
 
 instance KSubst Expr where
+    ksubst g (Raise l e t)           = Raise l <$> ksubst g e <*> pure t
     ksubst g (Var l n)              = return $ Var l n
     ksubst g (Int l i s)            = return $ Int l i s
     ksubst g (Float l f s)          = return $ Float l f s

@@ -890,9 +890,10 @@ scPOP               = tSchema [] tPOP
 scDROP              = tSchema [] tDROP
   where tDROP       = tFun fxPure posNil kwdNil tNone
 
---  $RAISE          : (BaseException) -> None
-scRAISE             = tSchema [] tRAISE
-  where tRAISE      = tFun fxPure (posRow tBaseException posNil) kwdNil tNone
+--  $RAISE          : [A] => (BaseException) -> A   (never returns)
+scRAISE             = tSchema [qbind a] tRAISE
+  where tRAISE      = tFun fxPure (posRow tBaseException posNil) kwdNil (tVar a)
+        a           = TV KType (name "A")
 
 
 --  $ASSERT         : pure (bool, ?str) -> None
@@ -1353,5 +1354,6 @@ isPUSH _                        = False
 isPUSHF (Call _ (Var _ x) _ _)  = x == primPUSHF
 isPUSHF _                       = False
 
+isRAISE (Call _ (TApp _ (Var _ x) _) _ _) = x == primRAISE
 isRAISE (Call _ (Var _ x) _ _)  = x == primRAISE
 isRAISE _                       = False

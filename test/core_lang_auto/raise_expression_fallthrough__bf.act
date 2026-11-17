@@ -1,0 +1,5 @@
+# The non-raising branch still falls through without returning an int.
+pure def invalid(valid: bool) -> int:
+    value = 1 if valid else raise ValueError()
+
+actor main(env): pass

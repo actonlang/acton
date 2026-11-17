@@ -27,6 +27,23 @@ actor main(env):
 normal, an optional value is often a better fit.</p>
 </div>
 
+## Raise expressions
+
+`raise` can also appear in an expression, including a declarative initializer:
+
+```python
+pure def checked_port(port: int) -> int:
+    return port if 0 <= port <= 65535 else raise ValueError("invalid port")
+```
+
+A raise expression never produces a value, so it can be used wherever a value
+of any type is expected. Raising itself adds no effect; evaluating the
+exception expression can still have effects.
+
+`raise` has low precedence: `raise first if condition else second` raises the
+selected exception. To raise only in the first branch, write
+`(raise error) if condition else value`.
+
 ## `try` structure
 
 A `try` statement can contain these parts:

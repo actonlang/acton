@@ -1954,7 +1954,7 @@ del_stmt = addLoc $ do
 
 pass_stmt =  S.Pass <$> rwordLoc "pass"
 
-flow_stmt = break_stmt <|>  continue_stmt <|>  return_stmt <|>  raise_stmt <|>  yield_stmt
+flow_stmt = break_stmt <|>  continue_stmt <|>  return_stmt <|>  yield_stmt
 
 break_stmt =  do l <- rwordLoc "break"
                  assertLoop l "break"
@@ -1971,9 +1971,6 @@ return_stmt = addLoc $ do    -- the notFollowedBy colon here is to avoid confusi
 
 yield_stmt = yield_expr >>= \e -> return $ S.Expr (S.eloc e) e
 
-raise_stmt = addLoc $ do
-               rword "raise"
-               S.Raise NoLoc <$> expr
 
 import_stmt = import_name <|> import_from <?> "import statement"
    where import_name = addLoc $ do
@@ -2292,7 +2289,8 @@ unescapeString (x:xs) = x : unescapeString xs
 
 -- The most general form of expression
 expr :: Parser S.Expr
-expr =  lambdef
+expr =  raise_expr
+       <|> lambdef
        <|>
         do
           e1 <- or_expr
@@ -2309,7 +2307,13 @@ exprlist :: Parser S.Expr
 exprlist = addLoc $ tuple_or_single posarg S.posArgHead S.singlePosArg (\p -> S.Tuple NoLoc p S.KwdNil)
 
 
-expr_nocond = lambdef_nocond <|> or_expr
+-- As with lambda, raise has low precedence. In particular, the existing
+-- `raise first if condition else second` raises the selected exception.
+raise_expr = raiseExpr expr
+
+raiseExpr operand = addLoc $ rword "raise" *> (S.Raise NoLoc <$> operand <*> pure S.tWild)
+
+expr_nocond = raiseExpr expr_nocond <|> lambdef_nocond <|> or_expr
 
 lambdefGen t = addLoc $ do
             fx <- optional effect

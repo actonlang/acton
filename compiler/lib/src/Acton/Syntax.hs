@@ -34,7 +34,7 @@ import Control.DeepSeq
 import Prelude hiding((<>))
 
 version :: [Int]
-version = [0,39]
+version = [0,40]
 
 data Module     = Module        { modname::ModName, imps::[Import], mdoc::Maybe String, mbody::Suite } deriving (Eq,Show,Generic,NFData)
 
@@ -53,7 +53,6 @@ data Stmt       = Expr          { sloc::SrcLoc, expr::Expr }
                 | Pass          { sloc::SrcLoc }
                 | Delete        { sloc::SrcLoc, target::Target }
                 | Return        { sloc::SrcLoc, optExpr::Maybe Expr }
-                | Raise         { sloc::SrcLoc, expr::Expr }
                 | Break         { sloc::SrcLoc }
                 | Continue      { sloc::SrcLoc }
                 | If            { sloc::SrcLoc, branches::[Branch], els::Suite }
@@ -118,6 +117,7 @@ data Expr       = Var           { eloc::SrcLoc, var::QName }
                 | Paren         { eloc::SrcLoc, exp1::Expr }
                 | Box           { tp :: Type, exp1 :: Expr }
                 | UnBox         { tp :: Type, exp1 :: Expr }
+                | Raise         { eloc::SrcLoc, exp1::Expr, tp::Type } -- inferred result type; never returns
                 deriving (Show,Read,NFData,Generic)
 
 data Pattern    = PWild         { ploc::SrcLoc, pann::Maybe Type }
@@ -335,7 +335,8 @@ sDef n p t b fx = sDecl [Def NoLoc n [] p KwdNIL (Just t) b NoDec fx Nothing]
 sReturn e       = Return NoLoc (Just e)
 sAssign p e     = Assign NoLoc [p] e
 sMutAssign t e  = MutAssign NoLoc t e
-sRaise e        = Raise NoLoc e
+eRaise e        = Raise NoLoc e tWild
+sRaise e        = sExpr (eRaise e)
 sExpr e         = Expr NoLoc e
 sDecl ds        = Decl NoLoc ds
 sIf bs els      = If NoLoc bs els
@@ -754,7 +755,6 @@ instance Eq Stmt where
     x@Pass{}            ==  y@Pass{}            = True
     x@Delete{}          ==  y@Delete{}          = target x == target y
     x@Return{}          ==  y@Return{}          = optExpr x == optExpr y
-    x@Raise{}           ==  y@Raise{}           = expr x == expr y
     x@Break{}           ==  y@Break{}           = True
     x@Continue{}        ==  y@Continue{}        = True
     x@If{}              ==  y@If{}              = branches x == branches y && els x == els y
@@ -782,6 +782,7 @@ instance Eq Decl where
     _                               == _                            = False
 
 instance Eq Expr where
+    x@Raise{}           ==  y@Raise{}           = exp1 x == exp1 y && tp x == tp y
     x@Var{}             ==  y@Var{}             = var x == var y
     x@Int{}             ==  y@Int{}             = lexeme x == lexeme y
     x@Float{}           ==  y@Float{}           = lexeme x == lexeme y
