@@ -1,5 +1,4 @@
 # Fresh descriptors passed to known builtin workers stay within the native call.
-import acton.rts
 
 def list_slice(xs: list[int], a: int, b: int, k: int) -> list[int]:
     return xs[a:b:k]
@@ -63,13 +62,13 @@ def custom_slice(xs: Saved) -> Saved:
 
 # Slice assignment can call an input iterator and collect before reading bounds.
 class Collecting(object):
-    cap: SysCap
-    def __init__(self, cap: SysCap):
-        self.cap = cap
+    rts: EnvRTS
+    def __init__(self, rts: EnvRTS):
+        self.rts = rts
 
 extension Collecting(Iterable[int]):
     def __iter__(self) -> Iterator[int]:
-        acton.rts.gc(self.cap)
+        self.rts.gc()
         return iter([8, 9, 10])
 
 mut def bound(log: list[int], n: int) -> int:
@@ -123,7 +122,7 @@ actor main(env):
     assert [0, 1, 2, 3][bound(log, 1):bound(log, 4):bound(log, 2)] == [1, 3]
     assert log == [1, 4, 2]
     xs = [0, 1, 2, 3, 4]
-    list_set_slice(xs, 1, 3, Collecting(env.syscap))
+    list_set_slice(xs, 1, 3, Collecting(env.rts))
     assert xs == [0, 8, 9, 10, 3, 4]
     list_del_slice(xs, 5, 0, -2)
     assert xs == [0, 9, 3]
@@ -131,12 +130,12 @@ actor main(env):
     list_set_slice(xs, 1, 2, xs)
     assert xs == [0, 0, 9, 3, 3]
     raw = bytearray(bytes([0, 1, 2, 3, 4]))
-    bytearray_set_slice(raw, 1, 3, Collecting(env.syscap))
+    bytearray_set_slice(raw, 1, 3, Collecting(env.rts))
     assert raw == bytearray(bytes([0, 8, 9, 10, 3, 4]))
     bytearray_del_slice(raw, 5, 0, -2)
     assert raw == bytearray(bytes([0, 9, 3]))
     saved = custom_slice(Saved(slice()))
-    acton.rts.gc(env.syscap)
+    env.rts.gc()
     assert saved.apply([0, 1, 2, 3, 4]) == [1, 3]
     # The native calls are also safe in a resumable actor function.
     for i in range(3):
