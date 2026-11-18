@@ -2508,13 +2508,26 @@ escapePass env scope typed = do
     summaries = Acton.EscapeAnalysis.interfaceSummaries report
 
 initializationPass :: ModuleEnv -> Acton.Env.Env0 -> A.Module -> IO ()
-initializationPass env scope typed =
-    when (C.initialization_analysis (moduleOptions env) && moduleDump env) $ do
-      imported <- catMaybes <$> mapM load modules
-      let safety = InitAnalysis.analyzeModules ((typed, Acton.Env.unalias scope) : imported)
-      dumpWhen (moduleOptions env) (nameOf env) C.initialization_analysis "initialization-analysis" $ unlines
-        [prstr q ++ ": " ++ Data.List.intercalate ", " [A.nstr n ++ "=" ++ show safe | (n,safe) <- ps]
-        | (q,ps) <- M.toList safety, A.mname q == nameOf env]
+initializationPass env scope typed = do
+    -- Missing constructor contracts are conservative. If the local analysis
+    -- already certifies every actor, imported bodies cannot invalidate it.
+    let local = InitAnalysis.analyzeModules [(typed, Acton.Env.unalias scope)]
+        requested = C.initialization_analysis (moduleOptions env) && moduleDump env
+        needsImports = requested || not (and $ M.elems $ InitAnalysis.actorSelfSafety local)
+    imported <- if needsImports then catMaybes <$> mapM load modules else return []
+    let safety = if needsImports
+                   then InitAnalysis.analyzeModules ((typed, Acton.Env.unalias scope) : imported)
+                   else local
+    forM_ [d | A.Decl _ ds <- A.mbody typed, d@A.Actor{} <- ds] $ \d ->
+      when (M.lookup (A.GName (A.modname typed) $ A.dname d) (InitAnalysis.actorSelfSafety safety) == Just False) $
+        throwIO $ Acton.Env.OtherError (A.dloc d)
+          ("Actor " ++ A.nstr (A.dname d) ++ " uses self unsafely during declarative initialization")
+    when requested $ dumpWhen (moduleOptions env) (nameOf env) C.initialization_analysis "initialization-analysis" $ unlines
+      [ prstr q ++ ": " ++ Data.List.intercalate ", "
+          (["self=" ++ show safe | Just safe <- [M.lookup q $ InitAnalysis.actorSelfSafety safety]] ++
+           [A.nstr n ++ "=" ++ show safe | (n,safe) <- ps])
+      | (q,ps) <- M.toList (InitAnalysis.parameterSafety safety), A.mname q == nameOf env]
+
   where
     paths = searchPath (pathsOf env)
     modules = filter (/= nameOf env) (Acton.Env.transitiveImports scope)

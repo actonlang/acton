@@ -1,5 +1,5 @@
 -- Copyright (C) 2026 Data Ductus AB
-module Acton.InitializationAnalysis (Safety, analyzeModule, analyzeModules) where
+module Acton.InitializationAnalysis (Safety(..), analyzeModule, analyzeModules) where
 
 import Control.Monad (forM_, void)
 import Control.Monad.Writer.Strict (Writer, execWriter, tell)
@@ -8,9 +8,12 @@ import qualified Data.Map.Strict as M
 import qualified Data.Set as S
 import Acton.Syntax hiding (body)
 import Acton.Names (assigned, bound, free, isWitness)
-import Acton.Prim (primCAST, primWRAP)
+import Acton.Prim (primCAST, primWRAP, primMarkStartup)
 
-type Safety = M.Map QName [(Name, Bool)]
+data Safety = Safety
+    { parameterSafety :: M.Map QName [(Name, Bool)]
+    , actorSelfSafety :: M.Map QName Bool
+    } deriving (Eq, Show)
 data Variable = Local QName Name | Field QName Name | Self QName deriving (Eq, Ord)
 data Rule = Bad Variable | Needs Variable Variable
 data Parameter = Parameter { pname :: Name, positional :: Bool, variadic :: Bool }
@@ -24,7 +27,8 @@ analyzeModule :: Module -> Safety
 analyzeModule m = analyzeModules [(m,id)]
 
 analyzeModules :: [(Module, QName -> QName)] -> Safety
-analyzeModules inputs = M.map result cs
+analyzeModules inputs = Safety (M.map result cs)
+    (M.map (\c -> S.notMember (Self $ cname c) unsafe) $ M.filter actor cs)
   where
     cs = M.map unique $ M.fromListWith (++)
         [(cname c,[c]) | (m,r) <- inputs, c <- collect m r (mbody m)]
@@ -86,10 +90,14 @@ suites s = case s of
     _ -> []
 
 declarative ss = case reverse ss of
+    Expr _ (Call _ f _ _) : rest | scheduled f -> reverse rest
     Expr _ (Call _ f PosNil KwdNil) : rest
       | startup f, name "__startup__" `elem` declared ss -> reverse rest
     _ -> ss
   where
+    scheduled (TApp _ e _) = scheduled e
+    scheduled (Var _ q) = q == primMarkStartup
+    scheduled _ = False
     startup (Var _ (NoQ n)) = nstr n == "__startup__"
     startup (Dot _ (Var _ (NoQ s)) n) = nstr s == "self" && nstr n == "__startup__"
     startup (Async _ e) = startup e

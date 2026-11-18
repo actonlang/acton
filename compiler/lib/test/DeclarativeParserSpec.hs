@@ -3,6 +3,8 @@ module DeclarativeParserSpec (spec, main) where
 import qualified Acton.Parser as P
 import qualified Acton.Syntax as S
 import qualified Acton.Env as Env
+import qualified Acton.InitializationAnalysis as Init
+import qualified Data.Map.Strict as M
 import Acton.Printer ()
 import Utils (SrcLoc(..), prstr)
 import qualified Control.Exception as E
@@ -172,6 +174,45 @@ spec = describe "Declarative body grammars" $ do
         accepted ("def " ++ word ++ "(): return 1\nvalue = " ++ word ++ "()")
       it ("rejects the retired " ++ word ++ " effect") $
         rejected (word ++ " def f(): pass")
+
+  describe "Actor self-safety" $ do
+    let declarations = unlines
+          [ "class Failure:"
+          , "    def __init__(self, value): self.value = value"
+          , "class Explodes:"
+          , "    def __init__(self, value): raise Failure(value)"
+          , "class RaisesSelf:"
+          , "    def __init__(self, value):"
+          , "        self.value = value"
+          , "        raise self"
+          ]
+    forM_ [ ("direct raise", "var state = raise Failure(self)", False)
+          , ("aliased exception", "error = Failure(self)\nvar state = raise error", False)
+          , ("exception stored on self", "error = Failure(self)\nvar state = raise self.error", False)
+          , ("throwing constructor", "value = Explodes(self)", False)
+          , ("constructor raising itself", "value = RaisesSelf(self)", False)
+          , ("cyclic storage", "error = Failure(self)", True)
+          , ("method-only use", "def method(): return self", True)
+          , ("startup-only use", "proc def __startup__(): raise Failure(self)\n__startup__()", True)
+          ] $ \(label,statements,expected) -> it ("checks zero-argument actors: " ++ label) $ do
+            ast <- P.parseModuleSerial (S.modName ["self_safety"]) "self_safety.act"
+                     (declarations ++ body "actor Example():" statements) Nothing
+            let report = Init.analyzeModule ast
+                q = S.GName (S.modName ["self_safety"]) (S.name "Example")
+            M.lookup q (Init.actorSelfSafety report) `shouldBe` Just expected
+            M.lookup q (Init.parameterSafety report) `shouldBe` Just []
+    it "uses imported constructor contracts to certify self forwarding" $ do
+      provider <- P.parseModuleSerial (S.modName ["provider"]) "provider.act"
+        "class Box:\n    def __init__(self, owner): self.owner = owner\n" Nothing
+      consumer <- P.parseModuleSerial (S.modName ["consumer"]) "consumer.act"
+        "from provider import Box\nactor Example():\n    box = Box(self)\n" Nothing
+      let resolve (S.NoQ n) | n == S.name "Box" = S.GName (S.modName ["provider"]) n
+          resolve q = q
+          q = S.GName (S.modName ["consumer"]) (S.name "Example")
+          local = Init.analyzeModules [(consumer,resolve)]
+          linked = Init.analyzeModules [(consumer,resolve),(provider,id)]
+      M.lookup q (Init.actorSelfSafety local) `shouldBe` Just False
+      M.lookup q (Init.actorSelfSafety linked) `shouldBe` Just True
 
 initializer :: String -> IO S.Expr
 initializer source = do

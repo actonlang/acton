@@ -1,0 +1,10 @@
+class Failure[T](Exception):
+    def __init__(self, value: T):
+        self.error_message = "failure"
+        self.value = value
+
+actor Invalid():
+    error = Failure(self)
+    var started = raise self.error
+
+actor main(env): pass

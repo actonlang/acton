@@ -1,0 +1,8 @@
+proc def effect() -> None:
+    pass
+
+actor Invalid():
+    pure def __startup__() -> None:
+        effect()
+
+actor main(env): pass

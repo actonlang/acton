@@ -87,6 +87,12 @@ tRET                = tCon $ TC primRET []
 primASSERT          = gPrim "ASSERT"
 primNEWACTOR        = gPrim "NEWACTOR"
 primInstallFinalizer = gPrim "InstallFinalizer"
+primConstructionBegin = gPrim "ConstructionBegin"
+primConstructionEnter = gPrim "ConstructionEnter"
+primConstructionEnd = gPrim "ConstructionEnd"
+primConstructionAbort = gPrim "ConstructionAbort"
+primMarkStartup = gPrim "MarkStartup"
+
 
 attr_finalizer      = name "GCfinalizer"
 
@@ -622,6 +628,12 @@ primEnv             = [ (noq (bwName w), NDef (bwSchema w) NoDec Nothing) | w <-
                             (noq primASSERT,        NDef scASSERT NoDec Nothing),
                             (noq primNEWACTOR,      NDef scNEWACTOR NoDec Nothing),
                             (noq primInstallFinalizer, NDef scGCfinalizer NoDec Nothing),
+                            (noq primConstructionBegin, NDef (monotype $ tFun0 [] tActor) NoDec Nothing),
+                            (noq primConstructionEnter, NDef (monotype $ tFun0 [tActor] tNone) NoDec Nothing),
+                            (noq primConstructionEnd, NDef (monotype $ tFun0 [tActor] tNone) NoDec Nothing),
+                            (noq primConstructionAbort, NDef (monotype $ tFun0 [tActor,tBaseException] tNone) NoDec Nothing),
+                            (noq primMarkStartup, NDef (monotype $ tFun fxCom (posRow (tMsg tNone) posNil) kwdNil tNone) NoDec Nothing),
+
 
                             (noq primISINSTANCE,    NDef scISINSTANCE NoDec Nothing),
                             (noq primISINSTANCE0,   NDef scISINSTANCE NoDec Nothing),
@@ -902,6 +914,9 @@ scASSERT            = tSchema [] tASSERT
 scNEWACTOR          = tSchema [QBind a [cActor]] tNEWACTOR
   where tNEWACTOR   = tFun fxPure posNil kwdNil (tVar a)
         a           = TV KType $ name "A"
+
+-- MarkStartup : com(Msg[None]) -> None
+scMarkStartup = monotype $ tFun fxCom (posRow (tMsg tNone) posNil) kwdNil tNone
 
 --  $GCfinalizer    : [A($Actor)] => pure (A) -> None
 scGCfinalizer       = tSchema [QBind a [cActor]] tGCfin
