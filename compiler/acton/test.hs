@@ -1109,6 +1109,55 @@ compilerTests =
           assertBool "internal DBP module should omit unused name" (not ("unused_a" `isInfixOf` aC))
           assertBool "boundary module should be compiled whole" ("unused_b" `isInfixOf` bC)
 
+  , testCase "dbp regenerates code after an import-only edit" $ do
+        withSystemTempDirectory "acton-dbp-import-edit" $ \proj -> do
+          actonExe <- canonicalizePath "../../dist/bin/acton"
+          let name = "dbp_import_edit"
+              fp = Fingerprint.formatFingerprint
+                (Fingerprint.updateFingerprintPrefix
+                  (Fingerprint.fingerprintPrefixForName name) 1)
+              srcDir = proj </> "src"
+              typesDir = proj </> "out" </> "types" </> name
+              build label = do
+                (code, out, err) <- readCreateProcessWithExitCode
+                  (proc actonExe ["build", "--skip-build", "--verbose", "--color", "never"]){ cwd = Just proj } ""
+                when (code /= ExitSuccess) $
+                  putStrLn ("\nERROR: " ++ label ++ "\nSTDOUT:\n" ++ out ++ "STDERR:\n" ++ err)
+                assertEqual label ExitSuccess code
+                return (out ++ err)
+              writeProvider imports = writeFile (srcDir </> "provider.act") $ unlines $ imports ++
+                [ ""
+                , "def greeting() -> str:"
+                , "    return \"hello\""
+                ]
+          createDirectoryIfMissing True srcDir
+          writeFile (proj </> "Build.act") $ unlines
+            [ "name = \"" ++ name ++ "\""
+            , "fingerprint = " ++ fp
+            ]
+          writeFile (srcDir </> "main.act") $ unlines
+            [ "import provider"
+            , ""
+            , "actor main(env):"
+            , "    print(provider.greeting())"
+            , "    env.exit(0)"
+            ]
+          writeProvider ["import std.json"]
+          firstLog <- build "initial build"
+          assertBool "provider should be a deferred module" ("DBP provider: total names" `isInfixOf` firstLog)
+          providerC <- readFile (typesDir </> "provider.c")
+          assertBool "provider C should initialize std.json" ("stdQ_jsonQ___init__" `isInfixOf` providerC)
+          writeProvider []
+          _ <- build "build after removing the import"
+          providerC2 <- readFile (typesDir </> "provider.c")
+          providerH2 <- readFile (typesDir </> "provider.h")
+          assertBool "provider C should no longer initialize std.json" (not ("stdQ_jsonQ___init__" `isInfixOf` providerC2))
+          assertBool "provider header should no longer include std.json" (not ("std/json.h" `isInfixOf` providerH2))
+          writeProvider ["import std.math"]
+          _ <- build "build after adding an import"
+          providerC3 <- readFile (typesDir </> "provider.c")
+          assertBool "provider C should initialize std.math" ("stdQ_mathQ___init__" `isInfixOf` providerC3)
+
   , testCase "path dependency fetches transitive cached deps before discovery" $ do
         withSystemTempDirectory "acton-transitive-path-fetch" $ \tmp -> do
           actonExe <- canonicalizePath "../../dist/bin/acton"
