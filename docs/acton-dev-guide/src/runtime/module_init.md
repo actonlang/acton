@@ -75,8 +75,8 @@ module without `NotImplemented`, the compiler neither includes the `.ext.c`
 file nor calls a hook.
 
 The hook takes no arguments and returns nothing. Its name is the module's C
-prefix followed by `___ext_init__`, for example `jsonQ___ext_init__` in
-`base/src/json.ext.c` and `stdQ_jsonQ___ext_init__` in `std/src/json.ext.c`.
+prefix followed by `___ext_init__`, for example `stdQ_jsonQ___ext_init__` in
+`std/src/json.ext.c`.
 The commented-out skeleton in the generated `out/types/.../<module>.c` shows
 the exact name. The hook must be defined: the call is unconditional, so a
 missing definition is a C compile error.

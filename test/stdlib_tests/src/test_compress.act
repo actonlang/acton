@@ -1,5 +1,5 @@
-import compress.gzip as gzip
-import compress.zlib as zlib
+import std.compress.gzip
+import std.compress.zlib
 import testing
 
 
@@ -9,27 +9,27 @@ def _text() -> bytes:
 
 def _test_gzip():
     data = _text()
-    gzipped = gzip.compress(data)
+    gzipped = std.compress.gzip.compress(data)
     testing.assertTrue(len(gzipped) < len(data) // 4, "gzip compresses text")
     # gzip starts with ID1, ID2 and CM 8 (deflate)
     testing.assertEqual(gzipped[:3], b"\x1f\x8b\x08")
-    testing.assertEqual(gzip.decompress(gzipped), data)
-    testing.assertEqual(gzip.decompress(gzip.compress(b"")), b"")
+    testing.assertEqual(std.compress.gzip.decompress(gzipped), data)
+    testing.assertEqual(std.compress.gzip.decompress(std.compress.gzip.compress(b"")), b"")
 
 
 def _test_zlib():
     data = _text()
-    deflated = zlib.compress(data)
+    deflated = std.compress.zlib.compress(data)
     testing.assertTrue(len(deflated) < len(data) // 4, "zlib compresses text")
     # zlib starts with CMF 0x78: deflate with a 32 KiB window
     testing.assertEqual(deflated[:1], b"\x78")
-    testing.assertEqual(zlib.decompress(deflated), data)
-    testing.assertEqual(zlib.decompress(zlib.compress(b"")), b"")
+    testing.assertEqual(std.compress.zlib.decompress(deflated), data)
+    testing.assertEqual(std.compress.zlib.decompress(std.compress.zlib.compress(b"")), b"")
 
 
 def _test_decompress_rejects_bad_streams():
-    gzipped = gzip.compress(_text())
-    deflated = zlib.compress(_text())
+    gzipped = std.compress.gzip.compress(_text())
+    deflated = std.compress.zlib.compress(_text())
     bad_gzip: list[(bytes, str)] = [
         (b"not compressed", "not gzip"),
         (deflated, "zlib given as gzip"),
@@ -39,7 +39,7 @@ def _test_decompress_rejects_bad_streams():
     for data, what in bad_gzip:
         raised = False
         try:
-            gzip.decompress(data)
+            std.compress.gzip.decompress(data)
         except ValueError:
             raised = True
         testing.assertTrue(raised, "gzip: " + what)
@@ -52,7 +52,7 @@ def _test_decompress_rejects_bad_streams():
     for data, what in bad_zlib:
         raised = False
         try:
-            zlib.decompress(data)
+            std.compress.zlib.decompress(data)
         except ValueError:
             raised = True
         testing.assertTrue(raised, "zlib: " + what)

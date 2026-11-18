@@ -60,35 +60,15 @@ cd base && zig build
 - The runner that the generated `test_main` calls is `std.testing.runner`
   in `std/src/testing/runner.act`
 
-### Data Processing
+#### `logging.act`, `fs.act`, `matrix.act`
 
-#### `json.act` / `json.ext.c`
-- JSON parsing and generation
-- Type-safe JSON handling
+### Modules in std
 
-#### `xml.act` / `xml.ext.c`
-- XML parsing
-- DOM manipulation
-
-#### `base64.act` / `base64.ext.c`
-- Base64 encoding/decoding
-
-### Advanced Modules
-
-#### `http.act`
-- HTTP client/server
-- Request/response handling
-- WebSocket support
-
-#### `re.act` / `re.ext.c`
-- Regular expressions
-- Pattern matching
-- String substitution
-
-#### `numpy.act` / `numpy.c`
-- Numerical arrays
-- Mathematical operations
-- Compatible subset of NumPy
+Every other library module (json, xml, re, http, base64, math, random,
+argparse, diff, term, ...) lives in `std/src/` and is imported as
+`std.<name>`. Inside the std project a module imports its siblings by their
+bare names. A std module named like a base module shadows the base module
+for every std module, so std has no module named `testing`.
 
 ## Builtin Types (`builtin/`)
 

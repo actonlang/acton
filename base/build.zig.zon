@@ -24,14 +24,8 @@
         .libnetstring = .{
             .path = "../deps/libnetstring/",
         },
-        .libpcre2 = .{
-            .path = "../deps/pcre2/",
-        },
         .libprotobuf_c = .{
             .path = "../deps/libprotobuf_c/",
-        },
-        .libsnappy = .{
-            .path = "../deps/libsnappy_c/",
         },
         .libtlsuv = .{
             .path = "../deps/tlsuv/",
@@ -44,9 +38,6 @@
         },
         .libuv = .{
             .path = "../deps/libuv/",
-        },
-        .libxml2 = .{
-            .path = "../deps/libxml2/",
         },
         .libyyjson = .{
             .path = "../deps/libyyjson/",
