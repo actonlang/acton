@@ -2578,10 +2578,16 @@ genBuildZig template sys spec zigDeps depModuleOpts =
                    ]
                    ++ moduleOpts
                    ++ [ "    });" ]
+    -- A dynamic library resolves the dependency's symbols in the
+    -- executable, so it takes only the dependency's headers.
     pkgLibLink (name, _) =
       "    libActonProject.root_module.linkLibrary(actdep_" ++ name ++ ".artifact(\"ActonProject\"));\n"
-      ++ "    for (explicit_static_libraries.items) |libActonExplicit| {\n"
-      ++ "        libActonExplicit.root_module.linkLibrary(actdep_" ++ name ++ ".artifact(\"ActonProject\"));\n"
+      ++ "    for (explicit_libraries.items) |libActonExplicit| {\n"
+      ++ "        if (libActonExplicit.linkage == .dynamic) {\n"
+      ++ "            libActonExplicit.root_module.include_dirs.append(b.allocator, .{ .other_step = actdep_" ++ name ++ ".artifact(\"ActonProject\") }) catch @panic(\"OOM\");\n"
+      ++ "        } else {\n"
+      ++ "            libActonExplicit.root_module.linkLibrary(actdep_" ++ name ++ ".artifact(\"ActonProject\"));\n"
+      ++ "        }\n"
       ++ "    }\n"
     pkgExeLink (name, _) = "            executable.root_module.linkLibrary(actdep_" ++ name ++ ".artifact(\"ActonProject\"));\n"
 
