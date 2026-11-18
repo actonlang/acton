@@ -96,7 +96,7 @@ def _test_std_namespace_parsers_and_random():
 
 
 def _test_std_namespace_protocol_module():
-    response = http.build_response(b"1.1", 200, {}, "ok")
+    response = http.build_response(b"1.1", 200, {}, b"ok")
     testing.assertEqual(response[:15], b"HTTP/1.1 200 OK")
     # Same parser as base's http: pipelined responses in one feed all come out
     msgs = http.MessageParser().feed(b"HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\none" + b"HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\ntwo")

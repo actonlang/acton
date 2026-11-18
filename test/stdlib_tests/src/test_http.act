@@ -406,7 +406,13 @@ def _test_http_message_parser_bodyless(st: testing.SyncT):
     testing.assertEqual([b"abc"], _bodies(msgs), "Request body")
 
 actor _test_HttpClientServer(t: testing.EnvT):
-    """HTTP client/server roundtrip over TCP"""
+    """HTTP client/server roundtrip over TCP
+
+    The body is not valid UTF-8 and holds a zero byte, so it reaches the
+    client as the server sent it only when no part of the path treats it
+    as text.
+    """
+    body = b"Hello\x00\xff\xfe, world!"
     log = logging.Logger(t.log_handler)
     var done = False
     var attempts = 0
@@ -433,7 +439,7 @@ actor _test_HttpClientServer(t: testing.EnvT):
         server.cb_install(_on_http_server_request, _on_http_server_error)
 
     def _on_http_server_request(server, request, respond):
-        respond(200, {}, "Hello, world!")
+        respond(200, {"Content-Type": "application/octet-stream"}, body)
 
     def _on_http_server_error(server, error):
         _finish_failure("HTTP server error: " + error)
@@ -453,7 +459,7 @@ actor _test_HttpClientServer(t: testing.EnvT):
         if data.status != 200:
             _finish_failure("Unexpected status: " + str(data.status))
             return
-        if data.body != b"Hello, world!":
+        if data.body != body:
             _finish_failure("Unexpected body: " + str(data.body))
             return
         _finish_success()
@@ -623,9 +629,9 @@ actor _test_HttpServerPipelinedRequests(t: testing.EnvT):
 
     def _on_http_request(s, request, respond):
         if request.path == "/1":
-            after 0.1: respond(200, {}, request.path)
+            after 0.1: respond(200, {}, request.path.encode())
         else:
-            after 0.01: respond(200, {}, request.path)
+            after 0.01: respond(200, {}, request.path.encode())
 
     def _on_http_server_error(s, error):
         _finish_failure("HTTP server error: " + error)
@@ -719,9 +725,9 @@ actor _test_HttpServerConnectionClose(t: testing.EnvT):
     def _on_http_request(s, request, respond):
         handled.append(request.path)
         if request.path == "/1":
-            after 0.1: respond(200, {}, request.path)
+            after 0.1: respond(200, {}, request.path.encode())
         else:
-            respond(200, {}, request.path)
+            respond(200, {}, request.path.encode())
 
     def _on_http_server_error(s, error):
         _finish_failure("HTTP server error: " + error)
@@ -817,9 +823,9 @@ actor _test_HttpsServerPipelinedRequests(t: testing.EnvT):
 
     def _on_http_request(s, request, respond):
         if request.path == "/1":
-            after 0.1: respond(200, {}, request.path)
+            after 0.1: respond(200, {}, request.path.encode())
         else:
-            after 0.01: respond(200, {}, request.path)
+            after 0.01: respond(200, {}, request.path.encode())
 
     def _on_http_server_error(s, error):
         _finish_failure("HTTP server error: " + error)
@@ -906,7 +912,7 @@ actor _test_HttpServerMalformedRequest(t: testing.EnvT):
 
     def _on_http_request(s, request, respond):
         handled.append(request.path)
-        after 0.05: respond(200, {}, request.path)
+        after 0.05: respond(200, {}, request.path.encode())
 
     def _on_http_server_error(s, error):
         _finish_failure("HTTP server error: " + error)
@@ -997,7 +1003,7 @@ actor _test_HttpServerHttp10(t: testing.EnvT):
 
     def _on_http_request(s, request, respond):
         handled.append(request.path)
-        respond(200, {}, request.path)
+        respond(200, {}, request.path.encode())
 
     def _on_http_server_error(s, error):
         _finish_failure("HTTP server error: " + error)
@@ -1088,10 +1094,10 @@ actor _test_HttpServerDuplicateRespond(t: testing.EnvT):
     def _on_http_request(s, request, respond):
         handled.append(request.path)
         if request.path == "/a":
-            after 0.1: respond(200, {}, "a")
+            after 0.1: respond(200, {}, b"a")
         else:
-            respond(200, {}, "b-first")
-            respond(200, {}, "b-second")
+            respond(200, {}, b"b-first")
+            respond(200, {}, b"b-second")
 
     def _on_http_server_error(s, error):
         _finish_failure("HTTP server error: " + error)
@@ -1179,7 +1185,7 @@ actor _test_HttpServerLateCbInstall(t: testing.EnvT):
         after 0.3: _install(s)
 
     def _on_http_request(s, request, respond):
-        respond(200, {}, "late install")
+        respond(200, {}, b"late install")
 
     def _on_http_server_error(s, error):
         _finish_failure("HTTP server error: " + error)
@@ -1260,7 +1266,7 @@ actor _test_HttpServerHandlerCallsBack(t: testing.EnvT):
     def _on_http_request(s, request, respond):
         # Calling the action in value position makes this a synchronous call
         # into the server: this actor is parked until the server has run it
-        res = respond(200, {}, "called back")
+        res = respond(200, {}, b"called back")
 
     def _on_http_server_error(s, error):
         _finish_failure("HTTP server error: " + error)
@@ -1342,7 +1348,7 @@ actor _test_HttpClientCallbackCallsBack(t: testing.EnvT):
         s.cb_install(_on_http_request, _on_http_server_error)
 
     def _on_http_request(s, request, respond):
-        respond(200, {}, request.path)
+        respond(200, {}, request.path.encode())
 
     def _on_http_server_error(s, error):
         _finish_failure("HTTP server error: " + error)
@@ -1434,7 +1440,7 @@ actor _EarlyRequests(t: testing.EnvT, scheme: str):
 
     def _on_http_request(s, request, respond):
         handled.append(request.path)
-        respond(200, {}, request.path)
+        respond(200, {}, request.path.encode())
 
     def _on_http_server_error(s, error):
         _finish_failure("HTTP server error: " + error)
@@ -1492,7 +1498,7 @@ actor _EarlyRequests(t: testing.EnvT, scheme: str):
 
     def _on_https_request(s, request, respond):
         handled.append(request.path)
-        respond(200, {}, request.path)
+        respond(200, {}, request.path.encode())
 
     def _on_https_server_error(s, error):
         _finish_failure("HTTPS server error: " + error)
@@ -1763,7 +1769,7 @@ actor _ServerClosesOnMalformed(t: testing.EnvT, request: bytes):
 
     def _on_http_request(s, request, respond):
         handled.append(request.path)
-        respond(200, {}, request.path)
+        respond(200, {}, request.path.encode())
 
     def _on_http_server_error(s, error):
         _finish_failure("HTTP server error: " + error)
@@ -2078,7 +2084,7 @@ actor _test_HttpsClientServer(t: testing.EnvT):
         server.cb_install(_on_https_request, _on_https_error)
 
     def _on_https_request(server, request, respond):
-        respond(200, {"content-type": "text/plain"}, "Hello, TLS!")
+        respond(200, {"content-type": "text/plain"}, b"Hello, TLS!")
 
     def _on_https_error(server, error):
         _finish_error("HTTPS server error: " + error)
