@@ -3226,7 +3226,7 @@ main = do
             [ safe | (q,ps) <- M.toList (Init.parameterSafety report), [S.nstr (S.noq q)] == path
                    , (n,safe) <- ps, S.nstr n == param ]
           selfSafe report path = listToMaybe
-            [safe | (q,safe) <- M.toList (Init.actorSelfSafety report), [S.nstr (S.noq q)] == path]
+            [safe | (q,safe) <- M.toList (Init.selfSafety report), [S.nstr (S.noq q)] == path]
           expect report path param answer = usage report path param `shouldBe` Just answer
           box = [ "class Box:", "    def __init__(self, p):", "        self.saved = p" ]
       it "uses graph module identities for dump requests in special projects" $

@@ -1,0 +1,14 @@
+def observe(value: Example):
+    assert value.value == 42
+
+class Example(object):
+    def __init__(self):
+        self.value = 42
+        observe(self)
+
+actor main(env):
+    example = Example()
+
+    proc def __startup__():
+        assert example.value == 42
+        env.exit(0)

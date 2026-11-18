@@ -7,12 +7,13 @@ import Data.Maybe (fromMaybe, mapMaybe)
 import qualified Data.Map.Strict as M
 import qualified Data.Set as S
 import Acton.Syntax hiding (body)
+import Utils (SrcLoc(..))
 import Acton.Names (assigned, bound, free, isWitness)
 import Acton.Prim (primCAST, primWRAP, primMarkStartup)
 
 data Safety = Safety
     { parameterSafety :: M.Map QName [(Name, Bool)]
-    , actorSelfSafety :: M.Map QName Bool
+    , selfSafety :: M.Map QName Bool
     } deriving (Eq, Show)
 data Variable = Local QName Name | Field QName Name | Self QName deriving (Eq, Ord)
 data Rule = Bad Variable | Needs Variable Variable
@@ -20,7 +21,7 @@ data Parameter = Parameter { pname :: Name, positional :: Bool, variadic :: Bool
 data Constructor = Constructor
     { cname :: QName, actor :: Bool, parameters :: [Parameter], receiver :: Name
     , body :: Suite, methods :: S.Set Name, resolve :: QName -> QName
-    , qualifiers :: S.Set ModName, unavailable :: Bool
+    , qualifiers :: S.Set ModName, unavailable :: Bool, sourceInitializer :: Bool
     }
 
 analyzeModule :: Module -> Safety
@@ -28,7 +29,7 @@ analyzeModule m = analyzeModules [(m,id)]
 
 analyzeModules :: [(Module, QName -> QName)] -> Safety
 analyzeModules inputs = Safety (M.map result cs)
-    (M.map (\c -> S.notMember (Self $ cname c) unsafe) $ M.filter actor cs)
+    (M.map (\c -> S.notMember (Self $ cname c) unsafe) $ M.filter (\c -> actor c || sourceInitializer c && not (unavailable c)) cs)
   where
     cs = M.map unique $ M.fromListWith (++)
         [(cname c,[c]) | (m,r) <- inputs, c <- collect m r (mbody m)]
@@ -52,17 +53,17 @@ collect m r = concatMap declaration . concatMap flatten
   where
     flatten (Decl _ ds) = ds
     flatten s = concat [concatMap flatten b | b <- suites s]
-    declaration d@Actor{} = [make True d (params (pos d) (kwd d)) (name "self") (declarative $ dbody d) False]
+    declaration d@Actor{} = [make True d (params (pos d) (kwd d)) (name "self") (declarative $ dbody d) False True]
     declaration d@Class{} = case [f | Decl _ ds <- dbody d, f@Def{} <- ds, nstr (dname f) == "__init__"] of
       [f] -> let ps = params (pos f) (kwd f)
                  self = case filter (not . isWitness . pname) ps of p:_ -> pname p; _ -> name "self"
-             in [make False d (filter ((/=self) . pname) ps) self (dbody f) False]
-      _ -> [make False d [] (name "self") [] True]
+             in [make False d (filter ((/=self) . pname) ps) self (dbody f) False (dloc f /= NoLoc)]
+      _ -> [make False d [] (name "self") [] True False]
     declaration _ = []
-    make a d ps self b missing = Constructor (GName (modname m) (dname d)) a ps self b
+    make a d ps self b missing source = Constructor (GName (modname m) (dname d)) a ps self b
         (S.fromList $ declared (dbody d) ++ declared b) r
         (S.fromList [fromMaybe mn alias | Import _ ms <- imps m, ModuleItem mn alias <- ms])
-        (missing || any native b)
+        (missing || any native b) source
     native (Expr _ NotImplemented{}) = True
     native (Assign _ _ NotImplemented{}) = True
     native _ = False

@@ -2513,18 +2513,22 @@ initializationPass env scope typed = do
     -- already certifies every actor, imported bodies cannot invalidate it.
     let local = InitAnalysis.analyzeModules [(typed, Acton.Env.unalias scope)]
         requested = C.initialization_analysis (moduleOptions env) && moduleDump env
-        needsImports = requested || not (and $ M.elems $ InitAnalysis.actorSelfSafety local)
+        actors = [d | A.Decl _ ds <- A.mbody typed, d@A.Actor{} <- ds]
+        unsafeActors report = [d | d <- actors, M.lookup (A.GName (A.modname typed) $ A.dname d)
+                                    (InitAnalysis.selfSafety report) == Just False]
+        needsImports = requested || not (null $ unsafeActors local)
     imported <- if needsImports then catMaybes <$> mapM load modules else return []
     let safety = if needsImports
                    then InitAnalysis.analyzeModules ((typed, Acton.Env.unalias scope) : imported)
                    else local
-    forM_ [d | A.Decl _ ds <- A.mbody typed, d@A.Actor{} <- ds] $ \d ->
-      when (M.lookup (A.GName (A.modname typed) $ A.dname d) (InitAnalysis.actorSelfSafety safety) == Just False) $
+    -- Class initializers may use their completed self in an operational tail.
+    -- Their parameter contracts still cover the entire initializer.
+    forM_ (unsafeActors safety) $ \d ->
         throwIO $ Acton.Env.OtherError (A.dloc d)
           ("Actor " ++ A.nstr (A.dname d) ++ " uses self unsafely during declarative initialization")
     when requested $ dumpWhen (moduleOptions env) (nameOf env) C.initialization_analysis "initialization-analysis" $ unlines
       [ prstr q ++ ": " ++ Data.List.intercalate ", "
-          (["self=" ++ show safe | Just safe <- [M.lookup q $ InitAnalysis.actorSelfSafety safety]] ++
+          (["self=" ++ show safe | Just safe <- [M.lookup q $ InitAnalysis.selfSafety safety]] ++
            [A.nstr n ++ "=" ++ show safe | (n,safe) <- ps])
       | (q,ps) <- M.toList (InitAnalysis.parameterSafety safety), A.mname q == nameOf env]
 

@@ -199,7 +199,7 @@ spec = describe "Declarative body grammars" $ do
                      (declarations ++ body "actor Example():" statements) Nothing
             let report = Init.analyzeModule ast
                 q = S.GName (S.modName ["self_safety"]) (S.name "Example")
-            M.lookup q (Init.actorSelfSafety report) `shouldBe` Just expected
+            M.lookup q (Init.selfSafety report) `shouldBe` Just expected
             M.lookup q (Init.parameterSafety report) `shouldBe` Just []
     it "uses imported constructor contracts to certify self forwarding" $ do
       provider <- P.parseModuleSerial (S.modName ["provider"]) "provider.act"
@@ -211,8 +211,39 @@ spec = describe "Declarative body grammars" $ do
           q = S.GName (S.modName ["consumer"]) (S.name "Example")
           local = Init.analyzeModules [(consumer,resolve)]
           linked = Init.analyzeModules [(consumer,resolve),(provider,id)]
-      M.lookup q (Init.actorSelfSafety local) `shouldBe` Just False
-      M.lookup q (Init.actorSelfSafety linked) `shouldBe` Just True
+      M.lookup q (Init.selfSafety local) `shouldBe` Just False
+      M.lookup q (Init.selfSafety linked) `shouldBe` Just True
+
+  describe "Advisory class self-safety" $ do
+    let storage = "class Box:\n    def __init__(self, value): self.value = value\n"
+    forM_ [ ("raising self", "raise self", False)
+          , ("raising an alias", "alias = self\nraise alias", False)
+          , ("raising a stored reference", "self.saved = self\nraise self.saved", False)
+          , ("publishing self", "publish(self)", False)
+          , ("observing a cycle", "self.saved = self\nvalue = self.saved.item", False)
+          , ("cyclic storage", "self.saved = self", True)
+          , ("forwarded cyclic storage", "self.saved = Box(self)", True)
+          , ("ordinary initialization", "self.value = 1", True)
+          ] $ \(label,statements,expected) -> it label $ do
+            ast <- P.parseModuleSerial (S.modName ["class_safety"]) "class_safety.act"
+                     (storage ++ body "class Example:" (body "def __init__(self):" statements)) Nothing
+            let report = Init.analyzeModule ast
+                q = S.GName (S.modName ["class_safety"]) (S.name "Example")
+            M.lookup q (Init.selfSafety report) `shouldBe` Just expected
+            M.lookup q (Init.parameterSafety report) `shouldBe` Just []
+    it "keeps opaque initializers conservative without claiming an Acton self check" $ do
+      ast <- P.parseModuleSerial (S.modName ["class_safety"]) "class_safety.act"
+               "class Native:\n    def __init__(self, value): NotImplemented\nclass Inherited(Native): pass\n" Nothing
+      let report = Init.analyzeModule ast
+          q = S.GName (S.modName ["class_safety"]) (S.name "Native")
+      M.lookup q (Init.selfSafety report) `shouldBe` Nothing
+      M.lookup q (Init.parameterSafety report) `shouldBe` Just [(S.name "value",False)]
+    it "checks constructor parameters even after the receiver is initialized" $ do
+      ast <- P.parseModuleSerial (S.modName ["class_safety"]) "class_safety.act"
+               "class Example:\n    def __init__(self, value):\n        self.ready = True\n        inspect(value)\n" Nothing
+      let report = Init.analyzeModule ast
+          q = S.GName (S.modName ["class_safety"]) (S.name "Example")
+      M.lookup q (Init.parameterSafety report) `shouldBe` Just [(S.name "value",False)]
 
 initializer :: String -> IO S.Expr
 initializer source = do
