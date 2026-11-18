@@ -72,11 +72,18 @@ genRoot env0 qn@(GName m n)         = do return $ render (cInclude $+$ cIncludeM
         cInclude                    = text "#include \"rts/common.h\""
         cIncludeMods                = include env "out/types" m
         cInit                       = (text "void" <+> gen env primROOTINIT <+> parens empty <+> char '{') $+$
-                                       nest 4 (gen env (GName m initKW) <> parens empty <> semi) $+$
+                                       nest 4 (initName env m <> parens empty <> semi) $+$
                                        char '}'
         cRoot                       = (gen env tActor <+> gen env primROOT <+> parens empty <+> char '{') $+$
                                        nest 4 (text "return" <+> parens (gen env tActor) <> gen env primNEWACTOR <> parens (gen env qn) <> semi) $+$
                                        char '}'
+
+-- | The C name of the function that initializes module 'm'.
+initName                            :: GenEnv -> ModName -> Doc
+initName env m                      = gen env (GName m initKW)
+
+genInitName                         :: Acton.Env.Env0 -> ModName -> String
+genInitName env0 m                  = render (initName (genEnv env0) m)
 
 
 
@@ -808,7 +815,7 @@ cModuleParts supportInclude env srcbase srcText emitLines (Module m imps _ stmts
         supportInitName             = genTopName env initKW <> text "$support"
         closureDecl (Class _ n _ _ _ _) = isClosureName n
         closureDecl _               = False
-        initImports                 = vcat [ gen env (GName m initKW) <> parens empty <> semi | m <- modNames imps ]
+        initImports                 = vcat [ initName env m <> parens empty <> semi | m <- modNames imps ]
         (globalChunkDefs, globalChunkCalls) = initGlobalChunks env1 stmts
         external                    = notImpl && not (inBuiltin env)
         ext_include                 = if notImpl then text "#include" <+> doubleQuotes (text srcbase <> text ".ext.c") else empty
