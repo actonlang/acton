@@ -72,7 +72,7 @@ reconstruct progressCb inferredCb env0 (Module m i mdoc ss) bareMod = do --trace
                                              (te,ss1) <- infTop progressCb inferredCb env1 ss
                                              let env2 = defineClosed te (setMod m env0)
                                                  (teT,ssT,tests) =
-                                                   if hasTesting i
+                                                   if importsTesting i
                                                      then let (testSs, discovered) = testStmts env2 (fromMaybe (modNameToString m) bareMod) ss1
                                                           in (te ++ testEnv, ss1 ++ testSs, discovered)
                                                      else (te, ss1, [])
@@ -89,7 +89,6 @@ reconstruct progressCb inferredCb env0 (Module m i mdoc ss) bareMod = do --trace
 
   where env1                            = reserveClosed (assigned ss) (initTypeEnv env0)
         env0'                           = convEnvProtos env0
-        hasTesting i                    = Import NoLoc [ModuleItem (ModName [name "testing"]) Nothing] `elem` i
         rmTests (Assign _ [PVar _ n _] _ : ss)
           | nstr n `elem` ["__unit_tests","__simple_sync_tests","__sync_tests","__async_tests","__env_tests"]
                                         = rmTests ss
@@ -3289,14 +3288,14 @@ dername a b                             = Derived (name a) (name b)
 
 dictAssign dictname cl dict             = sAssign (pVar (name dictname) (tDict tStr (testing cl))) (mkDict cl dict)
 
-testing tstr                            = tCon (TC (gname [name "testing"] (name tstr)) [])
+testing tstr                            = tCon (TC (GName mTesting (name tstr)) [])
 
 mkDict cl as                            = eCall (tApp (eQVar primMkDict) [tStr, testing cl]) [w,Dict NoLoc as]
     where w                             = eCall (eQVar (gname [name "__builtin__"] (dername "Hashable" "str"))) []
 
 testActor                               = sDecl [Actor NoLoc (name "test_main") []
                                                  PosNIL (KwdPar (name "env")  (Just tEnv) Nothing KwdNIL)
-                                             [sExpr (eCall (eQVar (gname [name "testing"] (name "test_runner")))
+                                             [sExpr (eCall (eQVar (GName mTestRunner (name "test_runner")))
                                                            (map (eVar . name) ["env","__unit_tests","__simple_sync_tests","__sync_tests","__async_tests","__env_tests"]))] Nothing]
 
 row2list (TRow _ _ _ t _ r)             = t : row2list r
@@ -3304,7 +3303,7 @@ row2list (TNil _ _)                     = []
 
 mkAssoc d testType modName =
     Assoc (Strings NoLoc [nstr (dname d)])
-          (eCall (eQVar (gname [name "testing"] testType))
+          (eCall (eQVar (GName mTesting testType))
                  [ eVar (dname d)
                  , Strings NoLoc [nstr (dname d)]
                  , comment (dbody d)
@@ -3315,7 +3314,7 @@ mkAssoc d testType modName =
 
 mkAssocActor (Actor _ n _ _ _ body _) testType modName =
     Assoc (Strings NoLoc [nstr n])
-          (eCall (eQVar (gname [name "testing"] testType))
+          (eCall (eQVar (GName mTesting testType))
                  [ eVar n
                  , Strings NoLoc [nstr n]
                  , comment body
@@ -3375,13 +3374,13 @@ genTestActorWrappers ss =
     isTestActor _ = False
 
     checkTestActorParams PosNIL (KwdPar _ (Just t) _ KwdNIL) =
-        t == tCon (TC (gname [name "testing"] (name "SyncT")) []) ||
-        t == tCon (TC (gname [name "testing"] (name "AsyncT")) []) ||
-        t == tCon (TC (gname [name "testing"] (name "EnvT")) [])
+        t == tCon (TC (GName mTesting (name "SyncT")) []) ||
+        t == tCon (TC (GName mTesting (name "AsyncT")) []) ||
+        t == tCon (TC (GName mTesting (name "EnvT")) [])
     checkTestActorParams (PosPar _ (Just t) _ PosNIL) KwdNIL =
-        t == tCon (TC (gname [name "testing"] (name "SyncT")) []) ||
-        t == tCon (TC (gname [name "testing"] (name "AsyncT")) []) ||
-        t == tCon (TC (gname [name "testing"] (name "EnvT")) [])
+        t == tCon (TC (GName mTesting (name "SyncT")) []) ||
+        t == tCon (TC (GName mTesting (name "AsyncT")) []) ||
+        t == tCon (TC (GName mTesting (name "EnvT")) [])
     checkTestActorParams _ _ = False
 
     -- Collect all function names to check for conflicts
@@ -3463,7 +3462,7 @@ testType (NDef (TSchema _ [] (TFun _ fx ppar kpar res)) _ _)
                                              (r, fx', [], [t]) | t == envT   && validReturn r                     -> Just EnvTest
                                              _                                                                    -> Nothing
     where validReturn r                 = r == tNone || r == TNone NoLoc || r == tStr
-          syncT                         = tCon (TC (gname [name "testing"] (name "SyncT")) [])
-          asyncT                        = tCon (TC (gname [name "testing"] (name "AsyncT")) [])
-          envT                          = tCon (TC (gname [name "testing"] (name "EnvT")) [])
+          syncT                         = tCon (TC (GName mTesting (name "SyncT")) [])
+          asyncT                        = tCon (TC (GName mTesting (name "AsyncT")) [])
+          envT                          = tCon (TC (GName mTesting (name "EnvT")) [])
 testType _                              = Nothing

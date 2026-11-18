@@ -54,6 +54,12 @@ cd base && zig build
 - Sleep/delay functions
 - Time formatting
 
+#### `testing.act` / `testing.ext.c`
+- Test types the compiler discovers tests by (`SyncT`, `AsyncT`, `EnvT`,
+  `UnitTest`, ...), `PerfLoop` and the asserts
+- The runner that the generated `test_main` calls is `std.testing.runner`
+  in `std/src/testing/runner.act`
+
 ### Data Processing
 
 #### `json.act` / `json.ext.c`

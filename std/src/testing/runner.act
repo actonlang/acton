@@ -29,6 +29,12 @@ _inconsistent_loop_error = ValueError("Call t.loop() consistently in every invoc
 def eq_opt[T(Eq)](a: ?T, b: ?T) -> bool:
     return a is not None and b is not None and a == b or a is None and b is None
 
+def exception_text(exception: Exception) -> str:
+    """The text of a test failure, with a diff of the values of a NotEqualError"""
+    if isinstance(exception, NotEqualError) and exception.print_diff:
+        return f"{exception}\n{term.normal}{diff.diff(str(exception.a), str(exception.b), color=True)}{term.normal}"
+    return str(exception)
+
 
 class TestResult(object):
     """
@@ -903,7 +909,7 @@ actor TestExecutor(rts: EnvRTS, config: TestRunnerConfig, t: Test, report_comple
         # Result processing may itself have failed. Use a fresh error result,
         # without repeating measurements, snapshots or performance metadata.
         info = TestInfo(t)
-        info.update(True, TestResult(None, str(exception), None, 0.0, 0, 0))
+        info.update(True, TestResult(None, exception_text(exception), None, 0.0, 0, 0))
         test_info = info
         if config.output_enabled:
             print("\n" + json.encode({"test_info": info.to_json()}), err=True)
@@ -943,7 +949,7 @@ actor TestExecutor(rts: EnvRTS, config: TestRunnerConfig, t: Test, report_comple
             exp_val = get_expected(test.module, test.display_name())
             if exp_val is None or exp_val is not None and val != exp_val:
                 success = False
-                exception = NotEqualError(val, exp_val, "Test output does not match expected snapshot value.", diff_str=f"{term.normal}{diff.diff(str(exp_val), val, color=True)}", print_vals=False)
+                exception = NotEqualError(exp_val, val, "Test output does not match expected snapshot value.", print_vals=False)
         if config.stress_mode and not config.perf_mode:
             _update_stress_timing_estimate(testiter_dur)
             if stress_calibrating:
@@ -1000,7 +1006,7 @@ actor TestExecutor(rts: EnvRTS, config: TestRunnerConfig, t: Test, report_comple
                 test_info.success = success
                 test_info.skipped = skipped
                 test_info.skip_reason = skip_reason
-                test_info.exception = str(exception) if exception is not None else None
+                test_info.exception = exception_text(exception) if exception is not None else None
                 test_info.output = val
                 test_info.test_duration = test_dur * 1000.0
                 test_info.num_skipped += 1 if skipped else 0
@@ -1037,7 +1043,7 @@ actor TestExecutor(rts: EnvRTS, config: TestRunnerConfig, t: Test, report_comple
                 complete = True
 
         if test_info is not None:
-            exc = str(exception) if exception is not None else None
+            exc = exception_text(exception) if exception is not None else None
             test_info.update(complete, TestResult(success, exc, val, testiter_dur, mem_usage_delta, non_gc_mem_usage_delta, skipped=skipped, skip_reason=skip_reason, gc_duration=gc_dur, counters=counters, loop_iterations=loop_iterations), test_dur*1000.0)
             if config.stress_mode and not config.perf_mode and executor_id >= stress_nodrift_workers:
                 _maybe_refine_stress_phase(test_info.num_iterations)

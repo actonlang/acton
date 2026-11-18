@@ -1,6 +1,8 @@
 import logging
 
 import testing
+
+import std.testing.runner
 actor MathTester ():
     T_17w def add (a : T_5w, b : T_9w) -> T_13w:
         return a + b

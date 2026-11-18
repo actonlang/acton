@@ -937,6 +937,23 @@ importedModules                     = concatMap named
     named (FromImport _ mn _)       = [mn]
     named (FromImportAll _ mn)      = [mn]
 
+mTesting, mTestRunner               :: ModName
+mTesting                            = ModName [name "testing"]
+mTestRunner                         = ModName [name "std", name "testing", name "runner"]
+
+-- | A module that imports testing is a test module: test discovery gives it
+-- a test_main actor that calls std.testing.runner.test_runner.
+importsTesting                      :: [Import] -> Bool
+importsTesting                      = elem (Import NoLoc [ModuleItem mTesting Nothing])
+
+-- | The imports of a module, with std.testing.runner added to a test module.
+withTestRunner                      :: [Import] -> [Import]
+withTestRunner is
+  | importsTesting is && runner `notElem` is
+                                    = is ++ [runner]
+  | otherwise                       = is
+  where runner                      = Import NoLoc [ModuleItem mTestRunner Nothing]
+
 unop op e                           = UnOp l0 op e
 binop e1 op e2                      = BinOp l0 e1 op e2
 cmp e1 op e2                        = CompOp l0 e1 [OpArg op e2]
