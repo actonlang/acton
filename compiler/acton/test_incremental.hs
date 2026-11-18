@@ -973,7 +973,7 @@ p15_rebuild_import :: TestTree
 p15_rebuild_import = testCase "15-rebuild with stdlib import" $ do
   ensureCasesProject
   writeFileUtf8 (casesSrcDir </> "rebuild.act") $ T.unlines
-    [ "import json"
+    [ "import std.json"
     , ""
     , "actor main(env: Env):"
     , "    env.exit(0)"

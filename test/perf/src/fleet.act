@@ -25,7 +25,7 @@ Shared actors:
   over all campaign members and releases more devices
 """
 
-import json
+import std.json
 import testing
 import time
 
@@ -113,7 +113,7 @@ def request(op: str, rpc: int) -> str:
     req["op"] = op
     req["rpc"] = rpc
     req["id"] = "msg-" + str(rpc)
-    return json.encode(req)
+    return std.json.encode(req)
 
 def field_str(doc: dict[str, ?value], key: str) -> str:
     v = doc.get(key)
@@ -174,11 +174,11 @@ actor MockDevice(id: int, log: Log):
         seq += 1
         if log.get_level() <= 10:
             print("rpc", req)
-        r = json.decode(req)
+        r = std.json.decode(req)
         name = field_str(r, "op")
         reply = ""
         if name == "get-config":
-            reply = json.encode(config_doc(id, version))
+            reply = std.json.encode(config_doc(id, version))
         elif name == "hello":
             caps: list[?value] = []
             for i in range(20):
@@ -186,14 +186,14 @@ actor MockDevice(id: int, log: Log):
             hello: dict[str, ?value] = {}
             hello["capabilities"] = caps
             hello["session"] = id
-            reply = json.encode(hello)
+            reply = std.json.encode(hello)
         else:
             t = op_time(name)
             if t > 0.0:
                 op = name
                 op_state = "running"
                 after now t: complete(name)
-            reply = json.encode(status_doc(id, seq, op, op_state, version, history))
+            reply = std.json.encode(status_doc(id, seq, op, op_state, version, history))
         s = server
         if s is not None:
             parts = split(reply, CHUNKS)
@@ -263,7 +263,7 @@ actor Driver(client: PipeClient, log: Log):
             partial[rpc] = [data]
 
     def done(rpc: int, data: str):
-        doc = json.decode(data)
+        doc = std.json.decode(data)
         cb = pending.pop(rpc)
         t0 = started.pop(rpc)
         if cb is not None and t0 is not None:
@@ -334,13 +334,13 @@ actor Store():
 
     def transact(dev: int, doc: dict[str, ?value]) -> bool:
         txns += 1
-        docs[dev] = json.encode(doc)
+        docs[dev] = std.json.encode(doc)
         states[dev] = "connected"
         return True
 
     def update_oper(dev: int, state: str, doc: dict[str, ?value]):
         updates += 1
-        docs[dev] = json.encode(doc)
+        docs[dev] = std.json.encode(doc)
         states[dev] = state
         f = sub
         if f is not None:
@@ -359,7 +359,7 @@ actor Store():
             else:
                 counts[st] = 1
         counts["updates"] = updates
-        return json.encode(counts)
+        return std.json.encode(counts)
 
 
 actor Device(id: int, store: Store, fleet: Fleet, log: Log):
@@ -374,7 +374,7 @@ actor Device(id: int, store: Store, fleet: Fleet, log: Log):
         doc["config"] = conf
         doc["version"] = version
         for i in range(3):
-            dmc = json.encode(doc)
+            dmc = std.json.encode(doc)
 
     def connect():
         mock = MockDevice(id, log)
@@ -505,7 +505,7 @@ actor Fleet(store: Store, log: Log):
         plan: dict[str, ?value] = {}
         plan["members"] = entries
         plan["in_flight"] = in_flight
-        decision = json.encode(plan)
+        decision = std.json.encode(plan)
         t0 = now_ns()
         while in_flight < concurrency and released < len(members):
             m = members[released]

@@ -1,5 +1,5 @@
 import net
-import std.syslog as syslog
+import std.syslog
 import testing
 
 
@@ -8,7 +8,7 @@ actor server_recovery(t: testing.EnvT, address: str, legacy: bool=True, optional
     udp_cap = net.UDPCap(net.NetCap(t.env.cap))
     modern = b'<165>1 2003-10-11T22:14:15Z host app 123 ID47 [meta@32473 n="1"] payload\x00\xff'
     old = b"<13>Feb  5 17:32:18 router daemon[42]: legacy payload"
-    var server: ?syslog.Server = None
+    var server: ?std.syslog.Server = None
     var sender: ?net.UDPConnection = None
     var source_port = 0
     var phase = 0
@@ -39,7 +39,7 @@ actor server_recovery(t: testing.EnvT, address: str, legacy: bool=True, optional
         if sender is not None:
             sender.write(data)
 
-    def server_failed(s: syslog.Server, error: str):
+    def server_failed(s: std.syslog.Server, error: str):
         if done:
             return
         if error == "":
@@ -63,7 +63,7 @@ actor server_recovery(t: testing.EnvT, address: str, legacy: bool=True, optional
         else:
             fail("Unexpected syslog server error: " + error)
 
-    def received(s: syslog.Server, message: syslog.Message, peer: str, port: int):
+    def received(s: std.syslog.Server, message: std.syslog.Message, peer: str, port: int):
         if done:
             return
         try:
@@ -116,7 +116,7 @@ actor server_recovery(t: testing.EnvT, address: str, legacy: bool=True, optional
             return
         c.write(b"not a syslog message")
 
-    def bound(s: syslog.Server, error: ?str):
+    def bound(s: std.syslog.Server, error: ?str):
         if done:
             s.close()
             return
@@ -132,7 +132,7 @@ actor server_recovery(t: testing.EnvT, address: str, legacy: bool=True, optional
             return
         sender = net.UDPConnection(net.UDPConnectCap(udp_cap), address, port, sender_connected, sender_received, sender_failed)
 
-    server = syslog.Server(net.UDPListenCap(udp_cap), address, 0, bound, received, server_failed, max_size=480, legacy=legacy)
+    server = std.syslog.Server(net.UDPListenCap(udp_cap), address, 0, bound, received, server_failed, max_size=480, legacy=legacy)
     after 5: fail("Syslog server recovery timed out")
 
 
@@ -151,9 +151,9 @@ actor _test_SyslogUDPServerStrict(t: testing.EnvT):
 actor _test_SyslogUDPClientWire(t: testing.EnvT):
     """Inspect sender datagrams without using the syslog decoder."""
     udp_cap = net.UDPCap(net.NetCap(t.env.cap))
-    message = syslog.Message(b"client\x00\xff", hostname="host", app_name="app")
+    message = std.syslog.Message(b"client\x00\xff", hostname="host", app_name="app")
     var listener: ?net.UDPListener = None
-    var client: ?syslog.Client = None
+    var client: ?std.syslog.Client = None
     var phase = 0
     var source_port = 0
     var done = False
@@ -171,7 +171,7 @@ actor _test_SyslogUDPClientWire(t: testing.EnvT):
         close()
         t.failure(AssertionError(message))
 
-    def client_failed(c: syslog.Client, error: str):
+    def client_failed(c: std.syslog.Client, error: str):
         if done:
             return
         if phase != 2 or error.find("closed") == -1:
@@ -181,7 +181,7 @@ actor _test_SyslogUDPClientWire(t: testing.EnvT):
         close()
         t.success()
 
-    def client_connected(c: syslog.Client):
+    def client_connected(c: std.syslog.Client):
         if done:
             c.close()
 
@@ -225,7 +225,7 @@ actor _test_SyslogUDPClientWire(t: testing.EnvT):
         if error is not None:
             fail("UDP listen error: " + error)
             return
-        c = syslog.Client(net.UDPConnectCap(udp_cap), "127.0.0.1", l.local_port(), client_connected, client_failed)
+        c = std.syslog.Client(net.UDPConnectCap(udp_cap), "127.0.0.1", l.local_port(), client_connected, client_failed)
         client = c
         # Sending immediately must work before the connection callback arrives.
         c.send(message)
@@ -237,7 +237,7 @@ actor _test_SyslogUDPClientWire(t: testing.EnvT):
 actor _test_SyslogUDPClientRejections(t: testing.EnvT):
     udp_cap = net.UDPCap(net.NetCap(t.env.cap))
     var listener: ?net.UDPListener = None
-    var client: ?syslog.Client = None
+    var client: ?std.syslog.Client = None
     var invalid_rejected = False
     var oversized_rejected = False
     var message_received = False
@@ -262,7 +262,7 @@ actor _test_SyslogUDPClientRejections(t: testing.EnvT):
             close()
             t.success()
 
-    def client_failed(c: syslog.Client, error: str):
+    def client_failed(c: std.syslog.Client, error: str):
         if done:
             return
         if error.find("severity") != -1 and not invalid_rejected:
@@ -274,13 +274,13 @@ actor _test_SyslogUDPClientRejections(t: testing.EnvT):
             return
         maybe_success()
 
-    def client_connected(c: syslog.Client):
+    def client_connected(c: std.syslog.Client):
         if done:
             c.close()
             return
-        c.send(syslog.Message(b"invalid", severity=8))
-        c.send(syslog.Message(b"x" * 480))
-        c.send(syslog.Message(b"accepted"))
+        c.send(std.syslog.Message(b"invalid", severity=8))
+        c.send(std.syslog.Message(b"x" * 480))
+        c.send(std.syslog.Message(b"accepted"))
 
     def received(l: net.UDPListener, data: bytes, peer: str, port: int):
         if done:
@@ -301,7 +301,7 @@ actor _test_SyslogUDPClientRejections(t: testing.EnvT):
         if error is not None:
             fail("UDP listen error: " + error)
             return
-        client = syslog.Client(net.UDPConnectCap(udp_cap), "127.0.0.1", l.local_port(), client_connected, client_failed, max_size=480)
+        client = std.syslog.Client(net.UDPConnectCap(udp_cap), "127.0.0.1", l.local_port(), client_connected, client_failed, max_size=480)
 
     listener = net.UDPListener(net.UDPListenCap(udp_cap), "127.0.0.1", 0, bound, received, listener_failed)
     after 5: fail("Syslog client rejection test timed out")

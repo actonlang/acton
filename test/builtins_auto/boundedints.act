@@ -1,4 +1,4 @@
-import qcheck
+import std.qcheck
 
 actor main(env):
     n: bigint= 65536

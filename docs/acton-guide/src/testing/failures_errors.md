@@ -12,14 +12,14 @@ For example, if a test attempts to retrieve `https://dummyjson.com/products/1` a
 
 Source:
 ```python
-import random
+import std.random
 import testing
 
 def _test_failure():
     testing.assertEqual(1, 2)
 
 def _test_flaky():
-    i = random.randint(0, 2)
+    i = std.random.randint(0, 2)
     if i == 0:
         return
     elif i == 1:

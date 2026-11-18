@@ -1,5 +1,5 @@
 import numpy
-import math
+import std.math
 
 actor main(env):
   a = numpy.arange(20)

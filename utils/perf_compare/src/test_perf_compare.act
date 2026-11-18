@@ -1,7 +1,7 @@
-import argparse
+import std.argparse
 import file
-import json
-import math
+import std.json
+import std.math
 import perf_compare
 import testing
 
@@ -21,7 +21,7 @@ def report_source() -> str:
 def measured(mean: float=10.0, iterations: int=100) -> dict[str, ?value]:
     source = report_source().replace('"avg_wall_duration":10.0', f'"avg_wall_duration":{mean}')
     source = source.replace('"num_iterations":100', f'"num_iterations":{iterations}')
-    return perf_compare.measurement(json.decode(source), ("nested.work", "_test_touch"))
+    return perf_compare.measurement(std.json.decode(source), ("nested.work", "_test_touch"))
 
 
 def number(val: ?value) -> float:
@@ -59,7 +59,7 @@ def _test_cli_rejects_invalid_budgets():
         rejected = False
         try:
             perf_compare.parse_args(["perf-compare", flag, text])
-        except argparse.ArgumentError:
+        except std.argparse.ArgumentError:
             rejected = True
         assert rejected, f"Accepted {flag} {text}"
     for time in [".5s", "2.5s", "1ms", "2m", "1h"]:
@@ -68,16 +68,16 @@ def _test_cli_rejects_invalid_budgets():
 
 
 def _test_selects_raw_names_in_sorted_order():
-    data = json.decode(r"""{"modules":[
+    data = std.json.decode(r"""{"modules":[
         {"name":"z","tests":[{"name":"touch","raw_name":"_test_touch"}]},
         {"name":"a","tests":[{"raw_name":"_test_z"},{"raw_name":"_test_a"}]}
     ]}""")
     assert perf_compare.selected(data) == [("a", "_test_a"), ("a", "_test_z"), ("z", "_test_touch")]
-    assert perf_compare.selected(json.decode(r'{"modules":[]}')) == []
+    assert perf_compare.selected(std.json.decode(r'{"modules":[]}')) == []
 
 
 def _test_report_parsing_ignores_build_progress():
-    source = json.encode(json.decode(report_source()))
+    source = std.json.encode(std.json.decode(report_source()))
     data = perf_compare.parse_report("Resolving dependencies...\nCompilation done\n" + source + "\n")
     assert number(perf_compare.measurement(data, ("nested.work", "_test_touch"))["avg_wall_duration"]) == 10.0
     for output in ["No tests\n", "{{truncated\n", "[]\n"]:
@@ -101,7 +101,7 @@ def _test_requires_one_fresh_successful_result():
     ]:
         rejected = False
         try:
-            perf_compare.measurement(json.decode(report_source().replace(original, changed)), ("nested.work", "_test_touch"))
+            perf_compare.measurement(std.json.decode(report_source().replace(original, changed)), ("nested.work", "_test_touch"))
         except ValueError:
             rejected = True
         assert rejected, f"Accepted invalid measurement: {changed}"
@@ -111,7 +111,7 @@ def _test_requires_one_fresh_successful_result():
     ]:
         rejected = False
         try:
-            perf_compare.measurement(json.decode(source), ("nested.work", "_test_touch"))
+            perf_compare.measurement(std.json.decode(source), ("nested.work", "_test_touch"))
         except ValueError:
             rejected = True
         assert rejected
@@ -122,7 +122,7 @@ def _test_requires_complete_measurement_identity():
         source = report_source().replace(f'"{key}":', f'"missing_{key}":')
         rejected = False
         try:
-            perf_compare.measurement(json.decode(source), ("nested.work", "_test_touch"))
+            perf_compare.measurement(std.json.decode(source), ("nested.work", "_test_touch"))
         except ValueError:
             rejected = True
         assert rejected, f"Accepted missing identity: {key}"
@@ -135,7 +135,7 @@ def _test_requires_compatible_measurement_identity():
         r'{"cpu":"","db":false,"no_dbp":false,"no_threads":false,"optimize":"ReleaseFast","target":"aarch64-macos-none"}',
         r'{"target":"aarch64-macos-none","optimize":"ReleaseFast","no_threads":false,"no_dbp":false,"db":false,"cpu":""}'
     )
-    perf_compare.comparable(baseline, perf_compare.measurement(json.decode(reordered), ("nested.work", "_test_touch")))
+    perf_compare.comparable(baseline, perf_compare.measurement(std.json.decode(reordered), ("nested.work", "_test_touch")))
     for original, changed in [
         ('"machine":"machine"', '"machine":"other"'),
         ('"version":"3"', '"version":"2"'),
@@ -148,7 +148,7 @@ def _test_requires_compatible_measurement_identity():
         ('"workers":1', '"workers":2'),
         ('"scale":257', '"scale":258')
     ]:
-        current = perf_compare.measurement(json.decode(report_source().replace(original, changed)), ("nested.work", "_test_touch"))
+        current = perf_compare.measurement(std.json.decode(report_source().replace(original, changed)), ("nested.work", "_test_touch"))
         rejected = False
         try:
             perf_compare.comparable(baseline, current)
@@ -158,9 +158,9 @@ def _test_requires_compatible_measurement_identity():
 
 
 def _test_canonical_preserves_string_keys():
-    first = perf_compare.canonical(json.decode(r'{"abc":1,"def":2}'))
-    reordered = perf_compare.canonical(json.decode(r'{"def":2,"abc":1}'))
-    changed = perf_compare.canonical(json.decode(r'{"abc":1,"ghi":2}'))
+    first = perf_compare.canonical(std.json.decode(r'{"abc":1,"def":2}'))
+    reordered = perf_compare.canonical(std.json.decode(r'{"def":2,"abc":1}'))
+    changed = perf_compare.canonical(std.json.decode(r'{"abc":1,"ghi":2}'))
     assert first == reordered
     assert first != changed
 
@@ -176,7 +176,7 @@ def _test_paired_interval_weights_processes_equally():
     if isinstance(interval, list):
         assert len(interval) == 2
         # Paired changes are -1, -2, -3, -4, regardless of each process's loop count.
-        half = 3.183 * math.sqrt(5.0 / 3.0) / 2.0
+        half = 3.183 * std.math.sqrt(5.0 / 3.0) / 2.0
         assert abs(number(interval[0]) - (-2.5 - half)) < 0.000000001
         assert abs(number(interval[1]) - (-2.5 + half)) < 0.000000001
     else:
@@ -266,7 +266,7 @@ actor _test_comparison_preserves_checkout(t: testing.EnvT):
 
     proc def latest_incomplete(has_study: bool) -> None:
         latest = sorted(fs.listdir(recording_root))[-1]
-        manifest = json.decode(read(recording_root + "/" + latest + "/comparison.json"))
+        manifest = std.json.decode(read(recording_root + "/" + latest + "/comparison.json"))
         assert perf_compare.text(manifest["status"]) == "incomplete"
         studies = perf_compare.array(manifest["tests"])
         assert len(studies) == (1 if has_study else 0)
@@ -314,7 +314,7 @@ actor _test_comparison_preserves_checkout(t: testing.EnvT):
             for index, recording in enumerate(recordings):
                 stage = "recorded measurements " + project + "/" + recording
                 directory = project_recordings + "/" + recording
-                manifest = json.decode(read(directory + "/comparison.json"))
+                manifest = std.json.decode(read(directory + "/comparison.json"))
                 assert perf_compare.text(manifest["status"]) == "complete", "Comparison did not complete"
                 # A child process reports the physical cwd, which can differ from
                 # mktmpdir's path spelling (for example /var versus /private/var).
@@ -512,9 +512,9 @@ cmp "external project/Build.act" "external snapshot/Build.act"
 diff -r "external project/src" "external snapshot/src"
 """)
         write(temporary + "/list.json", r'{"modules":[{"name":"nested.work","tests":[{"raw_name":"_test_touch"}]}]}' + "\n")
-        write(temporary + "/baseline.json", json.encode(json.decode(report_source())) + "\n")
-        write(temporary + "/current.json", json.encode(json.decode(report_source().replace('"avg_wall_duration":10.0', '"avg_wall_duration":8.0'))) + "\n")
-        write(temporary + "/pilot.json", json.encode(json.decode(report_source().replace('"avg_wall_duration":10.0', '"avg_wall_duration":1000.0'))) + "\n")
+        write(temporary + "/baseline.json", std.json.encode(std.json.decode(report_source())) + "\n")
+        write(temporary + "/current.json", std.json.encode(std.json.decode(report_source().replace('"avg_wall_duration":10.0', '"avg_wall_duration":8.0'))) + "\n")
+        write(temporary + "/pilot.json", std.json.encode(std.json.decode(report_source().replace('"avg_wall_duration":10.0', '"avg_wall_duration":1000.0'))) + "\n")
         run(["sh", "setup.sh"], "setup.log", setup_done)
     except Exception as error:
         fail(error)

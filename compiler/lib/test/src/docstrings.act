@@ -1,6 +1,6 @@
 """Test module for docstring functionality with {braces}."""
 
-import math
+import std.math
 
 # Basic functionality tests
 def test_function(x: int) -> int:

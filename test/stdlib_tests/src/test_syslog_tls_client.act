@@ -1,5 +1,5 @@
 import net
-import std.syslog as syslog
+import std.syslog
 import test_net_tls_auth as certs
 import testing
 
@@ -9,7 +9,7 @@ actor _test_SyslogTLSClientWire(t: testing.EnvT):
     cap = net.TCPCap(net.NetCap(t.env.cap))
     var listener: ?net.TLSListener = None
     var connection: ?net.TLSListenConnection = None
-    var client: ?syslog.StreamClient = None
+    var client: ?std.syslog.StreamClient = None
     var data = b""
     var messages = 0
     var server_verified = False
@@ -44,10 +44,10 @@ actor _test_SyslogTLSClientWire(t: testing.EnvT):
         client_verified = True
         return True
 
-    def client_failed(c: syslog.StreamClient, error: str):
+    def client_failed(c: std.syslog.StreamClient, error: str):
         finish("TLS syslog client failed: {error}")
 
-    def connected(c: syslog.StreamClient):
+    def connected(c: std.syslog.StreamClient):
         if done:
             c.close()
             return
@@ -122,12 +122,12 @@ actor _test_SyslogTLSClientWire(t: testing.EnvT):
         if error is not None:
             finish("TLS collector listener failed: {error}")
             return
-        c = syslog.StreamClient(net.TCPConnectCap(cap), "127.0.0.1", l.local_port(), connected, client_failed,
+        c = std.syslog.StreamClient(net.TCPConnectCap(cap), "127.0.0.1", l.local_port(), connected, client_failed,
                                  tls=True, ca_pem=certs.CA_PEM, server_name="localhost",
                                  cert_pem=certs.CLIENT_CERT_PEM, key_pem=certs.CLIENT_KEY_PEM,
                                  verify_peer=verified_server)
         client = c
-        c.send(syslog.Message(b"queued\n\x00\xff", hostname="host", app_name="app"))
+        c.send(std.syslog.Message(b"queued\n\x00\xff", hostname="host", app_name="app"))
 
     listener = net.TLSListener(net.TCPListenCap(cap), "127.0.0.1", 0,
                                certs.SERVER_CERT_PEM, certs.SERVER_KEY_PEM, bound, accepted,
@@ -143,7 +143,7 @@ actor rejected_server(t: testing.EnvT, reason: str):
     expected = "not trusted" if reason == "ca" else "does not match the server name" if reason == "name" else "rejected by verify_peer"
     var listener: ?net.TLSListener = None
     var connection: ?net.TLSListenConnection = None
-    var client: ?syslog.StreamClient = None
+    var client: ?std.syslog.StreamClient = None
     var listening = False
     var rejected = False
     var peer_closed = False
@@ -178,10 +178,10 @@ actor rejected_server(t: testing.EnvT, reason: str):
             finish("Client verifier received unexpected certificate information")
         return False
 
-    def connected(c: syslog.StreamClient):
+    def connected(c: std.syslog.StreamClient):
         finish("TLS client connected to a rejected server")
 
-    def client_failed(c: syslog.StreamClient, error: str):
+    def client_failed(c: std.syslog.StreamClient, error: str):
         if done:
             return
         if rejected or expected not in error:
@@ -230,10 +230,10 @@ actor rejected_server(t: testing.EnvT, reason: str):
             finish("TLS rejection listener repeated its bind callback")
             return
         listening = True
-        c = syslog.StreamClient(net.TCPConnectCap(cap), "127.0.0.1", l.local_port(), connected, client_failed,
+        c = std.syslog.StreamClient(net.TCPConnectCap(cap), "127.0.0.1", l.local_port(), connected, client_failed,
                                  tls=True, ca_pem=ca, server_name=name, verify_peer=verified)
         client = c
-        c.send(syslog.Message(b"must not be sent without verification"))
+        c.send(std.syslog.Message(b"must not be sent without verification"))
 
     listener = net.TLSListener(net.TCPListenCap(cap), "127.0.0.1", 0,
                                certs.SERVER_CERT_PEM, certs.SERVER_KEY_PEM, bound, accepted)
@@ -257,7 +257,7 @@ actor stalled_client(t: testing.EnvT, close_early: bool):
     cap = net.TCPCap(net.NetCap(t.env.cap))
     var listener: ?net.TCPListener = None
     var connection: ?net.TCPListenConnection = None
-    var client: ?syslog.StreamClient = None
+    var client: ?std.syslog.StreamClient = None
     var hello_seen = False
     var closing = False
     var timed_out = False
@@ -288,10 +288,10 @@ actor stalled_client(t: testing.EnvT, close_early: bool):
         deadline_passed = True
         progress()
 
-    def connected(c: syslog.StreamClient):
+    def connected(c: std.syslog.StreamClient):
         finish("TLS client connected without a handshake response")
 
-    def client_failed(c: syslog.StreamClient, error: str):
+    def client_failed(c: std.syslog.StreamClient, error: str):
         if done:
             return
         if close_early or timed_out or ("timeout" not in error.lower() and "timed out" not in error.lower()):
@@ -340,12 +340,12 @@ actor stalled_client(t: testing.EnvT, close_early: bool):
             finish("Stalled TLS listener failed: {error}")
             return
         timeout = 2.0 if close_early else 1.0
-        c = syslog.StreamClient(net.TCPConnectCap(cap), "127.0.0.1", l.local_port(), connected, client_failed,
+        c = std.syslog.StreamClient(net.TCPConnectCap(cap), "127.0.0.1", l.local_port(), connected, client_failed,
                                  tls=True, ca_pem=certs.CA_PEM, connect_timeout=timeout)
         client = c
         if close_early:
             after timeout + 0.2: deadline_elapsed()
-        c.send(syslog.Message(b"must wait for the handshake"))
+        c.send(std.syslog.Message(b"must wait for the handshake"))
 
     listener = net.TCPListener(net.TCPListenCap(cap), "127.0.0.1", 0, bound, accepted)
     after 8: finish("Stalled TLS syslog client test timed out")
@@ -362,13 +362,13 @@ actor _test_SyslogTLSCloseDuringHandshake(t: testing.EnvT):
 actor _test_SyslogTLSClientConfiguration(t: testing.EnvT):
     cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
 
-    def connected(c: syslog.StreamClient):
+    def connected(c: std.syslog.StreamClient):
         c.close()
 
-    def failed(c: syslog.StreamClient, error: str):
+    def failed(c: std.syslog.StreamClient, error: str):
         c.close()
 
-    var client: ?syslog.StreamClient = None
+    var client: ?std.syslog.StreamClient = None
 
     def run():
         for kind in ["cert", "key", "pair", "ca", "name", "verify"]:
@@ -379,7 +379,7 @@ actor _test_SyslogTLSClientConfiguration(t: testing.EnvT):
             expected = "Syslog TLS requires both cert_pem and key_pem" if kind in ["cert", "key"] else "Syslog TLS options require TLS"
             client = None
             try:
-                client = syslog.StreamClient(cap, "127.0.0.1", 1, connected, failed,
+                client = std.syslog.StreamClient(cap, "127.0.0.1", 1, connected, failed,
                                              tls=kind in ["cert", "key"], verify_tls=kind != "verify",
                                              cert_pem=certificate, key_pem=key, ca_pem=ca, server_name=name)
             except ValueError as error:
@@ -395,7 +395,7 @@ actor _test_SyslogTLSClientConfiguration(t: testing.EnvT):
         for timeout in [0.0, -1.0, float("nan"), float("inf"), float("-inf")]:
             client = None
             try:
-                client = syslog.StreamClient(cap, "127.0.0.1", 1, connected, failed,
+                client = std.syslog.StreamClient(cap, "127.0.0.1", 1, connected, failed,
                                              tls=True, ca_pem=certs.CA_PEM, connect_timeout=timeout)
             except ValueError as error:
                 if error.error_message != "Invalid syslog stream limits":

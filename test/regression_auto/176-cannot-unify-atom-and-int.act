@@ -1,11 +1,11 @@
-import random
+import std.random
 
 actor Foo():
     def bar(a):
         rest = int(a["id"]) % 2
 
 actor main(env):
-    a = {"id": random.randint(0,10)}
+    a = {"id": std.random.randint(0,10)}
     f = Foo()
     await async f.bar(a)
     env.exit(0)

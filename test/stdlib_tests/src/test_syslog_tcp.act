@@ -1,5 +1,5 @@
 import net
-import std.syslog as syslog
+import std.syslog
 import testing
 
 
@@ -13,7 +13,7 @@ actor server_frames(t: testing.EnvT, address: str, legacy: bool=True):
     first = frame(b'<14>1 - host app - - [meta@32473 n="one" n="two"] first\nline\x00\xff')
     second = frame(b"<14>1 - host app - - - second")
     old = frame(b"<13>Feb  5 17:32:18 router daemon[42]: old")
-    var server: ?syslog.StreamServer = None
+    var server: ?std.syslog.StreamServer = None
     var sender: ?net.TCPConnection = None
     var message_count = 0
     var errors = 0
@@ -45,7 +45,7 @@ actor server_frames(t: testing.EnvT, address: str, legacy: bool=True):
                 server.close()
                 server.close()
 
-    def server_failed(s: syslog.StreamServer, error: str):
+    def server_failed(s: std.syslog.StreamServer, error: str):
         if done:
             return
         expected_errors = 1 if legacy else 2
@@ -60,7 +60,7 @@ actor server_frames(t: testing.EnvT, address: str, legacy: bool=True):
                 sender.write(frame(b"<14>1 - host app - - - after legacy"))
         maybe_shutdown()
 
-    def received(s: syslog.StreamServer, message: syslog.Message, peer: str, port: int):
+    def received(s: std.syslog.StreamServer, message: std.syslog.Message, peer: str, port: int):
         if done:
             return
         try:
@@ -126,7 +126,7 @@ actor server_frames(t: testing.EnvT, address: str, legacy: bool=True):
         close()
         t.success()
 
-    def bound(s: syslog.StreamServer, error: ?str):
+    def bound(s: std.syslog.StreamServer, error: ?str):
         if done:
             s.close()
             return
@@ -144,7 +144,7 @@ actor server_frames(t: testing.EnvT, address: str, legacy: bool=True):
             return
         sender = net.TCPConnection(net.TCPConnectCap(cap), address, destination_port, connected, raw_received, sender_failed, remote_closed)
 
-    server = syslog.StreamServer(net.TCPListenCap(cap), address, 0, bound, received, server_failed, legacy=legacy)
+    server = std.syslog.StreamServer(net.TCPListenCap(cap), address, 0, bound, received, server_failed, legacy=legacy)
     after 5: fail("Syslog stream wire test timed out")
 
 
@@ -163,7 +163,7 @@ actor _test_SyslogTCPServerStrict(t: testing.EnvT):
 actor server_recovery(t: testing.EnvT, broken: bytes, expected_error: str, truncate: bool=False):
     """Reject a broken stream, release its slot, and accept a new client."""
     cap = net.TCPCap(net.NetCap(t.env.cap))
-    var server: ?syslog.StreamServer = None
+    var server: ?std.syslog.StreamServer = None
     var clients: list[net.TCPConnection] = []
     var port = 0
     var failed_stream_closed = False
@@ -219,7 +219,7 @@ actor server_recovery(t: testing.EnvT, broken: bytes, expected_error: str, trunc
             # frame only after receiving EOF.
             c.close(broken_closed)
 
-    def server_failed(s: syslog.StreamServer, error: str):
+    def server_failed(s: std.syslog.StreamServer, error: str):
         if done:
             return
         if rejected or expected_error not in error:
@@ -228,7 +228,7 @@ actor server_recovery(t: testing.EnvT, broken: bytes, expected_error: str, trunc
         rejected = True
         start_replacement()
 
-    def received(s: syslog.StreamServer, message: syslog.Message, peer: str, source_port: int):
+    def received(s: std.syslog.StreamServer, message: std.syslog.Message, peer: str, source_port: int):
         if done:
             return
         if peer != "127.0.0.1" or source_port <= 0:
@@ -243,7 +243,7 @@ actor server_recovery(t: testing.EnvT, broken: bytes, expected_error: str, trunc
         else:
             fail("Malformed stream produced a message or replacement failed")
 
-    def bound(s: syslog.StreamServer, error: ?str):
+    def bound(s: std.syslog.StreamServer, error: ?str):
         if done:
             s.close()
             return
@@ -253,7 +253,7 @@ actor server_recovery(t: testing.EnvT, broken: bytes, expected_error: str, trunc
         port = s.local_port()
         clients.append(net.TCPConnection(net.TCPConnectCap(cap), "127.0.0.1", port, broken_connected, raw_received, client_failed, broken_closed))
 
-    server = syslog.StreamServer(net.TCPListenCap(cap), "127.0.0.1", 0, bound, received, server_failed, max_size=480, max_connections=1)
+    server = std.syslog.StreamServer(net.TCPListenCap(cap), "127.0.0.1", 0, bound, received, server_failed, max_size=480, max_connections=1)
     after 5: fail("Syslog stream recovery test timed out")
 
 
@@ -274,8 +274,8 @@ actor _test_SyslogTCPOversizedFrame(t: testing.EnvT):
 actor _test_SyslogTCPConnectionLimit(t: testing.EnvT):
     """Reject an excess connection while preserving the accepted stream."""
     cap = net.TCPCap(net.NetCap(t.env.cap))
-    var server: ?syslog.StreamServer = None
-    var client: ?syslog.StreamClient = None
+    var server: ?std.syslog.StreamServer = None
+    var client: ?std.syslog.StreamClient = None
     var excess: ?net.TCPConnection = None
     var port = 0
     var message_count = 0
@@ -318,7 +318,7 @@ actor _test_SyslogTCPConnectionLimit(t: testing.EnvT):
         excess_is_closed = True
         maybe_success()
 
-    def received(s: syslog.StreamServer, message: syslog.Message, peer: str, source_port: int):
+    def received(s: std.syslog.StreamServer, message: std.syslog.Message, peer: str, source_port: int):
         if done:
             return
         if message_count == 0 and message.message == b"first":
@@ -330,7 +330,7 @@ actor _test_SyslogTCPConnectionLimit(t: testing.EnvT):
         else:
             fail("Unexpected message in connection limit test")
 
-    def server_failed(s: syslog.StreamServer, error: str):
+    def server_failed(s: std.syslog.StreamServer, error: str):
         if done:
             return
         if rejected or error.find("connection limit") == -1:
@@ -338,18 +338,18 @@ actor _test_SyslogTCPConnectionLimit(t: testing.EnvT):
             return
         rejected = True
         if client is not None:
-            client.send(syslog.Message(b"still connected"))
+            client.send(std.syslog.Message(b"still connected"))
 
-    def client_connected(c: syslog.StreamClient):
+    def client_connected(c: std.syslog.StreamClient):
         if done:
             c.close()
         else:
-            c.send(syslog.Message(b"first"))
+            c.send(std.syslog.Message(b"first"))
 
-    def client_failed(c: syslog.StreamClient, error: str):
+    def client_failed(c: std.syslog.StreamClient, error: str):
         fail("Accepted syslog client failed: {error}")
 
-    def bound(s: syslog.StreamServer, error: ?str):
+    def bound(s: std.syslog.StreamServer, error: ?str):
         if done:
             s.close()
             return
@@ -357,9 +357,9 @@ actor _test_SyslogTCPConnectionLimit(t: testing.EnvT):
             fail("Syslog stream listen failed: {error}")
             return
         port = s.local_port()
-        client = syslog.StreamClient(net.TCPConnectCap(cap), "127.0.0.1", port, client_connected, client_failed)
+        client = std.syslog.StreamClient(net.TCPConnectCap(cap), "127.0.0.1", port, client_connected, client_failed)
 
-    server = syslog.StreamServer(net.TCPListenCap(cap), "127.0.0.1", 0, bound, received, server_failed, max_connections=1)
+    server = std.syslog.StreamServer(net.TCPListenCap(cap), "127.0.0.1", 0, bound, received, server_failed, max_connections=1)
     after 5: fail("Syslog stream connection limit test timed out")
 
 
@@ -370,7 +370,7 @@ actor _test_SyslogTCPClientWire(t: testing.EnvT):
     boundary_body = b"x" * (480 - len(prefix))
     var listener: ?net.TCPListener = None
     var connection: ?net.TCPListenConnection = None
-    var client: ?syslog.StreamClient = None
+    var client: ?std.syslog.StreamClient = None
     var data = b""
     var message_count = 0
     var destination_port = 0
@@ -405,13 +405,13 @@ actor _test_SyslogTCPClientWire(t: testing.EnvT):
             if client is not None:
                 client.close()
                 client.close()
-                client.send(syslog.Message(b"after close"))
+                client.send(std.syslog.Message(b"after close"))
         if shutting_down and closed_rejected and peer_closed:
             done = True
             close()
             t.success()
 
-    def client_failed(c: syslog.StreamClient, error: str):
+    def client_failed(c: std.syslog.StreamClient, error: str):
         if done:
             return
         if "severity" in error and not invalid_rejected:
@@ -425,12 +425,12 @@ actor _test_SyslogTCPClientWire(t: testing.EnvT):
             return
         progress()
 
-    def connected(c: syslog.StreamClient):
+    def connected(c: std.syslog.StreamClient):
         if done:
             c.close()
             return
-        c.send(syslog.Message(b"invalid", severity=8))
-        c.send(syslog.Message(b"x" * 480))
+        c.send(std.syslog.Message(b"invalid", severity=8))
+        c.send(std.syslog.Message(b"x" * 480))
         c.log("café", hostname="host", app_name="test",
               structured_data={"event@32473": [(name="instance", value="one")]})
 
@@ -471,7 +471,7 @@ actor _test_SyslogTCPClientWire(t: testing.EnvT):
         if message_count == 2 and not boundary_sent:
             boundary_sent = True
             if client is not None:
-                client.send(syslog.Message(boundary_body))
+                client.send(std.syslog.Message(boundary_body))
         progress()
 
     def connection_failed(c: net.TCPListenConnection, error: str):
@@ -509,11 +509,11 @@ actor _test_SyslogTCPClientWire(t: testing.EnvT):
             fail("Raw TCP listener failed: {error}")
             return
         destination_port = l.local_port()
-        c = syslog.StreamClient(net.TCPConnectCap(cap), "127.0.0.1", destination_port, connected, client_failed, max_size=480)
+        c = std.syslog.StreamClient(net.TCPConnectCap(cap), "127.0.0.1", destination_port, connected, client_failed, max_size=480)
         client = c
         # A caller need not wait for on_connect before sending. Whether this
         # actually enters the startup queue depends on transport scheduling.
-        c.send(syslog.Message(b"queued\n\x00\xff", hostname="host", app_name="app"))
+        c.send(std.syslog.Message(b"queued\n\x00\xff", hostname="host", app_name="app"))
 
     listener = net.TCPListener(net.TCPListenCap(cap), "127.0.0.1", 0, bound, accepted)
     after 5: fail("Syslog stream client wire test timed out")
@@ -526,7 +526,7 @@ actor _test_SyslogTCPClientNoStartupQueue(t: testing.EnvT):
     ready = frame(b"<14>1 - - - - - - ready")
     var listener: ?net.TCPListener = None
     var connection: ?net.TCPListenConnection = None
-    var client: ?syslog.StreamClient = None
+    var client: ?std.syslog.StreamClient = None
     var data = b""
     var queue_rejected = False
     var shutting_down = False
@@ -555,7 +555,7 @@ actor _test_SyslogTCPClientNoStartupQueue(t: testing.EnvT):
             if client is not None:
                 client.close()
 
-    def client_failed(c: syslog.StreamClient, error: str):
+    def client_failed(c: std.syslog.StreamClient, error: str):
         if done:
             return
         if queue_rejected or error != "Syslog startup queue is full":
@@ -564,11 +564,11 @@ actor _test_SyslogTCPClientNoStartupQueue(t: testing.EnvT):
         queue_rejected = True
         progress()
 
-    def connected(c: syslog.StreamClient):
+    def connected(c: std.syslog.StreamClient):
         if done:
             c.close()
         else:
-            c.send(syslog.Message(b"ready"))
+            c.send(std.syslog.Message(b"ready"))
 
     def received(c: net.TCPListenConnection, chunk: bytes):
         if done:
@@ -611,11 +611,11 @@ actor _test_SyslogTCPClientNoStartupQueue(t: testing.EnvT):
         if error is not None:
             fail("Zero-queue listener failed: {error}")
             return
-        c = syslog.StreamClient(net.TCPConnectCap(cap), "127.0.0.1", l.local_port(), connected, client_failed, max_pending=0)
+        c = std.syslog.StreamClient(net.TCPConnectCap(cap), "127.0.0.1", l.local_port(), connected, client_failed, max_pending=0)
         client = c
         # The connection may become ready before this send runs. Both outcomes
         # are valid; receipt of on_connect is not a gate on internal readiness.
-        c.send(syslog.Message(b"early"))
+        c.send(std.syslog.Message(b"early"))
 
     listener = net.TCPListener(net.TCPListenCap(cap), "127.0.0.1", 0, bound, accepted)
     after 5: fail("Syslog stream zero-queue test timed out")
@@ -625,7 +625,7 @@ actor _test_SyslogTCPClientImmediateClose(t: testing.EnvT):
     """Immediate repeated close leaves the client closed for subsequent sends."""
     cap = net.TCPCap(net.NetCap(t.env.cap))
     var listener: ?net.TCPListener = None
-    var client: ?syslog.StreamClient = None
+    var client: ?std.syslog.StreamClient = None
     var done = False
 
     def fail(message: str):
@@ -638,12 +638,12 @@ actor _test_SyslogTCPClientImmediateClose(t: testing.EnvT):
             listener.close()
         t.failure(AssertionError(message))
 
-    def connected(c: syslog.StreamClient):
+    def connected(c: std.syslog.StreamClient):
         # Readiness can win the race against the immediate close request. The
         # invariant is that sends ordered after close are always rejected.
         pass
 
-    def client_failed(c: syslog.StreamClient, error: str):
+    def client_failed(c: std.syslog.StreamClient, error: str):
         if done:
             return
         if error != "Syslog client is closed":
@@ -677,11 +677,11 @@ actor _test_SyslogTCPClientImmediateClose(t: testing.EnvT):
         if error is not None:
             fail("Immediate-close listener failed: {error}")
             return
-        c = syslog.StreamClient(net.TCPConnectCap(cap), "127.0.0.1", l.local_port(), connected, client_failed)
+        c = std.syslog.StreamClient(net.TCPConnectCap(cap), "127.0.0.1", l.local_port(), connected, client_failed)
         client = c
         c.close()
         c.close()
-        c.send(syslog.Message(b"must not be sent"))
+        c.send(std.syslog.Message(b"must not be sent"))
 
     listener = net.TCPListener(net.TCPListenCap(cap), "127.0.0.1", 0, bound, accepted)
     after 5: fail("Syslog stream immediate-close test timed out")

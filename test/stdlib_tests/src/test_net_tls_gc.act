@@ -1,5 +1,5 @@
 import net
-import random
+import std.random
 import test_net_tls
 import testing
 import time
@@ -143,7 +143,7 @@ actor _TLSDroppedActorChurn(t: testing.EnvT):
         if done:
             return
         phase = "binding"
-        port = random.randint(20000, 45000)
+        port = std.random.randint(20000, 45000)
         listener = net.TLSListener(
             listen_cap,
             "127.0.0.1",

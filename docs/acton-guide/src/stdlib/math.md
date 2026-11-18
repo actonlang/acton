@@ -1,24 +1,24 @@
-# math
+# std.math
 
-The `math` module provides the constant `pi` and common floating-point
+The `std.math` module provides the constant `pi` and common floating-point
 functions.
 
 Source:
 ```python
-import math
+import std.math
 
 actor main(env):
-    angle = math.pi / 4.0
+    angle = std.math.pi / 4.0
 
-    print(math.sin(angle))
-    print(math.sqrt(9.0))
+    print(std.math.sin(angle))
+    print(std.math.sqrt(9.0))
 
     env.exit(0)
 ```
 
 <div class="beginner-content">
 <p>Import the module first with <code>import math</code>, then call its
-functions as <code>math.sqrt(...)</code>, <code>math.sin(...)</code>,
+functions as <code>std.math.sqrt(...)</code>, <code>std.math.sin(...)</code>,
 and so on.</p>
 </div>
 

@@ -1,5 +1,5 @@
 
-import http
+import std.http
 import logging
 import net
 
@@ -13,7 +13,7 @@ import net
 #            conn.get("/" + str(i), on_response)
 #            outstanding += 1
 #
-#    def on_response(conn: http.Client, resp: http.Response):
+#    def on_response(conn: std.http.Client, resp: std.http.Response):
 #        count += 1
 #        outstanding -= 1
 ##        if (count+outstanding) < 1234:
@@ -33,7 +33,7 @@ import net
 #        return "Count: " + str(count) + " outstanding: " + str(outstanding)
 #
 #    print("Connecting to http://" + host)
-#    client = http.Client(connect_auth, host, 7000, on_connect, on_error)
+#    client = std.http.Client(connect_auth, host, 7000, on_connect, on_error)
 #
 #
 actor main(env):
@@ -46,7 +46,7 @@ actor main(env):
 #        # byte at a time until we get a complete request
 #        for i in range(len(query)):
 #            partial_request = query[0:i+1]
-#            req, rest = http.parse_request(partial_request)
+#            req, rest = std.http.parse_request(partial_request)
 #            if req is not None:
 #                if str(parsed) == str(req):
 #                    return True
@@ -61,7 +61,7 @@ actor main(env):
 #        qs = a.split(b"\r\n\r\n", 1)
 #        tests = [
 #            (query = b"GET / HTTP/1.1\r\nHost: 127.0.0.1:8000\r\nUser-Agent: curl/7.85.0\r\nAccept: */*\r\n\r\n",
-#             parsed = http.Request("GET", "/", b"1.1", {"Host": "127.0.0.1:8000", "User-Agent": "curl/7.85.0", "Accept": "*/*"}, b"")
+#             parsed = std.http.Request("GET", "/", b"1.1", {"Host": "127.0.0.1:8000", "User-Agent": "curl/7.85.0", "Accept": "*/*"}, b"")
 #             )
 #        ]
 #        all_good = True
@@ -111,5 +111,5 @@ actor main(env):
         print(errmsg)
 
     print("asdf")
-    hc = http.Client(tcpccap, "dummyjson.com", _on_http_connect, _on_http_error, log_handler=log_handler)
-    #hc2 = http.Client(tcpccap, "neverssl.com", _on_http_connect, _on_http_error, scheme="http", log_handler)
+    hc = std.http.Client(tcpccap, "dummyjson.com", _on_http_connect, _on_http_error, log_handler=log_handler)
+    #hc2 = std.http.Client(tcpccap, "neverssl.com", _on_http_connect, _on_http_error, scheme="http", log_handler)

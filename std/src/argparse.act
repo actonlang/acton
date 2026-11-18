@@ -7,11 +7,11 @@ help generation.
 ## Basic Usage
 
 ```acton
-import argparse
+import std.argparse
 
 actor main(env):
     def _parse_args():
-        p = argparse.Parser()
+        p = std.argparse.Parser()
         p.add_option("lines", "int", default=10, help="Number of lines", short="n")
         p.add_bool("follow", "Follow file changes", short="f")
         p.add_arg("file", "File to tail")
@@ -28,10 +28,10 @@ actor main(env):
         if follow:
             print("Following file changes...")
 
-    except argparse.PrintUsage as exc:
+    except std.argparse.PrintUsage as exc:
         print(exc.error_message)
         env.exit(0)
-    except argparse.ArgumentError as exc:
+    except std.argparse.ArgumentError as exc:
         print(exc.error_message, err=True)
         env.exit(1)
 ```
@@ -129,7 +129,7 @@ def cmd_tail(args):
     follow = args.get_bool("follow")
     print("Tail mode:", lines, "lines, follow:", follow)
 
-p = argparse.Parser()
+p = std.argparse.Parser()
 p.add_bool("verbose", "Verbose output", short="v")
 
 head_cmd = p.add_cmd("head", "Show first lines", cmd_head)

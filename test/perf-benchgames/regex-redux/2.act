@@ -2,7 +2,7 @@
 # Adapted from 1.py by Dominique Wahli, Ahmad Syukri, and Justin Peel.
 
 import file
-import re
+import std.re
 
 actor main(env):
     path = env.argv[1] if len(env.argv) > 1 else "25000_in"
@@ -10,7 +10,7 @@ actor main(env):
     text = source.read().decode()
     source.close()
     original_length = len(text)
-    text = re.replace(">.*\n|\n", text, "")
+    text = std.re.replace(">.*\n|\n", text, "")
     clean_length = len(text)
     variants = [
         "agggtaaa|tttaccct",
@@ -24,10 +24,10 @@ actor main(env):
         "agggtaa[cgt]|[acg]ttaccct"
     ]
     for pattern in variants:
-        print("%s %d" % (pattern, re.count(pattern, text)))
+        print("%s %d" % (pattern, std.re.count(pattern, text)))
     for pattern, replacement in [("tHa[Nt]", "<4>"), ("aND|caN|Ha[DS]|WaS", "<3>"),
                                  ("a[NSt]|BY", "<2>"), ("<[^>]*>", "|")]:
-        text = re.replace(pattern, text, replacement)
-    text = re.replace(r"\|[^|][^|]*\|", text, "-")
+        text = std.re.replace(pattern, text, replacement)
+    text = std.re.replace(r"\|[^|][^|]*\|", text, "-")
     print("\n%d\n%d\n%d" % (original_length, clean_length, len(text)))
     env.exit(0)

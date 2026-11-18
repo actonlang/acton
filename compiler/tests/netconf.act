@@ -11,7 +11,7 @@
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 
-import xml
+import std.xml
 
 
 def connect(env, address, port, established_cb, error_cb):
@@ -27,11 +27,11 @@ actor session(conn, error_cb):
     
     def get(path, reply_cb):
         conn.deliver(print_rpc(message_id, 'get', print_path(path, '')))
-        responder = lambda text: reply_cb(xml.parse(strip_path(path, strip_reply(message_id, 'data', text))))
+        responder = lambda text: reply_cb(std.xml.parse(strip_path(path, strip_reply(message_id, 'data', text))))
     
     def edit_config(path, value):
-        conn.deliver(print_rpc(message_id, 'edit-config', print_path(path, xml.print(value))))
-        responder = lambda text: xml.parse_empty(strip_reply(message_id, 'ok', text))
+        conn.deliver(print_rpc(message_id, 'edit-config', print_path(path, std.xml.print(value))))
+        responder = lambda text: std.xml.parse_empty(strip_reply(message_id, 'ok', text))
 
     def abort():
         conn.close()
@@ -40,7 +40,7 @@ actor session(conn, error_cb):
         try:
             if responder:
                 responder(text)
-        except xml.ParseError as ex:
+        except std.xml.ParseError as ex:
             error_cb(str(ex))
         except ValueError as ex:
             error_cb(str(ex))
@@ -76,7 +76,7 @@ def strip_reply(message_id, second_tag, text):
             return text[len(prefix):-len(suffix)]
         elif text == '<' + second_tag + '/>':
             return ''
-    raise xml.ParseError
+    raise std.xml.ParseError
 
 def print_path(path, inner):
     elems = path.split('/')
@@ -105,5 +105,5 @@ def strip_path(path, text):
         if text.startswith(prefix) and text.endswith(suffix):
             text = text[len(prefix):-len(suffix)]
         else:
-            raise xml.ParseError
+            raise std.xml.ParseError
     return text

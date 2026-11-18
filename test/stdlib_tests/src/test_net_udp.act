@@ -1,6 +1,6 @@
 import logging
 import net
-import random
+import std.random
 import testing
 
 
@@ -9,7 +9,7 @@ actor udp_roundtrip(t: testing.EnvT, address: str, optional: bool=False):
     request_payload = b"PING"
     response_payload = b"PONG"
     var retries = 10
-    var port = random.randint(10000, 40000)
+    var port = std.random.randint(10000, 40000)
     udp_cap = net.UDPCap(net.NetCap(t.env.cap))
 
     var done = False
@@ -128,7 +128,7 @@ actor udp_roundtrip(t: testing.EnvT, address: str, optional: bool=False):
 
     def _start():
         retries -= 1
-        port = random.randint(10000, 40000)
+        port = std.random.randint(10000, 40000)
         listener = net.UDPListener(net.UDPListenCap(udp_cap), address, port, on_listen, on_server_receive, on_server_error)
 
     after 5: _timeout()

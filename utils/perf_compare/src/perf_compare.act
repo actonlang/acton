@@ -1,12 +1,12 @@
 """Compare two Acton builds using the same benchmark project sources."""
 
-import argparse
-import crypto.hash.md5
+import std.argparse
+import std.crypto.hash.md5
 import file
-import json
-import math
-import random
-import re
+import std.json
+import std.math
+import std.random
+import std.re
 import time
 
 
@@ -42,13 +42,13 @@ def canonical(v: ?value) -> str:
     # Object order is irrelevant when comparing measurement metadata.
     if isinstance(v, dict):
         fields = obj(v)
-        return "{{" + ",".join([json.encode({"key": k}) + ":" + canonical(fields[k]) for k in sorted(fields.keys())]) + "}}"
+        return "{{" + ",".join([std.json.encode({"key": k}) + ":" + canonical(fields[k]) for k in sorted(fields.keys())]) + "}}"
     if isinstance(v, list):
         return "[" + ",".join([canonical(item) for item in v]) + "]"
-    return json.encode({"value": v})
+    return std.json.encode({"value": v})
 
-def parse_args(argv: list[str]) -> argparse.Args:
-    p = argparse.Parser()
+def parse_args(argv: list[str]) -> std.argparse.Args:
+    p = std.argparse.Parser()
     p.add_arg("ref", "baseline Git revision (default: main)", required=False)
     p.add_option("project", "str", help="benchmark project directory, relative to the current directory (default: Acton's test/perf)")
     p.add_option("module", "strlist", default=[], help="benchmark module; repeat to select several")
@@ -57,23 +57,23 @@ def parse_args(argv: list[str]) -> argparse.Args:
     p.add_option("time", "str", default="5s", help="budget per process; eight processes per benchmark")
     args = p.parse(argv)
     if "scale" in args.options and args.get_int("scale") < 1:
-        raise argparse.ArgumentError("--scale must be a positive integer")
+        raise std.argparse.ArgumentError("--scale must be a positive integer")
     duration = args.get_str("time")
-    if re.match(r"^([0-9]+(\.[0-9]+)?|\.[0-9]+)(ms|s|m|h)$", duration) is None:
-        raise argparse.ArgumentError("--time requires a duration such as 1s or 500ms")
+    if std.re.match(r"^([0-9]+(\.[0-9]+)?|\.[0-9]+)(ms|s|m|h)$", duration) is None:
+        raise std.argparse.ArgumentError("--time requires a duration such as 1s or 500ms")
     unit = "ms" if duration.endswith("ms") else duration[-1:]
     ms = float(duration[: -len(unit)]) * {"ms": 1, "s": 1000, "m": 60000, "h": 3600000}[unit]
     if ms < 1 or ms >= 9223372036854775808.0:
-        raise argparse.ArgumentError("--time must be at least 1ms and fit in a machine integer")
+        raise std.argparse.ArgumentError("--time must be at least 1ms and fit in a machine integer")
     if "ref" in args.options and args.get_str("ref").startswith("-"):
-        raise argparse.ArgumentError("Invalid Git revision")
+        raise std.argparse.ArgumentError("Invalid Git revision")
     return args
 
 def parse_report(output: str) -> dict[str, ?value]:
     # Older compilers can print build progress before the final JSON report.
     for line in reversed(output.splitlines()):
         if line.startswith("{{"):
-            return json.decode(line)
+            return std.json.decode(line)
     raise ValueError("No JSON report in command output")
 
 def selected(data: dict[str, ?value]) -> list[(str, str)]:
@@ -113,7 +113,7 @@ def comparable(old: dict[str, ?value], new: dict[str, ?value]) -> None:
 
 def pair_order() -> list[bool]:
     # All six balanced schedules are equally likely.
-    return random.choice([[True, True, False, False], [True, False, True, False],
+    return std.random.choice([[True, True, False, False], [True, False, True, False],
                           [True, False, False, True], [False, True, True, False],
                           [False, True, False, True], [False, False, True, True]])
 
@@ -123,7 +123,7 @@ def summarize(pairs: list[dict[str, dict[str, ?value]]]) -> dict[str, ?value]:
     new = [number(pair["current"]["avg_wall_duration"]) for pair in pairs]
     differences = [b - a for a, b in zip(old, new)]
     mean = sum(differences) / 4
-    half = 3.183 * math.sqrt(sum([(d - mean) ** 2 for d in differences]) / 3) / 2
+    half = 3.183 * std.math.sqrt(sum([(d - mean) ** 2 for d in differences]) / 3) / 2
     return {"baseline_ms": sum(old) / 4, "current_ms": sum(new) / 4,
             "difference_ci95_ms": [mean - half, mean + half]}
 
@@ -182,7 +182,7 @@ actor main(env: Env):
     rcap = file.ReadFileCap(fcap)
     wcap = file.WriteFileCap(fcap)
     fs = file.FS(fcap)
-    var args = argparse.Args()
+    var args = std.argparse.Args()
     var root = ""
     var benchmark = ""
     var cache = ""
@@ -244,7 +244,7 @@ actor main(env: Env):
             await async fs.mkdir(path)
 
     proc def save() -> None:
-        write(output + "/comparison.json", (json.encode(manifest, pretty=True) + "\n").encode())
+        write(output + "/comparison.json", (std.json.encode(manifest, pretty=True) + "\n").encode())
 
     proc def finish(code: int) -> None:
         if finished:
@@ -309,7 +309,7 @@ actor main(env: Env):
         run(["git", "-C", checkout] + command, checkout, output + "/git.log", done)
 
     proc def source_hash(path: str) -> str:
-        digest = crypto.hash.md5.Hasher()
+        digest = std.crypto.hash.md5.Hasher()
         proc def visit(relative: str) -> None:
             entry = path + "/" + relative
             if fs.stat(entry).is_dir():
@@ -336,7 +336,7 @@ actor main(env: Env):
         git(root, ["rev-parse", "--path-format=absolute", "--git-common-dir"], repository_resolved)
 
     proc def repository_resolved(data: bytes) -> None:
-        repository = digest_text(crypto.hash.md5.hash(data.strip()))
+        repository = digest_text(std.crypto.hash.md5.hash(data.strip()))
         baseline = cache + "/worktrees/" + repository + "/compiler-" + text(manifest["baseline"])
         mkdirs(cache + "/worktrees/" + repository)
         manifest["worktree"] = baseline
@@ -529,7 +529,7 @@ actor main(env: Env):
         print("Project: " + benchmark)
         print("Results: " + output)
         git(root, ["rev-parse", "--verify", ref + "^{{commit}}"], baseline_resolved)
-    except argparse.PrintUsage as error:
+    except std.argparse.PrintUsage as error:
         print(error.error_message)
         finish(0)
     except Exception as error:

@@ -14,27 +14,27 @@ The examples use loopback port 5514.
 
 ```python
 import net
-import std.syslog as syslog
+import std.syslog
 
 actor main(env):
-    def finish(client: syslog.Client):
+    def finish(client: std.syslog.Client):
         client.close()
         env.exit(0)
 
-    def connected(client: syslog.Client):
-        client.log("Hello from Acton", severity=syslog.INFO,
-                   facility=syslog.LOCAL0, hostname="localhost",
+    def connected(client: std.syslog.Client):
+        client.log("Hello from Acton", severity=std.syslog.INFO,
+                   facility=std.syslog.LOCAL0, hostname="localhost",
                    app_name="syslog-client",
                    structured_data={"event@32473": [("instance", "one")]})
         after 0.2: finish(client)
 
-    def failed(client: syslog.Client, error: str):
+    def failed(client: std.syslog.Client, error: str):
         print("Syslog client error:", error)
         client.close()
         env.exit(1)
 
     cap = net.UDPConnectCap(net.UDPCap(net.NetCap(env.cap)))
-    syslog.Client(cap, "127.0.0.1", 5514, connected, failed)
+    std.syslog.Client(cap, "127.0.0.1", 5514, connected, failed)
 ```
 
 `Client(cap, address, port, on_connect, on_error, max_size=2048,
@@ -66,19 +66,19 @@ TCP, and TLS. Add the sink to a `logging.Handler` as usual:
 ```python
 import logging
 import net
-import std.syslog as syslog
+import std.syslog
 
 actor main(env):
-    def connected(client: syslog.Client):
+    def connected(client: std.syslog.Client):
         pass
 
-    def failed(client: syslog.Client, error: str):
+    def failed(client: std.syslog.Client, error: str):
         print("Syslog client error:", error, err=True)
 
     cap = net.UDPConnectCap(net.UDPCap(net.NetCap(env.cap)))
-    client = syslog.Client(cap, "127.0.0.1", 5514, connected, failed)
+    client = std.syslog.Client(cap, "127.0.0.1", 5514, connected, failed)
     handler = logging.Handler("service")
-    handler.add_sink(syslog.Sink(client.send, facility=syslog.LOCAL0,
+    handler.add_sink(std.syslog.Sink(client.send, facility=std.syslog.LOCAL0,
                                  hostname="host.example.com"))
     log = logging.Logger(handler)
     log.info("Service started", {"version": "1.0"})
@@ -111,27 +111,27 @@ behavior and `on_error` callback. The sink adds no retries or delivery guarantee
 
 ```python
 import net
-import std.syslog as syslog
+import std.syslog
 
 actor main(env):
-    def bound(server: syslog.Server, error: ?str):
+    def bound(server: std.syslog.Server, error: ?str):
         if error is not None:
             print("Syslog server could not listen:", error)
             env.exit(1)
         else:
             print("Listening on", server.local_address(), server.local_port())
 
-    def received(server: syslog.Server, message: syslog.Message,
+    def received(server: std.syslog.Server, message: std.syslog.Message,
                  peer: str, port: int):
         print("{peer}:{port} facility={message.facility} severity={message.severity}")
         print("timestamp:", message.timestamp, "hostname:", message.hostname,
               "app:", message.app_name, "message:", repr(message.message))
 
-    def failed(server: syslog.Server, error: str):
+    def failed(server: std.syslog.Server, error: str):
         print("Syslog server error:", error)
 
     cap = net.UDPListenCap(net.UDPCap(net.NetCap(env.cap)))
-    syslog.Server(cap, "127.0.0.1", 5514, bound, received, failed)
+    std.syslog.Server(cap, "127.0.0.1", 5514, bound, received, failed)
 ```
 
 `Server(cap, address, port, on_listen, on_message, on_error,
@@ -195,7 +195,7 @@ otherwise the system CA bundle is used. `server_name` selects the expected
 hostname and SNI name, defaulting to `address`.
 
 ```python
-syslog.StreamClient(cap, "192.0.2.10", 6514, connected, failed,
+std.syslog.StreamClient(cap, "192.0.2.10", 6514, connected, failed,
                     tls=True, ca_pem=ca_pem, server_name="logs.example.com")
 ```
 
@@ -218,7 +218,7 @@ that any syslog message was accepted.
 Supply PEM bytes in both `cert_pem` and `key_pem` to enable TLS on `StreamServer`:
 
 ```python
-syslog.StreamServer(cap, "0.0.0.0", 6514, bound, received, failed,
+std.syslog.StreamServer(cap, "0.0.0.0", 6514, bound, received, failed,
                     cert_pem=cert_pem, key_pem=key_pem,
                     client_auth=True, ca_pem=ca_pem)
 ```
@@ -289,17 +289,17 @@ SD-IDs in wire data. Use an enterprise-qualified ID for private structured data,
 for example:
 
 ```python
-event = syslog.Message(
+event = std.syslog.Message(
     b"service started",
-    facility=syslog.LOCAL0,
-    severity=syslog.NOTICE,
-    timestamp=syslog.timestamp(),
+    facility=std.syslog.LOCAL0,
+    severity=std.syslog.NOTICE,
+    timestamp=std.syslog.timestamp(),
     hostname="host.example.com",
     app_name="service",
     structured_data={"event@32473": [("instance", "one")]}
 )
-wire = syslog.encode(event)
-parsed = syslog.decode(wire)
+wire = std.syslog.encode(event)
+parsed = std.syslog.decode(wire)
 param = parsed.structured_data["event@32473"][0]
 print("{param.name}={param.value}")
 ```

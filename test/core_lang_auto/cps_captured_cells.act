@@ -1,4 +1,4 @@
-import json
+import std.json
 
 # A nested procedure must read the payload of a captured CPS cell, including
 # when the payload stays None or is reset to None (issue #2494).
@@ -13,7 +13,7 @@ proc def check_optional(mode: int, expected: ?str) -> None:
             assert value + "!" == "world!"
         else:
             assert expected is None
-        assert json.encode({"value": value}) == json.encode({"value": expected})
+        assert std.json.encode({"value": value}) == std.json.encode({"value": expected})
 
     try:
         if mode == 3:
@@ -48,7 +48,7 @@ actor main(env):
                 assert type(var2) == "str"
                 assert var1 == "hello"
                 assert var2 == "world"
-                assert json.encode({"var1": var1, "var2": var2}) == json.encode({"var1": "hello", "var2": "world"})
+                assert std.json.encode({"var1": var1, "var2": var2}) == std.json.encode({"var1": "hello", "var2": "world"})
                 check_optional(0, None)
                 check_optional(1, "world")
                 check_optional(2, None)

@@ -1,5 +1,5 @@
 import net
-import std.syslog as syslog
+import std.syslog
 import test_net_tls_auth as certs
 import testing
 
@@ -13,7 +13,7 @@ actor _test_SyslogTLSServerWire(t: testing.EnvT):
     cap = net.TCPCap(net.NetCap(t.env.cap))
     first = frame(b'<14>1 - host app - - [meta@32473 n="one"] first\n\x00\xff')
     second = frame(b"<14>1 - host app - - - \xef\xbb\xbf" + "räksmörgås 🫡".encode())
-    var server: ?syslog.StreamServer = None
+    var server: ?std.syslog.StreamServer = None
     var sender: ?net.TLSConnection = None
     var source_port = 0
     var messages = 0
@@ -41,7 +41,7 @@ actor _test_SyslogTLSServerWire(t: testing.EnvT):
                 server.close()
                 server.close()
 
-    def received(s: syslog.StreamServer, message: syslog.Message, peer: str, port: int):
+    def received(s: std.syslog.StreamServer, message: std.syslog.Message, peer: str, port: int):
         if done:
             return
         try:
@@ -62,7 +62,7 @@ actor _test_SyslogTLSServerWire(t: testing.EnvT):
         messages += 1
         progress()
 
-    def server_failed(s: syslog.StreamServer, error: str):
+    def server_failed(s: std.syslog.StreamServer, error: str):
         if done:
             return
         if malformed != 0 or "Invalid syslog message" not in error:
@@ -98,7 +98,7 @@ actor _test_SyslogTLSServerWire(t: testing.EnvT):
         else:
             finish(None)
 
-    def bound(s: syslog.StreamServer, error: ?str):
+    def bound(s: std.syslog.StreamServer, error: ?str):
         if done:
             s.close()
             return
@@ -112,7 +112,7 @@ actor _test_SyslogTLSServerWire(t: testing.EnvT):
                                    sender_received, sender_failed, sender_closed,
                                    ca_pem=certs.CA_PEM, server_name="localhost")
 
-    server = syslog.StreamServer(net.TCPListenCap(cap), "127.0.0.1", 0, bound, received, server_failed,
+    server = std.syslog.StreamServer(net.TCPListenCap(cap), "127.0.0.1", 0, bound, received, server_failed,
                                  cert_pem=certs.SERVER_CERT_PEM, key_pem=certs.SERVER_KEY_PEM)
     after 10: finish("TLS server wire test timed out")
 
@@ -120,8 +120,8 @@ actor _test_SyslogTLSServerWire(t: testing.EnvT):
 actor mutual_auth_recovery(t: testing.EnvT, reject_callback: bool):
     """An authentication failure reaches on_error; the listener accepts a trusted replacement."""
     cap = net.TCPCap(net.NetCap(t.env.cap))
-    var server: ?syslog.StreamServer = None
-    var rejected_client: ?syslog.StreamClient = None
+    var server: ?std.syslog.StreamServer = None
+    var rejected_client: ?std.syslog.StreamClient = None
     var sender: ?net.TLSConnection = None
     var port = 0
     var source_port = 0
@@ -164,12 +164,12 @@ actor mutual_auth_recovery(t: testing.EnvT, reject_callback: bool):
                                    sender_received, sender_failed, sender_closed, ca_pem=certs.CA_PEM,
                                    cert_pem=certs.CLIENT_CERT_PEM, key_pem=certs.CLIENT_KEY_PEM)
 
-    def rejected_connected(c: syslog.StreamClient):
+    def rejected_connected(c: std.syslog.StreamClient):
         # TLS 1.3 can report connection on the client before the server checks
         # its certificate. Only the server may deliver authenticated messages.
         pass
 
-    def rejected_failed(c: syslog.StreamClient, error: str):
+    def rejected_failed(c: std.syslog.StreamClient, error: str):
         if done:
             return
         if client_failed_once or error == "":
@@ -178,7 +178,7 @@ actor mutual_auth_recovery(t: testing.EnvT, reject_callback: bool):
         client_failed_once = True
         start_replacement()
 
-    def server_failed(s: syslog.StreamServer, error: str):
+    def server_failed(s: std.syslog.StreamServer, error: str):
         if done:
             return
         expected = "rejected by verify_peer" if reject_callback else "client did not present a certificate"
@@ -207,7 +207,7 @@ actor mutual_auth_recovery(t: testing.EnvT, reject_callback: bool):
         else:
             finish(None)
 
-    def received(s: syslog.StreamServer, message: syslog.Message, peer: str, peer_port: int):
+    def received(s: std.syslog.StreamServer, message: std.syslog.Message, peer: str, peer_port: int):
         if done:
             return
         if not recovering or not authenticated or closing or message.message != b"authenticated" or peer != "127.0.0.1" or peer_port != source_port:
@@ -216,7 +216,7 @@ actor mutual_auth_recovery(t: testing.EnvT, reject_callback: bool):
         closing = True
         s.close()
 
-    def bound(s: syslog.StreamServer, error: ?str):
+    def bound(s: std.syslog.StreamServer, error: ?str):
         if done:
             s.close()
             return
@@ -226,12 +226,12 @@ actor mutual_auth_recovery(t: testing.EnvT, reject_callback: bool):
         port = s.local_port()
         client_cert = certs.CLIENT_CERT_PEM if reject_callback else None
         client_key = certs.CLIENT_KEY_PEM if reject_callback else None
-        c = syslog.StreamClient(net.TCPConnectCap(cap), "127.0.0.1", port, rejected_connected, rejected_failed,
+        c = std.syslog.StreamClient(net.TCPConnectCap(cap), "127.0.0.1", port, rejected_connected, rejected_failed,
                                  tls=True, ca_pem=certs.CA_PEM, cert_pem=client_cert, key_pem=client_key)
         rejected_client = c
-        c.send(syslog.Message(b"must not be delivered"))
+        c.send(std.syslog.Message(b"must not be delivered"))
 
-    server = syslog.StreamServer(net.TCPListenCap(cap), "127.0.0.1", 0, bound, received, server_failed,
+    server = std.syslog.StreamServer(net.TCPListenCap(cap), "127.0.0.1", 0, bound, received, server_failed,
                                  cert_pem=certs.SERVER_CERT_PEM, key_pem=certs.SERVER_KEY_PEM,
                                  client_auth=True, ca_pem=certs.CA_PEM, verify_peer=verified)
     after 10: finish("Mutual TLS syslog recovery timed out")
@@ -248,7 +248,7 @@ actor _test_SyslogTLSClientVerifierRecovery(t: testing.EnvT):
 actor _test_SyslogTLSHandshakeTimeoutRecovery(t: testing.EnvT):
     """A peer that never starts TLS times out, then a verified client succeeds."""
     cap = net.TCPCap(net.NetCap(t.env.cap))
-    var server: ?syslog.StreamServer = None
+    var server: ?std.syslog.StreamServer = None
     var stalled: ?net.TCPConnection = None
     var sender: ?net.TLSConnection = None
     var port = 0
@@ -299,7 +299,7 @@ actor _test_SyslogTLSHandshakeTimeoutRecovery(t: testing.EnvT):
         stalled_closed = True
         start_replacement()
 
-    def server_failed(s: syslog.StreamServer, error: str):
+    def server_failed(s: std.syslog.StreamServer, error: str):
         if done:
             return
         expected = "TLS handshake with client 127.0.0.1:{stalled_port} timed out"
@@ -321,13 +321,13 @@ actor _test_SyslogTLSHandshakeTimeoutRecovery(t: testing.EnvT):
     def sender_failed(c: net.TLSConnection, error: str):
         finish("TLS replacement after timeout failed: {error}")
 
-    def received(s: syslog.StreamServer, message: syslog.Message, peer: str, peer_port: int):
+    def received(s: std.syslog.StreamServer, message: std.syslog.Message, peer: str, peer_port: int):
         if not recovering or message.message != b"after timeout" or peer != "127.0.0.1" or peer_port <= 0:
             finish("TLS server delivered unexpected data after timeout")
         else:
             finish(None)
 
-    def bound(s: syslog.StreamServer, error: ?str):
+    def bound(s: std.syslog.StreamServer, error: ?str):
         if done:
             s.close()
             return
@@ -338,7 +338,7 @@ actor _test_SyslogTLSHandshakeTimeoutRecovery(t: testing.EnvT):
         stalled = net.TCPConnection(net.TCPConnectCap(cap), "127.0.0.1", port,
                                     stalled_connected, stalled_received, stalled_failed, stalled_ended)
 
-    server = syslog.StreamServer(net.TCPListenCap(cap), "127.0.0.1", 0, bound, received, server_failed,
+    server = std.syslog.StreamServer(net.TCPListenCap(cap), "127.0.0.1", 0, bound, received, server_failed,
                                  cert_pem=certs.SERVER_CERT_PEM, key_pem=certs.SERVER_KEY_PEM,
                                  handshake_timeout=1.0)
     after 10: finish("TLS server handshake deadline recovery timed out")
@@ -347,16 +347,16 @@ actor _test_SyslogTLSHandshakeTimeoutRecovery(t: testing.EnvT):
 actor _test_SyslogTLSServerConfiguration(t: testing.EnvT):
     cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
 
-    def bound(s: syslog.StreamServer, error: ?str):
+    def bound(s: std.syslog.StreamServer, error: ?str):
         s.close()
 
-    def received(s: syslog.StreamServer, message: syslog.Message, peer: str, port: int):
+    def received(s: std.syslog.StreamServer, message: std.syslog.Message, peer: str, port: int):
         s.close()
 
-    def failed(s: syslog.StreamServer, error: str):
+    def failed(s: std.syslog.StreamServer, error: str):
         s.close()
 
-    var server: ?syslog.StreamServer = None
+    var server: ?std.syslog.StreamServer = None
 
     def run():
         for kind in ["cert", "key", "ca", "auth", "verify"]:
@@ -366,7 +366,7 @@ actor _test_SyslogTLSServerConfiguration(t: testing.EnvT):
             expected = "Syslog TLS requires both cert_pem and key_pem" if kind in ["cert", "key"] else "Syslog TLS options require TLS"
             server = None
             try:
-                server = syslog.StreamServer(cap, "127.0.0.1", 0, bound, received, failed,
+                server = std.syslog.StreamServer(cap, "127.0.0.1", 0, bound, received, failed,
                                              cert_pem=certificate, key_pem=key, ca_pem=ca,
                                              client_auth=kind == "auth", verify_tls=kind != "verify")
             except ValueError as error:
@@ -382,7 +382,7 @@ actor _test_SyslogTLSServerConfiguration(t: testing.EnvT):
         for timeout in [-1.0, float("nan"), float("inf"), float("-inf")]:
             server = None
             try:
-                server = syslog.StreamServer(cap, "127.0.0.1", 0, bound, received, failed,
+                server = std.syslog.StreamServer(cap, "127.0.0.1", 0, bound, received, failed,
                                              cert_pem=certs.SERVER_CERT_PEM, key_pem=certs.SERVER_KEY_PEM,
                                              handshake_timeout=timeout)
             except ValueError as error:

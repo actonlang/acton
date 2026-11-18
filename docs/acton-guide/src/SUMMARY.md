@@ -78,8 +78,8 @@
     - [Numeric protocols](stdlib/builtin_protocols/numeric.md)
     - [Collection protocols](stdlib/builtin_protocols/collection.md)
   - [Standard Library](stdlib/standard_library.md)
-    - [math](stdlib/math.md)
-    - [re](stdlib/re.md)
+    - [std.math](stdlib/math.md)
+    - [std.re](stdlib/re.md)
     - [std.syslog](stdlib/syslog.md)
 
 - [Testing](testing.md)

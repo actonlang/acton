@@ -1,5 +1,5 @@
 import numpy
-import math
+import std.math
 
 # run as follows:
 
@@ -27,7 +27,7 @@ def sample(t0, n, n0, w):
     t1 = t0+float(n)/52.0
     time         = numpy.linspace(t0,t1,n)
     trend        = 2.0 + 0.1 * time
-    periodic     = 0.5 * math.sin (6.2832 * time)
+    periodic     = 0.5 * std.math.sin (6.2832 * time)
     noise        = globalnoise[n0:n0+n:1]
     observation  = trend + periodic + noise
 

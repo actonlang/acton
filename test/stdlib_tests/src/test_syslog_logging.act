@@ -1,6 +1,6 @@
 import logging
 import net
-import std.syslog as syslog
+import std.syslog
 import testing
 import time
 
@@ -29,19 +29,19 @@ actor _test_SyslogLoggingSinkLevels(t: testing.AsyncT):
     levels = [logging.EMERGENCY, logging.ALERT, logging.CRITICAL, logging.ERR,
               logging.WARNING, logging.INFO, logging.NOTICE, logging.DEBUG,
               logging.VERBOSE, logging.TRACE]
-    severities = [syslog.EMERGENCY, syslog.ALERT, syslog.CRITICAL, syslog.ERROR,
-                  syslog.WARNING, syslog.INFO, syslog.NOTICE, syslog.DEBUG,
-                  syslog.DEBUG, syslog.DEBUG]
+    severities = [std.syslog.EMERGENCY, std.syslog.ALERT, std.syslog.CRITICAL, std.syslog.ERROR,
+                  std.syslog.WARNING, std.syslog.INFO, std.syslog.NOTICE, std.syslog.DEBUG,
+                  std.syslog.DEBUG, std.syslog.DEBUG]
     var count = 0
     var done = False
 
-    def received(m: syslog.Message):
+    def received(m: std.syslog.Message):
         if done:
             return
         try:
             testing.assertTrue(count < len(severities))
             testing.assertEqual(m.severity, severities[count])
-            testing.assertEqual(m.facility, syslog.LOCAL3)
+            testing.assertEqual(m.facility, std.syslog.LOCAL3)
             testing.assertEqual(m.timestamp, "2003-10-11T22:14:15.123456Z")
             testing.assertEqual(m.hostname, "host.example.com")
             testing.assertEqual(m.app_name, "application")
@@ -49,7 +49,7 @@ actor _test_SyslogLoggingSinkLevels(t: testing.AsyncT):
             testing.assertEqual(m.msgid, "event")
             testing.assertEqual(m.message, b"\xef\xbb\xbfhello")
             testing.assertEqual(len(m.structured_data), 0)
-            testing.assertEqual(syslog.decode(syslog.encode(m)).severity, severities[count])
+            testing.assertEqual(std.syslog.decode(std.syslog.encode(m)).severity, severities[count])
             count += 1
             if count == len(severities):
                 done = True
@@ -61,7 +61,7 @@ actor _test_SyslogLoggingSinkLevels(t: testing.AsyncT):
             done = True
             t.error(error)
 
-    sink = syslog.Sink(received, facility=syslog.LOCAL3, hostname="host.example.com",
+    sink = std.syslog.Sink(received, facility=std.syslog.LOCAL3, hostname="host.example.com",
                        app_name="application", procid="42", msgid="event")
     sink.set_formatter(TextFormatter())
     for level in levels:
@@ -79,18 +79,18 @@ actor _test_SyslogLoggingSinkFormatting(t: testing.AsyncT):
     var count = 0
     var done = False
 
-    def received(m: syslog.Message):
+    def received(m: std.syslog.Message):
         if done:
             return
         try:
             testing.assertTrue(count < len(expected))
             testing.assertEqual(m.message, expected[count])
-            testing.assertEqual(m.facility, syslog.USER)
+            testing.assertEqual(m.facility, std.syslog.USER)
             testing.assertEqual(m.hostname, None)
             testing.assertEqual(m.app_name, "app")
             testing.assertEqual(m.procid, None)
             testing.assertEqual(m.msgid, None)
-            testing.assertEqual(syslog.decode(syslog.encode(m)).message, expected[count])
+            testing.assertEqual(std.syslog.decode(std.syslog.encode(m)).message, expected[count])
             count += 1
             if count == len(expected):
                 done = True
@@ -102,7 +102,7 @@ actor _test_SyslogLoggingSinkFormatting(t: testing.AsyncT):
             done = True
             t.error(error)
 
-    sink = syslog.Sink(received)
+    sink = std.syslog.Sink(received)
     sink.handle(LogMessage("café 🫡", {"answer": 42, "missing": None}))
     sink.handle(LogMessage(None, {"answer": 42}))
     sink.handle(LogMessage(""))
@@ -136,14 +136,14 @@ actor _test_SyslogLoggingSinkAppNames(t: testing.AsyncT):
     var count = 0
     var done = False
 
-    def received(m: syslog.Message):
+    def received(m: std.syslog.Message):
         if done:
             return
         try:
             testing.assertTrue(count < len(cases))
             expected = cases[count].expected
             testing.assertEqual(m.app_name, expected)
-            testing.assertEqual(syslog.decode(syslog.encode(m)).app_name, expected)
+            testing.assertEqual(std.syslog.decode(std.syslog.encode(m)).app_name, expected)
             count += 1
             if count == len(cases):
                 done = True
@@ -156,7 +156,7 @@ actor _test_SyslogLoggingSinkAppNames(t: testing.AsyncT):
             t.error(error)
 
     for case in cases:
-        sink = syslog.Sink(received, app_name=case.app_name)
+        sink = std.syslog.Sink(received, app_name=case.app_name)
         sink.set_formatter(TextFormatter())
         sink.handle(LogMessage(path=case.path, name=case.name))
 
@@ -174,13 +174,13 @@ actor _test_SyslogLoggingSinkTimestamps(t: testing.AsyncT):
     var count = 0
     var done = False
 
-    def received(m: syslog.Message):
+    def received(m: std.syslog.Message):
         if done:
             return
         try:
             testing.assertTrue(count < len(expected))
             testing.assertEqual(m.timestamp, expected[count])
-            testing.assertEqual(syslog.decode(syslog.encode(m)).timestamp, expected[count])
+            testing.assertEqual(std.syslog.decode(std.syslog.encode(m)).timestamp, expected[count])
             count += 1
             if count == len(expected):
                 done = True
@@ -192,7 +192,7 @@ actor _test_SyslogLoggingSinkTimestamps(t: testing.AsyncT):
             done = True
             t.error(error)
 
-    sink = syslog.Sink(received)
+    sink = std.syslog.Sink(received)
     sink.set_formatter(TextFormatter())
     for offset in offsets:
         tz: ?time.Timezone = None
@@ -219,9 +219,9 @@ actor logging_sink_network(t: testing.EnvT, stream: bool):
             close()
             t.failure(AssertionError(error))
 
-    def log(send: action(syslog.Message) -> None):
+    def log(send: action(std.syslog.Message) -> None):
         root = logging.Handler("service")
-        root.add_sink(syslog.Sink(send, facility=syslog.LOCAL0,
+        root.add_sink(std.syslog.Sink(send, facility=std.syslog.LOCAL0,
                                  hostname="localhost"))
         child = logging.Handler("worker")
         child.set_handler(root)
@@ -230,12 +230,12 @@ actor logging_sink_network(t: testing.EnvT, stream: bool):
         # Exercise the client's startup queue through Logger and Handler.
         logger.info("Application started", {"answer": 42})
 
-    def received(m: syslog.Message):
+    def received(m: std.syslog.Message):
         if done:
             return
         try:
-            testing.assertEqual(m.facility, syslog.LOCAL0)
-            testing.assertEqual(m.severity, syslog.INFO)
+            testing.assertEqual(m.facility, std.syslog.LOCAL0)
+            testing.assertEqual(m.severity, std.syslog.INFO)
             testing.assertEqual(m.hostname, "localhost")
             testing.assertEqual(m.app_name, "service")
             testing.assertTrue(m.timestamp is not None)
@@ -251,62 +251,62 @@ actor logging_sink_network(t: testing.EnvT, stream: bool):
         except AssertionError as error:
             fail(error.error_message)
 
-    def udp_connected(c: syslog.Client):
+    def udp_connected(c: std.syslog.Client):
         if done:
             c.close()
 
-    def udp_failed(c: syslog.Client, error: str):
+    def udp_failed(c: std.syslog.Client, error: str):
         fail("Syslog UDP client failed: " + error)
 
-    def udp_received(s: syslog.Server, m: syslog.Message, peer: str, port: int):
+    def udp_received(s: std.syslog.Server, m: std.syslog.Message, peer: str, port: int):
         received(m)
 
-    def udp_server_failed(s: syslog.Server, error: str):
+    def udp_server_failed(s: std.syslog.Server, error: str):
         fail("Syslog UDP server failed: " + error)
 
-    def udp_bound(s: syslog.Server, error: ?str):
+    def udp_bound(s: std.syslog.Server, error: ?str):
         if done:
             s.close()
             return
         if error is not None:
             fail("Syslog UDP listen failed: " + error)
             return
-        c = syslog.Client(net.UDPConnectCap(net.UDPCap(cap)), "127.0.0.1",
+        c = std.syslog.Client(net.UDPConnectCap(net.UDPCap(cap)), "127.0.0.1",
                           s.local_port(), udp_connected, udp_failed)
         close_client = c.close
         log(c.send)
 
-    def tcp_connected(c: syslog.StreamClient):
+    def tcp_connected(c: std.syslog.StreamClient):
         if done:
             c.close()
 
-    def tcp_failed(c: syslog.StreamClient, error: str):
+    def tcp_failed(c: std.syslog.StreamClient, error: str):
         fail("Syslog TCP client failed: " + error)
 
-    def tcp_received(s: syslog.StreamServer, m: syslog.Message, peer: str, port: int):
+    def tcp_received(s: std.syslog.StreamServer, m: std.syslog.Message, peer: str, port: int):
         received(m)
 
-    def tcp_server_failed(s: syslog.StreamServer, error: str):
+    def tcp_server_failed(s: std.syslog.StreamServer, error: str):
         fail("Syslog TCP server failed: " + error)
 
-    def tcp_bound(s: syslog.StreamServer, error: ?str):
+    def tcp_bound(s: std.syslog.StreamServer, error: ?str):
         if done:
             s.close()
             return
         if error is not None:
             fail("Syslog TCP listen failed: " + error)
             return
-        c = syslog.StreamClient(net.TCPConnectCap(net.TCPCap(cap)), "127.0.0.1",
+        c = std.syslog.StreamClient(net.TCPConnectCap(net.TCPCap(cap)), "127.0.0.1",
                                 s.local_port(), tcp_connected, tcp_failed)
         close_client = c.close
         log(c.send)
 
     if stream:
-        tcp_server = syslog.StreamServer(net.TCPListenCap(net.TCPCap(cap)), "127.0.0.1",
+        tcp_server = std.syslog.StreamServer(net.TCPListenCap(net.TCPCap(cap)), "127.0.0.1",
                                          0, tcp_bound, tcp_received, tcp_server_failed)
         close_server = tcp_server.close
     else:
-        udp_server = syslog.Server(net.UDPListenCap(net.UDPCap(cap)), "127.0.0.1",
+        udp_server = std.syslog.Server(net.UDPListenCap(net.UDPCap(cap)), "127.0.0.1",
                                    0, udp_bound, udp_received, udp_server_failed)
         close_server = udp_server.close
     after 5: fail("Logging sink network test timed out")
