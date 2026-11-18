@@ -1,3 +1,5 @@
+import compress.gzip as gzip
+import compress.zlib as zlib
 import json
 import logging
 import net
@@ -98,8 +100,6 @@ def build_request(host: str, method: bytes, path: bytes, version: bytes, headers
         headers["User-Agent"] = "Acton HTTP Client"
     if "accept" not in lheaders:
         headers["Accept"] = "*/*"
-#    if "accept-encoding" not in lheaders:
-#        headers["Accept-Encoding"] = "gzip, deflate"
     if "connection" not in lheaders:
         headers["Connection"] = "keep-alive"
     if "content-length" not in lheaders:
@@ -572,17 +572,156 @@ def response_from_message(msg: Message) -> Response:
     return Response(version, parse_status_code(msg.start_line), msg.headers, msg.body)
 
 
+def _token(s: str) -> str:
+    """The token in s, without the spaces and tabs around it, in lower case.
+    Tokens are ASCII, so only ASCII letters are folded."""
+    return s.strip(" \t").encode().lower().decode()
+
+
 def connection_options(headers: dict[str, str]) -> list[str]:
     """The options listed in the Connection header field, in lower case"""
     value = headers.get("connection")
     if value is not None:
-        # Options are tokens, so only ASCII letters are folded
-        return [o.strip(" \t").encode().lower().decode() for o in value.split(",", None)]
+        return [_token(o) for o in value.split(",", None)]
     return []
 
 
+# Answers smaller than this go out uncompressed
+COMPRESS_MIN_SIZE = 1024
 
-actor Server(conn: net.TCPListenConnection, on_accept: action(Server) -> None, log_handler: ?logging.Handler=None):
+
+def _encode_content(data: bytes, coding: str) -> bytes:
+    """data encoded with the content coding "gzip" or "deflate"
+
+    deflate is the zlib format, as RFC 9110 defines it. Raises ValueError for
+    another coding, or when the data cannot be compressed.
+    """
+    if coding == "gzip":
+        return gzip.compress(data)
+    if coding == "deflate":
+        return zlib.compress(data)
+    raise ValueError("Unsupported content coding: " + coding)
+
+
+def _response_coding(headers: dict[str, str]) -> ?str:
+    """The content coding for the answer to a request with these headers:
+    "gzip" or "deflate", whichever its Accept-Encoding gives the higher
+    weight, or None when it allows neither. gzip wins a tie. A coding that
+    Accept-Encoding does not name has the weight of "*", and a weight that is
+    not a number counts as 0."""
+    value = headers.get("accept-encoding")
+    if value is None:
+        return None
+    weights: dict[str, float] = {}
+    for item in value!.split(",", None):
+        parts = item.split(";", None)
+        coding = _token(parts[0])
+        weight = 1.0
+        for param in parts[1:]:
+            p = _token(param)
+            if p.startswith("q="):
+                try:
+                    weight = float(p[2:])
+                except ValueError:
+                    weight = 0.0
+        if coding != "":
+            weights[coding] = weight
+    best: ?str = None
+    best_weight = 0.0
+    for coding in ["gzip", "deflate"]:
+        weight = weights.get_def(coding, weights.get_def("*", 0.0))
+        if weight > best_weight:
+            best = coding
+            best_weight = weight
+    return best
+
+
+def _header(headers: dict[str, str], name: str) -> ?str:
+    """The value of a header, whatever the case of its key. name is in lower case."""
+    for k, v in headers.items():
+        if k.lower() == name:
+            return v
+    return None
+
+
+def _set_header(headers: dict[str, str], name: str, value: str) -> None:
+    """Set the header name to value, replacing it whatever the case of its key"""
+    for k in list(headers.keys()):
+        if k.lower() == name.lower():
+            del headers[k]
+    headers[name] = value
+
+
+def _compressible(content_type: str) -> bool:
+    """Whether an answer of this media type is text"""
+    t = _token(content_type.split(";", 1)[0])
+    return t.startswith("text/") or t.endswith("json") or t.endswith("xml") or t == "application/javascript"
+
+
+def _compress_response(status: int, headers: dict[str, str], body: bytes, coding: ?str) -> bytes:
+    """The body to send from a server that compresses its answers
+
+    A text answer of COMPRESS_MIN_SIZE bytes or more is compressed with
+    coding, when coding is not None and the result is smaller. headers gets
+    Vary: Accept-Encoding for such an answer, also when it is not compressed,
+    and Content-Encoding when it is. A strong ETag becomes weak, because the
+    compressed body is a different representation. An answer that has a
+    Content-Encoding, and a partial answer, whose Content-Range counts the
+    bytes of the body as it is, go out as they are.
+    """
+    if status == 206 or len(body) < COMPRESS_MIN_SIZE or _header(headers, "content-encoding") is not None:
+        return body
+    content_type = _header(headers, "content-type")
+    # build_response sends text/html when there is no Content-Type
+    if not _compressible(content_type if content_type is not None else "text/html"):
+        return body
+    vary = _header(headers, "vary")
+    if vary is not None:
+        if vary.strip(" \t") != "*" and "accept-encoding" not in [_token(v) for v in vary.split(",", None)]:
+            _set_header(headers, "Vary", vary + ", Accept-Encoding")
+    else:
+        headers["Vary"] = "Accept-Encoding"
+    if coding is not None:
+        try:
+            compressed = _encode_content(body, coding)
+            if len(compressed) < len(body):
+                headers["Content-Encoding"] = coding
+                etag = _header(headers, "etag")
+                if etag is not None and not etag.startswith("W/"):
+                    _set_header(headers, "ETag", "W/" + etag)
+                return compressed
+        except ValueError:
+            pass
+    return body
+
+
+
+def _decode_response(r: Response) -> Response:
+    """r with its body decoded from the content coding gzip or deflate, and
+    without Content-Encoding and Content-Length. A response with no body, or
+    in another coding or in more than one, is returned as it is. Raises
+    ValueError when the body does not decode."""
+    value = r.headers.get("content-encoding")
+    if value is None or len(r.body) == 0:
+        return r
+    coding = _token(value!)
+    # TODO: limit the decoded size, so that a small body from a hostile
+    # server cannot decode to gigabytes in memory
+    # RFC 9110 has recipients take x-gzip as gzip
+    if coding == "gzip" or coding == "x-gzip":
+        body = gzip.decompress(r.body)
+    elif coding == "deflate":
+        body = zlib.decompress(r.body)
+    else:
+        return r
+    headers: dict[str, str] = {}
+    for k, v in r.headers.items():
+        if k != "content-encoding" and k != "content-length":
+            headers[k] = v
+    return Response(r.version, r.status, headers, body)
+
+
+actor Server(conn: net.TCPListenConnection, on_accept: action(Server) -> None, log_handler: ?logging.Handler=None, compress: bool=False):
     """Server serves a single client connection
 
     User callbacks are invoked asynchronously and the server does not wait
@@ -590,6 +729,10 @@ actor Server(conn: net.TCPListenConnection, on_accept: action(Server) -> None, l
     are sent on the connection in request order. A response to a
     later request is held back until the responses to all earlier requests
     have been sent.
+
+    With compress, a text response of COMPRESS_MIN_SIZE bytes or more is
+    compressed with gzip or deflate when the request's Accept-Encoding allows
+    it. This actor compresses the body when respond is called.
     """
     _log = logging.Logger(log_handler)
     var on_request_cb: ?action(Server, Request, action(int, dict[str, str], bytes) -> None) -> None = None
@@ -655,13 +798,19 @@ actor Server(conn: net.TCPListenConnection, on_accept: action(Server) -> None, l
             _log.debug("Closing the connection after responding to this request", None)
             close_after = req_id
             _requests = []
+        coding = _response_coding(req.headers) if compress else None
 
         def respond(status_code: int, headers: dict[str, str], body: bytes):
             _log.trace("Going to respond to query", {"query_id": req_id})
+            out_headers = headers
+            out_body = body
+            if compress:
+                out_headers = dict(headers.items())
+                out_body = _compress_response(status_code, out_headers, body, coding)
             if req_id == response_count + 1:
                 # In order, send response immediately
                 _log.trace("Sending response immediately", None)
-                send_response(status_code, headers, body)
+                send_response(status_code, out_headers, out_body)
                 response_count += 1
                 # Send buffered responses that are next in line
                 while response_count + 1 in outstanding_responses:
@@ -675,7 +824,7 @@ actor Server(conn: net.TCPListenConnection, on_accept: action(Server) -> None, l
                 # Responses must go out in request order, so buffer this one
                 # until responses to all earlier requests have been sent
                 _log.trace("Buffering response", None)
-                outstanding_responses[req_id] = (status_code, headers, body)
+                outstanding_responses[req_id] = (status_code, out_headers, out_body)
             else:
                 _log.notice("Duplicate response to query, ignoring", None)
 
@@ -697,7 +846,7 @@ actor Server(conn: net.TCPListenConnection, on_accept: action(Server) -> None, l
             conn.write(res)
 
 
-actor TLSServer(conn: net.TLSListenConnection, on_accept: action(TLSServer) -> None, log_handler: ?logging.Handler=None):
+actor TLSServer(conn: net.TLSListenConnection, on_accept: action(TLSServer) -> None, log_handler: ?logging.Handler=None, compress: bool=False):
     """Server serves a single TLS client connection
 
     User callbacks are invoked asynchronously and the server does not wait
@@ -705,6 +854,10 @@ actor TLSServer(conn: net.TLSListenConnection, on_accept: action(TLSServer) -> N
     are sent on the connection in request order. A response to a
     later request is held back until the responses to all earlier requests
     have been sent.
+
+    With compress, a text response of COMPRESS_MIN_SIZE bytes or more is
+    compressed with gzip or deflate when the request's Accept-Encoding allows
+    it. This actor compresses the body when respond is called.
     """
     _log = logging.Logger(log_handler)
     var on_request_cb: ?action(TLSServer, Request, action(int, dict[str, str], bytes) -> None) -> None = None
@@ -770,13 +923,19 @@ actor TLSServer(conn: net.TLSListenConnection, on_accept: action(TLSServer) -> N
             _log.debug("Closing the connection after responding to this request", None)
             close_after = req_id
             _requests = []
+        coding = _response_coding(req.headers) if compress else None
 
         def respond(status_code: int, headers: dict[str, str], body: bytes):
             _log.trace("Going to respond to query", {"query_id": req_id})
+            out_headers = headers
+            out_body = body
+            if compress:
+                out_headers = dict(headers.items())
+                out_body = _compress_response(status_code, out_headers, body, coding)
             if req_id == response_count + 1:
                 # In order, send response immediately
                 _log.trace("Sending response immediately", None)
-                send_response(status_code, headers, body)
+                send_response(status_code, out_headers, out_body)
                 response_count += 1
                 # Send buffered responses that are next in line
                 while response_count + 1 in outstanding_responses:
@@ -790,7 +949,7 @@ actor TLSServer(conn: net.TLSListenConnection, on_accept: action(TLSServer) -> N
                 # Responses must go out in request order, so buffer this one
                 # until responses to all earlier requests have been sent
                 _log.trace("Buffering response", None)
-                outstanding_responses[req_id] = (status_code, headers, body)
+                outstanding_responses[req_id] = (status_code, out_headers, out_body)
             else:
                 _log.notice("Duplicate response to query, ignoring", None)
 
@@ -815,7 +974,7 @@ actor TLSServer(conn: net.TLSListenConnection, on_accept: action(TLSServer) -> N
 # TODO: change port to u16, when u16 has a sub-type relationship to int
 # TODO: the on_listen_error default should be some action that just automatically retries with a backoff
 # TODO: add restart method to restart the listener
-actor Listener(cap: net.TCPListenCap, address: str, port: int, on_accept: action(Server) -> None, on_listen_error: ?action(net.TCPListener, str) -> None = None, log_handler: ?logging.Handler = None):
+actor Listener(cap: net.TCPListenCap, address: str, port: int, on_accept: action(Server) -> None, on_listen_error: ?action(net.TCPListener, str) -> None = None, log_handler: ?logging.Handler = None, compress: bool = False):
     """HTTP Server Listener"""
     _log = logging.Logger(log_handler)
     var bufs = []
@@ -827,7 +986,7 @@ actor Listener(cap: net.TCPListenCap, address: str, port: int, on_accept: action
                 on_listen_error(listener, error)
 
     def on_listener_accept(conn):
-        s = Server(conn, on_accept, log_handler)
+        s = Server(conn, on_accept, log_handler, compress)
         on_accept(s)
         conn.cb_install(s.on_conn_receive, s.on_conn_error, None)
 
@@ -837,7 +996,7 @@ actor Listener(cap: net.TCPListenCap, address: str, port: int, on_accept: action
 # TODO: change port to u16, when u16 has a sub-type relationship to int
 # TODO: the on_listen_error default should be some action that just automatically retries with a backoff
 # TODO: add restart method to restart the listener
-actor TLSListener(cap: net.TCPListenCap, address: str, port: int, cert_pem: bytes, key_pem: bytes, on_accept: action(TLSServer) -> None, on_listen_error: ?action(net.TLSListener, str) -> None = None, log_handler: ?logging.Handler = None):
+actor TLSListener(cap: net.TCPListenCap, address: str, port: int, cert_pem: bytes, key_pem: bytes, on_accept: action(TLSServer) -> None, on_listen_error: ?action(net.TLSListener, str) -> None = None, log_handler: ?logging.Handler = None, compress: bool = False):
     """HTTPS Server Listener"""
     _log = logging.Logger(log_handler)
     var bufs = []
@@ -849,7 +1008,7 @@ actor TLSListener(cap: net.TCPListenCap, address: str, port: int, cert_pem: byte
                 on_listen_error(listener, error)
 
     def on_listener_accept(conn):
-        s = TLSServer(conn, on_accept, log_handler)
+        s = TLSServer(conn, on_accept, log_handler, compress)
         on_accept(s)
         conn.cb_install(s.on_conn_receive, s.on_conn_error, None)
 
@@ -857,11 +1016,16 @@ actor TLSListener(cap: net.TCPListenCap, address: str, port: int, cert_pem: byte
 
 
 # TODO: change port to u16, when u16 has a sub-type relationship to int
-actor Client(cap: net.TCPConnectCap, address: str, on_connect: action(Client) -> None, on_error: action(Client, str) -> None, scheme: str="https", port: ?int=None, tls_verify: bool=True, log_handler: ?logging.Handler=None):
+actor Client(cap: net.TCPConnectCap, address: str, on_connect: action(Client) -> None, on_error: action(Client, str) -> None, scheme: str="https", port: ?int=None, tls_verify: bool=True, log_handler: ?logging.Handler=None, compress: bool=True):
     """HTTP(S) Client
 
     scheme is either 'http' or 'https', the default is 'https'
     port is optional, if not provided, it will be inferred from the scheme where http=80 and https=443
+    With compress, a request without an Accept-Encoding header gets
+    Accept-Encoding: gzip, deflate, and the client decodes each response in
+    gzip or deflate. on_response gets the decoded body, without the
+    Content-Encoding and Content-Length headers. A body that does not
+    decode is a malformed response.
 
     User callbacks (on_connect, on_error and the per-request on_response) are
     invoked asynchronously and the client does not wait for them, so a
@@ -938,6 +1102,12 @@ actor Client(cap: net.TCPConnectCap, address: str, on_connect: action(Client) ->
                     _log.notice("Data received with no on_response callback set", None)
                     break
                 outreq = _on_response[0]
+                if compress:
+                    try:
+                        r = _decode_response(r)
+                    except ValueError as e:
+                        failure = "Cannot decode the body: " + e.error_message
+                        break
                 del _on_response[0]
                 cb = outreq.2
 
@@ -985,6 +1155,15 @@ actor Client(cap: net.TCPConnectCap, address: str, on_connect: action(Client) ->
     def close():
         _conn_close()
 
+    def _add_accept_encoding(headers: dict[str, str]) -> None:
+        """With compress, ask for gzip and deflate unless headers has an
+        Accept-Encoding"""
+        if compress:
+            for k in headers.keys():
+                if k.lower() == "accept-encoding":
+                    return
+            headers["Accept-Encoding"] = "gzip, deflate"
+
     def _send_request(method: str, req: bytes, on_response: action(Client, Response) -> None) -> None:
         _on_response.append((req, method, on_response))
         if _connected:
@@ -993,11 +1172,13 @@ actor Client(cap: net.TCPConnectCap, address: str, on_connect: action(Client) ->
 
     # HTTP methods
     def get(path: str, on_response: action(Client, Response) -> None, headers: dict[str, str] = {}):
+        _add_accept_encoding(headers)
         req = build_request(address, b"GET", path.encode(), b"1.1", headers, b"")
         _log.debug("Sending request", {"method": "GET", "path": path})
         _send_request("GET", req, on_response)
 
     def head(path: str, on_response: action(Client, Response) -> None, headers: dict[str, str] = {}):
+        _add_accept_encoding(headers)
         req = build_request(address, b"HEAD", path.encode(), b"1.1", headers, b"")
         _log.debug("Sending request", {"method": "HEAD", "path": path})
         _send_request("HEAD", req, on_response)
@@ -1005,16 +1186,19 @@ actor Client(cap: net.TCPConnectCap, address: str, on_connect: action(Client) ->
     def post(path: str, body: bytes, on_response: action(Client, Response) -> None, headers: dict[str, str] = {}):
         if "Content-Type" not in headers:
             headers["Content-Type"] = "application/x-www-form-urlencoded"
+        _add_accept_encoding(headers)
         req = build_request(address, b"POST", path.encode(), b"1.1", headers, body)
         _log.debug("Sending request", {"method": "POST", "path": path})
         _send_request("POST", req, on_response)
 
     def put(path: str, body: bytes, on_response: action(Client, Response) -> None, headers: dict[str, str] = {}):
+        _add_accept_encoding(headers)
         req = build_request(address, b"PUT", path.encode(), b"1.1", headers, body)
         _log.debug("Sending request", {"method": "PUT", "path": path})
         _send_request("PUT", req, on_response)
 
     def delete(path: str, on_response: action(Client, Response) -> None, headers: dict[str, str] = {}):
+        _add_accept_encoding(headers)
         req = build_request(address, b"DELETE", path.encode(), b"1.1", headers, b"")
         _log.debug("Sending request", {"method": "DELETE", "path": path})
         _send_request("DELETE", req, on_response)

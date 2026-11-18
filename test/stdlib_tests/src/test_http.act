@@ -1,4 +1,6 @@
 
+import compress.gzip as gzip
+import compress.zlib as zlib
 import net
 import http
 import logging
@@ -405,6 +407,19 @@ def _test_http_message_parser_bodyless(st: testing.SyncT):
     msgs = p.feed(b"HTTP/1.1 204 HTTP/1.1\r\nContent-Length: 3\r\n\r\nabc")
     testing.assertEqual([b"abc"], _bodies(msgs), "Request body")
 
+def _compressible_json() -> bytes:
+    return ",".join([r'{"name":"cpe-' + str(i) + r'","schedule":"europe"}' for i in range(200)]).encode()
+
+
+def _decode(data: bytes, coding: ?str) -> bytes:
+    """data decoded from the content coding "gzip" or "deflate", or as it is"""
+    if coding == "gzip":
+        return gzip.decompress(data)
+    if coding == "deflate":
+        return zlib.decompress(data)
+    return data
+
+
 actor _test_HttpClientServer(t: testing.EnvT):
     """HTTP client/server roundtrip over TCP
 
@@ -483,6 +498,528 @@ actor _test_HttpClientServer(t: testing.EnvT):
     _start_listener()
     after 0.05: _start_client()
     after 10: _timeout()
+
+
+actor _test_HttpServerCompression(t: testing.EnvT):
+    """A Listener with compress compresses the text answers that the client
+    accepts
+
+    Each request names an answer and an Accept-Encoding. The test checks the
+    Content-Encoding, Vary and ETag of each response, and that its body
+    decodes to the answer.
+    """
+    big = _compressible_json()
+    png = b"\x89PNG\r\n\x1a\n" + big
+    # An answer that the handler compressed itself. Random digits keep it
+    # over COMPRESS_MIN_SIZE when compressed, so the server looks at it.
+    varied = ",".join([str(random.randint(0, 999999999)) for _ in range(1000)]).encode()
+    gzipped = gzip.compress(varied)
+    # Path, Accept-Encoding, and the Content-Encoding, Vary and ETag expected
+    cases: list[(str, ?str, ?str, ?str, ?str)] = [
+        ("/text", "gzip, deflate, br", "gzip", "Accept-Encoding", None),
+        ("/text", "deflate", "deflate", "Accept-Encoding", None),
+        ("/text", "GZIP;q=0, deflate;q=0.5", "deflate", "Accept-Encoding", None),
+        ("/text", "gzip;q=0.1, deflate", "deflate", "Accept-Encoding", None),
+        ("/text", "deflate;q=0.5, gzip;q=0.500", "gzip", "Accept-Encoding", None),
+        ("/text", "gzip;q=abc", None, "Accept-Encoding", None),
+        ("/text", "*;q=0.5, gzip;q=0", "deflate", "Accept-Encoding", None),
+        ("/text", "*", "gzip", "Accept-Encoding", None),
+        ("/text", "*;q=0", None, "Accept-Encoding", None),
+        ("/text", "br", None, "Accept-Encoding", None),
+        ("/text", None, None, "Accept-Encoding", None),
+        ("/small", "gzip", None, None, None),
+        ("/png", "gzip", None, None, None),
+        ("/gzipped", "gzip", "gzip", None, None),
+        ("/etag", "gzip", "gzip", "Accept, Accept-Encoding", 'W/"v1"'),
+    ]
+    log = logging.Logger(t.log_handler)
+    var done = False
+    var attempts = 0
+    var listen_attempts = 0
+    var port = random.randint(20000, 45000)
+    var server = None
+    var current = 0
+
+    serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
+
+    def _finish(error: ?Exception):
+        if done:
+            return
+        done = True
+        if error is not None:
+            t.failure(error)
+        else:
+            t.success()
+
+    def _answer(path: str) -> bytes:
+        if path == "/small":
+            return b"small"
+        if path == "/png":
+            return png
+        if path == "/gzipped":
+            return varied
+        return big
+
+    def _on_http_accept(server):
+        server.cb_install(_on_http_server_request, _on_http_server_error)
+
+    def _on_http_server_request(server, request, respond):
+        if request.path == "/small":
+            respond(200, {"Content-Type": "text/plain"}, b"small")
+        elif request.path == "/png":
+            respond(200, {"Content-Type": "image/png"}, png)
+        elif request.path == "/gzipped":
+            respond(200, {"Content-Type": "application/json", "Content-Encoding": "gzip"}, gzipped)
+        elif request.path == "/etag":
+            respond(200, {"Content-Type": "application/json", "ETag": '"v1"', "Vary": "Accept"}, big)
+        else:
+            respond(200, {"Content-Type": "application/json"}, big)
+
+    def _on_http_server_error(server, error):
+        _finish(AssertionError("HTTP server error: " + error))
+
+    def _on_http_listen_error(listener, error):
+        if listen_attempts < 10:
+            listen_attempts += 1
+            port = random.randint(20000, 45000)
+            _start_listener()
+        else:
+            _finish(AssertionError("HTTP listen failed: " + error))
+
+    def _send(c):
+        path, accept, coding, vary, etag = cases[current]
+        if accept is not None:
+            c.get(path, _on_http_receive, {"Accept-Encoding": accept})
+        else:
+            c.get(path, _on_http_receive)
+
+    def _on_http_receive(c, res):
+        path, accept, coding, vary, etag = cases[current]
+        what = "{path} with Accept-Encoding {accept}"
+        try:
+            testing.assertEqual(res.status, 200, what)
+            testing.assertEqual(res.headers.get("content-encoding"), coding, what)
+            testing.assertEqual(res.headers.get("vary"), vary, what)
+            testing.assertEqual(res.headers.get("etag"), etag, what)
+            testing.assertEqual(_decode(res.body, coding), _answer(path), what)
+            if path == "/gzipped":
+                testing.assertTrue(len(res.body) >= http.COMPRESS_MIN_SIZE, "the compressed answer is big enough to compress")
+        except Exception as e:
+            _finish(e)
+            return
+        current += 1
+        if current < len(cases):
+            _send(c)
+        else:
+            _finish(None)
+
+    def _on_http_error(c, errmsg):
+        if attempts < 5:
+            attempts += 1
+            after 0.1: _start_client()
+        else:
+            _finish(AssertionError("HTTP client error: " + errmsg))
+
+    def _start_client():
+        # The client sends only the Accept-Encoding of each case
+        http.Client(conn_cap, "127.0.0.1", _send, _on_http_error, scheme="http", port=port, compress=False)
+
+    def _start_listener():
+        server = http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error, compress=True)
+
+    _start_listener()
+    after 0.05: _start_client()
+    after 10: _finish(AssertionError("timeout"))
+
+
+actor _test_HttpServerNoCompressionByDefault(t: testing.EnvT):
+    """A Listener without compress sends answers as they are, also to a
+    client that accepts gzip"""
+    big = _compressible_json()
+    var done = False
+    var attempts = 0
+    var listen_attempts = 0
+    var port = random.randint(20000, 45000)
+    var server = None
+
+    serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
+
+    def _finish(error: ?Exception):
+        if done:
+            return
+        done = True
+        if error is not None:
+            t.failure(error)
+        else:
+            t.success()
+
+    def _on_http_accept(server):
+        server.cb_install(_on_http_server_request, _on_http_server_error)
+
+    def _on_http_server_request(server, request, respond):
+        respond(200, {"Content-Type": "application/json"}, big)
+
+    def _on_http_server_error(server, error):
+        _finish(AssertionError("HTTP server error: " + error))
+
+    def _on_http_listen_error(listener, error):
+        if listen_attempts < 10:
+            listen_attempts += 1
+            port = random.randint(20000, 45000)
+            _start_listener()
+        else:
+            _finish(AssertionError("HTTP listen failed: " + error))
+
+    def _on_http_connect(c):
+        c.get("/", _on_http_receive, {"Accept-Encoding": "gzip"})
+
+    def _on_http_receive(c, res):
+        try:
+            testing.assertEqual(res.headers.get("content-encoding"), None)
+            testing.assertEqual(res.headers.get("vary"), None)
+            testing.assertEqual(res.body, big)
+        except Exception as e:
+            _finish(e)
+            return
+        _finish(None)
+
+    def _on_http_error(c, errmsg):
+        if attempts < 5:
+            attempts += 1
+            after 0.1: _start_client()
+        else:
+            _finish(AssertionError("HTTP client error: " + errmsg))
+
+    def _start_client():
+        http.Client(conn_cap, "127.0.0.1", _on_http_connect, _on_http_error, scheme="http", port=port)
+
+    def _start_listener():
+        server = http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
+
+    _start_listener()
+    after 0.05: _start_client()
+    after 10: _finish(AssertionError("timeout"))
+
+
+actor _test_HttpClientDecompression(t: testing.EnvT):
+    """A Client asks for gzip and deflate and decodes the responses
+
+    The server sends each body already encoded, in the coding that the path
+    names, and tells in X-Seen-Accept-Encoding which Accept-Encoding it got.
+    """
+    big = _compressible_json()
+    # Path, request headers, then the Accept-Encoding the server sees, and
+    # the Content-Encoding, Content-Length presence and body the client gets
+    cases: list[(str, dict[str, str], str, ?str, bool, bytes)] = [
+        ("/gzip", {}, "gzip, deflate", None, False, big),
+        ("/deflate", {}, "gzip, deflate", None, False, big),
+        ("/x-gzip", {}, "gzip, deflate", None, False, big),
+        ("/br", {}, "gzip, deflate", "br", True, b"brotli"),
+        ("/plain", {}, "gzip, deflate", None, True, big),
+        ("/gzip", {"Accept-Encoding": "gzip"}, "gzip", None, False, big),
+        # The response tells the coding, also when the request did not ask for it
+        ("/gzip", {"Accept-Encoding": "identity"}, "identity", None, False, big),
+    ]
+    var done = False
+    var attempts = 0
+    var listen_attempts = 0
+    var port = random.randint(20000, 45000)
+    var server = None
+    var current = 0
+
+    serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
+
+    def _finish(error: ?Exception):
+        if done:
+            return
+        done = True
+        if error is not None:
+            t.failure(error)
+        else:
+            t.success()
+
+    def _on_http_accept(server):
+        server.cb_install(_on_http_server_request, _on_http_server_error)
+
+    def _on_http_server_request(server, request, respond):
+        h = {"Content-Type": "application/json", "X-Seen-Accept-Encoding": request.headers.get_def("accept-encoding", "")}
+        if request.path == "/gzip":
+            h["Content-Encoding"] = "gzip"
+            respond(200, h, gzip.compress(big))
+        elif request.path == "/deflate":
+            h["Content-Encoding"] = "deflate"
+            respond(200, h, zlib.compress(big))
+        elif request.path == "/x-gzip":
+            h["Content-Encoding"] = "x-gzip"
+            respond(200, h, gzip.compress(big))
+        elif request.path == "/br":
+            h["Content-Encoding"] = "br"
+            respond(200, h, b"brotli")
+        else:
+            respond(200, h, big)
+
+    def _on_http_server_error(server, error):
+        _finish(AssertionError("HTTP server error: " + error))
+
+    def _on_http_listen_error(listener, error):
+        if listen_attempts < 10:
+            listen_attempts += 1
+            port = random.randint(20000, 45000)
+            _start_listener()
+        else:
+            _finish(AssertionError("HTTP listen failed: " + error))
+
+    def _send(c):
+        path, headers, seen, coding, has_length, body = cases[current]
+        c.get(path, _on_http_receive, headers)
+
+    def _on_http_receive(c, res):
+        path, headers, seen, coding, has_length, body = cases[current]
+        what = "case {current}: {path}"
+        try:
+            testing.assertEqual(res.headers.get("x-seen-accept-encoding"), seen, what)
+            testing.assertEqual(res.headers.get("content-encoding"), coding, what)
+            testing.assertEqual("content-length" in res.headers, has_length, what)
+            testing.assertEqual(_decode(res.body, res.headers.get("content-encoding")), body, what)
+        except Exception as e:
+            _finish(e)
+            return
+        current += 1
+        if current < len(cases):
+            _send(c)
+        else:
+            _finish(None)
+
+    def _on_http_error(c, errmsg):
+        if attempts < 5:
+            attempts += 1
+            after 0.1: _start_client()
+        else:
+            _finish(AssertionError("HTTP client error: " + errmsg))
+
+    def _start_client():
+        http.Client(conn_cap, "127.0.0.1", _send, _on_http_error, scheme="http", port=port)
+
+    def _start_listener():
+        server = http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
+
+    _start_listener()
+    after 0.05: _start_client()
+    after 10: _finish(AssertionError("timeout"))
+
+
+actor _test_HttpClientWithoutCompression(t: testing.EnvT):
+    """A Client with compress=False sends no Accept-Encoding and leaves the
+    body as it is"""
+    big = _compressible_json()
+    var done = False
+    var attempts = 0
+    var listen_attempts = 0
+    var port = random.randint(20000, 45000)
+    var server = None
+
+    serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
+
+    def _finish(error: ?Exception):
+        if done:
+            return
+        done = True
+        if error is not None:
+            t.failure(error)
+        else:
+            t.success()
+
+    def _on_http_accept(server):
+        server.cb_install(_on_http_server_request, _on_http_server_error)
+
+    def _on_http_server_request(server, request, respond):
+        h = {"Content-Type": "application/json", "Content-Encoding": "gzip", "X-Seen-Accept-Encoding": request.headers.get_def("accept-encoding", "")}
+        respond(200, h, gzip.compress(big))
+
+    def _on_http_server_error(server, error):
+        _finish(AssertionError("HTTP server error: " + error))
+
+    def _on_http_listen_error(listener, error):
+        if listen_attempts < 10:
+            listen_attempts += 1
+            port = random.randint(20000, 45000)
+            _start_listener()
+        else:
+            _finish(AssertionError("HTTP listen failed: " + error))
+
+    def _on_http_connect(c):
+        c.get("/", _on_http_receive)
+
+    def _on_http_receive(c, res):
+        try:
+            testing.assertEqual(res.headers.get("x-seen-accept-encoding"), "")
+            testing.assertEqual(res.headers.get("content-encoding"), "gzip")
+            testing.assertEqual(gzip.decompress(res.body), big)
+        except Exception as e:
+            _finish(e)
+            return
+        _finish(None)
+
+    def _on_http_error(c, errmsg):
+        if attempts < 5:
+            attempts += 1
+            after 0.1: _start_client()
+        else:
+            _finish(AssertionError("HTTP client error: " + errmsg))
+
+    def _start_client():
+        http.Client(conn_cap, "127.0.0.1", _on_http_connect, _on_http_error, scheme="http", port=port, compress=False)
+
+    def _start_listener():
+        server = http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
+
+    _start_listener()
+    after 0.05: _start_client()
+    after 10: _finish(AssertionError("timeout"))
+
+
+actor _test_HttpClientUndecodableBody(t: testing.EnvT):
+    """A gzip body that does not decode is a malformed response: the client
+    calls on_error and not on_response"""
+    var done = False
+    var listen_attempts = 0
+    var port = random.randint(20000, 45000)
+    var server = None
+
+    serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
+
+    def _finish(error: ?Exception):
+        if done:
+            return
+        done = True
+        if error is not None:
+            t.failure(error)
+        else:
+            t.success()
+
+    def _on_http_accept(server):
+        server.cb_install(_on_http_server_request, _on_http_server_error)
+
+    def _on_http_server_request(server, request, respond):
+        respond(200, {"Content-Type": "application/json", "Content-Encoding": "gzip"}, b"not gzip")
+
+    def _on_http_server_error(server, error):
+        pass
+
+    def _on_http_listen_error(listener, error):
+        if listen_attempts < 10:
+            listen_attempts += 1
+            port = random.randint(20000, 45000)
+            _start_listener()
+        else:
+            _finish(AssertionError("HTTP listen failed: " + error))
+
+    def _on_http_connect(c):
+        c.get("/", _on_http_receive)
+
+    def _on_http_receive(c, res):
+        _finish(AssertionError("on_response got the undecodable response"))
+
+    def _on_http_error(c, errmsg):
+        if errmsg.startswith("Malformed HTTP response: Cannot decode the body"):
+            _finish(None)
+        elif "refused" in errmsg:
+            after 0.1: _start_client()
+        else:
+            _finish(AssertionError("Unexpected client error: " + errmsg))
+
+    def _start_client():
+        http.Client(conn_cap, "127.0.0.1", _on_http_connect, _on_http_error, scheme="http", port=port)
+
+    def _start_listener():
+        server = http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
+
+    _start_listener()
+    after 0.05: _start_client()
+    after 10: _finish(AssertionError("timeout"))
+
+
+actor _test_HttpCompressionEndToEnd(t: testing.EnvT):
+    """A Client with its defaults gets a compressed answer from a Listener
+    with compress, and on_response gets the answer as the handler gave it
+
+    The server sends Content-Length with each response, and the client
+    removes it only when it decodes the body, so a response without it went
+    over the connection compressed.
+    """
+    big = _compressible_json()
+    var done = False
+    var attempts = 0
+    var listen_attempts = 0
+    var port = random.randint(20000, 45000)
+    var server = None
+
+    serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
+
+    def _finish(error: ?Exception):
+        if done:
+            return
+        done = True
+        if error is not None:
+            t.failure(error)
+        else:
+            t.success()
+
+    def _on_http_accept(server):
+        server.cb_install(_on_http_server_request, _on_http_server_error)
+
+    def _on_http_server_request(server, request, respond):
+        h = {"Content-Type": "application/json", "X-Seen-Accept-Encoding": request.headers.get_def("accept-encoding", "")}
+        respond(200, h, big)
+
+    def _on_http_server_error(server, error):
+        _finish(AssertionError("HTTP server error: " + error))
+
+    def _on_http_listen_error(listener, error):
+        if listen_attempts < 10:
+            listen_attempts += 1
+            port = random.randint(20000, 45000)
+            _start_listener()
+        else:
+            _finish(AssertionError("HTTP listen failed: " + error))
+
+    def _on_http_connect(c):
+        c.get("/", _on_http_receive)
+
+    def _on_http_receive(c, res):
+        try:
+            testing.assertEqual(res.headers.get("x-seen-accept-encoding"), "gzip, deflate")
+            testing.assertEqual(res.headers.get("content-encoding"), None)
+            testing.assertFalse("content-length" in res.headers, "the body went compressed")
+            testing.assertEqual(res.headers.get("vary"), "Accept-Encoding")
+            testing.assertEqual(res.body, big)
+        except Exception as e:
+            _finish(e)
+            return
+        _finish(None)
+
+    def _on_http_error(c, errmsg):
+        if attempts < 5:
+            attempts += 1
+            after 0.1: _start_client()
+        else:
+            _finish(AssertionError("HTTP client error: " + errmsg))
+
+    def _start_client():
+        http.Client(conn_cap, "127.0.0.1", _on_http_connect, _on_http_error, scheme="http", port=port)
+
+    def _start_listener():
+        server = http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error, compress=True)
+
+    _start_listener()
+    after 0.05: _start_client()
+    after 10: _finish(AssertionError("timeout"))
 
 
 actor _test_HttpClientPipelinedResponses(t: testing.EnvT):
@@ -2124,3 +2661,68 @@ actor _test_HttpsClientServer(t: testing.EnvT):
     )
     after 0.05: _start_client()
     after 10: _timeout()
+
+
+actor _test_HttpsServerCompression(t: testing.EnvT):
+    """A TLSListener with compress compresses a text answer that the client
+    accepts"""
+    big = _compressible_json()
+    var done = False
+    var attempts = 0
+    var port = random.randint(20000, 45000)
+    var server = None
+    listen_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
+
+    def _finish(error: ?Exception):
+        if done:
+            return
+        done = True
+        if error is not None:
+            t.failure(error)
+        else:
+            t.success()
+
+    def _on_https_accept(server):
+        server.cb_install(_on_https_request, _on_https_error)
+
+    def _on_https_request(server, request, respond):
+        respond(200, {"Content-Type": "application/json"}, big)
+
+    def _on_https_error(server, error):
+        _finish(AssertionError("HTTPS server error: " + error))
+
+    def _on_https_connect(c):
+        c.get("/", _on_https_receive, {"Accept-Encoding": "gzip"})
+
+    def _on_https_receive(c, res):
+        try:
+            testing.assertEqual(res.headers.get("content-encoding"), "gzip")
+            testing.assertEqual(gzip.decompress(res.body), big)
+        except Exception as e:
+            _finish(e)
+            return
+        _finish(None)
+
+    def _on_https_error_client(c, errmsg):
+        if attempts < 5:
+            attempts += 1
+            after 0.1: _start_client()
+        else:
+            _finish(AssertionError("HTTPS client error: " + errmsg))
+
+    def _start_client():
+        # The client leaves the body as the server sent it
+        http.Client(conn_cap, "127.0.0.1", _on_https_connect, _on_https_error_client, scheme="https", port=port, tls_verify=False, compress=False)
+
+    server = http.TLSListener(
+        listen_cap,
+        "127.0.0.1",
+        port,
+        CERT_PEM.encode(),
+        KEY_PEM.encode(),
+        _on_https_accept,
+        compress=True
+    )
+    after 0.05: _start_client()
+    after 10: _finish(AssertionError("timeout"))
