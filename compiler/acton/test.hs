@@ -3851,7 +3851,7 @@ stdioTerminalTests = testGroup "stdio terminal" $
       env0 <- getEnvironment
       withPtyProgram "stdio_raw" env0 $ \master slave hOut ph -> do
         line <- readLineWithin hOut
-        assertEqual "stdin and stdout" "stdin_is_tty True is_tty False" line
+        assertEqual "stdin and stdout" "stdin_is_tty True stdout_is_tty False" line
         ttys <- readLineWithin hOut
         assertEqual "stdin readers after two stdin_install" "tty handles 1" ttys
         expectReady hOut
@@ -3893,9 +3893,9 @@ stdioTerminalTests = testGroup "stdio terminal" $
       testBuildThing "" ExitSuccess False "../../test/rts/stdio_is_tty.act"
       wd <- canonicalizePath "../../test/rts"
       -- One stream on the slave of a new pseudo terminal, the others on pipes
-      forM_ [ ("stdin", "stdin True stdout False stderr False is_tty False")
-            , ("stdout", "stdin False stdout True stderr False is_tty True")
-            , ("stderr", "stdin False stdout False stderr True is_tty False")
+      forM_ [ ("stdin", "stdin True stdout False stderr False")
+            , ("stdout", "stdin False stdout True stderr False")
+            , ("stderr", "stdin False stdout False stderr True")
             ] $ \(stream, expected) -> do
         (master, slave) <- PT.openPseudoTerminal
         hPty <- PIO.dup slave >>= PIO.fdToHandle
