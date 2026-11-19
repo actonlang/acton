@@ -2594,6 +2594,7 @@ actor _test_HttpsClientServer(t: testing.EnvT):
     log = logging.Logger(t.log_handler)
     var done = False
     var attempts = 0
+    var listen_attempts = 0
     var port = std.random.randint(20000, 45000)
     var server = None
     listen_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
@@ -2626,6 +2627,14 @@ actor _test_HttpsClientServer(t: testing.EnvT):
     def _on_https_error(server, error):
         _finish_error("HTTPS server error: " + error)
 
+    def _on_https_listen_error(listener, error):
+        if listen_attempts < 10:
+            listen_attempts += 1
+            port = std.random.randint(20000, 45000)
+            _start_listener()
+        else:
+            _finish_failure("HTTPS listen failed: " + error)
+
     def _on_https_connect(c):
         c.get("/", _on_https_receive)
 
@@ -2648,17 +2657,13 @@ actor _test_HttpsClientServer(t: testing.EnvT):
     def _start_client():
         std.http.Client(conn_cap, "127.0.0.1", _on_https_connect, _on_https_error_client, scheme="https", port=port, tls_verify=False)
 
+    def _start_listener():
+        server = std.http.TLSListener(listen_cap, "127.0.0.1", port, CERT_PEM.encode(), KEY_PEM.encode(), _on_https_accept, _on_https_listen_error)
+
     def _timeout():
         _finish_error("timeout")
 
-    server = std.http.TLSListener(
-        listen_cap,
-        "127.0.0.1",
-        port,
-        CERT_PEM.encode(),
-        KEY_PEM.encode(),
-        _on_https_accept
-    )
+    _start_listener()
     after 0.05: _start_client()
     after 10: _timeout()
 
@@ -2669,6 +2674,7 @@ actor _test_HttpsServerCompression(t: testing.EnvT):
     big = _compressible_json()
     var done = False
     var attempts = 0
+    var listen_attempts = 0
     var port = std.random.randint(20000, 45000)
     var server = None
     listen_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
@@ -2691,6 +2697,14 @@ actor _test_HttpsServerCompression(t: testing.EnvT):
 
     def _on_https_error(server, error):
         _finish(AssertionError("HTTPS server error: " + error))
+
+    def _on_https_listen_error(listener, error):
+        if listen_attempts < 10:
+            listen_attempts += 1
+            port = std.random.randint(20000, 45000)
+            _start_listener()
+        else:
+            _finish(AssertionError("HTTPS listen failed: " + error))
 
     def _on_https_connect(c):
         c.get("/", _on_https_receive, {"Accept-Encoding": "gzip"})
@@ -2715,14 +2729,9 @@ actor _test_HttpsServerCompression(t: testing.EnvT):
         # The client leaves the body as the server sent it
         std.http.Client(conn_cap, "127.0.0.1", _on_https_connect, _on_https_error_client, scheme="https", port=port, tls_verify=False, compress=False)
 
-    server = std.http.TLSListener(
-        listen_cap,
-        "127.0.0.1",
-        port,
-        CERT_PEM.encode(),
-        KEY_PEM.encode(),
-        _on_https_accept,
-        compress=True
-    )
+    def _start_listener():
+        server = std.http.TLSListener(listen_cap, "127.0.0.1", port, CERT_PEM.encode(), KEY_PEM.encode(), _on_https_accept, _on_https_listen_error, compress=True)
+
+    _start_listener()
     after 0.05: _start_client()
     after 10: _finish(AssertionError("timeout"))
