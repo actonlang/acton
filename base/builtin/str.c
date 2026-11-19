@@ -1416,6 +1416,10 @@ B_str B_strD_join(B_str s, B_Iterable wit, $WORD iter) {
     B_list_base lst = join_parts(wit, iter);
     B_str nxt;
     int64_t len = lst->length;
+    if (len == 0)
+        return null_str;
+    if (len == 1)
+        return (B_str)lst->data[0];
     // The total is checked as it grows by a part and a separator, so it
     // can't overflow before it is checked
     for (int64_t i = 0; i < len; i++) {
@@ -1426,18 +1430,16 @@ B_str B_strD_join(B_str s, B_Iterable wit, $WORD iter) {
     }
     B_str res;
     NEW_UNFILLED_STR(res, totchars, totbytes);
-    if (len > 0) {
-        nxt = (B_str)lst->data[0];
-        unsigned char *p = res->str;
+    nxt = (B_str)lst->data[0];
+    unsigned char *p = res->str;
+    memcpy(p, nxt->str, nxt->nbytes);
+    p += nxt->nbytes;
+    for (int64_t i = 1; i < len; i++) {
+        nxt = (B_str)lst->data[i];
+        memcpy(p, s->str, s->nbytes);
+        p += s->nbytes;
         memcpy(p, nxt->str, nxt->nbytes);
         p += nxt->nbytes;
-        for (int64_t i = 1; i < len; i++) {
-            nxt = (B_str)lst->data[i];
-            memcpy(p, s->str, s->nbytes);
-            p += s->nbytes;
-            memcpy(p, nxt->str, nxt->nbytes);
-            p += nxt->nbytes;
-        }
     }
     return res;
 }
@@ -3720,6 +3722,10 @@ B_bytes B_bytesD_join(B_bytes s, B_Iterable wit, $WORD iter) {
     B_list_base lst = join_parts(wit, iter);
     B_bytes nxt;
     int64_t len = lst->length;
+    if (len == 0)
+        return null_bytes;
+    if (len == 1)
+        return (B_bytes)lst->data[0];
     // The total is checked as it grows by a part and a separator, so it
     // can't overflow before it is checked
     for (int64_t i = 0; i < len; i++) {
@@ -3729,18 +3735,16 @@ B_bytes B_bytesD_join(B_bytes s, B_Iterable wit, $WORD iter) {
     }
     B_bytes res;
     NEW_UNFILLED_BYTES(res, totbytes);
-    if (len > 0) {
-        nxt = (B_bytes)lst->data[0];
-        unsigned char *p = res->str;
+    nxt = (B_bytes)lst->data[0];
+    unsigned char *p = res->str;
+    memcpy(p, nxt->str, nxt->nbytes);
+    p += nxt->nbytes;
+    for (int64_t i = 1; i < len; i++) {
+        nxt = (B_bytes)lst->data[i];
+        memcpy(p, s->str, s->nbytes);
+        p += s->nbytes;
         memcpy(p, nxt->str, nxt->nbytes);
         p += nxt->nbytes;
-        for (int64_t i = 1; i < len; i++) {
-            nxt = (B_bytes)lst->data[i];
-            memcpy(p, s->str, s->nbytes);
-            p += s->nbytes;
-            memcpy(p, nxt->str, nxt->nbytes);
-            p += nxt->nbytes;
-        }
     }
     return res;
 }
