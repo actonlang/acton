@@ -169,6 +169,7 @@ main = do
           C.CmdOpt gopts (C.PkgUpgrade opts) -> PkgCommands.pkgUpgradeCommand gopts opts
           C.CmdOpt gopts C.PkgUpdate         -> PkgCommands.pkgUpdateCommand gopts
           C.CmdOpt gopts (C.PkgSearch opts)  -> PkgCommands.pkgSearchCommand gopts opts
+          C.CmdOpt gopts (C.Artifact opts)   -> artifactCommand gopts opts
           C.CmdOpt gopts (C.BuildSpecCmd o)   -> buildSpecCommand o
           C.CmdOpt gopts (C.Cloud opts)       -> undefined
           C.CmdOpt gopts (C.Doc opts)         -> printDocs gopts opts
@@ -520,6 +521,24 @@ withProjectLockNotice gopts projDir action =
 withProjectLockForGen :: C.GlobalOptions -> Generation -> FilePath -> IO Bool -> IO Bool
 withProjectLockForGen gopts gen projDir action =
     ifCurrent gen False (withProjectLockNotice gopts projDir (ifCurrent gen False action))
+
+artifactCommand :: C.GlobalOptions -> C.ArtifactCommand -> IO ()
+artifactCommand gopts cmd =
+    case cmd of
+      C.ArtifactHash _ ->
+        PkgCommands.artifactCommand gopts cmd
+      _ -> do
+        let opts = C.defaultCompileOptions { C.skip_build = True, C.skip_backpass = True }
+            sp = Source.diskSourceProvider
+        paths <- loadProjectPaths opts
+        let projDir = projPath paths
+        withProjectLockNotice gopts projDir $ do
+          unless (C.quiet gopts) $
+            putStrLn ("Building project in " ++ projDir)
+          srcFiles <- projectSourceFiles paths
+          compileFiles sp gopts opts srcFiles WholeProject
+          generateProjectDocIndex sp gopts opts paths srcFiles
+          PkgCommands.artifactCommand gopts cmd
 
 -- | Require a project in the given directory: exit with an error unless it
 -- holds Build.act and src/, else return the Build.act path.
@@ -1083,7 +1102,7 @@ runWatchFile gopts absFile sched runOnce = do
 fetchCommand :: C.GlobalOptions -> IO ()
 fetchCommand gopts = do
     paths <- loadProjectPaths C.defaultCompileOptions
-    res <- try (fetchDependencies gopts paths []) :: IO (Either ProjectError ())
+    res <- try (fetchDependencies gopts paths [] []) :: IO (Either ProjectError ())
     case res of
       Left (ProjectError msg) -> printErrorAndExit msg
       Right () ->
@@ -1109,7 +1128,7 @@ sigCommand gopts sigOpts = do
         depOverrides = C.dep_overrides opts
         rootProj = ccRootProj cctx
     withProjectLockNotice queryGopts rootProj $ do
-      fetchDependencies queryGopts paths depOverrides
+      fetchDependencies queryGopts paths depOverrides (C.artifact_repos opts)
       projMap <- discoverProjects queryGopts (ccSysAbs cctx) rootProj depOverrides
       target <- resolveSigTarget opts paths rootProj projMap (C.sigTarget sigOpts)
       tyFile <- case target of
@@ -2046,7 +2065,7 @@ runCliPostCompile reporter gopts plan env = do
           success <- action `onException` finishFinal reporter False
           finishFinal reporter success
           return success
-    if C.skip_build opts'
+    if C.skip_build opts' || C.skip_backpass opts'
       then
         logLine "  Skipping final build step" >> return True
       else if C.altOutput opts' then return True else do
