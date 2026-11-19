@@ -29,7 +29,7 @@ def config(performance: bool) -> std.testing.runner.TestRunnerConfig:
     parser.add_bool("scaling", "")
     parser.add_option("tag", "strlist", default=[])
     for name, default in [("min-iter", 1), ("max-iter", 1), ("min-time", 0), ("max-time", 10000),
-                          ("stress-workers", 0), ("time", 10), ("scale", 1)]:
+                          ("stress-workers", 0), ("time", 10), ("scale", 1), ("seed", -1)]:
         parser.add_option(name, "int", default=default)
     return std.testing.runner.TestRunnerConfig(performance, False, parser.parse(["executor"]))
 
@@ -64,6 +64,11 @@ proc def snapshot(t: testing.AsyncT):
     t.success()
 
 
+proc def seeded_failure(t: testing.AsyncT):
+    t.random.rand_u64()
+    t.failure(AssertionError("seeded failure"))
+
+
 proc def measurement_failure(t: testing.AsyncT):
     for scale in t.loop():
         pass
@@ -76,6 +81,16 @@ proc def measurement_failure(t: testing.AsyncT):
 actor _test_executor_completes(t: testing.EnvT):
     var pending = 0
     var completed: set[int] = set()
+    var first_runs = 0
+
+    proc def first_run_fails(rt: testing.AsyncT):
+        # Fails only in its first run, so its seed does not fail again
+        rt.random.rand_u64()
+        first_runs += 1
+        if first_runs == 1:
+            rt.failure(AssertionError("first run failure"))
+        else:
+            rt.success()
 
     def run(performance: bool, fn: proc(testing.AsyncT) -> None, outcome: str):
         executor_id = pending
@@ -111,6 +126,21 @@ actor _test_executor_completes(t: testing.EnvT):
                         testing.assertNone(info.success)
                         testing.assertEqual(info.num_errors, 1)
                         testing.assertEqual(info.exception, "ValueError: test body error")
+                    elif outcome == "seeded":
+                        testing.assertEqual(info.success, False)
+                        testing.assertEqual(info.num_failures, 1)
+                        testing.assertTrue(info.random)
+                        testing.assertNotNone(info.seed)
+                        # Performance runs do not replay a failed run
+                        replays = 0 if performance else 3
+                        testing.assertEqual(info.seed_replays, replays)
+                        testing.assertEqual(info.seed_reproduced, replays)
+                    elif outcome == "unreproduced":
+                        testing.assertEqual(info.success, False)
+                        testing.assertEqual(info.num_iterations, 1)
+                        testing.assertNotNone(info.seed)
+                        testing.assertEqual(info.seed_replays, 3)
+                        testing.assertEqual(info.seed_reproduced, 0)
                     elif outcome == "skip":
                         testing.assertEqual(info.success, True)
                         testing.assertTrue(info.skipped)
@@ -120,6 +150,8 @@ actor _test_executor_completes(t: testing.EnvT):
                         testing.assertEqual(info.num_errors, 0)
                         testing.assertEqual(info.num_failures, 0)
                         testing.assertTrue(info.num_iterations >= 1)
+                        testing.assertFalse(info.random)
+                        testing.assertNone(info.seed)
                         if not performance:
                             testing.assertEqual(info.num_iterations, 2)
                     if performance:
@@ -140,8 +172,10 @@ actor _test_executor_completes(t: testing.EnvT):
         run(performance, failure, "failure")
         run(performance, error, "error")
         run(performance, skip, "skip")
+        run(performance, seeded_failure, "seeded")
         run(performance, snapshot, "internal")
     run(True, measurement_failure, "measurement")
+    run(False, first_run_fails, "unreproduced")
 
     def check():
         # This deadline is far below the executors' ten-second budget. A lost

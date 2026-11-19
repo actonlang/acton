@@ -243,6 +243,7 @@ data TestOptions = TestOptions
     , testRtsWthreads  :: Maybe Int
     , testGcCheck      :: Bool
     , testTags         :: [String]
+    , testSeed         :: Maybe Integer
     , testMaxIterSet   :: Bool
     , testMaxTimeSet   :: Bool
     , testMinTimeSet   :: Bool
@@ -596,12 +597,13 @@ testOptions mode = mkTestOptions
     <*> optional (option wthreadsReader (long "rts-wthreads" <> metavar "N" <> help "Run each test process with N runtime worker threads (default: one per CPU core, at least 4)"))
     <*> switch (long "gc-check" <> help "Run each test process in generational GC mode with the write-barrier checker (ACTON_GC_CHECK=1)")
     <*> many (strOption (long "tag" <> metavar "TAG" <> help "Enable test capability TAG for testing.require()"))
+    <*> ordinary Nothing (optional (option seedReader (long "seed" <> metavar "SEED" <> help "Seed t.random with SEED in every run, to repeat a failed run")))
     <*> many (strOption (long "module" <> metavar "MODULE" <> help "Filter on test module name"))
     <*> many (strOption (long "name" <> metavar "NAME" <> help "Filter on test name (regex, anchored; use .* for substrings)"))
   where
     defaultOptimize = if mode == OrdinaryOptions then Debug else ReleaseFast
     ordinary fallback parser = if mode == OrdinaryOptions then parser else pure fallback
-    mkTestOptions testCompile testShowLog testShowCached testNoCache testJson testRecord testSnapshotUpdate testIter testMaxIterOpt testMinIter testMaxTimeOpt testMinTimeOpt testTime testScale testStartScale testEndScale testMaxMemory testStressWorkers testRtsWthreads testGcCheck testTags testModules testNames =
+    mkTestOptions testCompile testShowLog testShowCached testNoCache testJson testRecord testSnapshotUpdate testIter testMaxIterOpt testMinIter testMaxTimeOpt testMinTimeOpt testTime testScale testStartScale testEndScale testMaxMemory testStressWorkers testRtsWthreads testGcCheck testTags testSeed testModules testNames =
       TestOptions
         { testCompile = testCompile
         , testShowLog = testShowLog
@@ -626,12 +628,18 @@ testOptions mode = mkTestOptions
         , testRtsWthreads = testRtsWthreads
         , testGcCheck = testGcCheck
         , testTags = testTags
+        , testSeed = testSeed
         , testMaxIterSet = isJust testMaxIterOpt
         , testMaxTimeSet = isJust testMaxTimeOpt
         , testMinTimeSet = isJust testMinTimeOpt
         , testModules = testModules
         , testNames = testNames
         }
+
+seedReader :: ReadM Integer
+seedReader = eitherReader $ \s -> case reads s :: [(Integer, String)] of
+    [(n, "")] | n >= 0 && n < 2^(63 :: Int) -> Right n
+    _ -> Left "Expected a seed in the range 0 to 2^63 - 1"
 
 scaleReader :: ReadM Int
 scaleReader = eitherReader $ \s -> case reads s :: [(Integer, String)] of

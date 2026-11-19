@@ -107,6 +107,7 @@ extern B_LogicalD_IntegralD_bigint B_LogicalD_IntegralD_bigintG_witness;
 extern B_MinusD_IntegralD_bigint B_MinusD_IntegralD_bigintG_witness;
 extern B_IntegralD_bigint B_IntegralD_bigintG_witness;
 extern B_HashableD_bool B_HashableD_boolG_witness;
+extern B_RandomD_EnvRandom B_RandomD_EnvRandomG_witness;
 
 extern B_OrdD_list  B_OrdD_listD_bytesG_witness;
 

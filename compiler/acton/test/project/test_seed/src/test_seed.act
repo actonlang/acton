@@ -1,0 +1,5 @@
+import testing
+
+def _test_even(t: testing.SyncT):
+    # The first draw of Xoshiro256(42) is odd and that of Xoshiro256(2) even
+    testing.assertEqual(t.random.rand_u64() % 2, 0)
