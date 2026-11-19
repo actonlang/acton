@@ -294,17 +294,6 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    const dep_libpcre2 = b.dependency("libpcre2", .{
-        .target = target,
-        .optimize = optimize,
-        .linkage = .static,
-    });
-
-    const dep_libsnappy_c = b.dependency("libsnappy", .{
-        .target = target,
-        .optimize = optimize,
-    });
-
     const dep_libtlsuv = b.dependency("libtlsuv", .{
         .target = target,
         .optimize = optimize,
@@ -324,11 +313,6 @@ pub fn build(b: *std.Build) void {
     });
 
     const dep_libuv = b.dependency("libuv", .{
-        .target = target,
-        .optimize = optimize,
-    });
-
-    const dep_libxml2 = b.dependency("libxml2", .{
         .target = target,
         .optimize = optimize,
     });
@@ -569,13 +553,10 @@ pub fn build(b: *std.Build) void {
     libActon.root_module.linkLibrary(dep_libmbedtls.artifact("mbedtls"));
     libActon.root_module.linkLibrary(dep_libmbedtls.artifact("mbedx509"));
     libActon.root_module.linkLibrary(dep_libnetstring.artifact("netstring"));
-    libActon.root_module.linkLibrary(dep_libpcre2.artifact("pcre2-8"));
     libActon.root_module.linkLibrary(dep_libprotobuf_c.artifact("protobuf-c")); // TODO: remove, once telemetrify/prw is fixed
-    libActon.root_module.linkLibrary(dep_libsnappy_c.artifact("snappy-c"));
     libActon.root_module.linkLibrary(dep_libtlsuv.artifact("tlsuv"));
     libActon.root_module.linkLibrary(dep_libutf8proc.artifact("utf8proc"));
     libActon.root_module.linkLibrary(dep_libuv.artifact("uv"));
-    libActon.root_module.linkLibrary(dep_libxml2.artifact("xml2"));
     libActon.root_module.linkLibrary(dep_libyyjson.artifact("yyjson"));
 
     libActon.installLibraryHeaders(dep_libbsdnt.artifact("bsdnt"));

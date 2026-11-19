@@ -1,18 +1,15 @@
-import json
+import std.json
 import testing
-import std.json as std_json
 
 def _test_json_error_key():
     key = "before" + chr(0) + "after"
-    for encode, prefix in [(lambda: json.encode({key: ValueError("unsupported")}), "jsonQ"),
-                           (lambda: std_json.encode({key: ValueError("unsupported")}), "stdQ_jsonQ")]:
-        try:
-            encode()
-        except ValueError as error:
-            expected = prefix + "_encode_dict: for key " + key + " unknown type: B_ValueError"
-            testing.assertEqual(error.error_message, expected)
-        else:
-            testing.error("Expected ValueError for an unsupported JSON value")
+    try:
+        std.json.encode({key: ValueError("unsupported")})
+    except ValueError as error:
+        expected = "stdQ_jsonQ_encode_dict: for key " + key + " unknown type: B_ValueError"
+        testing.assertEqual(error.error_message, expected)
+    else:
+        testing.error("Expected ValueError for an unsupported JSON value")
 
 def _test_json():
     test_json = [
@@ -28,10 +25,10 @@ def _test_json():
     ]
     for s in test_json:
         #log.debug("Input string", {"json_str": s})
-        d = json.decode(s)
+        d = std.json.decode(s)
         #log.debug("Decoded JSON string to dict", {"dict": d})
         testing.assertNotNone(d, "Failed to decode JSON")
-        e = json.encode(d)
+        e = std.json.encode(d)
         #log.debug("Encoded to JSON", {"encoded": s})
         testing.assertNotNone(e, "Failed to encode to JSON")
         testing.assertEqual(s, e, "Input output via JSON round trip does not match")
@@ -47,15 +44,15 @@ def _test_json_list_decode():
         r"""["x",null,10,3.14,{"k":"v"},[5]]""",
     ]
     for s in test_arrays:
-        l = json.decode_list(s)
-        testing.assertNotNone(l, "json.decode_list() returned None")
-        e = json.encode_list(l)
-        testing.assertNotNone(e, "json.encode_list() returned None")
+        l = std.json.decode_list(s)
+        testing.assertNotNone(l, "std.json.decode_list() returned None")
+        e = std.json.encode_list(l)
+        testing.assertNotNone(e, "std.json.encode_list() returned None")
         testing.assertEqual(s, e, "JSON array roundtrip does not match")
 
 def _test_json_bigint_decode():
     source = r"""{"foo":-18446744073709551617,"bar":18446744073709551616}"""
-    obj = json.decode(source)
+    obj = std.json.decode(source)
     foo = obj["foo"]
     bar = obj["bar"]
     testing.assertTrue(isinstance(foo, bigint), "negative JSON bigint decoded with the wrong type")
@@ -64,9 +61,9 @@ def _test_json_bigint_decode():
         testing.assertEqual(foo, bigint("-18446744073709551617"))
     if isinstance(bar, bigint):
         testing.assertEqual(bar, bigint("18446744073709551616"))
-    testing.assertEqual(json.encode(obj), source)
+    testing.assertEqual(std.json.encode(obj), source)
 
-    values = json.decode_list(r"""[-9223372036854775809,123456789012345678901234567890]""")
+    values = std.json.decode_list(r"""[-9223372036854775809,123456789012345678901234567890]""")
     first = values[0]
     second = values[1]
     testing.assertTrue(isinstance(first, bigint), "JSON array bigint decoded with the wrong type")
@@ -76,12 +73,12 @@ def _test_json_bigint_decode():
     if isinstance(second, bigint):
         testing.assertEqual(second, bigint("123456789012345678901234567890"))
 
-    real_values = json.decode_list(r"""[18446744073709551616.0,-18446744073709551617e0]""")
+    real_values = std.json.decode_list(r"""[18446744073709551616.0,-18446744073709551617e0]""")
     testing.assertTrue(isinstance(real_values[0], float), "large JSON decimal decoded with the wrong type")
     testing.assertTrue(isinstance(real_values[1], float), "large JSON exponent decoded with the wrong type")
 
     try:
-        json.decode_list(r"""[1e999]""")
+        std.json.decode_list(r"""[1e999]""")
         testing.assertTrue(False, "out-of-range JSON float did not raise ValueError")
     except ValueError:
         pass
@@ -91,21 +88,21 @@ def _test_json_bigint_encode():
     negative = bigint("-18446744073709551617")
     obj = {"positive": positive, "nested": [negative]}
     testing.assertEqual(
-        json.encode(obj),
+        std.json.encode(obj),
         r"""{"positive":123456789012345678901234567890,"nested":[-18446744073709551617]}"""
     )
     testing.assertEqual(
-        json.encode(obj, bigint_as_string=True),
+        std.json.encode(obj, bigint_as_string=True),
         r"""{"positive":"123456789012345678901234567890","nested":["-18446744073709551617"]}"""
     )
 
     values = [positive, {"negative": negative}]
     testing.assertEqual(
-        json.encode_list(values),
+        std.json.encode_list(values),
         r"""[123456789012345678901234567890,{"negative":-18446744073709551617}]"""
     )
     testing.assertEqual(
-        json.encode_list(values, bigint_as_string=True),
+        std.json.encode_list(values, bigint_as_string=True),
         r"""["123456789012345678901234567890",{"negative":"-18446744073709551617"}]"""
     )
 
@@ -122,14 +119,14 @@ def _test_json_encode_fixed_size_int():
         "u32": u32(4294967295),
         "u64": u64(18446744073709551615)
     }
-    j = json.encode(d)
+    j = std.json.encode(d)
     testing.assertEqual(
         j,
         r"""{"int":4,"i8":-128,"i16":-32768,"i32":-2147483648,"i64":-9223372036854775808,"u1":1,"u8":255,"u16":65535,"u32":4294967295,"u64":18446744073709551615}"""
     )
 
 actor _test_json_actor(t: testing.AsyncT):
-    j = json.Json()
+    j = std.json.Json()
 
     obj = r"""{"a":1,"b":[2,3]}"""
     decoded = await async j.decode(obj)
@@ -156,14 +153,14 @@ def _test_json_rejects_truncated_input():
     for source in [b'{}\x00junk', b'{}\x00', b'[]', b'null', b'"text"']:
         rejected = False
         try:
-            json.decode(source.decode())
+            std.json.decode(source.decode())
         except ValueError:
             rejected = True
         assert rejected
     for source in [b'[]\x00junk', b'[]\x00']:
         rejected = False
         try:
-            json.decode_list(source.decode())
+            std.json.decode_list(source.decode())
         except ValueError:
             rejected = True
         assert rejected
@@ -171,7 +168,7 @@ def _test_json_rejects_truncated_input():
 
 def _test_json_escaped_nul_roundtrip():
     source = r"""{"a\u0000b":"x\u0000y","a":"tail","array":["\u0000","x\u0000y"]}"""
-    decoded = json.decode(source)
+    decoded = std.json.decode(source)
     assert len(decoded) == 3
     key = b"a\x00b".decode()
     value = decoded[key]
@@ -179,29 +176,27 @@ def _test_json_escaped_nul_roundtrip():
         assert value.encode() == b"x\x00y"
     else:
         raise AssertionError("JSON string was decoded with the wrong type")
-    assert json.encode(decoded).encode() == source.encode()
+    assert std.json.encode(decoded).encode() == source.encode()
 
     array_source = r"""["x\u0000y",{"a\u0000b":1,"a":2},"\u0000"]"""
-    array = json.decode_list(array_source)
+    array = std.json.decode_list(array_source)
     first = array[0]
     if isinstance(first, str):
         assert first.encode() == b"x\x00y"
     else:
         raise AssertionError("JSON array string was decoded with the wrong type")
-    assert json.encode_list(array).encode() == array_source.encode()
+    assert std.json.encode_list(array).encode() == array_source.encode()
 
     # Every value kind must retain the complete object key when encoding.
     object_source = r"""{"n\u0000":null,"i\u0000":1,"f\u0000":1.5,"b\u0000":true,"s\u0000":"text","a\u0000":[],"o\u0000":{},"big\u0000":18446744073709551616}"""
-    assert json.encode(json.decode(object_source)).encode() == object_source.encode()
+    assert std.json.encode(std.json.decode(object_source)).encode() == object_source.encode()
 
 
 def _test_json_encode_nan_inf():
     expected = "JSON encoding error: nan or inf number is not allowed"
     for value in [float("nan"), float("inf"), float("-inf")]:
-        for encode in [lambda: json.encode({"a": [1, 2], "b": value}),
-                       lambda: json.encode_list(["x", value]),
-                       lambda: std_json.encode({"a": [1, 2], "b": value}),
-                       lambda: std_json.encode_list(["x", value])]:
+        for encode in [lambda: std.json.encode({"a": [1, 2], "b": value}),
+                       lambda: std.json.encode_list(["x", value])]:
             try:
                 encode()
             except ValueError as error:
@@ -230,28 +225,24 @@ def _nested_document(depth: int, width: int) -> dict[str, ?value]:
 
 def _test_json_large_nested_roundtrip():
     doc = _nested_document(30, 150)
-    for encode, decode in [(lambda d: json.encode(d), lambda s: json.decode(s)),
-                           (lambda d: std_json.encode(d), lambda s: std_json.decode(s))]:
-        encoded = encode(doc)
-        decoded = decode(encoded)
-        testing.assertEqual(encode(decoded), encoded, "large JSON document round trip does not match")
-        child = decoded["child"]
-        if isinstance(child, dict):
-            depth = child["depth"]
-            if isinstance(depth, int):
-                testing.assertEqual(depth, 29)
-            else:
-                testing.error("nested JSON integer was decoded with the wrong type")
+    encoded = std.json.encode(doc)
+    decoded = std.json.decode(encoded)
+    testing.assertEqual(std.json.encode(decoded), encoded, "large JSON document round trip does not match")
+    child = decoded["child"]
+    if isinstance(child, dict):
+        depth = child["depth"]
+        if isinstance(depth, int):
+            testing.assertEqual(depth, 29)
         else:
-            testing.error("nested JSON object was decoded with the wrong type")
+            testing.error("nested JSON integer was decoded with the wrong type")
+    else:
+        testing.error("nested JSON object was decoded with the wrong type")
 
     deep: list[?value] = ["bottom", 1, 2.5]
     for i in range(200):
         deep = [i, deep, {"level": i}]
-    for encode_list, decode_list in [(lambda l: json.encode_list(l), lambda s: json.decode_list(s)),
-                                     (lambda l: std_json.encode_list(l), lambda s: std_json.decode_list(s))]:
-        encoded = encode_list(deep)
-        testing.assertEqual(encode_list(decode_list(encoded)), encoded, "deeply nested JSON array round trip does not match")
+    encoded_list = std.json.encode_list(deep)
+    testing.assertEqual(std.json.encode_list(std.json.decode_list(encoded_list)), encoded_list, "deeply nested JSON array round trip does not match")
 
 
 def _test_json_encode_many_bigints():
@@ -266,10 +257,8 @@ def _test_json_encode_many_bigints():
         digits.append(str(b))
     as_numbers = "[" + ",".join(digits) + "]"
     as_strings = "[\"" + "\",\"".join(digits) + "\"]"
-    testing.assertEqual(json.encode_list(values), as_numbers)
-    testing.assertEqual(json.encode_list(values, bigint_as_string=True), as_strings)
-    testing.assertEqual(std_json.encode_list(values), as_numbers)
-    testing.assertEqual(std_json.encode_list(values, bigint_as_string=True), as_strings)
+    testing.assertEqual(std.json.encode_list(values), as_numbers)
+    testing.assertEqual(std.json.encode_list(values, bigint_as_string=True), as_strings)
 
 
 def _test_json_encode_error_mid_document():
@@ -282,10 +271,8 @@ def _test_json_encode_error_mid_document():
     bad_item: dict[str, ?value] = {"ok": 1, "bad": ValueError("unsupported")}
     bad_doc: dict[str, ?value] = {"items": items, "last": bad_item}
     bad_list: list[?value] = [items, ValueError("unsupported")]
-    for encode, expected in [(lambda: json.encode(bad_doc), "jsonQ_encode_dict: for key bad unknown type: B_ValueError"),
-                             (lambda: std_json.encode(bad_doc), "stdQ_jsonQ_encode_dict: for key bad unknown type: B_ValueError"),
-                             (lambda: json.encode_list(bad_list), "jsonQ_encode_list: unknown type: B_ValueError"),
-                             (lambda: std_json.encode_list(bad_list), "stdQ_jsonQ_encode_list: unknown type: B_ValueError")]:
+    for encode, expected in [(lambda: std.json.encode(bad_doc), "stdQ_jsonQ_encode_dict: for key bad unknown type: B_ValueError"),
+                             (lambda: std.json.encode_list(bad_list), "stdQ_jsonQ_encode_list: unknown type: B_ValueError")]:
         for _ in range(50):
             try:
                 encode()
@@ -293,8 +280,6 @@ def _test_json_encode_error_mid_document():
                 testing.assertEqual(error.error_message, expected)
             else:
                 testing.error("Expected ValueError for an unsupported JSON value")
-    good_doc: dict[str, ?value] = {"items": items}
-    testing.assertEqual(json.encode(good_doc), std_json.encode(good_doc))
 
 
 def _test_json_decode_error_mid_document():
@@ -302,10 +287,8 @@ def _test_json_decode_error_mid_document():
     array_source = "[" + numbers + ",[1e999]]"
     object_source = r"""{"numbers":[""" + numbers + r"""],"bad":{"x":-1e999}}"""
     expected = "JSON floating-point number is out of range"
-    for decode in [lambda: json.decode_list(array_source),
-                   lambda: std_json.decode_list(array_source),
-                   lambda: json.decode(object_source),
-                   lambda: std_json.decode(object_source)]:
+    for decode in [lambda: std.json.decode_list(array_source),
+                   lambda: std.json.decode(object_source)]:
         for _ in range(20):
             try:
                 decode()
@@ -338,21 +321,18 @@ def _test_json_decode_errors():
         (r'["x",{"a":[1e999]}]', "JSON floating-point number is out of range"),
     ]
     for source, expected in decode_cases:
-        for decode in [lambda: json.decode(source), lambda: std_json.decode(source)]:
-            try:
-                decode()
-            except ValueError as error:
-                testing.assertEqual(error.error_message, expected)
-            else:
-                testing.error("Expected ValueError for " + source)
+        try:
+            std.json.decode(source)
+        except ValueError as error:
+            testing.assertEqual(error.error_message, expected)
+        else:
+            testing.error("Expected ValueError for " + source)
     for source, expected in list_cases:
-        for decode_list in [lambda: json.decode_list(source), lambda: std_json.decode_list(source)]:
-            try:
-                decode_list()
-            except ValueError as error:
-                testing.assertEqual(error.error_message, expected)
-            else:
-                testing.error("Expected ValueError for " + source)
+        try:
+            std.json.decode_list(source)
+        except ValueError as error:
+            testing.assertEqual(error.error_message, expected)
+        else:
+            testing.error("Expected ValueError for " + source)
     source = r'{"a":[1,{"b":null}]}'
-    testing.assertEqual(json.encode(json.decode(source)), source)
-    testing.assertEqual(std_json.encode(std_json.decode(source)), source)
+    testing.assertEqual(std.json.encode(std.json.decode(source)), source)

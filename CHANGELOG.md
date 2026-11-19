@@ -164,6 +164,12 @@
   [#3325]
 
 ### Standard Library
+- Breaking: the library modules that were in both base and std are now only
+  in std. Import them with the `std.` prefix, for example `import std.json`
+  and `std.json.encode(...)`: aon, argparse, base64, buildy, compress.gzip,
+  compress.zlib, crypto.hash.md5, diff, hash.wyhash, http, json, math, qcheck,
+  random, re, snappy, term, uri and xml. Base keeps `__builtin__`, `testing`,
+  `logging`, `time`, `file`, `fs`, `net` and `matrix`.
 - Breaking: `testing` keeps the test types and asserts, and the test runner
   moved to `std.testing.runner`, which the generated `test_main` of a module
   that imports `testing` calls. `NotEqualError` takes `print_diff` instead of

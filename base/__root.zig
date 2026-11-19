@@ -6,7 +6,7 @@ const gc = @import("rts/gc.zig");
 // Both base64 functions build their result with acton.new_bytes so that it
 // looks exactly like bytes built by the C runtime, with a real (non-dangling)
 // buffer even when the output is empty.
-export fn base64Q_encode(data: *acton.bytes) callconv(.c) *acton.bytes {
+export fn stdQ_base64Q_encode(data: *acton.bytes) callconv(.c) *acton.bytes {
     const encoder = std.base64.standard.Encoder;
     // For possible Unicode input, bytes and chars may not be 1:1
     const data_len: usize = @intCast(data.nbytes);
@@ -17,7 +17,7 @@ export fn base64Q_encode(data: *acton.bytes) callconv(.c) *acton.bytes {
     return res;
 }
 
-export fn base64Q_decode(data: *acton.bytes) callconv(.c) *acton.bytes {
+export fn stdQ_base64Q_decode(data: *acton.bytes) callconv(.c) *acton.bytes {
     const decoder = std.base64.standard.Decoder;
     // Slice the input by its length for the decoder
     const data_len: usize = @intCast(data.nbytes);
@@ -37,14 +37,6 @@ export fn base64Q_decode(data: *acton.bytes) callconv(.c) *acton.bytes {
         unreachable;
     };
     return res;
-}
-
-export fn stdQ_base64Q_encode(data: *acton.bytes) callconv(.c) *acton.bytes {
-    return base64Q_encode(data);
-}
-
-export fn stdQ_base64Q_decode(data: *acton.bytes) callconv(.c) *acton.bytes {
-    return base64Q_decode(data);
 }
 
 const flate = std.compress.flate;
@@ -104,28 +96,12 @@ fn compressBytes(data: *acton.bytes, container: flate.Container) *acton.bytes {
     return res;
 }
 
-export fn compressQ_gzipQ_compress(data: *acton.bytes) callconv(.c) *acton.bytes {
-    return compressBytes(data, .gzip);
-}
-
-export fn compressQ_zlibQ_compress(data: *acton.bytes) callconv(.c) *acton.bytes {
-    return compressBytes(data, .zlib);
-}
-
 export fn stdQ_compressQ_gzipQ_compress(data: *acton.bytes) callconv(.c) *acton.bytes {
     return compressBytes(data, .gzip);
 }
 
 export fn stdQ_compressQ_zlibQ_compress(data: *acton.bytes) callconv(.c) *acton.bytes {
     return compressBytes(data, .zlib);
-}
-
-export fn compressQ_gzipQ_decompress(data: *acton.bytes) callconv(.c) *acton.bytes {
-    return decompressBytes(data, .gzip);
-}
-
-export fn compressQ_zlibQ_decompress(data: *acton.bytes) callconv(.c) *acton.bytes {
-    return decompressBytes(data, .zlib);
 }
 
 export fn stdQ_compressQ_gzipQ_decompress(data: *acton.bytes) callconv(.c) *acton.bytes {

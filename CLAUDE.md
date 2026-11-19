@@ -115,10 +115,14 @@ typedef struct actor_state_t {
 4. Add tests in `test/builtins_auto/`
 
 ### Adding a Standard Library Module
-1. Create `.act` file in `base/src/`
+1. Create `.act` file in `std/src/` (imported as `std.<name>`)
 2. Add C extension in `.ext.c` if needed
-3. Update `base/Build.act`
+3. Add any C library to `std/Build.act`
 4. Add module tests
+
+`base/src/` holds only what the compiler and runtime need: `__builtin__`,
+`testing` (test types and asserts) and the modules they use. Every other
+library module lives in `std/src/`. See [base/CLAUDE.md](base/CLAUDE.md).
 
 ### Modifying the Compiler
 1. Work in `compiler/lib/src/Acton/`

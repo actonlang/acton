@@ -159,7 +159,7 @@ stored names through the matching `name-info/<suffix>` entries, so the query
 index itself stays small. The attribute indexes record attributes where they
 are declared; readers complete inherited owners through the descendants index.
 
-For example, `base/src/base64.act` contains top-level `encode` and `decode`
+For example, `std/src/base64.act` contains top-level `encode` and `decode`
 definitions. Its `.tydb` uses these keys:
 
 ```text
