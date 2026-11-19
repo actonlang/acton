@@ -168,13 +168,15 @@
   in std. Import them with the `std.` prefix, for example `import std.json`
   and `std.json.encode(...)`: aon, argparse, base64, buildy, compress.gzip,
   compress.zlib, crypto.hash.md5, diff, hash.wyhash, http, json, math, qcheck,
-  random, re, snappy, term, uri and xml. Base keeps `__builtin__`, `testing`,
+  random, re, term, uri and xml. Base keeps `__builtin__`, `testing`,
   `logging`, `time`, `file`, `fs`, `net` and `matrix`.
 - Breaking: `testing` keeps the test types and asserts, and the test runner
   moved to `std.testing.runner`, which the generated `test_main` of a module
   that imports `testing` calls. `NotEqualError` takes `print_diff` instead of
   `diff_str`, and the runner renders the diff when it reports the failure, so
   `str()` of a `NotEqualError` no longer contains the diff.
+- Breaking: remove the `snappy` module. Use the
+  [acton-snappy](https://github.com/actonlang/acton-snappy) package instead.
 - Add `std.syslog`, a new module for sending and receiving syslog messages
   over UDP, TCP, and TLS. Use `Client` and `Server` for UDP, or `StreamClient`
   and `StreamServer` for TCP and TLS. The module includes an RFC 5424 codec

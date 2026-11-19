@@ -255,7 +255,6 @@ DEPS += dist/deps/libuuid
 DEPS += dist/deps/libuv
 DEPS += dist/deps/libxml2
 DEPS += dist/deps/libyyjson
-DEPS += dist/deps/libsnappy_c
 
 .PHONE: clean-downloads
 clean-downloads:
@@ -512,21 +511,6 @@ dist/deps/pcre2: deps-download/$(LIBPCRE2_REF).tar.gz $(LIBPCRE2_BUILD_ZIG)
 	cp "$(TD)/$(LIBPCRE2_BUILD_ZIG)" "$@/build.zig"
 	rm -rf "$@/.github" "$@/autogen.sh" "$@/doc" "$@/maint" "$@/testdata" "$@/vms"
 	rm -f "$@"/132html "$@"/CheckMan "$@"/CleanTxt "$@"/Detrail "$@"/PrepareRelease "$@"/RunGrepTest "$@"/RunTest "$@"/pcre2-config.in "$@"/perltest.sh
-	touch "$(TD)/$@"
-
-# /deps/libsnappy_c --------------------------------------------
-LIBSNAPPY_C_REF=dc05e026488865bc69313a68bcc03ef2e4ea8e83
-LIBSNAPPY_C_BUILD_ZIG=deps/libsnappy_c/build.zig
-deps-download/$(LIBSNAPPY_C_REF).tar.gz:
-	mkdir -p deps-download
-	$(CURL) -o $@ https://github.com/google/snappy/archive/$(LIBSNAPPY_C_REF).tar.gz
-
-dist/deps/libsnappy_c: deps-download/$(LIBSNAPPY_C_REF).tar.gz $(LIBSNAPPY_C_BUILD_ZIG)
-	rm -rf "$@"
-	mkdir -p "$@"
-	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<"
-	cp "$(TD)/$(LIBSNAPPY_C_BUILD_ZIG)" "$@/build.zig"
-	rm -rf "$@/.github" "$@/cmake" "$@/docs" "$@/testdata" "$@/third_party"
 	touch "$(TD)/$@"
 
 dist/deps/libnetstring: deps/libnetstring $(DIST_ZIG)
