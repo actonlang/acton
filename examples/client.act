@@ -3,7 +3,8 @@ import net
 actor main(env):
 
     def on_connect(c):
-        print("Client established connection to", c.remote_address(), "from", c.local_address(), "using IP version", c.ip_version())
+        ep = c.endpoints()
+        print("Client established connection to", ep.remote_address, "from", ep.local_address, "using IP version", c.ip_version())
         def conn_write(s):
             c.write(s.encode())
 

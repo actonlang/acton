@@ -8,7 +8,8 @@ actor main(env):
             print("Syslog server could not listen:", error)
             env.exit(1)
         else:
-            print("Listening on", server.local_address(), server.local_port())
+            ep = server.endpoint()
+            print("Listening on", ep.address, ep.port)
 
     def received(server: std.syslog.Server, message: std.syslog.Message,
                  peer: str, port: int):

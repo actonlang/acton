@@ -105,10 +105,11 @@ actor _test_SyslogTLSServerWire(t: testing.EnvT):
         if error is not None:
             finish("TLS server bind failed: {error}")
             return
-        if s.local_address() != "127.0.0.1" or s.local_port() <= 0:
+        ep = s.endpoint()
+        if ep.address != "127.0.0.1" or ep.port <= 0:
             finish("TLS server did not report its listening endpoint")
             return
-        sender = net.TLSConnection(net.TCPConnectCap(cap), "127.0.0.1", s.local_port(), connected,
+        sender = net.TLSConnection(net.TCPConnectCap(cap), "127.0.0.1", ep.port, connected,
                                    sender_received, sender_failed, sender_closed,
                                    ca_pem=certs.CA_PEM, server_name="localhost")
 
@@ -223,7 +224,7 @@ actor mutual_auth_recovery(t: testing.EnvT, reject_callback: bool):
         if error is not None or port != 0:
             finish("Mutual TLS server repeated or failed its initial bind callback")
             return
-        port = s.local_port()
+        port = s.endpoint().port
         client_cert = certs.CLIENT_CERT_PEM if reject_callback else None
         client_key = certs.CLIENT_KEY_PEM if reject_callback else None
         c = std.syslog.StreamClient(net.TCPConnectCap(cap), "127.0.0.1", port, rejected_connected, rejected_failed,
@@ -334,7 +335,7 @@ actor _test_SyslogTLSHandshakeTimeoutRecovery(t: testing.EnvT):
         if error is not None or port != 0:
             finish("TLS deadline server repeated or failed its initial bind callback")
             return
-        port = s.local_port()
+        port = s.endpoint().port
         stalled = net.TCPConnection(net.TCPConnectCap(cap), "127.0.0.1", port,
                                     stalled_connected, stalled_received, stalled_failed, stalled_ended)
 

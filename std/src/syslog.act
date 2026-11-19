@@ -604,17 +604,18 @@ actor Server(cap: net.UDPListenCap, address: str, port: int,
         if not _closed:
             _listener = net.UDPListener(cap, address, port, bound, received, failed)
 
-    action def local_address() -> str:
+    action def endpoint() -> (address: str, port: int):
+        """Address and port of the socket, empty and 0 when closed"""
         listener = _listener
         if listener is not None and not _closed:
-            return listener.local_address()
-        return ""
+            return listener.endpoint()
+        return (address="", port=0)
+
+    action def local_address() -> str:
+        return endpoint().address
 
     action def local_port() -> int:
-        listener = _listener
-        if listener is not None and not _closed:
-            return listener.local_port()
-        return 0
+        return endpoint().port
 
     action def close() -> None:
         """Close the listener. Safe to call repeatedly."""
@@ -905,8 +906,7 @@ actor StreamServer(cap: net.TCPListenCap, address: str, port: int,
     if not (0.0 <= handshake_timeout and handshake_timeout < float("inf")):
         raise invalid_handshake_timeout_error
     var _stop_listener: ?action() -> None = None
-    var _local_address: ?action() -> str = None
-    var _local_port: ?action() -> int = None
+    var _endpoint: ?action() -> (address: str, port: int) = None
     var _connections: dict[int, (decoder: StreamDecoder, peer: str, port: int, close: action() -> None)] = {}
     var _next_connection = 0
     var _ready = False
@@ -996,8 +996,8 @@ actor StreamServer(cap: net.TCPListenCap, address: str, port: int,
         return key
 
     def accepted(c: net.TCPListenConnection):
-        endpoints = c.endpoints()
-        key = accept(endpoints.remote_address, endpoints.remote_port, c.close)
+        ep = c.endpoints()
+        key = accept(ep.remote_address, ep.remote_port, c.close)
         if key is not None:
             def received(conn: net.TCPListenConnection, data: bytes):
                 data_received(key, data)
@@ -1011,8 +1011,8 @@ actor StreamServer(cap: net.TCPListenCap, address: str, port: int,
             c.cb_install(received, failed, closed)
 
     def tls_accepted(c: net.TLSListenConnection):
-        endpoints = c.endpoints()
-        key = accept(endpoints.remote_address, endpoints.remote_port, c.close)
+        ep = c.endpoints()
+        key = accept(ep.remote_address, ep.remote_port, c.close)
         if key is not None:
             def received(conn: net.TLSListenConnection, data: bytes):
                 data_received(key, data)
@@ -1034,33 +1034,31 @@ actor StreamServer(cap: net.TCPListenCap, address: str, port: int,
                                            verify_tls=verify_tls, ca_pem=ca_pem,
                                            verify_peer=verify_peer, handshake_timeout=handshake_timeout)
             _stop_listener = tls_listener.close
-            _local_address = tls_listener.local_address
-            _local_port = tls_listener.local_port
+            _endpoint = tls_listener.endpoint
         else:
             listener = net.TCPListener(cap, address, port, bound, accepted)
             _stop_listener = listener.close
-            _local_address = listener.local_address
-            _local_port = listener.local_port
+            _endpoint = listener.endpoint
+
+    action def endpoint() -> (address: str, port: int):
+        """Address and port of the listening socket, empty and 0 when closed"""
+        get_endpoint = _endpoint
+        if get_endpoint is not None and not _closed:
+            return get_endpoint()
+        return (address="", port=0)
 
     action def local_address() -> str:
-        get_address = _local_address
-        if get_address is not None and not _closed:
-            return get_address()
-        return ""
+        return endpoint().address
 
     action def local_port() -> int:
-        get_port = _local_port
-        if get_port is not None and not _closed:
-            return get_port()
-        return 0
+        return endpoint().port
 
     action def close() -> None:
         """Close the listener and every accepted connection. Idempotent."""
         _closed = True
         stop_listener = _stop_listener
         _stop_listener = None
-        _local_address = None
-        _local_port = None
+        _endpoint = None
         if stop_listener is not None:
             stop_listener()
         for state in _connections.values():

@@ -119,7 +119,8 @@ actor server_frames(t: testing.EnvT, address: str, legacy: bool=True):
             fail("Syslog server closed a valid framed stream")
             return
         if server is not None:
-            if server.local_address() != "" or server.local_port() != 0:
+            ep = server.endpoint()
+            if ep.address != "" or ep.port != 0:
                 fail("Closed stream server retained its bound endpoint")
                 return
         done = True
@@ -138,8 +139,9 @@ actor server_frames(t: testing.EnvT, address: str, legacy: bool=True):
             else:
                 fail("Syslog stream listen failed: {error}")
             return
-        destination_port = s.local_port()
-        if s.local_address() != address or destination_port <= 0:
+        ep = s.endpoint()
+        destination_port = ep.port
+        if ep.address != address or destination_port <= 0:
             fail("Syslog stream listener did not report its bound endpoint")
             return
         sender = net.TCPConnection(net.TCPConnectCap(cap), address, destination_port, connected, raw_received, sender_failed, remote_closed)
@@ -250,7 +252,7 @@ actor server_recovery(t: testing.EnvT, broken: bytes, expected_error: str, trunc
         if error is not None:
             fail("Syslog stream listen failed: {error}")
             return
-        port = s.local_port()
+        port = s.endpoint().port
         clients.append(net.TCPConnection(net.TCPConnectCap(cap), "127.0.0.1", port, broken_connected, raw_received, client_failed, broken_closed))
 
     server = std.syslog.StreamServer(net.TCPListenCap(cap), "127.0.0.1", 0, bound, received, server_failed, max_size=480, max_connections=1)
@@ -356,7 +358,7 @@ actor _test_SyslogTCPConnectionLimit(t: testing.EnvT):
         if error is not None:
             fail("Syslog stream listen failed: {error}")
             return
-        port = s.local_port()
+        port = s.endpoint().port
         client = std.syslog.StreamClient(net.TCPConnectCap(cap), "127.0.0.1", port, client_connected, client_failed)
 
     server = std.syslog.StreamServer(net.TCPListenCap(cap), "127.0.0.1", 0, bound, received, server_failed, max_connections=1)
@@ -508,7 +510,7 @@ actor _test_SyslogTCPClientWire(t: testing.EnvT):
         if error is not None:
             fail("Raw TCP listener failed: {error}")
             return
-        destination_port = l.local_port()
+        destination_port = l.endpoint().port
         c = std.syslog.StreamClient(net.TCPConnectCap(cap), "127.0.0.1", destination_port, connected, client_failed, max_size=480)
         client = c
         # A caller need not wait for on_connect before sending. Whether this
@@ -611,7 +613,7 @@ actor _test_SyslogTCPClientNoStartupQueue(t: testing.EnvT):
         if error is not None:
             fail("Zero-queue listener failed: {error}")
             return
-        c = std.syslog.StreamClient(net.TCPConnectCap(cap), "127.0.0.1", l.local_port(), connected, client_failed, max_pending=0)
+        c = std.syslog.StreamClient(net.TCPConnectCap(cap), "127.0.0.1", l.endpoint().port, connected, client_failed, max_pending=0)
         client = c
         # The connection may become ready before this send runs. Both outcomes
         # are valid; receipt of on_connect is not a gate on internal readiness.
@@ -677,7 +679,7 @@ actor _test_SyslogTCPClientImmediateClose(t: testing.EnvT):
         if error is not None:
             fail("Immediate-close listener failed: {error}")
             return
-        c = std.syslog.StreamClient(net.TCPConnectCap(cap), "127.0.0.1", l.local_port(), connected, client_failed)
+        c = std.syslog.StreamClient(net.TCPConnectCap(cap), "127.0.0.1", l.endpoint().port, connected, client_failed)
         client = c
         c.close()
         c.close()

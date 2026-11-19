@@ -119,7 +119,8 @@ actor main(env):
             print("Syslog server could not listen:", error)
             env.exit(1)
         else:
-            print("Listening on", server.local_address(), server.local_port())
+            ep = server.endpoint()
+            print("Listening on", ep.address, ep.port)
 
     def received(server: std.syslog.Server, message: std.syslog.Message,
                  peer: str, port: int):
@@ -143,10 +144,10 @@ the listener remains available for subsequent datagrams. Set `legacy=False`
 to accept only RFC 5424 messages.
 
 The server runs until closed or the program exits. `close()` is safe to call
-repeatedly. Port 0 requests an ephemeral port; query `local_port()` after the
-successful `on_listen` callback to find the selected port. `local_address()`
-returns the bound address. Both return an empty value before the listener is
-ready or after it is closed.
+repeatedly. Port 0 requests an ephemeral port; after the successful
+`on_listen` callback, `endpoint()` returns the bound `address` and the
+selected `port`. It returns an empty address and port 0 before the
+listener is ready or after it is closed.
 
 Both actors accept `max_size` from 480 through 65507 bytes. These limits apply
 to the entire encoded message. Choose a limit that suits the receiving system
@@ -166,8 +167,8 @@ oversized messages, and a full startup queue are reported through `on_error`.
 max_size=65536, max_connections=64, legacy=True)` accepts a `net.TCPListenCap`.
 Its callbacks have the same arguments as the UDP server, with the TCP peer's
 address and port included in `on_message`. Port 0 selects an ephemeral port;
-query `local_port()` after `on_listen` succeeds. `local_address()` returns the
-bound address.
+`endpoint()` returns the bound `address` and the selected `port` after
+`on_listen` succeeds.
 
 Both stream actors require `max_size` of at least 480 bytes. This limits the
 encoded message, excluding its length prefix. The server buffers at most one

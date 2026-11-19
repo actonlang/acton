@@ -272,7 +272,7 @@ actor logging_sink_network(t: testing.EnvT, stream: bool):
             fail("Syslog UDP listen failed: " + error)
             return
         c = std.syslog.Client(net.UDPConnectCap(net.UDPCap(cap)), "127.0.0.1",
-                          s.local_port(), udp_connected, udp_failed)
+                          s.endpoint().port, udp_connected, udp_failed)
         close_client = c.close
         log(c.send)
 
@@ -297,7 +297,7 @@ actor logging_sink_network(t: testing.EnvT, stream: bool):
             fail("Syslog TCP listen failed: " + error)
             return
         c = std.syslog.StreamClient(net.TCPConnectCap(net.TCPCap(cap)), "127.0.0.1",
-                                s.local_port(), tcp_connected, tcp_failed)
+                                s.endpoint().port, tcp_connected, tcp_failed)
         close_client = c.close
         log(c.send)
 

@@ -135,7 +135,7 @@ actor tls_handshake(t: testing.EnvT, what: str,
                 server_errors.append(error)
             return
         listener = l
-        port = l.local_port()
+        port = l.endpoint().port
         net.TLSConnection(connect_cap, "127.0.0.1", port, on_connect, on_receive, on_error, None,
                           verify_tls=verify_tls, protocols=protocols, ca_pem=ca_pem, cert_pem=cert_pem, key_pem=key_pem,
                           server_name=server_name, verify_peer=verify_peer, connect_timeout=5.0)
@@ -381,7 +381,7 @@ actor tls_writing_server(t: testing.EnvT, on_listening: action(tls_writing_serve
     def on_listen(l: net.TLSListener, error: ?str):
         if listener is None and error is None:
             listener = l
-            on_listening(self, l.local_port())
+            on_listening(self, l.endpoint().port)
 
     def on_accept(s: net.TLSListenConnection):
         s.cb_install(on_receive, on_error)
@@ -643,7 +643,7 @@ actor _test_TLSClientHandshakeTimeout(t: testing.EnvT):
             t.failure(AssertionError("listen error: " + error))
             return
         listener = l
-        net.TLSConnection(net.TCPConnectCap(tcp_cap), "127.0.0.1", l.local_port(), on_connect, on_receive, on_error, None,
+        net.TLSConnection(net.TCPConnectCap(tcp_cap), "127.0.0.1", l.endpoint().port, on_connect, on_receive, on_error, None,
                           ca_pem=CA_PEM, connect_timeout=0.5)
         after 1.5: check()
 
@@ -699,7 +699,7 @@ actor _test_TLSServerHandshakeTimeout(t: testing.EnvT):
                 finish("listen error: " + error)
                 return
             listener = l
-            client = net.TCPConnection(net.TCPConnectCap(tcp_cap), "127.0.0.1", l.local_port(), on_connect, on_receive, on_error)
+            client = net.TCPConnection(net.TCPConnectCap(tcp_cap), "127.0.0.1", l.endpoint().port, on_connect, on_receive, on_error)
         elif error is not None and client is not None:
             expected = "TLS handshake with client 127.0.0.1:%d timed out" % client.endpoints().local_port
             if error != expected:
@@ -733,7 +733,7 @@ actor _test_TLSCloseWhileConnecting(t: testing.EnvT):
         if error is not None:
             t.failure(AssertionError("listen error: " + error))
             return
-        c = net.TLSConnection(net.TCPConnectCap(tcp_cap), "127.0.0.1", l.local_port(), on_connect, on_receive, on_error, None,
+        c = net.TLSConnection(net.TCPConnectCap(tcp_cap), "127.0.0.1", l.endpoint().port, on_connect, on_receive, on_error, None,
                               ca_pem=CA_PEM, connect_timeout=0.3)
         c.close(on_close)
         after 0.6: check(l)
@@ -792,7 +792,7 @@ actor _test_TLSListenerCloseAbortsHandshake(t: testing.EnvT):
                 return
             listener = l
             # A client that never starts the handshake
-            client = net.TCPConnection(net.TCPConnectCap(tcp_cap), "127.0.0.1", l.local_port(), on_connect, on_receive, on_error, on_remote_close)
+            client = net.TCPConnection(net.TCPConnectCap(tcp_cap), "127.0.0.1", l.endpoint().port, on_connect, on_receive, on_error, on_remote_close)
         elif error is not None:
             finish("unexpected listener error: " + error)
 
