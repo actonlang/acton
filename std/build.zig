@@ -84,11 +84,6 @@ pub fn build(b: *std.Build) void {
         .linkage = .static,
     });
 
-    const dep_libsnappy_c = b.dependency("libsnappy", .{
-        .target = target,
-        .optimize = optimize,
-    });
-
     const dep_libxml2 = b.dependency("libxml2", .{
         .target = target,
         .optimize = optimize,
@@ -240,7 +235,6 @@ pub fn build(b: *std.Build) void {
 
     libActonProject.root_module.linkLibrary(actonbase_dep.artifact("Acton"));
     libActonProject.root_module.linkLibrary(dep_libpcre2.artifact("pcre2-8"));
-    libActonProject.root_module.linkLibrary(dep_libsnappy_c.artifact("snappy-c"));
     libActonProject.root_module.linkLibrary(dep_libxml2.artifact("xml2"));
     libActonProject.root_module.linkLibrary(dep_libyyjson.artifact("yyjson"));
 
@@ -263,6 +257,5 @@ pub fn build(b: *std.Build) void {
     }
 
     libActonProject.root_module.link_libc = true;
-    libActonProject.root_module.link_libcpp = true;
     b.installArtifact(libActonProject);
 }

@@ -13,7 +13,6 @@ import std.math
 import std.qcheck
 import std.random
 import std.re
-import std.snappy
 import std.term
 import std.xml
 
@@ -36,7 +35,6 @@ def _test_std_namespace_data_modules():
     testing.assertEqual(std.json.encode({"value": json_bigint}), r"""{"value":-18446744073709551617}""")
     testing.assertEqual(std.json.encode({"value": json_bigint}, bigint_as_string=True), r"""{"value":"-18446744073709551617"}""")
     testing.assertEqual(std.xml.encode(std.xml.Node("a", text="hello")), "<a>hello</a>")
-    testing.assertEqual(std.snappy.decompress(std.snappy.compress(b"hello hello hello")), b"hello hello hello")
     testing.assertEqual(std.crypto.hash.md5.hash(b"abc"), b"\x90\x01\x50\x98\x3c\xd2\x4f\xb0\xd6\x96\x3f\x7d\x28\xe1\x7f\x72")
     testing.assertEqual(std.hash.wyhash.hash(2, b"abc"), 0x32dd92e4b2915153)
 

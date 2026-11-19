@@ -68,8 +68,8 @@ class Acton < Formula
 
   test do
     # On macOS, brew test puts the SDK include directory in CPATH. clang, which
-    # zig runs, then finds the SDK C headers before the libc++ headers, and the
-    # C++ files of snappy-c do not compile.
+    # zig runs, then finds the SDK C headers before the libc++ headers, and
+    # libc++, which zig builds for every program, does not compile.
     ENV.delete "CPATH"
 
     testapp = (testpath/"hello.act")
