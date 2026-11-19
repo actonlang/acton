@@ -1,5 +1,5 @@
 import net
-import http
+import std.http
 import logging
 
 # PolarSSL/mbedTLS self-signed test certificate
@@ -70,7 +70,7 @@ actor main(env):
     def on_error(server, error):
         print("HTTPS server error:", error)
 
-    http.TLSListener(
+    std.http.TLSListener(
         listen_cap,
         "127.0.0.1",
         8443,

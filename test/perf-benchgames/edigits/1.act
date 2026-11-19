@@ -2,10 +2,10 @@
 
 # port of 1.py
 
-import math
+import std.math
 
-ln_tau = math.log(6.283185307179586)
-ln_10 = math.log(float(10))
+ln_tau = std.math.log(6.283185307179586)
+ln_10 = std.math.log(float(10))
 
 
 def sum_terms(a: int, b: int) -> (bigint, bigint):
@@ -36,7 +36,7 @@ def test_k(n, k) -> bool:
     if k <= 0:
         return False
     else:
-        ln_k_factorial = float(k) * (math.log(float(k))-1) + 0.5 * ln_tau
+        ln_k_factorial = float(k) * (std.math.log(float(k))-1) + 0.5 * ln_tau
         log_10_k_factorial = ln_k_factorial / ln_10
         return (int(log_10_k_factorial) >= n+50)
 

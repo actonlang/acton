@@ -1,5 +1,5 @@
 import numpy
-import math
+import std.math
 
 def loess(x, y, xin, win):
     win1 = win-1                                # to be compatible with Loess.py and Loess_with_np.py
@@ -17,7 +17,7 @@ def loess(x, y, xin, win):
 
 def sample():
     x = numpy.linspace(0.0, 10.0, 101)
-    y = numpy.unirandfloat(1.0, 3.0, 101) + math.sin(x)
+    y = numpy.unirandfloat(1.0, 3.0, 101) + std.math.sin(x)
     z = loess(x, y, x, 40)
     print("clear\n$data <<EOD");
     for i in range(101):

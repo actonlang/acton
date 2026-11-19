@@ -2,9 +2,9 @@
 # Adapted from 1.py by Kevin Carson, Tupteq, Fredrik Johansson,
 # Daniel Nanz, and Maciej Fijalkowski.
 
-import math
+import std.math
 
-solar_mass = 4.0 * math.pi * math.pi
+solar_mass = 4.0 * std.math.pi * std.math.pi
 days_per_year = 365.24
 
 class Body(object):
@@ -28,7 +28,7 @@ def energy(bodies: list[Body]) -> float:
             dx = a.x - b.x
             dy = a.y - b.y
             dz = a.z - b.z
-            e -= a.mass * b.mass / math.sqrt(dx*dx + dy*dy + dz*dz)
+            e -= a.mass * b.mass / std.math.sqrt(dx*dx + dy*dy + dz*dz)
     return e
 
 def advance(bodies: list[Body], pairs: list[(Body, Body)], n: int):
@@ -38,7 +38,7 @@ def advance(bodies: list[Body], pairs: list[(Body, Body)], n: int):
             dy = a.y - b.y
             dz = a.z - b.z
             distance2 = dx*dx + dy*dy + dz*dz
-            mag = 0.01 / (distance2 * math.sqrt(distance2))
+            mag = 0.01 / (distance2 * std.math.sqrt(distance2))
             am = a.mass * mag
             bm = b.mass * mag
             a.vx -= dx * bm

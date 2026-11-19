@@ -1,5 +1,5 @@
-import aon
-import json
+import std.aon
+import std.json
 import testing
 
 
@@ -72,7 +72,7 @@ def _str_list_field(table: dict[str, ?value], name: str) -> list[str]:
 
 
 def _test_sections_and_scalar_values():
-    document = aon.decode(r'''
+    document = std.aon.decode(r'''
 name = "example"
 enabled = True
 limit = None
@@ -107,7 +107,7 @@ network:
 
 
 def _test_lists_and_named_tuples():
-    document = aon.decode(r'''
+    document = std.aon.decode(r'''
 ports = [80, 443]
 peers = [
     (host = "one", port = 830),
@@ -135,7 +135,7 @@ peers = [
     else:
         raise ValueError("Expected peers to be a list")
 
-    spaced = aon.decode_value(r'''(
+    spaced = std.aon.decode_value(r'''(
         newline
         = 1,
         commented # explanation
@@ -149,29 +149,29 @@ peers = [
 
 
 def _test_standalone_values():
-    value = aon.decode_value('[(name = "one"), (name = "two")]')
+    value = std.aon.decode_value('[(name = "one"), (name = "two")]')
     if isinstance(value, list):
         testing.assertEqual(len(value), 2)
     else:
         raise ValueError("Expected standalone AON list")
 
-    commented = aon.decode_value("[1, # inner comment\n2]")
+    commented = std.aon.decode_value("[1, # inner comment\n2]")
     if isinstance(commented, list):
         testing.assertEqual(len(commented), 2)
     else:
         raise ValueError("Expected comments inside a standalone AON list")
 
     try:
-        aon.decode_value("[1, 2] # trailing comment")
-    except aon.AonParseError:
+        std.aon.decode_value("[1, 2] # trailing comment")
+    except std.aon.AonParseError:
         pass
     else:
         raise ValueError("Expected trailing text after an AON value to fail")
 
 
 def _test_acton_string_escapes():
-    escaped = aon.decode_value(r'''"\a\v\x48\123"''')
-    continued = aon.decode_value('"one' + "\\" + "\n" + 'two"')
+    escaped = std.aon.decode_value(r'''"\a\v\x48\123"''')
+    continued = std.aon.decode_value('"one' + "\\" + "\n" + 'two"')
     if isinstance(escaped, str) and isinstance(continued, str):
         testing.assertEqual(escaped, "\a\vHS")
         testing.assertEqual(continued, "onetwo")
@@ -180,8 +180,8 @@ def _test_acton_string_escapes():
 
     for text in [r'''"\x4"''', r'''"\400"''']:
         try:
-            aon.decode_value(text)
-        except aon.AonParseError:
+            std.aon.decode_value(text)
+        except std.aon.AonParseError:
             pass
         else:
             raise ValueError(f"Expected invalid Acton escape to fail: {repr(text)}")
@@ -189,8 +189,8 @@ def _test_acton_string_escapes():
 
 def _test_deterministic_encoding_and_json_conversion():
     json_text = r'''{"name":"example","enabled":true,"limit":null,"ratio":1.25,"network":{"port":830,"tls":false},"empty":{},"tags":["edge","backup"],"peers":[{"host":"one","port":830},{"host":"two","port":831}]}'''
-    document = json.decode(json_text)
-    encoded = aon.encode(document)
+    document = std.json.decode(json_text)
+    encoded = std.aon.encode(document)
     testing.assertEqual(encoded, '''name = "example"
 enabled = True
 limit = None
@@ -211,14 +211,14 @@ peers = [
     ),
 ]
 ''')
-    testing.assertEqual(json.encode(aon.decode(encoded)), json_text)
+    testing.assertEqual(std.json.encode(std.aon.decode(encoded)), json_text)
 
     aon_text = '''service:
   name = "example"
   ports = [80, 443]
 '''
     testing.assertEqual(
-        aon.encode(json.decode(json.encode(aon.decode(aon_text))), indent=2),
+        std.aon.encode(std.json.decode(std.json.encode(std.aon.decode(aon_text))), indent=2),
         aon_text
     )
 
@@ -230,7 +230,7 @@ peers = [
         "räksmörgås": 5,
         "_bare9": 6,
     }
-    encoded_keys = aon.encode(unusual_keys)
+    encoded_keys = std.aon.encode(unusual_keys)
     testing.assertEqual(encoded_keys, r'''"" = 1
 "display name" = 2
 "say\"hi" = 3
@@ -238,28 +238,28 @@ peers = [
 "räksmörgås" = 5
 _bare9 = 6
 ''')
-    testing.assertEqual(json.encode(aon.decode(encoded_keys)), json.encode(unusual_keys))
+    testing.assertEqual(std.json.encode(std.aon.decode(encoded_keys)), std.json.encode(unusual_keys))
 
 
 def _test_standalone_encoding():
     text = "line\n\"quoted\"\\tab\t\x01"
-    encoded = aon.encode_value(text)
+    encoded = std.aon.encode_value(text)
     testing.assertEqual(encoded, r'''"line\n\"quoted\"\\tab\t\u0001"''')
-    decoded = aon.decode_value(encoded)
+    decoded = std.aon.decode_value(encoded)
     if isinstance(decoded, str):
         testing.assertEqual(decoded, text)
     else:
         raise ValueError("Expected encoded AON string to round trip")
 
     empty: dict[str, ?value] = {}
-    testing.assertEqual(aon.encode(empty), "")
-    testing.assertEqual(aon.encode_value(empty), "()")
-    testing.assertEqual(aon.encode_value([]), "[]")
+    testing.assertEqual(std.aon.encode(empty), "")
+    testing.assertEqual(std.aon.encode_value(empty), "()")
+    testing.assertEqual(std.aon.encode_value([]), "[]")
 
-    testing.assertEqual(aon.encode_value(1.0), "1.0")
-    testing.assertEqual(aon.encode_value(-0.0), "-0.0")
+    testing.assertEqual(std.aon.encode_value(1.0), "1.0")
+    testing.assertEqual(std.aon.encode_value(-0.0), "-0.0")
     precise = 1.2345678901234567
-    decoded_float = aon.decode_value(aon.encode_value(precise))
+    decoded_float = std.aon.decode_value(std.aon.encode_value(precise))
     if isinstance(decoded_float, float):
         testing.assertEqual(decoded_float, precise)
     else:
@@ -268,21 +268,21 @@ def _test_standalone_encoding():
 
 def _test_encoding_rejects_unrepresentable_values():
     try:
-        aon.encode_value(float("inf"))
+        std.aon.encode_value(float("inf"))
     except ValueError:
         pass
     else:
         raise ValueError("Expected non-finite float encoding to fail")
 
     try:
-        aon.encode_value(b"bytes")
+        std.aon.encode_value(b"bytes")
     except ValueError:
         pass
     else:
         raise ValueError("Expected unsupported value encoding to fail")
 
     try:
-        aon.encode({}, indent=0)
+        std.aon.encode({}, indent=0)
     except ValueError:
         pass
     else:
@@ -305,8 +305,8 @@ def _test_invalid_layout_and_fields():
     ]
     for text in invalid:
         try:
-            aon.decode(text, "invalid.aon")
-        except aon.AonParseError as error:
+            std.aon.decode(text, "invalid.aon")
+        except std.aon.AonParseError as error:
             testing.assertTrue("invalid.aon:" in str(error))
         else:
             raise ValueError(f"Expected invalid AON to fail: {repr(text)}")

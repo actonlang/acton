@@ -1,10 +1,10 @@
-import snappy
+import std.snappy
 import testing
 
 def _test_snappy():
 
     data = ("Hello world!" * 1000).encode()
-    compressed = snappy.compress(data)
-    decompressed = snappy.decompress(compressed)
+    compressed = std.snappy.compress(data)
+    decompressed = std.snappy.decompress(compressed)
     testing.assertEqual(data, decompressed, "decompressed data does not match original")
     testing.assertTrue(len(data) > len(compressed), "compressed data is not smaller than original")

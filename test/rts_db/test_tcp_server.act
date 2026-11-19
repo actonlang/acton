@@ -1,7 +1,7 @@
 #!/usr/bin/env runacton
 
-import argparse
-import random
+import std.argparse
+import std.random
 import net
 
 # Tests that involve running an Acton program together with the database
@@ -301,14 +301,14 @@ actor Tester(env, verbose, port_chunk, app_wthreads=4):
     test_ddb_server()
 
 actor main(env):
-    p = argparse.Parser()
+    p = std.argparse.Parser()
     p.add_bool("verbose", "verbose mode")
 
     verbose = '--verbose' in set(env.argv)
 
     # compute random base port between PORT_CHUNK_MIN and PORT_CHUNK_MAX
     # in increments of PORT_CHUNK_SIZE
-    port_chunk = random.randint(int(PORT_CHUNK_MIN/PORT_CHUNK_SIZE), int(PORT_CHUNK_MAX/PORT_CHUNK_SIZE)) * PORT_CHUNK_SIZE
+    port_chunk = std.random.randint(int(PORT_CHUNK_MIN/PORT_CHUNK_SIZE), int(PORT_CHUNK_MAX/PORT_CHUNK_SIZE)) * PORT_CHUNK_SIZE
 
     t = Tester(env, verbose, port_chunk)
 

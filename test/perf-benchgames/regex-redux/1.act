@@ -2,7 +2,7 @@
 # Adapted from 1.py by Dominique Wahli, Ahmad Syukri, and Justin Peel.
 
 import file
-import re
+import std.re
 
 def scan(pattern: str, replacement: ?str, data: bytes, overlap: int=0, boundary: bytes=b"") -> (bytes, int):
     # The current regex API validates UTF-8 on every match. Small ASCII
@@ -21,7 +21,7 @@ def scan(pattern: str, replacement: ?str, data: bytes, overlap: int=0, boundary:
         if boundary == b"|" and end < len(data):
             limit = len(text) - 1
         pos = 0
-        for match in re.matches(pattern, text):
+        for match in std.re.matches(pattern, text):
             if match.start_pos >= limit:
                 break
             if replacement is not None:

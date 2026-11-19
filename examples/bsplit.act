@@ -1,4 +1,4 @@
-import math
+import std.math
 
 def bsplit(a,b):
     if b-a == 1:
@@ -14,7 +14,7 @@ def bsplit(a,b):
 
 def e(prec):
      fp = float(prec)
-     n = int(3 * fp / math.log(fp) + 20)
+     n = int(3 * fp / std.math.log(fp) + 20)
      p,q = bsplit(0,n)
      p += q
      p *= 10**prec

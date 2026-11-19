@@ -1,6 +1,6 @@
 import testing
 
-from uri import URI, quote, unquote
+from std.uri import URI, quote, unquote
 
 def _test_basic_uri():
     """Test basic URI parsing"""

@@ -1,10 +1,10 @@
 
-import compress.gzip as gzip
-import compress.zlib as zlib
+import std.compress.gzip
+import std.compress.zlib
 import net
-import http
+import std.http
 import logging
-import random
+import std.random
 import testing
 import time
 
@@ -59,23 +59,23 @@ TB6l9VGoxJL4fyHnZb8L5gGvnB1bbD8cL6YPaDiOhcRseC9vBiEuVg==
 -----END RSA PRIVATE KEY-----
 """
 
-def _requests_from(chunks: list[bytes]) -> (list[http.Request], ?str):
-    p = http.MessageParser()
+def _requests_from(chunks: list[bytes]) -> (list[std.http.Request], ?str):
+    p = std.http.MessageParser()
     reqs = []
     for c in chunks:
         for m in p.feed(c):
-            reqs.append(http.request_from_message(m))
+            reqs.append(std.http.request_from_message(m))
     return reqs, p.error
 
 def _test_http_parser(st: testing.SyncT):
     """Requests parse to the same Request whether fed whole or byte by byte"""
     tests = [
         (query = b"GET / HTTP/1.1\r\nHost: 127.0.0.1:8000\r\nUser-Agent: curl/7.85.0\r\nAccept: */*\r\n\r\n",
-         expected = http.Request("GET", "/", b"1.1", {"host": "127.0.0.1:8000", "user-agent": "curl/7.85.0", "accept": "*/*"}, b"")),
+         expected = std.http.Request("GET", "/", b"1.1", {"host": "127.0.0.1:8000", "user-agent": "curl/7.85.0", "accept": "*/*"}, b"")),
         (query = b"GET / HTTP/1.1\r\nHost: 127.0.0.1:8000\r\nUser-Agent: curl/7.85.0\r\nAccept: */*\r\nContent-Length: 5\r\n\r\nhello",
-         expected = http.Request("GET", "/", b"1.1", {"host": "127.0.0.1:8000", "user-agent": "curl/7.85.0", "accept": "*/*", "content-length": "5"}, b"hello")),
+         expected = std.http.Request("GET", "/", b"1.1", {"host": "127.0.0.1:8000", "user-agent": "curl/7.85.0", "accept": "*/*", "content-length": "5"}, b"hello")),
         (query = b"GET / HTTP/1.1\r\nHost: 127.0.0.1:8000\r\nUser-Agent: curl/7.85.0\r\nAccept: */*\r\nTransfer-Encoding: chunked\r\n\r\n4\r\nWiki\r\n5\r\npedia\r\nE\r\n in\r\n\r\nchunks.\r\n0\r\n\r\n",
-         expected = http.Request("GET", "/", b"1.1", {"host": "127.0.0.1:8000", "user-agent": "curl/7.85.0", "accept": "*/*", "transfer-encoding": "chunked"}, b"Wikipedia in\r\n\r\nchunks.")),
+         expected = std.http.Request("GET", "/", b"1.1", {"host": "127.0.0.1:8000", "user-agent": "curl/7.85.0", "accept": "*/*", "transfer-encoding": "chunked"}, b"Wikipedia in\r\n\r\nchunks.")),
         (query = b"GET / HTTP/1.1\r\nHost: loca\xe8\x03o-Length\r\n\r\n",
          expected = None),
     ]
@@ -94,37 +94,37 @@ def _test_http_parser(st: testing.SyncT):
 
 def _test_http_message_parser_pipelined_responses(st: testing.SyncT):
     """Pipelined responses in one feed all come out, in order, byte for byte"""
-    def responses(p: http.MessageParser, data: bytes) -> list[http.Response]:
-        return [http.response_from_message(m) for m in p.feed(data)]
+    def responses(p: std.http.MessageParser, data: bytes) -> list[std.http.Response]:
+        return [std.http.response_from_message(m) for m in p.feed(data)]
 
     # Content-Length framed
     first = b"HTTP/1.1 200 OK\r\nContent-Length: 12\r\n\r\nresponse-one"
     second = b"HTTP/1.1 404 Not Found\r\nContent-Length: 12\r\n\r\nresponse-two"
-    testing.assertEqual([http.Response(b"1.1", 200, {"content-length": "12"}, b"response-one"),
-                         http.Response(b"1.1", 404, {"content-length": "12"}, b"response-two")],
-                        responses(http.MessageParser(), first + second), "Content-Length framed pair")
+    testing.assertEqual([std.http.Response(b"1.1", 200, {"content-length": "12"}, b"response-one"),
+                         std.http.Response(b"1.1", 404, {"content-length": "12"}, b"response-two")],
+                        responses(std.http.MessageParser(), first + second), "Content-Length framed pair")
 
     # chunked Transfer-Encoding
     first = b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n4\r\nWiki\r\n5\r\npedia\r\n0\r\n\r\n"
     second = b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n3\r\nfoo\r\n0\r\n\r\n"
-    testing.assertEqual([http.Response(b"1.1", 200, {"transfer-encoding": "chunked"}, b"Wikipedia"),
-                         http.Response(b"1.1", 200, {"transfer-encoding": "chunked"}, b"foo")],
-                        responses(http.MessageParser(), first + second), "Chunked pair")
+    testing.assertEqual([std.http.Response(b"1.1", 200, {"transfer-encoding": "chunked"}, b"Wikipedia"),
+                         std.http.Response(b"1.1", 200, {"transfer-encoding": "chunked"}, b"foo")],
+                        responses(std.http.MessageParser(), first + second), "Chunked pair")
 
     # A 204 carries neither body nor framing headers, it ends at the empty line
     first = b"HTTP/1.1 204 No Content\r\n\r\n"
     second = b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok"
-    testing.assertEqual([http.Response(b"1.1", 204, {}, b""),
-                         http.Response(b"1.1", 200, {"content-length": "2"}, b"ok")],
-                        responses(http.MessageParser(), first + second), "Bodyless response first")
+    testing.assertEqual([std.http.Response(b"1.1", 204, {}, b""),
+                         std.http.Response(b"1.1", 200, {"content-length": "2"}, b"ok")],
+                        responses(std.http.MessageParser(), first + second), "Bodyless response first")
 
     # An incomplete second response completes with the next feed
     first = b"HTTP/1.1 200 OK\r\nContent-Length: 12\r\n\r\nresponse-one"
     partial = b"HTTP/1.1 200 OK\r\nContent-Length: 12\r\n\r\nrespon"
-    p = http.MessageParser()
-    testing.assertEqual([http.Response(b"1.1", 200, {"content-length": "12"}, b"response-one")],
+    p = std.http.MessageParser()
+    testing.assertEqual([std.http.Response(b"1.1", 200, {"content-length": "12"}, b"response-one")],
                         responses(p, first + partial), "Response ahead of a partial one")
-    testing.assertEqual([http.Response(b"1.1", 200, {"content-length": "12"}, b"response-two")],
+    testing.assertEqual([std.http.Response(b"1.1", 200, {"content-length": "12"}, b"response-two")],
                         responses(p, b"se-two"), "Partial response completed")
 
 def _hexlen(n: int) -> bytes:
@@ -162,7 +162,7 @@ def _filler(size: int) -> bytes:
         n += 1
     return b"".join(parts)[:size]
 
-def _bodies(msgs: list[http.Message]) -> list[bytes]:
+def _bodies(msgs: list[std.http.Message]) -> list[bytes]:
     return [m.body for m in msgs]
 
 def _test_http_message_parser_split_points(st: testing.SyncT):
@@ -177,24 +177,24 @@ def _test_http_message_parser_split_points(st: testing.SyncT):
     hdr = {"transfer-encoding": "chunked"}
     cases = [
         (data = b"HTTP/1.1 200 OK\r\nContent-Length: 12\r\n\r\nresponse-one",
-         expected = [http.Message(b"HTTP/1.1 200 OK", {"content-length": "12"}, b"response-one")]),
+         expected = [std.http.Message(b"HTTP/1.1 200 OK", {"content-length": "12"}, b"response-one")]),
         (data = b"HTTP/1.1 204 No Content\r\n\r\n",
-         expected = [http.Message(b"HTTP/1.1 204 No Content", {}, b"")]),
+         expected = [std.http.Message(b"HTTP/1.1 204 No Content", {}, b"")]),
         (data = b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n",
-         expected = [http.Message(b"HTTP/1.1 200 OK", {"content-length": "0"}, b"")]),
+         expected = [std.http.Message(b"HTTP/1.1 200 OK", {"content-length": "0"}, b"")]),
         (data = b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n4\r\nWiki\r\n5\r\npedia\r\nE\r\n in\r\n\r\nchunks.\r\n0\r\n\r\n",
-         expected = [http.Message(b"HTTP/1.1 200 OK", hdr, b"Wikipedia in\r\n\r\nchunks.")]),
+         expected = [std.http.Message(b"HTTP/1.1 200 OK", hdr, b"Wikipedia in\r\n\r\nchunks.")]),
         # chunk extension on a size line and trailer fields after the last chunk
         (data = b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n4;name=value\r\nWiki\r\n5\r\npedia\r\n0\r\nExpires: never\r\nX-Checksum: 1\r\n\r\n",
-         expected = [http.Message(b"HTTP/1.1 200 OK", hdr, b"Wikipedia")]),
+         expected = [std.http.Message(b"HTTP/1.1 200 OK", hdr, b"Wikipedia")]),
         # pipelined pair, Content-Length then chunked
         (data = b"HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\nfooHTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n3\r\nbar\r\n0\r\n\r\n",
-         expected = [http.Message(b"HTTP/1.1 200 OK", {"content-length": "3"}, b"foo"),
-                     http.Message(b"HTTP/1.1 200 OK", hdr, b"bar")]),
+         expected = [std.http.Message(b"HTTP/1.1 200 OK", {"content-length": "3"}, b"foo"),
+                     std.http.Message(b"HTTP/1.1 200 OK", hdr, b"bar")]),
         # pipelined pair, bodyless then Content-Length
         (data = b"HTTP/1.1 204 No Content\r\n\r\nHTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok",
-         expected = [http.Message(b"HTTP/1.1 204 No Content", {}, b""),
-                     http.Message(b"HTTP/1.1 200 OK", {"content-length": "2"}, b"ok")]),
+         expected = [std.http.Message(b"HTTP/1.1 204 No Content", {}, b""),
+                     std.http.Message(b"HTTP/1.1 200 OK", {"content-length": "2"}, b"ok")]),
     ]
     for c in cases:
         data = c.data
@@ -203,7 +203,7 @@ def _test_http_message_parser_split_points(st: testing.SyncT):
         expected_start = [m.start_line for m in c.expected]
 
         # everything in one feed
-        p = http.MessageParser()
+        p = std.http.MessageParser()
         msgs = p.feed(data)
         testing.assertEqual(expected_bodies, _bodies(msgs), "Bodies from a single feed")
         testing.assertEqual(expected_headers, [m.headers for m in msgs], "Headers from a single feed")
@@ -211,14 +211,14 @@ def _test_http_message_parser_split_points(st: testing.SyncT):
 
         # split at every boundary
         for i in range(len(data) + 1):
-            p = http.MessageParser()
+            p = std.http.MessageParser()
             got = p.feed(data[:i])
             got.extend(p.feed(data[i:]))
             testing.assertEqual(expected_bodies, _bodies(got), "Bodies with a split at " + str(i))
             testing.assertEqual(expected_headers, [m.headers for m in got], "Headers with a split at " + str(i))
 
         # one byte at a time
-        p = http.MessageParser()
+        p = std.http.MessageParser()
         got = []
         for i in range(len(data)):
             got.extend(p.feed(data[i:i+1]))
@@ -237,7 +237,7 @@ def _test_http_message_parser_large_chunked(st: testing.SyncT):
     body = _filler(1024 * 1024)
     data = b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n" + _chunked(body, 8192)
     sw = time.Stopwatch()
-    p = http.MessageParser()
+    p = std.http.MessageParser()
     got = []
     pos = 0
     reads = 0
@@ -253,7 +253,7 @@ def _test_http_message_parser_large_chunked(st: testing.SyncT):
 
     # The same body in a Content-Length message, fed in 4 KB reads
     data = b"HTTP/1.1 200 OK\r\nContent-Length: " + str(len(body)).encode() + b"\r\n\r\n" + body
-    p = http.MessageParser()
+    p = std.http.MessageParser()
     got = []
     pos = 0
     while pos < len(data):
@@ -265,7 +265,7 @@ def _test_http_message_parser_large_chunked(st: testing.SyncT):
 def _test_http_message_parser_malformed(st: testing.SyncT):
     """Malformed input sets error, keeps the messages before it and ends parsing"""
     def error_of(data: bytes) -> ?str:
-        p = http.MessageParser()
+        p = std.http.MessageParser()
         p.feed(data)
         return p.error
 
@@ -305,20 +305,20 @@ def _test_http_message_parser_malformed(st: testing.SyncT):
         (data = b"HTTP/1.1 200 OK\r\nTransfer-Encoding:\tChunked\r\n\r\n5 ;ext=1\r\nhello\r\n0\r\n\r\n", what = "Whitespace before a chunk extension"),
     ]
     for g in good:
-        p = http.MessageParser()
+        p = std.http.MessageParser()
         msgs = p.feed(g.data)
         testing.assertNone(p.error, g.what)
         testing.assertEqual([b"hello"], _bodies(msgs), g.what)
 
     # Field values lose surrounding tabs, and repeated fields are joined
-    p = http.MessageParser()
+    p = std.http.MessageParser()
     msgs = p.feed(b"HTTP/1.1 200 OK\r\nX-A:\tv\t\r\nConnection: close\r\nConnection: te\r\nContent-Length: 0\r\n\r\n")
     testing.assertNone(p.error, "Repeated and tab-wrapped fields")
     testing.assertEqual("v", msgs[0].headers["x-a"], "Tabs around a value are removed")
     testing.assertEqual("close, te", msgs[0].headers["connection"], "Repeated field lines are joined")
 
     # Empty lines before a request line are ignored
-    p = http.MessageParser()
+    p = std.http.MessageParser()
     msgs = p.feed(b"\r\n\r\nGET / HTTP/1.1\r\nHost: a\r\n\r\n")
     testing.assertNone(p.error, "Empty lines before a request")
     testing.assertEqual([b"GET / HTTP/1.1"], [m.start_line for m in msgs], "Request after empty lines")
@@ -327,11 +327,11 @@ def _test_http_message_parser_malformed(st: testing.SyncT):
     # and when the malformed one comes in a later feed, and nothing after it
     ok = b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok"
     broken = b"HTTP/1.1 200 OK\r\nContent-Length: many\r\n\r\n"
-    p = http.MessageParser()
+    p = std.http.MessageParser()
     testing.assertEqual([b"ok"], _bodies(p.feed(ok + broken)), "Message before the malformed one")
     testing.assertNotNone(p.error, "Error set after the malformed message")
     testing.assertEqual([], _bodies(p.feed(ok)), "No messages after an error")
-    p = http.MessageParser()
+    p = std.http.MessageParser()
     testing.assertEqual([b"ok"], _bodies(p.feed(ok)), "Message in its own feed")
     testing.assertEqual([], _bodies(p.feed(broken + ok)), "Malformed message in a later feed")
     testing.assertNotNone(p.error, "Error set by the later feed")
@@ -348,7 +348,7 @@ def _test_http_message_parser_bodyless(st: testing.SyncT):
     with_body = b"HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nhello"
 
     # HEAD, announced with expect_response, then a GET on the same connection
-    p = http.MessageParser(responses=True)
+    p = std.http.MessageParser(responses=True)
     p.expect_response("HEAD")
     p.expect_response("GET")
     msgs = p.feed(b"HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\n" + with_body)
@@ -356,25 +356,25 @@ def _test_http_message_parser_bodyless(st: testing.SyncT):
     testing.assertEqual("5", msgs[0].headers["content-length"], "HEAD response keeps its Content-Length field")
 
     # HEAD response framed as chunked
-    p = http.MessageParser(responses=True)
+    p = std.http.MessageParser(responses=True)
     p.expect_response("HEAD")
     p.expect_response("GET")
     msgs = p.feed(b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n" + with_body)
     testing.assertEqual([b"", b"hello"], _bodies(msgs), "Chunked HEAD response has no body")
 
     # Without expect_response a Content-Length body is read as usual
-    p = http.MessageParser(responses=True)
+    p = std.http.MessageParser(responses=True)
     msgs = p.feed(with_body + with_body)
     testing.assertEqual([b"hello", b"hello"], _bodies(msgs), "Bodies without request knowledge")
 
     # 204 and 304 by status alone
-    p = http.MessageParser(responses=True)
+    p = std.http.MessageParser(responses=True)
     msgs = p.feed(b"HTTP/1.1 204 No Content\r\nContent-Length: 5\r\n\r\n" + b"HTTP/1.1 304 Not Modified\r\nContent-Length: 1234\r\n\r\n" + with_body)
     testing.assertEqual([b"", b"", b"hello"], _bodies(msgs), "204 and 304 have no body")
 
     # An interim 100 Continue does not answer the request. The HEAD request
     # is answered by the final response that follows it.
-    p = http.MessageParser(responses=True)
+    p = std.http.MessageParser(responses=True)
     p.expect_response("HEAD")
     p.expect_response("GET")
     msgs = p.feed(b"HTTP/1.1 100 Continue\r\n\r\n" + b"HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\n" + with_body)
@@ -383,7 +383,7 @@ def _test_http_message_parser_bodyless(st: testing.SyncT):
 
     # Byte by byte, to cover the split between a bodyless response and the next
     data = b"HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\n" + with_body
-    p = http.MessageParser(responses=True)
+    p = std.http.MessageParser(responses=True)
     p.expect_response("HEAD")
     p.expect_response("GET")
     got = []
@@ -392,18 +392,18 @@ def _test_http_message_parser_bodyless(st: testing.SyncT):
     testing.assertEqual([b"", b"hello"], _bodies(got), "Bodyless response fed byte by byte")
 
     # A response needs a valid status code to be framed
-    p = http.MessageParser(responses=True)
+    p = std.http.MessageParser(responses=True)
     p.feed(b"HTTP/1.1 2x0 OK\r\nContent-Length: 0\r\n\r\n")
     testing.assertNotNone(p.error, "Status code that is not three digits")
 
     # A status code outside 100-199 is a final response, framed by its fields
-    p = http.MessageParser(responses=True)
+    p = std.http.MessageParser(responses=True)
     msgs = p.feed(b"HTTP/1.1 099 Odd\r\nContent-Length: 2\r\n\r\nok")
     testing.assertEqual([b"ok"], _bodies(msgs), "Status 099 is not an interim response")
 
     # A parser that reads requests applies none of these rules, also when a
     # request line starts like a status line
-    p = http.MessageParser()
+    p = std.http.MessageParser()
     msgs = p.feed(b"HTTP/1.1 204 HTTP/1.1\r\nContent-Length: 3\r\n\r\nabc")
     testing.assertEqual([b"abc"], _bodies(msgs), "Request body")
 
@@ -414,9 +414,9 @@ def _compressible_json() -> bytes:
 def _decode(data: bytes, coding: ?str) -> bytes:
     """data decoded from the content coding "gzip" or "deflate", or as it is"""
     if coding == "gzip":
-        return gzip.decompress(data)
+        return std.compress.gzip.decompress(data)
     if coding == "deflate":
-        return zlib.decompress(data)
+        return std.compress.zlib.decompress(data)
     return data
 
 
@@ -432,7 +432,7 @@ actor _test_HttpClientServer(t: testing.EnvT):
     var done = False
     var attempts = 0
     var listen_attempts = 0
-    var port = random.randint(20000, 45000)
+    var port = std.random.randint(20000, 45000)
     var server = None
 
     serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
@@ -462,7 +462,7 @@ actor _test_HttpClientServer(t: testing.EnvT):
     def _on_http_listen_error(listener, error):
         if listen_attempts < 10:
             listen_attempts += 1
-            port = random.randint(20000, 45000)
+            port = std.random.randint(20000, 45000)
             _start_listener()
         else:
             _finish_failure("HTTP listen failed: " + error)
@@ -487,10 +487,10 @@ actor _test_HttpClientServer(t: testing.EnvT):
             _finish_failure("HTTP client error: " + errmsg)
 
     def _start_client():
-        http.Client(conn_cap, "127.0.0.1", _on_http_connect, _on_http_error, scheme="http", port=port)
+        std.http.Client(conn_cap, "127.0.0.1", _on_http_connect, _on_http_error, scheme="http", port=port)
 
     def _start_listener():
-        server = http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
+        server = std.http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
 
     def _timeout():
         _finish_failure("timeout")
@@ -512,8 +512,8 @@ actor _test_HttpServerCompression(t: testing.EnvT):
     png = b"\x89PNG\r\n\x1a\n" + big
     # An answer that the handler compressed itself. Random digits keep it
     # over COMPRESS_MIN_SIZE when compressed, so the server looks at it.
-    varied = ",".join([str(random.randint(0, 999999999)) for _ in range(1000)]).encode()
-    gzipped = gzip.compress(varied)
+    varied = ",".join([str(std.random.randint(0, 999999999)) for _ in range(1000)]).encode()
+    gzipped = std.compress.gzip.compress(varied)
     # Path, Accept-Encoding, and the Content-Encoding, Vary and ETag expected
     cases: list[(str, ?str, ?str, ?str, ?str)] = [
         ("/text", "gzip, deflate, br", "gzip", "Accept-Encoding", None),
@@ -536,7 +536,7 @@ actor _test_HttpServerCompression(t: testing.EnvT):
     var done = False
     var attempts = 0
     var listen_attempts = 0
-    var port = random.randint(20000, 45000)
+    var port = std.random.randint(20000, 45000)
     var server = None
     var current = 0
 
@@ -582,7 +582,7 @@ actor _test_HttpServerCompression(t: testing.EnvT):
     def _on_http_listen_error(listener, error):
         if listen_attempts < 10:
             listen_attempts += 1
-            port = random.randint(20000, 45000)
+            port = std.random.randint(20000, 45000)
             _start_listener()
         else:
             _finish(AssertionError("HTTP listen failed: " + error))
@@ -604,7 +604,7 @@ actor _test_HttpServerCompression(t: testing.EnvT):
             testing.assertEqual(res.headers.get("etag"), etag, what)
             testing.assertEqual(_decode(res.body, coding), _answer(path), what)
             if path == "/gzipped":
-                testing.assertTrue(len(res.body) >= http.COMPRESS_MIN_SIZE, "the compressed answer is big enough to compress")
+                testing.assertTrue(len(res.body) >= std.http.COMPRESS_MIN_SIZE, "the compressed answer is big enough to compress")
         except Exception as e:
             _finish(e)
             return
@@ -623,10 +623,10 @@ actor _test_HttpServerCompression(t: testing.EnvT):
 
     def _start_client():
         # The client sends only the Accept-Encoding of each case
-        http.Client(conn_cap, "127.0.0.1", _send, _on_http_error, scheme="http", port=port, compress=False)
+        std.http.Client(conn_cap, "127.0.0.1", _send, _on_http_error, scheme="http", port=port, compress=False)
 
     def _start_listener():
-        server = http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error, compress=True)
+        server = std.http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error, compress=True)
 
     _start_listener()
     after 0.05: _start_client()
@@ -640,7 +640,7 @@ actor _test_HttpServerNoCompressionByDefault(t: testing.EnvT):
     var done = False
     var attempts = 0
     var listen_attempts = 0
-    var port = random.randint(20000, 45000)
+    var port = std.random.randint(20000, 45000)
     var server = None
 
     serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
@@ -667,7 +667,7 @@ actor _test_HttpServerNoCompressionByDefault(t: testing.EnvT):
     def _on_http_listen_error(listener, error):
         if listen_attempts < 10:
             listen_attempts += 1
-            port = random.randint(20000, 45000)
+            port = std.random.randint(20000, 45000)
             _start_listener()
         else:
             _finish(AssertionError("HTTP listen failed: " + error))
@@ -693,10 +693,10 @@ actor _test_HttpServerNoCompressionByDefault(t: testing.EnvT):
             _finish(AssertionError("HTTP client error: " + errmsg))
 
     def _start_client():
-        http.Client(conn_cap, "127.0.0.1", _on_http_connect, _on_http_error, scheme="http", port=port)
+        std.http.Client(conn_cap, "127.0.0.1", _on_http_connect, _on_http_error, scheme="http", port=port)
 
     def _start_listener():
-        server = http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
+        server = std.http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
 
     _start_listener()
     after 0.05: _start_client()
@@ -725,7 +725,7 @@ actor _test_HttpClientDecompression(t: testing.EnvT):
     var done = False
     var attempts = 0
     var listen_attempts = 0
-    var port = random.randint(20000, 45000)
+    var port = std.random.randint(20000, 45000)
     var server = None
     var current = 0
 
@@ -748,13 +748,13 @@ actor _test_HttpClientDecompression(t: testing.EnvT):
         h = {"Content-Type": "application/json", "X-Seen-Accept-Encoding": request.headers.get_def("accept-encoding", "")}
         if request.path == "/gzip":
             h["Content-Encoding"] = "gzip"
-            respond(200, h, gzip.compress(big))
+            respond(200, h, std.compress.gzip.compress(big))
         elif request.path == "/deflate":
             h["Content-Encoding"] = "deflate"
-            respond(200, h, zlib.compress(big))
+            respond(200, h, std.compress.zlib.compress(big))
         elif request.path == "/x-gzip":
             h["Content-Encoding"] = "x-gzip"
-            respond(200, h, gzip.compress(big))
+            respond(200, h, std.compress.gzip.compress(big))
         elif request.path == "/br":
             h["Content-Encoding"] = "br"
             respond(200, h, b"brotli")
@@ -767,7 +767,7 @@ actor _test_HttpClientDecompression(t: testing.EnvT):
     def _on_http_listen_error(listener, error):
         if listen_attempts < 10:
             listen_attempts += 1
-            port = random.randint(20000, 45000)
+            port = std.random.randint(20000, 45000)
             _start_listener()
         else:
             _finish(AssertionError("HTTP listen failed: " + error))
@@ -801,10 +801,10 @@ actor _test_HttpClientDecompression(t: testing.EnvT):
             _finish(AssertionError("HTTP client error: " + errmsg))
 
     def _start_client():
-        http.Client(conn_cap, "127.0.0.1", _send, _on_http_error, scheme="http", port=port)
+        std.http.Client(conn_cap, "127.0.0.1", _send, _on_http_error, scheme="http", port=port)
 
     def _start_listener():
-        server = http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
+        server = std.http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
 
     _start_listener()
     after 0.05: _start_client()
@@ -818,7 +818,7 @@ actor _test_HttpClientWithoutCompression(t: testing.EnvT):
     var done = False
     var attempts = 0
     var listen_attempts = 0
-    var port = random.randint(20000, 45000)
+    var port = std.random.randint(20000, 45000)
     var server = None
 
     serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
@@ -838,7 +838,7 @@ actor _test_HttpClientWithoutCompression(t: testing.EnvT):
 
     def _on_http_server_request(server, request, respond):
         h = {"Content-Type": "application/json", "Content-Encoding": "gzip", "X-Seen-Accept-Encoding": request.headers.get_def("accept-encoding", "")}
-        respond(200, h, gzip.compress(big))
+        respond(200, h, std.compress.gzip.compress(big))
 
     def _on_http_server_error(server, error):
         _finish(AssertionError("HTTP server error: " + error))
@@ -846,7 +846,7 @@ actor _test_HttpClientWithoutCompression(t: testing.EnvT):
     def _on_http_listen_error(listener, error):
         if listen_attempts < 10:
             listen_attempts += 1
-            port = random.randint(20000, 45000)
+            port = std.random.randint(20000, 45000)
             _start_listener()
         else:
             _finish(AssertionError("HTTP listen failed: " + error))
@@ -858,7 +858,7 @@ actor _test_HttpClientWithoutCompression(t: testing.EnvT):
         try:
             testing.assertEqual(res.headers.get("x-seen-accept-encoding"), "")
             testing.assertEqual(res.headers.get("content-encoding"), "gzip")
-            testing.assertEqual(gzip.decompress(res.body), big)
+            testing.assertEqual(std.compress.gzip.decompress(res.body), big)
         except Exception as e:
             _finish(e)
             return
@@ -872,10 +872,10 @@ actor _test_HttpClientWithoutCompression(t: testing.EnvT):
             _finish(AssertionError("HTTP client error: " + errmsg))
 
     def _start_client():
-        http.Client(conn_cap, "127.0.0.1", _on_http_connect, _on_http_error, scheme="http", port=port, compress=False)
+        std.http.Client(conn_cap, "127.0.0.1", _on_http_connect, _on_http_error, scheme="http", port=port, compress=False)
 
     def _start_listener():
-        server = http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
+        server = std.http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
 
     _start_listener()
     after 0.05: _start_client()
@@ -887,7 +887,7 @@ actor _test_HttpClientUndecodableBody(t: testing.EnvT):
     calls on_error and not on_response"""
     var done = False
     var listen_attempts = 0
-    var port = random.randint(20000, 45000)
+    var port = std.random.randint(20000, 45000)
     var server = None
 
     serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
@@ -914,7 +914,7 @@ actor _test_HttpClientUndecodableBody(t: testing.EnvT):
     def _on_http_listen_error(listener, error):
         if listen_attempts < 10:
             listen_attempts += 1
-            port = random.randint(20000, 45000)
+            port = std.random.randint(20000, 45000)
             _start_listener()
         else:
             _finish(AssertionError("HTTP listen failed: " + error))
@@ -934,10 +934,10 @@ actor _test_HttpClientUndecodableBody(t: testing.EnvT):
             _finish(AssertionError("Unexpected client error: " + errmsg))
 
     def _start_client():
-        http.Client(conn_cap, "127.0.0.1", _on_http_connect, _on_http_error, scheme="http", port=port)
+        std.http.Client(conn_cap, "127.0.0.1", _on_http_connect, _on_http_error, scheme="http", port=port)
 
     def _start_listener():
-        server = http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
+        server = std.http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
 
     _start_listener()
     after 0.05: _start_client()
@@ -956,7 +956,7 @@ actor _test_HttpCompressionEndToEnd(t: testing.EnvT):
     var done = False
     var attempts = 0
     var listen_attempts = 0
-    var port = random.randint(20000, 45000)
+    var port = std.random.randint(20000, 45000)
     var server = None
 
     serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
@@ -984,7 +984,7 @@ actor _test_HttpCompressionEndToEnd(t: testing.EnvT):
     def _on_http_listen_error(listener, error):
         if listen_attempts < 10:
             listen_attempts += 1
-            port = random.randint(20000, 45000)
+            port = std.random.randint(20000, 45000)
             _start_listener()
         else:
             _finish(AssertionError("HTTP listen failed: " + error))
@@ -1012,10 +1012,10 @@ actor _test_HttpCompressionEndToEnd(t: testing.EnvT):
             _finish(AssertionError("HTTP client error: " + errmsg))
 
     def _start_client():
-        http.Client(conn_cap, "127.0.0.1", _on_http_connect, _on_http_error, scheme="http", port=port)
+        std.http.Client(conn_cap, "127.0.0.1", _on_http_connect, _on_http_error, scheme="http", port=port)
 
     def _start_listener():
-        server = http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error, compress=True)
+        server = std.http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error, compress=True)
 
     _start_listener()
     after 0.05: _start_client()
@@ -1036,7 +1036,7 @@ actor _test_HttpClientPipelinedResponses(t: testing.EnvT):
     var done = False
     var attempts = 0
     var listen_attempts = 0
-    var port = random.randint(20000, 45000)
+    var port = std.random.randint(20000, 45000)
     var server = None
     var received = b""
     var responded = False
@@ -1061,7 +1061,7 @@ actor _test_HttpClientPipelinedResponses(t: testing.EnvT):
         if error is not None:
             if listen_attempts < 10:
                 listen_attempts += 1
-                port = random.randint(20000, 45000)
+                port = std.random.randint(20000, 45000)
                 _start_listener()
             else:
                 _finish_failure("TCP listen failed: " + error)
@@ -1114,7 +1114,7 @@ actor _test_HttpClientPipelinedResponses(t: testing.EnvT):
             _finish_failure("HTTP client error: " + errmsg)
 
     def _start_client():
-        http.Client(conn_cap, "127.0.0.1", _on_connect, _on_client_error, scheme="http", port=port)
+        std.http.Client(conn_cap, "127.0.0.1", _on_connect, _on_client_error, scheme="http", port=port)
 
     def _start_listener():
         server = net.TCPListener(serv_cap, "127.0.0.1", port, _on_raw_listen, _on_raw_accept)
@@ -1141,9 +1141,9 @@ actor _test_HttpServerPipelinedRequests(t: testing.EnvT):
     var done = False
     var attempts = 0
     var listen_attempts = 0
-    var port = random.randint(20000, 45000)
+    var port = std.random.randint(20000, 45000)
     var server = None
-    var parser = http.MessageParser()
+    var parser = std.http.MessageParser()
     var bodies: list[bytes] = []
 
     serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
@@ -1176,7 +1176,7 @@ actor _test_HttpServerPipelinedRequests(t: testing.EnvT):
     def _on_http_listen_error(listener, error):
         if listen_attempts < 10:
             listen_attempts += 1
-            port = random.randint(20000, 45000)
+            port = std.random.randint(20000, 45000)
             _start_listener()
         else:
             _finish_failure("HTTP listen failed: " + error)
@@ -1205,12 +1205,12 @@ actor _test_HttpServerPipelinedRequests(t: testing.EnvT):
             _finish_failure("TCP client error: " + errmsg)
 
     def _start_client():
-        parser = http.MessageParser()
+        parser = std.http.MessageParser()
         bodies = []
         net.TCPConnection(conn_cap, "127.0.0.1", port, _on_raw_connect, _on_raw_receive, _on_raw_error, None)
 
     def _start_listener():
-        server = http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
+        server = std.http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
 
     def _timeout():
         _finish_failure("timeout, responses received: " + str(bodies))
@@ -1235,9 +1235,9 @@ actor _test_HttpServerConnectionClose(t: testing.EnvT):
     var done = False
     var attempts = 0
     var listen_attempts = 0
-    var port = random.randint(20000, 45000)
+    var port = std.random.randint(20000, 45000)
     var server = None
-    var parser = http.MessageParser()
+    var parser = std.http.MessageParser()
     var bodies: list[bytes] = []
     var handled: list[str] = []
 
@@ -1272,7 +1272,7 @@ actor _test_HttpServerConnectionClose(t: testing.EnvT):
     def _on_http_listen_error(listener, error):
         if listen_attempts < 10:
             listen_attempts += 1
-            port = random.randint(20000, 45000)
+            port = std.random.randint(20000, 45000)
             _start_listener()
         else:
             _finish_failure("HTTP listen failed: " + error)
@@ -1305,13 +1305,13 @@ actor _test_HttpServerConnectionClose(t: testing.EnvT):
             _finish_failure("TCP client error: " + errmsg)
 
     def _start_client():
-        parser = http.MessageParser()
+        parser = std.http.MessageParser()
         bodies = []
         handled = []
         net.TCPConnection(conn_cap, "127.0.0.1", port, _on_raw_connect, _on_raw_receive, _on_raw_error, _on_raw_remote_close)
 
     def _start_listener():
-        server = http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
+        server = std.http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
 
     def _timeout():
         _finish_failure("timeout, responses received: " + str(bodies) + ", handled: " + str(handled))
@@ -1335,9 +1335,9 @@ actor _test_HttpsServerPipelinedRequests(t: testing.EnvT):
     var done = False
     var attempts = 0
     var listen_attempts = 0
-    var port = random.randint(20000, 45000)
+    var port = std.random.randint(20000, 45000)
     var server = None
-    var parser = http.MessageParser()
+    var parser = std.http.MessageParser()
     var bodies: list[bytes] = []
 
     serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
@@ -1370,7 +1370,7 @@ actor _test_HttpsServerPipelinedRequests(t: testing.EnvT):
     def _on_http_listen_error(listener, error):
         if listen_attempts < 10:
             listen_attempts += 1
-            port = random.randint(20000, 45000)
+            port = std.random.randint(20000, 45000)
             _start_listener()
         else:
             _finish_failure("HTTP listen failed: " + error)
@@ -1395,12 +1395,12 @@ actor _test_HttpsServerPipelinedRequests(t: testing.EnvT):
             _finish_failure("TLS client error: " + errmsg)
 
     def _start_client():
-        parser = http.MessageParser()
+        parser = std.http.MessageParser()
         bodies = []
         net.TLSConnection(conn_cap, "127.0.0.1", port, _on_raw_connect, _on_raw_receive, _on_raw_error, None, verify_tls=False)
 
     def _start_listener():
-        server = http.TLSListener(serv_cap, "127.0.0.1", port, CERT_PEM.encode(), KEY_PEM.encode(), _on_http_accept, _on_http_listen_error)
+        server = std.http.TLSListener(serv_cap, "127.0.0.1", port, CERT_PEM.encode(), KEY_PEM.encode(), _on_http_accept, _on_http_listen_error)
 
     def _timeout():
         _finish_failure("timeout, responses received: " + str(bodies))
@@ -1423,9 +1423,9 @@ actor _test_HttpServerMalformedRequest(t: testing.EnvT):
     var done = False
     var attempts = 0
     var listen_attempts = 0
-    var port = random.randint(20000, 45000)
+    var port = std.random.randint(20000, 45000)
     var server = None
-    var parser = http.MessageParser()
+    var parser = std.http.MessageParser()
     var bodies: list[bytes] = []
     var handled: list[str] = []
 
@@ -1457,7 +1457,7 @@ actor _test_HttpServerMalformedRequest(t: testing.EnvT):
     def _on_http_listen_error(listener, error):
         if listen_attempts < 10:
             listen_attempts += 1
-            port = random.randint(20000, 45000)
+            port = std.random.randint(20000, 45000)
             _start_listener()
         else:
             _finish_failure("HTTP listen failed: " + error)
@@ -1486,13 +1486,13 @@ actor _test_HttpServerMalformedRequest(t: testing.EnvT):
             _finish_failure("TCP client error: " + errmsg)
 
     def _start_client():
-        parser = http.MessageParser()
+        parser = std.http.MessageParser()
         bodies = []
         handled = []
         net.TCPConnection(conn_cap, "127.0.0.1", port, _on_raw_connect, _on_raw_receive, _on_raw_error, _on_raw_remote_close)
 
     def _start_listener():
-        server = http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
+        server = std.http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
 
     def _timeout():
         _finish_failure("timeout, responses received: " + str(bodies) + ", handled: " + str(handled))
@@ -1514,9 +1514,9 @@ actor _test_HttpServerHttp10(t: testing.EnvT):
     var done = False
     var attempts = 0
     var listen_attempts = 0
-    var port = random.randint(20000, 45000)
+    var port = std.random.randint(20000, 45000)
     var server = None
-    var parser = http.MessageParser()
+    var parser = std.http.MessageParser()
     var bodies: list[bytes] = []
     var handled: list[str] = []
 
@@ -1548,7 +1548,7 @@ actor _test_HttpServerHttp10(t: testing.EnvT):
     def _on_http_listen_error(listener, error):
         if listen_attempts < 10:
             listen_attempts += 1
-            port = random.randint(20000, 45000)
+            port = std.random.randint(20000, 45000)
             _start_listener()
         else:
             _finish_failure("HTTP listen failed: " + error)
@@ -1574,13 +1574,13 @@ actor _test_HttpServerHttp10(t: testing.EnvT):
             _finish_failure("TCP client error: " + errmsg)
 
     def _start_client():
-        parser = http.MessageParser()
+        parser = std.http.MessageParser()
         bodies = []
         handled = []
         net.TCPConnection(conn_cap, "127.0.0.1", port, _on_raw_connect, _on_raw_receive, _on_raw_error, _on_raw_remote_close)
 
     def _start_listener():
-        server = http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
+        server = std.http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
 
     def _timeout():
         _finish_failure("timeout, responses received: " + str(bodies) + ", handled: " + str(handled))
@@ -1604,9 +1604,9 @@ actor _test_HttpServerDuplicateRespond(t: testing.EnvT):
     var done = False
     var attempts = 0
     var listen_attempts = 0
-    var port = random.randint(20000, 45000)
+    var port = std.random.randint(20000, 45000)
     var server = None
-    var parser = http.MessageParser()
+    var parser = std.http.MessageParser()
     var bodies: list[bytes] = []
     var handled: list[str] = []
 
@@ -1642,7 +1642,7 @@ actor _test_HttpServerDuplicateRespond(t: testing.EnvT):
     def _on_http_listen_error(listener, error):
         if listen_attempts < 10:
             listen_attempts += 1
-            port = random.randint(20000, 45000)
+            port = std.random.randint(20000, 45000)
             _start_listener()
         else:
             _finish_failure("HTTP listen failed: " + error)
@@ -1668,13 +1668,13 @@ actor _test_HttpServerDuplicateRespond(t: testing.EnvT):
             _finish_failure("TCP client error: " + errmsg)
 
     def _start_client():
-        parser = http.MessageParser()
+        parser = std.http.MessageParser()
         bodies = []
         handled = []
         net.TCPConnection(conn_cap, "127.0.0.1", port, _on_raw_connect, _on_raw_receive, _on_raw_error, _on_raw_remote_close)
 
     def _start_listener():
-        server = http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
+        server = std.http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
 
     def _timeout():
         _finish_failure("timeout, responses received: " + str(bodies) + ", handled: " + str(handled))
@@ -1697,7 +1697,7 @@ actor _test_HttpServerLateCbInstall(t: testing.EnvT):
     var done = False
     var attempts = 0
     var listen_attempts = 0
-    var port = random.randint(20000, 45000)
+    var port = std.random.randint(20000, 45000)
     var server = None
 
     serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
@@ -1730,7 +1730,7 @@ actor _test_HttpServerLateCbInstall(t: testing.EnvT):
     def _on_http_listen_error(listener, error):
         if listen_attempts < 10:
             listen_attempts += 1
-            port = random.randint(20000, 45000)
+            port = std.random.randint(20000, 45000)
             _start_listener()
         else:
             _finish_failure("HTTP listen failed: " + error)
@@ -1752,10 +1752,10 @@ actor _test_HttpServerLateCbInstall(t: testing.EnvT):
             _finish_failure("HTTP client error: " + errmsg)
 
     def _start_client():
-        http.Client(conn_cap, "127.0.0.1", _on_connect, _on_client_error, scheme="http", port=port)
+        std.http.Client(conn_cap, "127.0.0.1", _on_connect, _on_client_error, scheme="http", port=port)
 
     def _start_listener():
-        server = http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
+        server = std.http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
 
     def _timeout():
         _finish_failure("timeout: the request that arrived before cb_install was not answered")
@@ -1779,7 +1779,7 @@ actor _test_HttpServerHandlerCallsBack(t: testing.EnvT):
     var done = False
     var attempts = 0
     var listen_attempts = 0
-    var port = random.randint(20000, 45000)
+    var port = std.random.randint(20000, 45000)
     var server = None
 
     serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
@@ -1811,7 +1811,7 @@ actor _test_HttpServerHandlerCallsBack(t: testing.EnvT):
     def _on_http_listen_error(listener, error):
         if listen_attempts < 10:
             listen_attempts += 1
-            port = random.randint(20000, 45000)
+            port = std.random.randint(20000, 45000)
             _start_listener()
         else:
             _finish_failure("HTTP listen failed: " + error)
@@ -1833,10 +1833,10 @@ actor _test_HttpServerHandlerCallsBack(t: testing.EnvT):
             _finish_failure("HTTP client error: " + errmsg)
 
     def _start_client():
-        http.Client(conn_cap, "127.0.0.1", _on_connect, _on_client_error, scheme="http", port=port)
+        std.http.Client(conn_cap, "127.0.0.1", _on_connect, _on_client_error, scheme="http", port=port)
 
     def _start_listener():
-        server = http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
+        server = std.http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
 
     def _timeout():
         _finish_failure("timeout: server and handler deadlocked")
@@ -1863,7 +1863,7 @@ actor _test_HttpClientCallbackCallsBack(t: testing.EnvT):
     var done = False
     var attempts = 0
     var listen_attempts = 0
-    var port = random.randint(20000, 45000)
+    var port = std.random.randint(20000, 45000)
     var server = None
 
     serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
@@ -1893,7 +1893,7 @@ actor _test_HttpClientCallbackCallsBack(t: testing.EnvT):
     def _on_http_listen_error(listener, error):
         if listen_attempts < 10:
             listen_attempts += 1
-            port = random.randint(20000, 45000)
+            port = std.random.randint(20000, 45000)
             _start_listener()
         else:
             _finish_failure("HTTP listen failed: " + error)
@@ -1924,10 +1924,10 @@ actor _test_HttpClientCallbackCallsBack(t: testing.EnvT):
             _finish_failure("HTTP client error: " + errmsg)
 
     def _start_client():
-        http.Client(conn_cap, "127.0.0.1", _on_connect, _on_client_error, scheme="http", port=port)
+        std.http.Client(conn_cap, "127.0.0.1", _on_connect, _on_client_error, scheme="http", port=port)
 
     def _start_listener():
-        server = http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
+        server = std.http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
 
     def _timeout():
         _finish_failure("timeout: client and callback deadlocked")
@@ -1950,7 +1950,7 @@ actor _EarlyRequests(t: testing.EnvT, scheme: str):
     var done = False
     var attempts = 0
     var listen_attempts = 0
-    var port = random.randint(20000, 45000)
+    var port = std.random.randint(20000, 45000)
     var server = None
     var tls_server = None
     var handled: list[str] = []
@@ -1985,7 +1985,7 @@ actor _EarlyRequests(t: testing.EnvT, scheme: str):
     def _listen_failed(error: str):
         if listen_attempts < 10:
             listen_attempts += 1
-            port = random.randint(20000, 45000)
+            port = std.random.randint(20000, 45000)
             _start_listener()
         else:
             _finish_failure("HTTP listen failed: " + error)
@@ -2020,15 +2020,15 @@ actor _EarlyRequests(t: testing.EnvT, scheme: str):
             _finish_failure("HTTP client error: " + errmsg)
 
     def _start_client():
-        c = http.Client(conn_cap, "127.0.0.1", _on_connect, _on_client_error, scheme=scheme, port=port, tls_verify=False)
+        c = std.http.Client(conn_cap, "127.0.0.1", _on_connect, _on_client_error, scheme=scheme, port=port, tls_verify=False)
         for i in range(len(expected)):
             c.get("/" + str(i), _on_response)
 
     def _start_listener():
         if scheme == "https":
-            tls_server = http.TLSListener(serv_cap, "127.0.0.1", port, CERT_PEM.encode(), KEY_PEM.encode(), _on_https_accept, _on_https_listen_error)
+            tls_server = std.http.TLSListener(serv_cap, "127.0.0.1", port, CERT_PEM.encode(), KEY_PEM.encode(), _on_https_accept, _on_https_listen_error)
         else:
-            server = http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
+            server = std.http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
 
     def _on_https_accept(s):
         s.cb_install(_on_https_request, _on_https_server_error)
@@ -2075,7 +2075,7 @@ actor _test_HttpClientLargeChunkedResponse(t: testing.EnvT):
     var done = False
     var attempts = 0
     var listen_attempts = 0
-    var port = random.randint(20000, 45000)
+    var port = std.random.randint(20000, 45000)
     var server = None
     var responded = False
     var sw = time.Stopwatch()
@@ -2102,7 +2102,7 @@ actor _test_HttpClientLargeChunkedResponse(t: testing.EnvT):
         if error is not None:
             if listen_attempts < 10:
                 listen_attempts += 1
-                port = random.randint(20000, 45000)
+                port = std.random.randint(20000, 45000)
                 _start_listener()
             else:
                 _finish_failure("TCP listen failed: " + error)
@@ -2151,7 +2151,7 @@ actor _test_HttpClientLargeChunkedResponse(t: testing.EnvT):
             _finish_failure("HTTP client error: " + errmsg)
 
     def _start_client():
-        http.Client(conn_cap, "127.0.0.1", _on_connect, _on_client_error, scheme="http", port=port)
+        std.http.Client(conn_cap, "127.0.0.1", _on_connect, _on_client_error, scheme="http", port=port)
 
     def _start_listener():
         server = net.TCPListener(serv_cap, "127.0.0.1", port, _on_raw_listen, _on_raw_accept)
@@ -2177,7 +2177,7 @@ actor _test_HttpClientMalformedResponse(t: testing.EnvT):
     t.timeout(15.0)
     var done = False
     var listen_attempts = 0
-    var port = random.randint(20000, 45000)
+    var port = std.random.randint(20000, 45000)
     var server = None
     var received = b""
     var responded = False
@@ -2204,7 +2204,7 @@ actor _test_HttpClientMalformedResponse(t: testing.EnvT):
         if error is not None:
             if listen_attempts < 10:
                 listen_attempts += 1
-                port = random.randint(20000, 45000)
+                port = std.random.randint(20000, 45000)
                 _start_listener()
             else:
                 _finish_failure("TCP listen failed: " + error)
@@ -2260,7 +2260,7 @@ actor _test_HttpClientMalformedResponse(t: testing.EnvT):
         _finish_success()
 
     def _start_client():
-        http.Client(conn_cap, "127.0.0.1", _on_connect, _on_client_error, scheme="http", port=port)
+        std.http.Client(conn_cap, "127.0.0.1", _on_connect, _on_client_error, scheme="http", port=port)
 
     def _start_listener():
         server = net.TCPListener(serv_cap, "127.0.0.1", port, _on_raw_listen, _on_raw_accept)
@@ -2280,9 +2280,9 @@ actor _ServerClosesOnMalformed(t: testing.EnvT, request: bytes):
     var done = False
     var attempts = 0
     var listen_attempts = 0
-    var port = random.randint(20000, 45000)
+    var port = std.random.randint(20000, 45000)
     var server = None
-    var parser = http.MessageParser()
+    var parser = std.http.MessageParser()
     var bodies: list[bytes] = []
     var handled: list[str] = []
 
@@ -2314,7 +2314,7 @@ actor _ServerClosesOnMalformed(t: testing.EnvT, request: bytes):
     def _on_http_listen_error(listener, error):
         if listen_attempts < 10:
             listen_attempts += 1
-            port = random.randint(20000, 45000)
+            port = std.random.randint(20000, 45000)
             _start_listener()
         else:
             _finish_failure("HTTP listen failed: " + error)
@@ -2340,13 +2340,13 @@ actor _ServerClosesOnMalformed(t: testing.EnvT, request: bytes):
             _finish_failure("TCP client error: " + errmsg)
 
     def _start_client():
-        parser = http.MessageParser()
+        parser = std.http.MessageParser()
         bodies = []
         handled = []
         net.TCPConnection(conn_cap, "127.0.0.1", port, _on_raw_connect, _on_raw_receive, _on_raw_error, _on_raw_remote_close)
 
     def _start_listener():
-        server = http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
+        server = std.http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
 
     def _timeout():
         _finish_failure("timeout, the server did not close the connection")
@@ -2382,10 +2382,10 @@ actor _test_HttpClientReconnect(t: testing.EnvT):
     t.timeout(15.0)
     var done = False
     var listen_attempts = 0
-    var port = random.randint(20000, 45000)
+    var port = std.random.randint(20000, 45000)
     var server = None
     var accepted = 0
-    var parser = http.MessageParser()
+    var parser = std.http.MessageParser()
     var first_requests = 0
     var second_paths: list[str] = []
     var bodies: list[bytes] = []
@@ -2411,14 +2411,14 @@ actor _test_HttpClientReconnect(t: testing.EnvT):
         if error is not None:
             if listen_attempts < 10:
                 listen_attempts += 1
-                port = random.randint(20000, 45000)
+                port = std.random.randint(20000, 45000)
                 _start_listener()
             else:
                 _finish_failure("TCP listen failed: " + error)
 
     def _on_raw_accept(conn):
         accepted += 1
-        parser = http.MessageParser()
+        parser = std.http.MessageParser()
         conn.cb_install(_on_raw_receive, _on_raw_error, None)
 
     def _on_raw_receive(conn, data):
@@ -2430,7 +2430,7 @@ actor _test_HttpClientReconnect(t: testing.EnvT):
                 conn.close()
         else:
             for m in msgs:
-                req = http.request_from_message(m)
+                req = std.http.request_from_message(m)
                 second_paths.append(req.path)
                 head = b"HTTP/1.1 200 OK\r\nContent-Length: " + str(len(req.path)).encode() + b"\r\n\r\n"
                 conn.write(head if req.method == "HEAD" else head + req.path.encode())
@@ -2468,7 +2468,7 @@ actor _test_HttpClientReconnect(t: testing.EnvT):
         errors.append(errmsg)
 
     def _start_client():
-        http.Client(conn_cap, "127.0.0.1", _on_connect, _on_client_error, scheme="http", port=port)
+        std.http.Client(conn_cap, "127.0.0.1", _on_connect, _on_client_error, scheme="http", port=port)
 
     def _start_listener():
         server = net.TCPListener(serv_cap, "127.0.0.1", port, _on_raw_listen, _on_raw_accept)
@@ -2497,7 +2497,7 @@ actor _test_HttpClientHeadRequest(t: testing.EnvT):
     var done = False
     var attempts = 0
     var listen_attempts = 0
-    var port = random.randint(20000, 45000)
+    var port = std.random.randint(20000, 45000)
     var server = None
     var received = b""
     var responded = False
@@ -2522,7 +2522,7 @@ actor _test_HttpClientHeadRequest(t: testing.EnvT):
         if error is not None:
             if listen_attempts < 10:
                 listen_attempts += 1
-                port = random.randint(20000, 45000)
+                port = std.random.randint(20000, 45000)
                 _start_listener()
             else:
                 _finish_failure("TCP listen failed: " + error)
@@ -2576,7 +2576,7 @@ actor _test_HttpClientHeadRequest(t: testing.EnvT):
             _finish_failure("HTTP client error: " + errmsg)
 
     def _start_client():
-        http.Client(conn_cap, "127.0.0.1", _on_connect, _on_client_error, scheme="http", port=port)
+        std.http.Client(conn_cap, "127.0.0.1", _on_connect, _on_client_error, scheme="http", port=port)
 
     def _start_listener():
         server = net.TCPListener(serv_cap, "127.0.0.1", port, _on_raw_listen, _on_raw_accept)
@@ -2594,7 +2594,7 @@ actor _test_HttpsClientServer(t: testing.EnvT):
     log = logging.Logger(t.log_handler)
     var done = False
     var attempts = 0
-    var port = random.randint(20000, 45000)
+    var port = std.random.randint(20000, 45000)
     var server = None
     listen_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
     conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
@@ -2646,12 +2646,12 @@ actor _test_HttpsClientServer(t: testing.EnvT):
             _finish_failure("HTTPS client error: " + errmsg)
 
     def _start_client():
-        http.Client(conn_cap, "127.0.0.1", _on_https_connect, _on_https_error_client, scheme="https", port=port, tls_verify=False)
+        std.http.Client(conn_cap, "127.0.0.1", _on_https_connect, _on_https_error_client, scheme="https", port=port, tls_verify=False)
 
     def _timeout():
         _finish_error("timeout")
 
-    server = http.TLSListener(
+    server = std.http.TLSListener(
         listen_cap,
         "127.0.0.1",
         port,
@@ -2669,7 +2669,7 @@ actor _test_HttpsServerCompression(t: testing.EnvT):
     big = _compressible_json()
     var done = False
     var attempts = 0
-    var port = random.randint(20000, 45000)
+    var port = std.random.randint(20000, 45000)
     var server = None
     listen_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
     conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
@@ -2698,7 +2698,7 @@ actor _test_HttpsServerCompression(t: testing.EnvT):
     def _on_https_receive(c, res):
         try:
             testing.assertEqual(res.headers.get("content-encoding"), "gzip")
-            testing.assertEqual(gzip.decompress(res.body), big)
+            testing.assertEqual(std.compress.gzip.decompress(res.body), big)
         except Exception as e:
             _finish(e)
             return
@@ -2713,9 +2713,9 @@ actor _test_HttpsServerCompression(t: testing.EnvT):
 
     def _start_client():
         # The client leaves the body as the server sent it
-        http.Client(conn_cap, "127.0.0.1", _on_https_connect, _on_https_error_client, scheme="https", port=port, tls_verify=False, compress=False)
+        std.http.Client(conn_cap, "127.0.0.1", _on_https_connect, _on_https_error_client, scheme="https", port=port, tls_verify=False, compress=False)
 
-    server = http.TLSListener(
+    server = std.http.TLSListener(
         listen_cap,
         "127.0.0.1",
         port,

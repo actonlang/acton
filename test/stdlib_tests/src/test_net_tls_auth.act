@@ -4,7 +4,7 @@
 # years: a test CA, a server certificate for localhost, 127.0.0.1 and ::1 and
 # a client certificate both from the test CA, and an unrelated other CA.
 
-import base64
+import std.base64 as base64
 import net
 import testing
 

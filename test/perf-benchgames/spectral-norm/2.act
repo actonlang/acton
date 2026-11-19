@@ -1,7 +1,7 @@
 # The Computer Language Benchmarks Game
 # Adapted from 1.go.
 
-import math
+import std.math
 
 def multiply(u: array[float], v: array[float], transpose: bool):
     # An array can store unboxed floats (in contrast to a list)
@@ -32,6 +32,6 @@ actor main(env):
     for i in range(n):
         uv += u[i] * v[i]
         vv += v[i] * v[i]
-    print("%.9f" % math.sqrt(uv / vv))
+    print("%.9f" % std.math.sqrt(uv / vv))
     env.exit(0)
     

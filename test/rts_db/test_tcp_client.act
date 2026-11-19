@@ -1,6 +1,6 @@
 #!/usr/bin/env runacton
 
-import random
+import std.random
 import net
 
 # Tests that involve running an Acton program together with the database
@@ -271,7 +271,7 @@ actor main(env):
 
     # compute random base port between PORT_CHUNK_MIN and PORT_CHUNK_MAX
     # in increments of PORT_CHUNK_SIZE
-    port_chunk = random.randint(int(PORT_CHUNK_MIN/PORT_CHUNK_SIZE), int(PORT_CHUNK_MAX/PORT_CHUNK_SIZE)) * PORT_CHUNK_SIZE
+    port_chunk = std.random.randint(int(PORT_CHUNK_MIN/PORT_CHUNK_SIZE), int(PORT_CHUNK_MAX/PORT_CHUNK_SIZE)) * PORT_CHUNK_SIZE
 
     t = Tester(env, verbose, port_chunk)
 

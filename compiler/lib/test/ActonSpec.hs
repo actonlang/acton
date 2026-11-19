@@ -223,6 +223,10 @@ hashDecl l doc =
 
 
 
+-- | The interface directories that tests type check against: std's, then base's.
+systemTypes :: [FilePath]
+systemTypes = Project.systemTypePaths (".." </> ".." </> "dist")
+
 main :: IO ()
 main = do
   let sysTypesPath = ".." </> ".." </> "dist" </> "base" </> "out" </> "types"
@@ -2899,9 +2903,8 @@ main = do
               , "    t.success()"
               ]
             moduleName = S.modName ["context_test_discovery"]
-            sysTypesPath = ".." </> ".." </> "dist" </> "base" </> "out" </> "types"
         parsed <- liftIO $ P.parseModule moduleName "<context_test_discovery>" src Nothing
-        env <- liftIO $ Acton.Env.mkEnv [sysTypesPath] env0 parsed
+        env <- liftIO $ Acton.Env.mkEnv systemTypes env0 parsed
         kchecked <- liftIO $ Acton.Kinds.check env parsed
         (_, _, _, discovered) <- liftIO $ Acton.Types.reconstruct Nothing Nothing env kchecked Nothing
         sort discovered `shouldBe` ["_test_async", "_test_env", "_test_sync"]
@@ -2956,10 +2959,9 @@ main = do
         let src = "value = 41\n"
             moduleName = S.modName ["top_non_total_sig"]
             actFile = "<top_non_total_sig>"
-            sysTypesPath = ".." </> ".." </> "dist" </> "base" </> "out" </> "types"
             onInferred names sig = modifyIORef' sigsRef ((names, sig) :)
         parsed <- liftIO $ P.parseModule moduleName actFile src Nothing
-        env <- liftIO $ Acton.Env.mkEnv [sysTypesPath] env0 parsed
+        env <- liftIO $ Acton.Env.mkEnv systemTypes env0 parsed
         kchecked <- liftIO $ Acton.Kinds.check env parsed
         _ <- liftIO $ Acton.Types.reconstruct Nothing (Just onInferred) env kchecked Nothing
         sigs <- liftIO $ reverse <$> readIORef sigsRef
@@ -3409,9 +3411,8 @@ main = do
                 return [ (pn, if mayEscape then Escape.MayEscape else Escape.NoEscape)
                        | (pn,mayEscape) <- stored ]
         let providerFile = "<escape_provider>"
-            sysTypesPath = ".." </> ".." </> "dist" </> "base" </> "out" </> "types"
         providerParsed <- liftIO $ P.parseModule providerName providerFile providerSrc Nothing
-        providerEnv <- liftIO $ Acton.Env.mkEnv [sysTypesPath] env0 providerParsed
+        providerEnv <- liftIO $ Acton.Env.mkEnv systemTypes env0 providerParsed
         providerKinds <- liftIO $ Acton.Kinds.check providerEnv providerParsed
         (providerNMod, providerTyped, _, _) <-
           liftIO $ Acton.Types.reconstruct Nothing Nothing providerEnv providerKinds Nothing
@@ -5143,19 +5144,17 @@ parseAct env0 modulePath = do
   let moduleComponents = splitDirectories modulePath
       moduleName = S.modName moduleComponents
       act_file = "test" </> "src" </> modulePath ++ ".act"
-      sysTypesPath = ".." </> ".." </> "dist" </> "base" </> "out" </> "types"
 
   src <- liftIO $ readFile act_file
   parsed <- liftIO $ P.parseModule moduleName act_file src Nothing
-  env <- liftIO $ Acton.Env.mkEnv [sysTypesPath] env0 parsed
+  env <- liftIO $ Acton.Env.mkEnv systemTypes env0 parsed
   return (env, parsed)
 
 typecheckSource env0 modName src = do
   let moduleName = S.modName [modName]
       actFile = "<" ++ modName ++ ">"
-      sysTypesPath = ".." </> ".." </> "dist" </> "base" </> "out" </> "types"
   parsed <- liftIO $ P.parseModule moduleName actFile src Nothing
-  env <- liftIO $ Acton.Env.mkEnv [sysTypesPath] env0 parsed
+  env <- liftIO $ Acton.Env.mkEnv systemTypes env0 parsed
   kchecked <- liftIO $ Acton.Kinds.check env parsed
   (_, tchecked, _, _) <- liftIO $ Acton.Types.reconstruct Nothing Nothing env kchecked Nothing
   return tchecked

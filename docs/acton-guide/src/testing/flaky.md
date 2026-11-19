@@ -4,11 +4,11 @@ Flaky tests are those that have different outcomes during different runs, i.e. t
 
 Source:
 ```python
-import random
+import std.random
 import testing
 
 def _test_flaky():
-    i = random.randint(0, 2)
+    i = std.random.randint(0, 2)
     if i == 0:
         return
     elif i == 1:

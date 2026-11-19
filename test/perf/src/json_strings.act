@@ -1,4 +1,4 @@
-import json
+import std.json
 import testing
 
 
@@ -49,7 +49,7 @@ def encode_object(t: testing.SyncT, data: dict[str, ?value], expected: str):
     last = ""
     for _ in t.loop():
         repeats += 1
-        last = json.encode(data)
+        last = std.json.encode(data)
         count += len(last)
     testing.assertEqual(count, repeats * len(expected))
     if repeats > 0:
@@ -61,11 +61,11 @@ def decode_object(t: testing.SyncT, source: str, expected_items: int):
     last: dict[str, ?value] = {}
     for _ in t.loop():
         repeats += 1
-        last = json.decode(source)
+        last = std.json.decode(source)
         count += len(last)
     testing.assertEqual(count, repeats * expected_items)
     if repeats > 0:
-        testing.assertEqual(json.encode(last), source)
+        testing.assertEqual(std.json.encode(last), source)
 
 def encode_array(t: testing.SyncT, data: list[?value], expected: str):
     count = 0
@@ -73,7 +73,7 @@ def encode_array(t: testing.SyncT, data: list[?value], expected: str):
     last = ""
     for _ in t.loop():
         repeats += 1
-        last = json.encode_list(data)
+        last = std.json.encode_list(data)
         count += len(last)
     testing.assertEqual(count, repeats * len(expected))
     if repeats > 0:
@@ -85,11 +85,11 @@ def decode_array(t: testing.SyncT, source: str, expected_items: int):
     last: list[?value] = []
     for _ in t.loop():
         repeats += 1
-        last = json.decode_list(source)
+        last = std.json.decode_list(source)
         count += len(last)
     testing.assertEqual(count, repeats * expected_items)
     if repeats > 0:
-        testing.assertEqual(json.encode_list(last), source)
+        testing.assertEqual(std.json.encode_list(last), source)
 
 
 def _test_encode_object_ascii(t: testing.SyncT):

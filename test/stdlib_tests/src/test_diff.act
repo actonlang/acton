@@ -1,4 +1,4 @@
-from diff import diff
+from std.diff import diff
 import testing
 
 def _test_diff_basic():

@@ -698,14 +698,14 @@ compilerTests =
               [ "def label() -> str:\n    return \"old function\""
               , "def label() -> str:\n    return \"new function\""
               , "answer = 42"
-              , "import math"
+              , "import std.math"
               , "class Box(object):\n    def __init__(self, name: str):\n        self.name = name\n    def describe(self) -> str:\n        return \"class \" + self.name"
               , "actor Foo():\n    print(\"old Foo\")"
               , "actor Foo():\n    print(\"hello from Foo\")"
               ]
         st <- foldM Repl.addReplInput Repl.emptyReplState inputs
         let sessionSrc = Repl.renderReplSessionSource st
-            evalSrc = Repl.renderReplEvalSource st (Repl.ReplExpr "math.sqrt(9.0)")
+            evalSrc = Repl.renderReplEvalSource st (Repl.ReplExpr "std.math.sqrt(9.0)")
         assertBool "repl should retain declarations in session module"
           ("actor Foo():" `isInfixOf` sessionSrc)
         assertBool "repl should retain classes in session module"
@@ -717,7 +717,7 @@ compilerTests =
         assertBool "repl eval should import session module"
           ("from repl_session import *" `isInfixOf` evalSrc)
         assertBool "repl eval should retain imports used by expressions"
-          ("import math" `isInfixOf` evalSrc)
+          ("import std.math" `isInfixOf` evalSrc)
         assertBool "repl eval should replay retained setup"
           ("answer = 42" `isInfixOf` evalSrc)
         assertBool "repl eval should not duplicate retained declarations"
@@ -2345,10 +2345,10 @@ actonProjTests =
             , "fingerprint = " ++ mkFp "std_json_import"
             ]
           writeFile (proj </> "src" </> "main.act") $ unlines
-            [ "import std.json as json"
+            [ "import std.json"
             , ""
             , "actor main(env):"
-            , "    print(json.encode({\"answer\": 42}))"
+            , "    print(std.json.encode({\"answer\": 42}))"
             , "    env.exit(0)"
             ]
           (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode
@@ -2940,7 +2940,7 @@ gcBuildOptionTests = testGroup "GC metadata build options"
           writeApp dir name (gcOptions False False)
           writeFile (dir </> "src/main.act") $ unlines
             [ "import bridge"
-            , "import std.json as json"
+            , "import std.json"
             , ""
             , "actor main(env):"
             , "    records = bridge.make()"
@@ -2949,7 +2949,7 @@ gcBuildOptionTests = testGroup "GC metadata build options"
             , "    assert bridge.churn() == 8128"
             , "    env.rts.gc()"
             , "    assert large == \"x\" * 16384"
-            , "    print(json.encode({\"count\": bridge.verify(records)}))"
+            , "    print(std.json.encode({\"count\": bridge.verify(records)}))"
             , "    env.exit(0)"
             ]
         let sharedFiles = [dir </> file | dir <- [bridge, shared], file <- ["Build.act", "src/lib.act"]]

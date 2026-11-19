@@ -1,5 +1,5 @@
 """Test module for docstring functionality with {braces}."""
-import math
+import std.math
 def test_function (x : int) -> int:
     """Test function with docstring."""
     return x * 2

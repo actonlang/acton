@@ -1,7 +1,7 @@
 # The Computer Language Benchmarks Game
 # Compute the packed bitmap and hash it, as in 1.go.
 
-import crypto.hash.md5
+import std.crypto.hash.md5 as md5
 
 def bitmap_row(size: int, ci: float, real: list[float]) -> bytes:
     row = []
@@ -40,5 +40,5 @@ actor main(env):
     for y in range(size):
         pixels.append(bitmap_row(size, imaginary[y], real))
     print("P4\n%d %d" % (size, size))
-    print(crypto.hash.md5.hash(b"".join(pixels)).hex())
+    print(md5.hash(b"".join(pixels)).hex())
     env.exit(0)

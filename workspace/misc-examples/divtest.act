@@ -1,5 +1,5 @@
 import numpy as np
-import math
+import std.math
 
 actor main(env):
   print(3/5)

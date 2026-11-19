@@ -1,4 +1,4 @@
-import math
+import std.math
 import testing
 
 
@@ -197,7 +197,7 @@ def _test_odd_samples(t: testing.SyncT):
     assert number(stats, "median_duration") == 3.0
     assert number(stats, "q1_duration") == 2.0
     assert number(stats, "q3_duration") == 4.0
-    assert abs(number(stats, "stdev_duration") - math.sqrt(2.5)) < 0.000000001
+    assert abs(number(stats, "stdev_duration") - std.math.sqrt(2.5)) < 0.000000001
 
 
 def _test_even_samples(t: testing.SyncT):
@@ -205,7 +205,7 @@ def _test_even_samples(t: testing.SyncT):
     assert number(stats, "median_duration") == 2.5
     assert number(stats, "q1_duration") == 1.75
     assert number(stats, "q3_duration") == 3.25
-    assert abs(number(stats, "stdev_duration") - math.sqrt(5.0 / 3.0)) < 0.000000001
+    assert abs(number(stats, "stdev_duration") - std.math.sqrt(5.0 / 3.0)) < 0.000000001
 
 
 def _test_outliers_are_retained(t: testing.SyncT):
@@ -214,7 +214,7 @@ def _test_outliers_are_retained(t: testing.SyncT):
     assert number(stats, "outlier_count") == 1.0
     assert number(stats, "median_duration") == 1.0
     assert info.avg_duration == 20.8
-    assert abs(number(stats, "stdev_duration") - math.sqrt(1960.2)) < 0.000000001
+    assert abs(number(stats, "stdev_duration") - std.math.sqrt(1960.2)) < 0.000000001
     assert len(info.results) == 5
 
 
@@ -230,7 +230,7 @@ def _test_wall_time_uses_paired_samples(t: testing.SyncT):
     assert number(stats, "avg_gc_duration") == 2.0
     assert number(stats, "min_gc_duration") == 1.0
     assert number(stats, "max_gc_duration") == 3.0
-    assert abs(number(stats, "stdev_gc_duration") - math.sqrt(2.0)) < 0.000000001
+    assert abs(number(stats, "stdev_gc_duration") - std.math.sqrt(2.0)) < 0.000000001
 
 
 def _test_memory_statistics_preserve_fractional_and_signed_values(t: testing.SyncT):
@@ -243,7 +243,7 @@ def _test_memory_statistics_preserve_fractional_and_signed_values(t: testing.Syn
     assert abs(number(stats, "mem_usage_delta_avg") - 2.0 / 3.0) < 0.000000001
     assert abs(number(stats, "non_gc_mem_usage_delta_avg") + 1.0 / 3.0) < 0.000000001
     for stem in ["mem_usage_delta", "non_gc_mem_usage_delta"]:
-        assert abs(number(stats, "stdev_" + stem) - math.sqrt(1.0 / 3.0)) < 0.000000001
+        assert abs(number(stats, "stdev_" + stem) - std.math.sqrt(1.0 / 3.0)) < 0.000000001
         assert number(stats, "outlier_count_" + stem) == 0.0
     assert number(stats, "min_mem_usage_delta") == 0.0
     assert number(stats, "max_mem_usage_delta") == 1.0
@@ -275,7 +275,7 @@ def _test_sparse_gc_and_memory_outliers_are_retained(t: testing.SyncT):
     assert number(stats, "outlier_count") == 0.0
     for stem in ["wall_duration", "gc_duration", "mem_usage_delta", "non_gc_mem_usage_delta"]:
         assert number(stats, "outlier_count_" + stem) == 1.0
-        assert abs(number(stats, "stdev_" + stem) - math.sqrt(2000.0)) < 0.000000001
+        assert abs(number(stats, "stdev_" + stem) - std.math.sqrt(2000.0)) < 0.000000001
     assert number(stats, "avg_wall_duration") == 21.0
     assert number(stats, "avg_gc_duration") == 20.0
     assert number(stats, "q1_gc_duration") == 0.0

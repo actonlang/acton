@@ -11,7 +11,7 @@
 # This reproduced as argparse dropping explicitly-provided sub-command options:
 # Args.get_int() raised "Option '<name>' not found" only under --release=fast.
 
-import argparse
+import std.argparse
 
 # Bare codegen pattern: `marker` is set inside the loop and read afterwards.
 def loop_carried(items: list[str], needle: str) -> ?str:
@@ -21,7 +21,7 @@ def loop_carried(items: list[str], needle: str) -> ?str:
             marker = x
     return marker
 
-proc def run(args: argparse.Args) -> None:
+proc def run(args: std.argparse.Args) -> None:
     pass
 
 actor main(env):
@@ -31,7 +31,7 @@ actor main(env):
         env.exit(1)
 
     # 2. argparse: an explicitly provided sub-command option must round-trip
-    p = argparse.Parser()
+    p = std.argparse.Parser()
     tp = p.add_cmd("test", "Run tests", run)
     tp.add_arg("name", "Name of the test")
     tp.add_option("min-iter", "int", default=3, help="")

@@ -1,8 +1,8 @@
 import testing
-import math
+import std.math
 
 def dct(k,n,l):
-    return math.cos(math.pi/l * (n + 0.5) * k)
+    return std.math.cos(std.math.pi/l * (n + 0.5) * k)
 
 def dct_sum(l):
     s = 0
