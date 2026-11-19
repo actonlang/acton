@@ -3819,6 +3819,8 @@ stdioTerminalTests = testGroup "stdio terminal" $
       withPtyProgram "stdio_raw" env0 $ \master slave hOut ph -> do
         line <- readLineWithin hOut
         assertEqual "stdin and stdout" "stdin_is_tty True is_tty False" line
+        ttys <- readLineWithin hOut
+        assertEqual "stdin readers after two stdin_install" "tty handles 1" ttys
         expectReady hOut
         assertRawMode slave
         -- Ctrl-C, Ctrl-Z, Ctrl-\, Ctrl-S, Ctrl-Q, Ctrl-V, Ctrl-Y, Ctrl-O, Enter

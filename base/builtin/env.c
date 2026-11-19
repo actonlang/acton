@@ -126,10 +126,18 @@ $R B_StdioD_set_stdinG_local (B_Stdio self, $Cont c$cont, B_bool canonical, B_bo
     return $R_CONT(c$cont, B_None);
 }
 
+// The one stdin reader of the process, with the callback of the last
+// stdin_install in its data. A second reader on the terminal would race the
+// first for its bytes, since libuv opens the terminal anew for each handle.
+// The reader runs on the loop of the worker that the Stdio actor is pinned
+// to, so only that worker's thread reads and writes it.
+static uv_tty_t *stdin_tty = NULL;
+
 void read_stdin(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
     if (nread < 0){
         if (nread == UV_EOF) {
             uv_close((uv_handle_t *)stream, NULL);
+            stdin_tty = NULL;
         }
     } else if (nread > 0) {
         if (stream->data) {
@@ -140,13 +148,19 @@ void read_stdin(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
 }
 
 $R B_StdioD__on_stdin_bytesG_local (B_Stdio self, $Cont c$cont, $action cb) {
+    if (stdin_tty != NULL) {
+        stdin_tty->data = cb;
+        return $R_CONT(c$cont, B_None);
+    }
     // This should be the only call in Stdio that uses the libuv loop, so it is
     // safe to pin affinity here (and not earlier).
     pin_actor_affinity();
     uv_tty_t *tty = acton_malloc_rescanned(sizeof(uv_tty_t));
-    uv_tty_init(get_uv_loop(), tty, STDIN_FILENO, 1);
+    if (uv_tty_init(get_uv_loop(), tty, STDIN_FILENO, 1) != 0)
+        return $R_CONT(c$cont, B_None);
     tty->data = cb;
     uv_read_start((uv_stream_t*)tty, alloc_buffer, read_stdin);
+    stdin_tty = tty;
     return $R_CONT(c$cont, B_None);
 }
 

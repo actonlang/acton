@@ -72,6 +72,13 @@ settings on exit for you, and why these programs should be careful and
 intentional about when they enter non-canonical or raw mode.</p>
 </div>
 
+## One stdin handler
+
+A process has one reader of stdin. Calling `stdin_install` again
+replaces the handler, and the input that arrives after that goes to the
+new handler only. A program can read a password with one handler and
+then install another one for its command line.
+
 ## Common patterns
 
 Switch to non-canonical or raw mode only when you need it, and keep

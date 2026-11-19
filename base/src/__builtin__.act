@@ -1756,7 +1756,12 @@ actor Stdio(envcap: _EnvCap, vars: EnvVar):
         NotImplemented
 
     action def stdin_install(on_stdin: ?action(str) -> None=None, encoding: ?str=None, on_error: ?action(str, bytes) -> None=None, on_stdin_bytes: ?action(bytes) -> None=None) -> None:
-        """Install a handler for stdin"""
+        """Install a handler for stdin
+
+        The process has one reader of stdin. Installing a handler again
+        replaces the handler before it, and the data that arrives after that
+        goes to the new handler only.
+        """
         if on_stdin is None and on_stdin_bytes is None:
             raise _missing_stdin_callback_error
         elif on_stdin_bytes is not None:
