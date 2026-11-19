@@ -648,11 +648,16 @@ static B_str str_transform(B_str s, transform first, transform rest) {
     unsigned char tmp[4];
     utf8proc_int32_t cp;
     int64_t nbytes = 0;
+    bool changed = false;
     unsigned char *p = s->str;
     for (int64_t i = 0; i < s->nchars; i++) {
         p += utf8proc_iterate(p, -1, &cp);
-        nbytes += utf8proc_encode_char(i == 0 ? first(cp) : rest(cp), tmp);
+        utf8proc_int32_t mapped = i == 0 ? first(cp) : rest(cp);
+        changed |= mapped != cp;
+        nbytes += utf8proc_encode_char(mapped, tmp);
     }
+    if (!changed)
+        return s;
     check_result_len(nbytes);
     B_str res;
     NEW_UNFILLED_STR(res, s->nchars, nbytes);
@@ -3465,16 +3470,27 @@ B_bytes B_bytesD___deserialize__(B_bytes self, $Serial$state state) {
     return res;
 }
 
-B_bytes B_bytesD_capitalize(B_bytes s) {
-    if (s->nbytes==0) {
+typedef unsigned char (*byte_transform)(unsigned char c);
+
+// Maps the first byte of s with first and the other bytes with rest. Copies
+// only when some byte changes.
+static B_bytes bytes_transform(B_bytes s, byte_transform first, byte_transform rest) {
+    int64_t i = 0;
+    while (i < s->nbytes && (i == 0 ? first : rest)(s->str[i]) == s->str[i])
+        i++;
+    if (i == s->nbytes)
         return s;
-    }
+    // The bytes before the first changed one are copied as they are
     B_bytes res;
-    NEW_UNFILLED_BYTES(res,s->nbytes);
-    res->str[0] = ascii_toupper(s->str[0]);
-    for (int64_t i = 1; i < s->nbytes; i++)
-        res->str[i] = ascii_tolower(s->str[i]);
+    NEW_UNFILLED_BYTES(res, s->nbytes);
+    memcpy(res->str, s->str, i);
+    for (; i < s->nbytes; i++)
+        res->str[i] = (i == 0 ? first : rest)(s->str[i]);
     return res;
+}
+
+B_bytes B_bytesD_capitalize(B_bytes s) {
+    return bytes_transform(s, ascii_toupper, ascii_tolower);
 }
 
 B_bytes B_bytesD_center(B_bytes s, int64_t width, B_bytes fill) {
@@ -3770,11 +3786,7 @@ B_bytes B_bytesD_ljust(B_bytes s, int64_t width, B_bytes fill) {
 }
 
 B_bytes B_bytesD_lower(B_bytes s) {
-    B_bytes res;
-    NEW_UNFILLED_BYTES(res,s->nbytes);
-    for (int64_t i=0; i< s->nbytes; i++)
-        res->str[i] = ascii_tolower(s->str[i]);
-    return res;
+    return bytes_transform(s, ascii_tolower, ascii_tolower);
 }
 
 B_bytes B_bytesD_lstrip(B_bytes s, B_bytes cs) {
@@ -4085,12 +4097,7 @@ B_bytes B_bytesD_strip(B_bytes s, B_bytes cs) {
 }
 
 B_bytes B_bytesD_upper(B_bytes s) {
-    B_bytes res;
-    NEW_UNFILLED_BYTES(res,s->nbytes);
-    for (int64_t i=0; i< s->nbytes; i++)
-        res->str[i] = ascii_toupper(s->str[i]);
-
-    return res;
+    return bytes_transform(s, ascii_toupper, ascii_toupper);
 }
 
 B_bytes B_bytesD_zfill(B_bytes s, int64_t width) {
