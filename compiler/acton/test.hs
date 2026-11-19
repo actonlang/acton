@@ -26,6 +26,7 @@ import Control.Concurrent (threadDelay)
 import qualified System.IO as IO
 import qualified System.Posix.IO as PIO
 import qualified System.Posix.IO.ByteString as PIOB
+import qualified System.Posix.Signals as PS
 import qualified System.Posix.Terminal as PT
 import System.IO.Temp (withSystemTempDirectory)
 import qualified System.Info
@@ -3804,12 +3805,12 @@ workerStackTests = testGroup "worker stacks" $
   | System.Info.os == "linux"
   ]
 
--- test/rts/stdio_raw runs with stdin on a new pseudo terminal, which these
--- tests set to cooked mode first, and stdout and stderr on pipes. The tests
--- read the settings of the terminal through its slave and type keys into its
--- master. The terminal is not the controlling terminal of the program, so the
--- keys that send signals in cooked mode send none, but the terminal does not
--- pass them on to the program either.
+-- test/rts/stdio_raw and test/rts/stdio_raw_wait run with stdin on a new
+-- pseudo terminal, which these tests set to cooked mode first, and stdout and
+-- stderr on pipes. The tests read the settings of the terminal through its
+-- slave and type keys into its master. The terminal is not the controlling
+-- terminal of the program, so the keys that send signals in cooked mode send
+-- none, but the terminal does not pass them on to the program either.
 stdioTerminalTests = testGroup "stdio terminal" $
   if System.Info.os `notElem` ["darwin", "linux"] then [] else
   [ testCase "raw mode passes every key on and set_stdin(raw=False) restores the terminal" $ do
@@ -3833,6 +3834,26 @@ stdioTerminalTests = testGroup "stdio terminal" $
         code <- waitWithin ph
         assertEqual "exit code" ExitSuccess code
         assertCookedMode slave
+  , testCase "the terminal is restored when a signal ends the program" $ do
+      testBuildThing "" ExitSuccess False "../../test/rts/stdio_raw_wait.act"
+      env0 <- getEnvironment
+      -- The crash handler starts lldb or gdb for a backtrace. With PATH on a
+      -- directory that does not exist it finds neither and goes on at once.
+      let noDebugger = ("PATH", "/nonexistent") : filter ((/= "PATH") . fst) env0
+      forM_ [ ("SIGHUP", PS.sigHUP, ExitFailure (-1), env0)
+            , ("SIGQUIT", PS.sigQUIT, ExitFailure (-3), env0)
+            , ("SIGINT", PS.sigINT, ExitSuccess, env0)
+            , ("SIGTERM", PS.sigTERM, ExitSuccess, env0)
+            , ("SIGSEGV", PS.sigSEGV, ExitFailure (-11), noDebugger)
+            ] $ \(name, sig, expCode, env) ->
+        withPtyProgram "stdio_raw_wait" env $ \_ slave hOut ph -> do
+          expectReady hOut
+          assertRawMode slave
+          Just pid <- getPid ph
+          PS.signalProcess sig pid
+          code <- waitWithin ph
+          assertEqual ("exit code after " ++ name) expCode code
+          assertCookedModeAfter ("after " ++ name) slave
   ]
   where
     withPtyProgram exe env body = do

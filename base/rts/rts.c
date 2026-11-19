@@ -110,7 +110,7 @@ extern struct dbc_stat dbc_stats;
 #endif
 
 #ifndef _WIN32
-struct sigaction sa_abrt, sa_ill, sa_int, sa_pipe, sa_segv, sa_term;
+struct sigaction sa_abrt, sa_hup, sa_ill, sa_int, sa_pipe, sa_quit, sa_segv, sa_term;
 #endif
 
 char rts_verbose = 0;
@@ -538,9 +538,20 @@ remote_db_t * db = NULL;
 #else
 struct termios old_stdin_attr;
 // set_stdin() sets this before it changes the terminal settings of stdin.
-// Only then are the settings in old_stdin_attr restored at exit, because from
-// a background process group, tcsetattr() stops the process with SIGTTOU.
+// Only then are the settings in old_stdin_attr restored at exit.
 bool stdin_attr_changed = false;
+
+// Restore the terminal settings of stdin from startup, if set_stdin() changed
+// them, unless the process is in a background process group of its controlling
+// terminal. From there tcsetattr() stops the process with SIGTTOU, or, in a
+// signal handler that blocks SIGTTOU, changes the settings under the
+// foreground job. tcgetpgrp() fails when stdin is not the controlling
+// terminal. Async-signal-safe, so the signal handlers call it.
+static void restore_stdin_attr(void) {
+    pid_t fg = tcgetpgrp(STDIN_FILENO);
+    if (stdin_attr_changed && (fg == -1 || fg == getpgrp()))
+        tcsetattr(STDIN_FILENO, TCSANOW, &old_stdin_attr);
+}
 #endif
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -3193,8 +3204,7 @@ void *$mon_socket_loop() {
 void rts_shutdown() {
 #if defined(_WIN32) || defined(_WIN64)
 #else
-    if (stdin_attr_changed)
-        tcsetattr(STDIN_FILENO, TCSANOW, &old_stdin_attr);
+    restore_stdin_attr();
 #endif
 
     rts_exit = 1;
@@ -3240,6 +3250,7 @@ void print_trace() {
 }
 
 void launch_debugger(int signum) {
+    restore_stdin_attr();
     fprintf(stderr, "\nERROR: This is the automatic debug launcher for %s\n", appname);
     if (signum == SIGILL)
         fprintf(stderr, "\nERROR: illegal instruction\n");
@@ -3267,6 +3278,7 @@ void launch_debugger(int signum) {
 }
 
 void crash_handler(int signum) {
+    restore_stdin_attr();
     fprintf(stderr, "\nERROR: This is the automatic crash handler for %s\n", appname);
     if (signum == SIGILL)
         fprintf(stderr, "ERROR: illegal instruction\n");
@@ -3326,6 +3338,14 @@ void sigterm_handler(int signum) {
         log_info("Received SIGTERM during graceful shutdown, exiting immediately");
         exit(return_val);
     }
+}
+
+// SIGHUP and SIGQUIT end the process as they do without a handler, after the
+// terminal settings of stdin are restored.
+void sighup_sigquit_handler(int signum) {
+    restore_stdin_attr();
+    signal(signum, SIG_DFL);
+    kill(getpid(), signum);
 }
 #endif
 
@@ -3819,15 +3839,19 @@ int main(int argc, char **argv) {
 
     // Signal handling
     sigfillset(&sa_abrt.sa_mask);
+    sigfillset(&sa_hup.sa_mask);
     sigfillset(&sa_ill.sa_mask);
     sigfillset(&sa_int.sa_mask);
     sigfillset(&sa_pipe.sa_mask);
+    sigfillset(&sa_quit.sa_mask);
     sigfillset(&sa_segv.sa_mask);
     sigfillset(&sa_term.sa_mask);
     sa_abrt.sa_flags = SA_RESTART;
+    sa_hup.sa_flags = SA_RESTART;
     sa_ill.sa_flags = SA_RESTART;
     sa_int.sa_flags = SA_RESTART;
     sa_pipe.sa_flags = SA_RESTART;
+    sa_quit.sa_flags = SA_RESTART;
     sa_segv.sa_flags = SA_RESTART;
     sa_term.sa_flags = SA_RESTART;
 
@@ -3837,6 +3861,8 @@ int main(int argc, char **argv) {
     // Handle signals
     sa_int.sa_handler = &sigint_handler;
     sa_term.sa_handler = &sigterm_handler;
+    sa_hup.sa_handler = &sighup_sigquit_handler;
+    sa_quit.sa_handler = &sighup_sigquit_handler;
 
     if (sigaction(SIGPIPE, &sa_pipe, NULL) == -1) {
         log_fatal("Failed to install signal handler for SIGPIPE: %s", strerror(errno));
@@ -3848,6 +3874,19 @@ int main(int argc, char **argv) {
     }
     if (sigaction(SIGTERM, &sa_term, NULL) == -1) {
         log_fatal("Failed to install signal handler for SIGTERM: %s", strerror(errno));
+        exit(1);
+    }
+    // A SIGHUP or SIGQUIT that the process starts with ignored, like SIGHUP
+    // under nohup, stays ignored.
+    struct sigaction sa_old;
+    sigaction(SIGHUP, NULL, &sa_old);
+    if (sa_old.sa_handler != SIG_IGN && sigaction(SIGHUP, &sa_hup, NULL) == -1) {
+        log_fatal("Failed to install signal handler for SIGHUP: %s", strerror(errno));
+        exit(1);
+    }
+    sigaction(SIGQUIT, NULL, &sa_old);
+    if (sa_old.sa_handler != SIG_IGN && sigaction(SIGQUIT, &sa_quit, NULL) == -1) {
+        log_fatal("Failed to install signal handler for SIGQUIT: %s", strerror(errno));
         exit(1);
     }
 #endif
@@ -4041,6 +4080,11 @@ int main(int argc, char **argv) {
 #if defined(_WIN32) || defined(_WIN64)
 #else
     tcgetattr(STDIN_FILENO, &old_stdin_attr);
+    // rts_shutdown() restores the settings when shutdown starts, but a
+    // set_stdin() running on another worker can change them after that, and
+    // exit() skips rts_shutdown(). Both the return from main(), after the
+    // workers have stopped, and every exit() run the atexit handlers.
+    atexit(restore_stdin_attr);
 #endif
 
     // RTS startup and module is static stuff, in particular module constants
@@ -4218,16 +4262,6 @@ int main(int argc, char **argv) {
         const char *stats_json = stats_to_json();
         printf("%s\n", stats_json);
     }
-#endif
-
-#if defined(_WIN32) || defined(_WIN64)
-#else
-    // rts_shutdown() restored the terminal settings if set_stdin() had changed
-    // them, but a Stdio.set_stdin() that was running on another worker may
-    // have changed them after that. No worker runs actors any more, so
-    // restore them once more.
-    if (stdin_attr_changed)
-        tcsetattr(STDIN_FILENO, TCSANOW, &old_stdin_attr);
 #endif
 
     if (logf) {

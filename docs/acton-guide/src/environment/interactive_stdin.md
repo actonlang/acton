@@ -61,7 +61,9 @@ the program runs read whole lines.
 
 The runtime copies the terminal settings on startup and restores them
 on exit, so you do not need to restore echo or raw mode manually in the
-common case.
+common case. This includes an exit through a signal such as SIGTERM,
+SIGHUP or SIGQUIT and a crash, so a program in raw mode does not leave
+the terminal without Ctrl-C.
 
 <div class="advanced-content">
 <p>Interactive stdin changes the terminal contract for the whole
