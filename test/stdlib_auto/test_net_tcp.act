@@ -3,7 +3,6 @@
 # a message and expects a reply. This exercices both ends of the TCP connection.
 
 import net
-import std.random
 
 
 def get_tcp_handles(m):
@@ -90,7 +89,7 @@ actor main(env):
 
     rts_monitor = env.rts
 
-    port4 = std.random.randint(10000, 20000)
+    port4 = env.random.between(10000, 20000)
     port6 = port4+1
     print("Using ports, IPv4: %d  IPv6: %d" % (port4, port6))
 

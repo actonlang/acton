@@ -183,10 +183,10 @@ def _test_paired_interval_weights_processes_equally():
         raise AssertionError("Missing paired interval")
 
 
-def _test_pair_order_is_balanced():
+def _test_pair_order_is_balanced(t: testing.SyncT):
     # Check the invariant, without requiring any random outcome to occur.
     for _ in range(20):
-        order = perf_compare.pair_order()
+        order = perf_compare.pair_order(t.random)
         assert len(order) == 4
         assert len([first for first in order if first]) == 2
         assert len([first for first in order if not first]) == 2

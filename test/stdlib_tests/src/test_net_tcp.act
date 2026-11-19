@@ -1,6 +1,5 @@
 import logging
 import net
-import std.random
 import std.re
 import testing
 
@@ -9,7 +8,7 @@ actor _test_TCPClientSideClose(t: testing.EnvT):
     test_payload = b"Stay a while and listen."
     address = "127.0.0.1"
     var retries = 10
-    var port = std.random.randint(10000, 40000)
+    var port = t.env.random.between(10000, 40000)
     tcp_cap = net.TCPCap(net.NetCap(t.env.cap))
 
     var recv_buf: list[bytes] = []
@@ -65,7 +64,7 @@ actor _test_TCPClientSideClose(t: testing.EnvT):
 
     def _start():
         retries -= 1
-        port = std.random.randint(10000, 40000)
+        port = t.env.random.between(10000, 40000)
         server = net.TCPListener(net.TCPListenCap(tcp_cap), address, port, on_listen, on_listen_accept)
     _start()
 
@@ -73,7 +72,7 @@ actor test_tcp_server_side_close(t: testing.EnvT, test_payload: bytes):
     log = logging.Logger(t.log_handler)
     address = "127.0.0.1"
     var retries = 10
-    var port = std.random.randint(10000, 40000)
+    var port = t.env.random.between(10000, 40000)
     tcp_cap = net.TCPCap(net.NetCap(t.env.cap))
 
     recv_buf: list[bytes] = []
@@ -134,7 +133,7 @@ actor test_tcp_server_side_close(t: testing.EnvT, test_payload: bytes):
 
     def _start():
         retries -= 1
-        port = std.random.randint(10000, 40000)
+        port = t.env.random.between(10000, 40000)
         server = net.TCPListener(net.TCPListenCap(tcp_cap), address, port, on_listen, on_listen_accept)
     _start()
 

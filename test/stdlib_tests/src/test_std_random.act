@@ -30,9 +30,13 @@ def _test_seeded_helpers():
     g = random.Xoshiro256(42)
     testing.assertEqual([g.rand_float(), g.rand_float()], [0.8143051451229099, 0.3188210400616611])
     g = random.Xoshiro256(42)
+    testing.assertEqual([random.choice(g, ["a", "b", "c", "d"]) for _ in range(8)], ["d", "b", "a", "a", "d", "b", "c", "c"])
+    g = random.Xoshiro256(42)
     items = list(range(10))
     random.shuffle(g, items)
     testing.assertEqual(items, [6, 9, 7, 8, 0, 5, 3, 4, 2, 1])
+    g = random.Xoshiro256(42)
+    testing.assertEqual(random.sample(g, list(range(10)), 4), [1, 3, 6, 2])
     g = random.Xoshiro256(42)
     testing.assertEqual(random.shuffled(g, list(range(10))), [6, 9, 7, 8, 0, 5, 3, 4, 2, 1])
 
@@ -148,6 +152,21 @@ def _test_rand_bytes():
     else:
         testing.error("rand_bytes accepted -1")
 
+def _test_choice():
+    g = random.Xoshiro256(1)
+    testing.assertEqual(random.choice(g, [42]), 42)
+    seen = set()
+    for _ in range(100):
+        seen.add(random.choice(g, ["a", "b", "c"]))
+    testing.assertEqual(seen, {"a", "b", "c"})
+    empty: list[int] = []
+    try:
+        random.choice(g, empty)
+    except ValueError as e:
+        testing.assertEqual(e.error_message, "choice: cannot choose from an empty sequence")
+    else:
+        testing.error("choice accepted an empty list")
+
 def _test_shuffle():
     g = random.Xoshiro256(1)
     empty: list[int] = []
@@ -188,7 +207,7 @@ def _test_shuffled():
     testing.assertEqual(random.shuffled(random.Xoshiro256(1), empty), [])
 
 def _test_sequence_types():
-    """shuffle and shuffled take other sequences than list"""
+    """choice, sample, shuffle and shuffled take other sequences than list"""
     # Seed 42 shuffles 10 elements into positions [6, 9, 7, 8, 0, 5, 3, 4, 2, 1]
     testing.assertEqual(random.shuffled(random.Xoshiro256(42), "abcdefghij"), "gjhiafdecb")
     testing.assertEqual(random.shuffled(random.Xoshiro256(42), b"abcdefghij"), b"gjhiafdecb")
@@ -197,6 +216,43 @@ def _test_sequence_types():
     ba = bytearray(b"abcdefghij")
     random.shuffle(random.Xoshiro256(42), ba)
     testing.assertEqual(ba, bytearray(b"gjhiafdecb"))
+
+    g = random.Xoshiro256(1)
+    testing.assertIn(random.choice(g, "xyz"), ["x", "y", "z"])
+    testing.assertIn(random.choice(g, b"xyz"), [120, 121, 122])
+    testing.assertIn(random.choice(g, ilist([1, 2])), [1, 2])
+    testing.assertEqual(sorted(random.sample(g, "xyz", 3)), ["x", "y", "z"])
+    testing.assertEqual(sorted(random.sample(g, b"xyz", 3)), [120, 121, 122])
+    try:
+        random.choice(g, "")
+    except ValueError as e:
+        testing.assertEqual(e.error_message, "choice: cannot choose from an empty sequence")
+    else:
+        testing.error("choice accepted an empty str")
+
+def _test_sample():
+    g = random.Xoshiro256(1)
+    population = list(range(20))
+    s = random.sample(g, population, 5)
+    testing.assertEqual(len(s), 5)
+    testing.assertEqual(len(set(s)), 5)
+    for x in s:
+        testing.assertIn(x, population)
+    testing.assertEqual(population, list(range(20)))
+    testing.assertEqual(random.sample(g, population, 0), [])
+    testing.assertEqual(sorted(random.sample(g, population, 20)), population)
+    # Distinct positions, not distinct values
+    testing.assertEqual(random.sample(g, [7, 7], 2), [7, 7])
+
+def _test_sample_invalid():
+    g = random.Xoshiro256(1)
+    for k in [-1, 4]:
+        try:
+            random.sample(g, [1, 2, 3], k)
+        except ValueError as e:
+            testing.assertEqual(e.error_message, f"sample: k must be between 0 and 3, got {k}")
+        else:
+            testing.error(f"sample accepted k={k}")
 
 mut def _roll[R(Random)](r: R) -> int:
     return r.between(1, 7)
@@ -228,7 +284,7 @@ def _test_env_random_protocol(t: testing.EnvT):
     testing.assertTrue(x >= 0.0 and x < 1.0, f"rand_float() returned {x}")
     n = r.rand_int()
     testing.assertTrue(n >= 0, f"rand_int() returned {n}")
-    testing.assertEqual(sorted(random.shuffled(r, [1, 2, 3])), [1, 2, 3])
+    testing.assertIn(random.choice(r, [1, 2, 3]), [1, 2, 3])
     t.success()
 
 def _test_seed_from_env_random(t: testing.EnvT):

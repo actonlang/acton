@@ -177,6 +177,13 @@
   `str()` of a `NotEqualError` no longer contains the diff.
 - Breaking: remove the `snappy` module. Use the
   [acton-snappy](https://github.com/actonlang/acton-snappy) package instead.
+- Breaking: `choice` and `sample` in `std.random` take a `Random` as their
+  first argument, as `shuffle` does, and `randint`, `randstr`, `rand_bigint`
+  and `rand_list` are removed. Replace `randint(lo, hi)` with
+  `env.random.between(lo, hi)`, which draws from the same half-open range, or
+  with `between` on a `std.random.Xoshiro256` for a seeded sequence. The
+  `qcheck_*` checks in `std.qcheck`, except `qcheck_0`, also take a `Random`
+  first: pass `env.random`, or `t.random` in a test.
 - Add `std.syslog`, a new module for sending and receiving syslog messages
   over UDP, TCP, and TLS. Use `Client` and `Server` for UDP, or `StreamClient`
   and `StreamServer` for TCP and TLS. The module includes an RFC 5424 codec

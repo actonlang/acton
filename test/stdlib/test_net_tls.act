@@ -1,7 +1,6 @@
 # TLS client/server test using local TLSListener.
 
 import net
-import std.random
 
 
 CERT_PEM = """-----BEGIN CERTIFICATE-----
@@ -154,7 +153,7 @@ actor main(env):
         _finish_failure("timeout")
 
     def _start_listener():
-        port = std.random.randint(20000, 45000)
+        port = env.random.between(20000, 45000)
         listener = net.TLSListener(
             listen_cap,
             "127.0.0.1",

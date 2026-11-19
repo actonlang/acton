@@ -1,4 +1,4 @@
-"""Seeded random number generators, and shuffling of sequences
+"""Seeded random number generators, and random picks from sequences
 
 Every source of random numbers implements the builtin Random protocol, which
 provides rand_u64, rand_int, rand_float, rand_bytes, below and between.
@@ -11,7 +11,8 @@ They are fast but predictable, so they suit simulations, tests and sampling,
 never secrets. The same seed gives the same sequence on every platform and from
 one Acton release to the next.
 
-shuffle and shuffled reorder a sequence, using any source.
+choice, sample, shuffle and shuffled pick from or reorder a sequence, using any
+source.
 
     import std.random as random
 
@@ -29,9 +30,40 @@ shuffle and shuffled reorder a sequence, using any source.
         env.exit(0)
 """
 
-# shuffled takes any sequence with a length and int indexes, such as list,
-# ilist, str, bytes or bytearray. shuffle also needs to assign by index, so it
-# takes a mutable sequence, such as list or bytearray.
+# choice, sample and shuffled take any sequence with a length and int indexes,
+# such as list, ilist, str, bytes or bytearray. shuffle also needs to assign by
+# index, so it takes a mutable sequence, such as list or bytearray.
+
+mut def choice[R(Random), S(Collection[A], IIndexed[int, A]), A](r: R, items: S) -> A:
+    """Return a random element of items
+
+    Raises ValueError if items is empty.
+    """
+    n = len(items)
+    if n == 0:
+        raise ValueError("choice: cannot choose from an empty sequence")
+    return items[r.below(n)]
+
+mut def sample[R(Random), S(Collection[A], IIndexed[int, A]), A](r: R, items: S, k: int) -> list[A]:
+    """Return a list of k distinct elements of items, in random order
+
+    Distinct means distinct positions, so an element that occurs twice in items
+    can occur twice in the result. items itself is not changed. Raises
+    ValueError unless 0 <= k <= len(items).
+    """
+    n = len(items)
+    if k < 0 or k > n:
+        raise ValueError(f"sample: k must be between 0 and {n}, got {k}")
+    # The first k steps of Fisher-Yates, on a list of positions
+    idx = list(range(n))
+    res = []
+    for i in range(k):
+        j = r.between(i, n)
+        tmp = idx[i]
+        idx[i] = idx[j]
+        idx[j] = tmp
+        res.append(items[idx[i]])
+    return res
 
 mut def shuffle[R(Random), S(object, Collection[A], MutIndexed[int, A]), A](r: R, items: S) -> None:
     """Put the elements of items in a random order, in place
@@ -109,89 +141,3 @@ def _splitmix64(s: u64) -> u64:
 
 def _rotl(x: u64, k: int) -> u64:
     return (x << k) | (x >> (64 - k))
-
-
-# The functions below are the old interface, which is being replaced by the
-# Random protocol and the functions above. They will be removed once nothing
-# uses them.
-
-_empty_choice_error = ValueError('Cannot choose from an empty sequence')
-_sample_size_error = ValueError("Sample larger than population or is negative")
-_decimal_length_error = ValueError('decimal length of int must be positive')
-
-
-# TODO: randint should not be pure!!! but what should it be?
-def randint(min: int, max: int) -> int:
-    NotImplemented
-
-def randstr(length: int) -> str:
-    char_set = list("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789")
-    res = ""
-    for i in range(length):
-        res += choice(char_set)
-    return res
-
-def choice[T](sequence: Sequence[T]) -> T:
-    """
-    Return a random element from the non-empty sequence.
-
-    :param sequence: List or sequence to choose from.
-    :return: A random element from the sequence.
-    """
-    if len(sequence) == 0:
-        raise _empty_choice_error
-
-    index = randint(0, len(sequence))
-    return sequence[index]
-
-
-def sample[T](population: list[T], k: int) -> list[T]:
-    """
-    Chooses k unique random elements from a population sequence.
-
-    :param population: List from which to sample.
-    :param k: Number of unique elements to pick.
-    :return: A new list containing elements from the population while maintaining the original sequence order.
-    """
-    if not (0 <= k and k <= len(population)):
-        raise _sample_size_error
-
-    result = []
-    indices = list(range(len(population)))
-    for _ in range(k):
-        idx_to_pop = choice(indices)
-        idx = 0
-        for i in range(len(indices)):
-            if indices[i] == idx_to_pop:
-                idx = i
-                break
-        indices.pop(idx)
-        result.append(population[idx_to_pop])
-    return result
-
-
-def rand_bigint(size):
-    """
-    Returns a randomly chosen integer (positive, zero or negative)
-
-    :param size: Maximal number of decimal digits (must be positive)
-    """
-    if (size <= 0):
-        raise _decimal_length_error
-    digits = [choice(["","-"])]
-    for i in range(size):
-        digits.append(choice(["0","1","2","3","4","5","6","7","8","9"]))
-    return bigint("".join(digits))
-
-def rand_list(size)->list[int]:
-    """
-    Returns a randomly chosen list of integers.
-
-    :param size: Maximal number of elements and maximal size of list elements (must be positive)
-    """
-    if (size <= 0):
-        raise _decimal_length_error
-    res = []
-    for i in range(randint(0,size)):
-        res.append(randint(-size, size))
-    return res
