@@ -534,6 +534,13 @@
   capture timing, purity requirements, and callback behavior. [#3242]
 
 ### Testing & CI
+- Add `t.random`, a source of random numbers on `testing.SyncT`, `AsyncT` and
+  `EnvT` that implements `Random`. Each run of a test draws from a generator
+  with a new seed. When a run that drew from it fails, `acton test` runs the
+  test three more times with that seed, shows the seed and how many of those
+  runs failed the same way, and prints the `acton test --seed` command that
+  runs the test with the seed again. Tests that draw from `t.random` run every
+  time instead of reusing a cached result.
 - Check runtime and C-extension pointer stores with `acton test --gc-check`.
   Tests run in generational mode with frequent collections and short marking
   steps, bypassing cached test results and failing when the checker detects

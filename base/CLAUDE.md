@@ -67,6 +67,8 @@ cd base && zig build
 #### `testing.act` / `testing.ext.c`
 - Test types the compiler discovers tests by (`SyncT`, `AsyncT`, `EnvT`,
   `UnitTest`, ...), `PerfLoop` and the asserts
+- `TestRandom`, the `t.random` of `SyncT`, `AsyncT` and `EnvT`, which draws
+  from a generator that `std.testing.runner` seeds for every run
 - The runner that the generated `test_main` calls is `std.testing.runner`
   in `std/src/testing/runner.act`
 

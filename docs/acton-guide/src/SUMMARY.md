@@ -92,6 +92,7 @@
   - [Snapshot testing](testing/snapshot.md)
   - [Failures vs errors](testing/failures_errors.md)
   - [Flaky tests](testing/flaky.md)
+  - [Random numbers in tests](testing/random.md)
   - [Performance testing](testing/performance.md)
   - [Stress testing](testing/stress.md)
   - [Perf comparison](testing/perf_record.md)

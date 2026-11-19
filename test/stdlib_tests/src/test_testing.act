@@ -99,9 +99,9 @@ proc def _check_timeout_values(timeout: proc(float) -> None):
 
 def _test_timeout_values(t: testing.EnvT):
     # Manually constructed contexts keep their existing constructor defaults.
-    sync = testing.SyncT(t.log_handler, set())
-    asynchronous = testing.AsyncT(t.report_result, t.log_handler, set())
-    environment = testing.EnvT(t.report_result, t.env, t.log_handler, set())
+    sync = testing.SyncT(t.log_handler, set(), t.random)
+    asynchronous = testing.AsyncT(t.report_result, t.log_handler, set(), t.random)
+    environment = testing.EnvT(t.report_result, t.env, t.log_handler, set(), t.random)
     _check_timeout_values(sync.timeout)
     _check_timeout_values(asynchronous.timeout)
     _check_timeout_values(environment.timeout)
