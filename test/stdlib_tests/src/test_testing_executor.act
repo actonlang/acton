@@ -1,20 +1,21 @@
-import argparse
+import std.argparse
 import testing
+import std.testing.runner
 
 
 def _test_non_gc_memory_samples():
     for rss, gc, expected in [(0, 10, -10), (10, 20, -10), (10, 10, 0), (30, 10, 20)]:
-        testing.assertEqual(testing.non_gc_mem_usage(u64(rss), u64(gc)), expected)
+        testing.assertEqual(std.testing.runner.non_gc_mem_usage(u64(rss), u64(gc)), expected)
     limit: u64 = 0x7fffffffffffffff
-    testing.assertEqual(testing.non_gc_mem_usage(limit, limit), 0)
-    testing.assertEqual(testing.non_gc_mem_usage(limit - 10, limit), -10)
-    testing.assertEqual(testing.non_gc_mem_usage(limit, limit - 10), 10)
+    testing.assertEqual(std.testing.runner.non_gc_mem_usage(limit, limit), 0)
+    testing.assertEqual(std.testing.runner.non_gc_mem_usage(limit - 10, limit), -10)
+    testing.assertEqual(std.testing.runner.non_gc_mem_usage(limit, limit - 10), 10)
 
-    info = testing.TestInfo(testing.Test("memory", "", "executor"))
+    info = std.testing.runner.TestInfo(testing.Test("memory", "", "executor"))
     for before, end in [(-20, -10), (-10, 0), (0, -10)]:
-        delta = testing.non_gc_mem_usage(u64(30 + end), u64(30)) - testing.non_gc_mem_usage(u64(30 + before), u64(30))
-        result = testing.TestResult(True, None, None, 1.0, 0, delta)
-        testing.assertEqual(testing.TestResult.from_json(result.to_json()).non_gc_mem_usage_delta, delta)
+        delta = std.testing.runner.non_gc_mem_usage(u64(30 + end), u64(30)) - std.testing.runner.non_gc_mem_usage(u64(30 + before), u64(30))
+        result = std.testing.runner.TestResult(True, None, None, 1.0, 0, delta)
+        testing.assertEqual(std.testing.runner.TestResult.from_json(result.to_json()).non_gc_mem_usage_delta, delta)
         info.update(True, result)
     testing.assertEqual(info.non_gc_mem_inc_count, 2)
     testing.assertTrue(info.leaky)
@@ -22,15 +23,15 @@ def _test_non_gc_memory_samples():
     testing.assertEqual(info.non_gc_mem_usage_delta_avg, expected_avg)
 
 
-def config(performance: bool) -> testing.TestRunnerConfig:
-    parser = argparse.Parser()
+def config(performance: bool) -> std.testing.runner.TestRunnerConfig:
+    parser = std.argparse.Parser()
     parser.add_bool("no_output", "")
     parser.add_bool("scaling", "")
     parser.add_option("tag", "strlist", default=[])
     for name, default in [("min-iter", 1), ("max-iter", 1), ("min-time", 0), ("max-time", 10000),
                           ("stress-workers", 0), ("time", 10), ("scale", 1)]:
         parser.add_option(name, "int", default=default)
-    return testing.TestRunnerConfig(performance, False, parser.parse(["executor"]))
+    return std.testing.runner.TestRunnerConfig(performance, False, parser.parse(["executor"]))
 
 
 class BrokenSnapshot(testing.AsyncTest):
@@ -85,7 +86,7 @@ actor _test_executor_completes(t: testing.EnvT):
         if outcome == "success" and not performance:
             cfg.max_iter = 2
 
-        def complete(received_id: int, received_test: testing.Test, info: ?testing.TestInfo):
+        def complete(received_id: int, received_test: testing.Test, info: ?std.testing.runner.TestInfo):
             try:
                 testing.assertEqual(received_id, executor_id)
                 testing.assertEqual(received_test, definition)
@@ -132,7 +133,7 @@ actor _test_executor_completes(t: testing.EnvT):
         def progress(executor_id: int, iterations: int, drift_us: int, drift_total_us: int, est_iter_ms: float, phase_resolution_us: int, target_sweep_iters: int, calibrating: bool):
             t.failure(AssertionError("Unexpected stress progress"))
 
-        executor = testing.TestExecutor(t.env.rts, cfg, definition, complete, progress, t.env, executor_id, 1, 1)
+        executor = std.testing.runner.TestExecutor(t.env.rts, cfg, definition, complete, progress, t.env, executor_id, 1, 1)
 
     for performance in [False, True]:
         run(performance, success, "success")

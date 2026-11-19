@@ -1271,7 +1271,7 @@ module_header_with_offset = scn *> do
     return (is, mbDocstring, off)
 
 imports :: Parser [S.Import]
-imports = many (L.nonIndented scn import_stmt <* eol <* scn <* reportParseProgress)
+imports = S.withTestRunner <$> many (L.nonIndented scn import_stmt <* eol <* scn <* reportParseProgress)
 
 top_suite :: Parser S.Suite
 top_suite = concat <$> (many (L.nonIndented scn (top_stmt <* reportParseProgress) <|> (newline1 <* reportParseProgress)))

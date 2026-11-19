@@ -164,6 +164,11 @@
   [#3325]
 
 ### Standard Library
+- Breaking: `testing` keeps the test types and asserts, and the test runner
+  moved to `std.testing.runner`, which the generated `test_main` of a module
+  that imports `testing` calls. `NotEqualError` takes `print_diff` instead of
+  `diff_str`, and the runner renders the diff when it reports the failure, so
+  `str()` of a `NotEqualError` no longer contains the diff.
 - Add `std.syslog`, a new module for sending and receiving syslog messages
   over UDP, TCP, and TLS. Use `Client` and `Server` for UDP, or `StreamClient`
   and `StreamServer` for TCP and TLS. The module includes an RFC 5424 codec

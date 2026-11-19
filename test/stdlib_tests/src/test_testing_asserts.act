@@ -1,6 +1,7 @@
 
 import testing
 from testing import NotEqualError
+import std.testing.runner
 
 def _test_assert_equal():
     """Test assertEqual"""
@@ -10,7 +11,7 @@ def _test_assert_equal():
     try:
         testing.assertEqual(1, 2)
     except AssertionError as e:
-        messages.append(str(e))
+        messages.append(std.testing.runner.exception_text(e))
     else:
         raise Exception("assertEqual(1, 2) should have raised NotEqualError")
 
@@ -18,7 +19,7 @@ def _test_assert_equal():
     try:
         testing.assertEqual(1, None)
     except AssertionError as e:
-        messages.append(str(e))
+        messages.append(std.testing.runner.exception_text(e))
     else:
         raise Exception("assertEqual(1, None) should have raised NotEqualError")
 
@@ -26,7 +27,7 @@ def _test_assert_equal():
     try:
         testing.assertEqual(None, 1)
     except AssertionError as e:
-        messages.append(str(e))
+        messages.append(std.testing.runner.exception_text(e))
     else:
         raise Exception("assertEqual(None, 1) should have raised NotEqualError")
 
