@@ -588,4 +588,29 @@ pub fn build(b: *std.Build) void {
             b.installArtifact(executable);
         }
     }
+
+    // Zig names a package by its path from the build root. The build root
+    // of a project in /home/u/foo is /home/u/foo/out/zig, so that project
+    // compiles the libuv that is bundled with an Acton in /opt/acton with
+    //
+    //     -I /home/u/foo/out/zig/../../../../../opt/acton/deps/libuv/include
+    //
+    // and a project in /home/u/bar compiles the same files with
+    //
+    //     -I /home/u/bar/out/zig/../../../../../opt/acton/deps/libuv/include
+    //
+    // Zig finds a compiled C file again only when its include directories
+    // are written as before, so without this loop every project directory
+    // compiles the bundled libraries for itself. Resolved, both projects
+    // compile with -I /opt/acton/deps/libuv/include and the libraries
+    // are compiled once. The loop goes over every package of the build,
+    // also those of the project's own dependencies, and changes only the
+    // way a directory is written: a path without ".." stays as it is, and
+    // two directories, such as two versions of a dependency, remain two
+    // packages.
+    for (b.graph.dependency_cache.values()) |dependency| {
+        if (dependency.builder.root.root_dir.path) |path| {
+            dependency.builder.root.root_dir.path = b.pathResolve(&.{path});
+        }
+    }
 }
