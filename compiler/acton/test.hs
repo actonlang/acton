@@ -746,8 +746,8 @@ compilerTests =
               , "label()"
               , "answer = 42"
               , "answer"
-              , "import math"
-              , "math.sqrt(9.0)"
+              , "import std.math"
+              , "std.math.sqrt(9.0)"
               , "print(\"direct print\")"
               , "proc def log():"
               , "    print(\"proc call\")"
@@ -803,7 +803,7 @@ compilerTests =
         assertBool "repl should evaluate retained local names"
           ("42\n" `isInfixOf` cmdOut)
         assertBool "repl should make retained imports visible to eval"
-          ("3\n" `isInfixOf` cmdOut)
+          ("acton> 3\n" `isInfixOf` cmdOut)
         assertBool "repl should run direct print calls without printing None"
           ("direct print\n" `isInfixOf` cmdOut)
         assertBool "repl should run retained proc calls without printing None"
