@@ -120,7 +120,6 @@ module InterfaceFiles
   , readStmtHasNotImpl
   , readHeaderSummary
   , tryReadHeaderSummary
-  , readRoots
   , readExtensionsByClass
   , readExtensionsByProtocol
   , readFileMaybe
@@ -1563,12 +1562,6 @@ readHeaderSummary f =
 -- exception propagates.
 tryReadHeaderSummary :: FilePath -> IO (Maybe HeaderSummary)
 tryReadHeaderSummary f = either (const Nothing) Just <$> trySync (readHeaderSummary f)
-
-readRoots :: FilePath -> IO [A.Name]
-readRoots f =
-    withReadTxn f $ \txn dbi -> do
-      validateVersion txn dbi
-      getValue "roots" txn dbi keyRoots
 
 readDepNames :: FilePath -> A.ModName -> IO [DepNameInfo]
 readDepNames f mn =

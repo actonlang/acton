@@ -2742,16 +2742,19 @@ addInterestDeps deps im =
 -- | The back job of a deferred module, once every module depending on it has
 -- finished its front passes, so the interest in its names is complete.  The
 -- selected names are the module's roots and every name other modules use,
--- closed over local dependencies and extensions.  Their codegen hash is
--- compared with the tags of the generated files before any statement is
--- read, and the job is Nothing when the generated code is up to date.
+-- closed over local dependencies and extensions.  The roots and the imports
+-- come from the module's .tydb header.  The codegen hash is compared with
+-- the tags of the generated files before any statement is read, and the job
+-- is Nothing when the generated code is up to date.
 prepareDeferredBackJob :: BuildEnv -> Acton.Env.Env0 -> InterestMap -> DeferredBackJob -> IO (Maybe BackJob)
 prepareDeferredBackJob build base interestMap job = do
-    roots    <- Data.Set.fromList <$> InterfaceFiles.readRoots tydb
-    let interested = M.findWithDefault Data.Set.empty mn interestMap
+    header   <- InterfaceFiles.readHeaderSummary tydb
+    let roots      = Data.Set.fromList (InterfaceFiles.summaryRoots header)
+        interested = M.findWithDefault Data.Set.empty mn interestMap
     selected <- selectedRows tydb label (Data.Set.union interested roots)
     let names       = M.keysSet selected
-        codegenHash = dbpCodegenHash (deferredImplHash job) names
+        imports     = map fst (InterfaceFiles.summaryImports header)
+        codegenHash = dbpCodegenHash (deferredImplHash job) imports names
         stats       = DbpStats { totalNames      = deferredNameCount job
                                , interestedNames = Data.Set.size interested
                                , rootNames       = Data.Set.size roots
@@ -2790,10 +2793,13 @@ describeDbp label stats upToDate =
     ++ ", " ++ (if upToDate then "generated code up to date" else "generated code out of date")
 
 -- | The hash a deferred module's generated code is tagged with: it changes
--- with the module's impl hash and with the set of selected names.
-dbpCodegenHash :: B.ByteString -> Data.Set.Set A.Name -> B.ByteString
-dbpCodegenHash moduleImplHash selected =
-    SHA256.hash (BL.toStrict (encode ("dbp" :: String, moduleImplHash, map A.nstr (sortedNames selected))))
+-- with the module's impl hash, with its imports in order and with the set
+-- of selected names.  The impl hash covers only the module's statements,
+-- but the code also calls the init function of each import and includes
+-- its header.
+dbpCodegenHash :: B.ByteString -> [A.ModName] -> Data.Set.Set A.Name -> B.ByteString
+dbpCodegenHash moduleImplHash imports selected =
+    SHA256.hash (BL.toStrict (encode ("dbp" :: String, moduleImplHash, map modNameToString imports, map A.nstr (sortedNames selected))))
 
 -- | A selection of a deferred module's names that found no row for a name,
 -- with the text that names the module and the name.
