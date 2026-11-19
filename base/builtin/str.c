@@ -3393,18 +3393,6 @@ char *fromB_bytes(B_bytes b) {
     return (char *)b->str;
 }
 
-// Auxiliaries
-
-static B_bytes B_bytesD_copy(B_bytes s) {
-    B_bytes res;
-    NEW_UNFILLED_BYTES(res,s->nbytes);
-    res->nbytes = s->nbytes;
-    memcpy(res->str,s->str,s->nbytes);
-    return res;
-}
-
-
-
 // Bytes methods, implementations
 
 // General methods //////////////////////////////////////////////////////////////
@@ -3772,7 +3760,7 @@ B_bytes B_bytesD_ljust(B_bytes s, int64_t width, B_bytes fill) {
         RAISE_EXC(&B_str_invalid_bytes_ljust_fill_error);
     }
     if (width <= s->nbytes) {
-        return B_bytesD_copy(s);
+        return s;
     }
     check_result_len(width);
     B_bytes res;
@@ -3862,7 +3850,7 @@ B_bytes B_bytesD_replace(B_bytes s, B_bytes old, B_bytes new, B_int count) {
     int64_t c = B_bytesD_count(s, old, 0, INT64_MAX);
     int64_t c0 = fromB_int(count) < c ? fromB_int(count) : c;
     if (c0 == 0) {
-        return B_bytesD_copy(s);
+        return s;
     }
     // The result can be far longer than the input. The count times the
     // growth of each replacement could overflow, so the count is checked
@@ -3923,7 +3911,7 @@ B_bytes B_bytesD_rjust(B_bytes s, int64_t width, B_bytes fill) {
         RAISE_EXC(&B_str_invalid_rjust_fill_error);
     }
     if (width <= s->nbytes) {
-        return B_bytesD_copy(s);
+        return s;
     }
     check_result_len(width);
     int64_t pad = width - s->nbytes;
@@ -4102,7 +4090,7 @@ B_bytes B_bytesD_upper(B_bytes s) {
 
 B_bytes B_bytesD_zfill(B_bytes s, int64_t width) {
     if (width < s->nbytes)
-        return B_bytesD_copy(s);
+        return s;
     check_result_len(width);
     int64_t fill = width - s->nbytes;
     B_bytes res;
