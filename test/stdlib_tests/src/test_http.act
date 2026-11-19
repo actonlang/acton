@@ -430,10 +430,7 @@ actor _test_HttpClientServer(t: testing.EnvT):
     body = b"Hello\x00\xff\xfe, world!"
     log = logging.Logger(t.log_handler)
     var done = False
-    var attempts = 0
-    var listen_attempts = 0
-    var port = std.random.randint(20000, 45000)
-    var server = None
+    var port = 0
 
     serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
     conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
@@ -459,13 +456,12 @@ actor _test_HttpClientServer(t: testing.EnvT):
     def _on_http_server_error(server, error):
         _finish_failure("HTTP server error: " + error)
 
-    def _on_http_listen_error(listener, error):
-        if listen_attempts < 10:
-            listen_attempts += 1
-            port = std.random.randint(20000, 45000)
-            _start_listener()
-        else:
+    def _on_http_listen(listener, error):
+        if error is not None:
             _finish_failure("HTTP listen failed: " + error)
+            return
+        port = listener.endpoint().port
+        _start_client()
 
     def _on_http_connect(c):
         c.get("/", _on_http_receive)
@@ -480,23 +476,15 @@ actor _test_HttpClientServer(t: testing.EnvT):
         _finish_success()
 
     def _on_http_error(c, errmsg):
-        if attempts < 5:
-            attempts += 1
-            after 0.1: _start_client()
-        else:
-            _finish_failure("HTTP client error: " + errmsg)
+        _finish_failure("HTTP client error: " + errmsg)
 
     def _start_client():
         std.http.Client(conn_cap, "127.0.0.1", _on_http_connect, _on_http_error, scheme="http", port=port)
 
-    def _start_listener():
-        server = std.http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
-
     def _timeout():
         _finish_failure("timeout")
 
-    _start_listener()
-    after 0.05: _start_client()
+    std.http.Listener(serv_cap, "127.0.0.1", 0, _on_http_accept, on_listen=_on_http_listen)
     after 10: _timeout()
 
 
@@ -534,10 +522,7 @@ actor _test_HttpServerCompression(t: testing.EnvT):
     ]
     log = logging.Logger(t.log_handler)
     var done = False
-    var attempts = 0
-    var listen_attempts = 0
-    var port = std.random.randint(20000, 45000)
-    var server = None
+    var port = 0
     var current = 0
 
     serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
@@ -579,13 +564,12 @@ actor _test_HttpServerCompression(t: testing.EnvT):
     def _on_http_server_error(server, error):
         _finish(AssertionError("HTTP server error: " + error))
 
-    def _on_http_listen_error(listener, error):
-        if listen_attempts < 10:
-            listen_attempts += 1
-            port = std.random.randint(20000, 45000)
-            _start_listener()
-        else:
+    def _on_http_listen(listener, error):
+        if error is not None:
             _finish(AssertionError("HTTP listen failed: " + error))
+            return
+        port = listener.endpoint().port
+        _start_client()
 
     def _send(c):
         path, accept, coding, vary, etag = cases[current]
@@ -615,21 +599,13 @@ actor _test_HttpServerCompression(t: testing.EnvT):
             _finish(None)
 
     def _on_http_error(c, errmsg):
-        if attempts < 5:
-            attempts += 1
-            after 0.1: _start_client()
-        else:
-            _finish(AssertionError("HTTP client error: " + errmsg))
+        _finish(AssertionError("HTTP client error: " + errmsg))
 
     def _start_client():
         # The client sends only the Accept-Encoding of each case
         std.http.Client(conn_cap, "127.0.0.1", _send, _on_http_error, scheme="http", port=port, compress=False)
 
-    def _start_listener():
-        server = std.http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error, compress=True)
-
-    _start_listener()
-    after 0.05: _start_client()
+    std.http.Listener(serv_cap, "127.0.0.1", 0, _on_http_accept, on_listen=_on_http_listen, compress=True)
     after 10: _finish(AssertionError("timeout"))
 
 
@@ -638,10 +614,7 @@ actor _test_HttpServerNoCompressionByDefault(t: testing.EnvT):
     client that accepts gzip"""
     big = _compressible_json()
     var done = False
-    var attempts = 0
-    var listen_attempts = 0
-    var port = std.random.randint(20000, 45000)
-    var server = None
+    var port = 0
 
     serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
     conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
@@ -664,13 +637,12 @@ actor _test_HttpServerNoCompressionByDefault(t: testing.EnvT):
     def _on_http_server_error(server, error):
         _finish(AssertionError("HTTP server error: " + error))
 
-    def _on_http_listen_error(listener, error):
-        if listen_attempts < 10:
-            listen_attempts += 1
-            port = std.random.randint(20000, 45000)
-            _start_listener()
-        else:
+    def _on_http_listen(listener, error):
+        if error is not None:
             _finish(AssertionError("HTTP listen failed: " + error))
+            return
+        port = listener.endpoint().port
+        _start_client()
 
     def _on_http_connect(c):
         c.get("/", _on_http_receive, {"Accept-Encoding": "gzip"})
@@ -686,20 +658,12 @@ actor _test_HttpServerNoCompressionByDefault(t: testing.EnvT):
         _finish(None)
 
     def _on_http_error(c, errmsg):
-        if attempts < 5:
-            attempts += 1
-            after 0.1: _start_client()
-        else:
-            _finish(AssertionError("HTTP client error: " + errmsg))
+        _finish(AssertionError("HTTP client error: " + errmsg))
 
     def _start_client():
         std.http.Client(conn_cap, "127.0.0.1", _on_http_connect, _on_http_error, scheme="http", port=port)
 
-    def _start_listener():
-        server = std.http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
-
-    _start_listener()
-    after 0.05: _start_client()
+    std.http.Listener(serv_cap, "127.0.0.1", 0, _on_http_accept, on_listen=_on_http_listen)
     after 10: _finish(AssertionError("timeout"))
 
 
@@ -723,10 +687,7 @@ actor _test_HttpClientDecompression(t: testing.EnvT):
         ("/gzip", {"Accept-Encoding": "identity"}, "identity", None, False, big),
     ]
     var done = False
-    var attempts = 0
-    var listen_attempts = 0
-    var port = std.random.randint(20000, 45000)
-    var server = None
+    var port = 0
     var current = 0
 
     serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
@@ -764,13 +725,12 @@ actor _test_HttpClientDecompression(t: testing.EnvT):
     def _on_http_server_error(server, error):
         _finish(AssertionError("HTTP server error: " + error))
 
-    def _on_http_listen_error(listener, error):
-        if listen_attempts < 10:
-            listen_attempts += 1
-            port = std.random.randint(20000, 45000)
-            _start_listener()
-        else:
+    def _on_http_listen(listener, error):
+        if error is not None:
             _finish(AssertionError("HTTP listen failed: " + error))
+            return
+        port = listener.endpoint().port
+        _start_client()
 
     def _send(c):
         path, headers, seen, coding, has_length, body = cases[current]
@@ -794,20 +754,12 @@ actor _test_HttpClientDecompression(t: testing.EnvT):
             _finish(None)
 
     def _on_http_error(c, errmsg):
-        if attempts < 5:
-            attempts += 1
-            after 0.1: _start_client()
-        else:
-            _finish(AssertionError("HTTP client error: " + errmsg))
+        _finish(AssertionError("HTTP client error: " + errmsg))
 
     def _start_client():
         std.http.Client(conn_cap, "127.0.0.1", _send, _on_http_error, scheme="http", port=port)
 
-    def _start_listener():
-        server = std.http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
-
-    _start_listener()
-    after 0.05: _start_client()
+    std.http.Listener(serv_cap, "127.0.0.1", 0, _on_http_accept, on_listen=_on_http_listen)
     after 10: _finish(AssertionError("timeout"))
 
 
@@ -816,10 +768,7 @@ actor _test_HttpClientWithoutCompression(t: testing.EnvT):
     body as it is"""
     big = _compressible_json()
     var done = False
-    var attempts = 0
-    var listen_attempts = 0
-    var port = std.random.randint(20000, 45000)
-    var server = None
+    var port = 0
 
     serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
     conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
@@ -843,13 +792,12 @@ actor _test_HttpClientWithoutCompression(t: testing.EnvT):
     def _on_http_server_error(server, error):
         _finish(AssertionError("HTTP server error: " + error))
 
-    def _on_http_listen_error(listener, error):
-        if listen_attempts < 10:
-            listen_attempts += 1
-            port = std.random.randint(20000, 45000)
-            _start_listener()
-        else:
+    def _on_http_listen(listener, error):
+        if error is not None:
             _finish(AssertionError("HTTP listen failed: " + error))
+            return
+        port = listener.endpoint().port
+        _start_client()
 
     def _on_http_connect(c):
         c.get("/", _on_http_receive)
@@ -865,20 +813,12 @@ actor _test_HttpClientWithoutCompression(t: testing.EnvT):
         _finish(None)
 
     def _on_http_error(c, errmsg):
-        if attempts < 5:
-            attempts += 1
-            after 0.1: _start_client()
-        else:
-            _finish(AssertionError("HTTP client error: " + errmsg))
+        _finish(AssertionError("HTTP client error: " + errmsg))
 
     def _start_client():
         std.http.Client(conn_cap, "127.0.0.1", _on_http_connect, _on_http_error, scheme="http", port=port, compress=False)
 
-    def _start_listener():
-        server = std.http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
-
-    _start_listener()
-    after 0.05: _start_client()
+    std.http.Listener(serv_cap, "127.0.0.1", 0, _on_http_accept, on_listen=_on_http_listen)
     after 10: _finish(AssertionError("timeout"))
 
 
@@ -886,9 +826,7 @@ actor _test_HttpClientUndecodableBody(t: testing.EnvT):
     """A gzip body that does not decode is a malformed response: the client
     calls on_error and not on_response"""
     var done = False
-    var listen_attempts = 0
-    var port = std.random.randint(20000, 45000)
-    var server = None
+    var port = 0
 
     serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
     conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
@@ -911,13 +849,12 @@ actor _test_HttpClientUndecodableBody(t: testing.EnvT):
     def _on_http_server_error(server, error):
         pass
 
-    def _on_http_listen_error(listener, error):
-        if listen_attempts < 10:
-            listen_attempts += 1
-            port = std.random.randint(20000, 45000)
-            _start_listener()
-        else:
+    def _on_http_listen(listener, error):
+        if error is not None:
             _finish(AssertionError("HTTP listen failed: " + error))
+            return
+        port = listener.endpoint().port
+        _start_client()
 
     def _on_http_connect(c):
         c.get("/", _on_http_receive)
@@ -936,11 +873,7 @@ actor _test_HttpClientUndecodableBody(t: testing.EnvT):
     def _start_client():
         std.http.Client(conn_cap, "127.0.0.1", _on_http_connect, _on_http_error, scheme="http", port=port)
 
-    def _start_listener():
-        server = std.http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
-
-    _start_listener()
-    after 0.05: _start_client()
+    std.http.Listener(serv_cap, "127.0.0.1", 0, _on_http_accept, on_listen=_on_http_listen)
     after 10: _finish(AssertionError("timeout"))
 
 
@@ -954,10 +887,7 @@ actor _test_HttpCompressionEndToEnd(t: testing.EnvT):
     """
     big = _compressible_json()
     var done = False
-    var attempts = 0
-    var listen_attempts = 0
-    var port = std.random.randint(20000, 45000)
-    var server = None
+    var port = 0
 
     serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
     conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
@@ -981,13 +911,12 @@ actor _test_HttpCompressionEndToEnd(t: testing.EnvT):
     def _on_http_server_error(server, error):
         _finish(AssertionError("HTTP server error: " + error))
 
-    def _on_http_listen_error(listener, error):
-        if listen_attempts < 10:
-            listen_attempts += 1
-            port = std.random.randint(20000, 45000)
-            _start_listener()
-        else:
+    def _on_http_listen(listener, error):
+        if error is not None:
             _finish(AssertionError("HTTP listen failed: " + error))
+            return
+        port = listener.endpoint().port
+        _start_client()
 
     def _on_http_connect(c):
         c.get("/", _on_http_receive)
@@ -1005,20 +934,12 @@ actor _test_HttpCompressionEndToEnd(t: testing.EnvT):
         _finish(None)
 
     def _on_http_error(c, errmsg):
-        if attempts < 5:
-            attempts += 1
-            after 0.1: _start_client()
-        else:
-            _finish(AssertionError("HTTP client error: " + errmsg))
+        _finish(AssertionError("HTTP client error: " + errmsg))
 
     def _start_client():
         std.http.Client(conn_cap, "127.0.0.1", _on_http_connect, _on_http_error, scheme="http", port=port)
 
-    def _start_listener():
-        server = std.http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error, compress=True)
-
-    _start_listener()
-    after 0.05: _start_client()
+    std.http.Listener(serv_cap, "127.0.0.1", 0, _on_http_accept, on_listen=_on_http_listen, compress=True)
     after 10: _finish(AssertionError("timeout"))
 
 
@@ -1034,10 +955,7 @@ actor _test_HttpClientPipelinedResponses(t: testing.EnvT):
     """
     log = logging.Logger(t.log_handler)
     var done = False
-    var attempts = 0
-    var listen_attempts = 0
-    var port = std.random.randint(20000, 45000)
-    var server = None
+    var port = 0
     var received = b""
     var responded = False
     var got_first = False
@@ -1059,12 +977,10 @@ actor _test_HttpClientPipelinedResponses(t: testing.EnvT):
 
     def _on_raw_listen(listener, error):
         if error is not None:
-            if listen_attempts < 10:
-                listen_attempts += 1
-                port = std.random.randint(20000, 45000)
-                _start_listener()
-            else:
-                _finish_failure("TCP listen failed: " + error)
+            _finish_failure("TCP listen failed: " + error)
+            return
+        port = listener.endpoint().port
+        _start_client()
 
     def _on_raw_accept(conn):
         received = b""
@@ -1107,23 +1023,15 @@ actor _test_HttpClientPipelinedResponses(t: testing.EnvT):
         _finish_success()
 
     def _on_client_error(c, errmsg):
-        if attempts < 5:
-            attempts += 1
-            after 0.1: _start_client()
-        else:
-            _finish_failure("HTTP client error: " + errmsg)
+        _finish_failure("HTTP client error: " + errmsg)
 
     def _start_client():
         std.http.Client(conn_cap, "127.0.0.1", _on_connect, _on_client_error, scheme="http", port=port)
 
-    def _start_listener():
-        server = net.TCPListener(serv_cap, "127.0.0.1", port, _on_raw_listen, _on_raw_accept)
-
     def _timeout():
         _finish_failure("timeout waiting for the second pipelined response, server received: " + str(received))
 
-    _start_listener()
-    after 0.05: _start_client()
+    net.TCPListener(serv_cap, "127.0.0.1", 0, _on_raw_listen, _on_raw_accept)
     after 10: _timeout()
 
 
@@ -1139,10 +1047,7 @@ actor _test_HttpServerPipelinedRequests(t: testing.EnvT):
     log = logging.Logger(t.log_handler)
     t.timeout(15.0)
     var done = False
-    var attempts = 0
-    var listen_attempts = 0
-    var port = std.random.randint(20000, 45000)
-    var server = None
+    var port = 0
     var parser = std.http.MessageParser()
     var bodies: list[bytes] = []
 
@@ -1173,13 +1078,12 @@ actor _test_HttpServerPipelinedRequests(t: testing.EnvT):
     def _on_http_server_error(s, error):
         _finish_failure("HTTP server error: " + error)
 
-    def _on_http_listen_error(listener, error):
-        if listen_attempts < 10:
-            listen_attempts += 1
-            port = std.random.randint(20000, 45000)
-            _start_listener()
-        else:
+    def _on_http_listen(listener, error):
+        if error is not None:
             _finish_failure("HTTP listen failed: " + error)
+            return
+        port = listener.endpoint().port
+        _start_client()
 
     def _on_raw_connect(conn):
         conn.write(b"GET /1 HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\nGET /2 HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
@@ -1198,25 +1102,17 @@ actor _test_HttpServerPipelinedRequests(t: testing.EnvT):
             _finish_success()
 
     def _on_raw_error(conn, errmsg):
-        if attempts < 5:
-            attempts += 1
-            after 0.1: _start_client()
-        else:
-            _finish_failure("TCP client error: " + errmsg)
+        _finish_failure("TCP client error: " + errmsg)
 
     def _start_client():
         parser = std.http.MessageParser()
         bodies = []
         net.TCPConnection(conn_cap, "127.0.0.1", port, _on_raw_connect, _on_raw_receive, _on_raw_error, None)
 
-    def _start_listener():
-        server = std.http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
-
     def _timeout():
         _finish_failure("timeout, responses received: " + str(bodies))
 
-    _start_listener()
-    after 0.05: _start_client()
+    std.http.Listener(serv_cap, "127.0.0.1", 0, _on_http_accept, on_listen=_on_http_listen)
     after 10: _timeout()
 
 
@@ -1233,10 +1129,7 @@ actor _test_HttpServerConnectionClose(t: testing.EnvT):
     log = logging.Logger(t.log_handler)
     t.timeout(15.0)
     var done = False
-    var attempts = 0
-    var listen_attempts = 0
-    var port = std.random.randint(20000, 45000)
-    var server = None
+    var port = 0
     var parser = std.http.MessageParser()
     var bodies: list[bytes] = []
     var handled: list[str] = []
@@ -1269,13 +1162,12 @@ actor _test_HttpServerConnectionClose(t: testing.EnvT):
     def _on_http_server_error(s, error):
         _finish_failure("HTTP server error: " + error)
 
-    def _on_http_listen_error(listener, error):
-        if listen_attempts < 10:
-            listen_attempts += 1
-            port = std.random.randint(20000, 45000)
-            _start_listener()
-        else:
+    def _on_http_listen(listener, error):
+        if error is not None:
             _finish_failure("HTTP listen failed: " + error)
+            return
+        port = listener.endpoint().port
+        _start_client()
 
     def _on_raw_connect(conn):
         conn.write(b"GET /1 HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\nGET /2 HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: keep-alive, Close\r\n\r\nGET /3 HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
@@ -1298,11 +1190,7 @@ actor _test_HttpServerConnectionClose(t: testing.EnvT):
         _finish_success()
 
     def _on_raw_error(conn, errmsg):
-        if attempts < 5:
-            attempts += 1
-            after 0.1: _start_client()
-        else:
-            _finish_failure("TCP client error: " + errmsg)
+        _finish_failure("TCP client error: " + errmsg)
 
     def _start_client():
         parser = std.http.MessageParser()
@@ -1310,14 +1198,10 @@ actor _test_HttpServerConnectionClose(t: testing.EnvT):
         handled = []
         net.TCPConnection(conn_cap, "127.0.0.1", port, _on_raw_connect, _on_raw_receive, _on_raw_error, _on_raw_remote_close)
 
-    def _start_listener():
-        server = std.http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
-
     def _timeout():
         _finish_failure("timeout, responses received: " + str(bodies) + ", handled: " + str(handled))
 
-    _start_listener()
-    after 0.05: _start_client()
+    std.http.Listener(serv_cap, "127.0.0.1", 0, _on_http_accept, on_listen=_on_http_listen)
     after 10: _timeout()
 
 
@@ -1333,10 +1217,7 @@ actor _test_HttpsServerPipelinedRequests(t: testing.EnvT):
     log = logging.Logger(t.log_handler)
     t.timeout(15.0)
     var done = False
-    var attempts = 0
-    var listen_attempts = 0
-    var port = std.random.randint(20000, 45000)
-    var server = None
+    var port = 0
     var parser = std.http.MessageParser()
     var bodies: list[bytes] = []
 
@@ -1367,13 +1248,12 @@ actor _test_HttpsServerPipelinedRequests(t: testing.EnvT):
     def _on_http_server_error(s, error):
         _finish_failure("HTTP server error: " + error)
 
-    def _on_http_listen_error(listener, error):
-        if listen_attempts < 10:
-            listen_attempts += 1
-            port = std.random.randint(20000, 45000)
-            _start_listener()
-        else:
+    def _on_http_listen(listener, error):
+        if error is not None:
             _finish_failure("HTTP listen failed: " + error)
+            return
+        port = listener.endpoint().port
+        _start_client()
 
     def _on_raw_connect(conn):
         conn.write(b"GET /1 HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\nGET /2 HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
@@ -1388,25 +1268,17 @@ actor _test_HttpsServerPipelinedRequests(t: testing.EnvT):
             _finish_success()
 
     def _on_raw_error(conn, errmsg):
-        if attempts < 5:
-            attempts += 1
-            after 0.1: _start_client()
-        else:
-            _finish_failure("TLS client error: " + errmsg)
+        _finish_failure("TLS client error: " + errmsg)
 
     def _start_client():
         parser = std.http.MessageParser()
         bodies = []
         net.TLSConnection(conn_cap, "127.0.0.1", port, _on_raw_connect, _on_raw_receive, _on_raw_error, None, verify_tls=False)
 
-    def _start_listener():
-        server = std.http.TLSListener(serv_cap, "127.0.0.1", port, CERT_PEM.encode(), KEY_PEM.encode(), _on_http_accept, _on_http_listen_error)
-
     def _timeout():
         _finish_failure("timeout, responses received: " + str(bodies))
 
-    _start_listener()
-    after 0.05: _start_client()
+    std.http.TLSListener(serv_cap, "127.0.0.1", 0, CERT_PEM.encode(), KEY_PEM.encode(), _on_http_accept, on_listen=_on_http_listen)
     after 10: _timeout()
 
 
@@ -1421,10 +1293,7 @@ actor _test_HttpServerMalformedRequest(t: testing.EnvT):
     log = logging.Logger(t.log_handler)
     t.timeout(15.0)
     var done = False
-    var attempts = 0
-    var listen_attempts = 0
-    var port = std.random.randint(20000, 45000)
-    var server = None
+    var port = 0
     var parser = std.http.MessageParser()
     var bodies: list[bytes] = []
     var handled: list[str] = []
@@ -1454,13 +1323,12 @@ actor _test_HttpServerMalformedRequest(t: testing.EnvT):
     def _on_http_server_error(s, error):
         _finish_failure("HTTP server error: " + error)
 
-    def _on_http_listen_error(listener, error):
-        if listen_attempts < 10:
-            listen_attempts += 1
-            port = std.random.randint(20000, 45000)
-            _start_listener()
-        else:
+    def _on_http_listen(listener, error):
+        if error is not None:
             _finish_failure("HTTP listen failed: " + error)
+            return
+        port = listener.endpoint().port
+        _start_client()
 
     def _on_raw_connect(conn):
         conn.write(b"GET /1 HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\nGET /2 HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: many\r\n\r\n")
@@ -1479,11 +1347,7 @@ actor _test_HttpServerMalformedRequest(t: testing.EnvT):
         _finish_success()
 
     def _on_raw_error(conn, errmsg):
-        if attempts < 5:
-            attempts += 1
-            after 0.1: _start_client()
-        else:
-            _finish_failure("TCP client error: " + errmsg)
+        _finish_failure("TCP client error: " + errmsg)
 
     def _start_client():
         parser = std.http.MessageParser()
@@ -1491,14 +1355,10 @@ actor _test_HttpServerMalformedRequest(t: testing.EnvT):
         handled = []
         net.TCPConnection(conn_cap, "127.0.0.1", port, _on_raw_connect, _on_raw_receive, _on_raw_error, _on_raw_remote_close)
 
-    def _start_listener():
-        server = std.http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
-
     def _timeout():
         _finish_failure("timeout, responses received: " + str(bodies) + ", handled: " + str(handled))
 
-    _start_listener()
-    after 0.05: _start_client()
+    std.http.Listener(serv_cap, "127.0.0.1", 0, _on_http_accept, on_listen=_on_http_listen)
     after 10: _timeout()
 
 
@@ -1512,10 +1372,7 @@ actor _test_HttpServerHttp10(t: testing.EnvT):
     log = logging.Logger(t.log_handler)
     t.timeout(15.0)
     var done = False
-    var attempts = 0
-    var listen_attempts = 0
-    var port = std.random.randint(20000, 45000)
-    var server = None
+    var port = 0
     var parser = std.http.MessageParser()
     var bodies: list[bytes] = []
     var handled: list[str] = []
@@ -1545,13 +1402,12 @@ actor _test_HttpServerHttp10(t: testing.EnvT):
     def _on_http_server_error(s, error):
         _finish_failure("HTTP server error: " + error)
 
-    def _on_http_listen_error(listener, error):
-        if listen_attempts < 10:
-            listen_attempts += 1
-            port = std.random.randint(20000, 45000)
-            _start_listener()
-        else:
+    def _on_http_listen(listener, error):
+        if error is not None:
             _finish_failure("HTTP listen failed: " + error)
+            return
+        port = listener.endpoint().port
+        _start_client()
 
     def _on_raw_connect(conn):
         conn.write(b"GET /a HTTP/1.0\r\nHost: 127.0.0.1\r\n\r\n")
@@ -1567,11 +1423,7 @@ actor _test_HttpServerHttp10(t: testing.EnvT):
         _finish_success()
 
     def _on_raw_error(conn, errmsg):
-        if attempts < 5:
-            attempts += 1
-            after 0.1: _start_client()
-        else:
-            _finish_failure("TCP client error: " + errmsg)
+        _finish_failure("TCP client error: " + errmsg)
 
     def _start_client():
         parser = std.http.MessageParser()
@@ -1579,14 +1431,10 @@ actor _test_HttpServerHttp10(t: testing.EnvT):
         handled = []
         net.TCPConnection(conn_cap, "127.0.0.1", port, _on_raw_connect, _on_raw_receive, _on_raw_error, _on_raw_remote_close)
 
-    def _start_listener():
-        server = std.http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
-
     def _timeout():
         _finish_failure("timeout, responses received: " + str(bodies) + ", handled: " + str(handled))
 
-    _start_listener()
-    after 0.05: _start_client()
+    std.http.Listener(serv_cap, "127.0.0.1", 0, _on_http_accept, on_listen=_on_http_listen)
     after 10: _timeout()
 
 
@@ -1602,10 +1450,7 @@ actor _test_HttpServerDuplicateRespond(t: testing.EnvT):
     log = logging.Logger(t.log_handler)
     t.timeout(15.0)
     var done = False
-    var attempts = 0
-    var listen_attempts = 0
-    var port = std.random.randint(20000, 45000)
-    var server = None
+    var port = 0
     var parser = std.http.MessageParser()
     var bodies: list[bytes] = []
     var handled: list[str] = []
@@ -1639,13 +1484,12 @@ actor _test_HttpServerDuplicateRespond(t: testing.EnvT):
     def _on_http_server_error(s, error):
         _finish_failure("HTTP server error: " + error)
 
-    def _on_http_listen_error(listener, error):
-        if listen_attempts < 10:
-            listen_attempts += 1
-            port = std.random.randint(20000, 45000)
-            _start_listener()
-        else:
+    def _on_http_listen(listener, error):
+        if error is not None:
             _finish_failure("HTTP listen failed: " + error)
+            return
+        port = listener.endpoint().port
+        _start_client()
 
     def _on_raw_connect(conn):
         conn.write(b"GET /a HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\nGET /b HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n")
@@ -1661,11 +1505,7 @@ actor _test_HttpServerDuplicateRespond(t: testing.EnvT):
         _finish_success()
 
     def _on_raw_error(conn, errmsg):
-        if attempts < 5:
-            attempts += 1
-            after 0.1: _start_client()
-        else:
-            _finish_failure("TCP client error: " + errmsg)
+        _finish_failure("TCP client error: " + errmsg)
 
     def _start_client():
         parser = std.http.MessageParser()
@@ -1673,14 +1513,10 @@ actor _test_HttpServerDuplicateRespond(t: testing.EnvT):
         handled = []
         net.TCPConnection(conn_cap, "127.0.0.1", port, _on_raw_connect, _on_raw_receive, _on_raw_error, _on_raw_remote_close)
 
-    def _start_listener():
-        server = std.http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
-
     def _timeout():
         _finish_failure("timeout, responses received: " + str(bodies) + ", handled: " + str(handled))
 
-    _start_listener()
-    after 0.05: _start_client()
+    std.http.Listener(serv_cap, "127.0.0.1", 0, _on_http_accept, on_listen=_on_http_listen)
     after 10: _timeout()
 
 
@@ -1695,10 +1531,7 @@ actor _test_HttpServerLateCbInstall(t: testing.EnvT):
     log = logging.Logger(t.log_handler)
     t.timeout(15.0)
     var done = False
-    var attempts = 0
-    var listen_attempts = 0
-    var port = std.random.randint(20000, 45000)
-    var server = None
+    var port = 0
 
     serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
     conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
@@ -1727,13 +1560,12 @@ actor _test_HttpServerLateCbInstall(t: testing.EnvT):
     def _on_http_server_error(s, error):
         _finish_failure("HTTP server error: " + error)
 
-    def _on_http_listen_error(listener, error):
-        if listen_attempts < 10:
-            listen_attempts += 1
-            port = std.random.randint(20000, 45000)
-            _start_listener()
-        else:
+    def _on_http_listen(listener, error):
+        if error is not None:
             _finish_failure("HTTP listen failed: " + error)
+            return
+        port = listener.endpoint().port
+        _start_client()
 
     def _on_connect(c):
         c.get("/", _on_response)
@@ -1745,23 +1577,15 @@ actor _test_HttpServerLateCbInstall(t: testing.EnvT):
         _finish_success()
 
     def _on_client_error(c, errmsg):
-        if attempts < 5:
-            attempts += 1
-            after 0.1: _start_client()
-        else:
-            _finish_failure("HTTP client error: " + errmsg)
+        _finish_failure("HTTP client error: " + errmsg)
 
     def _start_client():
         std.http.Client(conn_cap, "127.0.0.1", _on_connect, _on_client_error, scheme="http", port=port)
 
-    def _start_listener():
-        server = std.http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
-
     def _timeout():
         _finish_failure("timeout: the request that arrived before cb_install was not answered")
 
-    _start_listener()
-    after 0.05: _start_client()
+    std.http.Listener(serv_cap, "127.0.0.1", 0, _on_http_accept, on_listen=_on_http_listen)
     after 10: _timeout()
 
 
@@ -1777,10 +1601,7 @@ actor _test_HttpServerHandlerCallsBack(t: testing.EnvT):
     log = logging.Logger(t.log_handler)
     t.timeout(15.0)
     var done = False
-    var attempts = 0
-    var listen_attempts = 0
-    var port = std.random.randint(20000, 45000)
-    var server = None
+    var port = 0
 
     serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
     conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
@@ -1808,13 +1629,12 @@ actor _test_HttpServerHandlerCallsBack(t: testing.EnvT):
     def _on_http_server_error(s, error):
         _finish_failure("HTTP server error: " + error)
 
-    def _on_http_listen_error(listener, error):
-        if listen_attempts < 10:
-            listen_attempts += 1
-            port = std.random.randint(20000, 45000)
-            _start_listener()
-        else:
+    def _on_http_listen(listener, error):
+        if error is not None:
             _finish_failure("HTTP listen failed: " + error)
+            return
+        port = listener.endpoint().port
+        _start_client()
 
     def _on_connect(c):
         c.get("/", _on_response)
@@ -1826,23 +1646,15 @@ actor _test_HttpServerHandlerCallsBack(t: testing.EnvT):
         _finish_success()
 
     def _on_client_error(c, errmsg):
-        if attempts < 5:
-            attempts += 1
-            after 0.1: _start_client()
-        else:
-            _finish_failure("HTTP client error: " + errmsg)
+        _finish_failure("HTTP client error: " + errmsg)
 
     def _start_client():
         std.http.Client(conn_cap, "127.0.0.1", _on_connect, _on_client_error, scheme="http", port=port)
 
-    def _start_listener():
-        server = std.http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
-
     def _timeout():
         _finish_failure("timeout: server and handler deadlocked")
 
-    _start_listener()
-    after 0.05: _start_client()
+    std.http.Listener(serv_cap, "127.0.0.1", 0, _on_http_accept, on_listen=_on_http_listen)
     after 10: _timeout()
 
 
@@ -1861,10 +1673,7 @@ actor _test_HttpClientCallbackCallsBack(t: testing.EnvT):
     log = logging.Logger(t.log_handler)
     t.timeout(15.0)
     var done = False
-    var attempts = 0
-    var listen_attempts = 0
-    var port = std.random.randint(20000, 45000)
-    var server = None
+    var port = 0
 
     serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
     conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
@@ -1890,13 +1699,12 @@ actor _test_HttpClientCallbackCallsBack(t: testing.EnvT):
     def _on_http_server_error(s, error):
         _finish_failure("HTTP server error: " + error)
 
-    def _on_http_listen_error(listener, error):
-        if listen_attempts < 10:
-            listen_attempts += 1
-            port = std.random.randint(20000, 45000)
-            _start_listener()
-        else:
+    def _on_http_listen(listener, error):
+        if error is not None:
             _finish_failure("HTTP listen failed: " + error)
+            return
+        port = listener.endpoint().port
+        _start_client()
 
     def _on_connect(c):
         # A value-position call: this actor is parked until the client has run it
@@ -1917,23 +1725,15 @@ actor _test_HttpClientCallbackCallsBack(t: testing.EnvT):
         _finish_success()
 
     def _on_client_error(c, errmsg):
-        if attempts < 5:
-            attempts += 1
-            after 0.1: _start_client()
-        else:
-            _finish_failure("HTTP client error: " + errmsg)
+        _finish_failure("HTTP client error: " + errmsg)
 
     def _start_client():
         std.http.Client(conn_cap, "127.0.0.1", _on_connect, _on_client_error, scheme="http", port=port)
 
-    def _start_listener():
-        server = std.http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
-
     def _timeout():
         _finish_failure("timeout: client and callback deadlocked")
 
-    _start_listener()
-    after 0.05: _start_client()
+    std.http.Listener(serv_cap, "127.0.0.1", 0, _on_http_accept, on_listen=_on_http_listen)
     after 10: _timeout()
 
 
@@ -1948,11 +1748,7 @@ actor _EarlyRequests(t: testing.EnvT, scheme: str):
     log = logging.Logger(t.log_handler)
     t.timeout(15.0)
     var done = False
-    var attempts = 0
-    var listen_attempts = 0
-    var port = std.random.randint(20000, 45000)
-    var server = None
-    var tls_server = None
+    var port = 0
     var handled: list[str] = []
     var received: list[bytes] = []
     expected = [("/" + str(i)).encode() for i in range(200)]
@@ -1982,16 +1778,12 @@ actor _EarlyRequests(t: testing.EnvT, scheme: str):
     def _on_http_server_error(s, error):
         _finish_failure("HTTP server error: " + error)
 
-    def _listen_failed(error: str):
-        if listen_attempts < 10:
-            listen_attempts += 1
-            port = std.random.randint(20000, 45000)
-            _start_listener()
-        else:
+    def _on_http_listen(listener, error):
+        if error is not None:
             _finish_failure("HTTP listen failed: " + error)
-
-    def _on_http_listen_error(listener, error):
-        _listen_failed(error)
+            return
+        port = listener.endpoint().port
+        _start_client()
 
     def _on_connect(c):
         pass
@@ -2012,23 +1804,12 @@ actor _EarlyRequests(t: testing.EnvT, scheme: str):
         _finish_success()
 
     def _on_client_error(c, errmsg):
-        if len(received) == 0 and len(handled) == 0 and attempts < 5 and "not established" not in errmsg:
-            # The listener was not up yet, try again with a new client
-            attempts += 1
-            after 0.1: _start_client()
-        else:
-            _finish_failure("HTTP client error: " + errmsg)
+        _finish_failure("HTTP client error: " + errmsg)
 
     def _start_client():
         c = std.http.Client(conn_cap, "127.0.0.1", _on_connect, _on_client_error, scheme=scheme, port=port, tls_verify=False)
         for i in range(len(expected)):
             c.get("/" + str(i), _on_response)
-
-    def _start_listener():
-        if scheme == "https":
-            tls_server = std.http.TLSListener(serv_cap, "127.0.0.1", port, CERT_PEM.encode(), KEY_PEM.encode(), _on_https_accept, _on_https_listen_error)
-        else:
-            server = std.http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
 
     def _on_https_accept(s):
         s.cb_install(_on_https_request, _on_https_server_error)
@@ -2040,14 +1821,20 @@ actor _EarlyRequests(t: testing.EnvT, scheme: str):
     def _on_https_server_error(s, error):
         _finish_failure("HTTPS server error: " + error)
 
-    def _on_https_listen_error(listener, error):
-        _listen_failed(error)
+    def _on_https_listen(listener, error):
+        if error is not None:
+            _finish_failure("HTTPS listen failed: " + error)
+            return
+        port = listener.endpoint().port
+        _start_client()
 
     def _timeout():
         _finish_failure("timeout, responses received: " + str(received) + ", handled: " + str(handled))
 
-    _start_listener()
-    after 0.05: _start_client()
+    if scheme == "https":
+        std.http.TLSListener(serv_cap, "127.0.0.1", 0, CERT_PEM.encode(), KEY_PEM.encode(), _on_https_accept, on_listen=_on_https_listen)
+    else:
+        std.http.Listener(serv_cap, "127.0.0.1", 0, _on_http_accept, on_listen=_on_http_listen)
     after 10: _timeout()
 
 
@@ -2073,10 +1860,7 @@ actor _test_HttpClientLargeChunkedResponse(t: testing.EnvT):
     log = logging.Logger(t.log_handler)
     t.timeout(15.0)
     var done = False
-    var attempts = 0
-    var listen_attempts = 0
-    var port = std.random.randint(20000, 45000)
-    var server = None
+    var port = 0
     var responded = False
     var sw = time.Stopwatch()
 
@@ -2100,12 +1884,10 @@ actor _test_HttpClientLargeChunkedResponse(t: testing.EnvT):
 
     def _on_raw_listen(listener, error):
         if error is not None:
-            if listen_attempts < 10:
-                listen_attempts += 1
-                port = std.random.randint(20000, 45000)
-                _start_listener()
-            else:
-                _finish_failure("TCP listen failed: " + error)
+            _finish_failure("TCP listen failed: " + error)
+            return
+        port = listener.endpoint().port
+        _start_client()
 
     def _on_raw_accept(conn):
         responded = False
@@ -2144,23 +1926,15 @@ actor _test_HttpClientLargeChunkedResponse(t: testing.EnvT):
         _finish_success()
 
     def _on_client_error(c, errmsg):
-        if attempts < 5:
-            attempts += 1
-            after 0.1: _start_client()
-        else:
-            _finish_failure("HTTP client error: " + errmsg)
+        _finish_failure("HTTP client error: " + errmsg)
 
     def _start_client():
         std.http.Client(conn_cap, "127.0.0.1", _on_connect, _on_client_error, scheme="http", port=port)
 
-    def _start_listener():
-        server = net.TCPListener(serv_cap, "127.0.0.1", port, _on_raw_listen, _on_raw_accept)
-
     def _timeout():
         _finish_failure("timeout waiting for the large chunked response")
 
-    _start_listener()
-    after 0.05: _start_client()
+    net.TCPListener(serv_cap, "127.0.0.1", 0, _on_raw_listen, _on_raw_accept)
     after 10: _timeout()
 
 
@@ -2176,9 +1950,7 @@ actor _test_HttpClientMalformedResponse(t: testing.EnvT):
     log = logging.Logger(t.log_handler)
     t.timeout(15.0)
     var done = False
-    var listen_attempts = 0
-    var port = std.random.randint(20000, 45000)
-    var server = None
+    var port = 0
     var received = b""
     var responded = False
     var got_first = False
@@ -2202,12 +1974,10 @@ actor _test_HttpClientMalformedResponse(t: testing.EnvT):
 
     def _on_raw_listen(listener, error):
         if error is not None:
-            if listen_attempts < 10:
-                listen_attempts += 1
-                port = std.random.randint(20000, 45000)
-                _start_listener()
-            else:
-                _finish_failure("TCP listen failed: " + error)
+            _finish_failure("TCP listen failed: " + error)
+            return
+        port = listener.endpoint().port
+        _start_client()
 
     def _on_raw_accept(conn):
         conn.cb_install(_on_raw_receive, _on_raw_error, _on_raw_remote_close)
@@ -2262,14 +2032,10 @@ actor _test_HttpClientMalformedResponse(t: testing.EnvT):
     def _start_client():
         std.http.Client(conn_cap, "127.0.0.1", _on_connect, _on_client_error, scheme="http", port=port)
 
-    def _start_listener():
-        server = net.TCPListener(serv_cap, "127.0.0.1", port, _on_raw_listen, _on_raw_accept)
-
     def _timeout():
         _finish_failure("timeout, errors: " + str(errors))
 
-    _start_listener()
-    after 0.05: _start_client()
+    net.TCPListener(serv_cap, "127.0.0.1", 0, _on_raw_listen, _on_raw_accept)
     after 10: _timeout()
 
 
@@ -2278,10 +2044,7 @@ actor _ServerClosesOnMalformed(t: testing.EnvT, request: bytes):
     log = logging.Logger(t.log_handler)
     t.timeout(15.0)
     var done = False
-    var attempts = 0
-    var listen_attempts = 0
-    var port = std.random.randint(20000, 45000)
-    var server = None
+    var port = 0
     var parser = std.http.MessageParser()
     var bodies: list[bytes] = []
     var handled: list[str] = []
@@ -2311,13 +2074,12 @@ actor _ServerClosesOnMalformed(t: testing.EnvT, request: bytes):
     def _on_http_server_error(s, error):
         _finish_failure("HTTP server error: " + error)
 
-    def _on_http_listen_error(listener, error):
-        if listen_attempts < 10:
-            listen_attempts += 1
-            port = std.random.randint(20000, 45000)
-            _start_listener()
-        else:
+    def _on_http_listen(listener, error):
+        if error is not None:
             _finish_failure("HTTP listen failed: " + error)
+            return
+        port = listener.endpoint().port
+        _start_client()
 
     def _on_raw_connect(conn):
         conn.write(request)
@@ -2333,11 +2095,7 @@ actor _ServerClosesOnMalformed(t: testing.EnvT, request: bytes):
         _finish_success()
 
     def _on_raw_error(conn, errmsg):
-        if attempts < 5:
-            attempts += 1
-            after 0.1: _start_client()
-        else:
-            _finish_failure("TCP client error: " + errmsg)
+        _finish_failure("TCP client error: " + errmsg)
 
     def _start_client():
         parser = std.http.MessageParser()
@@ -2345,14 +2103,10 @@ actor _ServerClosesOnMalformed(t: testing.EnvT, request: bytes):
         handled = []
         net.TCPConnection(conn_cap, "127.0.0.1", port, _on_raw_connect, _on_raw_receive, _on_raw_error, _on_raw_remote_close)
 
-    def _start_listener():
-        server = std.http.Listener(serv_cap, "127.0.0.1", port, _on_http_accept, _on_http_listen_error)
-
     def _timeout():
         _finish_failure("timeout, the server did not close the connection")
 
-    _start_listener()
-    after 0.05: _start_client()
+    std.http.Listener(serv_cap, "127.0.0.1", 0, _on_http_accept, on_listen=_on_http_listen)
     after 10: _timeout()
 
 
@@ -2381,9 +2135,7 @@ actor _test_HttpClientReconnect(t: testing.EnvT):
     log = logging.Logger(t.log_handler)
     t.timeout(15.0)
     var done = False
-    var listen_attempts = 0
-    var port = std.random.randint(20000, 45000)
-    var server = None
+    var port = 0
     var accepted = 0
     var parser = std.http.MessageParser()
     var first_requests = 0
@@ -2409,12 +2161,10 @@ actor _test_HttpClientReconnect(t: testing.EnvT):
 
     def _on_raw_listen(listener, error):
         if error is not None:
-            if listen_attempts < 10:
-                listen_attempts += 1
-                port = std.random.randint(20000, 45000)
-                _start_listener()
-            else:
-                _finish_failure("TCP listen failed: " + error)
+            _finish_failure("TCP listen failed: " + error)
+            return
+        port = listener.endpoint().port
+        _start_client()
 
     def _on_raw_accept(conn):
         accepted += 1
@@ -2470,14 +2220,10 @@ actor _test_HttpClientReconnect(t: testing.EnvT):
     def _start_client():
         std.http.Client(conn_cap, "127.0.0.1", _on_connect, _on_client_error, scheme="http", port=port)
 
-    def _start_listener():
-        server = net.TCPListener(serv_cap, "127.0.0.1", port, _on_raw_listen, _on_raw_accept)
-
     def _timeout():
         _finish_failure("timeout, responses: " + str(bodies) + ", second connection: " + str(second_paths) + ", errors: " + str(errors))
 
-    _start_listener()
-    after 0.05: _start_client()
+    net.TCPListener(serv_cap, "127.0.0.1", 0, _on_raw_listen, _on_raw_accept)
     after 10: _timeout()
 
 
@@ -2495,10 +2241,7 @@ actor _test_HttpClientHeadRequest(t: testing.EnvT):
     log = logging.Logger(t.log_handler)
     t.timeout(15.0)
     var done = False
-    var attempts = 0
-    var listen_attempts = 0
-    var port = std.random.randint(20000, 45000)
-    var server = None
+    var port = 0
     var received = b""
     var responded = False
     var got_head = False
@@ -2520,12 +2263,10 @@ actor _test_HttpClientHeadRequest(t: testing.EnvT):
 
     def _on_raw_listen(listener, error):
         if error is not None:
-            if listen_attempts < 10:
-                listen_attempts += 1
-                port = std.random.randint(20000, 45000)
-                _start_listener()
-            else:
-                _finish_failure("TCP listen failed: " + error)
+            _finish_failure("TCP listen failed: " + error)
+            return
+        port = listener.endpoint().port
+        _start_client()
 
     def _on_raw_accept(conn):
         received = b""
@@ -2569,23 +2310,15 @@ actor _test_HttpClientHeadRequest(t: testing.EnvT):
         _finish_success()
 
     def _on_client_error(c, errmsg):
-        if attempts < 5:
-            attempts += 1
-            after 0.1: _start_client()
-        else:
-            _finish_failure("HTTP client error: " + errmsg)
+        _finish_failure("HTTP client error: " + errmsg)
 
     def _start_client():
         std.http.Client(conn_cap, "127.0.0.1", _on_connect, _on_client_error, scheme="http", port=port)
 
-    def _start_listener():
-        server = net.TCPListener(serv_cap, "127.0.0.1", port, _on_raw_listen, _on_raw_accept)
-
     def _timeout():
         _finish_failure("timeout waiting for the HEAD and GET responses")
 
-    _start_listener()
-    after 0.05: _start_client()
+    net.TCPListener(serv_cap, "127.0.0.1", 0, _on_raw_listen, _on_raw_accept)
     after 10: _timeout()
 
 
@@ -2593,10 +2326,7 @@ actor _test_HttpsClientServer(t: testing.EnvT):
     """HTTPS client/server roundtrip over TLS"""
     log = logging.Logger(t.log_handler)
     var done = False
-    var attempts = 0
-    var listen_attempts = 0
-    var port = std.random.randint(20000, 45000)
-    var server = None
+    var port = 0
     listen_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
     conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
 
@@ -2627,13 +2357,12 @@ actor _test_HttpsClientServer(t: testing.EnvT):
     def _on_https_error(server, error):
         _finish_error("HTTPS server error: " + error)
 
-    def _on_https_listen_error(listener, error):
-        if listen_attempts < 10:
-            listen_attempts += 1
-            port = std.random.randint(20000, 45000)
-            _start_listener()
-        else:
+    def _on_https_listen(listener, error):
+        if error is not None:
             _finish_failure("HTTPS listen failed: " + error)
+            return
+        port = listener.endpoint().port
+        _start_client()
 
     def _on_https_connect(c):
         c.get("/", _on_https_receive)
@@ -2648,23 +2377,15 @@ actor _test_HttpsClientServer(t: testing.EnvT):
         _finish_success()
 
     def _on_https_error_client(c, errmsg):
-        if attempts < 5:
-            attempts += 1
-            after 0.1: _start_client()
-        else:
-            _finish_failure("HTTPS client error: " + errmsg)
+        _finish_failure("HTTPS client error: " + errmsg)
 
     def _start_client():
         std.http.Client(conn_cap, "127.0.0.1", _on_https_connect, _on_https_error_client, scheme="https", port=port, tls_verify=False)
 
-    def _start_listener():
-        server = std.http.TLSListener(listen_cap, "127.0.0.1", port, CERT_PEM.encode(), KEY_PEM.encode(), _on_https_accept, _on_https_listen_error)
-
     def _timeout():
         _finish_error("timeout")
 
-    _start_listener()
-    after 0.05: _start_client()
+    std.http.TLSListener(listen_cap, "127.0.0.1", 0, CERT_PEM.encode(), KEY_PEM.encode(), _on_https_accept, on_listen=_on_https_listen)
     after 10: _timeout()
 
 
@@ -2673,10 +2394,7 @@ actor _test_HttpsServerCompression(t: testing.EnvT):
     accepts"""
     big = _compressible_json()
     var done = False
-    var attempts = 0
-    var listen_attempts = 0
-    var port = std.random.randint(20000, 45000)
-    var server = None
+    var port = 0
     listen_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
     conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
 
@@ -2698,13 +2416,12 @@ actor _test_HttpsServerCompression(t: testing.EnvT):
     def _on_https_error(server, error):
         _finish(AssertionError("HTTPS server error: " + error))
 
-    def _on_https_listen_error(listener, error):
-        if listen_attempts < 10:
-            listen_attempts += 1
-            port = std.random.randint(20000, 45000)
-            _start_listener()
-        else:
+    def _on_https_listen(listener, error):
+        if error is not None:
             _finish(AssertionError("HTTPS listen failed: " + error))
+            return
+        port = listener.endpoint().port
+        _start_client()
 
     def _on_https_connect(c):
         c.get("/", _on_https_receive, {"Accept-Encoding": "gzip"})
@@ -2719,19 +2436,129 @@ actor _test_HttpsServerCompression(t: testing.EnvT):
         _finish(None)
 
     def _on_https_error_client(c, errmsg):
-        if attempts < 5:
-            attempts += 1
-            after 0.1: _start_client()
-        else:
-            _finish(AssertionError("HTTPS client error: " + errmsg))
+        _finish(AssertionError("HTTPS client error: " + errmsg))
 
     def _start_client():
         # The client leaves the body as the server sent it
         std.http.Client(conn_cap, "127.0.0.1", _on_https_connect, _on_https_error_client, scheme="https", port=port, tls_verify=False, compress=False)
 
-    def _start_listener():
-        server = std.http.TLSListener(listen_cap, "127.0.0.1", port, CERT_PEM.encode(), KEY_PEM.encode(), _on_https_accept, _on_https_listen_error, compress=True)
+    std.http.TLSListener(listen_cap, "127.0.0.1", 0, CERT_PEM.encode(), KEY_PEM.encode(), _on_https_accept, on_listen=_on_https_listen, compress=True)
+    after 10: _finish(AssertionError("timeout"))
 
-    _start_listener()
-    after 0.05: _start_client()
+
+actor _test_HttpListenerReportsEndpoint(t: testing.EnvT):
+    """Listener reports to on_listen and gives its endpoint
+
+    A listener on port 0 calls on_listen with None and endpoint() gives the
+    address and the port it got. A second listener on that port gets an
+    error in on_listen. After close(), endpoint() is empty and port 0.
+    """
+    var done = False
+    var port = 0
+    var first: ?std.http.Listener = None
+    serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+
+    def _finish(error: ?Exception):
+        if done:
+            return
+        done = True
+        if error is not None:
+            t.failure(error)
+        else:
+            t.success()
+
+    def _on_accept(server):
+        pass
+
+    def _on_first_listen(listener, error):
+        if error is not None:
+            _finish(AssertionError("HTTP listen failed: " + error))
+            return
+        ep = listener.endpoint()
+        port = ep.port
+        try:
+            testing.assertEqual(ep.address, "127.0.0.1")
+            testing.assertTrue(port > 0, "port of a listening socket")
+        except Exception as e:
+            _finish(e)
+            return
+        first = listener
+        std.http.Listener(serv_cap, "127.0.0.1", port, _on_accept, on_listen=_on_second_listen)
+
+    def _on_second_listen(listener, error):
+        if error is None:
+            _finish(AssertionError("a second listener on port %d is listening" % port))
+            return
+        f = first
+        if f is not None:
+            f.close()
+            closed = f.endpoint()
+            try:
+                testing.assertEqual(closed.address, "")
+                testing.assertEqual(closed.port, 0)
+            except Exception as e:
+                _finish(e)
+                return
+        _finish(None)
+
+    std.http.Listener(serv_cap, "127.0.0.1", 0, _on_accept, on_listen=_on_first_listen)
+    after 10: _finish(AssertionError("timeout"))
+
+
+actor _test_HttpsListenerReportsEndpoint(t: testing.EnvT):
+    """TLSListener reports to on_listen and gives its endpoint
+
+    A listener on port 0 calls on_listen with None and endpoint() gives the
+    address and the port it got. A second listener on that port gets an
+    error in on_listen. After close(), endpoint() is empty and port 0.
+    """
+    var done = False
+    var port = 0
+    var first: ?std.http.TLSListener = None
+    serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+
+    def _finish(error: ?Exception):
+        if done:
+            return
+        done = True
+        if error is not None:
+            t.failure(error)
+        else:
+            t.success()
+
+    def _on_accept(server):
+        pass
+
+    def _on_first_listen(listener, error):
+        if error is not None:
+            _finish(AssertionError("HTTPS listen failed: " + error))
+            return
+        ep = listener.endpoint()
+        port = ep.port
+        try:
+            testing.assertEqual(ep.address, "127.0.0.1")
+            testing.assertTrue(port > 0, "port of a listening socket")
+        except Exception as e:
+            _finish(e)
+            return
+        first = listener
+        std.http.TLSListener(serv_cap, "127.0.0.1", port, CERT_PEM.encode(), KEY_PEM.encode(), _on_accept, on_listen=_on_second_listen)
+
+    def _on_second_listen(listener, error):
+        if error is None:
+            _finish(AssertionError("a second listener on port %d is listening" % port))
+            return
+        f = first
+        if f is not None:
+            f.close()
+            closed = f.endpoint()
+            try:
+                testing.assertEqual(closed.address, "")
+                testing.assertEqual(closed.port, 0)
+            except Exception as e:
+                _finish(e)
+                return
+        _finish(None)
+
+    std.http.TLSListener(serv_cap, "127.0.0.1", 0, CERT_PEM.encode(), KEY_PEM.encode(), _on_accept, on_listen=_on_first_listen)
     after 10: _finish(AssertionError("timeout"))
