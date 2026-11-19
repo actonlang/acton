@@ -1167,6 +1167,12 @@ jobs:
     with:
       repo_url: "actonlang/textfsm"
 
+  test-app-actsnmp:
+    needs: build-debs
+    uses: "./.github/workflows/test-app.yml"
+    with:
+      repo_url: "stratoweave/actsnmp"
+
   build-container-image:
     needs: [test-macos, test-linux, test-online-linux, test-online-macos, test-cross-compile, test-windows, test-proxy, build-debs]
     runs-on: ubuntu-latest
