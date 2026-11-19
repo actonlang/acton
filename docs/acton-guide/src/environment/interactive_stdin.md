@@ -55,9 +55,9 @@ still starts a new line. `set_stdin(raw=False)` puts back the settings
 from before `set_stdin(raw=True)`, for example to let a command that
 the program runs read whole lines.
 
-`env.stdio.stdin_is_tty()` tells whether stdin is a terminal, and
-`env.stdio.is_tty()` whether stdout is. When stdin is a pipe or a file,
-`set_stdin` does nothing.
+`env.stdio.stdin_is_tty()`, `env.stdio.stdout_is_tty()` and
+`env.stdio.stderr_is_tty()` tell whether stdin, stdout and stderr are
+terminals. When stdin is a pipe or a file, `set_stdin` does nothing.
 
 The runtime copies the terminal settings on startup and restores them
 on exit, so you do not need to restore echo or raw mode manually in the

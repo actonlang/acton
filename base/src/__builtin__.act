@@ -1816,6 +1816,14 @@ actor Stdio(envcap: _EnvCap, vars: EnvVar):
         """Check if stdin is a terminal"""
         NotImplemented
 
+    action def stdout_is_tty() -> bool:
+        """Check if stdout is a terminal"""
+        NotImplemented
+
+    action def stderr_is_tty() -> bool:
+        """Check if stderr is a terminal"""
+        NotImplemented
+
     action def _on_stdin_bytes(cb: action(bytes) -> None) -> None:
         NotImplemented
 

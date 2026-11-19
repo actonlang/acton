@@ -3856,6 +3856,25 @@ stdioTerminalTests = testGroup "stdio terminal" $
           code <- waitWithin ph
           assertEqual ("exit code after " ++ name) expCode code
           assertCookedModeAfter ("after " ++ name) slave
+  , testCase "stdin_is_tty, stdout_is_tty and stderr_is_tty check their own stream" $ do
+      testBuildThing "" ExitSuccess False "../../test/rts/stdio_is_tty.act"
+      wd <- canonicalizePath "../../test/rts"
+      -- One stream on the slave of a new pseudo terminal, the others on pipes
+      forM_ [ ("stdin", "stdin True stdout False stderr False is_tty False")
+            , ("stdout", "stdin False stdout True stderr False is_tty True")
+            , ("stderr", "stdin False stdout False stderr True is_tty False")
+            ] $ \(stream, expected) -> do
+        (master, slave) <- PT.openPseudoTerminal
+        hPty <- PIO.dup slave >>= PIO.fdToHandle
+        let on s = if s == stream then UseHandle hPty else CreatePipe
+        (mIn, mOut, mErr, ph) <- createProcess (proc "./stdio_is_tty" [])
+            { cwd = Just wd, std_in = on "stdin", std_out = on "stdout", std_err = on "stderr" }
+        line <- readLineWithin (head (catMaybes [mOut, mErr]))
+        assertEqual ("with " ++ stream ++ " on a terminal") expected line
+        code <- waitWithin ph
+        assertEqual "exit code" ExitSuccess code
+        mapM_ IO.hClose (catMaybes [mIn, mOut, mErr])
+        mapM_ PIO.closeFd [master, slave]
   ]
   where
     withPtyProgram exe env body = do
