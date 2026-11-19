@@ -692,6 +692,64 @@ compilerTests =
           (runCode, runOut, runErr) <- readCreateProcessWithExitCode (proc binPath []) ""
           assertEqual ("release dynamic executable should load liba and run: " ++ runErr) ExitSuccess runCode
           assertEqual "release dynamic executable output" "4950\n" runOut
+  , testCase "dynamic module library imports" $ do
+        -- Module a in liba imports the std modules std.base64 and std.math and
+        -- the project module c, and module b imports none of them. liba
+        -- resolves their symbols against the executable when the executable
+        -- loads it, so the executable must contain all three modules. The
+        -- second build reads a and c from their cached interfaces.
+        withSystemTempDirectory "acton-dynamic-module-imports" $ \proj -> do
+          actonExe <- canonicalizePath "../../dist/bin/acton"
+          let srcDir = proj </> "src"
+              binPath = proj </> "out" </> "bin" </> "b"
+              mkFp name = Fingerprint.formatFingerprint
+                (Fingerprint.updateFingerprintPrefix
+                  (Fingerprint.fingerprintPrefixForName name) 1)
+          createDirectoryIfMissing True srcDir
+          writeFile (proj </> "Build.act") $ unlines
+            [ "name = \"dynamic_module_imports\""
+            , "fingerprint = " ++ mkFp "dynamic_module_imports"
+            , "libraries = {"
+            , "    \"a\": (modules=[\"a\"], linkage=\"dynamic\")"
+            , "}"
+            ]
+          writeFile (srcDir </> "a.act") $ unlines
+            [ "import std.base64"
+            , "import std.math"
+            , "import c"
+            , ""
+            , "def greeting() -> str:"
+            , "    return std.base64.encode(c.name().encode()).decode() + \" \" + str(int(std.math.sqrt(16.0)))"
+            ]
+          writeFile (srcDir </> "c.act") $ unlines
+            [ "def name() -> str:"
+            , "    return \"hello\""
+            ]
+          writeFile (srcDir </> "b.act") $ unlines
+            [ "import a"
+            , ""
+            , "actor main(env: Env):"
+            , "    print(a.greeting())"
+            , "    env.exit(0)"
+            ]
+          (returnCode, _cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc actonExe ["build", "--color", "never"]){ cwd = Just proj } ""
+          assertEqual ("acton should build executable with dynamic module library: " ++ cmdErr) ExitSuccess returnCode
+          (runCode, runOut, runErr) <- readCreateProcessWithExitCode (proc binPath []) ""
+          assertEqual ("dynamic executable should load liba and run: " ++ runErr) ExitSuccess runCode
+          assertEqual "dynamic executable output" "aGVsbG8= 4\n" runOut
+          writeFile (srcDir </> "b.act") $ unlines
+            [ "import a"
+            , ""
+            , "actor main(env: Env):"
+            , "    print(a.greeting())"
+            , "    print(a.greeting())"
+            , "    env.exit(0)"
+            ]
+          (rebuildCode, _rebuildOut, rebuildErr) <- readCreateProcessWithExitCode (proc actonExe ["build", "--color", "never"]){ cwd = Just proj } ""
+          assertEqual ("acton should rebuild executable with dynamic module library: " ++ rebuildErr) ExitSuccess rebuildCode
+          (rerunCode, rerunOut, rerunErr) <- readCreateProcessWithExitCode (proc binPath []) ""
+          assertEqual ("rebuilt dynamic executable should load liba and run: " ++ rerunErr) ExitSuccess rerunCode
+          assertEqual "rebuilt dynamic executable output" "aGVsbG8= 4\naGVsbG8= 4\n" rerunOut
   , sequentialTestGroup "repl" AllSucceed
     [ testCase "renders retained session and eval source" $ do
         let inputs =
@@ -884,6 +942,23 @@ compilerTests =
             "name = \"real_project\"\n" parentBuildAct
           replBuildActExists <- doesFileExist (proj </> ".acton-repl" </> "Build.act")
           assertBool "repl should write Build.act in owned subdir" replBuildActExists
+
+    , testCase "imports a std module as the first input" $ do
+        -- The second input calls std.math from librepl_eval, which resolves
+        -- the call against the executable, so the executable must contain
+        -- std.math although the session has nothing else that uses it.
+        withSystemTempDirectory "acton-repl-first-import" $ \tmp -> do
+          actonExe <- canonicalizePath "../../dist/bin/acton"
+          let input = unlines
+                [ "import std.math"
+                , "std.math.sqrt(9.0)"
+                , ":q"
+                ]
+          (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode
+            (proc actonExe ["repl", "--color", "never", "--tempdir", tmp]) input
+          assertEqual ("acton repl should exit successfully: " ++ cmdErr) ExitSuccess returnCode
+          assertBool ("repl should evaluate a call of a std module imported first: " ++ cmdOut ++ cmdErr)
+            ("acton> 3\n" `isInfixOf` cmdOut)
     ]
 
   , testCase "deps" $ do
