@@ -1,0 +1,34 @@
+# str and bytes operations that short-circuit when they have nothing to
+# change. A short-circuit result equals a copy, so these checks use inputs
+# where a mistake in the short-circuit gives a different value.
+
+def check_join_str() -> bool:
+    # The separator is not empty, so a result that is the separator fails
+    return ("-".join([]) == "" and
+            "-".join(["abc"]) == "abc")
+
+def check_join_bytes() -> bool:
+    return (b"-".join([]) == b"" and
+            b"-".join([b"abc"]) == b"abc")
+
+def check_case_str() -> bool:
+    # Only the first character changes, then only the last
+    return ("abc".capitalize() == "Abc" and
+            "abC".lower() == "abc")
+
+def check_case_bytes() -> bool:
+    # A change at the first byte, then a change after an unchanged first byte
+    return (b"abc".capitalize() == b"Abc" and
+            b"ABC".capitalize() == b"Abc")
+
+actor main(env):
+    checks = [("str join", check_join_str()),
+              ("bytes join", check_join_bytes()),
+              ("str case", check_case_str()),
+              ("bytes case", check_case_bytes())]
+    failed = False
+    for name, ok in checks:
+        if not ok:
+            print(name + " failed")
+            failed = True
+    env.exit(1 if failed else 0)

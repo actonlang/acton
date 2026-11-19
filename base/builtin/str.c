@@ -648,11 +648,16 @@ static B_str str_transform(B_str s, transform first, transform rest) {
     unsigned char tmp[4];
     utf8proc_int32_t cp;
     int64_t nbytes = 0;
+    bool changed = false;
     unsigned char *p = s->str;
     for (int64_t i = 0; i < s->nchars; i++) {
         p += utf8proc_iterate(p, -1, &cp);
-        nbytes += utf8proc_encode_char(i == 0 ? first(cp) : rest(cp), tmp);
+        utf8proc_int32_t mapped = i == 0 ? first(cp) : rest(cp);
+        changed |= mapped != cp;
+        nbytes += utf8proc_encode_char(mapped, tmp);
     }
+    if (!changed)
+        return s;
     check_result_len(nbytes);
     B_str res;
     NEW_UNFILLED_STR(res, s->nchars, nbytes);
@@ -1416,6 +1421,10 @@ B_str B_strD_join(B_str s, B_Iterable wit, $WORD iter) {
     B_list_base lst = join_parts(wit, iter);
     B_str nxt;
     int64_t len = lst->length;
+    if (len == 0)
+        return null_str;
+    if (len == 1)
+        return (B_str)lst->data[0];
     // The total is checked as it grows by a part and a separator, so it
     // can't overflow before it is checked
     for (int64_t i = 0; i < len; i++) {
@@ -1426,18 +1435,16 @@ B_str B_strD_join(B_str s, B_Iterable wit, $WORD iter) {
     }
     B_str res;
     NEW_UNFILLED_STR(res, totchars, totbytes);
-    if (len > 0) {
-        nxt = (B_str)lst->data[0];
-        unsigned char *p = res->str;
+    nxt = (B_str)lst->data[0];
+    unsigned char *p = res->str;
+    memcpy(p, nxt->str, nxt->nbytes);
+    p += nxt->nbytes;
+    for (int64_t i = 1; i < len; i++) {
+        nxt = (B_str)lst->data[i];
+        memcpy(p, s->str, s->nbytes);
+        p += s->nbytes;
         memcpy(p, nxt->str, nxt->nbytes);
         p += nxt->nbytes;
-        for (int64_t i = 1; i < len; i++) {
-            nxt = (B_str)lst->data[i];
-            memcpy(p, s->str, s->nbytes);
-            p += s->nbytes;
-            memcpy(p, nxt->str, nxt->nbytes);
-            p += nxt->nbytes;
-        }
     }
     return res;
 }
@@ -3386,18 +3393,6 @@ char *fromB_bytes(B_bytes b) {
     return (char *)b->str;
 }
 
-// Auxiliaries
-
-static B_bytes B_bytesD_copy(B_bytes s) {
-    B_bytes res;
-    NEW_UNFILLED_BYTES(res,s->nbytes);
-    res->nbytes = s->nbytes;
-    memcpy(res->str,s->str,s->nbytes);
-    return res;
-}
-
-
-
 // Bytes methods, implementations
 
 // General methods //////////////////////////////////////////////////////////////
@@ -3463,16 +3458,27 @@ B_bytes B_bytesD___deserialize__(B_bytes self, $Serial$state state) {
     return res;
 }
 
-B_bytes B_bytesD_capitalize(B_bytes s) {
-    if (s->nbytes==0) {
+typedef unsigned char (*byte_transform)(unsigned char c);
+
+// Maps the first byte of s with first and the other bytes with rest. Copies
+// only when some byte changes.
+static B_bytes bytes_transform(B_bytes s, byte_transform first, byte_transform rest) {
+    int64_t i = 0;
+    while (i < s->nbytes && (i == 0 ? first : rest)(s->str[i]) == s->str[i])
+        i++;
+    if (i == s->nbytes)
         return s;
-    }
+    // The bytes before the first changed one are copied as they are
     B_bytes res;
-    NEW_UNFILLED_BYTES(res,s->nbytes);
-    res->str[0] = ascii_toupper(s->str[0]);
-    for (int64_t i = 1; i < s->nbytes; i++)
-        res->str[i] = ascii_tolower(s->str[i]);
+    NEW_UNFILLED_BYTES(res, s->nbytes);
+    memcpy(res->str, s->str, i);
+    for (; i < s->nbytes; i++)
+        res->str[i] = (i == 0 ? first : rest)(s->str[i]);
     return res;
+}
+
+B_bytes B_bytesD_capitalize(B_bytes s) {
+    return bytes_transform(s, ascii_toupper, ascii_tolower);
 }
 
 B_bytes B_bytesD_center(B_bytes s, int64_t width, B_bytes fill) {
@@ -3720,6 +3726,10 @@ B_bytes B_bytesD_join(B_bytes s, B_Iterable wit, $WORD iter) {
     B_list_base lst = join_parts(wit, iter);
     B_bytes nxt;
     int64_t len = lst->length;
+    if (len == 0)
+        return null_bytes;
+    if (len == 1)
+        return (B_bytes)lst->data[0];
     // The total is checked as it grows by a part and a separator, so it
     // can't overflow before it is checked
     for (int64_t i = 0; i < len; i++) {
@@ -3729,18 +3739,16 @@ B_bytes B_bytesD_join(B_bytes s, B_Iterable wit, $WORD iter) {
     }
     B_bytes res;
     NEW_UNFILLED_BYTES(res, totbytes);
-    if (len > 0) {
-        nxt = (B_bytes)lst->data[0];
-        unsigned char *p = res->str;
+    nxt = (B_bytes)lst->data[0];
+    unsigned char *p = res->str;
+    memcpy(p, nxt->str, nxt->nbytes);
+    p += nxt->nbytes;
+    for (int64_t i = 1; i < len; i++) {
+        nxt = (B_bytes)lst->data[i];
+        memcpy(p, s->str, s->nbytes);
+        p += s->nbytes;
         memcpy(p, nxt->str, nxt->nbytes);
         p += nxt->nbytes;
-        for (int64_t i = 1; i < len; i++) {
-            nxt = (B_bytes)lst->data[i];
-            memcpy(p, s->str, s->nbytes);
-            p += s->nbytes;
-            memcpy(p, nxt->str, nxt->nbytes);
-            p += nxt->nbytes;
-        }
     }
     return res;
 }
@@ -3752,7 +3760,7 @@ B_bytes B_bytesD_ljust(B_bytes s, int64_t width, B_bytes fill) {
         RAISE_EXC(&B_str_invalid_bytes_ljust_fill_error);
     }
     if (width <= s->nbytes) {
-        return B_bytesD_copy(s);
+        return s;
     }
     check_result_len(width);
     B_bytes res;
@@ -3766,11 +3774,7 @@ B_bytes B_bytesD_ljust(B_bytes s, int64_t width, B_bytes fill) {
 }
 
 B_bytes B_bytesD_lower(B_bytes s) {
-    B_bytes res;
-    NEW_UNFILLED_BYTES(res,s->nbytes);
-    for (int64_t i=0; i< s->nbytes; i++)
-        res->str[i] = ascii_tolower(s->str[i]);
-    return res;
+    return bytes_transform(s, ascii_tolower, ascii_tolower);
 }
 
 B_bytes B_bytesD_lstrip(B_bytes s, B_bytes cs) {
@@ -3846,7 +3850,7 @@ B_bytes B_bytesD_replace(B_bytes s, B_bytes old, B_bytes new, B_int count) {
     int64_t c = B_bytesD_count(s, old, 0, INT64_MAX);
     int64_t c0 = fromB_int(count) < c ? fromB_int(count) : c;
     if (c0 == 0) {
-        return B_bytesD_copy(s);
+        return s;
     }
     // The result can be far longer than the input. The count times the
     // growth of each replacement could overflow, so the count is checked
@@ -3907,7 +3911,7 @@ B_bytes B_bytesD_rjust(B_bytes s, int64_t width, B_bytes fill) {
         RAISE_EXC(&B_str_invalid_rjust_fill_error);
     }
     if (width <= s->nbytes) {
-        return B_bytesD_copy(s);
+        return s;
     }
     check_result_len(width);
     int64_t pad = width - s->nbytes;
@@ -4081,17 +4085,12 @@ B_bytes B_bytesD_strip(B_bytes s, B_bytes cs) {
 }
 
 B_bytes B_bytesD_upper(B_bytes s) {
-    B_bytes res;
-    NEW_UNFILLED_BYTES(res,s->nbytes);
-    for (int64_t i=0; i< s->nbytes; i++)
-        res->str[i] = ascii_toupper(s->str[i]);
-
-    return res;
+    return bytes_transform(s, ascii_toupper, ascii_toupper);
 }
 
 B_bytes B_bytesD_zfill(B_bytes s, int64_t width) {
     if (width < s->nbytes)
-        return B_bytesD_copy(s);
+        return s;
     check_result_len(width);
     int64_t fill = width - s->nbytes;
     B_bytes res;
