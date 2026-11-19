@@ -1783,12 +1783,32 @@ actor Stdio(envcap: _EnvCap, vars: EnvVar):
             sd = StringDecoder(on_stdin, encoding, on_error)
             _on_stdin_bytes(sd.decode)
 
-    action def set_stdin(canonical: ?bool=None, echo: ?bool=None) -> None:
-        """Set terminal options of stdin"""
+    action def set_stdin(canonical: ?bool=None, echo: ?bool=None, raw: ?bool=None) -> None:
+        """Set terminal options of stdin
+
+        raw=True puts stdin in raw mode, for programs that handle every key
+        themselves, like a line editor. Each key press arrives as its bytes
+        when it is pressed and is not echoed. The keys that the terminal
+        otherwise acts on arrive as bytes too: Ctrl-C, Ctrl-Z and Ctrl-Backslash
+        send no signal, Ctrl-S and Ctrl-Q do not stop and start output,
+        Ctrl-V and Ctrl-Y arrive as typed, and Enter arrives as a carriage
+        return. Output is not changed, so a newline written to stdout still
+        starts a new line. canonical and echo are set after raw, so
+        set_stdin(raw=True, echo=True) gives raw mode with echo.
+        raw=False puts back all the settings from before raw=True, which
+        undoes a change to canonical or echo made in raw mode.
+
+        Does nothing when stdin is not a terminal. When the program exits,
+        the terminal gets back the settings it had when the program started.
+        """
         NotImplemented
 
     action def is_tty() -> bool:
         """Check if stdout is a terminal"""
+        NotImplemented
+
+    action def stdin_is_tty() -> bool:
+        """Check if stdin is a terminal"""
         NotImplemented
 
     action def _on_stdin_bytes(cb: action(bytes) -> None) -> None:

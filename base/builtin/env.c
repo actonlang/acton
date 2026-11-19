@@ -63,11 +63,46 @@ $R B_StdioD_errbG_local (B_Stdio self, $Cont c$cont, B_bytes b) {
     return $R_CONT(c$cont, B_None);
 }
 
-$R B_StdioD_set_stdinG_local (B_Stdio self, $Cont c$cont, B_bool canonical, B_bool echo) {
+#if defined(_WIN32) || defined(_WIN64)
+#else
+// While stdin is in raw mode, stdin_raw is set and stdin_cooked_attr holds the
+// settings from before raw mode, which set_stdin(raw=False) puts back. Only
+// the Stdio actor reads and writes them.
+static bool stdin_raw = false;
+static struct termios stdin_cooked_attr;
+
+// Raw mode, like UV_TTY_MODE_RAW of libuv: every byte is passed on as it
+// arrives, without echo, signals (ISIG: ^C ^Z ^\), flow control (IXON: ^S ^Q),
+// literal next and delayed suspend (IEXTEN: ^V, and ^Y on macOS) or CR to NL
+// mapping. The output flags are not changed, so OPOST and ONLCR keep turning
+// "\n" into CR LF.
+static void make_raw(struct termios *attr) {
+    attr->c_iflag &= ~(BRKINT | ICRNL | IGNCR | INLCR | INPCK | ISTRIP | IXON);
+    attr->c_cflag = (attr->c_cflag & ~CSIZE) | CS8;
+    attr->c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
+    attr->c_cc[VMIN] = 1;
+    attr->c_cc[VTIME] = 0;
+}
+#endif
+
+$R B_StdioD_set_stdinG_local (B_Stdio self, $Cont c$cont, B_bool canonical, B_bool echo, B_bool raw) {
 #if defined(_WIN32) || defined(_WIN64)
 #else
     struct termios attr;
-    tcgetattr(STDIN_FILENO, &attr);
+    if (tcgetattr(STDIN_FILENO, &attr) != 0)
+        return $R_CONT(c$cont, B_None);
+
+    if (raw != NULL) {
+        if (fromB_bool(raw) == true) {
+            if (!stdin_raw)
+                stdin_cooked_attr = attr;
+            stdin_raw = true;
+            make_raw(&attr);
+        } else if (stdin_raw) {
+            stdin_raw = false;
+            attr = stdin_cooked_attr;
+        }
+    }
 
     if (canonical != NULL) {
         if (fromB_bool(canonical) == true) {

@@ -81,6 +81,11 @@ $R B_StdioD_is_ttyG_local (B_Stdio self, $Cont C_cont) {
     return $R_CONT(C_cont, toB_bool(isatty(1)));
 }
 
+// action def stdin_is_tty() -> bool:
+$R B_StdioD_stdin_is_ttyG_local (B_Stdio self, $Cont C_cont) {
+    return $R_CONT(C_cont, toB_bool(isatty(0)));
+}
+
 struct child_process_data {
     B_Process process;
     $action on_stdout;
