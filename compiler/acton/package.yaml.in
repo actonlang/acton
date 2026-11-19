@@ -120,6 +120,12 @@ tests:
       - -rtsopts
       - -with-rtsopts=-N
       - -Wno-x-partial
+    # openPseudoTerminal in the unix package calls openpty(), which glibc
+    # before 2.34 has in libutil. Newer glibc keeps an empty libutil.
+    when:
+    - condition: os(linux)
+      extra-libraries:
+        - util
   incremental:
     main:                test_incremental.hs
     source-dirs:         .
