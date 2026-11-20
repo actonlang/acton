@@ -108,6 +108,13 @@ static B_NoneType net_lookup_address(B_str name,
     hints.ai_family = family;
     hints.ai_socktype = socktype;
     hints.ai_protocol = protocol;
+#ifdef __APPLE__
+    // Apple's getaddrinfo reads ai_flags 0 as AI_DEFAULT, whose
+    // AI_V4MAPPED_CFG answers an AAAA lookup of an IPv4 address, or of a
+    // name with only IPv4 addresses, with IPv4-mapped addresses
+    // (::ffff:127.0.0.1). Linux finds no address. Keep the rest.
+    hints.ai_flags = AI_DEFAULT & ~AI_V4MAPPED_CFG;
+#endif
 
     struct dns_cb_data *cb_data = (struct dns_cb_data *)GC_malloc_uncollectable(sizeof(struct dns_cb_data));
     if (cb_data == NULL) {

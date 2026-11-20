@@ -23,3 +23,13 @@ def _test_is_ipv6_zone():
     testing.assertFalse(net.is_ipv6("fe80::1%0"), "zone index 0")
     testing.assertFalse(net.is_ipv6("fe80::1%no-such-interface"), "unknown interface")
     testing.assertFalse(net.is_ipv6("1.2.3.4%1"), "IPv4 address with zone")
+
+actor _test_lookup_aaaa_of_ipv4_address(t: testing.EnvT):
+    """An IPv4 address has no AAAA answer, not even an IPv4-mapped one"""
+    def on_resolve(addresses: list[str]):
+        t.failure(AssertionError("AAAA answer for 127.0.0.1: " + str(addresses)))
+
+    def on_error(name: str, error: str):
+        t.success()
+
+    net.lookup_aaaa(net.DNSCap(net.NetCap(t.env.cap)), "127.0.0.1", on_resolve, on_error)
