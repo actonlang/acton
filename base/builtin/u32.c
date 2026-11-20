@@ -27,8 +27,8 @@ struct B_ZeroDivisionError B_u32_mod_zero_error =
 uint32_t u32_pow(uint32_t a, uint32_t e) {
     if (e == 0) return 1;
     if (e == 1) return a;
-    if (e%2 == 0) return int_pow(a*a,e/2);
-    return a * int_pow(a*a,e/2);
+    if (e%2 == 0) return u32_pow(a*a,e/2);
+    return a * u32_pow(a*a,e/2);
 }
 
 // General methods
@@ -36,14 +36,14 @@ uint32_t u32_pow(uint32_t a, uint32_t e) {
 
 uint32_t B_u32G_new(B_atom a, B_int base) {  // base is optional
     B_bigint b = B_bigintG_new(a, base);
-    int sz = b->val.size;
-    unsigned long n = sz == 0 ? 0 : b->val.n[0];
+    int64_t sz = b->val.size;
+    uint64_t n = sz == 0 ? 0 : b->val.n[0];
     if (sz  > 1 || sz < 0 || (sz==1 && n > 0xffffffff)) {
         char errmsg[1024];
         snprintf(errmsg, sizeof(errmsg), "u32(): value %s out of range for type u32",get_str(&b->val));
         RAISE(B_ValueError, actStrFromCStringCopy(errmsg));
     }
-    return n*sz;
+    return (uint32_t)n;
 }
  
 B_NoneType B_u32D___init__(B_u32 self, B_atom a, B_int base){
@@ -110,7 +110,7 @@ B_u32 B_IntegralD_u32D___mul__(B_IntegralD_u32 wit,  B_u32 a, B_u32 b) {
 B_u32 B_IntegralD_u32D___pow__(B_IntegralD_u32 wit,  B_u32 a, B_u32 b) {
     uint32_t aval = a->val;
     uint32_t bval = b->val;
-    return toB_u32(int_pow(aval,bval));
+    return toB_u32(u32_pow(aval,bval));
 }
 
 B_u32 B_IntegralD_u32D___neg__(B_IntegralD_u32 wit,  B_u32 a) {
@@ -158,7 +158,7 @@ B_u32 B_IntegralD_u32D___round__ (B_IntegralD_u32 wit, B_u32 n, B_int p) {
     int32_t pval = p==NULL ? 0 : fromB_int(p);
     if (pval>=0)
         return n;
-    uint32_t p10 = int_pow(10,-pval);
+    uint32_t p10 = u32_pow(10,-pval);
     uint32_t res = nval/p10;
     if (nval%p10 * 2 > p10)
         res++; 
