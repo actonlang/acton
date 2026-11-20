@@ -562,6 +562,7 @@ pub fn build(b: *std.Build) void {
     libActon.installLibraryHeaders(dep_libbsdnt.artifact("bsdnt"));
     libActon.installLibraryHeaders(libgc);
     libActon.installLibraryHeaders(dep_libprotobuf_c.artifact("protobuf-c")); // TODO: remove, once telemetrify/prw is fixed
+    libActon.installLibraryHeaders(dep_libutf8proc.artifact("utf8proc"));
     libActon.installLibraryHeaders(dep_libuv.artifact("uv"));
 
     libActon.root_module.link_libc = true;

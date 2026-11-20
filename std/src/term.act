@@ -97,3 +97,16 @@ def left(n=1):
     return res
 
 clearline = "\x1b[0G\x1b[2K"
+
+def display_width(s: str) -> int:
+    """Number of columns that s takes on a terminal
+
+    Wide characters, such as CJK ideographs and most emoji, take 2
+    columns. Combining marks, control characters and other characters that
+    take no space take 0, and every other character takes 1. The width of s
+    is the sum of the widths of its characters, so a sequence that a
+    terminal may draw as one symbol, such as emoji joined by U+200D ZERO
+    WIDTH JOINER, counts each of its emoji. An escape sequence such as red
+    counts like other text, except for its ESC, which takes 0.
+    """
+    NotImplemented

@@ -352,6 +352,10 @@
   Hashing user-defined values, including dictionary and set operations, now
   keeps the temporary hasher on the stack instead of allocating it on the GC
   heap. [#3244] [#3290]
+- Add `std.term.display_width()`, the number of columns a string takes on a
+  terminal. CJK ideographs and most emoji take two columns, and combining
+  marks and control characters take none, so a program can align text and
+  place the cursor after it.
 
 ### Runtime
 - Reduce long garbage-collection pauses on large heaps with opt-in

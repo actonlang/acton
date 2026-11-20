@@ -1,0 +1,17 @@
+import std.term as term
+
+import testing
+
+def _test_display_width():
+    testing.assertEqual(term.display_width(""), 0)
+    testing.assertEqual(term.display_width("abc"), 3)
+    testing.assertEqual(term.display_width("åäö"), 3)
+    # CJK ideographs and emoji take two columns
+    testing.assertEqual(term.display_width("日本語"), 6)
+    testing.assertEqual(term.display_width("a😀b"), 4)
+    # A combining mark takes no column of its own: e followed by U+0301
+    # COMBINING ACUTE ACCENT is drawn as one é
+    testing.assertEqual(term.display_width("é"), 1)
+    # Zero width space and control characters take no column
+    testing.assertEqual(term.display_width("a​b"), 2)
+    testing.assertEqual(term.display_width("\x07\x1b\t\n"), 0)
