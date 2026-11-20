@@ -167,16 +167,6 @@ actor _test_executor_completes(t: testing.EnvT):
 
         executor = std.testing.runner.TestExecutor(t.env.rts, cfg, definition, complete, progress, t.env, executor_id, 1, 1)
 
-    for performance in [False, True]:
-        run(performance, success, "success")
-        run(performance, failure, "failure")
-        run(performance, error, "error")
-        run(performance, skip, "skip")
-        run(performance, seeded_failure, "seeded")
-        run(performance, snapshot, "internal")
-    run(True, measurement_failure, "measurement")
-    run(False, first_run_fails, "unreproduced")
-
     def check():
         # This deadline is far below the executors' ten-second budget. A lost
         # result must fail here instead of relying on the runner's watchdog.
@@ -186,4 +176,15 @@ actor _test_executor_completes(t: testing.EnvT):
         except Exception as e:
             t.failure(e)
 
-    after 1: check()
+    proc def __startup__():
+        for performance in [False, True]:
+            run(performance, success, "success")
+            run(performance, failure, "failure")
+            run(performance, error, "error")
+            run(performance, skip, "skip")
+            run(performance, seeded_failure, "seeded")
+            run(performance, snapshot, "internal")
+        run(True, measurement_failure, "measurement")
+        run(False, first_run_fails, "unreproduced")
+
+        after 1: check()

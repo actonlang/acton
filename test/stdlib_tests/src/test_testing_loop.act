@@ -13,8 +13,12 @@ def _test_sync_function(t: testing.SyncT):
 
 
 actor _test_sync_actor(t: testing.SyncT):
-    for scale in t.loop():
-        loop_work(scale)
+
+
+    proc def __startup__():
+        for scale in t.loop():
+            loop_work(scale)
+
 
 
 def _test_async_function(t: testing.AsyncT):
@@ -31,10 +35,13 @@ actor LoopWorker():
 
 actor _test_async_actor(t: testing.AsyncT):
     worker = LoopWorker()
-    for scale in t.loop():
-        result = await async worker.work(scale)
-        assert result == scale
-    t.success()
+
+    proc def __startup__():
+        for scale in t.loop():
+            result = await async worker.work(scale)
+            assert result == scale
+        t.success()
+
 
 
 def _test_env_function(t: testing.EnvT):
@@ -44,9 +51,13 @@ def _test_env_function(t: testing.EnvT):
 
 
 actor _test_env_actor(t: testing.EnvT):
-    for scale in t.loop():
-        loop_work(scale)
-    t.success()
+
+
+    proc def __startup__():
+        for scale in t.loop():
+            loop_work(scale)
+        t.success()
+
 
 
 def _test_context_defaults(t: testing.EnvT):

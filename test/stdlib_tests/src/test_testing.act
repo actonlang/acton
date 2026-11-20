@@ -15,20 +15,32 @@ def _test_unit_snapshot() -> str:
 # Synchronous actor test
 actor _test_SimpleSyncTester():
     m = MathTester()
-    print("SimpleSyncTester.test()")
-    testing.assertEqual(m.add(1, 2), 3, "1 + 2 = 3")
+
+    proc def __startup__():
+        print("SimpleSyncTester.test()")
+        testing.assertEqual(m.add(1, 2), 3, "1 + 2 = 3")
+
+
 
 actor _SyncTester(t: testing.SyncT):
     log = logging.Logger(t.log_handler)
     m = MathTester()
-    log.info("SyncTester.test()")
-    print("SyncTester.test()")
-    testing.assertEqual(m.add(1, 2), 3, "1 + 2 = 3")
+
+    proc def __startup__():
+        log.info("SyncTester.test()")
+        print("SyncTester.test()")
+        testing.assertEqual(m.add(1, 2), 3, "1 + 2 = 3")
+
+
 
 actor _SyncTesterCore():
     m = MathTester()
-    print("SimpleSyncTester.test()")
-    testing.assertEqual(m.add(1, 2), 3, "1 + 2 = 3")
+
+    proc def __startup__():
+        print("SimpleSyncTester.test()")
+        testing.assertEqual(m.add(1, 2), 3, "1 + 2 = 3")
+
+
 
 def _test_simple_sync():
     s = _SyncTesterCore()
@@ -50,32 +62,59 @@ def _test_simple_sync_snapshot():
     return "simple sync snapshot: " + str(m.add(2, 3))
 
 actor _test_async_snapshot(t: testing.AsyncT):
-    t.success("async snapshot")
+
+
+    proc def __startup__():
+        t.success("async snapshot")
+
+
 
 actor _test_env_snapshot(t: testing.EnvT):
-    t.success("env snapshot")
+
+
+    proc def __startup__():
+        t.success("env snapshot")
+
+
 
 actor _test_DuplicateCompletion(t: testing.AsyncT):
-    # Only the first completion belongs to this invocation. The delayed one
-    # must not complete or fail a subsequent invocation of the same test.
-    t.success()
-    t.failure(AssertionError("duplicate completion"))
-    after 0.001: t.failure(AssertionError("late completion"))
+
+
+    proc def __startup__():
+        t.success()
+        t.failure(AssertionError("duplicate completion"))
+        after 0.001: t.failure(AssertionError("late completion"))
+
+
 
 actor _test_AsyncRequireShortCircuit(t: testing.AsyncT):
-    t.require("network")
-    t.failure(AssertionError("should not run after require"))
+
+
+    proc def __startup__():
+        t.require("network")
+        t.failure(AssertionError("should not run after require"))
+
+
 
 actor _test_EnvRequireShortCircuit(t: testing.EnvT):
-    t.require("network")
-    t.failure(AssertionError("should not run after require"))
+
+
+    proc def __startup__():
+        t.require("network")
+        t.failure(AssertionError("should not run after require"))
+
+
 
 actor AsyncTester(t: testing.AsyncT):
     log = logging.Logger(t.log_handler)
     def test():
         log.info("AsyncTester.test()", {"data": "test"})
         t.success()
-    after 0: test()
+
+    proc def __startup__():
+        after 0: test()
+
+
 
 actor EnvTester(t: testing.EnvT):
     log = logging.Logger(t.log_handler)
@@ -83,7 +122,10 @@ actor EnvTester(t: testing.EnvT):
         log.info("EnvTester.test() wthreads:", {"nr_wthreads": t.env.nr_wthreads})
         print("EnvTester.test() wthreads:", t.env.nr_wthreads)
         t.success()
-    after 0: test()
+
+    proc def __startup__():
+        after 0: test()
+
 
 
 proc def _check_timeout_values(timeout: proc(float) -> None):
