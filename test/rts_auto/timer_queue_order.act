@@ -1,0 +1,32 @@
+# Timers fire in the order of their due times, and timers that are due at the
+# same time fire in the order they were set. The program sets 350 timers at
+# once, so the timer queue grows from its first 64 entries to 512, and it
+# shrinks again as the timers fire.
+
+actor main(env):
+    n = 300
+    same = 50
+    var fired: list[int] = []
+
+    def fire(i: int):
+        fired.append(i)
+        if len(fired) == n + same:
+            if fired == list(range(n + same)):
+                env.exit(0)
+            else:
+                print("Timers fired out of order:", fired)
+                env.exit(1)
+
+    def timeout():
+        print("Only", len(fired), "of", n + same, "timers fired")
+        env.exit(1)
+
+    after 10.0: timeout()
+    # Timer i is due i + 1 ms from now. The timers are set out of order: 7 and
+    # n have no common factor, so k * 7 % n takes every value below n once.
+    for k in range(n):
+        i = k * 7 % n
+        after 0.001 * float(i + 1): fire(i)
+    # These are due at the same time, after all of the above
+    for j in range(same):
+        after 0.5: fire(n + j)
