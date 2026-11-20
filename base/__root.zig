@@ -135,6 +135,69 @@ export fn zig_crypto_hash_md5_finalize(hasher: *std.crypto.hash.Md5, output: *ac
     hasher.final(out_slice);
 }
 
+// AES-GCM for std.crypto.aead.aes_gcm. The C side in that module checks the
+// key length (16 bytes selects AES-128, 32 bytes AES-256) and that the message
+// fits in GCM's length limit, allocates the output and passes every buffer as
+// a pointer, with a length where it varies. The plaintext and ciphertext
+// outputs are never null, but an empty input may be, so inputs go through
+// optionalSlice.
+const aes_gcm = std.crypto.aead.aes_gcm;
+
+fn optionalSlice(ptr: ?[*]const u8, len: usize) []const u8 {
+    const p = ptr orelse {
+        std.debug.assert(len == 0);
+        return &.{};
+    };
+    return p[0..len];
+}
+
+export fn zig_crypto_aead_aes_gcm_encrypt(
+    c: [*]u8,
+    tag: *[aes_gcm.Aes256Gcm.tag_length]u8,
+    m: ?[*]const u8,
+    m_len: usize,
+    ad: ?[*]const u8,
+    ad_len: usize,
+    nonce: *const [aes_gcm.Aes256Gcm.nonce_length]u8,
+    key: [*]const u8,
+    key_len: usize,
+) callconv(.c) void {
+    const out = c[0..m_len];
+    const msg = optionalSlice(m, m_len);
+    const assoc = optionalSlice(ad, ad_len);
+    switch (key_len) {
+        16 => aes_gcm.Aes128Gcm.encrypt(out, tag, msg, assoc, nonce.*, key[0..16].*),
+        32 => aes_gcm.Aes256Gcm.encrypt(out, tag, msg, assoc, nonce.*, key[0..32].*),
+        else => unreachable,
+    }
+}
+
+// Returns false if the tag does not match, that is, the key, nonce, associated
+// data, ciphertext or tag differs from what encryption used. The tag is
+// checked before decrypting, so no unauthenticated plaintext is ever written
+// to m.
+export fn zig_crypto_aead_aes_gcm_decrypt(
+    m: [*]u8,
+    c: ?[*]const u8,
+    c_len: usize,
+    tag: *const [aes_gcm.Aes256Gcm.tag_length]u8,
+    ad: ?[*]const u8,
+    ad_len: usize,
+    nonce: *const [aes_gcm.Aes256Gcm.nonce_length]u8,
+    key: [*]const u8,
+    key_len: usize,
+) callconv(.c) bool {
+    const out = m[0..c_len];
+    const ct = optionalSlice(c, c_len);
+    const assoc = optionalSlice(ad, ad_len);
+    switch (key_len) {
+        16 => aes_gcm.Aes128Gcm.decrypt(out, ct, tag.*, assoc, nonce.*, key[0..16].*) catch return false,
+        32 => aes_gcm.Aes256Gcm.decrypt(out, ct, tag.*, assoc, nonce.*, key[0..32].*) catch return false,
+        else => unreachable,
+    }
+    return true;
+}
+
 // Secure randomness behind env.random. Each thread has its own ChaCha8
 // generator with forward secrecy, seeded on first use from the operating
 // system through std.Io's randomSecure, which makes a syscall every time and

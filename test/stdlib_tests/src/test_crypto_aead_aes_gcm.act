@@ -1,0 +1,162 @@
+import testing
+
+import std.crypto.aead.aes_gcm as aes_gcm
+
+# Test cases from the GCM specification (McGrew and Viega, "The Galois/Counter
+# Mode of Operation"), cross-checked against CryptoKit. encrypt picks its own
+# nonce, so the vectors are given to decrypt as nonce | ciphertext | tag.
+_P60 = "d9313225f88406e5a55909c5aff5269a86a7a9531534f7da2e4c303d8a318a721c3c0c95956809532fcf0e2449a6b525b16aedf5aa0de657ba637b39"
+_A20 = "feedfacedeadbeeffeedfacedeadbeefabaddad2"
+
+def check_vector(key: str, nonce: str, plaintext: str, associated_data: str, ciphertext: str, tag: str):
+    k = bytes.from_hex(key)
+    ad = bytes.from_hex(associated_data)
+    sealed = bytes.from_hex(nonce + ciphertext + tag)
+    testing.assertEqual(aes_gcm.decrypt(k, sealed, ad), bytes.from_hex(plaintext))
+
+def flip_bit(data: bytes, i: int) -> bytes:
+    return data[:i] + bytes([data[i] ^ 1]) + data[i+1:]
+
+def assert_decryption_error(key: bytes, ciphertext: bytes, associated_data: bytes, what: str):
+    try:
+        aes_gcm.decrypt(key, ciphertext, associated_data)
+    except aes_gcm.DecryptionError:
+        pass
+    else:
+        testing.error("decrypt accepted " + what)
+
+def _test_aes256_gcm_vector_empty():
+    """AES-256-GCM test case 13: empty plaintext"""
+    check_vector("00" * 32, "00" * 12, "", "", "", "530f8afbc74536b9a963b4f1c4cb738b")
+
+def _test_aes256_gcm_vector_one_block():
+    """AES-256-GCM test case 14: one zero block"""
+    check_vector("00" * 32, "00" * 12, "00" * 16, "",
+                 "cea7403d4d606b6e074ec5d3baf39d18", "d0d1c8a799996bf0265b98b5d48ab919")
+
+def _test_aes256_gcm_vector_associated_data():
+    """AES-256-GCM test case 16: partial block and associated data"""
+    check_vector("feffe9928665731c6d6a8f9467308308feffe9928665731c6d6a8f9467308308",
+                 "cafebabefacedbaddecaf888", _P60, _A20,
+                 "522dc1f099567d07f47f37a32a84427d643a8cdcbfe5c0c97598a2bd2555d1aa8cb08e48590dbb3da7b08b1056828838c5f61e6393ba7a0abcc9f662",
+                 "76fc6ece0f4e1768cddf8853bb2d551b")
+
+def _test_aes128_gcm_vector_associated_data():
+    """AES-128-GCM test case 4: a 16-byte key selects AES-128"""
+    check_vector("feffe9928665731c6d6a8f9467308308",
+                 "cafebabefacedbaddecaf888", _P60, _A20,
+                 "42831ec2217774244b7221b784d0d49ce3aa212f2c02a4e035c17e2329aca12e21d514b25466931c7d8f6a5aac84aa051ba30b396a0aac973d58e091",
+                 "5bc94fbc3221a5db94fae95ae7121a47")
+
+# encrypt and generate_key draw from env.random, so the tests that use them are
+# env tests.
+
+def _test_generate_key(t: testing.EnvT):
+    k1 = aes_gcm.generate_key(t.env.random)
+    k2 = aes_gcm.generate_key(t.env.random)
+    testing.assertEqual(len(k1), aes_gcm.KEY_SIZE)
+    testing.assertEqual(len(k2), aes_gcm.KEY_SIZE)
+    testing.assertNotEqual(k1, k2)
+    t.success()
+
+def _test_roundtrip(t: testing.EnvT):
+    """Every length around the block size, with and without associated data"""
+    r = t.env.random
+    key = aes_gcm.generate_key(r)
+    for n in range(0, 50):
+        plaintext = b"x" * n
+        sealed = aes_gcm.encrypt(r, key, plaintext)
+        testing.assertEqual(len(sealed), aes_gcm.NONCE_SIZE + n + aes_gcm.TAG_SIZE)
+        testing.assertEqual(aes_gcm.decrypt(key, sealed), plaintext)
+        sealed_ad = aes_gcm.encrypt(r, key, plaintext, b"record 17")
+        testing.assertEqual(aes_gcm.decrypt(key, sealed_ad, b"record 17"), plaintext)
+    t.success()
+
+def _test_roundtrip_aes128(t: testing.EnvT):
+    key = b"0123456789abcdef"
+    sealed = aes_gcm.encrypt(t.env.random, key, b"hello", b"ad")
+    testing.assertEqual(aes_gcm.decrypt(key, sealed, b"ad"), b"hello")
+    t.success()
+
+def _test_roundtrip_large(t: testing.EnvT):
+    r = t.env.random
+    key = aes_gcm.generate_key(r)
+    plaintext = b"0123456789abcdef" * 65536 + b"tail"
+    testing.assertEqual(aes_gcm.decrypt(key, aes_gcm.encrypt(r, key, plaintext)), plaintext)
+    t.success()
+
+def _test_random_nonce(t: testing.EnvT):
+    """Encrypting the same plaintext twice gives different ciphertexts"""
+    r = t.env.random
+    key = aes_gcm.generate_key(r)
+    a = aes_gcm.encrypt(r, key, b"same message")
+    b = aes_gcm.encrypt(r, key, b"same message")
+    testing.assertNotEqual(a[:aes_gcm.NONCE_SIZE], b[:aes_gcm.NONCE_SIZE])
+    testing.assertNotEqual(a, b)
+    t.success()
+
+def _test_tampered_ciphertext(t: testing.EnvT):
+    """A flipped bit anywhere in the nonce, ciphertext or tag is rejected"""
+    r = t.env.random
+    key = aes_gcm.generate_key(r)
+    sealed = aes_gcm.encrypt(r, key, b"attack at dawn", b"ad")
+    for i in range(len(sealed)):
+        assert_decryption_error(key, flip_bit(sealed, i), b"ad", "a flipped bit at byte " + str(i))
+    t.success()
+
+def _test_wrong_key(t: testing.EnvT):
+    r = t.env.random
+    sealed = aes_gcm.encrypt(r, aes_gcm.generate_key(r), b"secret")
+    assert_decryption_error(aes_gcm.generate_key(r), sealed, b"", "the wrong key")
+    t.success()
+
+def _test_wrong_associated_data(t: testing.EnvT):
+    r = t.env.random
+    key = aes_gcm.generate_key(r)
+    sealed = aes_gcm.encrypt(r, key, b"secret", b"record 17")
+    assert_decryption_error(key, sealed, b"record 18", "other associated data")
+    assert_decryption_error(key, sealed, b"", "missing associated data")
+    sealed_no_ad = aes_gcm.encrypt(r, key, b"secret")
+    assert_decryption_error(key, sealed_no_ad, b"record 17", "unexpected associated data")
+    t.success()
+
+def _test_truncated_ciphertext(t: testing.EnvT):
+    r = t.env.random
+    key = aes_gcm.generate_key(r)
+    sealed = aes_gcm.encrypt(r, key, b"secret")
+    for n in range(len(sealed)):
+        assert_decryption_error(key, sealed[:n], b"", "a ciphertext truncated to " + str(n) + " bytes")
+    t.success()
+
+def _test_decryption_error_message():
+    key = b"k" * 32
+    try:
+        aes_gcm.decrypt(key, b"\x00" * 28)
+    except aes_gcm.DecryptionError as e:
+        testing.assertEqual(e.error_message, "AES-GCM authentication failed")
+    else:
+        testing.error("decrypt accepted a ciphertext under the wrong key")
+    # DecryptionError is a ValueError, so callers can handle both together
+    try:
+        aes_gcm.decrypt(key, b"")
+    except ValueError as e:
+        testing.assertEqual(e.error_message, "AES-GCM ciphertext has invalid length")
+    else:
+        testing.error("decrypt accepted an empty ciphertext")
+
+def _test_invalid_key_length(t: testing.EnvT):
+    for n in [0, 15, 17, 24, 31, 33, 64]:
+        key = b"k" * n
+        try:
+            aes_gcm.encrypt(t.env.random, key, b"secret")
+        except ValueError as e:
+            testing.assertEqual(e.error_message, "AES-GCM key must be 16 or 32 bytes, got " + str(n))
+        else:
+            testing.error("encrypt accepted a " + str(n) + "-byte key")
+        try:
+            aes_gcm.decrypt(key, b"\x00" * 40)
+        except ValueError as e:
+            testing.assertEqual(e.error_message, "AES-GCM key must be 16 or 32 bytes, got " + str(n))
+        else:
+            testing.error("decrypt accepted a " + str(n) + "-byte key")
+    t.success()

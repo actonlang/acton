@@ -79,8 +79,8 @@ $R B_EnvVarD_unsetenvbG_local (B_EnvVar self, $Cont C_cont, B_bytes name) {
 // The per-thread CSPRNG behind env.random lives in base/__root.zig.
 bool zig_env_random_fill(void *buf, size_t len);
 
-// Declared in builtin/env.h, for modules that take an EnvRandom to draw
-// from the same generator.
+// Declared in builtin/env.h, for modules that take an EnvRandom, such as
+// std.crypto.aead.aes_gcm, to draw from the same generator.
 void B_EnvRandom_fill(void *buf, size_t len) {
     if (!zig_env_random_fill(buf, len))
         RAISE(B_OSError, actStrFromCString("Unable to get secure random bytes from the operating system"));
