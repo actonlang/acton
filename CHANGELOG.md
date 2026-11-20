@@ -510,6 +510,12 @@
 - Send garbage-collector errors to stderr on Windows and terminate
   immediately with exit code 3 on fatal collector errors, avoiding dialogs
   that leave unattended programs waiting. [#3390]
+- Read the number of file descriptors the process has open, and the most it
+  may have open, with `env.rts.fd_stats()` instead of listing
+  `/proc/self/fd` or `/dev/fd` or parsing `/proc/self/limits`. On macOS the
+  limit includes the `kern.maxfilesperproc` cap that the kernel enforces. On
+  Windows the count is the number of handles of the process, of every kind,
+  and the limit is `None`.
 
 ### Packages & Distribution
 - Install stable Homebrew releases from prebuilt tarballs for macOS and Linux

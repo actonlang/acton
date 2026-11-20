@@ -1,8 +1,14 @@
 #include <gc.h>
 #include <acton_gc_config.h>
 
+#include <errno.h>
+#include <stdlib.h>
 #include <time.h>
 #include <uv.h>
+#ifndef _WIN32
+#include <dirent.h>
+#include <unistd.h>
+#endif
 
 #include "rts/io.h"
 #include "rts/log.h"
@@ -183,6 +189,53 @@ B_tuple B_EnvRTSD_process_stats(B_EnvRTS self) {
                            + (uint64_t)usage.ru_utime.tv_usec * 1000) : (B_u64)B_None,
         available ? toB_u64((uint64_t)usage.ru_stime.tv_sec * UINT64_C(1000000000)
                            + (uint64_t)usage.ru_stime.tv_usec * 1000) : (B_u64)B_None);
+}
+
+// Count the open file descriptors by listing the directory that has an entry
+// for each, leaving out the descriptor that the listing itself uses. Windows
+// has no such directory, so count the handles of the process instead.
+static bool count_open_fds(uint64_t *count) {
+#if defined(_WIN32)
+    DWORD handles;
+    if (!GetProcessHandleCount(GetCurrentProcess(), &handles))
+        return false;
+    *count = handles;
+    return true;
+#else
+#if defined(__linux__)
+    DIR *dir = opendir("/proc/self/fd");
+#else
+    DIR *dir = opendir("/dev/fd");
+#endif
+    if (!dir)
+        return false;
+    int own = dirfd(dir);
+    uint64_t n = 0;
+    struct dirent *entry;
+    errno = 0;
+    while ((entry = readdir(dir)) != NULL) {
+        if (entry->d_name[0] != '.' && atoi(entry->d_name) != own)
+            n++;
+    }
+    bool listed = errno == 0;
+    closedir(dir);
+    *count = n;
+    return listed;
+#endif
+}
+
+B_tuple B_EnvRTSD_fd_stats(B_EnvRTS self) {
+    uint64_t fds;
+    B_u64 count = count_open_fds(&fds) ? toB_u64(fds) : (B_u64)B_None;
+#if defined(_WIN32)
+    B_u64 limit = (B_u64)B_None;
+#else
+    // getdtablesize gives the limit the kernel enforces. On macOS that is the
+    // soft RLIMIT_NOFILE capped at kern.maxfilesperproc, while getrlimit
+    // reports the soft limit without the cap.
+    B_u64 limit = toB_u64((uint64_t)getdtablesize());
+#endif
+    return $NEWTUPLE(2, count, limit);
 }
 
 B_tuple B_EnvRTSD_perf_stats (B_EnvRTS self) {

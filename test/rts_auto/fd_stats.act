@@ -1,0 +1,17 @@
+import file
+
+actor main(env: Env):
+    rts = env.rts
+    start = rts.fd_stats()
+    assert start.open is not None
+    assert start.limit is not None
+    assert start.limit! >= start.open!
+
+    exe = file.FS(file.FileCap(env.cap)).exepath()
+    cap = file.ReadFileCap(file.FileCap(env.cap))
+    files = [file.ReadFile(cap, exe) for _ in range(10)]
+    assert rts.fd_stats().open! == start.open! + 10
+    for f in files:
+        await async f.close()
+    assert rts.fd_stats().open! == start.open!
+    env.exit(0)

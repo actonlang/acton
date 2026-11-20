@@ -68,6 +68,8 @@ At startup, the RTS raises its soft limit on open files to the hard limit. On ma
 
 To run a program with a lower limit, lower the hard limit, for example with `ulimit -Hn 4096`. Child processes that the program starts inherit the raised limit.
 
+`env.rts.fd_stats()` reads how many file descriptors the program has open and how many it may have open. A test can use it to check that some code does not leak descriptors, or to skip a case that needs more descriptors than the limit allows. On macOS, the limit is the soft limit capped at `kern.maxfilesperproc`, which is the limit the kernel enforces. On Windows, the count is the number of handles of the process, of every kind, and the limit is `None`.
+
 # Interactive debugging on crashes
 
 If an Acton program crashes, `--rts-bt-dbg` is a convenient option for launching an interactive debugger. It is triggered on `SIGILL` / `SIGSEGV` and launches an interactive GDB session that allows for debugging the running program.
