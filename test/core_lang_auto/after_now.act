@@ -6,26 +6,27 @@
 import time
 
 actor main(env):
-    var order = []
+    proc def __startup__():
+        order = []
 
-    env.rts.sleep(0.3)
-    scheduled = time.Stopwatch()
+        env.rts.sleep(0.3)
+        scheduled = time.Stopwatch()
 
-    def inherited():
-        order.append("inherited")
+        def inherited():
+            order.append("inherited")
 
-    def from_now():
-        order.append("now")
-        elapsed = scheduled.elapsed().to_float()
-        if order != ["inherited", "now"]:
-            print("Unexpected timer order:", order)
-            env.exit(1)
-        elif elapsed < 0.19:
-            print("after now fired too early:", elapsed)
-            env.exit(1)
-        else:
-            env.exit(0)
+        def from_now():
+            order.append("now")
+            elapsed = scheduled.elapsed().to_float()
+            if order != ["inherited", "now"]:
+                print("Unexpected timer order:", order)
+                env.exit(1)
+            elif elapsed < 0.19:
+                print("after now fired too early:", elapsed)
+                env.exit(1)
+            else:
+                env.exit(0)
 
-    after now 0.2: from_now()
-    after 0.25: inherited()
-    after 10.0: env.exit(1)
+        after now 0.2: from_now()
+        after 0.25: inherited()
+        after 10.0: env.exit(1)

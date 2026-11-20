@@ -8,6 +8,7 @@ def pick(b: bool) -> value:
     return n if b else "x"       # unboxed-rep then-branch into a `value` result
 
 actor main(env):
-    if isinstance(pick(True), atom) and isinstance(pick(False), atom):
-        env.exit(0)
-    env.exit(1)
+    proc def __startup__():
+        if isinstance(pick(True), atom) and isinstance(pick(False), atom):
+            env.exit(0)
+        env.exit(1)

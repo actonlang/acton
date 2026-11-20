@@ -1,5 +1,6 @@
 actor Test():
-    try:
-        raise ValueError("test")
-    except ValueError as self:
-        print(self)
+    proc def __startup__():
+        try:
+            raise ValueError("test")
+        except ValueError as self:
+            print(self)

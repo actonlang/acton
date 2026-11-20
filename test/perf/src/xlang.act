@@ -857,40 +857,41 @@ actor main(env: Env):
         print(summarize(lines))
         finish(0)
 
-    try:
-        p = std.argparse.Parser()
-        r = p.add_cmd("run", "Run the tests in each runtime, interleaved, and append JSON lines to a file", cmd_run)
-        r.add_arg("output", "file to append results to")
-        r.add_option("reps", "int", default=1, help="repeats")
-        r.add_option("rep_offset", "int", default=0, help="number the repeats from this + 1, for runs split into chunks")
-        r.add_option("threads", "str", default="4", help="thread counts, separated by spaces")
-        r.add_option("tests", "str", default="", help="tests to run, separated by commas (default: all)")
-        r.add_option("runtimes", "str", default="acton,go,tokio", help="runtimes to run, separated by commas")
-        r.add_option("acton", "str", default="", help="Acton's scheduling test binary, a release build (default: " + BINARIES["acton"] + ")")
-        r.add_option("go", "str", default="", help="the Go port (default: " + BINARIES["go"] + ")")
-        r.add_option("tokio", "str", default="", help="the Tokio port (default: " + BINARIES["tokio"] + ")")
-        r.add_option("counters", "str", default="acton", help="acton: Acton's harness counts cycles (as acton test perf does); perf: also Go and Tokio under perf stat (Linux); off: no counters")
-        r.add_option("time", "int", default=0, help="time budget per run in ms instead of each test's default")
-        r.add_option("label", "str", default="", help="free text for the machine lines, such as the Acton build")
-        r.add_option("scheduling", "str", default="src/scheduling.act", help="the Acton tests the ports mirror")
-        b = p.add_cmd("build", "Build Acton's test binary in release mode, the Go port and the Tokio port", cmd_build)
-        b.add_option("compiler", "str", default="", help="the acton compiler (default: ../../dist/bin/acton, else acton on PATH)")
-        b.add_option("cpu", "str", default="native", help="CPU to build Acton and the Tokio port for; Go keeps GOAMD64 or GOARM64 from the environment")
-        g = p.add_cmd("page", "Write a web page with charts and tables, one section per result file (one file per machine)", cmd_page)
-        g.add_arg("files", "result files, one per machine", nargs="+")
-        g.add_option("output", "str", default="xlang.html", help="the page to write")
-        g.add_option("intro", "str", default="", help="an HTML fragment to put under the title, such as findings")
-        s = p.add_cmd("summary", "Print tables of medians from result files", cmd_summary)
-        s.add_arg("files", "result files", nargs="+")
-        args = p.parse(env.argv)
-        cmd = args.cmd
-        if cmd is not None:
-            cmd(args)
-        else:
-            p.print_usage()
-            finish(2)
-    except std.argparse.PrintUsage as error:
-        print(error.error_message)
-        finish(0)
-    except Exception as error:
-        fail(error)
+    proc def __startup__():
+        try:
+            p = std.argparse.Parser()
+            r = p.add_cmd("run", "Run the tests in each runtime, interleaved, and append JSON lines to a file", cmd_run)
+            r.add_arg("output", "file to append results to")
+            r.add_option("reps", "int", default=1, help="repeats")
+            r.add_option("rep_offset", "int", default=0, help="number the repeats from this + 1, for runs split into chunks")
+            r.add_option("threads", "str", default="4", help="thread counts, separated by spaces")
+            r.add_option("tests", "str", default="", help="tests to run, separated by commas (default: all)")
+            r.add_option("runtimes", "str", default="acton,go,tokio", help="runtimes to run, separated by commas")
+            r.add_option("acton", "str", default="", help="Acton's scheduling test binary, a release build (default: " + BINARIES["acton"] + ")")
+            r.add_option("go", "str", default="", help="the Go port (default: " + BINARIES["go"] + ")")
+            r.add_option("tokio", "str", default="", help="the Tokio port (default: " + BINARIES["tokio"] + ")")
+            r.add_option("counters", "str", default="acton", help="acton: Acton's harness counts cycles (as acton test perf does); perf: also Go and Tokio under perf stat (Linux); off: no counters")
+            r.add_option("time", "int", default=0, help="time budget per run in ms instead of each test's default")
+            r.add_option("label", "str", default="", help="free text for the machine lines, such as the Acton build")
+            r.add_option("scheduling", "str", default="src/scheduling.act", help="the Acton tests the ports mirror")
+            b = p.add_cmd("build", "Build Acton's test binary in release mode, the Go port and the Tokio port", cmd_build)
+            b.add_option("compiler", "str", default="", help="the acton compiler (default: ../../dist/bin/acton, else acton on PATH)")
+            b.add_option("cpu", "str", default="native", help="CPU to build Acton and the Tokio port for; Go keeps GOAMD64 or GOARM64 from the environment")
+            g = p.add_cmd("page", "Write a web page with charts and tables, one section per result file (one file per machine)", cmd_page)
+            g.add_arg("files", "result files, one per machine", nargs="+")
+            g.add_option("output", "str", default="xlang.html", help="the page to write")
+            g.add_option("intro", "str", default="", help="an HTML fragment to put under the title, such as findings")
+            s = p.add_cmd("summary", "Print tables of medians from result files", cmd_summary)
+            s.add_arg("files", "result files", nargs="+")
+            args = p.parse(env.argv)
+            cmd = args.cmd
+            if cmd is not None:
+                cmd(args)
+            else:
+                p.print_usage()
+                finish(2)
+        except std.argparse.PrintUsage as error:
+            print(error.error_message)
+            finish(0)
+        except Exception as error:
+            fail(error)

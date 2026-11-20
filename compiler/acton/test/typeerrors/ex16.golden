@@ -1,10 +1,10 @@
 Building file test/typeerrors/ex16.act using temporary scratch directory
    ex16  Parse done                                                               0.000 s
 [error]: Constraint violation
-     +--> ex16.act@6:9-6:22
+     +--> ex16.act@7:13-7:26
      |
-   6 |         foo.append(4)
-     :         ^------------
-     :         `- ?__builtin__.list[__builtin__.int] does not have an attribute append
-     :            Hint: you may need to test if foo is not None
+   7 |             foo.append(4)
+     :             ^------------
+     :             `- ?__builtin__.list[__builtin__.int] does not have an attribute append
+     :                Hint: you may need to test if foo is not None
 -----+

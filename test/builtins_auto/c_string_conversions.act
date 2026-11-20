@@ -45,9 +45,10 @@ def check():
         assert from_c(b"before\x00\xff", mode) == "before"
 
 actor main(env):
-    try:
-        check()
-        env.exit(0)
-    except Exception as e:
-        print(e)
-        env.exit(1)
+    proc def __startup__():
+        try:
+            check()
+            env.exit(0)
+        except Exception as e:
+            print(e)
+            env.exit(1)

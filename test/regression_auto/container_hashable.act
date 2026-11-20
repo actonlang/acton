@@ -100,11 +100,12 @@ def check_shared_and_cycles():
     require(same_object(shared[0], shared[0]["self"]), "cyclic dict reference")
 
 actor main(env):
-    require(native_checks(), "native calls or protocol factory")
-    check(list(range(40)))
-    check([str(i) for i in range(40)])
-    check([Key(i) for i in range(40)])
-    check([Key(str(i)) for i in range(40)])
-    check([(i, str(i)) for i in range(40)])
-    check_shared_and_cycles()
-    env.exit(0)
+    proc def __startup__():
+        require(native_checks(), "native calls or protocol factory")
+        check(list(range(40)))
+        check([str(i) for i in range(40)])
+        check([Key(i) for i in range(40)])
+        check([Key(str(i)) for i in range(40)])
+        check([(i, str(i)) for i in range(40)])
+        check_shared_and_cycles()
+        env.exit(0)

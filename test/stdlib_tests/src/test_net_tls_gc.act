@@ -165,5 +165,6 @@ actor _TLSDroppedActorChurn(t: testing.EnvT):
         else:
             after WATCHDOG_INTERVAL_S: _watchdog()
 
-    _start_round()
-    _watchdog()
+    proc def __startup__():
+        _start_round()
+        _watchdog()

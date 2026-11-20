@@ -43,10 +43,11 @@ actor main(env):
             i += 1
             after 1: _work()
 
-    if len(env.argv) > 2:
-        print("Usage: count COUNT")
-        env.exit(1)
-    else:
-        if len(env.argv) > 1:
-            count_to = int(env.argv[1])
-        _work()
+    proc def __startup__():
+        if len(env.argv) > 2:
+            print("Usage: count COUNT")
+            env.exit(1)
+        else:
+            if len(env.argv) > 1:
+                count_to = int(env.argv[1])
+            _work()

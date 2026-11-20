@@ -44,130 +44,131 @@ actor DefaultActor():
         pass
 
 actor main(env):
-    # Actor interfaces are inferred through a provisional method type. Make
-    # sure that learning its row shape preserves default arguments, including
-    # a call that supplies no positional arguments at all.
-    default_actor: DefaultActor = DefaultActor()
-    default_actor.f()
-    default_actor.f(x=False)
+    proc def __startup__():
+        # Actor interfaces are inferred through a provisional method type. Make
+        # sure that learning its row shape preserves default arguments, including
+        # a call that supplies no positional arguments at all.
+        default_actor: DefaultActor = DefaultActor()
+        default_actor.f()
+        default_actor.f(x=False)
 
-    optional_alias = optional_default
-    if optional_default() != 3 or optional_default(None) is not None or optional_alias() != 3:
-        print("Nullable default argument semantics failed")
-        env.exit(1)
-    if split_defaults() != 33 or split_defaults(4, y=5) != 9:
-        print("Split positional/keyword default semantics failed")
-        env.exit(1)
+        optional_alias = optional_default
+        if optional_default() != 3 or optional_default(None) is not None or optional_alias() != 3:
+            print("Nullable default argument semantics failed")
+            env.exit(1)
+        if split_defaults() != 33 or split_defaults(4, y=5) != 9:
+            print("Split positional/keyword default semantics failed")
+            env.exit(1)
 
-    # Test function call
-    out1 = f('hello')
-    out2 = f('hello', 'you')
-    out3 = f('hello', y='there')
-    out4 = f(x='hello', y='there')
-    out5 = f(y='there', x='hello')
-    out7 = f(x='hello')
+        # Test function call
+        out1 = f('hello')
+        out2 = f('hello', 'you')
+        out3 = f('hello', y='there')
+        out4 = f(x='hello', y='there')
+        out5 = f(y='there', x='hello')
+        out7 = f(x='hello')
 
-#    print(out1)
-#    print(out2)
-#    print(out3)
-#    print(out4)
-#    print(out5)
-#    print(out7)
+    #    print(out1)
+    #    print(out2)
+    #    print(out3)
+    #    print(out4)
+    #    print(out5)
+    #    print(out7)
 
-    if out1 != "hello, world":
-        print("Bad 1:", out1)
-        env.exit(1)
-    if out2 != "hello, you":
-        print("Bad 2:", out2)
-        env.exit(1)
-    if out3 != "hello, there":
-        print("Bad 3:", out3)
-        env.exit(1)
-    if out4 != "hello, there":
-        print("Bad 4:", out4)
-        env.exit(1)
-    if out5 != "hello, there":
-        print("Bad 5:", out5)
-        env.exit(1)
-    if out7 != "hello, world":
-        print("Bad 7:", out7)
-        env.exit(1)
+        if out1 != "hello, world":
+            print("Bad 1:", out1)
+            env.exit(1)
+        if out2 != "hello, you":
+            print("Bad 2:", out2)
+            env.exit(1)
+        if out3 != "hello, there":
+            print("Bad 3:", out3)
+            env.exit(1)
+        if out4 != "hello, there":
+            print("Bad 4:", out4)
+            env.exit(1)
+        if out5 != "hello, there":
+            print("Bad 5:", out5)
+            env.exit(1)
+        if out7 != "hello, world":
+            print("Bad 7:", out7)
+            env.exit(1)
 
-    # Test class init
-    fout1 = str(Foo('hello'))
-    fout2 = str(Foo('hello', 'you'))
-    fout3 = str(Foo('hello', y='there'))
-    fout4 = str(Foo(x='hello', y='there'))
-    fout5 = str(Foo(y='there', x='hello'))
-    fout7 = str(Foo(x='hello'))
+        # Test class init
+        fout1 = str(Foo('hello'))
+        fout2 = str(Foo('hello', 'you'))
+        fout3 = str(Foo('hello', y='there'))
+        fout4 = str(Foo(x='hello', y='there'))
+        fout5 = str(Foo(y='there', x='hello'))
+        fout7 = str(Foo(x='hello'))
 
-#    print(fout1)
-#    print(fout2)
-#    print(fout3)
-#    print(fout4)
-#    print(fout5)
-#    print(fout7)
+    #    print(fout1)
+    #    print(fout2)
+    #    print(fout3)
+    #    print(fout4)
+    #    print(fout5)
+    #    print(fout7)
 
-    if fout1 != "hello, world":
-        print("Bad 1:", fout1)
-        env.exit(1)
-    if fout2 != "hello, you":
-        print("Bad 2:", fout2)
-        env.exit(1)
-    if fout3 != "hello, there":
-        print("Bad 3:", fout3)
-        env.exit(1)
-    if fout4 != "hello, there":
-        print("Bad 4:", fout4)
-        env.exit(1)
-    if fout5 != "hello, there":
-        print("Bad 5:", fout5)
-        env.exit(1)
-    if fout7 != "hello, world":
-        print("Bad 7:", fout7)
-        env.exit(1)
+        if fout1 != "hello, world":
+            print("Bad 1:", fout1)
+            env.exit(1)
+        if fout2 != "hello, you":
+            print("Bad 2:", fout2)
+            env.exit(1)
+        if fout3 != "hello, there":
+            print("Bad 3:", fout3)
+            env.exit(1)
+        if fout4 != "hello, there":
+            print("Bad 4:", fout4)
+            env.exit(1)
+        if fout5 != "hello, there":
+            print("Bad 5:", fout5)
+            env.exit(1)
+        if fout7 != "hello, world":
+            print("Bad 7:", fout7)
+            env.exit(1)
 
-    # Test class method
-    b = Bar()
-    gout1 = b.f('hello')
-    gout2 = b.f('hello', 'you')
-    gout3 = b.f('hello', y='there')
-    gout4 = b.f(x='hello', y='there')
-    gout5 = b.f(y='there', x='hello')
-    gout7 = b.f(x='hello')
+        # Test class method
+        b = Bar()
+        gout1 = b.f('hello')
+        gout2 = b.f('hello', 'you')
+        gout3 = b.f('hello', y='there')
+        gout4 = b.f(x='hello', y='there')
+        gout5 = b.f(y='there', x='hello')
+        gout7 = b.f(x='hello')
 
-#    print(gout1)
-#    print(gout2)
-#    print(gout3)
-#    print(gout4)
-#    print(gout5)
-#    print(gout7)
+    #    print(gout1)
+    #    print(gout2)
+    #    print(gout3)
+    #    print(gout4)
+    #    print(gout5)
+    #    print(gout7)
 
-    if gout1 != "hello, world":
-        print("Bad 1:", gout1)
-        env.exit(1)
-    if gout2 != "hello, you":
-        print("Bad 2:", gout2)
-        env.exit(1)
-    if gout3 != "hello, there":
-        print("Bad 3:", gout3)
-        env.exit(1)
-    if gout4 != "hello, there":
-        print("Bad 4:", gout4)
-        env.exit(1)
-    if gout5 != "hello, there":
-        print("Bad 5:", gout5)
-        env.exit(1)
-    if gout7 != "hello, world":
-        print("Bad 7:", gout7)
-        env.exit(1)
+        if gout1 != "hello, world":
+            print("Bad 1:", gout1)
+            env.exit(1)
+        if gout2 != "hello, you":
+            print("Bad 2:", gout2)
+            env.exit(1)
+        if gout3 != "hello, there":
+            print("Bad 3:", gout3)
+            env.exit(1)
+        if gout4 != "hello, there":
+            print("Bad 4:", gout4)
+            env.exit(1)
+        if gout5 != "hello, there":
+            print("Bad 5:", gout5)
+            env.exit(1)
+        if gout7 != "hello, world":
+            print("Bad 7:", gout7)
+            env.exit(1)
 
-    # Method override constraints must not erase a source-declared default.
-    overridden: DefaultBase = DefaultDerived()
-    if overridden.f() != 7:
-        print("Inherited method default failed")
-        env.exit(1)
+        # Method override constraints must not erase a source-declared default.
+        overridden: DefaultBase = DefaultDerived()
+        if overridden.f() != 7:
+            print("Inherited method default failed")
+            env.exit(1)
 
 
-    print("All is well")
-    env.exit(0)
+        print("All is well")
+        env.exit(0)

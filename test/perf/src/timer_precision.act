@@ -148,9 +148,10 @@ actor TimerSpread(t: testing.AsyncT, receivers: int):
             return
         run()
 
-    for i in range(receivers):
-        rs.append(Receiver(self))
-    run()
+    proc def __startup__():
+        for i in range(receivers):
+            rs.append(Receiver(self))
+        run()
 
 
 actor Ticker(coord: TimerPeriodic, slots: int):
@@ -245,11 +246,18 @@ actor TimerPeriodic(t: testing.AsyncT, slots: int):
             return
         run()
 
-    run()
+    proc def __startup__():
+        run()
 
 
 actor _test_spread(t: testing.AsyncT):
-    TimerSpread(t, 16)
+
+
+    proc def __startup__():
+        TimerSpread(t, 16)
 
 actor _test_periodic(t: testing.AsyncT):
-    TimerPeriodic(t, SLOTS)
+
+
+    proc def __startup__():
+        TimerPeriodic(t, SLOTS)

@@ -10,4 +10,5 @@ actor main(env):
             i += 1
             after 1: _work()
 
-    _work()
+    proc def __startup__():
+        _work()

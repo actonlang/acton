@@ -4,19 +4,22 @@ actor Interruptor(cap):
     def interrupt():
         cap.gc()
         after 0.001: interrupt()
-    interrupt()
+
+    proc def __startup__():
+        interrupt()
 
 actor main(env):
-    def test():
-        s = time.Stopwatch()
-        env.rts.sleep(0.1)
-        d = s.elapsed()
-        if d.to_float() < 0.1:
-            print("Sleep seems to have been below 1 second :(")
-            return 1
-        else:
-            return 0
+    proc def __startup__():
+        def test():
+            s = time.Stopwatch()
+            env.rts.sleep(0.1)
+            d = s.elapsed()
+            if d.to_float() < 0.1:
+                print("Sleep seems to have been below 1 second :(")
+                return 1
+            else:
+                return 0
 
-#    i = Interruptor(env.rts)
-    r = test()
-    env.exit(r)
+    #    i = Interruptor(env.rts)
+        r = test()
+        env.exit(r)

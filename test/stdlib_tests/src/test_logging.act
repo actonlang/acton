@@ -52,46 +52,50 @@ def deepfun(p_logh):
 
 actor MyApp(log_handler):
     logh = logging.Handler("MyApp")
-    logh.set_handler(log_handler)
     log = logging.Logger(logh)
-    log.info("Starting up", None)
-
     def _work():
         log.info("Doing some work", None)
         log.info("Bidabopp", {"actor": "MyApp", "thing": "bopp", "number": 42, "nothingness": None})
         deepfun(logh)
-    _work()
+
+    proc def __startup__():
+        logh.set_handler(log_handler)
+        log.info("Starting up", None)
+
+        _work()
 
 actor _test_Logging(t: testing.AsyncT):
 
-    expected_logs = [
-        logging.Message(logging.INFO, [], None, "hej", None),
-        logging.Message(logging.INFO, [], None, "hello", None),
-        logging.Message(logging.DEBUG, [], None, "dello", None),
-        logging.Message(logging.INFO, ["MyApp"], None, "Starting up", None),
-        logging.Message(logging.INFO, ["MyApp"], None, "Doing some work", None),
-        logging.Message(logging.INFO, ["MyApp"], None, "Bidabopp", {"actor": "MyApp", "thing": "bopp", "number": 42, "nothingness": None}),
-        logging.Message(logging.EMERGENCY, ["MyApp", "deepfun", "deepy"], "deepy", "deep emergency", None),
-        logging.Message(logging.ALERT, ["MyApp", "deepfun", "deepy"], "deepy", "deep alert", None),
-        logging.Message(logging.CRITICAL, ["MyApp", "deepfun", "deepy"], "deepy", "deep critical", None),
-        logging.Message(logging.ERR, ["MyApp", "deepfun", "deepy"], "deepy", "deep error", None),
-        logging.Message(logging.WARNING, ["MyApp", "deepfun", "deepy"], "deepy", "deep warning", None),
-        logging.Message(logging.INFO, ["MyApp", "deepfun", "deepy"], "deepy", "deep info", None),
-        logging.Message(logging.NOTICE, ["MyApp", "deepfun", "deepy"], "deepy", "deep notice", None),
-        logging.Message(logging.DEBUG, ["MyApp", "deepfun", "deepy"], "deepy", "deep debug", None),
-        logging.Message(logging.VERBOSE, ["MyApp", "deepfun", "deepy"], "deepy", "deep verbose", None),
-        logging.Message(logging.TRACE, ["MyApp", "deepfun", "deepy"], "deepy", "deep trace", None),
-    ]
-    ts = TestSink(t, expected_logs)
-    loghandler = logging.Handler(None)
-    loghandler.add_sink(ts)
 
-    log = logging.Logger(loghandler)
-    log.info("hej")
+    proc def __startup__():
+        expected_logs = [
+            logging.Message(logging.INFO, [], None, "hej", None),
+            logging.Message(logging.INFO, [], None, "hello", None),
+            logging.Message(logging.DEBUG, [], None, "dello", None),
+            logging.Message(logging.INFO, ["MyApp"], None, "Starting up", None),
+            logging.Message(logging.INFO, ["MyApp"], None, "Doing some work", None),
+            logging.Message(logging.INFO, ["MyApp"], None, "Bidabopp", {"actor": "MyApp", "thing": "bopp", "number": 42, "nothingness": None}),
+            logging.Message(logging.EMERGENCY, ["MyApp", "deepfun", "deepy"], "deepy", "deep emergency", None),
+            logging.Message(logging.ALERT, ["MyApp", "deepfun", "deepy"], "deepy", "deep alert", None),
+            logging.Message(logging.CRITICAL, ["MyApp", "deepfun", "deepy"], "deepy", "deep critical", None),
+            logging.Message(logging.ERR, ["MyApp", "deepfun", "deepy"], "deepy", "deep error", None),
+            logging.Message(logging.WARNING, ["MyApp", "deepfun", "deepy"], "deepy", "deep warning", None),
+            logging.Message(logging.INFO, ["MyApp", "deepfun", "deepy"], "deepy", "deep info", None),
+            logging.Message(logging.NOTICE, ["MyApp", "deepfun", "deepy"], "deepy", "deep notice", None),
+            logging.Message(logging.DEBUG, ["MyApp", "deepfun", "deepy"], "deepy", "deep debug", None),
+            logging.Message(logging.VERBOSE, ["MyApp", "deepfun", "deepy"], "deepy", "deep verbose", None),
+            logging.Message(logging.TRACE, ["MyApp", "deepfun", "deepy"], "deepy", "deep trace", None),
+        ]
+        ts = TestSink(t, expected_logs)
+        loghandler = logging.Handler(None)
+        loghandler.add_sink(ts)
 
-    def logsome():
-        log.info("hello", None)
-        log.debug("dello", None)
-    logsome()
+        log = logging.Logger(loghandler)
+        log.info("hej")
 
-    my_app = MyApp(loghandler)
+        def logsome():
+            log.info("hello", None)
+            log.debug("dello", None)
+        logsome()
+
+        my_app = MyApp(loghandler)

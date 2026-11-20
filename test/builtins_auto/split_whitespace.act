@@ -92,16 +92,17 @@ def test_bytearray(fail: list[str]):
                     bytearray(b"a b c").split(None, 1), [b"a", b"b c"])
 
 actor main(env):
-    fail: list[str] = []
-    try:
-        test_str(fail)
-        test_bytes(fail)
-        test_bytearray(fail)
-    except Exception as e:
-        fail.append("unexpected exception: " + str(e))
-    if fail:
-        print("Failed:", len(fail))
-        for f in fail[:40]:
-            print(f)
-        env.exit(1)
-    env.exit(0)
+    proc def __startup__():
+        fail: list[str] = []
+        try:
+            test_str(fail)
+            test_bytes(fail)
+            test_bytearray(fail)
+        except Exception as e:
+            fail.append("unexpected exception: " + str(e))
+        if fail:
+            print("Failed:", len(fail))
+            for f in fail[:40]:
+                print(f)
+            env.exit(1)
+        env.exit(0)

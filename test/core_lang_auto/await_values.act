@@ -18,7 +18,10 @@
 #    ordering across await boundaries.
 
 actor Watchdog(env):
-    after 10.0: env.exit(1)
+
+
+    proc def __startup__():
+        after 10.0: env.exit(1)
 
 actor Prod():
     var effects = 0
@@ -39,18 +42,19 @@ actor Prod():
         return effects
 
 actor main(env):
-    wd = Watchdog(env)
-    b = Prod()
+    proc def __startup__():
+        wd = Watchdog(env)
+        b = Prod()
 
-    def go():
-        i = b.geti()
-        s = b.gets()
-        t = b.getb()
-        await async b.bump()
-        n = b.effects_seen()
-        if i == 42 and s == "hello" and t and n == 1:
-            print("values ok")
-            env.exit(0)
-        env.exit(1)
+        def go():
+            i = b.geti()
+            s = b.gets()
+            t = b.getb()
+            await async b.bump()
+            n = b.effects_seen()
+            if i == 42 and s == "hello" and t and n == 1:
+                print("values ok")
+                env.exit(0)
+            env.exit(1)
 
-    go()
+        go()

@@ -18,11 +18,12 @@ tests = {
     }
 
 actor main(env):
-    failed = False
-    for name, t in tests.items():
-        print("== test: {name}")
-        if not t():
-            print("-- FAILED test: {name}")
-            failed = True
-        print()
-    env.exit(1 if failed else 0)
+    proc def __startup__():
+        failed = False
+        for name, t in tests.items():
+            print("== test: {name}")
+            if not t():
+                print("-- FAILED test: {name}")
+                failed = True
+            print()
+        env.exit(1 if failed else 0)

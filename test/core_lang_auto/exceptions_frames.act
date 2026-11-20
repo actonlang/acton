@@ -364,15 +364,16 @@ actor Caller(cap: EnvRTS):
 
 
 actor main(env):
-    ok = True
-    ok = test_deep(2000, 0) and ok
-    ok = test_deep(2000, 1000) and ok
-    ok = test_deep(2000, 1999) and ok
-    ok = test_deep_loops(2000) and ok
-    ok = test_across_calls() and ok
-    ok = test_churn() and ok
-    ok = test_gc(env.rts) and ok
-    ok = test_iterators() and ok
-    c = Caller(env.rts)
-    ok = c.run() and ok
-    env.exit(0 if ok else 1)
+    proc def __startup__():
+        ok = True
+        ok = test_deep(2000, 0) and ok
+        ok = test_deep(2000, 1000) and ok
+        ok = test_deep(2000, 1999) and ok
+        ok = test_deep_loops(2000) and ok
+        ok = test_across_calls() and ok
+        ok = test_churn() and ok
+        ok = test_gc(env.rts) and ok
+        ok = test_iterators() and ok
+        c = Caller(env.rts)
+        ok = c.run() and ok
+        env.exit(0 if ok else 1)

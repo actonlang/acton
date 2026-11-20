@@ -154,7 +154,8 @@ def test_complex() -> bool:
     return True
 
 actor main(env):
-    if test_complex():
-        print("All complex number tests passed!")
-        env.exit(0)
-    env.exit(1)
+    proc def __startup__():
+        if test_complex():
+            print("All complex number tests passed!")
+            env.exit(0)
+        env.exit(1)

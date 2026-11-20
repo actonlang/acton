@@ -1,11 +1,11 @@
 Building file test/typeerrors/ex8.act using temporary scratch directory
    ex8  Parse done                                                               0.000 s
 [error]: Cannot satisfy the following simultaneous constraints for the unknown type t0
-     +--> ex8.act@3:14-3:15
+     +--> ex8.act@4:18-4:19
      |
-   3 |     for x in n:
-     :              ^ 
-     :              |- The type of the indicated expression (inferred to be __builtin__.int) must be a subtype of t0
-     :                 
-     :              `- The type of the indicated expression (which we call t0) must implement __builtin__.Iterable[_]
+   4 |         for x in n:
+     :                  ^ 
+     :                  |- The type of the indicated expression (inferred to be __builtin__.int) must be a subtype of t0
+     :                     
+     :                  `- The type of the indicated expression (which we call t0) must implement __builtin__.Iterable[_]
 -----+

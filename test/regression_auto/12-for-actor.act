@@ -4,7 +4,8 @@ actor Foo():
         return "pong"
 
 actor main(env):
-    var actors = [Foo()]
-    for act in actors:
-        act.ping()
-    env.exit(0)
+    proc def __startup__():
+        actors = [Foo()]
+        for act in actors:
+            act.ping()
+        env.exit(0)

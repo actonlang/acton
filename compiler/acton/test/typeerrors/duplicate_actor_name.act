@@ -10,5 +10,6 @@ actor Server():
         pass
 
 actor main(env):
-    server = Server()
-    env.exit(0)
+    proc def __startup__():
+        server = Server()
+        env.exit(0)

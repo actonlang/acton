@@ -427,65 +427,66 @@ actor _test_HttpClientServer(t: testing.EnvT):
     client as the server sent it only when no part of the path treats it
     as text.
     """
-    body = b"Hello\x00\xff\xfe, world!"
-    log = logging.Logger(t.log_handler)
     var done = False
     var port = 0
 
-    serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
-    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
+    proc def __startup__():
+        body = b"Hello\x00\xff\xfe, world!"
+        log = logging.Logger(t.log_handler)
+        serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+        conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
 
-    def _finish_success():
-        if done:
-            return
-        done = True
-        t.success()
+        def _finish_success():
+            if done:
+                return
+            done = True
+            t.success()
 
-    def _finish_failure(msg: str):
-        if done:
-            return
-        done = True
-        t.failure(AssertionError(msg))
+        def _finish_failure(msg: str):
+            if done:
+                return
+            done = True
+            t.failure(AssertionError(msg))
 
-    def _on_http_accept(server):
-        server.cb_install(_on_http_server_request, _on_http_server_error)
+        def _on_http_accept(server):
+            server.cb_install(_on_http_server_request, _on_http_server_error)
 
-    def _on_http_server_request(server, request, respond):
-        respond(200, {"Content-Type": "application/octet-stream"}, body)
+        def _on_http_server_request(server, request, respond):
+            respond(200, {"Content-Type": "application/octet-stream"}, body)
 
-    def _on_http_server_error(server, error):
-        _finish_failure("HTTP server error: " + error)
+        def _on_http_server_error(server, error):
+            _finish_failure("HTTP server error: " + error)
 
-    def _on_http_listen(listener, error):
-        if error is not None:
-            _finish_failure("HTTP listen failed: " + error)
-            return
-        port = listener.endpoint().port
-        _start_client()
+        def _on_http_listen(listener, error):
+            if error is not None:
+                _finish_failure("HTTP listen failed: " + error)
+                return
+            port = listener.endpoint().port
+            _start_client()
 
-    def _on_http_connect(c):
-        c.get("/", _on_http_receive)
+        def _on_http_connect(c):
+            c.get("/", _on_http_receive)
 
-    def _on_http_receive(c, data):
-        if data.status != 200:
-            _finish_failure("Unexpected status: " + str(data.status))
-            return
-        if data.body != body:
-            _finish_failure("Unexpected body: " + str(data.body))
-            return
-        _finish_success()
+        def _on_http_receive(c, data):
+            if data.status != 200:
+                _finish_failure("Unexpected status: " + str(data.status))
+                return
+            if data.body != body:
+                _finish_failure("Unexpected body: " + str(data.body))
+                return
+            _finish_success()
 
-    def _on_http_error(c, errmsg):
-        _finish_failure("HTTP client error: " + errmsg)
+        def _on_http_error(c, errmsg):
+            _finish_failure("HTTP client error: " + errmsg)
 
-    def _start_client():
-        std.http.Client(conn_cap, "127.0.0.1", _on_http_connect, _on_http_error, scheme="http", port=port)
+        def _start_client():
+            std.http.Client(conn_cap, "127.0.0.1", _on_http_connect, _on_http_error, scheme="http", port=port)
 
-    def _timeout():
-        _finish_failure("timeout")
+        def _timeout():
+            _finish_failure("timeout")
 
-    std.http.Listener(serv_cap, "127.0.0.1", 0, _on_http_accept, on_listen=_on_http_listen)
-    after 10: _timeout()
+        std.http.Listener(serv_cap, "127.0.0.1", 0, _on_http_accept, on_listen=_on_http_listen)
+        after 10: _timeout()
 
 
 actor _test_HttpServerCompression(t: testing.EnvT):
@@ -496,175 +497,177 @@ actor _test_HttpServerCompression(t: testing.EnvT):
     Content-Encoding, Vary and ETag of each response, and that its body
     decodes to the answer.
     """
-    big = _compressible_json()
-    png = b"\x89PNG\r\n\x1a\n" + big
-    # An answer that the handler compressed itself. Random digits keep it
-    # over COMPRESS_MIN_SIZE when compressed, so the server looks at it.
-    varied = ",".join([str(std.random.randint(0, 999999999)) for _ in range(1000)]).encode()
-    gzipped = std.compress.gzip.compress(varied)
-    # Path, Accept-Encoding, and the Content-Encoding, Vary and ETag expected
-    cases: list[(str, ?str, ?str, ?str, ?str)] = [
-        ("/text", "gzip, deflate, br", "gzip", "Accept-Encoding", None),
-        ("/text", "deflate", "deflate", "Accept-Encoding", None),
-        ("/text", "GZIP;q=0, deflate;q=0.5", "deflate", "Accept-Encoding", None),
-        ("/text", "gzip;q=0.1, deflate", "deflate", "Accept-Encoding", None),
-        ("/text", "deflate;q=0.5, gzip;q=0.500", "gzip", "Accept-Encoding", None),
-        ("/text", "gzip;q=abc", None, "Accept-Encoding", None),
-        ("/text", "*;q=0.5, gzip;q=0", "deflate", "Accept-Encoding", None),
-        ("/text", "*", "gzip", "Accept-Encoding", None),
-        ("/text", "*;q=0", None, "Accept-Encoding", None),
-        ("/text", "br", None, "Accept-Encoding", None),
-        ("/text", None, None, "Accept-Encoding", None),
-        ("/small", "gzip", None, None, None),
-        ("/png", "gzip", None, None, None),
-        ("/gzipped", "gzip", "gzip", None, None),
-        ("/etag", "gzip", "gzip", "Accept, Accept-Encoding", 'W/"v1"'),
-    ]
-    log = logging.Logger(t.log_handler)
     var done = False
     var port = 0
     var current = 0
 
-    serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
-    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
+    proc def __startup__():
+        big = _compressible_json()
+        png = b"\x89PNG\r\n\x1a\n" + big
+        # An answer that the handler compressed itself. Random digits keep it
+        # over COMPRESS_MIN_SIZE when compressed, so the server looks at it.
+        varied = ",".join([str(std.random.randint(0, 999999999)) for _ in range(1000)]).encode()
+        gzipped = std.compress.gzip.compress(varied)
+        # Path, Accept-Encoding, and the Content-Encoding, Vary and ETag expected
+        cases: list[(str, ?str, ?str, ?str, ?str)] = [
+            ("/text", "gzip, deflate, br", "gzip", "Accept-Encoding", None),
+            ("/text", "deflate", "deflate", "Accept-Encoding", None),
+            ("/text", "GZIP;q=0, deflate;q=0.5", "deflate", "Accept-Encoding", None),
+            ("/text", "gzip;q=0.1, deflate", "deflate", "Accept-Encoding", None),
+            ("/text", "deflate;q=0.5, gzip;q=0.500", "gzip", "Accept-Encoding", None),
+            ("/text", "gzip;q=abc", None, "Accept-Encoding", None),
+            ("/text", "*;q=0.5, gzip;q=0", "deflate", "Accept-Encoding", None),
+            ("/text", "*", "gzip", "Accept-Encoding", None),
+            ("/text", "*;q=0", None, "Accept-Encoding", None),
+            ("/text", "br", None, "Accept-Encoding", None),
+            ("/text", None, None, "Accept-Encoding", None),
+            ("/small", "gzip", None, None, None),
+            ("/png", "gzip", None, None, None),
+            ("/gzipped", "gzip", "gzip", None, None),
+            ("/etag", "gzip", "gzip", "Accept, Accept-Encoding", 'W/"v1"'),
+        ]
+        log = logging.Logger(t.log_handler)
+        serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+        conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
 
-    def _finish(error: ?Exception):
-        if done:
-            return
-        done = True
-        if error is not None:
-            t.failure(error)
-        else:
-            t.success()
+        def _finish(error: ?Exception):
+            if done:
+                return
+            done = True
+            if error is not None:
+                t.failure(error)
+            else:
+                t.success()
 
-    def _answer(path: str) -> bytes:
-        if path == "/small":
-            return b"small"
-        if path == "/png":
-            return png
-        if path == "/gzipped":
-            return varied
-        return big
-
-    def _on_http_accept(server):
-        server.cb_install(_on_http_server_request, _on_http_server_error)
-
-    def _on_http_server_request(server, request, respond):
-        if request.path == "/small":
-            respond(200, {"Content-Type": "text/plain"}, b"small")
-        elif request.path == "/png":
-            respond(200, {"Content-Type": "image/png"}, png)
-        elif request.path == "/gzipped":
-            respond(200, {"Content-Type": "application/json", "Content-Encoding": "gzip"}, gzipped)
-        elif request.path == "/etag":
-            respond(200, {"Content-Type": "application/json", "ETag": '"v1"', "Vary": "Accept"}, big)
-        else:
-            respond(200, {"Content-Type": "application/json"}, big)
-
-    def _on_http_server_error(server, error):
-        _finish(AssertionError("HTTP server error: " + error))
-
-    def _on_http_listen(listener, error):
-        if error is not None:
-            _finish(AssertionError("HTTP listen failed: " + error))
-            return
-        port = listener.endpoint().port
-        _start_client()
-
-    def _send(c):
-        path, accept, coding, vary, etag = cases[current]
-        if accept is not None:
-            c.get(path, _on_http_receive, {"Accept-Encoding": accept})
-        else:
-            c.get(path, _on_http_receive)
-
-    def _on_http_receive(c, res):
-        path, accept, coding, vary, etag = cases[current]
-        what = "{path} with Accept-Encoding {accept}"
-        try:
-            testing.assertEqual(res.status, 200, what)
-            testing.assertEqual(res.headers.get("content-encoding"), coding, what)
-            testing.assertEqual(res.headers.get("vary"), vary, what)
-            testing.assertEqual(res.headers.get("etag"), etag, what)
-            testing.assertEqual(_decode(res.body, coding), _answer(path), what)
+        def _answer(path: str) -> bytes:
+            if path == "/small":
+                return b"small"
+            if path == "/png":
+                return png
             if path == "/gzipped":
-                testing.assertTrue(len(res.body) >= std.http.COMPRESS_MIN_SIZE, "the compressed answer is big enough to compress")
-        except Exception as e:
-            _finish(e)
-            return
-        current += 1
-        if current < len(cases):
-            _send(c)
-        else:
-            _finish(None)
+                return varied
+            return big
 
-    def _on_http_error(c, errmsg):
-        _finish(AssertionError("HTTP client error: " + errmsg))
+        def _on_http_accept(server):
+            server.cb_install(_on_http_server_request, _on_http_server_error)
 
-    def _start_client():
-        # The client sends only the Accept-Encoding of each case
-        std.http.Client(conn_cap, "127.0.0.1", _send, _on_http_error, scheme="http", port=port, compress=False)
+        def _on_http_server_request(server, request, respond):
+            if request.path == "/small":
+                respond(200, {"Content-Type": "text/plain"}, b"small")
+            elif request.path == "/png":
+                respond(200, {"Content-Type": "image/png"}, png)
+            elif request.path == "/gzipped":
+                respond(200, {"Content-Type": "application/json", "Content-Encoding": "gzip"}, gzipped)
+            elif request.path == "/etag":
+                respond(200, {"Content-Type": "application/json", "ETag": '"v1"', "Vary": "Accept"}, big)
+            else:
+                respond(200, {"Content-Type": "application/json"}, big)
 
-    std.http.Listener(serv_cap, "127.0.0.1", 0, _on_http_accept, on_listen=_on_http_listen, compress=True)
-    after 10: _finish(AssertionError("timeout"))
+        def _on_http_server_error(server, error):
+            _finish(AssertionError("HTTP server error: " + error))
+
+        def _on_http_listen(listener, error):
+            if error is not None:
+                _finish(AssertionError("HTTP listen failed: " + error))
+                return
+            port = listener.endpoint().port
+            _start_client()
+
+        def _send(c):
+            path, accept, coding, vary, etag = cases[current]
+            if accept is not None:
+                c.get(path, _on_http_receive, {"Accept-Encoding": accept})
+            else:
+                c.get(path, _on_http_receive)
+
+        def _on_http_receive(c, res):
+            path, accept, coding, vary, etag = cases[current]
+            what = "{path} with Accept-Encoding {accept}"
+            try:
+                testing.assertEqual(res.status, 200, what)
+                testing.assertEqual(res.headers.get("content-encoding"), coding, what)
+                testing.assertEqual(res.headers.get("vary"), vary, what)
+                testing.assertEqual(res.headers.get("etag"), etag, what)
+                testing.assertEqual(_decode(res.body, coding), _answer(path), what)
+                if path == "/gzipped":
+                    testing.assertTrue(len(res.body) >= std.http.COMPRESS_MIN_SIZE, "the compressed answer is big enough to compress")
+            except Exception as e:
+                _finish(e)
+                return
+            current += 1
+            if current < len(cases):
+                _send(c)
+            else:
+                _finish(None)
+
+        def _on_http_error(c, errmsg):
+            _finish(AssertionError("HTTP client error: " + errmsg))
+
+        def _start_client():
+            # The client sends only the Accept-Encoding of each case
+            std.http.Client(conn_cap, "127.0.0.1", _send, _on_http_error, scheme="http", port=port, compress=False)
+
+        std.http.Listener(serv_cap, "127.0.0.1", 0, _on_http_accept, on_listen=_on_http_listen, compress=True)
+        after 10: _finish(AssertionError("timeout"))
 
 
 actor _test_HttpServerNoCompressionByDefault(t: testing.EnvT):
     """A Listener without compress sends answers as they are, also to a
     client that accepts gzip"""
-    big = _compressible_json()
     var done = False
     var port = 0
 
-    serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
-    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
+    proc def __startup__():
+        big = _compressible_json()
+        serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+        conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
 
-    def _finish(error: ?Exception):
-        if done:
-            return
-        done = True
-        if error is not None:
-            t.failure(error)
-        else:
-            t.success()
+        def _finish(error: ?Exception):
+            if done:
+                return
+            done = True
+            if error is not None:
+                t.failure(error)
+            else:
+                t.success()
 
-    def _on_http_accept(server):
-        server.cb_install(_on_http_server_request, _on_http_server_error)
+        def _on_http_accept(server):
+            server.cb_install(_on_http_server_request, _on_http_server_error)
 
-    def _on_http_server_request(server, request, respond):
-        respond(200, {"Content-Type": "application/json"}, big)
+        def _on_http_server_request(server, request, respond):
+            respond(200, {"Content-Type": "application/json"}, big)
 
-    def _on_http_server_error(server, error):
-        _finish(AssertionError("HTTP server error: " + error))
+        def _on_http_server_error(server, error):
+            _finish(AssertionError("HTTP server error: " + error))
 
-    def _on_http_listen(listener, error):
-        if error is not None:
-            _finish(AssertionError("HTTP listen failed: " + error))
-            return
-        port = listener.endpoint().port
-        _start_client()
+        def _on_http_listen(listener, error):
+            if error is not None:
+                _finish(AssertionError("HTTP listen failed: " + error))
+                return
+            port = listener.endpoint().port
+            _start_client()
 
-    def _on_http_connect(c):
-        c.get("/", _on_http_receive, {"Accept-Encoding": "gzip"})
+        def _on_http_connect(c):
+            c.get("/", _on_http_receive, {"Accept-Encoding": "gzip"})
 
-    def _on_http_receive(c, res):
-        try:
-            testing.assertEqual(res.headers.get("content-encoding"), None)
-            testing.assertEqual(res.headers.get("vary"), None)
-            testing.assertEqual(res.body, big)
-        except Exception as e:
-            _finish(e)
-            return
-        _finish(None)
+        def _on_http_receive(c, res):
+            try:
+                testing.assertEqual(res.headers.get("content-encoding"), None)
+                testing.assertEqual(res.headers.get("vary"), None)
+                testing.assertEqual(res.body, big)
+            except Exception as e:
+                _finish(e)
+                return
+            _finish(None)
 
-    def _on_http_error(c, errmsg):
-        _finish(AssertionError("HTTP client error: " + errmsg))
+        def _on_http_error(c, errmsg):
+            _finish(AssertionError("HTTP client error: " + errmsg))
 
-    def _start_client():
-        std.http.Client(conn_cap, "127.0.0.1", _on_http_connect, _on_http_error, scheme="http", port=port)
+        def _start_client():
+            std.http.Client(conn_cap, "127.0.0.1", _on_http_connect, _on_http_error, scheme="http", port=port)
 
-    std.http.Listener(serv_cap, "127.0.0.1", 0, _on_http_accept, on_listen=_on_http_listen)
-    after 10: _finish(AssertionError("timeout"))
+        std.http.Listener(serv_cap, "127.0.0.1", 0, _on_http_accept, on_listen=_on_http_listen)
+        after 10: _finish(AssertionError("timeout"))
 
 
 actor _test_HttpClientDecompression(t: testing.EnvT):
@@ -673,153 +676,155 @@ actor _test_HttpClientDecompression(t: testing.EnvT):
     The server sends each body already encoded, in the coding that the path
     names, and tells in X-Seen-Accept-Encoding which Accept-Encoding it got.
     """
-    big = _compressible_json()
-    # Path, request headers, then the Accept-Encoding the server sees, and
-    # the Content-Encoding, Content-Length presence and body the client gets
-    cases: list[(str, dict[str, str], str, ?str, bool, bytes)] = [
-        ("/gzip", {}, "gzip, deflate", None, False, big),
-        ("/deflate", {}, "gzip, deflate", None, False, big),
-        ("/x-gzip", {}, "gzip, deflate", None, False, big),
-        ("/br", {}, "gzip, deflate", "br", True, b"brotli"),
-        ("/plain", {}, "gzip, deflate", None, True, big),
-        ("/gzip", {"Accept-Encoding": "gzip"}, "gzip", None, False, big),
-        # The response tells the coding, also when the request did not ask for it
-        ("/gzip", {"Accept-Encoding": "identity"}, "identity", None, False, big),
-    ]
     var done = False
     var port = 0
     var current = 0
 
-    serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
-    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
+    proc def __startup__():
+        big = _compressible_json()
+        # Path, request headers, then the Accept-Encoding the server sees, and
+        # the Content-Encoding, Content-Length presence and body the client gets
+        cases: list[(str, dict[str, str], str, ?str, bool, bytes)] = [
+            ("/gzip", {}, "gzip, deflate", None, False, big),
+            ("/deflate", {}, "gzip, deflate", None, False, big),
+            ("/x-gzip", {}, "gzip, deflate", None, False, big),
+            ("/br", {}, "gzip, deflate", "br", True, b"brotli"),
+            ("/plain", {}, "gzip, deflate", None, True, big),
+            ("/gzip", {"Accept-Encoding": "gzip"}, "gzip", None, False, big),
+            # The response tells the coding, also when the request did not ask for it
+            ("/gzip", {"Accept-Encoding": "identity"}, "identity", None, False, big),
+        ]
+        serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+        conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
 
-    def _finish(error: ?Exception):
-        if done:
-            return
-        done = True
-        if error is not None:
-            t.failure(error)
-        else:
-            t.success()
+        def _finish(error: ?Exception):
+            if done:
+                return
+            done = True
+            if error is not None:
+                t.failure(error)
+            else:
+                t.success()
 
-    def _on_http_accept(server):
-        server.cb_install(_on_http_server_request, _on_http_server_error)
+        def _on_http_accept(server):
+            server.cb_install(_on_http_server_request, _on_http_server_error)
 
-    def _on_http_server_request(server, request, respond):
-        h = {"Content-Type": "application/json", "X-Seen-Accept-Encoding": request.headers.get_def("accept-encoding", "")}
-        if request.path == "/gzip":
-            h["Content-Encoding"] = "gzip"
-            respond(200, h, std.compress.gzip.compress(big))
-        elif request.path == "/deflate":
-            h["Content-Encoding"] = "deflate"
-            respond(200, h, std.compress.zlib.compress(big))
-        elif request.path == "/x-gzip":
-            h["Content-Encoding"] = "x-gzip"
-            respond(200, h, std.compress.gzip.compress(big))
-        elif request.path == "/br":
-            h["Content-Encoding"] = "br"
-            respond(200, h, b"brotli")
-        else:
-            respond(200, h, big)
+        def _on_http_server_request(server, request, respond):
+            h = {"Content-Type": "application/json", "X-Seen-Accept-Encoding": request.headers.get_def("accept-encoding", "")}
+            if request.path == "/gzip":
+                h["Content-Encoding"] = "gzip"
+                respond(200, h, std.compress.gzip.compress(big))
+            elif request.path == "/deflate":
+                h["Content-Encoding"] = "deflate"
+                respond(200, h, std.compress.zlib.compress(big))
+            elif request.path == "/x-gzip":
+                h["Content-Encoding"] = "x-gzip"
+                respond(200, h, std.compress.gzip.compress(big))
+            elif request.path == "/br":
+                h["Content-Encoding"] = "br"
+                respond(200, h, b"brotli")
+            else:
+                respond(200, h, big)
 
-    def _on_http_server_error(server, error):
-        _finish(AssertionError("HTTP server error: " + error))
+        def _on_http_server_error(server, error):
+            _finish(AssertionError("HTTP server error: " + error))
 
-    def _on_http_listen(listener, error):
-        if error is not None:
-            _finish(AssertionError("HTTP listen failed: " + error))
-            return
-        port = listener.endpoint().port
-        _start_client()
+        def _on_http_listen(listener, error):
+            if error is not None:
+                _finish(AssertionError("HTTP listen failed: " + error))
+                return
+            port = listener.endpoint().port
+            _start_client()
 
-    def _send(c):
-        path, headers, seen, coding, has_length, body = cases[current]
-        c.get(path, _on_http_receive, headers)
+        def _send(c):
+            path, headers, seen, coding, has_length, body = cases[current]
+            c.get(path, _on_http_receive, headers)
 
-    def _on_http_receive(c, res):
-        path, headers, seen, coding, has_length, body = cases[current]
-        what = "case {current}: {path}"
-        try:
-            testing.assertEqual(res.headers.get("x-seen-accept-encoding"), seen, what)
-            testing.assertEqual(res.headers.get("content-encoding"), coding, what)
-            testing.assertEqual("content-length" in res.headers, has_length, what)
-            testing.assertEqual(_decode(res.body, res.headers.get("content-encoding")), body, what)
-        except Exception as e:
-            _finish(e)
-            return
-        current += 1
-        if current < len(cases):
-            _send(c)
-        else:
-            _finish(None)
+        def _on_http_receive(c, res):
+            path, headers, seen, coding, has_length, body = cases[current]
+            what = "case {current}: {path}"
+            try:
+                testing.assertEqual(res.headers.get("x-seen-accept-encoding"), seen, what)
+                testing.assertEqual(res.headers.get("content-encoding"), coding, what)
+                testing.assertEqual("content-length" in res.headers, has_length, what)
+                testing.assertEqual(_decode(res.body, res.headers.get("content-encoding")), body, what)
+            except Exception as e:
+                _finish(e)
+                return
+            current += 1
+            if current < len(cases):
+                _send(c)
+            else:
+                _finish(None)
 
-    def _on_http_error(c, errmsg):
-        _finish(AssertionError("HTTP client error: " + errmsg))
+        def _on_http_error(c, errmsg):
+            _finish(AssertionError("HTTP client error: " + errmsg))
 
-    def _start_client():
-        std.http.Client(conn_cap, "127.0.0.1", _send, _on_http_error, scheme="http", port=port)
+        def _start_client():
+            std.http.Client(conn_cap, "127.0.0.1", _send, _on_http_error, scheme="http", port=port)
 
-    std.http.Listener(serv_cap, "127.0.0.1", 0, _on_http_accept, on_listen=_on_http_listen)
-    after 10: _finish(AssertionError("timeout"))
+        std.http.Listener(serv_cap, "127.0.0.1", 0, _on_http_accept, on_listen=_on_http_listen)
+        after 10: _finish(AssertionError("timeout"))
 
 
 actor _test_HttpClientWithoutCompression(t: testing.EnvT):
     """A Client with compress=False sends no Accept-Encoding and leaves the
     body as it is"""
-    big = _compressible_json()
     var done = False
     var port = 0
 
-    serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
-    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
+    proc def __startup__():
+        big = _compressible_json()
+        serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+        conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
 
-    def _finish(error: ?Exception):
-        if done:
-            return
-        done = True
-        if error is not None:
-            t.failure(error)
-        else:
-            t.success()
+        def _finish(error: ?Exception):
+            if done:
+                return
+            done = True
+            if error is not None:
+                t.failure(error)
+            else:
+                t.success()
 
-    def _on_http_accept(server):
-        server.cb_install(_on_http_server_request, _on_http_server_error)
+        def _on_http_accept(server):
+            server.cb_install(_on_http_server_request, _on_http_server_error)
 
-    def _on_http_server_request(server, request, respond):
-        h = {"Content-Type": "application/json", "Content-Encoding": "gzip", "X-Seen-Accept-Encoding": request.headers.get_def("accept-encoding", "")}
-        respond(200, h, std.compress.gzip.compress(big))
+        def _on_http_server_request(server, request, respond):
+            h = {"Content-Type": "application/json", "Content-Encoding": "gzip", "X-Seen-Accept-Encoding": request.headers.get_def("accept-encoding", "")}
+            respond(200, h, std.compress.gzip.compress(big))
 
-    def _on_http_server_error(server, error):
-        _finish(AssertionError("HTTP server error: " + error))
+        def _on_http_server_error(server, error):
+            _finish(AssertionError("HTTP server error: " + error))
 
-    def _on_http_listen(listener, error):
-        if error is not None:
-            _finish(AssertionError("HTTP listen failed: " + error))
-            return
-        port = listener.endpoint().port
-        _start_client()
+        def _on_http_listen(listener, error):
+            if error is not None:
+                _finish(AssertionError("HTTP listen failed: " + error))
+                return
+            port = listener.endpoint().port
+            _start_client()
 
-    def _on_http_connect(c):
-        c.get("/", _on_http_receive)
+        def _on_http_connect(c):
+            c.get("/", _on_http_receive)
 
-    def _on_http_receive(c, res):
-        try:
-            testing.assertEqual(res.headers.get("x-seen-accept-encoding"), "")
-            testing.assertEqual(res.headers.get("content-encoding"), "gzip")
-            testing.assertEqual(std.compress.gzip.decompress(res.body), big)
-        except Exception as e:
-            _finish(e)
-            return
-        _finish(None)
+        def _on_http_receive(c, res):
+            try:
+                testing.assertEqual(res.headers.get("x-seen-accept-encoding"), "")
+                testing.assertEqual(res.headers.get("content-encoding"), "gzip")
+                testing.assertEqual(std.compress.gzip.decompress(res.body), big)
+            except Exception as e:
+                _finish(e)
+                return
+            _finish(None)
 
-    def _on_http_error(c, errmsg):
-        _finish(AssertionError("HTTP client error: " + errmsg))
+        def _on_http_error(c, errmsg):
+            _finish(AssertionError("HTTP client error: " + errmsg))
 
-    def _start_client():
-        std.http.Client(conn_cap, "127.0.0.1", _on_http_connect, _on_http_error, scheme="http", port=port, compress=False)
+        def _start_client():
+            std.http.Client(conn_cap, "127.0.0.1", _on_http_connect, _on_http_error, scheme="http", port=port, compress=False)
 
-    std.http.Listener(serv_cap, "127.0.0.1", 0, _on_http_accept, on_listen=_on_http_listen)
-    after 10: _finish(AssertionError("timeout"))
+        std.http.Listener(serv_cap, "127.0.0.1", 0, _on_http_accept, on_listen=_on_http_listen)
+        after 10: _finish(AssertionError("timeout"))
 
 
 actor _test_HttpClientUndecodableBody(t: testing.EnvT):
@@ -828,53 +833,54 @@ actor _test_HttpClientUndecodableBody(t: testing.EnvT):
     var done = False
     var port = 0
 
-    serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
-    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
+    proc def __startup__():
+        serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+        conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
 
-    def _finish(error: ?Exception):
-        if done:
-            return
-        done = True
-        if error is not None:
-            t.failure(error)
-        else:
-            t.success()
+        def _finish(error: ?Exception):
+            if done:
+                return
+            done = True
+            if error is not None:
+                t.failure(error)
+            else:
+                t.success()
 
-    def _on_http_accept(server):
-        server.cb_install(_on_http_server_request, _on_http_server_error)
+        def _on_http_accept(server):
+            server.cb_install(_on_http_server_request, _on_http_server_error)
 
-    def _on_http_server_request(server, request, respond):
-        respond(200, {"Content-Type": "application/json", "Content-Encoding": "gzip"}, b"not gzip")
+        def _on_http_server_request(server, request, respond):
+            respond(200, {"Content-Type": "application/json", "Content-Encoding": "gzip"}, b"not gzip")
 
-    def _on_http_server_error(server, error):
-        pass
+        def _on_http_server_error(server, error):
+            pass
 
-    def _on_http_listen(listener, error):
-        if error is not None:
-            _finish(AssertionError("HTTP listen failed: " + error))
-            return
-        port = listener.endpoint().port
-        _start_client()
+        def _on_http_listen(listener, error):
+            if error is not None:
+                _finish(AssertionError("HTTP listen failed: " + error))
+                return
+            port = listener.endpoint().port
+            _start_client()
 
-    def _on_http_connect(c):
-        c.get("/", _on_http_receive)
+        def _on_http_connect(c):
+            c.get("/", _on_http_receive)
 
-    def _on_http_receive(c, res):
-        _finish(AssertionError("on_response got the undecodable response"))
+        def _on_http_receive(c, res):
+            _finish(AssertionError("on_response got the undecodable response"))
 
-    def _on_http_error(c, errmsg):
-        if errmsg.startswith("Malformed HTTP response: Cannot decode the body"):
-            _finish(None)
-        elif "refused" in errmsg:
-            after 0.1: _start_client()
-        else:
-            _finish(AssertionError("Unexpected client error: " + errmsg))
+        def _on_http_error(c, errmsg):
+            if errmsg.startswith("Malformed HTTP response: Cannot decode the body"):
+                _finish(None)
+            elif "refused" in errmsg:
+                after 0.1: _start_client()
+            else:
+                _finish(AssertionError("Unexpected client error: " + errmsg))
 
-    def _start_client():
-        std.http.Client(conn_cap, "127.0.0.1", _on_http_connect, _on_http_error, scheme="http", port=port)
+        def _start_client():
+            std.http.Client(conn_cap, "127.0.0.1", _on_http_connect, _on_http_error, scheme="http", port=port)
 
-    std.http.Listener(serv_cap, "127.0.0.1", 0, _on_http_accept, on_listen=_on_http_listen)
-    after 10: _finish(AssertionError("timeout"))
+        std.http.Listener(serv_cap, "127.0.0.1", 0, _on_http_accept, on_listen=_on_http_listen)
+        after 10: _finish(AssertionError("timeout"))
 
 
 actor _test_HttpCompressionEndToEnd(t: testing.EnvT):
@@ -885,62 +891,63 @@ actor _test_HttpCompressionEndToEnd(t: testing.EnvT):
     removes it only when it decodes the body, so a response without it went
     over the connection compressed.
     """
-    big = _compressible_json()
     var done = False
     var port = 0
 
-    serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
-    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
+    proc def __startup__():
+        big = _compressible_json()
+        serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+        conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
 
-    def _finish(error: ?Exception):
-        if done:
-            return
-        done = True
-        if error is not None:
-            t.failure(error)
-        else:
-            t.success()
+        def _finish(error: ?Exception):
+            if done:
+                return
+            done = True
+            if error is not None:
+                t.failure(error)
+            else:
+                t.success()
 
-    def _on_http_accept(server):
-        server.cb_install(_on_http_server_request, _on_http_server_error)
+        def _on_http_accept(server):
+            server.cb_install(_on_http_server_request, _on_http_server_error)
 
-    def _on_http_server_request(server, request, respond):
-        h = {"Content-Type": "application/json", "X-Seen-Accept-Encoding": request.headers.get_def("accept-encoding", "")}
-        respond(200, h, big)
+        def _on_http_server_request(server, request, respond):
+            h = {"Content-Type": "application/json", "X-Seen-Accept-Encoding": request.headers.get_def("accept-encoding", "")}
+            respond(200, h, big)
 
-    def _on_http_server_error(server, error):
-        _finish(AssertionError("HTTP server error: " + error))
+        def _on_http_server_error(server, error):
+            _finish(AssertionError("HTTP server error: " + error))
 
-    def _on_http_listen(listener, error):
-        if error is not None:
-            _finish(AssertionError("HTTP listen failed: " + error))
-            return
-        port = listener.endpoint().port
-        _start_client()
+        def _on_http_listen(listener, error):
+            if error is not None:
+                _finish(AssertionError("HTTP listen failed: " + error))
+                return
+            port = listener.endpoint().port
+            _start_client()
 
-    def _on_http_connect(c):
-        c.get("/", _on_http_receive)
+        def _on_http_connect(c):
+            c.get("/", _on_http_receive)
 
-    def _on_http_receive(c, res):
-        try:
-            testing.assertEqual(res.headers.get("x-seen-accept-encoding"), "gzip, deflate")
-            testing.assertEqual(res.headers.get("content-encoding"), None)
-            testing.assertFalse("content-length" in res.headers, "the body went compressed")
-            testing.assertEqual(res.headers.get("vary"), "Accept-Encoding")
-            testing.assertEqual(res.body, big)
-        except Exception as e:
-            _finish(e)
-            return
-        _finish(None)
+        def _on_http_receive(c, res):
+            try:
+                testing.assertEqual(res.headers.get("x-seen-accept-encoding"), "gzip, deflate")
+                testing.assertEqual(res.headers.get("content-encoding"), None)
+                testing.assertFalse("content-length" in res.headers, "the body went compressed")
+                testing.assertEqual(res.headers.get("vary"), "Accept-Encoding")
+                testing.assertEqual(res.body, big)
+            except Exception as e:
+                _finish(e)
+                return
+            _finish(None)
 
-    def _on_http_error(c, errmsg):
-        _finish(AssertionError("HTTP client error: " + errmsg))
+        def _on_http_error(c, errmsg):
+            _finish(AssertionError("HTTP client error: " + errmsg))
 
-    def _start_client():
-        std.http.Client(conn_cap, "127.0.0.1", _on_http_connect, _on_http_error, scheme="http", port=port)
+        def _start_client():
+            std.http.Client(conn_cap, "127.0.0.1", _on_http_connect, _on_http_error, scheme="http", port=port)
 
-    std.http.Listener(serv_cap, "127.0.0.1", 0, _on_http_accept, on_listen=_on_http_listen, compress=True)
-    after 10: _finish(AssertionError("timeout"))
+        std.http.Listener(serv_cap, "127.0.0.1", 0, _on_http_accept, on_listen=_on_http_listen, compress=True)
+        after 10: _finish(AssertionError("timeout"))
 
 
 actor _test_HttpClientPipelinedResponses(t: testing.EnvT):
@@ -953,86 +960,87 @@ actor _test_HttpClientPipelinedResponses(t: testing.EnvT):
     client that discards what follows the first parsed response loses the
     second one and its callback never fires.
     """
-    log = logging.Logger(t.log_handler)
     var done = False
     var port = 0
     var received = b""
     var responded = False
     var got_first = False
 
-    serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
-    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
+    proc def __startup__():
+        log = logging.Logger(t.log_handler)
+        serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+        conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
 
-    def _finish_success():
-        if done:
-            return
-        done = True
-        t.success()
+        def _finish_success():
+            if done:
+                return
+            done = True
+            t.success()
 
-    def _finish_failure(msg: str):
-        if done:
-            return
-        done = True
-        t.failure(AssertionError(msg))
+        def _finish_failure(msg: str):
+            if done:
+                return
+            done = True
+            t.failure(AssertionError(msg))
 
-    def _on_raw_listen(listener, error):
-        if error is not None:
-            _finish_failure("TCP listen failed: " + error)
-            return
-        port = listener.endpoint().port
-        _start_client()
+        def _on_raw_listen(listener, error):
+            if error is not None:
+                _finish_failure("TCP listen failed: " + error)
+                return
+            port = listener.endpoint().port
+            _start_client()
 
-    def _on_raw_accept(conn):
-        received = b""
-        responded = False
-        conn.cb_install(_on_raw_receive, _on_raw_error, None)
+        def _on_raw_accept(conn):
+            received = b""
+            responded = False
+            conn.cb_install(_on_raw_receive, _on_raw_error, None)
 
-    def _on_raw_receive(conn, data):
-        received += data
-        if responded:
-            return
-        # Each GET request ends in an empty line. Once both have arrived,
-        # answer both in a single write so the responses coalesce into one
-        # receive event on the client side.
-        if received.count(b"\r\n\r\n") >= 2:
-            responded = True
-            responses = b"HTTP/1.1 200 OK\r\nContent-Length: 12\r\n\r\nresponse-one"
-            responses += b"HTTP/1.1 200 OK\r\nContent-Length: 12\r\n\r\nresponse-two"
-            conn.write(responses)
+        def _on_raw_receive(conn, data):
+            received += data
+            if responded:
+                return
+            # Each GET request ends in an empty line. Once both have arrived,
+            # answer both in a single write so the responses coalesce into one
+            # receive event on the client side.
+            if received.count(b"\r\n\r\n") >= 2:
+                responded = True
+                responses = b"HTTP/1.1 200 OK\r\nContent-Length: 12\r\n\r\nresponse-one"
+                responses += b"HTTP/1.1 200 OK\r\nContent-Length: 12\r\n\r\nresponse-two"
+                conn.write(responses)
 
-    def _on_raw_error(conn, errmsg):
-        _finish_failure("TCP server connection error: " + errmsg)
+        def _on_raw_error(conn, errmsg):
+            _finish_failure("TCP server connection error: " + errmsg)
 
-    def _on_connect(c):
-        c.get("/1", _on_response1)
-        c.get("/2", _on_response2)
+        def _on_connect(c):
+            c.get("/1", _on_response1)
+            c.get("/2", _on_response2)
 
-    def _on_response1(c, r):
-        if r.status != 200 or r.body != b"response-one":
-            _finish_failure("Unexpected first response: " + str(r.status) + " " + str(r.body))
-            return
-        got_first = True
+        def _on_response1(c, r):
+            if r.status != 200 or r.body != b"response-one":
+                _finish_failure("Unexpected first response: " + str(r.status) + " " + str(r.body))
+                return
+            got_first = True
 
-    def _on_response2(c, r):
-        if not got_first:
-            _finish_failure("Second response delivered before the first")
-            return
-        if r.status != 200 or r.body != b"response-two":
-            _finish_failure("Unexpected second response: " + str(r.status) + " " + str(r.body))
-            return
-        _finish_success()
+        def _on_response2(c, r):
+            if not got_first:
+                _finish_failure("Second response delivered before the first")
+                return
+            if r.status != 200 or r.body != b"response-two":
+                _finish_failure("Unexpected second response: " + str(r.status) + " " + str(r.body))
+                return
+            _finish_success()
 
-    def _on_client_error(c, errmsg):
-        _finish_failure("HTTP client error: " + errmsg)
+        def _on_client_error(c, errmsg):
+            _finish_failure("HTTP client error: " + errmsg)
 
-    def _start_client():
-        std.http.Client(conn_cap, "127.0.0.1", _on_connect, _on_client_error, scheme="http", port=port)
+        def _start_client():
+            std.http.Client(conn_cap, "127.0.0.1", _on_connect, _on_client_error, scheme="http", port=port)
 
-    def _timeout():
-        _finish_failure("timeout waiting for the second pipelined response, server received: " + str(received))
+        def _timeout():
+            _finish_failure("timeout waiting for the second pipelined response, server received: " + str(received))
 
-    net.TCPListener(serv_cap, "127.0.0.1", 0, _on_raw_listen, _on_raw_accept)
-    after 10: _timeout()
+        net.TCPListener(serv_cap, "127.0.0.1", 0, _on_raw_listen, _on_raw_accept)
+        after 10: _timeout()
 
 
 actor _test_HttpServerPipelinedRequests(t: testing.EnvT):
@@ -1044,76 +1052,77 @@ actor _test_HttpServerPipelinedRequests(t: testing.EnvT):
     the server has to hold the second response back until the first has been
     sent: the responses must arrive in request order.
     """
-    log = logging.Logger(t.log_handler)
-    t.timeout(15.0)
     var done = False
     var port = 0
     var parser = std.http.MessageParser()
     var bodies: list[bytes] = []
 
-    serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
-    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
+    proc def __startup__():
+        log = logging.Logger(t.log_handler)
+        t.timeout(15.0)
+        serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+        conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
 
-    def _finish_success():
-        if done:
-            return
-        done = True
-        t.success()
-
-    def _finish_failure(msg: str):
-        if done:
-            return
-        done = True
-        t.failure(AssertionError(msg))
-
-    def _on_http_accept(s):
-        s.cb_install(_on_http_request, _on_http_server_error)
-
-    def _on_http_request(s, request, respond):
-        if request.path == "/1":
-            after 0.1: respond(200, {}, request.path.encode())
-        else:
-            after 0.01: respond(200, {}, request.path.encode())
-
-    def _on_http_server_error(s, error):
-        _finish_failure("HTTP server error: " + error)
-
-    def _on_http_listen(listener, error):
-        if error is not None:
-            _finish_failure("HTTP listen failed: " + error)
-            return
-        port = listener.endpoint().port
-        _start_client()
-
-    def _on_raw_connect(conn):
-        conn.write(b"GET /1 HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\nGET /2 HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
-
-    def _on_raw_receive(conn, data):
-        for m in parser.feed(data):
-            bodies.append(m.body)
-        err = parser.error
-        if err is not None:
-            _finish_failure("Malformed response from server: " + err)
-            return
-        if len(bodies) >= 2:
-            if bodies[0] != b"/1" or bodies[1] != b"/2":
-                _finish_failure("Responses out of order or wrong: " + str(bodies))
+        def _finish_success():
+            if done:
                 return
-            _finish_success()
+            done = True
+            t.success()
 
-    def _on_raw_error(conn, errmsg):
-        _finish_failure("TCP client error: " + errmsg)
+        def _finish_failure(msg: str):
+            if done:
+                return
+            done = True
+            t.failure(AssertionError(msg))
 
-    def _start_client():
-        parser = std.http.MessageParser()
-        bodies = []
-        net.TCPConnection(conn_cap, "127.0.0.1", port, _on_raw_connect, _on_raw_receive, _on_raw_error, None)
+        def _on_http_accept(s):
+            s.cb_install(_on_http_request, _on_http_server_error)
 
-    def _timeout():
-        _finish_failure("timeout, responses received: " + str(bodies))
+        def _on_http_request(s, request, respond):
+            if request.path == "/1":
+                after 0.1: respond(200, {}, request.path.encode())
+            else:
+                after 0.01: respond(200, {}, request.path.encode())
 
-    std.http.Listener(serv_cap, "127.0.0.1", 0, _on_http_accept, on_listen=_on_http_listen)
-    after 10: _timeout()
+        def _on_http_server_error(s, error):
+            _finish_failure("HTTP server error: " + error)
+
+        def _on_http_listen(listener, error):
+            if error is not None:
+                _finish_failure("HTTP listen failed: " + error)
+                return
+            port = listener.endpoint().port
+            _start_client()
+
+        def _on_raw_connect(conn):
+            conn.write(b"GET /1 HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\nGET /2 HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
+
+        def _on_raw_receive(conn, data):
+            for m in parser.feed(data):
+                bodies.append(m.body)
+            err = parser.error
+            if err is not None:
+                _finish_failure("Malformed response from server: " + err)
+                return
+            if len(bodies) >= 2:
+                if bodies[0] != b"/1" or bodies[1] != b"/2":
+                    _finish_failure("Responses out of order or wrong: " + str(bodies))
+                    return
+                _finish_success()
+
+        def _on_raw_error(conn, errmsg):
+            _finish_failure("TCP client error: " + errmsg)
+
+        def _start_client():
+            parser = std.http.MessageParser()
+            bodies = []
+            net.TCPConnection(conn_cap, "127.0.0.1", port, _on_raw_connect, _on_raw_receive, _on_raw_error, None)
+
+        def _timeout():
+            _finish_failure("timeout, responses received: " + str(bodies))
+
+        std.http.Listener(serv_cap, "127.0.0.1", 0, _on_http_accept, on_listen=_on_http_listen)
+        after 10: _timeout()
 
 
 actor _test_HttpServerConnectionClose(t: testing.EnvT):
@@ -1126,83 +1135,84 @@ actor _test_HttpServerConnectionClose(t: testing.EnvT):
     responses, in order, and then see the server close the connection. The
     third request must never reach the handler.
     """
-    log = logging.Logger(t.log_handler)
-    t.timeout(15.0)
     var done = False
     var port = 0
     var parser = std.http.MessageParser()
     var bodies: list[bytes] = []
     var handled: list[str] = []
 
-    serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
-    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
+    proc def __startup__():
+        log = logging.Logger(t.log_handler)
+        t.timeout(15.0)
+        serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+        conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
 
-    def _finish_success():
-        if done:
-            return
-        done = True
-        t.success()
+        def _finish_success():
+            if done:
+                return
+            done = True
+            t.success()
 
-    def _finish_failure(msg: str):
-        if done:
-            return
-        done = True
-        t.failure(AssertionError(msg))
+        def _finish_failure(msg: str):
+            if done:
+                return
+            done = True
+            t.failure(AssertionError(msg))
 
-    def _on_http_accept(s):
-        s.cb_install(_on_http_request, _on_http_server_error)
+        def _on_http_accept(s):
+            s.cb_install(_on_http_request, _on_http_server_error)
 
-    def _on_http_request(s, request, respond):
-        handled.append(request.path)
-        if request.path == "/1":
-            after 0.1: respond(200, {}, request.path.encode())
-        else:
-            respond(200, {}, request.path.encode())
+        def _on_http_request(s, request, respond):
+            handled.append(request.path)
+            if request.path == "/1":
+                after 0.1: respond(200, {}, request.path.encode())
+            else:
+                respond(200, {}, request.path.encode())
 
-    def _on_http_server_error(s, error):
-        _finish_failure("HTTP server error: " + error)
+        def _on_http_server_error(s, error):
+            _finish_failure("HTTP server error: " + error)
 
-    def _on_http_listen(listener, error):
-        if error is not None:
-            _finish_failure("HTTP listen failed: " + error)
-            return
-        port = listener.endpoint().port
-        _start_client()
+        def _on_http_listen(listener, error):
+            if error is not None:
+                _finish_failure("HTTP listen failed: " + error)
+                return
+            port = listener.endpoint().port
+            _start_client()
 
-    def _on_raw_connect(conn):
-        conn.write(b"GET /1 HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\nGET /2 HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: keep-alive, Close\r\n\r\nGET /3 HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
+        def _on_raw_connect(conn):
+            conn.write(b"GET /1 HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\nGET /2 HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: keep-alive, Close\r\n\r\nGET /3 HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
 
-    def _on_raw_receive(conn, data):
-        for m in parser.feed(data):
-            bodies.append(m.body)
-        err = parser.error
-        if err is not None:
-            _finish_failure("Malformed response from server: " + err)
-            return
+        def _on_raw_receive(conn, data):
+            for m in parser.feed(data):
+                bodies.append(m.body)
+            err = parser.error
+            if err is not None:
+                _finish_failure("Malformed response from server: " + err)
+                return
 
-    def _on_raw_remote_close(conn):
-        if bodies != [b"/1", b"/2"]:
-            _finish_failure("Expected the responses to /1 and /2 before the close, got: " + str(bodies))
-            return
-        if handled != ["/1", "/2"]:
-            _finish_failure("Expected only /1 and /2 to be handled, handled: " + str(handled))
-            return
-        _finish_success()
+        def _on_raw_remote_close(conn):
+            if bodies != [b"/1", b"/2"]:
+                _finish_failure("Expected the responses to /1 and /2 before the close, got: " + str(bodies))
+                return
+            if handled != ["/1", "/2"]:
+                _finish_failure("Expected only /1 and /2 to be handled, handled: " + str(handled))
+                return
+            _finish_success()
 
-    def _on_raw_error(conn, errmsg):
-        _finish_failure("TCP client error: " + errmsg)
+        def _on_raw_error(conn, errmsg):
+            _finish_failure("TCP client error: " + errmsg)
 
-    def _start_client():
-        parser = std.http.MessageParser()
-        bodies = []
-        handled = []
-        net.TCPConnection(conn_cap, "127.0.0.1", port, _on_raw_connect, _on_raw_receive, _on_raw_error, _on_raw_remote_close)
+        def _start_client():
+            parser = std.http.MessageParser()
+            bodies = []
+            handled = []
+            net.TCPConnection(conn_cap, "127.0.0.1", port, _on_raw_connect, _on_raw_receive, _on_raw_error, _on_raw_remote_close)
 
-    def _timeout():
-        _finish_failure("timeout, responses received: " + str(bodies) + ", handled: " + str(handled))
+        def _timeout():
+            _finish_failure("timeout, responses received: " + str(bodies) + ", handled: " + str(handled))
 
-    std.http.Listener(serv_cap, "127.0.0.1", 0, _on_http_accept, on_listen=_on_http_listen)
-    after 10: _timeout()
+        std.http.Listener(serv_cap, "127.0.0.1", 0, _on_http_accept, on_listen=_on_http_listen)
+        after 10: _timeout()
 
 
 actor _test_HttpsServerPipelinedRequests(t: testing.EnvT):
@@ -1214,72 +1224,73 @@ actor _test_HttpsServerPipelinedRequests(t: testing.EnvT):
     the server has to hold the second response back until the first has been
     sent: the responses must arrive in request order.
     """
-    log = logging.Logger(t.log_handler)
-    t.timeout(15.0)
     var done = False
     var port = 0
     var parser = std.http.MessageParser()
     var bodies: list[bytes] = []
 
-    serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
-    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
+    proc def __startup__():
+        log = logging.Logger(t.log_handler)
+        t.timeout(15.0)
+        serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+        conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
 
-    def _finish_success():
-        if done:
-            return
-        done = True
-        t.success()
-
-    def _finish_failure(msg: str):
-        if done:
-            return
-        done = True
-        t.failure(AssertionError(msg))
-
-    def _on_http_accept(s):
-        s.cb_install(_on_http_request, _on_http_server_error)
-
-    def _on_http_request(s, request, respond):
-        if request.path == "/1":
-            after 0.1: respond(200, {}, request.path.encode())
-        else:
-            after 0.01: respond(200, {}, request.path.encode())
-
-    def _on_http_server_error(s, error):
-        _finish_failure("HTTP server error: " + error)
-
-    def _on_http_listen(listener, error):
-        if error is not None:
-            _finish_failure("HTTP listen failed: " + error)
-            return
-        port = listener.endpoint().port
-        _start_client()
-
-    def _on_raw_connect(conn):
-        conn.write(b"GET /1 HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\nGET /2 HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
-
-    def _on_raw_receive(conn, data):
-        for m in parser.feed(data):
-            bodies.append(m.body)
-        if len(bodies) >= 2:
-            if bodies[0] != b"/1" or bodies[1] != b"/2":
-                _finish_failure("Responses out of order or wrong: " + str(bodies))
+        def _finish_success():
+            if done:
                 return
-            _finish_success()
+            done = True
+            t.success()
 
-    def _on_raw_error(conn, errmsg):
-        _finish_failure("TLS client error: " + errmsg)
+        def _finish_failure(msg: str):
+            if done:
+                return
+            done = True
+            t.failure(AssertionError(msg))
 
-    def _start_client():
-        parser = std.http.MessageParser()
-        bodies = []
-        net.TLSConnection(conn_cap, "127.0.0.1", port, _on_raw_connect, _on_raw_receive, _on_raw_error, None, verify_tls=False)
+        def _on_http_accept(s):
+            s.cb_install(_on_http_request, _on_http_server_error)
 
-    def _timeout():
-        _finish_failure("timeout, responses received: " + str(bodies))
+        def _on_http_request(s, request, respond):
+            if request.path == "/1":
+                after 0.1: respond(200, {}, request.path.encode())
+            else:
+                after 0.01: respond(200, {}, request.path.encode())
 
-    std.http.TLSListener(serv_cap, "127.0.0.1", 0, CERT_PEM.encode(), KEY_PEM.encode(), _on_http_accept, on_listen=_on_http_listen)
-    after 10: _timeout()
+        def _on_http_server_error(s, error):
+            _finish_failure("HTTP server error: " + error)
+
+        def _on_http_listen(listener, error):
+            if error is not None:
+                _finish_failure("HTTP listen failed: " + error)
+                return
+            port = listener.endpoint().port
+            _start_client()
+
+        def _on_raw_connect(conn):
+            conn.write(b"GET /1 HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\nGET /2 HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
+
+        def _on_raw_receive(conn, data):
+            for m in parser.feed(data):
+                bodies.append(m.body)
+            if len(bodies) >= 2:
+                if bodies[0] != b"/1" or bodies[1] != b"/2":
+                    _finish_failure("Responses out of order or wrong: " + str(bodies))
+                    return
+                _finish_success()
+
+        def _on_raw_error(conn, errmsg):
+            _finish_failure("TLS client error: " + errmsg)
+
+        def _start_client():
+            parser = std.http.MessageParser()
+            bodies = []
+            net.TLSConnection(conn_cap, "127.0.0.1", port, _on_raw_connect, _on_raw_receive, _on_raw_error, None, verify_tls=False)
+
+        def _timeout():
+            _finish_failure("timeout, responses received: " + str(bodies))
+
+        std.http.TLSListener(serv_cap, "127.0.0.1", 0, CERT_PEM.encode(), KEY_PEM.encode(), _on_http_accept, on_listen=_on_http_listen)
+        after 10: _timeout()
 
 
 actor _test_HttpServerMalformedRequest(t: testing.EnvT):
@@ -1290,76 +1301,77 @@ actor _test_HttpServerMalformedRequest(t: testing.EnvT):
     first request and then close the connection without handing the second
     one to the handler.
     """
-    log = logging.Logger(t.log_handler)
-    t.timeout(15.0)
     var done = False
     var port = 0
     var parser = std.http.MessageParser()
     var bodies: list[bytes] = []
     var handled: list[str] = []
 
-    serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
-    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
+    proc def __startup__():
+        log = logging.Logger(t.log_handler)
+        t.timeout(15.0)
+        serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+        conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
 
-    def _finish_success():
-        if done:
-            return
-        done = True
-        t.success()
+        def _finish_success():
+            if done:
+                return
+            done = True
+            t.success()
 
-    def _finish_failure(msg: str):
-        if done:
-            return
-        done = True
-        t.failure(AssertionError(msg))
+        def _finish_failure(msg: str):
+            if done:
+                return
+            done = True
+            t.failure(AssertionError(msg))
 
-    def _on_http_accept(s):
-        s.cb_install(_on_http_request, _on_http_server_error)
+        def _on_http_accept(s):
+            s.cb_install(_on_http_request, _on_http_server_error)
 
-    def _on_http_request(s, request, respond):
-        handled.append(request.path)
-        after 0.05: respond(200, {}, request.path.encode())
+        def _on_http_request(s, request, respond):
+            handled.append(request.path)
+            after 0.05: respond(200, {}, request.path.encode())
 
-    def _on_http_server_error(s, error):
-        _finish_failure("HTTP server error: " + error)
+        def _on_http_server_error(s, error):
+            _finish_failure("HTTP server error: " + error)
 
-    def _on_http_listen(listener, error):
-        if error is not None:
-            _finish_failure("HTTP listen failed: " + error)
-            return
-        port = listener.endpoint().port
-        _start_client()
+        def _on_http_listen(listener, error):
+            if error is not None:
+                _finish_failure("HTTP listen failed: " + error)
+                return
+            port = listener.endpoint().port
+            _start_client()
 
-    def _on_raw_connect(conn):
-        conn.write(b"GET /1 HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\nGET /2 HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: many\r\n\r\n")
+        def _on_raw_connect(conn):
+            conn.write(b"GET /1 HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\nGET /2 HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: many\r\n\r\n")
 
-    def _on_raw_receive(conn, data):
-        for m in parser.feed(data):
-            bodies.append(m.body)
+        def _on_raw_receive(conn, data):
+            for m in parser.feed(data):
+                bodies.append(m.body)
 
-    def _on_raw_remote_close(conn):
-        if bodies != [b"/1"]:
-            _finish_failure("Expected the response to /1 before the close, got: " + str(bodies))
-            return
-        if handled != ["/1"]:
-            _finish_failure("Expected only /1 to be handled, handled: " + str(handled))
-            return
-        _finish_success()
+        def _on_raw_remote_close(conn):
+            if bodies != [b"/1"]:
+                _finish_failure("Expected the response to /1 before the close, got: " + str(bodies))
+                return
+            if handled != ["/1"]:
+                _finish_failure("Expected only /1 to be handled, handled: " + str(handled))
+                return
+            _finish_success()
 
-    def _on_raw_error(conn, errmsg):
-        _finish_failure("TCP client error: " + errmsg)
+        def _on_raw_error(conn, errmsg):
+            _finish_failure("TCP client error: " + errmsg)
 
-    def _start_client():
-        parser = std.http.MessageParser()
-        bodies = []
-        handled = []
-        net.TCPConnection(conn_cap, "127.0.0.1", port, _on_raw_connect, _on_raw_receive, _on_raw_error, _on_raw_remote_close)
+        def _start_client():
+            parser = std.http.MessageParser()
+            bodies = []
+            handled = []
+            net.TCPConnection(conn_cap, "127.0.0.1", port, _on_raw_connect, _on_raw_receive, _on_raw_error, _on_raw_remote_close)
 
-    def _timeout():
-        _finish_failure("timeout, responses received: " + str(bodies) + ", handled: " + str(handled))
+        def _timeout():
+            _finish_failure("timeout, responses received: " + str(bodies) + ", handled: " + str(handled))
 
-    std.http.Listener(serv_cap, "127.0.0.1", 0, _on_http_accept, on_listen=_on_http_listen)
-    after 10: _timeout()
+        std.http.Listener(serv_cap, "127.0.0.1", 0, _on_http_accept, on_listen=_on_http_listen)
+        after 10: _timeout()
 
 
 actor _test_HttpServerHttp10(t: testing.EnvT):
@@ -1369,73 +1381,74 @@ actor _test_HttpServerHttp10(t: testing.EnvT):
     sends one HTTP/1.0 request and must get its response and then see the
     server close the connection.
     """
-    log = logging.Logger(t.log_handler)
-    t.timeout(15.0)
     var done = False
     var port = 0
     var parser = std.http.MessageParser()
     var bodies: list[bytes] = []
     var handled: list[str] = []
 
-    serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
-    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
+    proc def __startup__():
+        log = logging.Logger(t.log_handler)
+        t.timeout(15.0)
+        serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+        conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
 
-    def _finish_success():
-        if done:
-            return
-        done = True
-        t.success()
+        def _finish_success():
+            if done:
+                return
+            done = True
+            t.success()
 
-    def _finish_failure(msg: str):
-        if done:
-            return
-        done = True
-        t.failure(AssertionError(msg))
+        def _finish_failure(msg: str):
+            if done:
+                return
+            done = True
+            t.failure(AssertionError(msg))
 
-    def _on_http_accept(s):
-        s.cb_install(_on_http_request, _on_http_server_error)
+        def _on_http_accept(s):
+            s.cb_install(_on_http_request, _on_http_server_error)
 
-    def _on_http_request(s, request, respond):
-        handled.append(request.path)
-        respond(200, {}, request.path.encode())
+        def _on_http_request(s, request, respond):
+            handled.append(request.path)
+            respond(200, {}, request.path.encode())
 
-    def _on_http_server_error(s, error):
-        _finish_failure("HTTP server error: " + error)
+        def _on_http_server_error(s, error):
+            _finish_failure("HTTP server error: " + error)
 
-    def _on_http_listen(listener, error):
-        if error is not None:
-            _finish_failure("HTTP listen failed: " + error)
-            return
-        port = listener.endpoint().port
-        _start_client()
+        def _on_http_listen(listener, error):
+            if error is not None:
+                _finish_failure("HTTP listen failed: " + error)
+                return
+            port = listener.endpoint().port
+            _start_client()
 
-    def _on_raw_connect(conn):
-        conn.write(b"GET /a HTTP/1.0\r\nHost: 127.0.0.1\r\n\r\n")
+        def _on_raw_connect(conn):
+            conn.write(b"GET /a HTTP/1.0\r\nHost: 127.0.0.1\r\n\r\n")
 
-    def _on_raw_receive(conn, data):
-        for m in parser.feed(data):
-            bodies.append(m.body)
+        def _on_raw_receive(conn, data):
+            for m in parser.feed(data):
+                bodies.append(m.body)
 
-    def _on_raw_remote_close(conn):
-        if bodies != [b"/a"] or handled != ["/a"]:
-            _finish_failure("Expected the response to /a before the close, got: " + str(bodies) + ", handled: " + str(handled))
-            return
-        _finish_success()
+        def _on_raw_remote_close(conn):
+            if bodies != [b"/a"] or handled != ["/a"]:
+                _finish_failure("Expected the response to /a before the close, got: " + str(bodies) + ", handled: " + str(handled))
+                return
+            _finish_success()
 
-    def _on_raw_error(conn, errmsg):
-        _finish_failure("TCP client error: " + errmsg)
+        def _on_raw_error(conn, errmsg):
+            _finish_failure("TCP client error: " + errmsg)
 
-    def _start_client():
-        parser = std.http.MessageParser()
-        bodies = []
-        handled = []
-        net.TCPConnection(conn_cap, "127.0.0.1", port, _on_raw_connect, _on_raw_receive, _on_raw_error, _on_raw_remote_close)
+        def _start_client():
+            parser = std.http.MessageParser()
+            bodies = []
+            handled = []
+            net.TCPConnection(conn_cap, "127.0.0.1", port, _on_raw_connect, _on_raw_receive, _on_raw_error, _on_raw_remote_close)
 
-    def _timeout():
-        _finish_failure("timeout, responses received: " + str(bodies) + ", handled: " + str(handled))
+        def _timeout():
+            _finish_failure("timeout, responses received: " + str(bodies) + ", handled: " + str(handled))
 
-    std.http.Listener(serv_cap, "127.0.0.1", 0, _on_http_accept, on_listen=_on_http_listen)
-    after 10: _timeout()
+        std.http.Listener(serv_cap, "127.0.0.1", 0, _on_http_accept, on_listen=_on_http_listen)
+        after 10: _timeout()
 
 
 actor _test_HttpServerDuplicateRespond(t: testing.EnvT):
@@ -1447,77 +1460,78 @@ actor _test_HttpServerDuplicateRespond(t: testing.EnvT):
     first is outstanding. The client must get the first answer to each
     request, in order, and then see the server close the connection.
     """
-    log = logging.Logger(t.log_handler)
-    t.timeout(15.0)
     var done = False
     var port = 0
     var parser = std.http.MessageParser()
     var bodies: list[bytes] = []
     var handled: list[str] = []
 
-    serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
-    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
+    proc def __startup__():
+        log = logging.Logger(t.log_handler)
+        t.timeout(15.0)
+        serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+        conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
 
-    def _finish_success():
-        if done:
-            return
-        done = True
-        t.success()
+        def _finish_success():
+            if done:
+                return
+            done = True
+            t.success()
 
-    def _finish_failure(msg: str):
-        if done:
-            return
-        done = True
-        t.failure(AssertionError(msg))
+        def _finish_failure(msg: str):
+            if done:
+                return
+            done = True
+            t.failure(AssertionError(msg))
 
-    def _on_http_accept(s):
-        s.cb_install(_on_http_request, _on_http_server_error)
+        def _on_http_accept(s):
+            s.cb_install(_on_http_request, _on_http_server_error)
 
-    def _on_http_request(s, request, respond):
-        handled.append(request.path)
-        if request.path == "/a":
-            after 0.1: respond(200, {}, b"a")
-        else:
-            respond(200, {}, b"b-first")
-            respond(200, {}, b"b-second")
+        def _on_http_request(s, request, respond):
+            handled.append(request.path)
+            if request.path == "/a":
+                after 0.1: respond(200, {}, b"a")
+            else:
+                respond(200, {}, b"b-first")
+                respond(200, {}, b"b-second")
 
-    def _on_http_server_error(s, error):
-        _finish_failure("HTTP server error: " + error)
+        def _on_http_server_error(s, error):
+            _finish_failure("HTTP server error: " + error)
 
-    def _on_http_listen(listener, error):
-        if error is not None:
-            _finish_failure("HTTP listen failed: " + error)
-            return
-        port = listener.endpoint().port
-        _start_client()
+        def _on_http_listen(listener, error):
+            if error is not None:
+                _finish_failure("HTTP listen failed: " + error)
+                return
+            port = listener.endpoint().port
+            _start_client()
 
-    def _on_raw_connect(conn):
-        conn.write(b"GET /a HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\nGET /b HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n")
+        def _on_raw_connect(conn):
+            conn.write(b"GET /a HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\nGET /b HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n")
 
-    def _on_raw_receive(conn, data):
-        for m in parser.feed(data):
-            bodies.append(m.body)
+        def _on_raw_receive(conn, data):
+            for m in parser.feed(data):
+                bodies.append(m.body)
 
-    def _on_raw_remote_close(conn):
-        if bodies != [b"a", b"b-first"]:
-            _finish_failure("Expected the first answer to each request, got: " + str(bodies))
-            return
-        _finish_success()
+        def _on_raw_remote_close(conn):
+            if bodies != [b"a", b"b-first"]:
+                _finish_failure("Expected the first answer to each request, got: " + str(bodies))
+                return
+            _finish_success()
 
-    def _on_raw_error(conn, errmsg):
-        _finish_failure("TCP client error: " + errmsg)
+        def _on_raw_error(conn, errmsg):
+            _finish_failure("TCP client error: " + errmsg)
 
-    def _start_client():
-        parser = std.http.MessageParser()
-        bodies = []
-        handled = []
-        net.TCPConnection(conn_cap, "127.0.0.1", port, _on_raw_connect, _on_raw_receive, _on_raw_error, _on_raw_remote_close)
+        def _start_client():
+            parser = std.http.MessageParser()
+            bodies = []
+            handled = []
+            net.TCPConnection(conn_cap, "127.0.0.1", port, _on_raw_connect, _on_raw_receive, _on_raw_error, _on_raw_remote_close)
 
-    def _timeout():
-        _finish_failure("timeout, responses received: " + str(bodies) + ", handled: " + str(handled))
+        def _timeout():
+            _finish_failure("timeout, responses received: " + str(bodies) + ", handled: " + str(handled))
 
-    std.http.Listener(serv_cap, "127.0.0.1", 0, _on_http_accept, on_listen=_on_http_listen)
-    after 10: _timeout()
+        std.http.Listener(serv_cap, "127.0.0.1", 0, _on_http_accept, on_listen=_on_http_listen)
+        after 10: _timeout()
 
 
 actor _test_HttpServerLateCbInstall(t: testing.EnvT):
@@ -1528,65 +1542,66 @@ actor _test_HttpServerLateCbInstall(t: testing.EnvT):
     which time the client's request has been received. The server must keep
     the request and dispatch it to the handler once it is installed.
     """
-    log = logging.Logger(t.log_handler)
-    t.timeout(15.0)
     var done = False
     var port = 0
 
-    serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
-    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
+    proc def __startup__():
+        log = logging.Logger(t.log_handler)
+        t.timeout(15.0)
+        serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+        conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
 
-    def _finish_success():
-        if done:
-            return
-        done = True
-        t.success()
+        def _finish_success():
+            if done:
+                return
+            done = True
+            t.success()
 
-    def _finish_failure(msg: str):
-        if done:
-            return
-        done = True
-        t.failure(AssertionError(msg))
+        def _finish_failure(msg: str):
+            if done:
+                return
+            done = True
+            t.failure(AssertionError(msg))
 
-    def _install(s):
-        s.cb_install(_on_http_request, _on_http_server_error)
+        def _install(s):
+            s.cb_install(_on_http_request, _on_http_server_error)
 
-    def _on_http_accept(s):
-        after 0.3: _install(s)
+        def _on_http_accept(s):
+            after 0.3: _install(s)
 
-    def _on_http_request(s, request, respond):
-        respond(200, {}, b"late install")
+        def _on_http_request(s, request, respond):
+            respond(200, {}, b"late install")
 
-    def _on_http_server_error(s, error):
-        _finish_failure("HTTP server error: " + error)
+        def _on_http_server_error(s, error):
+            _finish_failure("HTTP server error: " + error)
 
-    def _on_http_listen(listener, error):
-        if error is not None:
-            _finish_failure("HTTP listen failed: " + error)
-            return
-        port = listener.endpoint().port
-        _start_client()
+        def _on_http_listen(listener, error):
+            if error is not None:
+                _finish_failure("HTTP listen failed: " + error)
+                return
+            port = listener.endpoint().port
+            _start_client()
 
-    def _on_connect(c):
-        c.get("/", _on_response)
+        def _on_connect(c):
+            c.get("/", _on_response)
 
-    def _on_response(c, r):
-        if r.status != 200 or r.body != b"late install":
-            _finish_failure("Unexpected response: " + str(r.status) + " " + str(r.body))
-            return
-        _finish_success()
+        def _on_response(c, r):
+            if r.status != 200 or r.body != b"late install":
+                _finish_failure("Unexpected response: " + str(r.status) + " " + str(r.body))
+                return
+            _finish_success()
 
-    def _on_client_error(c, errmsg):
-        _finish_failure("HTTP client error: " + errmsg)
+        def _on_client_error(c, errmsg):
+            _finish_failure("HTTP client error: " + errmsg)
 
-    def _start_client():
-        std.http.Client(conn_cap, "127.0.0.1", _on_connect, _on_client_error, scheme="http", port=port)
+        def _start_client():
+            std.http.Client(conn_cap, "127.0.0.1", _on_connect, _on_client_error, scheme="http", port=port)
 
-    def _timeout():
-        _finish_failure("timeout: the request that arrived before cb_install was not answered")
+        def _timeout():
+            _finish_failure("timeout: the request that arrived before cb_install was not answered")
 
-    std.http.Listener(serv_cap, "127.0.0.1", 0, _on_http_accept, on_listen=_on_http_listen)
-    after 10: _timeout()
+        std.http.Listener(serv_cap, "127.0.0.1", 0, _on_http_accept, on_listen=_on_http_listen)
+        after 10: _timeout()
 
 
 actor _test_HttpServerHandlerCallsBack(t: testing.EnvT):
@@ -1598,64 +1613,65 @@ actor _test_HttpServerHandlerCallsBack(t: testing.EnvT):
     for the handler to return, so the server must invoke the handler
     asynchronously; a server that awaits its handler deadlocks with it here.
     """
-    log = logging.Logger(t.log_handler)
-    t.timeout(15.0)
     var done = False
     var port = 0
 
-    serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
-    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
+    proc def __startup__():
+        log = logging.Logger(t.log_handler)
+        t.timeout(15.0)
+        serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+        conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
 
-    def _finish_success():
-        if done:
-            return
-        done = True
-        t.success()
+        def _finish_success():
+            if done:
+                return
+            done = True
+            t.success()
 
-    def _finish_failure(msg: str):
-        if done:
-            return
-        done = True
-        t.failure(AssertionError(msg))
+        def _finish_failure(msg: str):
+            if done:
+                return
+            done = True
+            t.failure(AssertionError(msg))
 
-    def _on_http_accept(s):
-        s.cb_install(_on_http_request, _on_http_server_error)
+        def _on_http_accept(s):
+            s.cb_install(_on_http_request, _on_http_server_error)
 
-    def _on_http_request(s, request, respond):
-        # Calling the action in value position makes this a synchronous call
-        # into the server: this actor is parked until the server has run it
-        res = respond(200, {}, b"called back")
+        def _on_http_request(s, request, respond):
+            # Calling the action in value position makes this a synchronous call
+            # into the server: this actor is parked until the server has run it
+            res = respond(200, {}, b"called back")
 
-    def _on_http_server_error(s, error):
-        _finish_failure("HTTP server error: " + error)
+        def _on_http_server_error(s, error):
+            _finish_failure("HTTP server error: " + error)
 
-    def _on_http_listen(listener, error):
-        if error is not None:
-            _finish_failure("HTTP listen failed: " + error)
-            return
-        port = listener.endpoint().port
-        _start_client()
+        def _on_http_listen(listener, error):
+            if error is not None:
+                _finish_failure("HTTP listen failed: " + error)
+                return
+            port = listener.endpoint().port
+            _start_client()
 
-    def _on_connect(c):
-        c.get("/", _on_response)
+        def _on_connect(c):
+            c.get("/", _on_response)
 
-    def _on_response(c, r):
-        if r.status != 200 or r.body != b"called back":
-            _finish_failure("Unexpected response: " + str(r.status) + " " + str(r.body))
-            return
-        _finish_success()
+        def _on_response(c, r):
+            if r.status != 200 or r.body != b"called back":
+                _finish_failure("Unexpected response: " + str(r.status) + " " + str(r.body))
+                return
+            _finish_success()
 
-    def _on_client_error(c, errmsg):
-        _finish_failure("HTTP client error: " + errmsg)
+        def _on_client_error(c, errmsg):
+            _finish_failure("HTTP client error: " + errmsg)
 
-    def _start_client():
-        std.http.Client(conn_cap, "127.0.0.1", _on_connect, _on_client_error, scheme="http", port=port)
+        def _start_client():
+            std.http.Client(conn_cap, "127.0.0.1", _on_connect, _on_client_error, scheme="http", port=port)
 
-    def _timeout():
-        _finish_failure("timeout: server and handler deadlocked")
+        def _timeout():
+            _finish_failure("timeout: server and handler deadlocked")
 
-    std.http.Listener(serv_cap, "127.0.0.1", 0, _on_http_accept, on_listen=_on_http_listen)
-    after 10: _timeout()
+        std.http.Listener(serv_cap, "127.0.0.1", 0, _on_http_accept, on_listen=_on_http_listen)
+        after 10: _timeout()
 
 
 
@@ -1670,71 +1686,72 @@ actor _test_HttpClientCallbackCallsBack(t: testing.EnvT):
     on_response asynchronously. A client that awaits its callbacks
     deadlocks with them here.
     """
-    log = logging.Logger(t.log_handler)
-    t.timeout(15.0)
     var done = False
     var port = 0
 
-    serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
-    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
+    proc def __startup__():
+        log = logging.Logger(t.log_handler)
+        t.timeout(15.0)
+        serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+        conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
 
-    def _finish_success():
-        if done:
-            return
-        done = True
-        t.success()
+        def _finish_success():
+            if done:
+                return
+            done = True
+            t.success()
 
-    def _finish_failure(msg: str):
-        if done:
-            return
-        done = True
-        t.failure(AssertionError(msg))
+        def _finish_failure(msg: str):
+            if done:
+                return
+            done = True
+            t.failure(AssertionError(msg))
 
-    def _on_http_accept(s):
-        s.cb_install(_on_http_request, _on_http_server_error)
+        def _on_http_accept(s):
+            s.cb_install(_on_http_request, _on_http_server_error)
 
-    def _on_http_request(s, request, respond):
-        respond(200, {}, request.path.encode())
+        def _on_http_request(s, request, respond):
+            respond(200, {}, request.path.encode())
 
-    def _on_http_server_error(s, error):
-        _finish_failure("HTTP server error: " + error)
+        def _on_http_server_error(s, error):
+            _finish_failure("HTTP server error: " + error)
 
-    def _on_http_listen(listener, error):
-        if error is not None:
-            _finish_failure("HTTP listen failed: " + error)
-            return
-        port = listener.endpoint().port
-        _start_client()
+        def _on_http_listen(listener, error):
+            if error is not None:
+                _finish_failure("HTTP listen failed: " + error)
+                return
+            port = listener.endpoint().port
+            _start_client()
 
-    def _on_connect(c):
-        # A value-position call: this actor is parked until the client has run it
-        res = c.get("/1", _on_response1)
+        def _on_connect(c):
+            # A value-position call: this actor is parked until the client has run it
+            res = c.get("/1", _on_response1)
 
-    def _on_response1(c, r):
-        if r.status != 200 or r.body != b"/1":
-            _finish_failure("Unexpected first response: " + str(r.status) + " " + str(r.body))
-            return
-        # Calling the action in value position makes this a synchronous call
-        # into the client: this actor is parked until the client has run it
-        res = c.get("/2", _on_response2)
+        def _on_response1(c, r):
+            if r.status != 200 or r.body != b"/1":
+                _finish_failure("Unexpected first response: " + str(r.status) + " " + str(r.body))
+                return
+            # Calling the action in value position makes this a synchronous call
+            # into the client: this actor is parked until the client has run it
+            res = c.get("/2", _on_response2)
 
-    def _on_response2(c, r):
-        if r.status != 200 or r.body != b"/2":
-            _finish_failure("Unexpected second response: " + str(r.status) + " " + str(r.body))
-            return
-        _finish_success()
+        def _on_response2(c, r):
+            if r.status != 200 or r.body != b"/2":
+                _finish_failure("Unexpected second response: " + str(r.status) + " " + str(r.body))
+                return
+            _finish_success()
 
-    def _on_client_error(c, errmsg):
-        _finish_failure("HTTP client error: " + errmsg)
+        def _on_client_error(c, errmsg):
+            _finish_failure("HTTP client error: " + errmsg)
 
-    def _start_client():
-        std.http.Client(conn_cap, "127.0.0.1", _on_connect, _on_client_error, scheme="http", port=port)
+        def _start_client():
+            std.http.Client(conn_cap, "127.0.0.1", _on_connect, _on_client_error, scheme="http", port=port)
 
-    def _timeout():
-        _finish_failure("timeout: client and callback deadlocked")
+        def _timeout():
+            _finish_failure("timeout: client and callback deadlocked")
 
-    std.http.Listener(serv_cap, "127.0.0.1", 0, _on_http_accept, on_listen=_on_http_listen)
-    after 10: _timeout()
+        std.http.Listener(serv_cap, "127.0.0.1", 0, _on_http_accept, on_listen=_on_http_listen)
+        after 10: _timeout()
 
 
 
@@ -1745,107 +1762,113 @@ actor _EarlyRequests(t: testing.EnvT, scheme: str):
     has connected. Each one must reach the server once and be answered in
     order, and the client must not report errors for them.
     """
-    log = logging.Logger(t.log_handler)
-    t.timeout(15.0)
     var done = False
     var port = 0
     var handled: list[str] = []
     var received: list[bytes] = []
-    expected = [("/" + str(i)).encode() for i in range(200)]
 
-    serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
-    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
+    proc def __startup__():
+        log = logging.Logger(t.log_handler)
+        t.timeout(15.0)
+        expected = [("/" + str(i)).encode() for i in range(200)]
 
-    def _finish_success():
-        if done:
-            return
-        done = True
-        t.success()
+        serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+        conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
 
-    def _finish_failure(msg: str):
-        if done:
-            return
-        done = True
-        t.failure(AssertionError(msg))
-
-    def _on_http_accept(s):
-        s.cb_install(_on_http_request, _on_http_server_error)
-
-    def _on_http_request(s, request, respond):
-        handled.append(request.path)
-        respond(200, {}, request.path.encode())
-
-    def _on_http_server_error(s, error):
-        _finish_failure("HTTP server error: " + error)
-
-    def _on_http_listen(listener, error):
-        if error is not None:
-            _finish_failure("HTTP listen failed: " + error)
-            return
-        port = listener.endpoint().port
-        _start_client()
-
-    def _on_connect(c):
-        pass
-
-    def _on_response(c, r):
-        received.append(r.body)
-        if len(received) == len(expected):
-            if received != expected:
-                _finish_failure("Responses out of order or wrong: " + str(received))
+        def _finish_success():
+            if done:
                 return
-            # Give duplicate requests time to reach the handler
-            after 0.2: _check_handled()
+            done = True
+            t.success()
 
-    def _check_handled():
-        if handled != [e.decode() for e in expected]:
-            _finish_failure("Each request must be handled once, handled: " + str(handled))
-            return
-        _finish_success()
+        def _finish_failure(msg: str):
+            if done:
+                return
+            done = True
+            t.failure(AssertionError(msg))
 
-    def _on_client_error(c, errmsg):
-        _finish_failure("HTTP client error: " + errmsg)
+        def _on_http_accept(s):
+            s.cb_install(_on_http_request, _on_http_server_error)
 
-    def _start_client():
-        c = std.http.Client(conn_cap, "127.0.0.1", _on_connect, _on_client_error, scheme=scheme, port=port, tls_verify=False)
-        for i in range(len(expected)):
-            c.get("/" + str(i), _on_response)
+        def _on_http_request(s, request, respond):
+            handled.append(request.path)
+            respond(200, {}, request.path.encode())
 
-    def _on_https_accept(s):
-        s.cb_install(_on_https_request, _on_https_server_error)
+        def _on_http_server_error(s, error):
+            _finish_failure("HTTP server error: " + error)
 
-    def _on_https_request(s, request, respond):
-        handled.append(request.path)
-        respond(200, {}, request.path.encode())
+        def _on_http_listen(listener, error):
+            if error is not None:
+                _finish_failure("HTTP listen failed: " + error)
+                return
+            port = listener.endpoint().port
+            _start_client()
 
-    def _on_https_server_error(s, error):
-        _finish_failure("HTTPS server error: " + error)
+        def _on_connect(c):
+            pass
 
-    def _on_https_listen(listener, error):
-        if error is not None:
-            _finish_failure("HTTPS listen failed: " + error)
-            return
-        port = listener.endpoint().port
-        _start_client()
+        def _on_response(c, r):
+            received.append(r.body)
+            if len(received) == len(expected):
+                if received != expected:
+                    _finish_failure("Responses out of order or wrong: " + str(received))
+                    return
+                # Give duplicate requests time to reach the handler
+                after 0.2: _check_handled()
 
-    def _timeout():
-        _finish_failure("timeout, responses received: " + str(received) + ", handled: " + str(handled))
+        def _check_handled():
+            if handled != [e.decode() for e in expected]:
+                _finish_failure("Each request must be handled once, handled: " + str(handled))
+                return
+            _finish_success()
 
-    if scheme == "https":
-        std.http.TLSListener(serv_cap, "127.0.0.1", 0, CERT_PEM.encode(), KEY_PEM.encode(), _on_https_accept, on_listen=_on_https_listen)
-    else:
-        std.http.Listener(serv_cap, "127.0.0.1", 0, _on_http_accept, on_listen=_on_http_listen)
-    after 10: _timeout()
+        def _on_client_error(c, errmsg):
+            _finish_failure("HTTP client error: " + errmsg)
+
+        def _start_client():
+            c = std.http.Client(conn_cap, "127.0.0.1", _on_connect, _on_client_error, scheme=scheme, port=port, tls_verify=False)
+            for i in range(len(expected)):
+                c.get("/" + str(i), _on_response)
+
+        def _on_https_accept(s):
+            s.cb_install(_on_https_request, _on_https_server_error)
+
+        def _on_https_request(s, request, respond):
+            handled.append(request.path)
+            respond(200, {}, request.path.encode())
+
+        def _on_https_server_error(s, error):
+            _finish_failure("HTTPS server error: " + error)
+
+        def _on_https_listen(listener, error):
+            if error is not None:
+                _finish_failure("HTTPS listen failed: " + error)
+                return
+            port = listener.endpoint().port
+            _start_client()
+
+        def _timeout():
+            _finish_failure("timeout, responses received: " + str(received) + ", handled: " + str(handled))
+
+        if scheme == "https":
+            std.http.TLSListener(serv_cap, "127.0.0.1", 0, CERT_PEM.encode(), KEY_PEM.encode(), _on_https_accept, on_listen=_on_https_listen)
+        else:
+            std.http.Listener(serv_cap, "127.0.0.1", 0, _on_http_accept, on_listen=_on_http_listen)
+        after 10: _timeout()
 
 
 actor _test_HttpClientEarlyRequests(t: testing.EnvT):
     """HTTP requests issued before the client has connected are sent exactly once"""
-    _EarlyRequests(t, "http")
+
+    proc def __startup__():
+        _EarlyRequests(t, "http")
 
 
 actor _test_HttpsClientEarlyRequests(t: testing.EnvT):
     """HTTPS requests issued before the client has connected are sent exactly once"""
-    _EarlyRequests(t, "https")
+
+    proc def __startup__():
+        _EarlyRequests(t, "https")
 
 
 actor _test_HttpClientLargeChunkedResponse(t: testing.EnvT):
@@ -1857,85 +1880,86 @@ actor _test_HttpClientLargeChunkedResponse(t: testing.EnvT):
     within 2 s of the request. It takes a few milliseconds in a release build
     and well under a second in a debug build.
     """
-    log = logging.Logger(t.log_handler)
-    t.timeout(15.0)
     var done = False
     var port = 0
     var responded = False
     var sw = time.Stopwatch()
 
-    serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
-    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
+    proc def __startup__():
+        log = logging.Logger(t.log_handler)
+        t.timeout(15.0)
+        serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+        conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
 
-    body = _filler(1024 * 1024)
-    response = b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nTransfer-Encoding: chunked\r\n\r\n" + _chunked(body, 64)
+        body = _filler(1024 * 1024)
+        response = b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nTransfer-Encoding: chunked\r\n\r\n" + _chunked(body, 64)
 
-    def _finish_success():
-        if done:
-            return
-        done = True
-        t.success()
+        def _finish_success():
+            if done:
+                return
+            done = True
+            t.success()
 
-    def _finish_failure(msg: str):
-        if done:
-            return
-        done = True
-        t.failure(AssertionError(msg))
+        def _finish_failure(msg: str):
+            if done:
+                return
+            done = True
+            t.failure(AssertionError(msg))
 
-    def _on_raw_listen(listener, error):
-        if error is not None:
-            _finish_failure("TCP listen failed: " + error)
-            return
-        port = listener.endpoint().port
-        _start_client()
+        def _on_raw_listen(listener, error):
+            if error is not None:
+                _finish_failure("TCP listen failed: " + error)
+                return
+            port = listener.endpoint().port
+            _start_client()
 
-    def _on_raw_accept(conn):
-        responded = False
-        conn.cb_install(_on_raw_receive, _on_raw_error, None)
+        def _on_raw_accept(conn):
+            responded = False
+            conn.cb_install(_on_raw_receive, _on_raw_error, None)
 
-    def _on_raw_receive(conn, data):
-        if responded:
-            return
-        responded = True
-        pos = 0
-        while pos < len(response):
-            conn.write(response[pos:pos + 4096])
-            pos += 4096
+        def _on_raw_receive(conn, data):
+            if responded:
+                return
+            responded = True
+            pos = 0
+            while pos < len(response):
+                conn.write(response[pos:pos + 4096])
+                pos += 4096
 
-    def _on_raw_error(conn, errmsg):
-        _finish_failure("TCP server connection error: " + errmsg)
+        def _on_raw_error(conn, errmsg):
+            _finish_failure("TCP server connection error: " + errmsg)
 
-    def _on_connect(c):
-        sw = time.Stopwatch()
-        c.get("/", _on_response)
+        def _on_connect(c):
+            sw = time.Stopwatch()
+            c.get("/", _on_response)
 
-    def _on_response(c, r):
-        elapsed = sw.elapsed().to_float()
-        if r.status != 200:
-            _finish_failure("Unexpected status: " + str(r.status))
-            return
-        if len(r.body) != len(body):
-            _finish_failure("Unexpected body length: " + str(len(r.body)) + " expected " + str(len(body)))
-            return
-        if r.body != body:
-            _finish_failure("Body content differs from what was sent")
-            return
-        if elapsed > 2.0:
-            _finish_failure("The response took " + str(elapsed) + " s")
-            return
-        _finish_success()
+        def _on_response(c, r):
+            elapsed = sw.elapsed().to_float()
+            if r.status != 200:
+                _finish_failure("Unexpected status: " + str(r.status))
+                return
+            if len(r.body) != len(body):
+                _finish_failure("Unexpected body length: " + str(len(r.body)) + " expected " + str(len(body)))
+                return
+            if r.body != body:
+                _finish_failure("Body content differs from what was sent")
+                return
+            if elapsed > 2.0:
+                _finish_failure("The response took " + str(elapsed) + " s")
+                return
+            _finish_success()
 
-    def _on_client_error(c, errmsg):
-        _finish_failure("HTTP client error: " + errmsg)
+        def _on_client_error(c, errmsg):
+            _finish_failure("HTTP client error: " + errmsg)
 
-    def _start_client():
-        std.http.Client(conn_cap, "127.0.0.1", _on_connect, _on_client_error, scheme="http", port=port)
+        def _start_client():
+            std.http.Client(conn_cap, "127.0.0.1", _on_connect, _on_client_error, scheme="http", port=port)
 
-    def _timeout():
-        _finish_failure("timeout waiting for the large chunked response")
+        def _timeout():
+            _finish_failure("timeout waiting for the large chunked response")
 
-    net.TCPListener(serv_cap, "127.0.0.1", 0, _on_raw_listen, _on_raw_accept)
-    after 10: _timeout()
+        net.TCPListener(serv_cap, "127.0.0.1", 0, _on_raw_listen, _on_raw_accept)
+        after 10: _timeout()
 
 
 actor _test_HttpClientMalformedResponse(t: testing.EnvT):
@@ -1947,8 +1971,6 @@ actor _test_HttpClientMalformedResponse(t: testing.EnvT):
     called exactly once, the second callback must not be called, and the
     client must close the connection.
     """
-    log = logging.Logger(t.log_handler)
-    t.timeout(15.0)
     var done = False
     var port = 0
     var received = b""
@@ -1957,167 +1979,175 @@ actor _test_HttpClientMalformedResponse(t: testing.EnvT):
     var errors: list[str] = []
     var closed_by_client = False
 
-    serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
-    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
+    proc def __startup__():
+        log = logging.Logger(t.log_handler)
+        t.timeout(15.0)
+        serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+        conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
 
-    def _finish_success():
-        if done:
-            return
-        done = True
-        t.success()
+        def _finish_success():
+            if done:
+                return
+            done = True
+            t.success()
 
-    def _finish_failure(msg: str):
-        if done:
-            return
-        done = True
-        t.failure(AssertionError(msg))
+        def _finish_failure(msg: str):
+            if done:
+                return
+            done = True
+            t.failure(AssertionError(msg))
 
-    def _on_raw_listen(listener, error):
-        if error is not None:
-            _finish_failure("TCP listen failed: " + error)
-            return
-        port = listener.endpoint().port
-        _start_client()
+        def _on_raw_listen(listener, error):
+            if error is not None:
+                _finish_failure("TCP listen failed: " + error)
+                return
+            port = listener.endpoint().port
+            _start_client()
 
-    def _on_raw_accept(conn):
-        conn.cb_install(_on_raw_receive, _on_raw_error, _on_raw_remote_close)
+        def _on_raw_accept(conn):
+            conn.cb_install(_on_raw_receive, _on_raw_error, _on_raw_remote_close)
 
-    def _on_raw_remote_close(conn):
-        closed_by_client = True
+        def _on_raw_remote_close(conn):
+            closed_by_client = True
 
-    def _on_raw_receive(conn, data):
-        received += data
-        if responded:
-            return
-        if received.count(b"\r\n\r\n") >= 2:
-            responded = True
-            conn.write(b"HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\none" + b"HTTP/1.1 200 OK\r\nContent-Length: many\r\n\r\n" + b"garbage\r\n\r\n")
+        def _on_raw_receive(conn, data):
+            received += data
+            if responded:
+                return
+            if received.count(b"\r\n\r\n") >= 2:
+                responded = True
+                conn.write(b"HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\none" + b"HTTP/1.1 200 OK\r\nContent-Length: many\r\n\r\n" + b"garbage\r\n\r\n")
 
-    def _on_raw_error(conn, errmsg):
-        pass
+        def _on_raw_error(conn, errmsg):
+            pass
 
-    def _on_connect(c):
-        c.get("/1", _on_response1)
-        c.get("/2", _on_response2)
+        def _on_connect(c):
+            c.get("/1", _on_response1)
+            c.get("/2", _on_response2)
 
-    def _on_response1(c, r):
-        if r.status != 200 or r.body != b"one":
-            _finish_failure("Unexpected first response: " + str(r.status) + " " + str(r.body))
-            return
-        got_first = True
+        def _on_response1(c, r):
+            if r.status != 200 or r.body != b"one":
+                _finish_failure("Unexpected first response: " + str(r.status) + " " + str(r.body))
+                return
+            got_first = True
 
-    def _on_response2(c, r):
-        _finish_failure("The malformed second response reached its callback")
+        def _on_response2(c, r):
+            _finish_failure("The malformed second response reached its callback")
 
-    def _on_client_error(c, errmsg):
-        errors.append(errmsg)
-        if len(errors) == 1:
-            after 0.3: _check()
+        def _on_client_error(c, errmsg):
+            errors.append(errmsg)
+            if len(errors) == 1:
+                after 0.3: _check()
 
-    def _check():
-        if not got_first:
-            _finish_failure("The valid first response was not delivered")
-            return
-        if len(errors) != 1:
-            _finish_failure("Expected one error, got: " + str(errors))
-            return
-        if not errors[0].startswith("Malformed HTTP response"):
-            _finish_failure("Unexpected error: " + errors[0])
-            return
-        if not closed_by_client:
-            _finish_failure("The client did not close the connection")
-            return
-        _finish_success()
+        def _check():
+            if not got_first:
+                _finish_failure("The valid first response was not delivered")
+                return
+            if len(errors) != 1:
+                _finish_failure("Expected one error, got: " + str(errors))
+                return
+            if not errors[0].startswith("Malformed HTTP response"):
+                _finish_failure("Unexpected error: " + errors[0])
+                return
+            if not closed_by_client:
+                _finish_failure("The client did not close the connection")
+                return
+            _finish_success()
 
-    def _start_client():
-        std.http.Client(conn_cap, "127.0.0.1", _on_connect, _on_client_error, scheme="http", port=port)
+        def _start_client():
+            std.http.Client(conn_cap, "127.0.0.1", _on_connect, _on_client_error, scheme="http", port=port)
 
-    def _timeout():
-        _finish_failure("timeout, errors: " + str(errors))
+        def _timeout():
+            _finish_failure("timeout, errors: " + str(errors))
 
-    net.TCPListener(serv_cap, "127.0.0.1", 0, _on_raw_listen, _on_raw_accept)
-    after 10: _timeout()
+        net.TCPListener(serv_cap, "127.0.0.1", 0, _on_raw_listen, _on_raw_accept)
+        after 10: _timeout()
 
 
 actor _ServerClosesOnMalformed(t: testing.EnvT, request: bytes):
     """Server closes the connection on malformed input without calling the handler"""
-    log = logging.Logger(t.log_handler)
-    t.timeout(15.0)
     var done = False
     var port = 0
     var parser = std.http.MessageParser()
     var bodies: list[bytes] = []
     var handled: list[str] = []
 
-    serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
-    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
+    proc def __startup__():
+        log = logging.Logger(t.log_handler)
+        t.timeout(15.0)
+        serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+        conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
 
-    def _finish_success():
-        if done:
-            return
-        done = True
-        t.success()
+        def _finish_success():
+            if done:
+                return
+            done = True
+            t.success()
 
-    def _finish_failure(msg: str):
-        if done:
-            return
-        done = True
-        t.failure(AssertionError(msg))
+        def _finish_failure(msg: str):
+            if done:
+                return
+            done = True
+            t.failure(AssertionError(msg))
 
-    def _on_http_accept(s):
-        s.cb_install(_on_http_request, _on_http_server_error)
+        def _on_http_accept(s):
+            s.cb_install(_on_http_request, _on_http_server_error)
 
-    def _on_http_request(s, request, respond):
-        handled.append(request.path)
-        respond(200, {}, request.path.encode())
+        def _on_http_request(s, request, respond):
+            handled.append(request.path)
+            respond(200, {}, request.path.encode())
 
-    def _on_http_server_error(s, error):
-        _finish_failure("HTTP server error: " + error)
+        def _on_http_server_error(s, error):
+            _finish_failure("HTTP server error: " + error)
 
-    def _on_http_listen(listener, error):
-        if error is not None:
-            _finish_failure("HTTP listen failed: " + error)
-            return
-        port = listener.endpoint().port
-        _start_client()
+        def _on_http_listen(listener, error):
+            if error is not None:
+                _finish_failure("HTTP listen failed: " + error)
+                return
+            port = listener.endpoint().port
+            _start_client()
 
-    def _on_raw_connect(conn):
-        conn.write(request)
+        def _on_raw_connect(conn):
+            conn.write(request)
 
-    def _on_raw_receive(conn, data):
-        for m in parser.feed(data):
-            bodies.append(m.body)
+        def _on_raw_receive(conn, data):
+            for m in parser.feed(data):
+                bodies.append(m.body)
 
-    def _on_raw_remote_close(conn):
-        if len(bodies) > 0 or len(handled) > 0:
-            _finish_failure("Expected a close without responses, got: " + str(bodies) + ", handled: " + str(handled))
-            return
-        _finish_success()
+        def _on_raw_remote_close(conn):
+            if len(bodies) > 0 or len(handled) > 0:
+                _finish_failure("Expected a close without responses, got: " + str(bodies) + ", handled: " + str(handled))
+                return
+            _finish_success()
 
-    def _on_raw_error(conn, errmsg):
-        _finish_failure("TCP client error: " + errmsg)
+        def _on_raw_error(conn, errmsg):
+            _finish_failure("TCP client error: " + errmsg)
 
-    def _start_client():
-        parser = std.http.MessageParser()
-        bodies = []
-        handled = []
-        net.TCPConnection(conn_cap, "127.0.0.1", port, _on_raw_connect, _on_raw_receive, _on_raw_error, _on_raw_remote_close)
+        def _start_client():
+            parser = std.http.MessageParser()
+            bodies = []
+            handled = []
+            net.TCPConnection(conn_cap, "127.0.0.1", port, _on_raw_connect, _on_raw_receive, _on_raw_error, _on_raw_remote_close)
 
-    def _timeout():
-        _finish_failure("timeout, the server did not close the connection")
+        def _timeout():
+            _finish_failure("timeout, the server did not close the connection")
 
-    std.http.Listener(serv_cap, "127.0.0.1", 0, _on_http_accept, on_listen=_on_http_listen)
-    after 10: _timeout()
+        std.http.Listener(serv_cap, "127.0.0.1", 0, _on_http_accept, on_listen=_on_http_listen)
+        after 10: _timeout()
 
 
 actor _test_HttpServerBadRequestLine(t: testing.EnvT):
     """Server closes the connection on a request line it does not accept"""
-    _ServerClosesOnMalformed(t, b"GET / HTTP/2.0\r\nHost: 127.0.0.1\r\n\r\n")
+
+    proc def __startup__():
+        _ServerClosesOnMalformed(t, b"GET / HTTP/2.0\r\nHost: 127.0.0.1\r\n\r\n")
 
 
 actor _test_HttpServerBadFramingAlone(t: testing.EnvT):
     """Server closes the connection at once on malformed framing with no request pending"""
-    _ServerClosesOnMalformed(t, b"GET / HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: many\r\n\r\n")
+
+    proc def __startup__():
+        _ServerClosesOnMalformed(t, b"GET / HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: many\r\n\r\n")
 
 
 actor _test_HttpClientReconnect(t: testing.EnvT):
@@ -2132,8 +2162,6 @@ actor _test_HttpClientReconnect(t: testing.EnvT):
     Content-Length and no body, so the client must frame it as a response to
     HEAD. on_error must not be called.
     """
-    log = logging.Logger(t.log_handler)
-    t.timeout(15.0)
     var done = False
     var port = 0
     var accepted = 0
@@ -2144,87 +2172,90 @@ actor _test_HttpClientReconnect(t: testing.EnvT):
     var errors: list[str] = []
     var requested = False
 
-    serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
-    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
+    proc def __startup__():
+        log = logging.Logger(t.log_handler)
+        t.timeout(15.0)
+        serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+        conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
 
-    def _finish_success():
-        if done:
-            return
-        done = True
-        t.success()
+        def _finish_success():
+            if done:
+                return
+            done = True
+            t.success()
 
-    def _finish_failure(msg: str):
-        if done:
-            return
-        done = True
-        t.failure(AssertionError(msg))
+        def _finish_failure(msg: str):
+            if done:
+                return
+            done = True
+            t.failure(AssertionError(msg))
 
-    def _on_raw_listen(listener, error):
-        if error is not None:
-            _finish_failure("TCP listen failed: " + error)
-            return
-        port = listener.endpoint().port
-        _start_client()
+        def _on_raw_listen(listener, error):
+            if error is not None:
+                _finish_failure("TCP listen failed: " + error)
+                return
+            port = listener.endpoint().port
+            _start_client()
 
-    def _on_raw_accept(conn):
-        accepted += 1
-        parser = std.http.MessageParser()
-        conn.cb_install(_on_raw_receive, _on_raw_error, None)
+        def _on_raw_accept(conn):
+            accepted += 1
+            parser = std.http.MessageParser()
+            conn.cb_install(_on_raw_receive, _on_raw_error, None)
 
-    def _on_raw_receive(conn, data):
-        msgs = parser.feed(data)
-        if accepted == 1:
-            first_requests += len(msgs)
-            if first_requests == 3:
-                conn.write(b"HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 2\r\n\r\n/1" + b"junk\r\n\r\n")
-                conn.close()
-        else:
-            for m in msgs:
-                req = std.http.request_from_message(m)
-                second_paths.append(req.path)
-                head = b"HTTP/1.1 200 OK\r\nContent-Length: " + str(len(req.path)).encode() + b"\r\n\r\n"
-                conn.write(head if req.method == "HEAD" else head + req.path.encode())
+        def _on_raw_receive(conn, data):
+            msgs = parser.feed(data)
+            if accepted == 1:
+                first_requests += len(msgs)
+                if first_requests == 3:
+                    conn.write(b"HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 2\r\n\r\n/1" + b"junk\r\n\r\n")
+                    conn.close()
+            else:
+                for m in msgs:
+                    req = std.http.request_from_message(m)
+                    second_paths.append(req.path)
+                    head = b"HTTP/1.1 200 OK\r\nContent-Length: " + str(len(req.path)).encode() + b"\r\n\r\n"
+                    conn.write(head if req.method == "HEAD" else head + req.path.encode())
 
-    def _on_raw_error(conn, errmsg):
-        pass
+        def _on_raw_error(conn, errmsg):
+            pass
 
-    def _on_connect(c):
-        # on_connect runs again for the new connection
-        if not requested:
-            requested = True
-            c.get("/1", _on_response)
-            c.head("/2", _on_response)
-            c.get("/3", _on_response)
+        def _on_connect(c):
+            # on_connect runs again for the new connection
+            if not requested:
+                requested = True
+                c.get("/1", _on_response)
+                c.head("/2", _on_response)
+                c.get("/3", _on_response)
 
-    def _on_response(c, r):
-        bodies.append(r.body)
-        if len(bodies) == 3:
-            # Give duplicate requests time to arrive
-            after 0.2: _check()
+        def _on_response(c, r):
+            bodies.append(r.body)
+            if len(bodies) == 3:
+                # Give duplicate requests time to arrive
+                after 0.2: _check()
 
-    def _check():
-        if bodies != [b"/1", b"", b"/3"]:
-            _finish_failure("Responses out of order or wrong: " + str(bodies))
-            return
-        if second_paths != ["/2", "/3"]:
-            _finish_failure("Expected /2 and /3 once on the new connection, got: " + str(second_paths))
-            return
-        if len(errors) > 0:
-            _finish_failure("Unexpected errors: " + str(errors))
-            return
-        _finish_success()
+        def _check():
+            if bodies != [b"/1", b"", b"/3"]:
+                _finish_failure("Responses out of order or wrong: " + str(bodies))
+                return
+            if second_paths != ["/2", "/3"]:
+                _finish_failure("Expected /2 and /3 once on the new connection, got: " + str(second_paths))
+                return
+            if len(errors) > 0:
+                _finish_failure("Unexpected errors: " + str(errors))
+                return
+            _finish_success()
 
-    def _on_client_error(c, errmsg):
-        errors.append(errmsg)
+        def _on_client_error(c, errmsg):
+            errors.append(errmsg)
 
-    def _start_client():
-        std.http.Client(conn_cap, "127.0.0.1", _on_connect, _on_client_error, scheme="http", port=port)
+        def _start_client():
+            std.http.Client(conn_cap, "127.0.0.1", _on_connect, _on_client_error, scheme="http", port=port)
 
-    def _timeout():
-        _finish_failure("timeout, responses: " + str(bodies) + ", second connection: " + str(second_paths) + ", errors: " + str(errors))
+        def _timeout():
+            _finish_failure("timeout, responses: " + str(bodies) + ", second connection: " + str(second_paths) + ", errors: " + str(errors))
 
-    net.TCPListener(serv_cap, "127.0.0.1", 0, _on_raw_listen, _on_raw_accept)
-    after 10: _timeout()
+        net.TCPListener(serv_cap, "127.0.0.1", 0, _on_raw_listen, _on_raw_accept)
+        after 10: _timeout()
 
 
 actor _test_HttpClientHeadRequest(t: testing.EnvT):
@@ -2238,212 +2269,217 @@ actor _test_HttpClientHeadRequest(t: testing.EnvT):
     the first 5 bytes of the GET response as its body, and the rest of the
     GET response is then malformed.
     """
-    log = logging.Logger(t.log_handler)
-    t.timeout(15.0)
     var done = False
     var port = 0
     var received = b""
     var responded = False
     var got_head = False
 
-    serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
-    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
+    proc def __startup__():
+        log = logging.Logger(t.log_handler)
+        t.timeout(15.0)
+        serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+        conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
 
-    def _finish_success():
-        if done:
-            return
-        done = True
-        t.success()
-
-    def _finish_failure(msg: str):
-        if done:
-            return
-        done = True
-        t.failure(AssertionError(msg))
-
-    def _on_raw_listen(listener, error):
-        if error is not None:
-            _finish_failure("TCP listen failed: " + error)
-            return
-        port = listener.endpoint().port
-        _start_client()
-
-    def _on_raw_accept(conn):
-        received = b""
-        responded = False
-        conn.cb_install(_on_raw_receive, _on_raw_error, None)
-
-    def _on_raw_receive(conn, data):
-        received += data
-        if responded:
-            return
-        if received.count(b"\r\n\r\n") >= 2:
-            responded = True
-            if not received.startswith(b"HEAD / HTTP/1.1"):
-                _finish_failure("Expected the HEAD request first, got: " + str(received[:40]))
+        def _finish_success():
+            if done:
                 return
-            responses = b"HTTP/1.1 100 Continue\r\n\r\n"
-            responses += b"HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\n"
-            responses += b"HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nhello"
-            conn.write(responses)
+            done = True
+            t.success()
 
-    def _on_raw_error(conn, errmsg):
-        _finish_failure("TCP server connection error: " + errmsg)
+        def _finish_failure(msg: str):
+            if done:
+                return
+            done = True
+            t.failure(AssertionError(msg))
 
-    def _on_connect(c):
-        c.head("/", _on_head_response)
-        c.get("/", _on_get_response)
+        def _on_raw_listen(listener, error):
+            if error is not None:
+                _finish_failure("TCP listen failed: " + error)
+                return
+            port = listener.endpoint().port
+            _start_client()
 
-    def _on_head_response(c, r):
-        if r.status != 200 or r.body != b"" or r.headers["content-length"] != "5":
-            _finish_failure("Unexpected HEAD response: " + str(r.status) + " " + str(r.body))
-            return
-        got_head = True
+        def _on_raw_accept(conn):
+            received = b""
+            responded = False
+            conn.cb_install(_on_raw_receive, _on_raw_error, None)
 
-    def _on_get_response(c, r):
-        if not got_head:
-            _finish_failure("GET response delivered before the HEAD response")
-            return
-        if r.status != 200 or r.body != b"hello":
-            _finish_failure("Unexpected GET response: " + str(r.status) + " " + str(r.body))
-            return
-        _finish_success()
+        def _on_raw_receive(conn, data):
+            received += data
+            if responded:
+                return
+            if received.count(b"\r\n\r\n") >= 2:
+                responded = True
+                if not received.startswith(b"HEAD / HTTP/1.1"):
+                    _finish_failure("Expected the HEAD request first, got: " + str(received[:40]))
+                    return
+                responses = b"HTTP/1.1 100 Continue\r\n\r\n"
+                responses += b"HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\n"
+                responses += b"HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nhello"
+                conn.write(responses)
 
-    def _on_client_error(c, errmsg):
-        _finish_failure("HTTP client error: " + errmsg)
+        def _on_raw_error(conn, errmsg):
+            _finish_failure("TCP server connection error: " + errmsg)
 
-    def _start_client():
-        std.http.Client(conn_cap, "127.0.0.1", _on_connect, _on_client_error, scheme="http", port=port)
+        def _on_connect(c):
+            c.head("/", _on_head_response)
+            c.get("/", _on_get_response)
 
-    def _timeout():
-        _finish_failure("timeout waiting for the HEAD and GET responses")
+        def _on_head_response(c, r):
+            if r.status != 200 or r.body != b"" or r.headers["content-length"] != "5":
+                _finish_failure("Unexpected HEAD response: " + str(r.status) + " " + str(r.body))
+                return
+            got_head = True
 
-    net.TCPListener(serv_cap, "127.0.0.1", 0, _on_raw_listen, _on_raw_accept)
-    after 10: _timeout()
+        def _on_get_response(c, r):
+            if not got_head:
+                _finish_failure("GET response delivered before the HEAD response")
+                return
+            if r.status != 200 or r.body != b"hello":
+                _finish_failure("Unexpected GET response: " + str(r.status) + " " + str(r.body))
+                return
+            _finish_success()
+
+        def _on_client_error(c, errmsg):
+            _finish_failure("HTTP client error: " + errmsg)
+
+        def _start_client():
+            std.http.Client(conn_cap, "127.0.0.1", _on_connect, _on_client_error, scheme="http", port=port)
+
+        def _timeout():
+            _finish_failure("timeout waiting for the HEAD and GET responses")
+
+        net.TCPListener(serv_cap, "127.0.0.1", 0, _on_raw_listen, _on_raw_accept)
+        after 10: _timeout()
 
 
 actor _test_HttpsClientServer(t: testing.EnvT):
     """HTTPS client/server roundtrip over TLS"""
-    log = logging.Logger(t.log_handler)
     var done = False
     var port = 0
-    listen_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
-    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
 
-    def _finish_success():
-        if done:
-            return
-        done = True
-        t.success()
+    proc def __startup__():
+        log = logging.Logger(t.log_handler)
+        listen_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+        conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
 
-    def _finish_failure(msg: str):
-        if done:
-            return
-        done = True
-        t.failure(AssertionError(msg))
+        def _finish_success():
+            if done:
+                return
+            done = True
+            t.success()
 
-    def _finish_error(msg: str):
-        if done:
-            return
-        done = True
-        t.error(Exception(msg))
+        def _finish_failure(msg: str):
+            if done:
+                return
+            done = True
+            t.failure(AssertionError(msg))
 
-    def _on_https_accept(server):
-        server.cb_install(_on_https_request, _on_https_error)
+        def _finish_error(msg: str):
+            if done:
+                return
+            done = True
+            t.error(Exception(msg))
 
-    def _on_https_request(server, request, respond):
-        respond(200, {"content-type": "text/plain"}, b"Hello, TLS!")
+        def _on_https_accept(server):
+            server.cb_install(_on_https_request, _on_https_error)
 
-    def _on_https_error(server, error):
-        _finish_error("HTTPS server error: " + error)
+        def _on_https_request(server, request, respond):
+            respond(200, {"content-type": "text/plain"}, b"Hello, TLS!")
 
-    def _on_https_listen(listener, error):
-        if error is not None:
-            _finish_failure("HTTPS listen failed: " + error)
-            return
-        port = listener.endpoint().port
-        _start_client()
+        def _on_https_error(server, error):
+            _finish_error("HTTPS server error: " + error)
 
-    def _on_https_connect(c):
-        c.get("/", _on_https_receive)
+        def _on_https_listen(listener, error):
+            if error is not None:
+                _finish_failure("HTTPS listen failed: " + error)
+                return
+            port = listener.endpoint().port
+            _start_client()
 
-    def _on_https_receive(c, data):
-        if data.status != 200:
-            _finish_failure("Unexpected status: " + str(data.status))
-            return
-        if data.body != b"Hello, TLS!":
-            _finish_failure("Unexpected body: " + str(data.body))
-            return
-        _finish_success()
+        def _on_https_connect(c):
+            c.get("/", _on_https_receive)
 
-    def _on_https_error_client(c, errmsg):
-        _finish_failure("HTTPS client error: " + errmsg)
+        def _on_https_receive(c, data):
+            if data.status != 200:
+                _finish_failure("Unexpected status: " + str(data.status))
+                return
+            if data.body != b"Hello, TLS!":
+                _finish_failure("Unexpected body: " + str(data.body))
+                return
+            _finish_success()
 
-    def _start_client():
-        std.http.Client(conn_cap, "127.0.0.1", _on_https_connect, _on_https_error_client, scheme="https", port=port, tls_verify=False)
+        def _on_https_error_client(c, errmsg):
+            _finish_failure("HTTPS client error: " + errmsg)
 
-    def _timeout():
-        _finish_error("timeout")
+        def _start_client():
+            std.http.Client(conn_cap, "127.0.0.1", _on_https_connect, _on_https_error_client, scheme="https", port=port, tls_verify=False)
 
-    std.http.TLSListener(listen_cap, "127.0.0.1", 0, CERT_PEM.encode(), KEY_PEM.encode(), _on_https_accept, on_listen=_on_https_listen)
-    after 10: _timeout()
+        def _timeout():
+            _finish_error("timeout")
+
+        std.http.TLSListener(listen_cap, "127.0.0.1", 0, CERT_PEM.encode(), KEY_PEM.encode(), _on_https_accept, on_listen=_on_https_listen)
+        after 10: _timeout()
 
 
 actor _test_HttpsServerCompression(t: testing.EnvT):
     """A TLSListener with compress compresses a text answer that the client
     accepts"""
-    big = _compressible_json()
     var done = False
     var port = 0
-    listen_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
-    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
 
-    def _finish(error: ?Exception):
-        if done:
-            return
-        done = True
-        if error is not None:
-            t.failure(error)
-        else:
-            t.success()
+    proc def __startup__():
+        big = _compressible_json()
+        listen_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+        conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
 
-    def _on_https_accept(server):
-        server.cb_install(_on_https_request, _on_https_error)
+        def _finish(error: ?Exception):
+            if done:
+                return
+            done = True
+            if error is not None:
+                t.failure(error)
+            else:
+                t.success()
 
-    def _on_https_request(server, request, respond):
-        respond(200, {"Content-Type": "application/json"}, big)
+        def _on_https_accept(server):
+            server.cb_install(_on_https_request, _on_https_error)
 
-    def _on_https_error(server, error):
-        _finish(AssertionError("HTTPS server error: " + error))
+        def _on_https_request(server, request, respond):
+            respond(200, {"Content-Type": "application/json"}, big)
 
-    def _on_https_listen(listener, error):
-        if error is not None:
-            _finish(AssertionError("HTTPS listen failed: " + error))
-            return
-        port = listener.endpoint().port
-        _start_client()
+        def _on_https_error(server, error):
+            _finish(AssertionError("HTTPS server error: " + error))
 
-    def _on_https_connect(c):
-        c.get("/", _on_https_receive, {"Accept-Encoding": "gzip"})
+        def _on_https_listen(listener, error):
+            if error is not None:
+                _finish(AssertionError("HTTPS listen failed: " + error))
+                return
+            port = listener.endpoint().port
+            _start_client()
 
-    def _on_https_receive(c, res):
-        try:
-            testing.assertEqual(res.headers.get("content-encoding"), "gzip")
-            testing.assertEqual(std.compress.gzip.decompress(res.body), big)
-        except Exception as e:
-            _finish(e)
-            return
-        _finish(None)
+        def _on_https_connect(c):
+            c.get("/", _on_https_receive, {"Accept-Encoding": "gzip"})
 
-    def _on_https_error_client(c, errmsg):
-        _finish(AssertionError("HTTPS client error: " + errmsg))
+        def _on_https_receive(c, res):
+            try:
+                testing.assertEqual(res.headers.get("content-encoding"), "gzip")
+                testing.assertEqual(std.compress.gzip.decompress(res.body), big)
+            except Exception as e:
+                _finish(e)
+                return
+            _finish(None)
 
-    def _start_client():
-        # The client leaves the body as the server sent it
-        std.http.Client(conn_cap, "127.0.0.1", _on_https_connect, _on_https_error_client, scheme="https", port=port, tls_verify=False, compress=False)
+        def _on_https_error_client(c, errmsg):
+            _finish(AssertionError("HTTPS client error: " + errmsg))
 
-    std.http.TLSListener(listen_cap, "127.0.0.1", 0, CERT_PEM.encode(), KEY_PEM.encode(), _on_https_accept, on_listen=_on_https_listen, compress=True)
-    after 10: _finish(AssertionError("timeout"))
+        def _start_client():
+            # The client leaves the body as the server sent it
+            std.http.Client(conn_cap, "127.0.0.1", _on_https_connect, _on_https_error_client, scheme="https", port=port, tls_verify=False, compress=False)
+
+        std.http.TLSListener(listen_cap, "127.0.0.1", 0, CERT_PEM.encode(), KEY_PEM.encode(), _on_https_accept, on_listen=_on_https_listen, compress=True)
+        after 10: _finish(AssertionError("timeout"))
 
 
 actor _test_HttpListenerReportsEndpoint(t: testing.EnvT):
@@ -2456,53 +2492,55 @@ actor _test_HttpListenerReportsEndpoint(t: testing.EnvT):
     var done = False
     var port = 0
     var first: ?std.http.Listener = None
-    serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
 
-    def _finish(error: ?Exception):
-        if done:
-            return
-        done = True
-        if error is not None:
-            t.failure(error)
-        else:
-            t.success()
+    proc def __startup__():
+        serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
 
-    def _on_accept(server):
-        pass
+        def _finish(error: ?Exception):
+            if done:
+                return
+            done = True
+            if error is not None:
+                t.failure(error)
+            else:
+                t.success()
 
-    def _on_first_listen(listener, error):
-        if error is not None:
-            _finish(AssertionError("HTTP listen failed: " + error))
-            return
-        ep = listener.endpoint()
-        port = ep.port
-        try:
-            testing.assertEqual(ep.address, "127.0.0.1")
-            testing.assertTrue(port > 0, "port of a listening socket")
-        except Exception as e:
-            _finish(e)
-            return
-        first = listener
-        std.http.Listener(serv_cap, "127.0.0.1", port, _on_accept, on_listen=_on_second_listen)
+        def _on_accept(server):
+            pass
 
-    def _on_second_listen(listener, error):
-        if error is None:
-            _finish(AssertionError("a second listener on port %d is listening" % port))
-            return
-        f = first
-        if f is not None:
-            f.close()
-            closed = f.endpoint()
+        def _on_first_listen(listener, error):
+            if error is not None:
+                _finish(AssertionError("HTTP listen failed: " + error))
+                return
+            ep = listener.endpoint()
+            port = ep.port
             try:
-                testing.assertEqual(closed.address, "")
-                testing.assertEqual(closed.port, 0)
+                testing.assertEqual(ep.address, "127.0.0.1")
+                testing.assertTrue(port > 0, "port of a listening socket")
             except Exception as e:
                 _finish(e)
                 return
-        _finish(None)
+            first = listener
+            std.http.Listener(serv_cap, "127.0.0.1", port, _on_accept, on_listen=_on_second_listen)
 
-    std.http.Listener(serv_cap, "127.0.0.1", 0, _on_accept, on_listen=_on_first_listen)
-    after 10: _finish(AssertionError("timeout"))
+        def _on_second_listen(listener, error):
+            if error is None:
+                _finish(AssertionError("a second listener on port %d is listening" % port))
+                return
+            f = first
+            if f is not None:
+                f.close()
+                closed = f.endpoint()
+                try:
+                    testing.assertEqual(closed.address, "")
+                    testing.assertEqual(closed.port, 0)
+                except Exception as e:
+                    _finish(e)
+                    return
+            _finish(None)
+
+        std.http.Listener(serv_cap, "127.0.0.1", 0, _on_accept, on_listen=_on_first_listen)
+        after 10: _finish(AssertionError("timeout"))
 
 
 actor _test_HttpsListenerReportsEndpoint(t: testing.EnvT):
@@ -2515,50 +2553,52 @@ actor _test_HttpsListenerReportsEndpoint(t: testing.EnvT):
     var done = False
     var port = 0
     var first: ?std.http.TLSListener = None
-    serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
 
-    def _finish(error: ?Exception):
-        if done:
-            return
-        done = True
-        if error is not None:
-            t.failure(error)
-        else:
-            t.success()
+    proc def __startup__():
+        serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
 
-    def _on_accept(server):
-        pass
+        def _finish(error: ?Exception):
+            if done:
+                return
+            done = True
+            if error is not None:
+                t.failure(error)
+            else:
+                t.success()
 
-    def _on_first_listen(listener, error):
-        if error is not None:
-            _finish(AssertionError("HTTPS listen failed: " + error))
-            return
-        ep = listener.endpoint()
-        port = ep.port
-        try:
-            testing.assertEqual(ep.address, "127.0.0.1")
-            testing.assertTrue(port > 0, "port of a listening socket")
-        except Exception as e:
-            _finish(e)
-            return
-        first = listener
-        std.http.TLSListener(serv_cap, "127.0.0.1", port, CERT_PEM.encode(), KEY_PEM.encode(), _on_accept, on_listen=_on_second_listen)
+        def _on_accept(server):
+            pass
 
-    def _on_second_listen(listener, error):
-        if error is None:
-            _finish(AssertionError("a second listener on port %d is listening" % port))
-            return
-        f = first
-        if f is not None:
-            f.close()
-            closed = f.endpoint()
+        def _on_first_listen(listener, error):
+            if error is not None:
+                _finish(AssertionError("HTTPS listen failed: " + error))
+                return
+            ep = listener.endpoint()
+            port = ep.port
             try:
-                testing.assertEqual(closed.address, "")
-                testing.assertEqual(closed.port, 0)
+                testing.assertEqual(ep.address, "127.0.0.1")
+                testing.assertTrue(port > 0, "port of a listening socket")
             except Exception as e:
                 _finish(e)
                 return
-        _finish(None)
+            first = listener
+            std.http.TLSListener(serv_cap, "127.0.0.1", port, CERT_PEM.encode(), KEY_PEM.encode(), _on_accept, on_listen=_on_second_listen)
 
-    std.http.TLSListener(serv_cap, "127.0.0.1", 0, CERT_PEM.encode(), KEY_PEM.encode(), _on_accept, on_listen=_on_first_listen)
-    after 10: _finish(AssertionError("timeout"))
+        def _on_second_listen(listener, error):
+            if error is None:
+                _finish(AssertionError("a second listener on port %d is listening" % port))
+                return
+            f = first
+            if f is not None:
+                f.close()
+                closed = f.endpoint()
+                try:
+                    testing.assertEqual(closed.address, "")
+                    testing.assertEqual(closed.port, 0)
+                except Exception as e:
+                    _finish(e)
+                    return
+            _finish(None)
+
+        std.http.TLSListener(serv_cap, "127.0.0.1", 0, CERT_PEM.encode(), KEY_PEM.encode(), _on_accept, on_listen=_on_first_listen)
+        after 10: _finish(AssertionError("timeout"))

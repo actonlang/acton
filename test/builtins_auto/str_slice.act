@@ -9,10 +9,11 @@ def test_slice_outside_of_range():
     b = a[i:]
 
 actor main(env):
-    try:
-        test_slice()
-        test_slice_outside_of_range()
-        env.exit(0)
-    except Exception as e:
-        print(e)
-        env.exit(1)
+    proc def __startup__():
+        try:
+            test_slice()
+            test_slice_outside_of_range()
+            env.exit(0)
+        except Exception as e:
+            print(e)
+            env.exit(1)

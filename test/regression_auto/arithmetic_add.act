@@ -1,13 +1,14 @@
 actor main(env):
-    def testEqual(a, b, msg):
-        if a == b:
-            print(msg, "=", a, "as expected (", b, ")")
-            return True
-        else:
-            print("Assertion error:", a, "!=", b, "(" + msg + ")")
-            return False
+    proc def __startup__():
+        def testEqual(a, b, msg):
+            if a == b:
+                print(msg, "=", a, "as expected (", b, ")")
+                return True
+            else:
+                print("Assertion error:", a, "!=", b, "(" + msg + ")")
+                return False
 
-    if testEqual(0+1, 1, "0+1") and testEqual(1+2, 3, "1+2"):
-        env.exit(0)
-    else:
-        env.exit(1)
+        if testEqual(0+1, 1, "0+1") and testEqual(1+2, 3, "1+2"):
+            env.exit(0)
+        else:
+            env.exit(1)

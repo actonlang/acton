@@ -43,6 +43,7 @@ def binary_tree(n: int):
     print("long lived tree of depth %d\t check: %d" % (max_depth, check(long_lived_tree)))
 
 actor main(env):
-    n = int(env.argv[1]) if len(env.argv) > 1 else 6
-    binary_tree(n)
-    env.exit(0)
+    proc def __startup__():
+        n = int(env.argv[1]) if len(env.argv) > 1 else 6
+        binary_tree(n)
+        env.exit(0)

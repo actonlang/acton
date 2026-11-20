@@ -47,4 +47,5 @@ actor main(env):
         server.ping(now_ms(), pong)
         server.job(JOB_MS)
 
-    start()
+    proc def __startup__():
+        start()

@@ -2,4 +2,5 @@ def helper():
     pass
 
 actor main(env):
-    env.exit(0)
+    proc def __startup__():
+        env.exit(0)

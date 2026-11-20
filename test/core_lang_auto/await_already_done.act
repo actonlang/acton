@@ -25,7 +25,10 @@
 #    (in-main timers cannot fire behind a parked head).
 
 actor Watchdog(env):
-    after 10.0: env.exit(1)
+
+
+    proc def __startup__():
+        after 10.0: env.exit(1)
 
 actor Prod():
     def produce() -> int:
@@ -36,18 +39,19 @@ actor Rel():
         return await fut
 
 actor main(env):
-    wd = Watchdog(env)
-    b = Prod()
-    c = Rel()
-    x = async b.produce()
+    proc def __startup__():
+        wd = Watchdog(env)
+        b = Prod()
+        c = Rel()
+        x = async b.produce()
 
-    def phase2():
-        warm = b.produce()
-        v1 = c.consume(x)
-        v2 = await x
-        if warm == 3 and v1 == 3 and v2 == 3:
-            print("already-done ok")
-            env.exit(0)
-        env.exit(1)
+        def phase2():
+            warm = b.produce()
+            v1 = c.consume(x)
+            v2 = await x
+            if warm == 3 and v1 == 3 and v2 == 3:
+                print("already-done ok")
+                env.exit(0)
+            env.exit(1)
 
-    after 0.3: phase2()
+        after 0.3: phase2()

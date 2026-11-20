@@ -21,6 +21,8 @@ actor Tester(env, port):
                 print("Unhandled error:", error)
             print("Attempting to re-establish listening socket")
             _lsock = _init_listen()
+        else:
+            print("NOW LISTENING ON", str(port))
 
     def _on_server_accept(c):
         c.cb_install(_on_server_receive, _on_server_error)
@@ -74,14 +76,13 @@ actor Tester(env, port):
         listen_cap = net.TCPListenCap(net.TCPCap(net.NetCap(env.cap)))
         print("Starting to listen...")
         s = net.TCPListener(listen_cap, "0.0.0.0", port, _on_listen, _on_server_accept)
-        print("NOW LISTENING ON", str(port))
 
         return s
 
-    _lsock = _init_listen()
+    proc def __startup__():
+        _lsock = _init_listen()
 
 
 actor main(env):
     port = int(env.argv[1])
-    var t = None
-    t = Tester(env, port)
+    var t = Tester(env, port)

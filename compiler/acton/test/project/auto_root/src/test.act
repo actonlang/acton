@@ -1,5 +1,6 @@
 import b
 
 actor main(env):
-    b.foo()
-    env.exit(0)
+    proc def __startup__():
+        b.foo()
+        env.exit(0)

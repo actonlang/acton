@@ -21,8 +21,9 @@ extension Node(Indexed[Ix, str]):
         pass
 
 actor main(env):
-    def target(node: Node, ix: SubIx):
-        node[ix] = "x"
-        node[ix] += "y"
-        del node[ix]
-    env.exit(0)
+    proc def __startup__():
+        def target(node: Node, ix: SubIx):
+            node[ix] = "x"
+            node[ix] += "y"
+            del node[ix]
+        env.exit(0)

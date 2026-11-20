@@ -25,7 +25,10 @@
 #    parked-arrival property). The Watchdog actor bounds lost-wake hangs.
 
 actor Watchdog(env):
-    after 10.0: env.exit(1)
+
+
+    proc def __startup__():
+        after 10.0: env.exit(1)
 
 actor Prod():
     var i = 0
@@ -64,6 +67,7 @@ actor main(env):
         awaited = True
         after 0.4: finish()
 
-    after 0.05: tick(1)
-    after 0.1: tick(2)
-    go()
+    proc def __startup__():
+        after 0.05: tick(1)
+        after 0.1: tick(2)
+        go()

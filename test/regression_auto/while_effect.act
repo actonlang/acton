@@ -20,7 +20,8 @@ class Loop(object):
         return False
 
 actor main(env):
-    f = Loop(2)
-    f.a()
-    print("Done")
-    env.exit(0)
+    proc def __startup__():
+        f = Loop(2)
+        f.a()
+        print("Done")
+        env.exit(0)

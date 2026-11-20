@@ -599,21 +599,22 @@ actor _PatternUser(p: std.re.Pattern, anchored: std.re.Pattern, first: int, n: i
 
 actor _test_compile_shared_between_actors(t: testing.AsyncT):
     """Actors on several threads match with the same Patterns at once"""
-    p = std.re.compile(r"id (?P<num>[0-9]+) é([0-9])")
-    anchored = std.re.compile(r"id (?P<num>[0-9]+) é([0-9])$")
     workers = 8
     var pending = workers
     var wrong = 0
 
-    def done(w: int):
-        pending -= 1
-        wrong += w
-        if pending == 0:
-            if wrong == 0:
-                t.success()
-            else:
-                t.failure(AssertionError(str(wrong) + " matches gave a wrong result"))
+    proc def __startup__():
+        p = std.re.compile(r"id (?P<num>[0-9]+) é([0-9])")
+        anchored = std.re.compile(r"id (?P<num>[0-9]+) é([0-9])$")
+        def done(w: int):
+            pending -= 1
+            wrong += w
+            if pending == 0:
+                if wrong == 0:
+                    t.success()
+                else:
+                    t.failure(AssertionError(str(wrong) + " matches gave a wrong result"))
 
-    for i in range(workers):
-        u = _PatternUser(p, anchored, i * 3000, 3000, done)
-        u.run()
+        for i in range(workers):
+            u = _PatternUser(p, anchored, i * 3000, 3000, done)
+            u.run()

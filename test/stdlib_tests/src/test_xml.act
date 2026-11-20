@@ -74,9 +74,7 @@ def _test_xml_parse_error_position():
         testing.error("Expected exception on parsing error")
 
 def _item_list(n: int) -> str:
-    items = []
-    for i in range(n):
-        items.append('<item id="' + str(i) + '">value ' + str(i) + ' &amp; more</item>')
+    items = ['<item id="' + str(i) + '">value ' + str(i) + ' &amp; more</item>' for i in range(n)]
     return "<list>" + "".join(items) + "</list>"
 
 def _test_xml_large_documents():
@@ -155,18 +153,19 @@ actor _test_xml_concurrent_parse_errors(t: testing.AsyncT):
     var pending = len(cases)
     var wrong = 0
 
-    def done(w: int):
-        pending -= 1
-        wrong += w
-        if pending == 0:
-            if wrong == 0:
-                t.success()
-            else:
-                t.failure(AssertionError(str(wrong) + " decodes raised the wrong error"))
+    proc def __startup__():
+        def done(w: int):
+            pending -= 1
+            wrong += w
+            if pending == 0:
+                if wrong == 0:
+                    t.success()
+                else:
+                    t.failure(AssertionError(str(wrong) + " decodes raised the wrong error"))
 
-    for c in cases:
-        d = _XmlErrorDecoder(c.0, c.1, c.2, done)
-        d.run()
+        for c in cases:
+            d = _XmlErrorDecoder(c.0, c.1, c.2, done)
+            d.run()
 
 def _test_xml_unsupported_node():
     """A node type that std.xml.Node cannot represent raises XmlParseError"""

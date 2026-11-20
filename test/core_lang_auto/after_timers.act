@@ -1,5 +1,8 @@
 actor Watchdog(env):
-    after 10.0: env.exit(1)
+
+
+    proc def __startup__():
+        after 10.0: env.exit(1)
 
 actor TimerProducer(env, done: action() -> None):
     groups = 257
@@ -35,7 +38,8 @@ actor TimerProducer(env, done: action() -> None):
         else:
             schedule()
 
-    schedule()
+    proc def __startup__():
+        schedule()
 
 actor main(env):
     wd = Watchdog(env)
@@ -48,5 +52,6 @@ actor main(env):
             print("timers ok")
             env.exit(0)
 
-    for i in range(4):
-        producers.append(TimerProducer(env, done))
+    proc def __startup__():
+        for i in range(4):
+            producers.append(TimerProducer(env, done))

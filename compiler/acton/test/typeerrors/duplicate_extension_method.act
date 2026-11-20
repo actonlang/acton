@@ -9,5 +9,6 @@ extension int (Proto):
         return 2
 
 actor main(env):
-    print((3).a())
-    env.exit(0)
+    proc def __startup__():
+        print((3).a())
+        env.exit(0)

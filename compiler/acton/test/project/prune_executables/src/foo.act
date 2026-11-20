@@ -4,5 +4,6 @@ def _test_basic():
     testing.assertEqual(1, 1)
 
 actor main(env):
-    print("foo")
-    env.exit(0)
+    proc def __startup__():
+        print("foo")
+        env.exit(0)

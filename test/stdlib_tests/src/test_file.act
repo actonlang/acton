@@ -3,112 +3,52 @@ import file
 import testing
 
 actor _test_mkdir_idempotent(t: testing.EnvT):
-    fc = file.FileCap(t.env.cap)
-    fs = file.FS(fc)
-    tmpdir = fs.mktmpdir()
-    fs.mkdir(tmpdir + "/foo")
-    fs.mkdir(tmpdir + "/foo")
-    t.success()
+
+
+    proc def __startup__():
+        fc = file.FileCap(t.env.cap)
+        fs = file.FS(fc)
+        tmpdir = fs.mktmpdir()
+        fs.mkdir(tmpdir + "/foo")
+        fs.mkdir(tmpdir + "/foo")
+        t.success()
 
 actor _test_mktmpdir_creates_unique_directories(t: testing.EnvT):
-    fc = file.FileCap(t.env.cap)
-    fs = file.FS(fc)
-    paths = [fs.mktmpdir("acton-mktmpdir-") for _ in range(16)]
-    testing.assertEqual(len(paths), len(set(paths)))
-    for path in paths:
-        testing.assertTrue(fs.stat(path).is_dir())
-        testing.assertTrue(path.split("/")[-1].startswith("acton-mktmpdir-"))
-        await async fs.rmdir(path)
-    t.success()
+
+
+    proc def __startup__():
+        fc = file.FileCap(t.env.cap)
+        fs = file.FS(fc)
+        paths = [fs.mktmpdir("acton-mktmpdir-") for _ in range(16)]
+        testing.assertEqual(len(paths), len(set(paths)))
+        for path in paths:
+            testing.assertTrue(fs.stat(path).is_dir())
+            testing.assertTrue(path.split("/")[-1].startswith("acton-mktmpdir-"))
+            await async fs.rmdir(path)
+        t.success()
 
 actor _test_rmdir_idempotent(t: testing.EnvT):
-    fc = file.FileCap(t.env.cap)
-    fs = file.FS(fc)
-    tmpdir = fs.mktmpdir()
-    fs.rmdir(tmpdir + "/foo")
-    t.success()
+
+
+    proc def __startup__():
+        fc = file.FileCap(t.env.cap)
+        fs = file.FS(fc)
+        tmpdir = fs.mktmpdir()
+        fs.rmdir(tmpdir + "/foo")
+        t.success()
 
 actor _test_rmtree_empty_directory(t: testing.EnvT):
-    try:
-        fc = file.FileCap(t.env.cap)
-        fs = file.FS(fc)
-        tmpdir = fs.mktmpdir()
-        try:
-            await async fs.mkdir(tmpdir + "/victim")
-            await async fs.rmtree(tmpdir + "/victim")
-            testing.assertEqual([], fs.listdir(tmpdir))
-        finally:
-            await async fs.rmtree(tmpdir)
-        t.success()
-    except AssertionError as exc:
-        t.failure(exc)
-    except Exception as exc:
-        t.error(exc)
 
-actor _test_rmtree_nested_directory(t: testing.EnvT):
-    try:
-        fc = file.FileCap(t.env.cap)
-        fs = file.FS(fc)
-        tmpdir = fs.mktmpdir()
-        try:
-            for path in ["victim", "victim/empty", "victim/child", "victim/child/grandchild"]:
-                await async fs.mkdir(tmpdir + "/" + path)
-            for path in ["victim/file", "victim/child/file", "victim/child/grandchild/file"]:
-                wf = file.WriteFile(file.WriteFileCap(fc), tmpdir + "/" + path)
-                await async wf.write(b"data")
-                await async wf.close()
-            await async fs.rmtree(tmpdir + "/victim")
-            testing.assertEqual([], fs.listdir(tmpdir))
-        finally:
-            await async fs.rmtree(tmpdir)
-        t.success()
-    except AssertionError as exc:
-        t.failure(exc)
-    except Exception as exc:
-        t.error(exc)
 
-actor _test_rmtree_non_directories(t: testing.EnvT):
-    """Missing paths and regular files are left alone without raising."""
-    try:
-        fc = file.FileCap(t.env.cap)
-        fs = file.FS(fc)
-        tmpdir = fs.mktmpdir()
+    proc def __startup__():
         try:
-            await async fs.rmtree(tmpdir + "/missing")
-            wf = file.WriteFile(file.WriteFileCap(fc), tmpdir + "/file")
-            await async wf.write(b"data")
-            await async wf.close()
-            await async fs.rmtree(tmpdir + "/file")
-            testing.assertEqual(["file"], fs.listdir(tmpdir))
-            await async fs.rmtree(tmpdir)
-            await async fs.rmtree(tmpdir)
-        finally:
-            await async fs.rmtree(tmpdir)
-        t.success()
-    except AssertionError as exc:
-        t.failure(exc)
-    except Exception as exc:
-        t.error(exc)
-
-actor _test_rmtree_child_symlinks(t: testing.EnvT):
-    fc = file.FileCap(t.env.cap)
-    fs = file.FS(fc)
-    tmpdir = fs.mktmpdir()
-
-    action def on_exit(p: Process, code: int, sig: int, stdout: bytes, stderr: bytes) -> None:
-        try:
+            fc = file.FileCap(t.env.cap)
+            fs = file.FS(fc)
+            tmpdir = fs.mktmpdir()
             try:
-                testing.assertEqual(0, code, stderr.decode())
-                testing.assertEqual(0, sig)
-                testing.assertTrue(fs.lstat(tmpdir + "/victim/dir-link").is_symlink())
-                testing.assertTrue(fs.lstat(tmpdir + "/victim/file-link").is_symlink())
-                testing.assertTrue(fs.lstat(tmpdir + "/victim/dangling-link").is_symlink())
+                await async fs.mkdir(tmpdir + "/victim")
                 await async fs.rmtree(tmpdir + "/victim")
-                testing.assertEqual(["kept"], fs.listdir(tmpdir))
-                testing.assertEqual(["file"], fs.listdir(tmpdir + "/kept"))
-                rf = file.ReadFile(file.ReadFileCap(fc), tmpdir + "/kept/file")
-                testing.assertEqual(b"data", rf.read())
-                await async rf.close()
+                testing.assertEqual([], fs.listdir(tmpdir))
             finally:
                 await async fs.rmtree(tmpdir)
             t.success()
@@ -117,276 +57,376 @@ actor _test_rmtree_child_symlinks(t: testing.EnvT):
         except Exception as exc:
             t.error(exc)
 
-    action def on_error(p: Process, error: str) -> None:
-        await async fs.rmtree(tmpdir)
-        t.error(OSError(error))
+actor _test_rmtree_nested_directory(t: testing.EnvT):
 
-    await async fs.mkdir(tmpdir + "/victim")
-    await async fs.mkdir(tmpdir + "/kept")
-    wf = file.WriteFile(file.WriteFileCap(fc), tmpdir + "/kept/file")
-    await async wf.write(b"data")
-    await async wf.close()
-    t.env.process.run(["sh", "-c", "ln -s ../kept victim/dir-link && ln -s ../kept/file victim/file-link && ln -s ../missing victim/dangling-link"],
-                      on_exit, on_error, workdir=tmpdir)
 
-actor _test_file_walk(t: testing.EnvT):
-    try:
+    proc def __startup__():
+        try:
+            fc = file.FileCap(t.env.cap)
+            fs = file.FS(fc)
+            tmpdir = fs.mktmpdir()
+            try:
+                for path in ["victim", "victim/empty", "victim/child", "victim/child/grandchild"]:
+                    await async fs.mkdir(tmpdir + "/" + path)
+                for path in ["victim/file", "victim/child/file", "victim/child/grandchild/file"]:
+                    wf = file.WriteFile(file.WriteFileCap(fc), tmpdir + "/" + path)
+                    await async wf.write(b"data")
+                    await async wf.close()
+                await async fs.rmtree(tmpdir + "/victim")
+                testing.assertEqual([], fs.listdir(tmpdir))
+            finally:
+                await async fs.rmtree(tmpdir)
+            t.success()
+        except AssertionError as exc:
+            t.failure(exc)
+        except Exception as exc:
+            t.error(exc)
+
+actor _test_rmtree_non_directories(t: testing.EnvT):
+    """Missing paths and regular files are left alone without raising."""
+
+    proc def __startup__():
+        try:
+            fc = file.FileCap(t.env.cap)
+            fs = file.FS(fc)
+            tmpdir = fs.mktmpdir()
+            try:
+                await async fs.rmtree(tmpdir + "/missing")
+                wf = file.WriteFile(file.WriteFileCap(fc), tmpdir + "/file")
+                await async wf.write(b"data")
+                await async wf.close()
+                await async fs.rmtree(tmpdir + "/file")
+                testing.assertEqual(["file"], fs.listdir(tmpdir))
+                await async fs.rmtree(tmpdir)
+                await async fs.rmtree(tmpdir)
+            finally:
+                await async fs.rmtree(tmpdir)
+            t.success()
+        except AssertionError as exc:
+            t.failure(exc)
+        except Exception as exc:
+            t.error(exc)
+
+actor _test_rmtree_child_symlinks(t: testing.EnvT):
+
+
+    proc def __startup__():
         fc = file.FileCap(t.env.cap)
         fs = file.FS(fc)
         tmpdir = fs.mktmpdir()
-        fs.mkdir(tmpdir + "/foo")
-        fs.mkdir(tmpdir + "/foo2")
-        rel_things = []
-        for e in fs.walk(tmpdir):
-            rel_things.append(e.name.split("/")[-1])
-        testing.assertEqual(set(["foo", "foo2"]), set(rel_things))
-        fs.rmtree(tmpdir)
-        t.success()
-    except AssertionError as exc:
-        t.failure(exc)
-    except Exception as exc:
-        t.error(exc)
+
+        action def on_exit(p: Process, code: int, sig: int, stdout: bytes, stderr: bytes) -> None:
+            try:
+                try:
+                    testing.assertEqual(0, code, stderr.decode())
+                    testing.assertEqual(0, sig)
+                    testing.assertTrue(fs.lstat(tmpdir + "/victim/dir-link").is_symlink())
+                    testing.assertTrue(fs.lstat(tmpdir + "/victim/file-link").is_symlink())
+                    testing.assertTrue(fs.lstat(tmpdir + "/victim/dangling-link").is_symlink())
+                    await async fs.rmtree(tmpdir + "/victim")
+                    testing.assertEqual(["kept"], fs.listdir(tmpdir))
+                    testing.assertEqual(["file"], fs.listdir(tmpdir + "/kept"))
+                    rf = file.ReadFile(file.ReadFileCap(fc), tmpdir + "/kept/file")
+                    testing.assertEqual(b"data", rf.read())
+                    await async rf.close()
+                finally:
+                    await async fs.rmtree(tmpdir)
+                t.success()
+            except AssertionError as exc:
+                t.failure(exc)
+            except Exception as exc:
+                t.error(exc)
+
+        action def on_error(p: Process, error: str) -> None:
+            await async fs.rmtree(tmpdir)
+            t.error(OSError(error))
+
+        await async fs.mkdir(tmpdir + "/victim")
+        await async fs.mkdir(tmpdir + "/kept")
+        wf = file.WriteFile(file.WriteFileCap(fc), tmpdir + "/kept/file")
+        await async wf.write(b"data")
+        await async wf.close()
+        t.env.process.run(["sh", "-c", "ln -s ../kept victim/dir-link && ln -s ../kept/file victim/file-link && ln -s ../missing victim/dangling-link"],
+                          on_exit, on_error, workdir=tmpdir)
+
+actor _test_file_walk(t: testing.EnvT):
+
+
+    proc def __startup__():
+        try:
+            fc = file.FileCap(t.env.cap)
+            fs = file.FS(fc)
+            tmpdir = fs.mktmpdir()
+            fs.mkdir(tmpdir + "/foo")
+            fs.mkdir(tmpdir + "/foo2")
+            rel_things = []
+            for e in fs.walk(tmpdir):
+                rel_things.append(e.name.split("/")[-1])
+            testing.assertEqual(set(["foo", "foo2"]), set(rel_things))
+            fs.rmtree(tmpdir)
+            t.success()
+        except AssertionError as exc:
+            t.failure(exc)
+        except Exception as exc:
+            t.error(exc)
 
 actor _test_path_with_nul(t: testing.EnvT):
     """A path with a NUL in it raises ValueError instead of naming the file
     before the NUL"""
-    try:
-        fc = file.FileCap(t.env.cap)
-        fs = file.FS(fc)
-        tmpdir = fs.mktmpdir()
-        name = file.join_path([tmpdir, "a"])
-        wf = file.WriteFile(file.WriteFileCap(fc), name)
-        await async wf.write(b"data")
-        await async wf.close()
-        nul_name = name + chr(0) + "b"
 
-        raised = 0
+    proc def __startup__():
         try:
-            await async fs.stat(nul_name)
-        except ValueError:
-            raised += 1
-        try:
-            await async fs.lstat(nul_name)
-        except ValueError:
-            raised += 1
-        try:
-            await async fs.remove(nul_name)
-        except ValueError:
-            raised += 1
-        try:
-            await async fs.rename(nul_name, name + ".moved")
-        except ValueError:
-            raised += 1
-        try:
-            await async fs.copyfile(name, nul_name)
-        except ValueError:
-            raised += 1
-        try:
-            await async fs.mkdir(nul_name)
-        except ValueError:
-            raised += 1
-        try:
-            await async fs.rmdir(tmpdir + chr(0))
-        except ValueError:
-            raised += 1
-        try:
-            await async fs.rmtree(tmpdir + chr(0))
-        except ValueError:
-            raised += 1
-        try:
-            await async fs.listdir(tmpdir + chr(0))
-        except ValueError:
-            raised += 1
-        try:
-            await async fs.mktmpdir("x" + chr(0))
-        except ValueError:
-            raised += 1
-        try:
-            file.ReadFile(file.ReadFileCap(fc), nul_name)
-        except ValueError:
-            raised += 1
-        try:
-            file.WriteFile(file.WriteFileCap(fc), nul_name)
-        except ValueError:
-            raised += 1
-        testing.assertEqual(12, raised)
-        # The file named by the part before the NUL is untouched
-        testing.assertEqual(["a"], fs.listdir(tmpdir))
-        rf = file.ReadFile(file.ReadFileCap(fc), name)
-        testing.assertEqual(b"data", rf.read())
-        rf.close()
-        await async fs.rmtree(tmpdir)
-        t.success()
-    except AssertionError as exc:
-        t.failure(exc)
-    except Exception as exc:
-        t.error(exc)
+            fc = file.FileCap(t.env.cap)
+            fs = file.FS(fc)
+            tmpdir = fs.mktmpdir()
+            name = file.join_path([tmpdir, "a"])
+            wf = file.WriteFile(file.WriteFileCap(fc), name)
+            await async wf.write(b"data")
+            await async wf.close()
+            nul_name = name + chr(0) + "b"
+
+            raised = 0
+            try:
+                await async fs.stat(nul_name)
+            except ValueError:
+                raised += 1
+            try:
+                await async fs.lstat(nul_name)
+            except ValueError:
+                raised += 1
+            try:
+                await async fs.remove(nul_name)
+            except ValueError:
+                raised += 1
+            try:
+                await async fs.rename(nul_name, name + ".moved")
+            except ValueError:
+                raised += 1
+            try:
+                await async fs.copyfile(name, nul_name)
+            except ValueError:
+                raised += 1
+            try:
+                await async fs.mkdir(nul_name)
+            except ValueError:
+                raised += 1
+            try:
+                await async fs.rmdir(tmpdir + chr(0))
+            except ValueError:
+                raised += 1
+            try:
+                await async fs.rmtree(tmpdir + chr(0))
+            except ValueError:
+                raised += 1
+            try:
+                await async fs.listdir(tmpdir + chr(0))
+            except ValueError:
+                raised += 1
+            try:
+                await async fs.mktmpdir("x" + chr(0))
+            except ValueError:
+                raised += 1
+            try:
+                file.ReadFile(file.ReadFileCap(fc), nul_name)
+            except ValueError:
+                raised += 1
+            try:
+                file.WriteFile(file.WriteFileCap(fc), nul_name)
+            except ValueError:
+                raised += 1
+            testing.assertEqual(12, raised)
+            # The file named by the part before the NUL is untouched
+            testing.assertEqual(["a"], fs.listdir(tmpdir))
+            rf = file.ReadFile(file.ReadFileCap(fc), name)
+            testing.assertEqual(b"data", rf.read())
+            rf.close()
+            await async fs.rmtree(tmpdir)
+            t.success()
+        except AssertionError as exc:
+            t.failure(exc)
+        except Exception as exc:
+            t.error(exc)
 
 actor _test_fs_write_read_file(t: testing.EnvT):
-    try:
-        fc = file.FileCap(t.env.cap)
-        fs = file.FS(fc)
-        tmpdir = fs.mktmpdir()
-        filename = file.join_path([tmpdir, "test-file"])
-        test_data = b"test-data\n"
-        wf = file.WriteFile(file.WriteFileCap(fc), filename)
-        await async wf.write(test_data)
-        await async wf.close()
 
-        rf = file.ReadFile(file.ReadFileCap(fc), filename)
-        rd = rf.read()
-        rf.close()
-        testing.assertEqual(test_data, rd)
-        await async fs.rmtree(tmpdir)
-        t.success()
-    except AssertionError as exc:
-        t.failure(exc)
-    except Exception as exc:
-        t.error(exc)
+
+    proc def __startup__():
+        try:
+            fc = file.FileCap(t.env.cap)
+            fs = file.FS(fc)
+            tmpdir = fs.mktmpdir()
+            filename = file.join_path([tmpdir, "test-file"])
+            test_data = b"test-data\n"
+            wf = file.WriteFile(file.WriteFileCap(fc), filename)
+            await async wf.write(test_data)
+            await async wf.close()
+
+            rf = file.ReadFile(file.ReadFileCap(fc), filename)
+            rd = rf.read()
+            rf.close()
+            testing.assertEqual(test_data, rd)
+            await async fs.rmtree(tmpdir)
+            t.success()
+        except AssertionError as exc:
+            t.failure(exc)
+        except Exception as exc:
+            t.error(exc)
 
 actor _test_write_file_writes_in_order(t: testing.EnvT):
     """Each write continues where the previous one ended."""
-    try:
-        fc = file.FileCap(t.env.cap)
-        fs = file.FS(fc)
-        tmpdir = fs.mktmpdir()
-        filename = file.join_path([tmpdir, "test-file"])
-        wf = file.WriteFile(file.WriteFileCap(fc), filename)
-        await async wf.write(b"first\n")
-        await async wf.write(b"second\n")
-        await async wf.close()
 
-        rf = file.ReadFile(file.ReadFileCap(fc), filename)
-        rd = rf.read()
-        rf.close()
-        testing.assertEqual(b"first\nsecond\n", rd)
-        await async fs.rmtree(tmpdir)
-        t.success()
-    except AssertionError as exc:
-        t.failure(exc)
-    except Exception as exc:
-        t.error(exc)
+    proc def __startup__():
+        try:
+            fc = file.FileCap(t.env.cap)
+            fs = file.FS(fc)
+            tmpdir = fs.mktmpdir()
+            filename = file.join_path([tmpdir, "test-file"])
+            wf = file.WriteFile(file.WriteFileCap(fc), filename)
+            await async wf.write(b"first\n")
+            await async wf.write(b"second\n")
+            await async wf.close()
+
+            rf = file.ReadFile(file.ReadFileCap(fc), filename)
+            rd = rf.read()
+            rf.close()
+            testing.assertEqual(b"first\nsecond\n", rd)
+            await async fs.rmtree(tmpdir)
+            t.success()
+        except AssertionError as exc:
+            t.failure(exc)
+        except Exception as exc:
+            t.error(exc)
 
 actor _test_write_file_append(t: testing.EnvT):
     """append creates the file, keeps its content and writes at the end."""
-    try:
-        fc = file.FileCap(t.env.cap)
-        wfc = file.WriteFileCap(fc)
-        rfc = file.ReadFileCap(fc)
-        fs = file.FS(fc)
-        tmpdir = fs.mktmpdir()
-        filename = file.join_path([tmpdir, "test-file"])
 
-        wf = file.WriteFile(wfc, filename, append=True)
-        await async wf.write(b"one\n")
-        await async wf.close()
-        wf = file.WriteFile(wfc, filename, append=True)
-        await async wf.write(b"two\n")
-        await async wf.close()
-        rf = file.ReadFile(rfc, filename)
-        appended = rf.read()
-        rf.close()
+    proc def __startup__():
+        try:
+            fc = file.FileCap(t.env.cap)
+            wfc = file.WriteFileCap(fc)
+            rfc = file.ReadFileCap(fc)
+            fs = file.FS(fc)
+            tmpdir = fs.mktmpdir()
+            filename = file.join_path([tmpdir, "test-file"])
 
-        wf = file.WriteFile(wfc, filename)
-        await async wf.write(b"three\n")
-        await async wf.close()
-        rf = file.ReadFile(rfc, filename)
-        truncated = rf.read()
-        rf.close()
+            wf = file.WriteFile(wfc, filename, append=True)
+            await async wf.write(b"one\n")
+            await async wf.close()
+            wf = file.WriteFile(wfc, filename, append=True)
+            await async wf.write(b"two\n")
+            await async wf.close()
+            rf = file.ReadFile(rfc, filename)
+            appended = rf.read()
+            rf.close()
 
-        testing.assertEqual(b"one\ntwo\n", appended)
-        testing.assertEqual(b"three\n", truncated)
-        await async fs.rmtree(tmpdir)
-        t.success()
-    except AssertionError as exc:
-        t.failure(exc)
-    except Exception as exc:
-        t.error(exc)
+            wf = file.WriteFile(wfc, filename)
+            await async wf.write(b"three\n")
+            await async wf.close()
+            rf = file.ReadFile(rfc, filename)
+            truncated = rf.read()
+            rf.close()
+
+            testing.assertEqual(b"one\ntwo\n", appended)
+            testing.assertEqual(b"three\n", truncated)
+            await async fs.rmtree(tmpdir)
+            t.success()
+        except AssertionError as exc:
+            t.failure(exc)
+        except Exception as exc:
+            t.error(exc)
 
 actor _test_fs_rename(t: testing.EnvT):
     """rename replaces an existing target and reports a missing source."""
-    try:
-        fc = file.FileCap(t.env.cap)
-        wfc = file.WriteFileCap(fc)
-        fs = file.FS(fc)
-        tmpdir = fs.mktmpdir()
-        src = file.join_path([tmpdir, "src"])
-        dst = file.join_path([tmpdir, "dst"])
-        wf = file.WriteFile(wfc, src)
-        await async wf.write(b"src\n")
-        await async wf.close()
-        wf = file.WriteFile(wfc, dst)
-        await async wf.write(b"dst\n")
-        await async wf.close()
 
-        await async fs.rename(src, dst)
-        rf = file.ReadFile(file.ReadFileCap(fc), dst)
-        renamed = rf.read()
-        rf.close()
-        testing.assertEqual(b"src\n", renamed)
-        testing.assertEqual(["dst"], fs.listdir(tmpdir))
-
-        missing = False
+    proc def __startup__():
         try:
+            fc = file.FileCap(t.env.cap)
+            wfc = file.WriteFileCap(fc)
+            fs = file.FS(fc)
+            tmpdir = fs.mktmpdir()
+            src = file.join_path([tmpdir, "src"])
+            dst = file.join_path([tmpdir, "dst"])
+            wf = file.WriteFile(wfc, src)
+            await async wf.write(b"src\n")
+            await async wf.close()
+            wf = file.WriteFile(wfc, dst)
+            await async wf.write(b"dst\n")
+            await async wf.close()
+
             await async fs.rename(src, dst)
-        except FileNotFoundError:
-            missing = True
-        testing.assertTrue(missing, "rename of a missing file raises FileNotFoundError")
-        await async fs.rmtree(tmpdir)
-        t.success()
-    except AssertionError as exc:
-        t.failure(exc)
-    except Exception as exc:
-        t.error(exc)
+            rf = file.ReadFile(file.ReadFileCap(fc), dst)
+            renamed = rf.read()
+            rf.close()
+            testing.assertEqual(b"src\n", renamed)
+            testing.assertEqual(["dst"], fs.listdir(tmpdir))
+
+            missing = False
+            try:
+                await async fs.rename(src, dst)
+            except FileNotFoundError:
+                missing = True
+            testing.assertTrue(missing, "rename of a missing file raises FileNotFoundError")
+            await async fs.rmtree(tmpdir)
+            t.success()
+        except AssertionError as exc:
+            t.failure(exc)
+        except Exception as exc:
+            t.error(exc)
 
 actor _test_fs_copyfile(t: testing.EnvT):
-    try:
-        fc = file.FileCap(t.env.cap)
-        fs = file.FS(fc)
-        tmpdir = fs.mktmpdir()
-        filename = file.join_path([tmpdir, "test-file"])
-        test_data = b"test-data\n"
-        wf = file.WriteFile(file.WriteFileCap(fc), filename)
-        await async wf.write(test_data)
-        await async wf.close()
 
-        await async fs.copyfile(file.join_path([tmpdir, "test-file"]), file.join_path([tmpdir, "test-file2"]))
-        rf = file.ReadFile(file.ReadFileCap(fc), file.join_path([tmpdir, "test-file2"]))
-        rd = rf.read()
-        rf.close()
-        testing.assertEqual(test_data, rd)
-        await async fs.rmtree(tmpdir)
-        t.success()
-    except AssertionError as exc:
-        t.failure(exc)
-    except Exception as exc:
-        t.error(exc)
+
+    proc def __startup__():
+        try:
+            fc = file.FileCap(t.env.cap)
+            fs = file.FS(fc)
+            tmpdir = fs.mktmpdir()
+            filename = file.join_path([tmpdir, "test-file"])
+            test_data = b"test-data\n"
+            wf = file.WriteFile(file.WriteFileCap(fc), filename)
+            await async wf.write(test_data)
+            await async wf.close()
+
+            await async fs.copyfile(file.join_path([tmpdir, "test-file"]), file.join_path([tmpdir, "test-file2"]))
+            rf = file.ReadFile(file.ReadFileCap(fc), file.join_path([tmpdir, "test-file2"]))
+            rd = rf.read()
+            rf.close()
+            testing.assertEqual(test_data, rd)
+            await async fs.rmtree(tmpdir)
+            t.success()
+        except AssertionError as exc:
+            t.failure(exc)
+        except Exception as exc:
+            t.error(exc)
 
 
 actor _test_fs_copytree(t: testing.EnvT):
-    try:
-        fc = file.FileCap(t.env.cap)
-        fs = file.FS(fc)
-        tmpdir = fs.mktmpdir()
-        await async fs.mkdir(file.join_path([tmpdir, "src"]))
-        await async fs.mkdir(file.join_path([tmpdir, "src", "foo"]))
-        # write a file in src/foo
-        wf = file.WriteFile(file.WriteFileCap(fc), file.join_path([tmpdir, "src", "foo", "test-file"]))
-        await async wf.write(b"test-data\n")
-        await async fs.mkdir(file.join_path([tmpdir, "src", "foo", "bar"]))
-        await async fs.mkdir(file.join_path([tmpdir, "src", "foo", "bar", "baz"]))
-        # write a file in src/foo/bar/baz
-        wf = file.WriteFile(file.WriteFileCap(fc), file.join_path([tmpdir, "src", "foo", "bar", "baz", "test-file"]))
-        await async wf.write(b"test-data\n")
-        await async fs.mkdir(file.join_path([tmpdir, "dst"]))
-        await async fs.copytree(file.join_path([tmpdir, "src"]), file.join_path([tmpdir, "dst"]))
-        testing.assertTrue(fs.stat(tmpdir + "/dst/foo/bar").is_dir())
-        await async fs.rmtree(tmpdir)
-        t.success()
-    except AssertionError as exc:
-        t.failure(exc)
-    except Exception as exc:
-        t.error(exc)
+
+
+    proc def __startup__():
+        try:
+            fc = file.FileCap(t.env.cap)
+            fs = file.FS(fc)
+            tmpdir = fs.mktmpdir()
+            await async fs.mkdir(file.join_path([tmpdir, "src"]))
+            await async fs.mkdir(file.join_path([tmpdir, "src", "foo"]))
+            # write a file in src/foo
+            wf = file.WriteFile(file.WriteFileCap(fc), file.join_path([tmpdir, "src", "foo", "test-file"]))
+            await async wf.write(b"test-data\n")
+            await async fs.mkdir(file.join_path([tmpdir, "src", "foo", "bar"]))
+            await async fs.mkdir(file.join_path([tmpdir, "src", "foo", "bar", "baz"]))
+            # write a file in src/foo/bar/baz
+            wf = file.WriteFile(file.WriteFileCap(fc), file.join_path([tmpdir, "src", "foo", "bar", "baz", "test-file"]))
+            await async wf.write(b"test-data\n")
+            await async fs.mkdir(file.join_path([tmpdir, "dst"]))
+            await async fs.copytree(file.join_path([tmpdir, "src"]), file.join_path([tmpdir, "dst"]))
+            testing.assertTrue(fs.stat(tmpdir + "/dst/foo/bar").is_dir())
+            await async fs.rmtree(tmpdir)
+            t.success()
+        except AssertionError as exc:
+            t.failure(exc)
+        except Exception as exc:
+            t.error(exc)
 
 def _test_relative_path_basic():
     rel = file.get_relative_path("/a/b/c", "/a/b/d")

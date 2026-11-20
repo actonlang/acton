@@ -24,8 +24,9 @@ def same(n: int) -> bool:
     return [(n, [n])] == [(n, [n])] and [[n]] != [[n + 1]]
 
 actor main(env):
-    if EQUAL and HOLDER.ok and same(3) and NATIVE.get() == 2:
-        env.exit(0)
-    else:
-        print("Witnesses in a module with a class implemented in C are wrong")
-        env.exit(1)
+    proc def __startup__():
+        if EQUAL and HOLDER.ok and same(3) and NATIVE.get() == 2:
+            env.exit(0)
+        else:
+            print("Witnesses in a module with a class implemented in C are wrong")
+            env.exit(1)

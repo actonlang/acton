@@ -6,5 +6,6 @@ class Forged(_EnvCap):
         pass
 
 actor main(env: Env):
-    stdio = Stdio(Forged(), env.vars)
-    env.exit(0)
+    proc def __startup__():
+        stdio = Stdio(Forged(), env.vars)
+        env.exit(0)

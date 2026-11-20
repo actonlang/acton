@@ -163,19 +163,20 @@ def check_frozen(fail: list[str]):
         fail.append("frozen |=")
 
 actor main(env):
-    fail: list[str] = []
-    check_ior(fail)
-    check_iand(fail)
-    check_isub(fail)
-    check_ixor(fail)
-    check_alias(fail)
-    check_self(fail)
-    check_sizes(fail)
-    check_remove_then_add(fail)
-    check_targets(fail)
-    check_iset(fail)
-    check_frozen(fail)
-    if fail:
-        print("Failed:", fail)
-        env.exit(1)
-    env.exit(0)
+    proc def __startup__():
+        fail: list[str] = []
+        check_ior(fail)
+        check_iand(fail)
+        check_isub(fail)
+        check_ixor(fail)
+        check_alias(fail)
+        check_self(fail)
+        check_sizes(fail)
+        check_remove_then_add(fail)
+        check_targets(fail)
+        check_iset(fail)
+        check_frozen(fail)
+        if fail:
+            print("Failed:", fail)
+            env.exit(1)
+        env.exit(0)

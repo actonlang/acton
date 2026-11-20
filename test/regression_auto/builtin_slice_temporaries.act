@@ -116,29 +116,30 @@ actor Pinger():
         pass
 
 actor main(env):
-    pinger = Pinger()
-    check_bounds()
-    log: list[int] = []
-    assert [0, 1, 2, 3][bound(log, 1):bound(log, 4):bound(log, 2)] == [1, 3]
-    assert log == [1, 4, 2]
-    xs = [0, 1, 2, 3, 4]
-    list_set_slice(xs, 1, 3, Collecting(env.rts))
-    assert xs == [0, 8, 9, 10, 3, 4]
-    list_del_slice(xs, 5, 0, -2)
-    assert xs == [0, 9, 3]
-    # Aliasing source and destination still requires the existing RHS snapshot.
-    list_set_slice(xs, 1, 2, xs)
-    assert xs == [0, 0, 9, 3, 3]
-    raw = bytearray(bytes([0, 1, 2, 3, 4]))
-    bytearray_set_slice(raw, 1, 3, Collecting(env.rts))
-    assert raw == bytearray(bytes([0, 8, 9, 10, 3, 4]))
-    bytearray_del_slice(raw, 5, 0, -2)
-    assert raw == bytearray(bytes([0, 9, 3]))
-    saved = custom_slice(Saved(slice()))
-    env.rts.gc()
-    assert saved.apply([0, 1, 2, 3, 4]) == [1, 3]
-    # The native calls are also safe in a resumable actor function.
-    for i in range(3):
-        assert optional_slice("abcde", i, None, None) == "abcde"[i:]
-        await async pinger.ping()
-    env.exit(0)
+    proc def __startup__():
+        pinger = Pinger()
+        check_bounds()
+        log: list[int] = []
+        assert [0, 1, 2, 3][bound(log, 1):bound(log, 4):bound(log, 2)] == [1, 3]
+        assert log == [1, 4, 2]
+        xs = [0, 1, 2, 3, 4]
+        list_set_slice(xs, 1, 3, Collecting(env.rts))
+        assert xs == [0, 8, 9, 10, 3, 4]
+        list_del_slice(xs, 5, 0, -2)
+        assert xs == [0, 9, 3]
+        # Aliasing source and destination still requires the existing RHS snapshot.
+        list_set_slice(xs, 1, 2, xs)
+        assert xs == [0, 0, 9, 3, 3]
+        raw = bytearray(bytes([0, 1, 2, 3, 4]))
+        bytearray_set_slice(raw, 1, 3, Collecting(env.rts))
+        assert raw == bytearray(bytes([0, 8, 9, 10, 3, 4]))
+        bytearray_del_slice(raw, 5, 0, -2)
+        assert raw == bytearray(bytes([0, 9, 3]))
+        saved = custom_slice(Saved(slice()))
+        env.rts.gc()
+        assert saved.apply([0, 1, 2, 3, 4]) == [1, 3]
+        # The native calls are also safe in a resumable actor function.
+        for i in range(3):
+            assert optional_slice("abcde", i, None, None) == "abcde"[i:]
+            await async pinger.ping()
+        env.exit(0)

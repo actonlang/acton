@@ -12,7 +12,8 @@ mut def finish[A](value: Freeze[A]) -> A:
     return freeze(value)
 
 actor main(env):
-    result = finish(Builder("frozen"))
-    if result.upper() != "FROZEN":
-        raise ValueError("freeze did not dispatch through the protocol")
-    env.exit(0)
+    proc def __startup__():
+        result = finish(Builder("frozen"))
+        if result.upper() != "FROZEN":
+            raise ValueError("freeze did not dispatch through the protocol")
+        env.exit(0)

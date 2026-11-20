@@ -93,41 +93,42 @@ proc def descend(n: int, source: action() -> int) -> None:
     return done
 
 actor main(env):
-    empty = Counter()
-    assert walk(empty.step, 0, -1) == 0
-    assert await async empty.step() == 1
-    counter = Counter()
-    assert walk(counter.step, 20, 5) == 5
-    assert walk(counter.step, 10, -1) == 10
-    assert await async counter.step() == 11
-    nested_counter = Counter()
-    assert nested(nested_counter.step) == 21
-    branch_counter = Counter()
-    assert branch(branch_counter.step, False) == 7
-    assert branch(branch_counter.step, True) == 1
-    token = [4, 5]
-    kept = keep(branch_counter.step, token)
-    kept.append(6)
-    assert token == [4, 5, 6]
-    assert property_after_loop(branch_counter.step, Box()) == 4
-    trail = []
-    assert call_after_loop(branch_counter.step, trail) == 5
-    assert trail == [5]
-    assert cleanup(branch_counter.step, trail) == 6
-    assert trail == [5, 99]
-    caught_counter = Counter()
-    assert caught(caught_counter.step, trail) == 3
-    assert trail == [5, 99, 3, 99]
-    generic_counter = Counter()
-    assert keep(generic_counter.step, True)
-    answer: int = 42
-    assert keep(generic_counter.step, answer) == 42
-    fraction: float = 1.25
-    assert keep(generic_counter.step, fraction) == 1.25
-    pair = (answer, "token")
-    assert keep(generic_counter.step, pair) == pair
-    deep_counter = Counter()
-    descend(100000, deep_counter.step)
-    assert await async deep_counter.step() == 100001
-    print("CPS forwarding passed")
-    env.exit(0)
+    proc def __startup__():
+        empty = Counter()
+        assert walk(empty.step, 0, -1) == 0
+        assert await async empty.step() == 1
+        counter = Counter()
+        assert walk(counter.step, 20, 5) == 5
+        assert walk(counter.step, 10, -1) == 10
+        assert await async counter.step() == 11
+        nested_counter = Counter()
+        assert nested(nested_counter.step) == 21
+        branch_counter = Counter()
+        assert branch(branch_counter.step, False) == 7
+        assert branch(branch_counter.step, True) == 1
+        token = [4, 5]
+        kept = keep(branch_counter.step, token)
+        kept.append(6)
+        assert token == [4, 5, 6]
+        assert property_after_loop(branch_counter.step, Box()) == 4
+        trail = []
+        assert call_after_loop(branch_counter.step, trail) == 5
+        assert trail == [5]
+        assert cleanup(branch_counter.step, trail) == 6
+        assert trail == [5, 99]
+        caught_counter = Counter()
+        assert caught(caught_counter.step, trail) == 3
+        assert trail == [5, 99, 3, 99]
+        generic_counter = Counter()
+        assert keep(generic_counter.step, True)
+        answer: int = 42
+        assert keep(generic_counter.step, answer) == 42
+        fraction: float = 1.25
+        assert keep(generic_counter.step, fraction) == 1.25
+        pair = (answer, "token")
+        assert keep(generic_counter.step, pair) == pair
+        deep_counter = Counter()
+        descend(100000, deep_counter.step)
+        assert await async deep_counter.step() == 100001
+        print("CPS forwarding passed")
+        env.exit(0)

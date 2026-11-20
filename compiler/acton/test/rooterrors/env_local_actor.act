@@ -5,4 +5,5 @@ actor Config():
         return None
 
 actor main(env):
-    print(env.getenv("HOME"))
+    proc def __startup__():
+        print(env.getenv("HOME"))

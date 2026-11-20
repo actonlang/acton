@@ -65,37 +65,38 @@ def garbage(n: int, seed: int) -> int:
     return total
 
 actor main(env):
-    rounds = int(env.argv[1]) if len(env.argv) > 1 else 200
-    nkeep = int(env.argv[2]) if len(env.argv) > 2 else 8
-    # Each Thing gets a block of its own, between Pads that stay referenced.
-    # A collection dirties the block of every object that a stack word
-    # points to, also when the word is stale, and the checker skips dirty
-    # blocks. The I/O loop of the main thread keeps an event array on its
-    # stack and writes only the entries of the events that arrive, so a
-    # block address that the collector left there before stays for the
-    # whole run and keeps that block dirty. Such a word then hides the
-    # stores into one Thing only. The Pads fill the rest of each block, so
-    # that none of it gets on a thread-local free list, whose blocks every
-    # collection dirties. The lists grow between Pads, so that the arrays
-    # they discard do not share a block with a Thing either.
-    keep = []
-    pads = []
-    for i in range(nkeep):
-        fill(pads)
-        t = Thing(i)
-        fill(pads)
-        keep.append(t)
-    expect = list(range(nkeep))
-    # A full collection marks every Thing and leaves their blocks clean.
-    # Then a re-initialized Thing is the only object that points to its new
-    # tuple, and the garbage starts minor collections.
-    env.rts.gc()
-    for r in range(rounds):
-        reinit(keep[r % nkeep], r)
-        expect[r % nkeep] = r
-        garbage(400, r)
-    for i in range(nkeep):
-        if keep[i].vals.0 != expect[i] or keep[i].vals.299 is not None:
-            print("wrong tuple", i, keep[i].vals.0)
-            env.exit(1)
-    env.exit(0)
+    proc def __startup__():
+        rounds = int(env.argv[1]) if len(env.argv) > 1 else 200
+        nkeep = int(env.argv[2]) if len(env.argv) > 2 else 8
+        # Each Thing gets a block of its own, between Pads that stay referenced.
+        # A collection dirties the block of every object that a stack word
+        # points to, also when the word is stale, and the checker skips dirty
+        # blocks. The I/O loop of the main thread keeps an event array on its
+        # stack and writes only the entries of the events that arrive, so a
+        # block address that the collector left there before stays for the
+        # whole run and keeps that block dirty. Such a word then hides the
+        # stores into one Thing only. The Pads fill the rest of each block, so
+        # that none of it gets on a thread-local free list, whose blocks every
+        # collection dirties. The lists grow between Pads, so that the arrays
+        # they discard do not share a block with a Thing either.
+        keep = []
+        pads = []
+        for i in range(nkeep):
+            fill(pads)
+            t = Thing(i)
+            fill(pads)
+            keep.append(t)
+        expect = list(range(nkeep))
+        # A full collection marks every Thing and leaves their blocks clean.
+        # Then a re-initialized Thing is the only object that points to its new
+        # tuple, and the garbage starts minor collections.
+        env.rts.gc()
+        for r in range(rounds):
+            reinit(keep[r % nkeep], r)
+            expect[r % nkeep] = r
+            garbage(400, r)
+        for i in range(nkeep):
+            if keep[i].vals.0 != expect[i] or keep[i].vals.299 is not None:
+                print("wrong tuple", i, keep[i].vals.0)
+                env.exit(1)
+        env.exit(0)

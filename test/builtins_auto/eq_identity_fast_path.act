@@ -69,11 +69,12 @@ def test_container_reflexivity_and_numeric_exceptions():
 
 
 actor main(env):
-    try:
-        test_reflexive_builtin_aliases()
-        test_distinct_equal_builtins()
-        test_container_reflexivity_and_numeric_exceptions()
-        env.exit(0)
-    except Exception as e:
-        print(e)
-        env.exit(1)
+    proc def __startup__():
+        try:
+            test_reflexive_builtin_aliases()
+            test_distinct_equal_builtins()
+            test_container_reflexivity_and_numeric_exceptions()
+            env.exit(0)
+        except Exception as e:
+            print(e)
+            env.exit(1)

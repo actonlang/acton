@@ -18,6 +18,7 @@ class Bar(object):
                 print("BUG FOUND, v should not be None!")
 
 actor main(env):
-    a = {"a": Foo()}
-    b = Bar(a)
-    env.exit(0)
+    proc def __startup__():
+        a = {"a": Foo()}
+        b = Bar(a)
+        env.exit(0)

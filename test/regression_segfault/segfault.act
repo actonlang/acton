@@ -6,6 +6,7 @@ def foo(bar):
     print("test")
 
 actor main(env):
-    a = foo("foo")
-    print(a)
-    env.exit(0)
+    proc def __startup__():
+        a = foo("foo")
+        print(a)
+        env.exit(0)

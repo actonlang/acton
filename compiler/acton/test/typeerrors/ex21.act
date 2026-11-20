@@ -1,6 +1,7 @@
 import std.math
 
 actor main(env):
-   print(std.math.sin("hej"))
-   env.exit(0)
+    proc def __startup__():
+       print(std.math.sin("hej"))
+       env.exit(0)
    

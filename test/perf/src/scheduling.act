@@ -98,25 +98,32 @@ actor RingTest(t: testing.AsyncT, rings: int, size: int, tokens: int):
         else:
             t.success()
 
-    for i in range(rings * size):
-        nodes.append(RingNode(done))
-    for i in range(rings * size):
-        # Link each node to the next one in its own ring
-        linked = nodes[i].link(nodes[i - i % size + (i + 1) % size])
-    run()
+    proc def __startup__():
+        for i in range(rings * size):
+            nodes.append(RingNode(done))
+        for i in range(rings * size):
+            # Link each node to the next one in its own ring
+            linked = nodes[i].link(nodes[i - i % size + (i + 1) % size])
+        run()
 
 
 actor _test_ring(t: testing.AsyncT):
     """One token around a ring of 1000 actors, scale hops per body"""
-    RingTest(t, 1, RING_SIZE, 1)
+
+    proc def __startup__():
+        RingTest(t, 1, RING_SIZE, 1)
 
 actor _test_ring_tokens(t: testing.AsyncT):
     """64 tokens around a ring of 1000 actors, scale hops per body in total"""
-    RingTest(t, 1, RING_SIZE, 64)
+
+    proc def __startup__():
+        RingTest(t, 1, RING_SIZE, 64)
 
 actor _test_pairs(t: testing.AsyncT):
     """64 pairs of actors, one token per pair, scale hops per body in total"""
-    RingTest(t, PAIRS, 2, PAIRS)
+
+    proc def __startup__():
+        RingTest(t, PAIRS, 2, PAIRS)
 
 
 actor Server():
@@ -160,9 +167,10 @@ actor _test_hot_server(t: testing.AsyncT):
         else:
             t.success()
 
-    for i in range(CLIENTS):
-        clients.append(Client(server, done))
-    run()
+    proc def __startup__():
+        for i in range(CLIENTS):
+            clients.append(Client(server, done))
+        run()
 
 
 actor Worker():
@@ -208,9 +216,10 @@ actor _test_fan_out(t: testing.AsyncT):
         else:
             t.success()
 
-    for i in range(WORKERS):
-        workers.append(Worker())
-    run()
+    proc def __startup__():
+        for i in range(WORKERS):
+            workers.append(Worker())
+        run()
 
 
 actor Stage(next: ?Stage, sink: action(int) -> None):
@@ -251,10 +260,12 @@ actor _test_pipeline(t: testing.AsyncT):
             t.success()
 
     var stage: ?Stage = None
-    for i in range(STAGES):
-        stage = Stage(stage, sink)
     first = stage
-    run()
+
+    proc def __startup__():
+        for i in range(STAGES):
+            stage = Stage(stage, sink)
+        run()
 
 
 actor Hog(us: int):
@@ -272,7 +283,8 @@ actor Hog(us: int):
         running = False
         return turns
 
-    after 0: spin()
+    proc def __startup__():
+        after 0: spin()
 
 
 actor Echo():
@@ -317,9 +329,10 @@ actor _test_latency_under_load(t: testing.EnvT):
                 turns = h.stop()
             t.success()
 
-    for i in range(2 * t.env.nr_wthreads):
-        hogs.append(Hog(HOG_US))
-    run()
+    proc def __startup__():
+        for i in range(2 * t.env.nr_wthreads):
+            hogs.append(Hog(HOG_US))
+        run()
 
 
 actor JobServer():
@@ -363,4 +376,5 @@ actor _test_reply_behind_work(t: testing.AsyncT):
         else:
             t.success()
 
-    run()
+    proc def __startup__():
+        run()

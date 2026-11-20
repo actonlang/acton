@@ -112,74 +112,75 @@ def fun7(n,out):
             break                       #   FINAL   DROP    LOOP
         out.append("C")                 #   FINAL   DROP
     finally:
-        out.append('F2')                 
+        out.append('F2')
     return "R2"
 
 
 actor main(env):
-    try:
-        raise Err("err")
-    except Exception:
-        pass
+    proc def __startup__():
+        try:
+            raise Err("err")
+        except Exception:
+            pass
 
-    out1 = []
-    fun1(0,out1)
-    fun1(1,out1)
-    #print(out1)
-    
-    out2 = []
-    fun2(0,out2)
-    fun2(1,out2)
-    #print(out2)
+        out1 = []
+        fun1(0,out1)
+        fun1(1,out1)
+        #print(out1)
 
-    out3 = []
-    fun3(0,out3)
-    fun3(1,out3)
-    #print(out3)
+        out2 = []
+        fun2(0,out2)
+        fun2(1,out2)
+        #print(out2)
 
-    out4 = []
-    fun4(0,out4)
-    fun4(1,out4)
-    #print(out4)
-    
-    out5 = []
-    res5 = [fun5(0,out5),fun5(1,out5)]
-    try:
-        res5.append(fun5(2,out5))
-    except Err:
-        res5.append('X')
-    #print(out5,res5)
-    
-    out6 = []
-    fun6(0,out6)
-    fun6(1,out6)
-    fun6(2,out6)
-    #print(out6)
+        out3 = []
+        fun3(0,out3)
+        fun3(1,out3)
+        #print(out3)
 
-    out7 = []
-    res7 = [fun7(0,out7), fun7(1,out7), fun7(2,out7)]
-    #print(out7, res7)
+        out4 = []
+        fun4(0,out4)
+        fun4(1,out4)
+        #print(out4)
 
-    if out1 != ['A', 'E', 'F', 'A', 'X', 'F']:
-        print("Bad 1:", out1)
-        env.exit(1)
-    if out2 != ['A', 'B', 'F', 'A', 'F']:
-        print("Bad 2:", out2)
-        env.exit(1)
-    if out3 != ['A', 'E', 'A', 'X']:
-        print("Bad 3:", out3)
-        env.exit(1)
-    if out4 != ['A', 'E', 'F1', 'C', 'F2', 'A', 'X', 'F1', 'C', 'F2']:
-        print("Bad 4:", out4)
-        env.exit(1)
-    if out5 != ['A', 'F', 'A', 'F', 'A', 'F'] or res5 != ['B', 'C', 'X']:
-        print("Bad 5:", out5, res5)
-        env.exit(1)
-    if out6 != ['A', 'F1', 'F2', 'B', 'C', 'A', 'F1', 'F2', 'C', 'A', 'X', 'F1', 'F2', 'C']:
-        print("Bad 6:", out6)
-        env.exit(1)
-    if out7 != ['A', 'E', 'F1', 'B', 'C', 'F2', 'A', 'F1', 'F2', 'A', 'F1', 'C', 'F2'] or res7 != ['R2', 'R1', 'R2']:
-        print("Bad 7:", out7, res7)
-        env.exit(1)
+        out5 = []
+        res5 = [fun5(0,out5),fun5(1,out5)]
+        try:
+            res5.append(fun5(2,out5))
+        except Err:
+            res5.append('X')
+        #print(out5,res5)
 
-    env.exit(0)
+        out6 = []
+        fun6(0,out6)
+        fun6(1,out6)
+        fun6(2,out6)
+        #print(out6)
+
+        out7 = []
+        res7 = [fun7(0,out7), fun7(1,out7), fun7(2,out7)]
+        #print(out7, res7)
+
+        if out1 != ['A', 'E', 'F', 'A', 'X', 'F']:
+            print("Bad 1:", out1)
+            env.exit(1)
+        if out2 != ['A', 'B', 'F', 'A', 'F']:
+            print("Bad 2:", out2)
+            env.exit(1)
+        if out3 != ['A', 'E', 'A', 'X']:
+            print("Bad 3:", out3)
+            env.exit(1)
+        if out4 != ['A', 'E', 'F1', 'C', 'F2', 'A', 'X', 'F1', 'C', 'F2']:
+            print("Bad 4:", out4)
+            env.exit(1)
+        if out5 != ['A', 'F', 'A', 'F', 'A', 'F'] or res5 != ['B', 'C', 'X']:
+            print("Bad 5:", out5, res5)
+            env.exit(1)
+        if out6 != ['A', 'F1', 'F2', 'B', 'C', 'A', 'F1', 'F2', 'C', 'A', 'X', 'F1', 'F2', 'C']:
+            print("Bad 6:", out6)
+            env.exit(1)
+        if out7 != ['A', 'E', 'F1', 'B', 'C', 'F2', 'A', 'F1', 'F2', 'A', 'F1', 'C', 'F2'] or res7 != ['R2', 'R1', 'R2']:
+            print("Bad 7:", out7, res7)
+            env.exit(1)
+
+        env.exit(0)

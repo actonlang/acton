@@ -2,5 +2,6 @@ def f(x,y):
     return x+y
 
 actor main(env):
-    print("a".center(f(3)))
+    proc def __startup__():
+        print("a".center(f(3)))
     

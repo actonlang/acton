@@ -1,6 +1,7 @@
 actor main(env):
-    a: ?str = None
-    # we just want to check it is possible to isinstance a None value and not segfault, so if we pass this (although negative) we declare victory
-    if isinstance(a, str):
-        pass
-    env.exit(0)
+    proc def __startup__():
+        a: ?str = None
+        # we just want to check it is possible to isinstance a None value and not segfault, so if we pass this (although negative) we declare victory
+        if isinstance(a, str):
+            pass
+        env.exit(0)

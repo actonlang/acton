@@ -1,5 +1,6 @@
 import foo
 
 actor main(env):
-    b = foo.Bar()
-    env.exit(0)
+    proc def __startup__():
+        b = foo.Bar()
+        env.exit(0)

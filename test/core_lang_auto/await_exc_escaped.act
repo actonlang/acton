@@ -25,7 +25,10 @@
 #    parked head (no ENQ_ready), so an in-main timer cannot guard the park.
 
 actor Watchdog(env):
-    after 10.0: env.exit(1)
+
+
+    proc def __startup__():
+        after 10.0: env.exit(1)
 
 actor Prod():
     var i = 0
@@ -45,17 +48,18 @@ actor Rel():
             return -1
 
 actor main(env):
-    wd = Watchdog(env)
-    b = Prod()
-    c = Rel()
+    proc def __startup__():
+        wd = Watchdog(env)
+        b = Prod()
+        c = Rel()
 
-    def go():
-        async b.spin()
-        x = async b.boom()
-        v = c.consume(x)
-        if v == -1:
-            print("escaped exception ok")
-            env.exit(0)
-        env.exit(1)
+        def go():
+            async b.spin()
+            x = async b.boom()
+            v = c.consume(x)
+            if v == -1:
+                print("escaped exception ok")
+                env.exit(0)
+            env.exit(1)
 
-    go()
+        go()

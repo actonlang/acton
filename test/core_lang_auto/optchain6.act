@@ -24,17 +24,16 @@ def new_nonopt(a: ?Alpha):
     print("Got a part:", part)
 
 actor main(env):
-    c = Gamma("hello")
-    b = Beta(c)
-    a = Alpha(b)
-    new_opt(a)
-    new_nonopt(a)
-    b.c = None
-    new_opt(a)
-    try:
+    proc def __startup__():
+        c = Gamma("hello")
+        b = Beta(c)
+        a = Alpha(b)
+        new_opt(a)
         new_nonopt(a)
-    except ValueError:
-        print("ValueError")
-    env.exit(0)
-    
-        
+        b.c = None
+        new_opt(a)
+        try:
+            new_nonopt(a)
+        except ValueError:
+            print("ValueError")
+        env.exit(0)

@@ -121,12 +121,13 @@ def check() -> bool:
 #    if len(s) != 985 or len(s2) != 500:
 #        print(len(s), len(s2))
 #        raise ValueError("set length error 1")
-#    if len(s & s2) != 27 or len(s | s2) != 1458 or len(s ^ s2) != 1431:  
+#    if len(s & s2) != 27 or len(s | s2) != 1458 or len(s ^ s2) != 1431:
 #        raise ValueError("set length error 2")
     return True
 
 actor main(env):
-    if check():
-        env.exit(0)
-    else:
-        env.exit(1)
+    proc def __startup__():
+        if check():
+            env.exit(0)
+        else:
+            env.exit(1)

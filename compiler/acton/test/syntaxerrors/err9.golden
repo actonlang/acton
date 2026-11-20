@@ -1,12 +1,10 @@
 Building file test/syntaxerrors/err9.act using temporary scratch directory
-[error Parse error]: unexpected newline
-                     expecting "=>"
-
-     +--> test/syntaxerrors/err9.act@1:8-1:9
+[error Syntax error]: Only declarations and assignments are allowed at the module top level
+     +--> test/syntaxerrors/err9.act@1:1-1:1
      |
    1 | f : [A]
-     :        ^
-     :        `- unexpected newline
-     :           expecting "=>"
-     :           
+     :  
+     : `- Only declarations and assignments are allowed at the module top level
+     :
+     | Hint: Assign the value to a name or move runtime work into a function or an actor startup method
 -----+

@@ -3,7 +3,7 @@ class Gamma():
         self.s = s
 
 class Beta():
-    def __init__(self, c: ?Gamma): 
+    def __init__(self, c: ?Gamma):
         self.c = c
 
 class Alpha():
@@ -16,15 +16,15 @@ def check_equal[A(Eq)](env: Env, a: ?A,b: ?A)->None:
        env.exit(1)
 
 actor main(env):
+    proc def __startup__():
 
-    a1 = None
-    check_equal(env,a1?.b?.c?.s, None)
+        a1 = None
+        check_equal(env,a1?.b?.c?.s, None)
 
-    a2 = Alpha(Beta(None))
-    check_equal(env,a2?.b?.c?.s, None)
+        a2 = Alpha(Beta(None))
+        check_equal(env,a2?.b?.c?.s, None)
 
-    a3 = Alpha(Beta(Gamma("hello")))
-    check_equal(env,a3?.b?.c?.s, "hello")
+        a3 = Alpha(Beta(Gamma("hello")))
+        check_equal(env,a3?.b?.c?.s, "hello")
 
-    env. exit(0)
-    
+        env. exit(0)

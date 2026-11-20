@@ -1,7 +1,8 @@
 import time
 
 actor main(env):
-    def f():
-        print(time.time())
-    f()
-    env.exit(0)
+    proc def __startup__():
+        def f():
+            print(time.time())
+        f()
+        env.exit(0)

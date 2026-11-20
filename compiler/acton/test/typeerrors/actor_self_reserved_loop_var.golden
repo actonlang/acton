@@ -1,9 +1,9 @@
 Building file test/typeerrors/actor_self_reserved_loop_var.act using temporary scratch directory
    actor_self_reserved_loop_var  Parse done                                                               0.000 s
 [error Compilation error]: 'self' cannot be used as a parameter name in actors.
-     +--> actor_self_reserved_loop_var.act@2:9-2:13
+     +--> actor_self_reserved_loop_var.act@3:13-3:17
      |
-   2 |     for self in [1, 2, 3]:
-     :         ^--- 
-     :         `- 'self' cannot be used as a parameter name in actors.
+   3 |         for self in [1, 2, 3]:
+     :             ^--- 
+     :             `- 'self' cannot be used as a parameter name in actors.
 -----+

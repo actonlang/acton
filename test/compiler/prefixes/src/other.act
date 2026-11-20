@@ -1,4 +1,5 @@
 import prefixes
 
 actor main(env: Env):
-    prefixes.main(env)
+    proc def __startup__():
+        prefixes.main(env)

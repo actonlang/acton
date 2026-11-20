@@ -2,5 +2,6 @@
 from __builtin__ import _EnvCap
 
 actor main(env: Env):
-    stdio = Stdio(_EnvCap(), env.vars)
-    env.exit(0)
+    proc def __startup__():
+        stdio = Stdio(_EnvCap(), env.vars)
+        env.exit(0)

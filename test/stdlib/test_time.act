@@ -1,18 +1,19 @@
 import time
 
 actor main(env):
-    et = time.Instant(int(env.argv[1]), 0, time.RealtimeClock(0, 0, 0))
-    n = time.time()
-    d = n.since(et)
-    print("duration:", d)
+    proc def __startup__():
+        et = time.Instant(int(env.argv[1]), 0, time.RealtimeClock(0, 0, 0))
+        n = time.time()
+        d = n.since(et)
+        print("duration:", d)
 
-    # Generous tolerance on purpose: this guards against time.time() being grossly
-    # wrong (a real bug would be off by hours/days, not seconds). The gap between
-    # the timestamp passed in at launch and time.time() here is dominated by
-    # compile/startup latency on slow, oversubscribed CI runners, which has been
-    # seen to exceed 15s. Keep it wide enough not to flake on those.
-    if abs(d.second) > 300:
-        print("ERROR: diff seems too large, time.time*() should be roughly same as provided UNIX timestamp input")
-        env.exit(1)
-    else:
-        env.exit(0)
+        # Generous tolerance on purpose: this guards against time.time() being grossly
+        # wrong (a real bug would be off by hours/days, not seconds). The gap between
+        # the timestamp passed in at launch and time.time() here is dominated by
+        # compile/startup latency on slow, oversubscribed CI runners, which has been
+        # seen to exceed 15s. Keep it wide enough not to flake on those.
+        if abs(d.second) > 300:
+            print("ERROR: diff seems too large, time.time*() should be roughly same as provided UNIX timestamp input")
+            env.exit(1)
+        else:
+            env.exit(0)

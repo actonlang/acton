@@ -5,15 +5,15 @@ def average(xs: array[float])->float:
     return s/float(len(xs))
 
 actor main(env):
-#     env.rts.start_gc_performance_measurement()
-    xs = array(1000000)
-    for n in range(1000000):
-        xs[n] = float(n)
-    av = average(xs)
-    if abs(av - 499999.5) > 0.001:
-        print("average of array is wrong")
-        env.exit(1)
-#     print("gc time", env.rts.gc_stats().total_ms, "millisecs")
-#     print("Total heap memory allocated",env.rts.gc_stats().total_bytes,"bytes")
-    env.exit(0)
-    
+    proc def __startup__():
+    #     env.rts.start_gc_performance_measurement()
+        xs = array(1000000)
+        for n in range(1000000):
+            xs[n] = float(n)
+        av = average(xs)
+        if abs(av - 499999.5) > 0.001:
+            print("average of array is wrong")
+            env.exit(1)
+    #     print("gc time", env.rts.gc_stats().total_ms, "millisecs")
+    #     print("Total heap memory allocated",env.rts.gc_stats().total_bytes,"bytes")
+        env.exit(0)

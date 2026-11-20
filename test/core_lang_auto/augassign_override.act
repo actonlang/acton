@@ -42,29 +42,30 @@ def generic_ior[T(Logical)](a: T, b: T) -> T:
     return a
 
 actor main(env):
-    failures: list[str] = []
+    proc def __startup__():
+        failures: list[str] = []
 
-    def expect(what: str, ok: bool):
-        if not ok:
-            failures.append(what)
+        def expect(what: str, ok: bool):
+            if not ok:
+                failures.append(what)
 
-    expect("variable", local_ops() == ["ior", "iand", "ixor", "isub"])
+        expect("variable", local_ops() == ["ior", "iand", "ixor", "isub"])
 
-    h = Holder(Ops([]))
-    h.ops |= Ops([])
-    h.ops -= Ops([])
-    expect("attribute", h.ops.log == ["ior", "isub"])
+        h = Holder(Ops([]))
+        h.ops |= Ops([])
+        h.ops -= Ops([])
+        expect("attribute", h.ops.log == ["ior", "isub"])
 
-    l = [Ops([])]
-    l[0] ^= Ops([])
-    l[0] &= Ops([])
-    expect("index", l[0].log == ["ixor", "iand"])
+        l = [Ops([])]
+        l[0] ^= Ops([])
+        l[0] &= Ops([])
+        expect("index", l[0].log == ["ixor", "iand"])
 
-    expect("generic", generic_ior(Ops([]), Ops([])).log == ["ior"])
+        expect("generic", generic_ior(Ops([]), Ops([])).log == ["ior"])
 
-    expect("binary", (Ops([]) | Ops([])).log == ["or"])
+        expect("binary", (Ops([]) | Ops([])).log == ["or"])
 
-    if failures:
-        print("Failed:", failures)
-        env.exit(1)
-    env.exit(0)
+        if failures:
+            print("Failed:", failures)
+            env.exit(1)
+        env.exit(0)

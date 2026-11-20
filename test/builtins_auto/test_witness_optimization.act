@@ -10,25 +10,26 @@ def test_generic_dict_comp[K(Hashable), V](keys: list[K], value: V) -> dict[K, V
     return {k: value for k in keys}
 
 actor main(env):
-    # Test with integers
-    int_set = test_generic_comprehension([1, 2, 3, 4, 5])
-    print("Integer set:", int_set)
-    
-    # Test with strings  
-    str_set = test_generic_comprehension(["hello", "world", "test"])
-    print("String set:", str_set)
-    
-    # Test dict comprehension with generic key type
-    int_dict = test_generic_dict_comp([10, 20, 30], "value")
-    print("Integer dict:", int_dict)
-    
-    str_dict = test_generic_dict_comp(["a", "b", "c"], 42)
-    print("String dict:", str_dict)
-    
-    # Test with large lists to ensure optimization matters
-    large_list = list(range(1000))
-    large_set = test_generic_comprehension(large_list)
-    print("Large set size:", len(large_set))
-    
-    print("✓ Witness optimization test passed!")
-    env.exit(0)
+    proc def __startup__():
+        # Test with integers
+        int_set = test_generic_comprehension([1, 2, 3, 4, 5])
+        print("Integer set:", int_set)
+
+        # Test with strings
+        str_set = test_generic_comprehension(["hello", "world", "test"])
+        print("String set:", str_set)
+
+        # Test dict comprehension with generic key type
+        int_dict = test_generic_dict_comp([10, 20, 30], "value")
+        print("Integer dict:", int_dict)
+
+        str_dict = test_generic_dict_comp(["a", "b", "c"], 42)
+        print("String dict:", str_dict)
+
+        # Test with large lists to ensure optimization matters
+        large_list = list(range(1000))
+        large_set = test_generic_comprehension(large_list)
+        print("Large set size:", len(large_set))
+
+        print("✓ Witness optimization test passed!")
+        env.exit(0)
