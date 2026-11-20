@@ -583,6 +583,8 @@
   anchored to the original test start. [#3245]
 
 ### Compatibility Notes
+- Replace `env.stdio.is_tty()` with `env.stdio.stdout_is_tty()`.
+  `stdin_is_tty()` and `stderr_is_tty()` check the other two streams. [#3421]
 - Update C extensions for changed builtin helper names and container layouts.
   Dictionaries and sets now retain their `Hashable` witness, so
   `B_dictD_setitem()` and `B_dictD_get()` no longer take it as an argument.
@@ -6140,6 +6142,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#3388]: https://github.com/actonlang/acton/pull/3388
 [#3390]: https://github.com/actonlang/acton/pull/3390
 [#3391]: https://github.com/actonlang/acton/pull/3391
+[#3421]: https://github.com/actonlang/acton/pull/3421
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0

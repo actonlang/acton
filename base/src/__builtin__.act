@@ -1944,10 +1944,6 @@ actor Stdio(envcap: _EnvCap, vars: EnvVar):
         """
         NotImplemented
 
-    action def is_tty() -> bool:
-        """Check if stdout is a terminal"""
-        NotImplemented
-
     action def stdin_is_tty() -> bool:
         """Check if stdin is a terminal"""
         NotImplemented

@@ -21,7 +21,7 @@ actor main(env: Env):
             print("cooked")
             env.exit(0)
 
-    print("stdin_is_tty", env.stdio.stdin_is_tty(), "is_tty", env.stdio.is_tty())
+    print("stdin_is_tty", env.stdio.stdin_is_tty(), "stdout_is_tty", env.stdio.stdout_is_tty())
     await async env.stdio.stdin_install(on_stdin_bytes=replaced)
     await async env.stdio.stdin_install(on_stdin_bytes=on_key)
     ttys = 0
