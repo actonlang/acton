@@ -3908,6 +3908,32 @@ stdioTerminalTests = testGroup "stdio terminal" $
         assertEqual "exit code" ExitSuccess code
         mapM_ IO.hClose (catMaybes [mIn, mOut, mErr])
         mapM_ PIO.closeFd [master, slave]
+  , testCase "term_size reads the size of the terminal on stdout" $ do
+      testBuildThing "" ExitSuccess False "../../test/rts/stdio_term_size.act"
+      wd <- canonicalizePath "../../test/rts"
+      -- A new pseudo terminal has no size, 0 columns and 0 rows, until stty
+      -- sets one. The size of the terminal on stdin does not count.
+      forM_ [ ("stdout on a terminal of 97 by 31", Just (97, 31), "stdout", "columns 97 rows 31")
+            , ("stdout on a terminal with no size", Nothing, "stdout", "None")
+            , ("stdin on a terminal of 97 by 31 and stdout on a pipe", Just (97, 31), "stdin", "None")
+            ] $ \(what, size, stream, expected) -> do
+        (master, slave) <- PT.openPseudoTerminal
+        forM_ size $ \(columns, rows) -> do
+          hStty <- PIO.dup slave >>= PIO.fdToHandle
+          (_, _, _, sttyPh) <- createProcess (proc "stty" ["cols", show columns, "rows", show rows])
+              { std_in = UseHandle hStty }
+          sttyCode <- waitWithin sttyPh
+          assertEqual "stty exit code" ExitSuccess sttyCode
+        hPty <- PIO.dup slave >>= PIO.fdToHandle
+        let on s = if s == stream then UseHandle hPty else CreatePipe
+        (mIn, mOut, Just hErr, ph) <- createProcess (proc "./stdio_term_size" [])
+            { cwd = Just wd, std_in = on "stdin", std_out = on "stdout", std_err = CreatePipe }
+        line <- readLineWithin hErr
+        assertEqual ("with " ++ what) expected line
+        code <- waitWithin ph
+        assertEqual "exit code" ExitSuccess code
+        mapM_ IO.hClose (catMaybes [mIn, mOut, Just hErr])
+        mapM_ PIO.closeFd [master, slave]
   ]
   where
     withPtyProgram exe env body = do

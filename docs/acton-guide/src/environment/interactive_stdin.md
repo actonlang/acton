@@ -72,6 +72,26 @@ settings on exit for you, and why these programs should be careful and
 intentional about when they enter non-canonical or raw mode.</p>
 </div>
 
+## Terminal size
+
+`env.stdio.term_size()` returns the size of the terminal on stdout as
+`columns` and `rows`. It returns `None` when stdout is not a terminal,
+for example when the output goes to a pipe or a file, or when the
+terminal reports no size.
+
+```python
+actor main(env):
+    columns = 80
+    size = env.stdio.term_size()
+    if size is not None:
+        columns = size.columns
+    print("-" * columns)
+    env.exit(0)
+```
+
+The size changes when the user resizes the terminal window, so read it
+again before laying out output that depends on it.
+
 ## One stdin handler
 
 A process has one reader of stdin. Calling `stdin_install` again
