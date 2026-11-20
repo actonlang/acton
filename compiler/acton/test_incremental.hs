@@ -688,8 +688,9 @@ p01_init = testCase "01-init" $ do
     [ "import b"
     , ""
     , "actor main(env: Env):"
-    , "    print(b.baa())"
-    , "    env.exit(0)"
+    , "    proc def __startup__():"
+    , "        print(b.baa())"
+    , "        env.exit(0)"
     ]
 
 p02_initial_build :: TestTree
@@ -852,8 +853,9 @@ f01_init = testCase "01-init" $ do
     [ "import b"
     , ""
     , "actor main(env: Env):"
-    , "    print(b.baa())"
-    , "    env.exit(0)"
+    , "    proc def __startup__():"
+    , "        print(b.baa())"
+    , "        env.exit(0)"
     ]
 
 f02_initial_build :: TestTree
@@ -961,7 +963,8 @@ p14_partial_rebuild = testCase "14-partial rebuild" $ do
   ensureCasesProject
   writeFileUtf8 (casesSrcDir </> "rebuild.act") $ T.unlines
     [ "actor main(env: Env):"
-    , "    env.exit(0)"
+    , "    proc def __startup__():"
+    , "        env.exit(0)"
     ]
   res1 <- runActonIn casesProjDir ["build", "--color", "never"]
   assertExitSuccess "initial build" res1
@@ -976,7 +979,8 @@ p15_rebuild_import = testCase "15-rebuild with stdlib import" $ do
     [ "import std.json"
     , ""
     , "actor main(env: Env):"
-    , "    env.exit(0)"
+    , "    proc def __startup__():"
+    , "        env.exit(0)"
     ]
   res1 <- runActonIn casesProjDir ["build", "--color", "never"]
   assertExitSuccess "initial build" res1
@@ -994,7 +998,8 @@ p15b_transitive_stdlib_import = testCase "15b-transitive stdlib import via cache
         , "    pass"
         , ""
         , "actor main(env):"
-        , "    env.exit(0)"
+        , "    proc def __startup__():"
+        , "        env.exit(0)"
         ]
   ensureCasesProject
   writeFileUtf8 (src </> "b.act") $ T.unlines
@@ -1021,9 +1026,10 @@ p15c_transitive_extension_import = testCase "15c-transitive extension via cached
       writeMain imports = writeFileUtf8 (src </> "main.act") $ T.unlines $ imports ++
         [ ""
         , "actor main(env):"
-        , "    for e in b.make():"
-        , "        print(e)"
-        , "    env.exit(0)"
+        , "    proc def __startup__():"
+        , "        for e in b.make():"
+        , "            print(e)"
+        , "        env.exit(0)"
         ]
   ensureCasesProject
   writeFileUtf8 (src </> "a.act") $ T.unlines
@@ -1072,9 +1078,10 @@ p16_dep_api_change = testCase "16-dependency API change triggers rebuild" $ do
     [ "import libfoo.lib"
     , ""
     , "actor main(env: Env):"
-    , "    result = libfoo.lib.calculate(21)"
-    , "    print(\"Result: %d\" % result)"
-    , "    env.exit(0)"
+    , "    proc def __startup__():"
+    , "        result = libfoo.lib.calculate(21)"
+    , "        print(\"Result: %d\" % result)"
+    , "        env.exit(0)"
     ]
   res1 <- runActonIn casesProjDir ["build", "--color", "never"]
   assertExitSuccess "initial build" res1
@@ -1103,9 +1110,10 @@ p17_dep_impl_change = testCase "17-dependency impl change triggers back job" $ d
     [ "import libfoo.lib"
     , ""
     , "actor main(env: Env):"
-    , "    result = libfoo.lib.calculate(21)"
-    , "    print(\"Result: %d\" % result)"
-    , "    env.exit(0)"
+    , "    proc def __startup__():"
+    , "        result = libfoo.lib.calculate(21)"
+    , "        print(\"Result: %d\" % result)"
+    , "        env.exit(0)"
     ]
   res1 <- runActonIn casesProjDir ["build", "--color", "never"]
   assertExitSuccess "initial build" res1
@@ -1149,8 +1157,9 @@ p17b_dep_escape_change = testCase "17b-dependency escape change rechecks Hashabl
     , "        self.x.hash(h)"
     , ""
     , "actor main(env: Env):"
-    , "    print(hash(Point(3)))"
-    , "    env.exit(0)"
+    , "    proc def __startup__():"
+    , "        print(hash(Point(3)))"
+    , "        env.exit(0)"
     ]
   res1 <- runActonIn casesProjDir ["build", "--color", "never"]
   assertExitSuccess "initial build" res1
@@ -1186,8 +1195,9 @@ p17c_refresh_keeps_escape = testCase "17c-impl refresh keeps escape summaries" $
         , "        self.x.hash(h)"
         , ""
         , "actor main(env: Env):"
-        , "    print(hash(Point(u.g())))"
-        , "    env.exit(0)"
+        , "    proc def __startup__():"
+        , "        print(hash(Point(u.g())))"
+        , "        env.exit(0)"
         ]
   ensureCasesProjectWithDeps []
   writeFileUtf8 (casesSrcDir </> "v.act") $ T.unlines
@@ -1242,8 +1252,9 @@ p17d_codegen_refresh_keeps_escape = testCase "17d-codegen refresh keeps escape s
         , "        self.x.hash(h)"
         , ""
         , "actor main(env: Env):"
-        , "    print(hash(Point(3)))"
-        , "    env.exit(0)"
+        , "    proc def __startup__():"
+        , "        print(hash(Point(3)))"
+        , "        env.exit(0)"
         ]
   ensureCasesProjectWithDeps []
   writeFileUtf8 (casesSrcDir </> "u.act") $ T.unlines
@@ -1283,7 +1294,8 @@ p18_type_only_deps = testCase "18-type-only deps in signatures" $ do
     ]
   writeFileUtf8 (src </> "c.act") $ T.unlines
     [ "actor main(env: Env):"
-    , "    env.exit(0)"
+    , "    proc def __startup__():"
+    , "        env.exit(0)"
     ]
   _ <- buildOutIn proj
   writeFileUtf8 (src </> "a.act") $ T.unlines
@@ -1324,8 +1336,9 @@ p19_unused_import = testCase "19-unused import does not propagate" $ do
     [ "import b"
     , ""
     , "actor main(env: Env):"
-    , "    b.bar()"
-    , "    env.exit(0)"
+    , "    proc def __startup__():"
+    , "        b.bar()"
+    , "        env.exit(0)"
     ]
   _ <- buildOutIn proj
   writeFileUtf8 (src </> "b.act") $ T.unlines
@@ -1357,8 +1370,9 @@ p20_add_remove_names = testCase "20-add/remove top-level names" $ do
     [ "import b"
     , ""
     , "actor main(env: Env):"
-    , "    b.bar()"
-    , "    env.exit(0)"
+    , "    proc def __startup__():"
+    , "        b.bar()"
+    , "        env.exit(0)"
     ]
   _ <- buildOutIn proj
   writeFileUtf8 (src </> "a.act") $ T.unlines
@@ -1406,8 +1420,9 @@ p21_recursive_group = testCase "21-recursive group impl change propagates" $ do
     [ "import b"
     , ""
     , "actor main(env: Env):"
-    , "    b.use()"
-    , "    env.exit(0)"
+    , "    proc def __startup__():"
+    , "        b.use()"
+    , "        env.exit(0)"
     ]
   _ <- buildOutIn proj
   writeFileUtf8 (src </> "a.act") $ T.unlines
@@ -1446,8 +1461,9 @@ p22_multibind = testCase "22-multi-binding updates per-name hashes" $ do
     [ "import b"
     , ""
     , "actor main(env: Env):"
-    , "    b.get()"
-    , "    env.exit(0)"
+    , "    proc def __startup__():"
+    , "        b.get()"
+    , "        env.exit(0)"
     ]
   _ <- buildOutIn proj
   writeFileUtf8 (src </> "a.act") "x, y = 1, 3\n"
@@ -1478,8 +1494,9 @@ p23_codegen_mismatch = testCase "23-codegen hash mismatch triggers rebuild" $ do
     [ "import b"
     , ""
     , "actor main(env: Env):"
-    , "    b.bar()"
-    , "    env.exit(0)"
+    , "    proc def __startup__():"
+    , "        b.bar()"
+    , "        env.exit(0)"
     ]
   _ <- buildOutIn proj
   rewriteFirstLine bC "/* Acton impl hash: deadbeef */"
@@ -1518,8 +1535,9 @@ p24_codegen_equal_hash = testCase "24-codegen equal hash mismatch formats single
     [ "import b"
     , ""
     , "actor main(env: Env):"
-    , "    b.bar()"
-    , "    env.exit(0)"
+    , "    proc def __startup__():"
+    , "        b.bar()"
+    , "        env.exit(0)"
     ]
   -- The single-delta message is emitted by the EAGER codegen refresh; under
   -- default-on DBP the module would be deferred, so pin this path explicitly.
@@ -1554,8 +1572,9 @@ p25_whitespace_change = testCase "25-whitespace-only change does not propagate" 
     [ "import b"
     , ""
     , "actor main(env: Env):"
-    , "    b.bar()"
-    , "    env.exit(0)"
+    , "    proc def __startup__():"
+    , "        b.bar()"
+    , "        env.exit(0)"
     ]
   _ <- buildOutIn proj
   writeFileUtf8 (src </> "a.act") $ T.unlines
@@ -1579,8 +1598,9 @@ p26_corrupt_ty_header = testCase "26-corrupt .tydb header forces re-parse" $ do
     [ "import a"
     , ""
     , "actor main(env: Env):"
-    , "    print(a.aaa)"
-    , "    env.exit(0)"
+    , "    proc def __startup__():"
+    , "        print(a.aaa)"
+    , "        env.exit(0)"
     ]
   _ <- buildOutIn proj
   removePathForcibly tyA
@@ -1601,8 +1621,9 @@ p26_ty_version_mismatch = testCase "26b-.tydb version mismatch forces re-parse" 
     [ "import a"
     , ""
     , "actor main(env: Env):"
-    , "    print(a.aaa)"
-    , "    env.exit(0)"
+    , "    proc def __startup__():"
+    , "        print(a.aaa)"
+    , "        env.exit(0)"
     ]
   _ <- buildOutIn proj
   rewriteTyVersion tyA (map (+ 1) A.version)
@@ -1622,8 +1643,9 @@ p27_overlay_source_provider = testCase "27-overlay snapshots drive readModuleTas
     [ "import a"
     , ""
     , "actor main(env: Env):"
-    , "    print(a.aaa)"
-    , "    env.exit(0)"
+    , "    proc def __startup__():"
+    , "        print(a.aaa)"
+    , "        env.exit(0)"
     ]
   _ <- buildOutIn proj
   actAAbs <- canonicalizePath actA
@@ -1708,8 +1730,9 @@ p28_protocol_extension_deps = testCase "28-protocol/extension deps are recorded 
     , "import b"
     , ""
     , "actor main(env: Env):"
-    , "    b.runner(a.Widget())"
-    , "    env.exit(0)"
+    , "    proc def __startup__():"
+    , "        b.runner(a.Widget())"
+    , "        env.exit(0)"
     ]
   _ <- buildOutIn proj
   nameHashesA <- readTyNameHashes tyA
@@ -1780,8 +1803,9 @@ p29_protocol_impl_rebuild = testCase "29-protocol impl change triggers back jobs
     [ "import b"
     , ""
     , "actor main(env: Env):"
-    , "    print(b.calc())"
-    , "    env.exit(0)"
+    , "    proc def __startup__():"
+    , "        print(b.calc())"
+    , "        env.exit(0)"
     ]
   _ <- buildOutIn proj
   out1 <- runBinaryIn proj "c"
@@ -1839,8 +1863,9 @@ p30_only_build = testCase "30-only-build skips front passes" $ do
     [ "import b"
     , ""
     , "actor main(env: Env):"
-    , "    b.bar()"
-    , "    env.exit(0)"
+    , "    proc def __startup__():"
+    , "        b.bar()"
+    , "        env.exit(0)"
     ]
   _ <- buildOutIn proj
   writeFileUtf8 (src </> "a.act") "aaa = 2\n"
@@ -1884,8 +1909,9 @@ p31_missing_interfaces = testCase "31-missing interfaces rebuild front passes" $
     [ "import b"
     , ""
     , "actor main(env: Env):"
-    , "    b.bar()"
-    , "    env.exit(0)"
+    , "    proc def __startup__():"
+    , "        b.bar()"
+    , "        env.exit(0)"
     ]
   _ <- buildOutIn proj
   interfaces <- InterfaceFiles.listInterfaceDirsRecursive (proj </> "out/types")
@@ -1905,8 +1931,9 @@ p32_project_alt_output = testCase "32-project --types emits output" $ do
     [ "import a"
     , ""
     , "actor main(env: Env):"
-    , "    print(a.aaa)"
-    , "    env.exit(0)"
+    , "    proc def __startup__():"
+    , "        print(a.aaa)"
+    , "        env.exit(0)"
     ]
   _ <- buildOutIn proj
   res@(ec, out) <- runActonIn proj ["build", "--color", "never", "--types"]
@@ -2012,9 +2039,10 @@ p33_comprehensive_hashes = testCase "33-comprehensive hash propagation" $ do
     , "import b"
     , ""
     , "actor main(env: Env):"
-    , "    l = a.Local(3)"
-    , "    print(b.use_values() + b.use_method(l))"
-    , "    env.exit(0)"
+    , "    proc def __startup__():"
+    , "        l = a.Local(3)"
+    , "        print(b.use_values() + b.use_method(l))"
+    , "        env.exit(0)"
     ]
   _ <- buildOutIn proj
   let tyDep = depDir </> "out" </> "types" </> "libfoo" </> "lib.tydb"
@@ -2073,8 +2101,9 @@ p34_removed_import_module = testCase "34-removed imported module fails before Zi
     [ "import b"
     , ""
     , "actor main(env: Env):"
-    , "    print(b.bar())"
-    , "    env.exit(0)"
+    , "    proc def __startup__():"
+    , "        print(b.bar())"
+    , "        env.exit(0)"
     ]
   _ <- buildOutIn proj
   supportExists <- artifactExists (outA ++ ".closures.inc")
@@ -2114,8 +2143,9 @@ p35_changed_path_keeps_unaffected_provider =
       [ "import b"
       , ""
       , "actor main(env: Env):"
-      , "    print(b.bar())"
-      , "    env.exit(0)"
+      , "    proc def __startup__():"
+      , "        print(b.bar())"
+      , "        env.exit(0)"
       ]
     _ <- buildOutIn proj
     writeFileUtf8 actA "aaa = 2\n"
@@ -2167,8 +2197,9 @@ p35_dbp_changed_path_includes_provider =
       , "import b"
       , ""
       , "actor main(env: Env):"
-      , "    print(a.fa() + b.fb())"
-      , "    env.exit(0)"
+      , "    proc def __startup__():"
+      , "        print(a.fa() + b.fb())"
+      , "        env.exit(0)"
       ]
     _ <- buildOutInArgs proj ["--skip-build"]
     writeFileUtf8 actA $ T.unlines
@@ -2203,8 +2234,9 @@ p36_removed_dep_name_triggers_front_refresh =
       [ "import libfoo.lib"
       , ""
       , "actor main(env: Env):"
-      , "    print(libfoo.lib.foo())"
-      , "    env.exit(0)"
+      , "    proc def __startup__():"
+      , "        print(libfoo.lib.foo())"
+      , "        env.exit(0)"
       ]
     res1 <- runActonIn proj ["build", "--color", "never", "--skip-build"]
     assertExitSuccess "initial build" res1
@@ -2309,8 +2341,9 @@ p37_impl_refresh_missing_dep_hashes_reruns_front =
           , "    return libfoo.lib.foo() + libfoo.lib.bar()"
           , ""
           , "actor main(env: Env):"
-          , "    print(value())"
-          , "    env.exit(0)"
+          , "    proc def __startup__():"
+          , "        print(value())"
+          , "        env.exit(0)"
           ]
     writeFileUtf8 depSrc $ T.unlines
       [ "def foo() -> int:"
@@ -2357,7 +2390,8 @@ p38_project_lock_blocks_build =
     ensureCasesProject
     writeFileUtf8 (src </> "main.act") $ T.unlines
       [ "actor main(env: Env):"
-      , "    env.exit(0)"
+      , "    proc def __startup__():"
+      , "        env.exit(0)"
       ]
     actonExe <- actonPath
     res <- Project.withProjectLock proj $ do
@@ -2404,7 +2438,8 @@ p39_background_lock_does_not_block_build =
     ensureCasesProject
     writeFileUtf8 (src </> "main.act") $ T.unlines
       [ "actor main(env: Env):"
-      , "    env.exit(0)"
+      , "    proc def __startup__():"
+      , "        env.exit(0)"
       ]
     withBackgroundCompilerLockHeld proj $ do
       res@(_ec, out) <- runActonIn proj ["build", "--color", "never", "--verbose"]
@@ -2420,7 +2455,8 @@ p40_background_lock_blocks_watch =
     ensureCasesProject
     writeFileUtf8 (src </> "main.act") $ T.unlines
       [ "actor main(env: Env):"
-      , "    env.exit(0)"
+      , "    proc def __startup__():"
+      , "        env.exit(0)"
       ]
     withBackgroundCompilerLockHeld proj $ do
       actonExe <- actonPath
@@ -2463,8 +2499,9 @@ p41_stale_header_missing_import_reparses_source =
       [ "import b"
       , ""
       , "actor main(env: Env):"
-      , "    print(b.bar())"
-      , "    env.exit(0)"
+      , "    proc def __startup__():"
+      , "        print(b.bar())"
+      , "        env.exit(0)"
       ]
     _ <- buildOutIn proj
     writeFileUtf8 actB $ T.unlines
@@ -2499,8 +2536,9 @@ p42_metadata_drift_refreshes_header =
       [ "import a"
       , ""
       , "actor main(env: Env):"
-      , "    print(a.aaa)"
-      , "    env.exit(0)"
+      , "    proc def __startup__():"
+      , "        print(a.aaa)"
+      , "        env.exit(0)"
       ]
     _ <- buildOutIn proj
     metaBefore <- readTySourceMeta tyA
@@ -2540,8 +2578,9 @@ p43_equal_act_ty_mtime_hashes_source =
       [ "import b"
       , ""
       , "actor main(env: Env):"
-      , "    print(b.bar())"
-      , "    env.exit(0)"
+      , "    proc def __startup__():"
+      , "        print(b.bar())"
+      , "        env.exit(0)"
       ]
     _ <- buildOutIn proj
     writeFileUtf8 actB $ T.unlines
@@ -2589,7 +2628,8 @@ p44_provider_import_rename_reruns_dependent_front =
       , "    pass"
       , ""
       , "actor main(env: Env):"
-      , "    env.exit(0)"
+      , "    proc def __startup__():"
+      , "        env.exit(0)"
       ]
     writeFileUtf8 actBase $ T.unlines
       [ "import oldpkg.ttt as ttt"
@@ -2667,8 +2707,9 @@ p45_tydb_records_local_name_dependencies =
       [ "import a"
       , ""
       , "actor main(env: Env):"
-      , "    print(a.make_box().get())"
-      , "    env.exit(0)"
+      , "    proc def __startup__():"
+      , "        print(a.make_box().get())"
+      , "        env.exit(0)"
       ]
     _ <- buildOutIn proj
     (topPub, topImpl) <- readTyLocalDeps tyA "top"
@@ -2810,8 +2851,9 @@ writeHashTraceMain =
     [ "import small"
     , ""
     , "actor main(env: Env):"
-    , "    print(small.value())"
-    , "    env.exit(0)"
+    , "    proc def __startup__():"
+    , "        print(small.value())"
+    , "        env.exit(0)"
     ]
 
 buildHashTraceRoot :: IO ()
@@ -2867,8 +2909,9 @@ p50_big_dep_added_name_keeps_small_fresh =
       , "    return big_dep.big.Node000A(1).score_node000a(2)"
       , ""
       , "actor main(env: Env):"
-      , "    print(use_one())"
-      , "    env.exit(0)"
+      , "    proc def __startup__():"
+      , "        print(use_one())"
+      , "        env.exit(0)"
       ]
     buildHashTraceRoot
     (pubDeps, implDeps) <- readTyDeps tySmall "use_one"
@@ -2909,8 +2952,9 @@ p51_imported_lookup_stays_selective =
           , T.pack ("    return big_dep.big.used_value() + " ++ show (offset :: Int))
           , ""
           , "actor main(env: Env):"
-          , "    print(use_one())"
-          , "    env.exit(0)"
+          , "    proc def __startup__():"
+          , "        print(use_one())"
+          , "        env.exit(0)"
           ]
     depDir <- ensureHeavyDep 20
     let bigSrc = depDir </> "src" </> "big.act"
@@ -2946,16 +2990,17 @@ p52_imported_witness_lookup_stays_selective =
           [ "import big_dep.big"
           , ""
           , "actor main(env: Env):"
-          , "    box = big_dep.big.Box(1)"
-          , "    other = big_dep.big.Box(1)"
-          , "    ordered = big_dep.big.OrderedBox(1)"
-          , T.pack ("    ordered2 = big_dep.big.OrderedBox(" ++ show (offset :: Int) ++ ")")
-          , "    worker = big_dep.big.Worker()"
-          , "    direct = big_dep.big.Box(1).value"
-          , "    if box == other and ordered == ordered and ordered < ordered2 and direct == 1:"
-          , "        env.exit(0)"
-          , "    else:"
-          , "        env.exit(1)"
+          , "    proc def __startup__():"
+          , "        box = big_dep.big.Box(1)"
+          , "        other = big_dep.big.Box(1)"
+          , "        ordered = big_dep.big.OrderedBox(1)"
+          , T.pack ("        ordered2 = big_dep.big.OrderedBox(" ++ show (offset :: Int) ++ ")")
+          , "        worker = big_dep.big.Worker()"
+          , "        direct = big_dep.big.Box(1).value"
+          , "        if box == other and ordered == ordered and ordered < ordered2 and direct == 1:"
+          , "            env.exit(0)"
+          , "        else:"
+          , "            env.exit(1)"
           ]
     depDir <- ensureHeavyDep 20
     let bigSrc = depDir </> "src" </> "big.act"
@@ -3026,10 +3071,11 @@ p53_imported_attr_inference_stays_selective =
           , "    return args.get_bool(\"flag\")"
           , ""
           , "actor main(env: Env):"
-          , T.pack ("    if read_flag(big_dep.big.Args()) and " ++ show (offset :: Int) ++ " > 0:")
-          , "        env.exit(0)"
-          , "    else:"
-          , "        env.exit(1)"
+          , "    proc def __startup__():"
+          , T.pack ("        if read_flag(big_dep.big.Args()) and " ++ show (offset :: Int) ++ " > 0:")
+          , "            env.exit(0)"
+          , "        else:"
+          , "            env.exit(1)"
           ]
     depDir <- ensureHeavyDep 20
     let bigSrc = depDir </> "src" </> "big.act"
@@ -3080,8 +3126,9 @@ p55_dbp_reads_selected_statements =
       , "    return big.Node000A(1).score_node000a(2)"
       , ""
       , "actor main(env: Env):"
-      , "    print(use_one())"
-      , "    env.exit(0)"
+      , "    proc def __startup__():"
+      , "        print(use_one())"
+      , "        env.exit(0)"
       ]
     res@(_ec, out) <- runActonInEnv [("ACTON_TYDB_TRACE_READS", "1")] proj ["build", "--color", "never", "--verbose", "--skip-build"]
     assertExitSuccess "selective DBP .tydb trace build" res
@@ -3146,7 +3193,8 @@ p56_changed_path_prunes_removed_module =
         supportMain = typesDir </> casesProjName </> "main.closures.inc"
         rootActor = T.unlines
           [ "actor main(env: Env):"
-          , "    env.exit(0)"
+          , "    proc def __startup__():"
+          , "        env.exit(0)"
           ]
         opts = C.defaultCompileOptions
     ensureCasesProject
@@ -3203,7 +3251,8 @@ p58_full_build_drops_undeclared_root_stub =
         rootMain = typesDir </> "main.root.c"
         rootActor = T.unlines
           [ "actor main(env: Env):"
-          , "    env.exit(0)"
+          , "    proc def __startup__():"
+          , "        env.exit(0)"
           ]
     ensureCasesProject
     writeFileUtf8 (src </> "a.act") rootActor
@@ -3225,7 +3274,8 @@ p59_full_build_keeps_nested_module_binary =
         stamp p = (\st -> (fileID st, modificationTimeHiRes st)) <$> getFileStatus p
         rootActor = T.unlines
           [ "actor main(env: Env):"
-          , "    env.exit(0)"
+          , "    proc def __startup__():"
+          , "        env.exit(0)"
           ]
     ensureCasesProject
     createDirectoryIfMissing True (src </> "sub")
