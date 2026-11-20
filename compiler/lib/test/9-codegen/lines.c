@@ -397,6 +397,7 @@ B_NoneType linesQ_ApaD___init__ (linesQ_Apa self) {
     #line 16 "test/src/lines.act"
     ((linesQ_Apa)(self))->y = 123LL;
     $MarkStartup(((B_Msg (*) ($WORD))((linesQ_Apa)(self))->$class->__startup__)(self));
+    return B_None;
 }
 #line 3 "test/src/lines.act"
 $R linesQ_ApaD_setupG_local (linesQ_Apa self, $Cont C_cont, $action cb) {
@@ -473,6 +474,7 @@ linesQ_Apa linesQ_ApaG_new() {
 struct linesQ_ApaG_class linesQ_ApaG_methods;
 B_NoneType linesQ_BepaD___init__ (linesQ_Bepa self) {
     $MarkStartup(((B_Msg (*) ($WORD))((linesQ_Bepa)(self))->$class->__startup__)(self));
+    return B_None;
 }
 #line 24 "test/src/lines.act"
 $R linesQ_BepaD_callbackG_local (linesQ_Bepa self, $Cont C_cont, int64_t i) {
@@ -523,6 +525,7 @@ struct linesQ_BepaG_class linesQ_BepaG_methods;
 B_NoneType linesQ_mainD___init__ (linesQ_main self, B_Env env) {
     ACTON_STORE_ATTR(((linesQ_main)(self)), env, env);
     $MarkStartup(((B_Msg (*) ($WORD))((linesQ_main)(self))->$class->__startup__)(self));
+    return B_None;
 }
 #line 32 "test/src/lines.act"
 $R linesQ_mainD___startup__G_local (linesQ_main self, $Cont C_cont) {

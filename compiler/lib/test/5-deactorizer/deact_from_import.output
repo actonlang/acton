@@ -4,7 +4,7 @@ W_Manager_122: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
 # recursive group:
 class Manager ($Actor, __builtin__.value):
     com def __init__ (self : Self) -> None:
-        pass
+        return None
     proc def create_decoderG_local (self : Self) -> __builtin__.StringDecoder:
         decoder: __builtin__.StringDecoder = __builtin__.StringDecoderG_newact(self.decode_callback, "\"utf-8\"", None)
         return decoder
@@ -26,6 +26,7 @@ class main ($Actor, __builtin__.value):
     com def __init__ (self : Self, env : __builtin__.Env) -> None:
         self.env = env
         $MarkStartup((async self.__startup__)())
+        return None
     proc def __startup__G_local (self : Self) -> None:
         mgr: Manager = ManagerG_newact()
         decoder: __builtin__.StringDecoder = $AWAITf@[__builtin__.StringDecoder]((async mgr.create_decoder)())

@@ -238,6 +238,7 @@ $proc deactQ_L_22procD___deserialize__($proc self, $Serial$state state) {
 struct $Proc0Class deactQ_L_22procG_methods;
 B_NoneType deactQ_ApaD___init__ (deactQ_Apa self) {
     $MarkStartup(((B_Msg (*) ($WORD))((deactQ_Apa)(self))->$class->__startup__)(self));
+    return B_None;
 }
 #line 2 "test/src/deact.act"
 $R deactQ_ApaD_setupG_local (deactQ_Apa self, $Cont C_cont, $action cb) {
@@ -305,6 +306,7 @@ deactQ_Apa deactQ_ApaG_new() {
 struct deactQ_ApaG_class deactQ_ApaG_methods;
 B_NoneType deactQ_BepaD___init__ (deactQ_Bepa self) {
     $MarkStartup(((B_Msg (*) ($WORD))((deactQ_Bepa)(self))->$class->__startup__)(self));
+    return B_None;
 }
 #line 19 "test/src/deact.act"
 $R deactQ_BepaD_callbackG_local (deactQ_Bepa self, $Cont C_cont, int64_t i) {
@@ -355,6 +357,7 @@ struct deactQ_BepaG_class deactQ_BepaG_methods;
 B_NoneType deactQ_mainD___init__ (deactQ_main self, B_Env env) {
     ACTON_STORE_ATTR(((deactQ_main)(self)), env, env);
     $MarkStartup(((B_Msg (*) ($WORD))((deactQ_main)(self))->$class->__startup__)(self));
+    return B_None;
 }
 #line 27 "test/src/deact.act"
 $R deactQ_mainD___startup__G_local (deactQ_main self, $Cont C_cont) {

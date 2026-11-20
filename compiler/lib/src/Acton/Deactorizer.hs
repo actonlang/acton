@@ -133,7 +133,7 @@ instance Deact Decl where
     deact env (Actor l n q params KwdNIL body ddoc)
                                     = do inits1 <- deactSuite (define (envOf decls) env1) inits
                                          decls1 <- deactSuite (define (envOf inits) env1) decls
-                                         let _init_ = Def l0 initKW [] (addSelfPar params) KwdNIL (Just tNone) (mkBody $ copies++inits1) NoDec fxCom Nothing
+                                         let _init_ = Def l0 initKW [] (addSelfPar params) KwdNIL (Just tNone) (copies++inits1++[sReturn eNone]) NoDec fxCom Nothing
                                              decls2 = [ Decl l $ map deactMeth ds | Decl l ds <- decls1 ]
                                          return $ Class l n q [TC primActor [], cValue] (propsigs ++ [Decl l0 [_init_]] ++ decls2 ++ wraps) ddoc
       where env1                    = setActor wrapped stvars locals $ define (envOf params) $ define [(selfKW, NVar t0)] $ defineTVars q env

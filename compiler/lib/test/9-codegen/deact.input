@@ -244,6 +244,7 @@ class L_22proc ($proc[(), None], __builtin__.value):
 class Apa ($Actor, __builtin__.value):
     com def __init__ (self : Apa) -> None:
         $MarkStartup((async self.__startup__)())
+        return None
     proc def setupG_local (self : Apa, C_cont : $Cont[None], cb : $action[(__builtin__.int,), __builtin__.int]) -> $R:
         print@[(__builtin__.str,)](("\"setup\"",), "\" \"", "\"\\n\"", (UNBOX __builtin__.bool False), (UNBOX __builtin__.bool False))
         cb.__asyn__((BOX __builtin__.int (UNBOX __builtin__.int 0)))
@@ -268,6 +269,7 @@ class Apa ($Actor, __builtin__.value):
 class Bepa ($Actor, __builtin__.value):
     com def __init__ (self : Bepa) -> None:
         $MarkStartup((async self.__startup__)())
+        return None
     proc def callbackG_local (self : Bepa, C_cont : $Cont[__builtin__.int], i : UNBOXED __builtin__.int) -> $R:
         print@[(__builtin__.str, __builtin__.int)](("\"callback\"", (BOX __builtin__.int i)), "\" \"", "\"\\n\"", (UNBOX __builtin__.bool False), (UNBOX __builtin__.bool False))
         N_2tmp: UNBOXED __builtin__.int = ((UNBOX __builtin__.int i) + (UNBOX __builtin__.int 1))
@@ -285,6 +287,7 @@ class main ($Actor, __builtin__.value):
     com def __init__ (self : main, env : __builtin__.Env) -> None:
         self.env = env
         $MarkStartup((async self.__startup__)())
+        return None
     proc def __startup__G_local (self : main, C_cont : $Cont[None]) -> $R:
         a: Apa = ApaG_newact()
         b: Bepa = BepaG_newact()

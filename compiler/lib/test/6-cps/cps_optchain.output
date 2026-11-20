@@ -21,7 +21,7 @@ proc def maybe_log (C_cont : proc(None) -> $R, c : ?Cls) -> $R:
 # recursive group:
 class Logger ($Actor, __builtin__.value):
     com def __init__ (self : Self) -> None:
-        pass
+        return None
     proc def logG_local (self : Self, C_cont : proc(None) -> $R, msg : __builtin__.str) -> $R:
         pass
         return $R_CONTc@[None](C_cont, None)

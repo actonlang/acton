@@ -31,6 +31,7 @@ class main ($Actor, __builtin__.value):
     com def __init__ (self : Self, env : __builtin__.Env) -> None:
         self.env = env
         $MarkStartup((async self.__startup__)())
+        return None
     proc def __startup__G_local (self : Self) -> None:
         v: __builtin__.int = compute(W_main_74.__fromatom__(10))
         if W_main_29.__eq__(v, W_main_74.__fromatom__(13)):
