@@ -3883,7 +3883,10 @@ stdioTerminalTests = testGroup "stdio terminal" $
       PT.setTerminalAttributes slave (setModes attrs) PT.Immediately
       hIn <- PIO.dup slave >>= PIO.fdToHandle
       wd <- canonicalizePath "../../test/rts"
-      (_, Just hOut, Just hErr, ph) <- createProcess (proc ("./" ++ exe) [])
+      -- SIGQUIT and SIGSEGV dump core by default. A core of an Acton
+      -- program is several GB and takes longer to write than the test waits
+      -- where core dumps are on, as in CI.
+      (_, Just hOut, Just hErr, ph) <- createProcess (proc "sh" ["-c", "ulimit -c 0 && exec \"$@\"", "sh", "./" ++ exe])
           { cwd = Just wd, env = Just env, std_in = UseHandle hIn, std_out = CreatePipe, std_err = CreatePipe }
       body master slave hOut ph
         `onException` (terminateProcess ph >> IO.hGetContents hErr >>= IO.hPutStr IO.stderr)
