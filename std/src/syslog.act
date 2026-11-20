@@ -552,7 +552,6 @@ actor Client(cap: net.UDPConnectCap, address: str, port: int,
     proc def __startup__():
         after 0: start()
 
-    __startup__()
 
 
 actor Server(cap: net.UDPListenCap, address: str, port: int,
@@ -629,7 +628,6 @@ actor Server(cap: net.UDPListenCap, address: str, port: int,
     proc def __startup__():
         after 0: start()
 
-    __startup__()
 
 
 invalid_frame_max_size_error = ValueError("Syslog frame size limit must be positive")
@@ -876,7 +874,6 @@ actor StreamClient(cap: net.TCPConnectCap, address: str, port: int,
     proc def __startup__():
         after 0: start()
 
-    __startup__()
 
 
 actor StreamServer(cap: net.TCPListenCap, address: str, port: int,
@@ -1071,5 +1068,3 @@ actor StreamServer(cap: net.TCPListenCap, address: str, port: int,
 
     proc def __startup__():
         after 0: start()
-
-    __startup__()

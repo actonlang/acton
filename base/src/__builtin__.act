@@ -1706,7 +1706,8 @@ actor _RTSWorkerMonitor(wthread_id: int):
 
     proc def _init():
         NotImplemented
-    _init()
+    proc def __startup__():
+        _init()
 
 def _rts_io_handles() -> dict[u64, (typ: str, act: u64)]:
     NotImplemented
@@ -2070,7 +2071,6 @@ actor Process(envcap: _EnvCap,
         if timeout is not None:
             after timeout: stop()
 
-    __startup__()
 
 actor RunProcess(envcap: _EnvCap,
                  vars: EnvVar,
@@ -2145,7 +2145,6 @@ actor RunProcess(envcap: _EnvCap,
     proc def __startup__():
         _process = _p
 
-    __startup__()
 
 actor EnvProcess(envcap: _EnvCap, vars: EnvVar):
     """Spawning of child processes, reached as env.process"""

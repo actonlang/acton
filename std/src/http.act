@@ -1246,5 +1246,3 @@ actor Client(cap: net.TCPConnectCap, address: str, on_connect: action(Client) ->
 
     proc def __startup__():
         _connect()
-
-    __startup__()

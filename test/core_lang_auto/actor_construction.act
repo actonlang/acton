@@ -1,5 +1,3 @@
-import acton.rts
-
 actor Journal():
     var entries: list[str] = []
 
@@ -57,9 +55,9 @@ actor CaughtFailure(journal: Journal):
     proc def __startup__():
         journal.record("must-not-run")
 
-actor Collected(journal: Journal, cap: SysCap, valid: bool):
+actor Collected(journal: Journal, rts: EnvRTS, valid: bool):
     child = Leaf(journal, "collected")
-    collected = acton.rts.gc(cap)
+    collected = rts.gc()
     checked = 1 if valid else raise ValueError("collected failure")
 
 actor EmptyStartup():
@@ -105,12 +103,12 @@ proc def run_checks(env):
     assert journal.read() == ["before", "caught"]
 
     try:
-        failed = Collected(journal, env.syscap, False)
+        failed = Collected(journal, env.rts, False)
         assert False
     except ValueError:
         pass
     assert journal.read() == ["before", "caught"]
-    collected = Collected(journal, env.syscap, True)
+    collected = Collected(journal, env.rts, True)
     assert collected.child.ping() == 1
 
     family = make_family(journal, True)

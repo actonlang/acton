@@ -128,5 +128,3 @@ proc def run_checks(env):
 actor main(env):
     proc def __startup__():
         run_checks(env)
-
-    __startup__()

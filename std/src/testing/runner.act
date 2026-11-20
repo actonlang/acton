@@ -1202,7 +1202,6 @@ actor TestExecutor(rts: EnvRTS, config: TestRunnerConfig, t: Test, report_comple
         log_handler.add_sink(logging.ConsoleSink())
         after 0: _run_test()
 
-    __startup__()
 
 
 class ProjectTestResults(object):
@@ -1920,5 +1919,3 @@ actor test_runner(env: Env,
         except argparse.ArgumentError as arg_error:
             print(arg_error.error_message)
             env.exit(1)
-
-    __startup__()

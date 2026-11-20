@@ -330,7 +330,6 @@ actor FS(cap: FileCap):
     proc def __startup__():
         _pin_affinity()
 
-    __startup__()
 
 actor ReadFile(cap: ReadFileCap, filename: str, lock=False):
     """Read a file
@@ -357,7 +356,6 @@ actor ReadFile(cap: ReadFileCap, filename: str, lock=False):
         if lock:
             _lock_file()
 
-    __startup__()
 
 actor WriteFile(cap: WriteFileCap, filename: str, lock=False, append=False):
     """Write a file
@@ -388,5 +386,3 @@ actor WriteFile(cap: WriteFileCap, filename: str, lock=False, append=False):
         _open_file()
         if lock:
             _lock_file()
-
-    __startup__()

@@ -22,7 +22,6 @@ actor Counter(initial: int):
         if initial > 0:
             increment()
 
-    __startup__()
 
 actor main(env):
     counter = Counter(4)
@@ -32,5 +31,3 @@ actor main(env):
         counter.increment()
         assert counter.read() == 11
         env.exit(0)
-
-    __startup__()
