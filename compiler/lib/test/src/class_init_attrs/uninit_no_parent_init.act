@@ -6,5 +6,6 @@ class TestClass(Base):
         Base.__init__(self)
 
 actor main(env):
-    t = TestClass()
-    env.exit(0)
+    proc def __startup__():
+        t = TestClass()
+        env.exit(0)

@@ -10,4 +10,5 @@ class TestClass(object):
         # No else - x not initialized for other values
 
 actor main(env):
-    env.exit(0)
+    proc def __startup__():
+        env.exit(0)

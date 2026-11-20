@@ -13,5 +13,6 @@ class TestClass(object):
         self.result = 42
 
 actor main(env):
-    t = TestClass(5)
-    env.exit(0)
+    proc def __startup__():
+        t = TestClass(5)
+        env.exit(0)

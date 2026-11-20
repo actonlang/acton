@@ -34,12 +34,13 @@ actor Counter():
         return 1
 
 actor main(env):
-    counter = Counter()
+    proc def __startup__():
+        counter = Counter()
 
-    def run():
-        total = 0
-        for value in [1, 2, 3]:
-            total += await async counter.tick()
-        env.exit(0 if total == 3 else 1)
+        def run():
+            total = 0
+            for value in [1, 2, 3]:
+                total += await async counter.tick()
+            env.exit(0 if total == 3 else 1)
 
-    run()
+        run()

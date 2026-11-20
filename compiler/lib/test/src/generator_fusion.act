@@ -75,13 +75,13 @@ def fused_local_condition(limit: int) -> int:
         return 1
     return 0
 
-# Actor bodies are local scopes too; they have no declared return type, so
-# coverage here prevents accidentally restricting forwarding to functions.
-# The captured state value must be sampled at construction while the plan
-# itself remains fusible.
+# Startup also supports forwarding a local generator plan. The captured
+# value must be sampled when the generator is constructed, before it
+# changes, while the plan itself remains fusible.
 actor fused_local_actor(env):
-    factor = 2
-    values = (factor * i for i in range(10))
-    factor = 3
-    total = sum(values)
-    env.exit(total)
+    proc def __startup__():
+        factor = 2
+        values = (factor * i for i in range(10))
+        factor = 3
+        total = sum(values)
+        env.exit(total)

@@ -14,82 +14,87 @@ actor Apa():
         return i+1
 
     y = 123
-    setup(notice)
-    z = 1
-    print("Apa")
+
+    proc def __startup__():
+        setup(notice)
+        z = 1
+        print("Apa")
 
 actor Bepa():
     def callback(i):
         print("callback", i)
         return i+1
-    print("Bepa")
+
+    proc def __startup__():
+        print("Bepa")
 
 actor main(env):
-    def myproc(i):
-        print("myproc", i)
-        if i == 2:
-            env.exit(0)
-        return i
-    a = Apa()
-    b = Bepa()
-    print("-----")
-    a.setup(a.notice)
-    x = async a.compute(b.callback)
-    r = await x
-    print("r =", r)
-    a.compute(myproc)
-    print("main")
+    proc def __startup__():
+        def myproc(i):
+            print("myproc", i)
+            if i == 2:
+                env.exit(0)
+            return i
+        a = Apa()
+        b = Bepa()
+        print("-----")
+        a.setup(a.notice)
+        x = async a.compute(b.callback)
+        r = await x
+        print("r =", r)
+        a.compute(myproc)
+        print("main")
 
-    # If/elif/else nested blocks
-    v = 0
-    if v == 0:
-        print("if branch")
-        if v < 1:
-            print("nested if")
-        elif v == -1:
-            print("nested elif")
-        else:
-            print("nested else")
-    elif v == 1:
-        print("outer elif")
-    else:
-        print("outer else")
-
-    # While with else, break/continue
-    i = 0
-    while i < 3:
-        i = i + 1
-        if i == 1:
-            print("continue path")
-            continue
-        if i == 2:
-            print("break path")
-            break
-        print("loop body", i)
-    else:
-        print("while else")
-
-    # For loop over literal list
-    for j in [1, 2, 3]:
-        if j == 2:
-            continue
-        print("for j", j)
-
-    # Try / except / finally
-    try:
+        # If/elif/else nested blocks
+        v = 0
         if v == 0:
-            raise ValueError("boom")
-        print("unreached")
-    except ValueError as e:
-        print("caught", "ValueError")
-    finally:
-        print("finally")
+            print("if branch")
+            if v < 1:
+                print("nested if")
+            elif v == -1:
+                print("nested elif")
+            else:
+                print("nested else")
+        elif v == 1:
+            print("outer elif")
+        else:
+            print("outer else")
 
-    # After scheduling (not executed in tests, but exercises codegen)
-    after 1: myproc(0)
+        # While with else, break/continue
+        i = 0
+        while i < 3:
+            i = i + 1
+            if i == 1:
+                print("continue path")
+                continue
+            if i == 2:
+                print("break path")
+                break
+            print("loop body", i)
+        else:
+            print("while else")
 
-    # pass statement and return None path in a local
-    def nop():
-        pass
-        return None
-    nop()
+        # For loop over literal list
+        for j in [1, 2, 3]:
+            if j == 2:
+                continue
+            print("for j", j)
+
+        # Try / except / finally
+        try:
+            if v == 0:
+                raise ValueError("boom")
+            print("unreached")
+        except ValueError as e:
+            print("caught", "ValueError")
+        finally:
+            print("finally")
+
+        # After scheduling (not executed in tests, but exercises codegen)
+        after 1: myproc(0)
+
+        # pass statement and return None path in a local
+        def nop():
+            pass
+            return None
+        nop()

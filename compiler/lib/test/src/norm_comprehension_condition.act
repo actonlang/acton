@@ -8,6 +8,7 @@ def check(l: list[int]) -> bool:
     return True
 
 actor main(env):
-    if [x * 2 for x in [1, 2]] == [2, 4]:
-        env.exit(0)
-    env.exit(1)
+    proc def __startup__():
+        if [x * 2 for x in [1, 2]] == [2, 4]:
+            env.exit(0)
+        env.exit(1)

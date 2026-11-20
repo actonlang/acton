@@ -14,30 +14,45 @@ proc def compute (aa : __builtin__.int) -> __builtin__.int:
         if isinstance(N_x, ValueError):
             pass
         else:
-            $RAISE(N_x)
+            $RAISE@[None](N_x)
     N_1tmp: __builtin__.int = W_compute_19.__add__(xx, aa)
     return N_1tmp
 
 W_main_74: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
 
-W_main_91: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
+W_main_133: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
 
-W_main_29: __builtin__.Eq[?__builtin__.int] = $EqOpt@[__builtin__.int](W_main_91)
+W_main_29: __builtin__.Eq[?__builtin__.int] = $EqOpt@[__builtin__.int](W_main_133)
 
 # recursive group:
 class main ($Actor, __builtin__.value):
     @property
-    v : __builtin__.int
-    proc def __init__ (self : Self, env : __builtin__.Env) -> None:
-        self.v = compute(W_main_74.__fromatom__(10))
-        if W_main_29.__eq__(self.v, W_main_74.__fromatom__(13)):
-            (async env.exit)(W_main_74.__fromatom__(0))
+    env : __builtin__.Env
+    com def __init__ (self : Self, env : __builtin__.Env) -> None:
+        self.env = env
+        $MarkStartup((async self.__startup__)())
+    proc def __startup__G_local (self : Self) -> None:
+        v: __builtin__.int = compute(W_main_74.__fromatom__(10))
+        if W_main_29.__eq__(v, W_main_74.__fromatom__(13)):
+            (async self.env.exit)(W_main_74.__fromatom__(0))
         else:
-            print@[(__builtin__.str, __builtin__.int)](("\"Excpected 13, got\"", self.v), "\" \"", "\"\\n\"", False, False)
-            (async env.exit)(W_main_74.__fromatom__(1))
-proc def mainG_newact (env : __builtin__.Env) -> main:
-    G_act: main = $NEWACTOR@[main]()
-    $InstallFinalizer@[main](G_act)
-    $AWAITf@[None]($ASYNCf@[None](G_act, proc lambda: G_act.__init__(env)))
+            print@[(__builtin__.str, __builtin__.int)](("\"Excpected 13, got\"", v), "\" \"", "\"\\n\"", False, False)
+            (async self.env.exit)(W_main_74.__fromatom__(1))
+        return None
+    action def __startup__ (self : Self) -> None:
+        return $ASYNCf@[None](self, proc lambda: self.__startup__G_local())
+com def mainG_newact (env : __builtin__.Env) -> main:
+    N_construction_parent: $Actor = $ConstructionBegin()
+    if $PUSH():
+        G_act: main = $NEWACTOR@[main]()
+        $ConstructionEnter(G_act)
+        $InstallFinalizer@[main](G_act)
+        G_act.__init__(env)
+        $DROP()
+    else:
+        N_construction_exception: __builtin__.BaseException = $POP()
+        $ConstructionAbort(N_construction_parent, N_construction_exception)
+        $RAISE@[None](N_construction_exception)
+    $ConstructionEnd(N_construction_parent)
     return G_act
 # (recursive group)

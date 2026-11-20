@@ -3323,10 +3323,10 @@ main = do
         report <- analyze
           [ "actor Child(p):", "    def initial():", "        return p.item", "    value = initial()" ]
         expect report ["Child"] "p" False
-      it "ignores only the terminal startup dispatch and defers its body" $ do
+      it "defers startup bodies but treats ordinary calls eagerly" $ do
         report <- analyze
           [ "actor Good(p):", "    proc def __startup__():", "        print(p.item)", "    __startup__()"
-          , "actor Bad(p):", "    proc def __startup__():", "        print(p.item)", "    __startup__()", "    saved = p" ]
+          , "actor Bad(p):", "    proc def __startup__():", "        print(p.item)", "    dispatch = __startup__()", "    saved = p" ]
         expect report ["Good"] "p" True
         expect report ["Bad"] "p" False
       it "retains self provenance through bound callback aliases and lambdas" $ do
@@ -3334,13 +3334,13 @@ main = do
           [ "actor Child(cb):", "    def run():", "        cb()"
           , "actor Good(probe):", "    def done():", "        pass", "    cb = done", "    child = Child(cb)"
           , "actor Lambda(probe):", "    def done():", "        pass", "    child = Child(lambda: self.done())"
-          , "actor Bad(probe):", "    def done():", "        pass", "    cb = done", "    cb()" ]
+          , "actor Bad(probe):", "    def done():", "        pass", "    cb = done", "    result = cb()" ]
         selfSafe report ["Good"] `shouldBe` Just True
         selfSafe report ["Lambda"] `shouldBe` Just True
         selfSafe report ["Bad"] `shouldBe` Just False
       it "recognizes implicit self captures in actor lambdas" $ do
         report <- analyze
-          [ "actor Toucher(cb):", "    cb()"
+          [ "actor Toucher(cb):", "    result = cb()"
           , "actor Parent(p):", "    child = Toucher(lambda: p.item)" ]
         expect report ["Parent"] "p" False
       it "retains provenance through constructor results and self aliases" $ do
@@ -3370,7 +3370,7 @@ main = do
       it "rejects unmatched expanded arguments and existing-object publication" $ do
         report <- analyze $ box ++
           [ "actor Spread(probe):", "    args = (self,)", "    child = Box(*args)"
-          , "actor Publish(dst):", "    dst.saved = self" ]
+          , "class Publish:", "    def __init__(self, dst):", "        dst.saved = self" ]
         selfSafe report ["Spread"] `shouldBe` Just False
         expect report ["Publish"] "dst" False
       it "does not certify opaque native or inherited initializers" $ do
