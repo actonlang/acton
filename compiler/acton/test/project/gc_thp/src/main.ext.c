@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <unistd.h>
 
 void gc_thpQ_mainQ___ext_init__() {}
 
@@ -46,6 +47,20 @@ static void check_range(void *space, size_t size, int enabled) {
                 "unexpected THP policy at end of GC allocation");
 }
 
+static void check_released(void *space, size_t size) {
+    const size_t page_size = (size_t)getpagesize();
+    const uintptr_t start = ((uintptr_t)space + page_size - 1) / page_size * page_size;
+    const uintptr_t end = ((uintptr_t)space + size) / page_size * page_size;
+    const size_t pages = (end - start) / page_size;
+    thp_require(pages > 0, "allocation contains no whole pages");
+    unsigned char *resident = malloc(pages);
+    thp_require(resident != NULL, "resident page allocation failed");
+    thp_require(mincore((void *)start, end - start, resident) == 0, "mincore failed");
+    for (size_t i = 0; i < pages; i++)
+        thp_require((resident[i] & 1) == 0, "collector did not release physical pages");
+    free(resident);
+}
+
 int64_t gc_thpQ_mainQ_check(bool enabled) {
     GC_on_os_get_mem_proc hook = GC_get_on_os_get_mem();
     thp_require((hook != NULL) == enabled, "unexpected startup hook");
@@ -57,7 +72,8 @@ int64_t gc_thpQ_mainQ_check(bool enabled) {
     check_range(small, 32, enabled);
 
     const size_t size = 32 * 1024 * 1024;
-    void *large = GC_malloc_atomic(size);
+    // Limit extra space reserved for blacklisting, so reuse needs this range.
+    void *large = GC_malloc_atomic_ignore_off_page(size);
     thp_require(large != NULL, "large allocation failed");
     memset(large, 0x5a, size);
     check_range(large, size, enabled);
@@ -65,21 +81,26 @@ int64_t gc_thpQ_mainQ_check(bool enabled) {
     GC_free(large);
     large = NULL;
     GC_gcollect_and_unmap();
-    GC_word heap_before, unmapped_before;
-    GC_get_heap_usage_safe(&heap_before, NULL, &unmapped_before, NULL, NULL);
-    thp_require(unmapped_before >= size, "collector did not release physical pages");
+    check_released((void *)previous, size);
     check_range((void *)previous, size, enabled);
 
-    large = GC_malloc_atomic(size);
+    // Leave room to split the released range, and bypass conservative
+    // blacklisting of addresses retained on this test's stack.
+    const size_t reuse_size = size - 1024 * 1024;
+    large = GC_malloc_atomic_uncollectable(reuse_size);
     thp_require(large != NULL, "allocation after release failed");
-    memset(large, 0xa5, size);
-    GC_word heap_after, unmapped_after;
-    GC_get_heap_usage_safe(&heap_after, NULL, &unmapped_after, NULL, NULL);
-    thp_require(heap_after + unmapped_after == heap_before + unmapped_before,
-                "allocation grew the GC heap instead of reusing it");
-    thp_require(unmapped_after < unmapped_before,
-                "allocation did not reuse released physical pages");
-    check_range(large, size, enabled);
+    const uintptr_t reused = (uintptr_t)large;
+    const uintptr_t overlap_start = reused > previous ? reused : previous;
+    const uintptr_t reused_end = reused + reuse_size;
+    const uintptr_t previous_end = previous + size;
+    const uintptr_t overlap_end = reused_end < previous_end ? reused_end : previous_end;
+    const size_t page_size = (size_t)getpagesize();
+    const uintptr_t page_start = (overlap_start + page_size - 1) / page_size * page_size;
+    const uintptr_t page_end = overlap_end / page_size * page_size;
+    thp_require(page_end > page_start,
+                "allocation did not reuse the released range");
+    memset(large, 0xa5, reuse_size);
+    check_range(large, reuse_size, enabled);
     GC_free(large);
     GC_free(small);
 

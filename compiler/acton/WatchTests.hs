@@ -2,16 +2,17 @@
 module WatchTests (watchProcessTests) where
 
 import Control.Concurrent (threadDelay)
-import Control.Exception (IOException, catch, finally, mask)
+import Control.Exception (IOException, catch, finally, mask, onException)
 import Control.Monad
 import qualified Data.ByteString.Char8 as BS
-import Data.List (isInfixOf, isPrefixOf, isSuffixOf, tails)
-import Data.Maybe (isJust)
+import Data.List (intercalate, isInfixOf, isPrefixOf, isSuffixOf, tails)
+import Data.Maybe (isJust, mapMaybe)
 import System.Directory
 import System.Exit
 import System.FilePath
 import System.IO
 import System.IO.Temp (withSystemTempDirectory)
+import System.Info (os)
 import System.Posix.Files (createSymbolicLink)
 import System.Posix.Signals
 import System.Posix.Types (ProcessID)
@@ -326,7 +327,33 @@ withActon acton proj args action = mask $ \restore ->
         , std_err = UseHandle output, create_group = True
         } $ \_ _ _ ph -> do
           Just pid <- getPid ph
-          restore (action ph pid (readOutput (proj </> "compiler.log"))) `finally` stopProcessGroup ph (Just pid)
+          (restore (action ph pid (readOutput (proj </> "compiler.log")))
+            `onException` restore (saveProcessDiagnostics acton proj args ph pid `catch` ignoreIO))
+            `finally` stopProcessGroup ph (Just pid)
+
+-- Save evidence before cleanup stops a hung compiler. CI uploads test/ on failure.
+saveProcessDiagnostics :: FilePath -> FilePath -> [String] -> ProcessHandle -> ProcessID -> IO ()
+saveProcessDiagnostics acton proj args ph pid = do
+    let root = takeDirectory (takeDirectory (takeDirectory acton))
+        dir = root </> "test/watch-process/out" </> takeFileName proj
+        pidFiles = ["leader.pid", "child.pid"]
+        capture name command arguments = do
+          result <- Timeout.timeout 5000000 (readProcessWithExitCode command arguments "")
+          writeFile (dir </> name) $ case result of
+            Nothing -> "Diagnostic command timed out\n"
+            Just (code, out, err) -> show code ++ "\n" ++ out ++ err
+    createDirectoryIfMissing True dir
+    forM_ ("compiler.log" : pidFiles) $ \name ->
+      copyFile (proj </> name) (dir </> name) `catch` ignoreIO
+    code <- getProcessExitCode ph
+    writeFile (dir </> "command.txt") $ unlines
+      ["cwd: " ++ proj, show (acton : args), "exit: " ++ show code]
+    pids <- (pid :) . mapMaybe readMaybe <$> mapM (readOutput . (proj </>)) pidFiles
+    capture "processes.txt" "ps"
+      ["-o", "pid=,ppid=,pgid=,stat=,etime=,wchan=,comm=", "-p", intercalate "," (map show pids)]
+    when (os == "darwin" && code == Nothing) $
+      capture "sample.log" "/usr/bin/sample" [show pid, "2", "-file", dir </> "acton.sample.txt"]
+    hPutStrLn stderr ("Watch process diagnostics saved in " ++ dir)
 
 readOutput :: FilePath -> IO String
 readOutput path = (BS.unpack <$> BS.readFile path) `catch` \(_ :: IOException) -> return ""
