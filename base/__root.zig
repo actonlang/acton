@@ -135,6 +135,29 @@ export fn zig_crypto_hash_md5_finalize(hasher: *std.crypto.hash.Md5, output: *ac
     hasher.final(out_slice);
 }
 
+// Secure randomness behind env.random. Each thread has its own ChaCha8
+// generator with forward secrecy, seeded on first use from the operating
+// system through std.Io's randomSecure, which makes a syscall every time and
+// has no weak fallback. The per-thread state avoids the global mutex that
+// std.Io.random takes on threads that Zig did not start, which is all of ours.
+// Returns false if the operating system could not provide a seed; the buffer
+// is then left untouched and a later call tries to seed again.
+const Csprng = std.Random.DefaultCsprng;
+threadlocal var env_random_csprng: ?Csprng = null;
+
+export fn zig_env_random_fill(buf: ?[*]u8, len: usize) callconv(.c) bool {
+    if (len == 0) return true;
+    if (env_random_csprng == null) {
+        var seed: [Csprng.secret_seed_length]u8 = undefined;
+        const io = std.Io.Threaded.global_single_threaded.io();
+        io.randomSecure(&seed) catch return false;
+        env_random_csprng = Csprng.init(seed);
+        std.crypto.secureZero(u8, &seed);
+    }
+    env_random_csprng.?.fill(buf.?[0..len]);
+    return true;
+}
+
 export fn zig_hash_wyhash_init(seed: u64) callconv(.c) *std.hash.Wyhash {
     // Wyhash state is only integers and bytes, so it need not be scanned
     const alloc = gc.atomicAllocator();

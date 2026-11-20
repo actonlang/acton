@@ -196,6 +196,19 @@
   outermost named handler; set `app_name` to override it.
   The guide includes runnable UDP and TCP examples and TLS configuration.
   [#3323] [#3344] [#3375] [#3384]
+- Add `env.random`, the capability to draw secure random numbers, and the
+  builtin `Random` protocol it implements. `rand_u64()` and `rand_bytes(n)`
+  come from a per-thread ChaCha8 generator seeded from the operating system,
+  and run in the calling actor without a message to `Env`. The protocol adds
+  `rand_int()`, `rand_float()`, `below(n)` and `between(lo, hi)`, with
+  half-open ranges and no modulo bias. Take `EnvRandom` where the numbers must
+  be secure, and any `Random` where they need not be.
+- Add the seeded `Xoshiro256` generator to `std.random`, and the functions
+  `shuffle(r, items)` and `shuffled(r, items)`, which take any `Random` and
+  any sequence with a length and `int` indexes, such as `list`, `str` or
+  `bytes`. `shuffle` reorders a mutable sequence in place; `shuffled` returns
+  a reordered copy of the same type. A seed gives the same sequence on every
+  platform and from one release to the next.
 - Use private CAs and client certificates with `net.TLSConnection` and
   `net.TLSListener` through `ca_pem`, `cert_pem`, and `key_pem`.
   Listeners request client certificates with `client_auth=True`. Set
@@ -521,6 +534,13 @@
   capture timing, purity requirements, and callback behavior. [#3242]
 
 ### Testing & CI
+- Add `t.random`, a source of random numbers on `testing.SyncT`, `AsyncT` and
+  `EnvT` that implements `Random`. Each run of a test draws from a generator
+  with a new seed. When a run that drew from it fails, `acton test` runs the
+  test three more times with that seed, shows the seed and how many of those
+  runs failed the same way, and prints the `acton test --seed` command that
+  runs the test with the seed again. Tests that draw from `t.random` run every
+  time instead of reusing a cached result.
 - Check runtime and C-extension pointer stores with `acton test --gc-check`.
   Tests run in generational mode with frequent collections and short marking
   steps, bypassing cached test results and failing when the checker detects

@@ -76,6 +76,33 @@ $R B_EnvVarD_unsetenvbG_local (B_EnvVar self, $Cont C_cont, B_bytes name) {
     return $R_CONT(C_cont, B_None);
 }
 
+// The per-thread CSPRNG behind env.random lives in base/__root.zig.
+bool zig_env_random_fill(void *buf, size_t len);
+
+// Declared in builtin/env.h, for modules that take an EnvRandom to draw
+// from the same generator.
+void B_EnvRandom_fill(void *buf, size_t len) {
+    if (!zig_env_random_fill(buf, len))
+        RAISE(B_OSError, actStrFromCString("Unable to get secure random bytes from the operating system"));
+}
+
+uint64_t B_EnvRandomD_rand_u64 (B_EnvRandom self) {
+    uint64_t res;
+    B_EnvRandom_fill(&res, sizeof(res));
+    return res;
+}
+
+B_bytes B_EnvRandomD_rand_bytes (B_EnvRandom self, int64_t len) {
+    if (len < 0)
+        RAISE(B_ValueError, $FORMAT("rand_bytes: n must not be negative, got %lld", (long long)len));
+    // The buffer holds no pointers, so it is allocated atomic
+    char *buf = acton_malloc_atomic(len > 0 ? (size_t)len : 1);
+    if (buf == NULL)
+        RAISE(B_MemoryError, actStrFromCString("Out of memory in rand_bytes"));
+    B_EnvRandom_fill(buf, (size_t)len);
+    return actBytesFromCStringLengthNoCopy(buf, len);
+}
+
 // action def is_tty() -> bool:
 $R B_StdioD_is_ttyG_local (B_Stdio self, $Cont C_cont) {
     return $R_CONT(C_cont, toB_bool(isatty(1)));

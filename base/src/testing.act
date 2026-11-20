@@ -438,10 +438,29 @@ class PerfLoop(Iterator[int]):
                 counts["ipc"] = float(self._instructions) / float(self._cycles)
         return counts
 
+class TestRandom(object):
+    """The source of random numbers of a test, as t.random
+
+    The test runner seeds a new TestRandom for every run of a test. When a
+    run that drew from t.random fails, the runner shows its seed, and
+    acton test --seed runs the test with that seed again. A test that takes
+    all its random numbers from t.random gives the same result for the same
+    seed.
+    """
+    def __init__(self, next: mut() -> u64):
+        self._next = next
+        self.draws = 0
+
+extension TestRandom(Random):
+    mut def rand_u64(self) -> u64:
+        self.draws += 1
+        return self._next()
+
 class SyncT(value):
-    def __init__(self, log_handler: logging.Handler, tags: set[str], loop: ?PerfLoop=None, request_timeout: ?action(float) -> None=None):
+    def __init__(self, log_handler: logging.Handler, tags: set[str], random: TestRandom, loop: ?PerfLoop=None, request_timeout: ?action(float) -> None=None):
         self.log_handler = log_handler
         self.tags = tags
+        self.random = random
         self._loop = loop if loop is not None else PerfLoop()
         self._request_timeout = request_timeout
 
@@ -469,10 +488,11 @@ class SyncT(value):
             self.skip(f"Missing required capability '{tag}' (enable with --tag {tag})")
 
 class AsyncT(value):
-    def __init__(self, report_result: action(?bool, ?Exception, ?str) -> None, log_handler: logging.Handler, tags: set[str], loop: ?PerfLoop=None, request_timeout: ?action(float) -> None=None):
+    def __init__(self, report_result: action(?bool, ?Exception, ?str) -> None, log_handler: logging.Handler, tags: set[str], random: TestRandom, loop: ?PerfLoop=None, request_timeout: ?action(float) -> None=None):
         self.report_result = report_result
         self.log_handler = log_handler
         self.tags = tags
+        self.random = random
         self._loop = loop if loop is not None else PerfLoop()
         self._request_timeout = request_timeout
 
@@ -510,11 +530,12 @@ class AsyncT(value):
             self.skip(f"Missing required capability '{tag}' (enable with --tag {tag})")
 
 class EnvT(value):
-    def __init__(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler, tags: set[str], loop: ?PerfLoop=None, request_timeout: ?action(float) -> None=None):
+    def __init__(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler, tags: set[str], random: TestRandom, loop: ?PerfLoop=None, request_timeout: ?action(float) -> None=None):
         self.report_result = report_result
         self.env = env
         self.log_handler = log_handler
         self.tags = tags
+        self.random = random
         self._loop = loop if loop is not None else PerfLoop()
         self._request_timeout = request_timeout
 
@@ -573,17 +594,17 @@ class Test(object):
             n = n[:-8]
         return n
 
-    def run(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler, tags: set[str], loop: ?PerfLoop=None, request_timeout: ?action(float) -> None=None):
+    def run(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler, tags: set[str], random: TestRandom, loop: ?PerfLoop=None, request_timeout: ?action(float) -> None=None):
         if isinstance(self, UnitTest):
             self.run_test(report_result, env, log_handler, tags)
         elif isinstance(self, SimpleSyncTest):
             self.run_test(report_result, env, log_handler, tags)
         elif isinstance(self, SyncTest):
-            self.run_test(report_result, env, log_handler, tags, loop, request_timeout)
+            self.run_test(report_result, env, log_handler, tags, random, loop, request_timeout)
         elif isinstance(self, AsyncTest):
-            self.run_test(report_result, env, log_handler, tags, loop, request_timeout)
+            self.run_test(report_result, env, log_handler, tags, random, loop, request_timeout)
         elif isinstance(self, EnvTest):
-            self.run_test(report_result, env, log_handler, tags, loop, request_timeout)
+            self.run_test(report_result, env, log_handler, tags, random, loop, request_timeout)
         else:
             raise _invalid_test_type_error
 
@@ -691,12 +712,12 @@ class SyncTest(Test):
         self.desc = desc
         self.module = module
 
-    def run_test(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler, tags: set[str], loop: ?PerfLoop=None, request_timeout: ?action(float) -> None=None):
+    def run_test(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler, tags: set[str], random: TestRandom, loop: ?PerfLoop=None, request_timeout: ?action(float) -> None=None):
         output = None
         success = None
         exception = None
         try:
-            output = self.fn(SyncT(log_handler, tags, loop, request_timeout))
+            output = self.fn(SyncT(log_handler, tags, random, loop, request_timeout))
             success = True
             exception = None
         except SkipTest as e:
@@ -717,9 +738,9 @@ class AsyncTest(Test):
         self.desc = desc
         self.module = module
 
-    def run_test(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler, tags: set[str], loop: ?PerfLoop=None, request_timeout: ?action(float) -> None=None):
+    def run_test(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler, tags: set[str], random: TestRandom, loop: ?PerfLoop=None, request_timeout: ?action(float) -> None=None):
         try:
-            self.fn(AsyncT(report_result, log_handler, tags, loop, request_timeout))
+            self.fn(AsyncT(report_result, log_handler, tags, random, loop, request_timeout))
         except AbortTest:
             pass
 
@@ -730,8 +751,8 @@ class EnvTest(Test):
         self.desc = desc
         self.module = module
 
-    def run_test(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler, tags: set[str], loop: ?PerfLoop=None, request_timeout: ?action(float) -> None=None):
+    def run_test(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler, tags: set[str], random: TestRandom, loop: ?PerfLoop=None, request_timeout: ?action(float) -> None=None):
         try:
-            self.fn(EnvT(report_result, env, log_handler, tags, loop, request_timeout))
+            self.fn(EnvT(report_result, env, log_handler, tags, random, loop, request_timeout))
         except AbortTest:
             pass

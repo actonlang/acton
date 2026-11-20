@@ -1,6 +1,7 @@
 # General protocols
 
-These protocols cover iteration, comparison, operators, hashing, and freezing.
+These protocols cover iteration, comparison, operators, hashing, freezing,
+and random numbers.
 
 ## Iteration
 
@@ -62,3 +63,11 @@ of type `A`. For example, `set[T]` implements `Freeze[iset[T]]`.
 Freezing consumes the source value. The caller must own it exclusively and
 use only the result afterward. The compiler does not yet enforce this
 ownership requirement. See [Freezing a set](../../collections/sets.md#freezing-a-set).
+
+## Random numbers
+
+`Random` is a source of random numbers. A source implements
+`rand_u64() -> u64`, and the protocol builds `rand_int()`, `rand_float()`,
+`rand_bytes(n)`, `below(n)` and `between(lo, hi)` on it. `env.random`
+implements it, and so do the seeded generators in `std.random`. See
+[Random numbers](../../environment/random.md).

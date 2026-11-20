@@ -6,6 +6,7 @@ module TestFormat
   , formatTestFinalLineRenderer
   , formatTestLiveLineRenderer
   , formatTestDetailLines
+  , displayTestName
   , formatTestPerfLines
   , testColorApply
   , testColorBold
@@ -19,7 +20,7 @@ import Acton.Testing (TestResult(..))
 import TestPerf
 import TestOutput (testOutputMeaningful, splitTestOutput)
 import Data.Char (isSpace)
-import Data.List (foldl', isPrefixOf, intercalate)
+import Data.List (foldl', isPrefixOf, isSuffixOf, intercalate)
 import Data.Maybe (catMaybes, fromMaybe, isJust, listToMaybe, mapMaybe)
 import qualified Data.Map as M
 import qualified Data.Text as T
@@ -521,6 +522,28 @@ formatTestLiveLineRenderer :: Bool -> Double -> Int -> String -> TestResult -> I
 formatTestLiveLineRenderer useColor expectedDurationMs nameWidth display res cols =
     formatTestLineFitted useColor formatTestStatusLive expectedDurationMs nameWidth cols display res
 
+-- | The seed of the first failed run that drew from t.random, how many of
+-- the runs again with that seed failed the same way, and the command that
+-- runs the test with the seed.
+formatSeedLines :: String -> TestResult -> [String]
+formatSeedLines modLabel res = case trRaw res of
+    Aeson.Object obj | Just seed <- field obj "seed" ->
+      let replays = fromMaybe 0 (field obj "seed_replays") :: Int
+          reproduced = fromMaybe 0 (field obj "seed_reproduced") :: Int
+          replayNote
+            | replays <= 0 = ""
+            | reproduced == replays =
+                printf " (failed the same way in %d of %d replays)" reproduced replays
+            | otherwise =
+                printf " (failed the same way in %d of %d replays, so the outcome depends on more than t.random)" reproduced replays
+      in [ "    seed: " ++ show (seed :: Integer) ++ replayNote
+         , "    rerun: acton test --module " ++ modLabel ++ " --name " ++ displayTestName (trName res)
+             ++ " --seed " ++ show seed
+         ]
+    _ -> []
+  where
+    field obj key = AesonKM.lookup (AesonKey.fromString key) obj >>= AesonTypes.parseMaybe Aeson.parseJSON
+
 perfPhase :: TestResult -> Maybe String
 perfPhase res
   | trComplete res = Nothing
@@ -530,8 +553,21 @@ perfPhase res
         _ -> Nothing
       _ -> Nothing
 
-formatTestDetailLines :: Bool -> Bool -> TestResult -> [String]
-formatTestDetailLines useColor showLog res =
+-- | Normalize test names by stripping prefixes and wrappers.
+displayTestName :: String -> String
+displayTestName name =
+    let withoutPrefix =
+          if "_test_" `isPrefixOf` name
+            then drop 6 name
+            else name
+    in if "_wrapper" `isSuffixOf` withoutPrefix
+         then take (length withoutPrefix - length "_wrapper") withoutPrefix
+         else withoutPrefix
+
+-- | The lines under a test's result line. modLabel is the test's module as
+-- acton test --module takes it.
+formatTestDetailLines :: Bool -> Bool -> String -> TestResult -> [String]
+formatTestDetailLines useColor showLog modLabel res =
     let skipped = trSkipped res
         ok = trSuccess res == Just True && trException res == Nothing && not skipped
         wantDetails = showLog || skipped || not ok
@@ -549,12 +585,13 @@ formatTestDetailLines useColor showLog res =
             | line <- lines exc
             ]
           Nothing -> []
+        seedLines = if skipped then [] else formatSeedLines modLabel res
         outputLines =
           if wantDetails
             then formatCombinedLogLines (trStdOut res) (trStdErr res)
             else []
     in if wantDetails
-         then outcomeLines ++ skipLines ++ excLines ++ outputLines
+         then outcomeLines ++ skipLines ++ excLines ++ seedLines ++ outputLines
          else []
   where
     formatOutcomeSummaryLine useColor' result

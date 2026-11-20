@@ -70,6 +70,7 @@
       - [Reading stdin input](environment/stdin.md)
       - [Interactive stdin input](environment/interactive_stdin.md)
       - [Child processes](environment/processes.md)
+      - [Random numbers](environment/random.md)
   
 - [Built-in & Standard Library](stdlib.md)
   - [Built-in protocols](stdlib/builtin_protocols.md)
@@ -79,6 +80,7 @@
     - [Collection protocols](stdlib/builtin_protocols/collection.md)
   - [Standard Library](stdlib/standard_library.md)
     - [std.math](stdlib/math.md)
+    - [std.random](stdlib/random.md)
     - [std.re](stdlib/re.md)
     - [std.syslog](stdlib/syslog.md)
 
@@ -90,6 +92,7 @@
   - [Snapshot testing](testing/snapshot.md)
   - [Failures vs errors](testing/failures_errors.md)
   - [Flaky tests](testing/flaky.md)
+  - [Random numbers in tests](testing/random.md)
   - [Performance testing](testing/performance.md)
   - [Stress testing](testing/stress.md)
   - [Perf comparison](testing/perf_record.md)

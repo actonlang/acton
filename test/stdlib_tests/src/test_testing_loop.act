@@ -50,9 +50,9 @@ actor _test_env_actor(t: testing.EnvT):
 
 
 def _test_context_defaults(t: testing.EnvT):
-    sync = testing.SyncT(t.log_handler, set())
-    asynchronous = testing.AsyncT(t.report_result, t.log_handler, set())
-    environment = testing.EnvT(t.report_result, t.env, t.log_handler, set())
+    sync = testing.SyncT(t.log_handler, set(), t.random)
+    asynchronous = testing.AsyncT(t.report_result, t.log_handler, set(), t.random)
+    environment = testing.EnvT(t.report_result, t.env, t.log_handler, set(), t.random)
     assert list(sync.loop()) == [1]
     assert list(asynchronous.loop()) == [1]
     assert list(environment.loop()) == [1]

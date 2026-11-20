@@ -1914,6 +1914,39 @@ parseFlagTests =
         stress <- run ["stress", "--name", "budget", "--max-time", "20", "--max-iter", "2", "--stress-workers", "1"] ExitSuccess
         assertBool "the stress repetition budget is independent of the watchdog"
           ("\"iterations\":1" `isInfixOf` stress)
+  , testCase "acton test shows and replays the seed of a failed run" $ do
+      withSystemTempDirectory "acton-test-seed" $ \proj -> do
+        acton <- canonicalizePath "../../dist/bin/acton"
+        let name = "test_seed"
+            fp = Fingerprint.formatFingerprint
+              (Fingerprint.updateFingerprintPrefix
+                (Fingerprint.fingerprintPrefixForName name) 1)
+            srcDir = proj </> "src"
+            run args expected = do
+              (code, out, err) <- readCreateProcessWithExitCode
+                (proc acton (["test"] ++ args ++ ["--rts-wthreads", "2"]))
+                  { cwd = Just proj } ""
+              assertEqual ("acton test " ++ unwords args ++ " exit code:\n" ++ out ++ err) expected code
+              return out
+        createDirectoryIfMissing True srcDir
+        writeFile (proj </> "Build.act") $ unlines
+          [ "name = " ++ show name
+          , "fingerprint = " ++ fp
+          ]
+        copyFile "test/project/test_seed/src/test_seed.act" (srcDir </> "test_seed.act")
+        fixed <- run ["--seed", "42"] (ExitFailure 1)
+        assertBool ("every run with a failing seed fails:\n" ++ fixed)
+          ("FAIL" `isInfixOf` fixed && not ("FLAKY" `isInfixOf` fixed))
+        assertBool ("the seed and the command to rerun it are shown:\n" ++ fixed)
+          ("    seed: 42\n" `isInfixOf` fixed
+           && "rerun: acton test --module test_seed --name even --seed 42" `isInfixOf` fixed)
+        _ <- run ["--seed", "2"] ExitSuccess
+        fresh <- run [] (ExitFailure 1)
+        assertBool ("new seeds find the failure, which its seed replays:\n" ++ fresh)
+          ("(failed the same way in 3 of 3 replays)" `isInfixOf` fresh)
+        report <- run ["--seed", "42", "--json"] (ExitFailure 1)
+        assertBool ("the JSON report has the seed:\n" ++ report)
+          ("\"seed\":42" `isInfixOf` report)
   , testCase "acton test compiles selected modules and their imports" $ do
       withSystemTempDirectory "acton-test-selection" $ \proj -> do
         acton <- canonicalizePath "../../dist/bin/acton"
