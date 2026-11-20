@@ -2545,6 +2545,14 @@ void wt_work_cb(uv_check_t *ev) {
             rtsd_printf("## (%" PRId64 ") Actor %" PRId64 " : %s longjmp exception: %s", wctx->id, current->$globkey, current->$class->$GCINFO, ex->$class->$GCINFO);
             r = $R_FAIL(ex);
         }
+        // The continuation has returned, and this worker runs no actor code
+        // until the next continuation. Allocations from here on can run
+        // finalizers, and the __cleanup__ that a finalizer calls sends a
+        // message. With current as self, the message would join the outgoing
+        // queue of current after this iteration has sent the queued messages,
+        // and stay there until current finishes another message, which may
+        // never happen. With no self, the message is sent at once.
+        SET_SELF(NULL);
         // Every actor that this iteration makes ready gets the end of the
         // continuation as its ready stamp.
         uint32_t end_us = stamp_us(end_ns);
@@ -2691,7 +2699,6 @@ void wt_work_cb(uv_check_t *ev) {
         }
         if (!keep)
             current = NULL;
-        SET_SELF(NULL);
 
         // The state is for statistics only: working while we hold an actor
         if (!current)
