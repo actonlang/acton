@@ -1,24 +1,17 @@
 import testing
 
-actor Foo(cb):
-    action def __cleanup__():
-        cb()
-
-
-actor _test_Cleanup(t: testing.EnvT):
-    """Unreachable actors get their __cleanup__ called when the GC collects them
+actor CleanupCounter(t: testing.EnvT, expected: int):
+    """Counts __cleanup__ calls and collects garbage every 0.1 s until all
+    the expected calls have arrived
     """
-    var cleaned_up = 0
+    var count = 0
     var done = False
 
-    def _count_cleanup():
-        cleaned_up += 1
-        if cleaned_up > 80 and not done:
+    def cleaned():
+        count += 1
+        if count == expected and not done:
             done = True
             t.success()
-
-    for i in range(100):
-        Foo(_count_cleanup)
 
     def _collect():
         if done:
@@ -26,3 +19,81 @@ actor _test_Cleanup(t: testing.EnvT):
         t.env.rts.gc()
         after 0.1: _collect()
     after 0: _collect()
+
+
+actor Foo(cb):
+    action def __cleanup__():
+        cb()
+
+
+actor TimerNow(cb):
+    def tick():
+        pass
+
+    after 0: tick()
+
+    action def __cleanup__():
+        cb()
+
+
+actor TimerLater(cb):
+    def tick():
+        pass
+
+    after 0.01: tick()
+
+    action def __cleanup__():
+        cb()
+
+
+actor TimerRaises(cb):
+    def tick():
+        raise ValueError("tick")
+
+    after 0.01: tick()
+
+    action def __cleanup__():
+        cb()
+
+
+actor Raises():
+    def tick():
+        raise ValueError("tick")
+
+    after 0.01: tick()
+
+
+actor _test_Cleanup(t: testing.EnvT):
+    """Unreachable actors get their __cleanup__ called when the GC collects them
+    """
+    c = CleanupCounter(t, 100)
+    for i in range(100):
+        Foo(c.cleaned)
+
+
+actor _test_cleanup_after_timer(t: testing.EnvT):
+    """Unreachable actors whose timer has run get their __cleanup__ called
+    """
+    c = CleanupCounter(t, 200)
+    for i in range(100):
+        TimerNow(c.cleaned)
+        TimerLater(c.cleaned)
+
+
+actor _test_cleanup_after_raise(t: testing.EnvT):
+    """Unreachable actors whose timer raised an exception that nothing caught
+    get their __cleanup__ called
+    """
+    c = CleanupCounter(t, 20)
+    for i in range(20):
+        TimerRaises(c.cleaned)
+
+
+actor _test_cleanup_beside_raise(t: testing.EnvT):
+    """Unreachable actors get their __cleanup__ called while other actors
+    raise exceptions that nothing catches
+    """
+    c = CleanupCounter(t, 100)
+    for i in range(100):
+        Foo(c.cleaned)
+        Raises()

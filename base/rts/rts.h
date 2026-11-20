@@ -327,11 +327,11 @@ struct WorkerCtx {
     uint32_t steal_seed;
     uint64_t balance_next;
     // The worker loop's exception frame, at the bottom of the frame stack.
-    // The first continuation on the worker pushes it, with a setjmp in that
-    // call of wt_work_cb(). It stays pushed, and a raise that no try catches
-    // longjmps to it also from later calls, which relies on uv running
-    // wt_work_cb() at the same stack depth every time. It outlives each call,
-    // so it cannot live on the stack.
+    // The first continuation in a call of wt_work_cb() pushes it, with a
+    // setjmp in that call, and a raise that no try catches longjmps to it.
+    // It stays pushed after the call returns, until clear_before_poll()
+    // drops it and zeroes it right before the loop polls, so it cannot live
+    // on the stack.
     struct JumpBuf jump0;
 } __attribute__((aligned(128)));
 extern WorkerCtx wctxs[MAX_WTHREADS];
