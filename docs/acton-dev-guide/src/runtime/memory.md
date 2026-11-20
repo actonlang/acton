@@ -156,7 +156,10 @@ events that the kernel fills only partly, and that frame reuses the stack
 where the worker ran continuations. Right before each poll, the worker zeroes
 that part of its stack (`clear_before_poll`, `base/rts/rts.c`), so that the
 pointers its earlier calls left there do not keep actors alive, and their
-`__cleanup__` from running, for as long as the worker waits.
+`__cleanup__` from running, for as long as the worker waits. It also drops and
+zeroes the exception frame of the worker loop (`jump0` in the worker context),
+whose setjmp saved registers that can point to a continuation that the worker
+ran.
 
 ## IO and native libraries
 

@@ -2513,8 +2513,8 @@ void wt_work_cb(uv_check_t *ev) {
         }
 
         $R r;
-        // The first continuation on this worker pushes jump0, which then
-        // stays at the bottom of the frame stack.
+        // The first continuation in each call pushes jump0, which then stays
+        // at the bottom of the frame stack until the loop polls again.
         if (wctx->jump_top == &wctx->jump0 || $PUSH(&wctx->jump0)) {   // Normal path
             rtsd_printf("## Running actor %" PRId64 " : %s", current->$globkey, current->$class->$GCINFO);
             r = cont->$class->__call__(cont, val);
@@ -2732,9 +2732,20 @@ void wt_work_cb(uv_check_t *ev) {
 // __cleanup__ that they reach is not finalized. Just before the loop polls,
 // clear_before_poll zeroes 64 KiB of stack in its own frame, which the poll's
 // frame then reuses.
+//
+// The collector also scans the worker context. There, jump0, the worker
+// loop's exception frame, holds the registers that its setjmp saved, and in
+// an optimized build these can include the continuation that the worker was
+// about to run and its argument. So clear_before_poll also drops jump0 and
+// zeroes it, and the first continuation after the poll pushes it again.
 #define POLL_STACK_CLEAR (64 * 1024)
 
 static void clear_before_poll(uv_prepare_t *ev) {
+    WorkerCtx wctx = GET_WCTX();
+    assert(wctx->jump_top == NULL || wctx->jump_top == &wctx->jump0);   // no try is open
+    wctx->jump_top = NULL;
+    memset(&wctx->jump0, 0, sizeof(wctx->jump0));
+
     char area[POLL_STACK_CLEAR];
     memset(area, 0, sizeof(area));
     // Nothing reads the area, so tell the compiler that something might
