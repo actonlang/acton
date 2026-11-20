@@ -882,10 +882,19 @@ bool ENQ_timed(B_Msg m) {
     bool new_head = timerQ_len == 0 || m->$baseline < timerQ[0].msg->$baseline;
     if (timerQ_len == timerQ_capacity) {
         size_t capacity = timerQ_capacity ? 2 * timerQ_capacity : 64;
-        struct TimedMsg *queue = GC_realloc(timerQ, capacity * sizeof(*timerQ));
+        // Copy the queue to a new array and free the old one, as DEQ_timed
+        // does when it shrinks the queue. GC_realloc leaves a small old array
+        // to the collector with every message still in it, and one stale
+        // pointer to that array would keep all of those messages alive, and
+        // their actors.
+        struct TimedMsg *queue = GC_malloc(capacity * sizeof(*queue));
         if (!queue) {
             log_fatal("Unable to grow timer queue");
             exit(1);
+        }
+        if (timerQ) {
+            memcpy(queue, timerQ, timerQ_len * sizeof(*queue));
+            GC_free(timerQ);
         }
         timerQ = queue;
         timerQ_capacity = capacity;
