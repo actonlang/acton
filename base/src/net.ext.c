@@ -297,6 +297,14 @@ static int make_sockaddr(B_str address, int64_t port, struct sockaddr_storage *d
     return r;
 }
 
+// Turns an IPv4 address into an IPv4-mapped IPv6 address, ::ffff:192.0.2.1
+static void map_ipv4_to_ipv6(struct sockaddr_storage *addr) {
+    struct sockaddr_in addr4 = *(struct sockaddr_in *)addr;
+    struct sockaddr_in6 *addr6 = (struct sockaddr_in6 *)addr;
+    uv_ip6_addr("::ffff:0.0.0.0", ntohs(addr4.sin_port), addr6);
+    memcpy(&addr6->sin6_addr.s6_addr[12], &addr4.sin_addr, 4);
+}
+
 static int make_udp_bind_addr(int family, struct sockaddr_storage *dest) {
     if (family == AF_INET) {
         struct sockaddr_in addr4;
@@ -838,6 +846,12 @@ $R netQ_UDPListenerD_sendG_local (netQ_UDPListener self, $Cont c$cont, B_bytes d
 
     struct sockaddr_storage dest;
     if (make_sockaddr(address, port, &dest) == 0) {
+        // The socket is IPv6 when its bind address is (has a colon). Linux
+        // takes an IPv4 destination on it as is, macOS refuses that
+        // (EINVAL); both take it as an IPv4-mapped address.
+        if (dest.ss_family == AF_INET && strchr((const char *)fromB_str(self->address), ':') != NULL) {
+            map_ipv4_to_ipv6(&dest);
+        }
         udp_listener_send_to(self, udp, data, (const struct sockaddr *)&dest, dest_name);
     } else if (strchr(addr, ':') != NULL || strchr(addr, '%') != NULL) {
         // A malformed IPv6 address or zone is no host name
