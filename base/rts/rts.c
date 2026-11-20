@@ -128,6 +128,7 @@ uv_loop_t *uv_loops[MAX_WTHREADS];
 uv_async_t stop_ev[MAX_WTHREADS];
 uv_async_t wake_ev[MAX_WTHREADS];
 uv_check_t work_ev[MAX_WTHREADS];
+uv_prepare_t poll_ev[MAX_WTHREADS];
 WorkerCtx wctxs[MAX_WTHREADS];
 
 char *mon_log_path = NULL;
@@ -2713,6 +2714,26 @@ void wt_work_cb(uv_check_t *ev) {
     uv_async_send(&wake_ev[wctx->id]);
 }
 
+// A worker with nothing to run waits in libuv's poll, whose stack frame holds
+// an array of 1024 events: 32 KiB with kqueue, 12 to 16 KiB with epoll. The
+// kernel fills in only the events it returns, and the rest of the array keeps
+// what earlier calls left at that depth of the stack, such as pointers to the
+// actors, messages and continuations that the worker ran last, or to an
+// exception that a continuation raised. The collector scans the stack of a
+// waiting thread from its stack pointer up, so these pointers keep their
+// objects alive for as long as the worker waits, and an actor with a
+// __cleanup__ that they reach is not finalized. Just before the loop polls,
+// clear_before_poll zeroes 64 KiB of stack in its own frame, which the poll's
+// frame then reuses.
+#define POLL_STACK_CLEAR (64 * 1024)
+
+static void clear_before_poll(uv_prepare_t *ev) {
+    char area[POLL_STACK_CLEAR];
+    memset(area, 0, sizeof(area));
+    // Nothing reads the area, so tell the compiler that something might
+    __asm__ __volatile__("" : : "r"(area) : "memory");
+}
+
 // SET_SELF stores the current actor into the worker context for every
 // continuation, without a write barrier.
 static WorkerCtx new_worker_ctx(void) {
@@ -4053,6 +4074,8 @@ int main(int argc, char **argv) {
         uv_loop_t *loop = acton_gc_malloc_rescanned_aligned(_Alignof(uv_loop_t), sizeof(uv_loop_t));
         check_uv_fatal(uv_loop_init(loop), "Error initializing libuv loop: ");
         uv_loops[i] = loop;
+        check_uv_fatal(uv_prepare_init(loop, &poll_ev[i]), "Error initializing libuv prepare handle: ");
+        check_uv_fatal(uv_prepare_start(&poll_ev[i], clear_before_poll), "Error starting libuv prepare handle: ");
 
         if (i == 0) {
             check_uv_fatal(uv_async_init(uv_loops[i], &stop_ev[i], main_stop_cb), "Error initializing libuv stop event: ");
