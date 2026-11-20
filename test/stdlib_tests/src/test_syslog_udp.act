@@ -110,7 +110,7 @@ actor server_recovery(t: testing.EnvT, address: str, legacy: bool=True, optional
             c.close()
             return
         sender = c
-        source_port = c.local_port()
+        source_port = c.endpoints().local_port
         if source_port <= 0:
             fail("UDP sender did not report its source port")
             return
@@ -126,8 +126,9 @@ actor server_recovery(t: testing.EnvT, address: str, legacy: bool=True, optional
             else:
                 fail("Syslog listen error: " + error)
             return
-        port = s.local_port()
-        if port <= 0 or s.local_address() != address:
+        ep = s.endpoint()
+        port = ep.port
+        if port <= 0 or ep.address != address:
             fail("Syslog server did not report its bound address and port")
             return
         sender = net.UDPConnection(net.UDPConnectCap(udp_cap), address, port, sender_connected, sender_received, sender_failed)
@@ -225,7 +226,7 @@ actor _test_SyslogUDPClientWire(t: testing.EnvT):
         if error is not None:
             fail("UDP listen error: " + error)
             return
-        c = std.syslog.Client(net.UDPConnectCap(udp_cap), "127.0.0.1", l.local_port(), client_connected, client_failed)
+        c = std.syslog.Client(net.UDPConnectCap(udp_cap), "127.0.0.1", l.endpoint().port, client_connected, client_failed)
         client = c
         # Sending immediately must work before the connection callback arrives.
         c.send(message)
@@ -301,7 +302,7 @@ actor _test_SyslogUDPClientRejections(t: testing.EnvT):
         if error is not None:
             fail("UDP listen error: " + error)
             return
-        client = std.syslog.Client(net.UDPConnectCap(udp_cap), "127.0.0.1", l.local_port(), client_connected, client_failed, max_size=480)
+        client = std.syslog.Client(net.UDPConnectCap(udp_cap), "127.0.0.1", l.endpoint().port, client_connected, client_failed, max_size=480)
 
     listener = net.UDPListener(net.UDPListenCap(udp_cap), "127.0.0.1", 0, bound, received, listener_failed)
     after 5: fail("Syslog client rejection test timed out")

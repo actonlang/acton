@@ -19,7 +19,7 @@ actor Server(env, ready: action(int) -> None):
             print("listen error", err)
             env.exit(2)
         else:
-            ready(l.local_port())
+            ready(l.endpoint().port)
 
     def on_receive(c, data: bytes):
         junk = [str(i) for i in range(30)]

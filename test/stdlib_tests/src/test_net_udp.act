@@ -86,7 +86,7 @@ actor udp_roundtrip(t: testing.EnvT, address: str, optional: bool=False):
             _finish_error("UDP listen error: " + error)
             return
         listener = l
-        if l.local_port() <= 0:
+        if l.endpoint().port <= 0:
             _finish_failure("UDP listener did not report a local port")
             return
         _connect_client()
@@ -95,10 +95,11 @@ actor udp_roundtrip(t: testing.EnvT, address: str, optional: bool=False):
         if done:
             return
         client = c
-        if c.local_port() <= 0:
+        ep = c.endpoints()
+        if ep.local_port <= 0:
             _finish_failure("UDP client did not report a local port")
             return
-        if c.remote_address() == "":
+        if ep.remote_address == "":
             _finish_failure("UDP client did not report a remote address")
             return
         c.write(request_payload)
@@ -261,7 +262,7 @@ actor udp_send_to(t: testing.EnvT, listen_address: str, destination: str, option
             finish("sender listen error: " + error)
             return
         if receiver is not None:
-            l.send(b"hello", destination, receiver.local_port())
+            l.send(b"hello", destination, receiver.endpoint().port)
 
     def on_receive(l: net.UDPListener, data: bytes, address: str, port: int):
         if data != b"hello":

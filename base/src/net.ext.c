@@ -448,6 +448,20 @@ static void udp_close_initialized_handle(uv_udp_t *udp) {
     }
 }
 
+// Local address and port of a UDP socket, "" and 0 if they cannot be read
+static void udp_local_names(const uv_udp_t *udp, char *addr, size_t addr_len, int *port) {
+    addr[0] = '\0';
+    *port = 0;
+    struct sockaddr_storage name;
+    int namelen = sizeof(name);
+    if (uv_udp_getsockname(udp, (struct sockaddr *)&name, &namelen) == 0) {
+        if (sockaddr_to_addr_port((struct sockaddr *)&name, addr, addr_len, port) != 0) {
+            addr[0] = '\0';
+            *port = 0;
+        }
+    }
+}
+
 static int udp_connection_start(netQ_UDPConnection self, B_str ip_address, int family) {
     uv_udp_t *udp = (uv_udp_t *)acton_malloc_rescanned(sizeof(uv_udp_t));
     int r = uv_udp_init(get_uv_loop(), udp);
@@ -493,6 +507,11 @@ static int udp_connection_start(netQ_UDPConnection self, B_str ip_address, int f
     self->_sock = (int64_t)(intptr_t)udp;
     ACTON_WBAR(self, &self->_sock, udp);
     self->_ip_version = family == AF_INET ? 4LL : 6LL;
+    char local_address[NET_ADDRSTRLEN];
+    int local_port;
+    udp_local_names(udp, local_address, sizeof(local_address), &local_port);
+    ACTON_STORE(self, self->_local_address, actStrFromCStringCopy(local_address));
+    self->_local_port = local_port;
     ACTON_STORE(self, self->_remote_address, ip_address);
     self->$class->_on_udp_ready(self);
     return 0;
@@ -680,6 +699,11 @@ $R netQ_UDPListenerD__initG_local (netQ_UDPListener self, $Cont c$cont) {
 
     self->_sock = (int64_t)(intptr_t)udp;
     ACTON_WBAR(self, &self->_sock, udp);
+    char local_address[NET_ADDRSTRLEN];
+    int local_port;
+    udp_local_names(udp, local_address, sizeof(local_address), &local_port);
+    ACTON_STORE(self, self->_local_address, actStrFromCStringCopy(local_address));
+    self->_local_port = local_port;
     $action2 f = ($action2)self->on_listen;
     f->$class->__asyn__(f, self, B_None);
     return $R_CONT(c$cont, B_None);
@@ -1297,6 +1321,11 @@ $R netQ_TCPListenerD__initG_local (netQ_TCPListener self, $Cont c$cont) {
 
     self->_stream = (int64_t)(intptr_t)server;
     ACTON_WBAR(self, &self->_stream, server);
+    char local_address[NET_ADDRSTRLEN];
+    int local_port;
+    tcp_listener_names(self->_stream, local_address, sizeof(local_address), &local_port);
+    ACTON_STORE(self, self->_local_address, actStrFromCStringCopy(local_address));
+    self->_local_port = local_port;
     $action2 f = ($action2)self->on_listen;
     f->$class->__asyn__(f, self, B_None);
     return $R_CONT(c$cont, B_None);
@@ -2569,6 +2598,11 @@ $R netQ_TLSListenerD__initG_local (netQ_TLSListener self, $Cont c$cont) {
 
     self->_tls_owner = (int64_t)(intptr_t)owner;
     self->_stream = (int64_t)(intptr_t)server;
+    char local_address[NET_ADDRSTRLEN];
+    int local_port;
+    tcp_listener_names(self->_stream, local_address, sizeof(local_address), &local_port);
+    ACTON_STORE(self, self->_local_address, actStrFromCStringCopy(local_address));
+    self->_local_port = local_port;
     $action2 f = ($action2)self->on_listen;
     f->$class->__asyn__(f, self, B_None);
     return $R_CONT(c$cont, B_None);

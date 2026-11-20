@@ -190,12 +190,13 @@ actor _test_TCPListenerPortZero(t: testing.EnvT):
             base.failure("listen error: " + error)
             return
         listener = l
-        port = l.local_port()
+        ep = l.endpoint()
+        port = ep.port
         if port <= 0:
             base.failure("listener on port 0 reports port %d" % port)
             return
-        if l.local_address() != "127.0.0.1":
-            base.failure("listener reports local address " + l.local_address())
+        if ep.address != "127.0.0.1":
+            base.failure("listener reports local address " + ep.address)
             return
         client = net.TCPConnection(net.TCPConnectCap(tcp_cap), "127.0.0.1", port, on_connect, on_receive, on_error)
 
@@ -259,7 +260,7 @@ actor tcp_refused_once(t: testing.EnvT, address: str):
         if error is not None:
             base.failure("listen error: " + error)
             return
-        port = l.local_port()
+        port = l.endpoint().port
         l.close()
         after 0.1: connect(port)
 
@@ -315,7 +316,7 @@ actor _test_TCPConnectLocalhost(t: testing.EnvT):
             base.failure("listen error: " + error)
             return
         # Only IPv4 listens, so an IPv6 attempt to localhost is refused
-        net.TCPConnection(net.TCPConnectCap(tcp_cap), "localhost", l.local_port(), on_connect, on_receive, on_error)
+        net.TCPConnection(net.TCPConnectCap(tcp_cap), "localhost", l.endpoint().port, on_connect, on_receive, on_error)
         after 1.0: check(l)
 
     def check(l: net.TCPListener):
@@ -389,7 +390,7 @@ actor _test_TCPCloseWhileConnecting(t: testing.EnvT):
         if error is not None:
             base.failure("listen error: " + error)
             return
-        c = net.TCPConnection(net.TCPConnectCap(tcp_cap), "127.0.0.1", l.local_port(), on_connect, on_receive, on_error, None, connect_timeout=0.3)
+        c = net.TCPConnection(net.TCPConnectCap(tcp_cap), "127.0.0.1", l.endpoint().port, on_connect, on_receive, on_error, None, connect_timeout=0.3)
         c.close(on_close)
         # Past connect_timeout, which must not fire either
         after 0.6: check(l)
@@ -433,7 +434,7 @@ actor _test_TCPServerResetReported(t: testing.EnvT):
             base.failure("listen error: " + error)
             return
         listener = l
-        net.TCPConnection(net.TCPConnectCap(tcp_cap), "127.0.0.1", l.local_port(), on_connect, on_receive, on_error, on_remote_close)
+        net.TCPConnection(net.TCPConnectCap(tcp_cap), "127.0.0.1", l.endpoint().port, on_connect, on_receive, on_error, on_remote_close)
 
     def on_accept(s: net.TCPListenConnection):
         s.cb_install(on_server_receive, on_server_error, None)
@@ -476,7 +477,7 @@ actor _test_TCPClientResetReported(t: testing.EnvT):
             base.failure("listen error: " + error)
             return
         listener = l
-        net.TCPConnection(net.TCPConnectCap(tcp_cap), "127.0.0.1", l.local_port(), on_connect, on_receive, on_error)
+        net.TCPConnection(net.TCPConnectCap(tcp_cap), "127.0.0.1", l.endpoint().port, on_connect, on_receive, on_error)
 
     def on_accept(s: net.TCPListenConnection):
         s.cb_install(on_server_receive, on_server_error, on_server_remote_close)
@@ -534,7 +535,7 @@ actor _test_TCPAcceptLeavesNoHandles(t: testing.EnvT):
         listener = l
         baseline = tcp_handles()
         for i in range(CONNECTIONS):
-            net.TCPConnection(net.TCPConnectCap(tcp_cap), "127.0.0.1", l.local_port(), on_connect, on_receive, on_error, on_remote_close)
+            net.TCPConnection(net.TCPConnectCap(tcp_cap), "127.0.0.1", l.endpoint().port, on_connect, on_receive, on_error, on_remote_close)
 
     def on_accept(s: net.TCPListenConnection):
         s.close()
@@ -581,7 +582,7 @@ actor _test_TCPListenOnZone(t: testing.EnvT):
             net.TCPListener(net.TCPListenCap(tcp_cap), "::1", 0, on_ipv6_listen, on_accept)
             return
         listener = l
-        net.TCPConnection(net.TCPConnectCap(tcp_cap), "::1", l.local_port(), on_connect, on_receive, on_error)
+        net.TCPConnection(net.TCPConnectCap(tcp_cap), "::1", l.endpoint().port, on_connect, on_receive, on_error)
 
     def on_ipv6_listen(l: net.TCPListener, error: ?str):
         l.close()
@@ -630,7 +631,7 @@ actor _test_TCPDroppedConnectionsClosed(t: testing.EnvT):
             return
         listener = l
         for i in range(CONNECTIONS):
-            net.TCPConnection(net.TCPConnectCap(tcp_cap), "127.0.0.1", l.local_port(), on_connect, on_receive, on_error, on_remote_close)
+            net.TCPConnection(net.TCPConnectCap(tcp_cap), "127.0.0.1", l.endpoint().port, on_connect, on_receive, on_error, on_remote_close)
 
     def on_accept(s: net.TCPListenConnection):
         # Drop the connection without cb_install() or close()

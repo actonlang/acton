@@ -974,16 +974,26 @@ actor TLSServer(conn: net.TLSListenConnection, on_accept: action(TLSServer) -> N
 # TODO: change port to u16, when u16 has a sub-type relationship to int
 # TODO: the on_listen_error default should be some action that just automatically retries with a backoff
 # TODO: add restart method to restart the listener
-actor Listener(cap: net.TCPListenCap, address: str, port: int, on_accept: action(Server) -> None, on_listen_error: ?action(net.TCPListener, str) -> None = None, log_handler: ?logging.Handler = None, compress: bool = False):
-    """HTTP Server Listener"""
-    _log = logging.Logger(log_handler)
-    var bufs = []
+actor Listener(cap: net.TCPListenCap, address: str, port: int, on_accept: action(Server) -> None, on_listen_error: ?action(net.TCPListener, str) -> None = None, log_handler: ?logging.Handler = None, compress: bool = False, on_listen: ?action(Listener, ?str) -> None = None):
+    """HTTP Server Listener
 
-    def on_conn_listen(listener, error):
+    Listens on address and port, where port 0 picks a free port, see
+    endpoint(). on_listen is called with None once listening, or with an
+    error. Each accepted connection gets a Server, which is passed to
+    on_accept. on_listen_error is called with the net listener for each
+    error, use on_listen instead.
+
+    close() stops listening, connections already accepted stay open.
+    """
+    _log = logging.Logger(log_handler)
+
+    def on_conn_listen(listener: net.TCPListener, error: ?str):
         if error is not None:
             _log.notice("There was an error with the listener socket", {"error": error})
             if on_listen_error is not None:
                 on_listen_error(listener, error)
+        if on_listen is not None:
+            on_listen(self, error)
 
     def on_listener_accept(conn):
         s = Server(conn, on_accept, log_handler, compress)
@@ -992,20 +1002,39 @@ actor Listener(cap: net.TCPListenCap, address: str, port: int, on_accept: action
 
     var _listener = net.TCPListener(cap, address, port, on_conn_listen, on_listener_accept)
 
+    action def close() -> None:
+        """Stop listening"""
+        _listener.close()
+
+    action def endpoint() -> (address: str, port: int):
+        """Address and port of the listening socket, empty and 0 when not listening"""
+        return _listener.endpoint()
+
 
 # TODO: change port to u16, when u16 has a sub-type relationship to int
 # TODO: the on_listen_error default should be some action that just automatically retries with a backoff
 # TODO: add restart method to restart the listener
-actor TLSListener(cap: net.TCPListenCap, address: str, port: int, cert_pem: bytes, key_pem: bytes, on_accept: action(TLSServer) -> None, on_listen_error: ?action(net.TLSListener, str) -> None = None, log_handler: ?logging.Handler = None, compress: bool = False):
-    """HTTPS Server Listener"""
-    _log = logging.Logger(log_handler)
-    var bufs = []
+actor TLSListener(cap: net.TCPListenCap, address: str, port: int, cert_pem: bytes, key_pem: bytes, on_accept: action(TLSServer) -> None, on_listen_error: ?action(net.TLSListener, str) -> None = None, log_handler: ?logging.Handler = None, compress: bool = False, on_listen: ?action(TLSListener, ?str) -> None = None):
+    """HTTPS Server Listener
 
-    def on_conn_listen(listener, error):
+    Listens on address and port, where port 0 picks a free port, see
+    endpoint(). on_listen is called with None once listening, or with an
+    error. It is also called with an error for each failed TLS handshake.
+    Each connection that completes the handshake gets a TLSServer, which is
+    passed to on_accept. on_listen_error is called with the net listener for
+    each error, use on_listen instead.
+
+    close() stops listening, connections already accepted stay open.
+    """
+    _log = logging.Logger(log_handler)
+
+    def on_conn_listen(listener: net.TLSListener, error: ?str):
         if error is not None:
             _log.notice("There was an error with the listener socket", {"error": error})
             if on_listen_error is not None:
                 on_listen_error(listener, error)
+        if on_listen is not None:
+            on_listen(self, error)
 
     def on_listener_accept(conn):
         s = TLSServer(conn, on_accept, log_handler, compress)
@@ -1013,6 +1042,18 @@ actor TLSListener(cap: net.TCPListenCap, address: str, port: int, cert_pem: byte
         conn.cb_install(s.on_conn_receive, s.on_conn_error, None)
 
     var _listener = net.TLSListener(cap, address, port, cert_pem, key_pem, on_conn_listen, on_listener_accept)
+
+    action def close() -> None:
+        """Stop listening
+
+        Handshakes in progress are aborted, connections already accepted
+        stay open.
+        """
+        _listener.close()
+
+    action def endpoint() -> (address: str, port: int):
+        """Address and port of the listening socket, empty and 0 when not listening"""
+        return _listener.endpoint()
 
 
 # TODO: change port to u16, when u16 has a sub-type relationship to int

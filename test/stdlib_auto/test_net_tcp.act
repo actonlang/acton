@@ -45,7 +45,7 @@ actor Client(name, rts_monitor, env: Env, port: int, on_success):
     var connection = 0
     def on_connect(c):
         connection += 1
-        print("Client %s connected to %s:%d, TCP handles: %s" % (name, c.remote_address(), port, str(get_tcp_handles(rts_monitor))))
+        print("Client %s connected to %s:%d, TCP handles: %s" % (name, c.endpoints().remote_address, port, str(get_tcp_handles(rts_monitor))))
         await async c.write(b"PING")
 
     def on_close(c):

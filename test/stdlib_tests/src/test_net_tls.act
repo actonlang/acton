@@ -671,12 +671,13 @@ actor _TLSListenerPortZero(t: testing.EnvT):
             finish("TLS listen failed: " + err)
             return
         listener = l
-        port = l.local_port()
+        ep = l.endpoint()
+        port = ep.port
         if port <= 0:
             finish("listener on port 0 reports port %d" % port)
             return
-        if l.local_address() != "127.0.0.1":
-            finish("listener reports local address " + l.local_address())
+        if ep.address != "127.0.0.1":
+            finish("listener reports local address " + ep.address)
             return
         net.TLSConnection(conn_cap, "127.0.0.1", port, _on_connect, _on_receive, _on_error, None, False)
 
