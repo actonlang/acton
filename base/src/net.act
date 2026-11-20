@@ -212,15 +212,6 @@ actor UDPConnection(cap: UDPConnectCap, address: str, port: int, on_connect: act
             return None
         return _ip_version
 
-    action def local_address() -> str:
-        NotImplemented
-
-    action def local_port() -> int:
-        NotImplemented
-
-    action def remote_address() -> str:
-        return _remote_address
-
     action def endpoints() -> (local_address: str, local_port: int, remote_address: str, remote_port: int):
         """Local and remote address and port of the current or most recent connection
 
@@ -291,12 +282,6 @@ actor UDPListener(cap: UDPListenCap, address: str, port: int, on_listen: action(
 
     action def close() -> None:
         """Close listener"""
-        NotImplemented
-
-    action def local_address() -> str:
-        NotImplemented
-
-    action def local_port() -> int:
         NotImplemented
 
     action def endpoint() -> (address: str, port: int):
@@ -597,14 +582,6 @@ actor TCPConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
             return None
         return _ip_version
 
-    action def local_address() -> str:
-        """Local address of the current or most recent connection, see endpoints()"""
-        return _local_address
-
-    action def remote_address() -> str:
-        """Remote address of the current or most recent connection, see endpoints()"""
-        return _remote_address
-
     action def endpoints() -> (local_address: str, local_port: int, remote_address: str, remote_port: int):
         """Local and remote address and port of the current or most recent connection
 
@@ -720,14 +697,6 @@ actor TCPListener(cap: TCPListenCap, address: str, port: int, on_listen: action(
 
     action def close() -> None:
         """Stop listening"""
-        NotImplemented
-
-    action def local_address() -> str:
-        """Local address of the listening socket, "" when closed"""
-        NotImplemented
-
-    action def local_port() -> int:
-        """Local port of the listening socket, 0 when closed"""
         NotImplemented
 
     action def endpoint() -> (address: str, port: int):
@@ -914,14 +883,6 @@ actor TLSListener(cap: TCPListenCap, address: str, port: int, cert_pem: bytes, k
         Handshakes in progress are aborted, connections already accepted
         stay open.
         """
-        NotImplemented
-
-    action def local_address() -> str:
-        """Local address of the listening socket, "" when closed"""
-        NotImplemented
-
-    action def local_port() -> int:
-        """Local port of the listening socket, 0 when closed"""
         NotImplemented
 
     action def endpoint() -> (address: str, port: int):
