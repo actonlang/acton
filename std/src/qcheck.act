@@ -1,11 +1,16 @@
-from random import *
+"""Property checks with random arguments
 
-def qcheck_int_1(name: str, prop: (int) -> bool, verbose = False)->int:
+Each check calls prop with up to 100 sets of random arguments, drawn from the
+source r, and prints whether they all passed. Pass env.random for new arguments
+on every run, or a seeded generator from std.random to repeat a run.
+"""
+
+mut def qcheck_int_1[R(Random)](r: R, name: str, prop: (int) -> bool, verbose = False)->int:
     print("Testing",name)
     i: int = 1
     while i <= 100:
         m = i*i
-        a = randint(-m,m)
+        a = r.between(-m, m)
         if not prop(a):
             print("   ",name,"failed after",i,"tests:\n",a,"\n")
             return 1
@@ -16,13 +21,13 @@ def qcheck_int_1(name: str, prop: (int) -> bool, verbose = False)->int:
     print("   OK,",name,"passed 100 tests\n")
     return 0
 
-def qcheck_int_2(name: str, prop: (int, int) -> bool, verbose = False)->int:
+mut def qcheck_int_2[R(Random)](r: R, name: str, prop: (int, int) -> bool, verbose = False)->int:
     print("Testing",name)
     i: int = 1
     while i <= 100:
         m = i*i
-        a = randint(-m,m)
-        b = randint(-m,m)
+        a = r.between(-m, m)
+        b = r.between(-m, m)
         if not prop(a,b):
             print("   ",name,"failed after",i,"tests:\n",a,"\n",b)
             return 1
@@ -33,12 +38,12 @@ def qcheck_int_2(name: str, prop: (int, int) -> bool, verbose = False)->int:
     print("   OK,",name,"passed 100 tests\n")
     return 0
 
-def qcheck_bigint_1(name: str, prop: (bigint) -> bool, verbose = False)->int:
+mut def qcheck_bigint_1[R(Random)](r: R, name: str, prop: (bigint) -> bool, verbose = False)->int:
     print("Testing",name)
     i= 1
     while i <= 100:
         m = 2+i//2
-        a = rand_bigint(m)
+        a = _rand_bigint(r, m)
         if not prop(a):
             print("   ",name,"failed after",i,"tests:\n",a)
             return 1
@@ -49,12 +54,12 @@ def qcheck_bigint_1(name: str, prop: (bigint) -> bool, verbose = False)->int:
     print("   OK,",name,"passed 100 tests\n")
     return 0
 
-def qcheck_bigint_2(name: str, prop: (bigint, bigint) -> bool, verbose = False)->int:
+mut def qcheck_bigint_2[R(Random)](r: R, name: str, prop: (bigint, bigint) -> bool, verbose = False)->int:
     print("Testing",name)
     i= 1
     while i <= 100:
-        a = rand_bigint(randint(2,i+2))
-        b = rand_bigint(randint(2,i+2))
+        a = _rand_bigint(r, r.between(2, i+2))
+        b = _rand_bigint(r, r.between(2, i+2))
         if not prop(a,b):
             print("   ",name,"failed after",i,"tests:\n",a,"\n",b)
             return 1
@@ -65,12 +70,12 @@ def qcheck_bigint_2(name: str, prop: (bigint, bigint) -> bool, verbose = False)-
     print("   OK,",name,"passed 100 tests\n")
     return 0
 
-def qcheck_bigint_int(name: str, prop: (bigint, int) -> bool, verbose = False)->int:
+mut def qcheck_bigint_int[R(Random)](r: R, name: str, prop: (bigint, int) -> bool, verbose = False)->int:
     print("Testing",name)
     i= 1
     while i <= 100:
-        a = rand_bigint(randint(2,i+2))
-        b = randint(-i*i,i*i)
+        a = _rand_bigint(r, r.between(2, i+2))
+        b = r.between(-i*i, i*i)
         if not prop(a,b):
             print("   ",name,"failed after",i,"tests:\n",a,"\n",b)
             return 1
@@ -91,12 +96,12 @@ def qcheck_0(name: str, prop: () -> bool)->int:
         print("   ",name,"failed")
         return 1
 
-def qcheck_list_2(name: str, prop: (list[int], list[int]) -> bool, verbose = False)->int:
+mut def qcheck_list_2[R(Random)](r: R, name: str, prop: (list[int], list[int]) -> bool, verbose = False)->int:
     print("Testing",name)
     i = 1
     while i <= 100:
-        a = rand_list(i)
-        b = rand_list(i)
+        a = _rand_list(r, i)
+        b = _rand_list(r, i)
         if not prop(a,b):
             print("   *************",name,"FAILED AFTER",i,"TESTS:*************\n",a,"\n",b)
             return 1
@@ -106,3 +111,17 @@ def qcheck_list_2(name: str, prop: (list[int], list[int]) -> bool, verbose = Fal
         i += 1
     print("   OK,",name,"passed 100 tests\n")
     return 0
+
+mut def _rand_bigint[R(Random)](r: R, size: int) -> bigint:
+    """A random bigint of at most size decimal digits, which may be negative"""
+    digits = ["-" if r.below(2) == 1 else ""]
+    for _ in range(size):
+        digits.append(str(r.below(10)))
+    return bigint("".join(digits))
+
+mut def _rand_list[R(Random)](r: R, size: int) -> list[int]:
+    """A random list of fewer than size ints, each in range(-size, size)"""
+    res = []
+    for _ in range(r.below(size)):
+        res.append(r.between(-size, size))
+    return res

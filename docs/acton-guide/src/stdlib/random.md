@@ -1,8 +1,9 @@
 # std.random
 
 The `std.random` module has seeded random number generators, and the
-functions `shuffle` and `shuffled`, which reorder a sequence. Both work with
-any source of random numbers that implements the builtin
+functions `choice`, `sample`, `shuffle` and `shuffled`, which pick from or
+reorder a sequence. Both work with any source of random numbers that
+implements the builtin
 [`Random`](../environment/random.md#the-random-protocol) protocol, including
 `env.random`.
 
@@ -22,6 +23,7 @@ actor main(env):
     cards = ["ace", "king", "queen", "jack", "ten"]
     random.shuffle(g, cards)
     print("Shuffled:", cards)
+    print("Drawn:", random.sample(g, cards, 2))
     print("Scrambled:", random.shuffled(g, "acton"))
     env.exit(0)
 ```
@@ -31,7 +33,8 @@ Output:
 Secure roll: 2
 Seeded rolls: [2, 6, 1, 5, 6, 2, 3, 1]
 Shuffled: ['jack', 'king', 'queen', 'ten', 'ace']
-Scrambled: taonc
+Drawn: ['king', 'queen']
+Scrambled: ctoan
 ```
 
 The secure roll differs from run to run. Everything drawn from
@@ -54,10 +57,12 @@ print("seed:", seed)
 g = random.Xoshiro256(seed)
 ```
 
-## Reordering a sequence
+## Picking from a sequence
 
 | Function | Returns |
 | --- | --- |
+| `choice(r, items)` | a random element of `items` |
+| `sample(r, items, k)` | a `list` of `k` elements from distinct positions of `items`, in random order |
 | `shuffle(r, items)` | nothing; puts the elements of `items` in a random order, in place |
 | `shuffled(r, items)` | a copy of `items`, of the same type, with the elements in a random order |
 
@@ -68,10 +73,13 @@ so it takes a mutable sequence, such as a `list` or `bytearray`; for others,
 use `shuffled`, which leaves `items` as it is. With the same draws from `r`,
 `shuffled` gives the order that `shuffle` would.
 
+`choice` of an empty sequence, or a `k` outside `0` to `len(items)`, raises
+`ValueError`.
+
 ## Reproducibility
 
-The same seed gives the same sequence on every platform. `Xoshiro256`,
-`shuffle`, `shuffled` and the methods of `Random` are implemented in Acton
-itself, not taken from a library that might change them, so a seeded
-sequence also stays the same from one Acton release to the next.
-`Xoshiro256(seed)` matches Zig's `std.Random.Xoshiro256.init(seed)`.
+The same seed gives the same sequence on every platform. The methods of
+`Random` and the functions in `std.random` are implemented in Acton itself,
+not taken from a library that might change them, so a seeded sequence also
+stays the same from one Acton release to the next. `Xoshiro256(seed)`
+matches Zig's `std.Random.Xoshiro256.init(seed)`.

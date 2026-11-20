@@ -111,11 +111,11 @@ def comparable(old: dict[str, ?value], new: dict[str, ?value]) -> None:
         if canonical(obj(old["perf_info"])[key]) != canonical(obj(new["perf_info"])[key]):
             raise ValueError("Cannot compare measurements: " + key + " differs")
 
-def pair_order() -> list[bool]:
+mut def pair_order[R(Random)](r: R) -> list[bool]:
     # All six balanced schedules are equally likely.
-    return std.random.choice([[True, True, False, False], [True, False, True, False],
-                          [True, False, False, True], [False, True, True, False],
-                          [False, True, False, True], [False, False, True, True]])
+    return std.random.choice(r, [[True, True, False, False], [True, False, True, False],
+                                 [True, False, False, True], [False, True, True, False],
+                                 [False, True, False, True], [False, False, True, True]])
 
 def summarize(pairs: list[dict[str, dict[str, ?value]]]) -> dict[str, ?value]:
     # Each fresh process contributes one mean; inner loops are not independent.
@@ -470,7 +470,7 @@ actor main(env: Env):
         saved_pairs = []
         study = {"module": module, "name": raw_name, "scale": scale, "order": order, "pairs": saved_pairs}
         studies.append(study)
-        schedule = [side for old_first in pair_order()
+        schedule = [side for old_first in pair_order(env.random)
                     for side in (["baseline", "current"] if old_first else ["current", "baseline"])]
         sample_index = 0
         sample()

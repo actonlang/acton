@@ -3,7 +3,6 @@
 import std.http
 import std.json
 import net
-import std.random
 
 actor Requests(cap: net.TCPConnectCap, port: int, first: int, stride: int, n: int,
                done: action(int) -> None, fail: action(str) -> None):
@@ -35,7 +34,7 @@ actor main(env):
     n = int(env.argv[1]) if len(env.argv) > 1 else 10
     tcp = net.TCPCap(net.NetCap(env.cap))
     connect = net.TCPConnectCap(tcp)
-    port = std.random.randint(20000, 50000)
+    port = env.random.between(20000, 50000)
     workers = min([64, n])
     var remaining = workers
     var total = 0

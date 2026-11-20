@@ -1718,8 +1718,8 @@ protocol Random:
     seeded sequences do not change.
 
     env.random is a source of secure random numbers from the operating system.
-    The std.random module has seeded generators, and shuffle and shuffled,
-    which reorder a sequence using any source.
+    The std.random module has seeded generators, and choice, sample, shuffle
+    and shuffled, which pick from or reorder a sequence using any source.
     """
     rand_u64 : mut() -> u64
     rand_int : mut() -> int

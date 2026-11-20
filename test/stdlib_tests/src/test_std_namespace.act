@@ -87,8 +87,7 @@ def _test_std_namespace_parsers_and_random():
     testing.assertNotNone(m, "std.re.match returned None")
     testing.assertNotNone(std.re.match("a.b", "a" + chr(0) + "b"), "std.re.match stopped at a NUL")
 
-    n = std.random.randint(1, 4)
-    testing.assertTrue(1 <= n and n < 4, "std.random.randint outside expected range")
+    testing.assertIn(std.random.choice(std.random.Xoshiro256(1), [1, 2, 3]), [1, 2, 3])
 
     def prop_true():
         return True

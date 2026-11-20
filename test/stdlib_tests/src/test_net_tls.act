@@ -1,5 +1,4 @@
 import net
-import std.random
 import testing
 import time
 
@@ -198,7 +197,7 @@ actor TLSClientServerProbe(t: testing.EnvT, protocols: list[str]=[]):
             after WATCHDOG_INTERVAL_S: _watchdog()
 
     def _start_listener():
-        port = std.random.randint(20000, 45000)
+        port = t.env.random.between(20000, 45000)
         l = net.TLSListener(
             listen_cap,
             "127.0.0.1",
@@ -397,7 +396,7 @@ actor _TLSQueuedWriteRoundtrip(t: testing.EnvT):
             after WATCHDOG_INTERVAL_S: _watchdog()
 
     def _start_listener():
-        port = std.random.randint(20000, 45000)
+        port = t.env.random.between(20000, 45000)
         client_connected = False
         request_started = False
         server_recv = []
@@ -570,7 +569,7 @@ actor _TLSListenerDropKeepsAcceptedConnection(t: testing.EnvT):
 
     def _start_listener():
         phase = "listener-starting"
-        port = std.random.randint(20000, 45000)
+        port = t.env.random.between(20000, 45000)
         listener = net.TLSListener(
             listen_cap,
             "127.0.0.1",

@@ -9,6 +9,6 @@ def prop_lshift_rshift_1(n,i):
     return (n << i1) >> i1 == n
 
 actor main(env):
-     std.qcheck.qcheck_bigint_int("lshift_1", prop_lshift_1)
-     std.qcheck.qcheck_bigint_int("lshift_rshift_1", prop_lshift_rshift_1)
+     std.qcheck.qcheck_bigint_int(env.random, "lshift_1", prop_lshift_1)
+     std.qcheck.qcheck_bigint_int(env.random, "lshift_rshift_1", prop_lshift_rshift_1)
      env.exit(0)
