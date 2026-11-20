@@ -371,6 +371,21 @@ class bytearray (object):
 class Msg[A] (value):
     NotImplemented
 
+class TimerHandle (value):
+    """A timer set with `after`, as bound by `h = after d: f()`"""
+    def __init__(self) -> None:
+        NotImplemented
+    mut def cancel(self) -> None:
+        """Cancel the timer
+
+        Cancelling a timer before its code has started to run means that the
+        code never runs. Cancelling after the code has started, and cancelling
+        twice, do nothing. A cancel by the actor that set the timer always
+        stops code that has not started. A cancel from another actor can race
+        the start of the code and come too late, and the code then runs.
+        """
+        NotImplemented
+
 ## Exceptions ##################################################################################
 
 # All exceptions should have a human readable error in the error_message field.

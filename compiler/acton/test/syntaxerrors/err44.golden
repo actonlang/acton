@@ -1,0 +1,11 @@
+Building file test/syntaxerrors/err44.act using temporary scratch directory
+[error Syntax error]: An after statement binds its timer to a plain name only
+     +--> test/syntaxerrors/err44.act@6:9-6:26
+     |
+   6 |         h: TimerHandle = after 1.0: tick()
+     :         ^---------------- 
+     :         `- An after statement binds its timer to a plain name only
+     :
+     | Note: The statement h = after d: f() binds the timer to h
+     | Hint: Bind the timer to a plain name and assign that name where the timer should go
+-----+

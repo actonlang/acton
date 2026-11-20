@@ -790,9 +790,9 @@ scASYNCf            = tSchema [qbind a] tASYNC
         a           = TV KType $ name "A"
         tFun'       = tFun fxProc posNil kwdNil (tVar a)
 
---  $AFTERf         : [A] => action(int, proc()->A) -> A
+--  $AFTERf         : [A] => action(float, proc()->A) -> TimerHandle
 scAFTERf            = tSchema [qbind a] tAFTER
-  where tAFTER      = tFun fxAction (posRow tFloat $ posRow tFun' posNil) kwdNil (tVar a)
+  where tAFTER      = tFun fxAction (posRow tFloat $ posRow tFun' posNil) kwdNil tTimerHandle
         a           = TV KType $ name "A"
         tFun'       = tFun fxProc posNil kwdNil (tVar a)
 
@@ -809,9 +809,9 @@ scASYNCc            = tSchema [qbind a] tASYNC
         tCont'      = tFun fxProc (posRow tCont'' posNil) kwdNil tR
         tCont''     = tFun fxProc (posRow (tVar a) posNil) kwdNil tR
 
---  $AFTERc         : [A] => action(int, proc(proc(A)->$R)->$R) -> A
+--  $AFTERc         : [A] => action(float, proc(proc(A)->$R)->$R) -> TimerHandle
 scAFTERc            = tSchema [qbind a] tAFTER
-  where tAFTER      = tFun fxAction (posRow tFloat $ posRow tCont' posNil) kwdNil (tVar a)
+  where tAFTER      = tFun fxAction (posRow tFloat $ posRow tCont' posNil) kwdNil tTimerHandle
         a           = TV KType $ name "A"
         tCont'      = tFun fxProc (posRow tCont'' posNil) kwdNil tR
         tCont''     = tFun fxProc (posRow (tVar a) posNil) kwdNil tR
@@ -830,9 +830,9 @@ scASYNC             = tSchema [qbind a] tASYNC
         tCont'      = tCont tCont''
         tCont''     = tCont (tVar a)
 
---  $AFTER          : [A] => action(int, $Cont[$Cont[A]]) -> A
+--  $AFTER          : [A] => action(float, $Cont[$Cont[A]]) -> TimerHandle
 scAFTER             = tSchema [qbind a] tAFTER
-  where tAFTER      = tFun fxAction (posRow tFloat $ posRow tCont' posNil) kwdNil (tVar a)
+  where tAFTER      = tFun fxAction (posRow tFloat $ posRow tCont' posNil) kwdNil tTimerHandle
         a           = TV KType $ name "A"
         tCont'      = tCont tCont''
         tCont''     = tCont (tVar a)

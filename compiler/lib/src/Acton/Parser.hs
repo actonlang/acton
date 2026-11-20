@@ -62,6 +62,7 @@ data CustomParseError = TypeVariableNameError String  -- Name that looks like ty
                       | InvalidModuleStatement
                       | InvalidTopLevelAssignmentPattern
                       | DuplicateTopLevelAssignment String
+                      | AfterTargetNotName
                       | MisplacedImport
                       | CyclicTypedef [String]
                       | MixedIndentation Indentation
@@ -97,6 +98,8 @@ instance ShowErrorComponent CustomParseError where
     "Module top-level assignments must bind at least one name"
   showErrorComponent (DuplicateTopLevelAssignment name) =
     "Module top-level name '" ++ name ++ "' cannot be assigned more than once"
+  showErrorComponent AfterTargetNotName =
+    "An after statement binds its timer to a plain name only"
   showErrorComponent MisplacedImport =
     "Import statements must appear at the beginning of a module, preceded only by a possible docstring"
   showErrorComponent (CyclicTypedef names) =
@@ -1849,10 +1852,10 @@ small_stmt = del_stmt <|> pass_stmt <|> flow_stmt <|> assert_stmt <|> var_stmt <
 expr_stmt :: Parser S.Stmt
 expr_stmt = addLoc $ do
             o <- getOffset
-            S.Assign NoLoc <$> some (try assign) <*> rhs                                 -- Single variable lhs matches here
+            S.Assign NoLoc <$> some (try assign) <* assertNotAfterTarget o <*> rhs      -- Single variable lhs matches here
              <|> (do t <- target
                      ((S.AugAssign NoLoc t <$> augassign <*> rhs) <* assertNotData (Loc o o) "augmented assignment")
-                       <|> (S.MutAssign NoLoc t <$> (equals *> rhs)))                    -- and not here
+                       <|> (S.MutAssign NoLoc t <$> (equals *> assertNotAfterTarget o *> rhs)))  -- and not here
              <|> (((S.Expr NoLoc <$> rhs) <* assertNotData (Loc o o) "call") <?> "expression statement")
    where augassign :: Parser S.Aug
          augassign = augops
@@ -1880,19 +1883,37 @@ trysome p = do x <- p; rest [x]
 
 after_stmt :: Parser S.Stmt
 after_stmt = addLoc $ do
+                mbp <- optional $ try (bind_target <* lookAhead (rword "after"))
                 l <- rwordLoc "after"
                 assertDefAct l "after"
                 -- 'now' is a soft keyword: it only measures the delay from the current time when a delay
                 -- expression and ':' follow it, so 'after now: f()' still reads a variable named now
                 (now,e) <- try ((,) True <$> (rword "now" *> expr) <* colon) <|> ((,) False <$> expr <* colon)
                 e' <- expr
-                return $ S.After NoLoc now e e'
+                return $ S.After NoLoc mbp now e e'
+  where bind_target = do n <- name
+                         equals
+                         return $ S.PVar (loc n) n Nothing
+
+-- An after statement binds its timer to a plain name only (after_stmt). Any
+-- other target is parsed as the start of an assignment, and when "after"
+-- follows it, this reports the target instead of failing at "after".
+assertNotAfterTarget :: Int -> Parser ()
+assertNotAfterTarget o = do
+    found <- optional (hidden (lookAhead (rword "after")))
+    case found of
+        Just _  -> do o' <- getOffset
+                      parseException (Loc o o') AfterTargetNotName
+        Nothing -> return ()
 
 var_stmt :: Parser S.Stmt
 var_stmt = addLoc $ do
+             o <- getOffset
              l <- rwordLoc "var"
              assertActBody l "var"
-             S.VarAssign NoLoc <$> trysome assign <*> rhs
+             ps <- trysome assign
+             assertNotAfterTarget o
+             S.VarAssign NoLoc ps <$> rhs
 
 del_stmt = addLoc $ do
             l <- rwordLoc "del"

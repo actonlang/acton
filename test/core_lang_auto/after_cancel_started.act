@@ -1,0 +1,35 @@
+# Cancelling a timer whose code has started does nothing: it must not drop the
+# rest of the code. The timer's code waits for a call to another actor, which
+# cancels the timer meanwhile, and the code must still run to its end.
+
+actor Watchdog(env):
+    after 10.0: env.exit(1)
+
+actor Canceller():
+    def cancel_it(h: TimerHandle) -> int:
+        h.cancel()
+        return 1
+
+actor main(env):
+    wd = Watchdog(env)
+    var completed = False
+    var pending: ?TimerHandle = None
+    c = Canceller()
+
+    def body():
+        p = pending
+        if p is not None:
+            r = c.cancel_it(p)
+            if r == 1:
+                completed = True
+
+    def check():
+        if completed:
+            print("timer code ran to its end despite the cancel")
+            env.exit(0)
+        else:
+            print("BOOM: the cancel dropped the rest of the timer's code")
+            env.exit(1)
+
+    pending = after 0.05: body()
+    after 0.5: check()

@@ -1,0 +1,49 @@
+# serialize() refuses a TimerHandle, both while its timer is pending and after
+# the timer has run: the copy that deserialize() made would refer to a copy of
+# the timer's message, which is in no timer queue, so its cancel() would cancel
+# nothing. Once the timer has run, its message no longer refers to the actor
+# that set it, so only the check for the handle itself stops serialize().
+
+actor Watchdog(env):
+    after 10.0: env.exit(1)
+
+actor main(env):
+    wd = Watchdog(env)
+    var ran = False
+
+    def tick():
+        ran = True
+
+    # What serialize(h) did: None when it raised the error for timer handles
+    def refusal(h: TimerHandle) -> ?str:
+        try:
+            serialize(h)
+        except ValueError as err:
+            if "timer handles" in str(err):
+                return None
+            return "it raised another error: " + str(err)
+        return "it did not raise"
+
+    pending = after 5.0: tick()
+    done = after 0: tick()
+
+    def check():
+        if not ran:
+            print("BOOM: the after 0 timer did not run before check()")
+            env.exit(1)
+            return
+        r = refusal(pending)
+        if r is not None:
+            print("BOOM: serialize() of a pending TimerHandle: " + r)
+            env.exit(1)
+            return
+        r = refusal(done)
+        if r is not None:
+            print("BOOM: serialize() of a done TimerHandle: " + r)
+            env.exit(1)
+            return
+        pending.cancel()
+        print("serialize() of a TimerHandle raised, pending and done")
+        env.exit(0)
+
+    after 0.2: check()

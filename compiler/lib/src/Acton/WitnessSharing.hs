@@ -400,7 +400,7 @@ stmt env s = case s of
     Raise _ e -> visit [e]
     Assert _ e x -> visit (e : maybe [] (:[]) x)
     Delete _ e -> visit [e]
-    After _ _ a b -> visit [a,b]
+    After _ _ _ a b -> visit [a,b]
     If _ bs els -> do
         forM_ bs $ \(Branch e b) -> expr env e >> suite env b
         suite env els >> return env
@@ -712,7 +712,7 @@ walkStmt e b s = case s of
     Raise l x -> Raise l <$> e x
     Assert l x y -> Assert l <$> e x <*> mapM e y
     Delete l x -> Delete l <$> e x
-    After l now x y -> After l now <$> e x <*> e y
+    After l mbp now x y -> After l mbp now <$> e x <*> e y
     If l bs els -> If l <$> mapM (\(Branch x ss) -> Branch <$> e x <*> b ss) bs <*> b els
     While l x ss els -> While l <$> e x <*> b ss <*> b els
     For l p x ss els -> For l p <$> e x <*> b ss <*> b els

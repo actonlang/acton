@@ -1,0 +1,108 @@
+import acton.rts
+import testing
+
+# Each actor keeps the handle of its own timer in its state (a public name of
+# the actor body is an attribute of the actor). While the timer's message
+# refers to the actor, the actor reaches itself through the handle, and the
+# collector never finalizes an object that reaches itself. The RTS clears the
+# message's reference to the actor when the timer is done or dropped.
+
+actor TimerRan(cb):
+    def tick():
+        pass
+
+    # The timer runs, and its message is done
+    h = after 0: tick()
+
+    action def __cleanup__():
+        cb()
+
+
+actor TimerDroppedByWorker(cb):
+    def tick():
+        pass
+
+    # An after 0 timer goes to the mailbox, and the worker drops it
+    h = after 0: tick()
+    h.cancel()
+
+    action def __cleanup__():
+        cb()
+
+
+actor TimerDroppedWhenDue(cb):
+    def tick():
+        pass
+
+    # The timer waits in the timer queue, and handle_timeout drops it when it
+    # is due
+    h = after 0.05: tick()
+    h.cancel()
+
+    action def __cleanup__():
+        cb()
+
+
+actor TimerRaised(cb):
+    def boom():
+        raise ValueError("raised in the code of a timer")
+
+    # The timer's code raises an exception that nothing catches
+    h = after 0: boom()
+
+    action def __cleanup__():
+        cb()
+
+
+actor _test_timer_handle_cleanup(t: testing.EnvT):
+    """Unreachable actors that keep the handle of their own timer get their
+    __cleanup__ called when the GC collects them, once the timer has run or
+    been dropped
+    """
+    var ran = 0
+    var dropped_by_worker = 0
+    var dropped_when_due = 0
+    var raised = 0
+    var done = False
+
+    def _check():
+        if done or raised <= 5:
+            return
+        if ran > 80 and dropped_by_worker > 80 and dropped_when_due > 80:
+            done = True
+            t.success()
+
+    def _count_ran():
+        ran += 1
+        _check()
+
+    def _count_dropped_by_worker():
+        dropped_by_worker += 1
+        _check()
+
+    def _count_dropped_when_due():
+        dropped_when_due += 1
+        _check()
+
+    def _count_raised():
+        raised += 1
+        _check()
+
+    for i in range(100):
+        TimerRan(_count_ran)
+        TimerDroppedByWorker(_count_dropped_by_worker)
+        TimerDroppedWhenDue(_count_dropped_when_due)
+
+    # Fewer of these, since each prints its unhandled exception. An actor
+    # whose message raised is not always finalized, also when it keeps no
+    # handle, so this kind only has to be finalized at all: while the timer's
+    # message refers to it, none is.
+    for i in range(20):
+        TimerRaised(_count_raised)
+
+    def _collect():
+        if done:
+            return
+        acton.rts.gc(t.env.syscap)
+        after 0.1: _collect()
+    after 0: _collect()

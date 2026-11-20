@@ -1,0 +1,61 @@
+# Timer handles bound to other names than a public name of main's body: locals
+# of a method, which keeps them across a call to another actor before it
+# cancels, also with after now, a hidden name of the actor body, and a public
+# name of another actor's body, which main reads and cancels through.
+#
+# The cancel through w.h is the one cancel here from another actor than the
+# one that set the timer, so it races the start of the timer's code. Both
+# Worker's timer and check() count from the same logical time, the time of
+# main's first message, so the timer always comes due before check(), and a
+# cancel that comes too late is caught. main has 2 seconds from the start of
+# the program to cancel, which covers a slow start on a loaded machine.
+
+actor Watchdog(env):
+    after 10.0: env.exit(1)
+
+actor Echo():
+    def echo(x: int) -> int:
+        return x
+
+actor Worker(env):
+    def boom_attribute():
+        print("BOOM: timer cancelled through an attribute still ran")
+        env.exit(1)
+
+    h = after 2.0: boom_attribute()
+
+actor main(env):
+    wd = Watchdog(env)
+    e = Echo()
+    w = Worker(env)
+
+    def boom_local():
+        print("BOOM: timer cancelled through a local still ran")
+        env.exit(1)
+
+    def boom_local_now():
+        print("BOOM: after now timer cancelled through a local still ran")
+        env.exit(1)
+
+    def boom_hidden():
+        print("BOOM: timer cancelled through a hidden name still ran")
+        env.exit(1)
+
+    def set_and_cancel():
+        h = after 0.3: boom_local()
+        hn = after now 0.3: boom_local_now()
+        # The call to another actor makes the rest of this method a
+        # continuation, which keeps h and hn
+        if e.echo(1) == 1:
+            h.cancel()
+            hn.cancel()
+
+    def check():
+        print("cancelled timers did not run")
+        env.exit(0)
+
+    _h = after 0.3: boom_hidden()
+    _h.cancel()
+    w.h.cancel()
+    set_and_cancel()
+    after 2.5: check()

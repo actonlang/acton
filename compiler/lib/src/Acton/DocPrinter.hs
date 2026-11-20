@@ -3041,6 +3041,7 @@ extractActorMembers :: Suite -> ([(Name, Maybe Type)], [(Name, Maybe Type)], [(N
 extractActorMembers stmts = foldr extractMember ([], [], []) stmts
   where
     extractMember (Assign _ [PVar _ n ann] _) (publics, internals, methods) = ((n, ann) : publics, internals, methods)
+    extractMember (After _ (Just (PVar _ n ann)) _ _ _) (publics, internals, methods) = ((n, ann) : publics, internals, methods)
     extractMember (VarAssign _ [PVar _ n ann] _) (publics, internals, methods) = (publics, (n, ann) : internals, methods)
     extractMember (Signature _ [n] (TSchema _ _ t) _) (publics, internals, methods) =
         case t of
@@ -3436,18 +3437,8 @@ docActorBodyHtmlWithGenericsTypesAndClasses tenv generics classNames stmts =
 partitionActorMembersHtmlWithGenericsTypesAndClasses :: TEnv -> Set Name -> Set Name -> Suite -> ([Doc], [Doc], [(Name, QBinds, PosPar, KwdPar, Maybe Type, Maybe String)])
 partitionActorMembersHtmlWithGenericsTypesAndClasses tenv generics classNames stmts = foldl partition ([], [], []) stmts
   where
-    partition (publics, internals, methods) (Assign _ [PVar _ n ann] _) =
-        let enrichedType = case ann of
-                Just t -> Just t
-                Nothing -> case lookup n tenv of
-                    Just (NSig (TSchema _ _ t) _ _) -> Just t
-                    Just (NDef (TSchema _ _ t) _ _) -> Just t
-                    _ -> Nothing
-            doc = case enrichedType of
-                Just t -> text "<div class=\"attribute-item\"><code>" <> pretty n <> text "</code>: <span class=\"type\">" <>
-                          text (renderTypeWithGenericsConstraintsAndClasses generics [] classNames t) <> text "</span></div>"
-                Nothing -> text "<div class=\"attribute-item\"><code>" <> pretty n <> text "</code></div>"
-        in (publics ++ [doc], internals, methods)
+    partition acc (Assign _ [PVar _ n ann] _) = publicAttr acc n ann
+    partition acc (After _ (Just (PVar _ n ann)) _ _ _) = publicAttr acc n ann
     partition (publics, internals, methods) (VarAssign _ [PVar _ n ann] _) =
         let doc = case ann of
                 Just t -> text "<div class=\"attribute-item\"><code>" <> pretty n <> text "</code>: <span class=\"type\">" <>
@@ -3463,6 +3454,19 @@ partitionActorMembersHtmlWithGenericsTypesAndClasses tenv generics classNames st
     partition (publics, internals, methods) (Decl _ decls) =
         foldl extractDeclMember (publics, internals, methods) decls
     partition acc _ = acc
+
+    publicAttr (publics, internals, methods) n ann =
+        let enrichedType = case ann of
+                Just t -> Just t
+                Nothing -> case lookup n tenv of
+                    Just (NSig (TSchema _ _ t) _ _) -> Just t
+                    Just (NDef (TSchema _ _ t) _ _) -> Just t
+                    _ -> Nothing
+            doc = case enrichedType of
+                Just t -> text "<div class=\"attribute-item\"><code>" <> pretty n <> text "</code>: <span class=\"type\">" <>
+                          text (renderTypeWithGenericsConstraintsAndClasses generics [] classNames t) <> text "</span></div>"
+                Nothing -> text "<div class=\"attribute-item\"><code>" <> pretty n <> text "</code></div>"
+        in (publics ++ [doc], internals, methods)
 
     extractDeclMember (publics, internals, methods) (Def _ n q p k ret body _ _ ddoc) =
         (publics, internals, methods ++ [(n, q, p, k, ret, ddoc)])

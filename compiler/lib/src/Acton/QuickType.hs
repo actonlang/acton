@@ -436,6 +436,7 @@ instance EnvOf KwdPat where
 instance EnvOf Stmt where
     envOf (Assign _ ps e)           = envOf ps
     envOf (VarAssign _ ps e)        = envOf ps
+    envOf (After _ mbp _ _ _)       = envOf mbp
     envOf (Decl _ ds)               = envOf ds
     envOf (Signature _ ns sc dec)   = [ (n, NSig sc dec Nothing) | n <- ns ]
     envOf (If _ [Branch e ss] fin)

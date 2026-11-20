@@ -1,0 +1,9 @@
+actor main(env):
+    def tick():
+        pass
+
+    def start():
+        timers = {}
+        timers["tick"] = after 1.0: tick()
+
+    start()

@@ -1,0 +1,11 @@
+Building file test/syntaxerrors/err43.act using temporary scratch directory
+[error Syntax error]: An after statement binds its timer to a plain name only
+     +--> test/syntaxerrors/err43.act@2:5-2:13
+     |
+   2 |     var h = after 1.0: env.exit(0)
+     :     ^------- 
+     :     `- An after statement binds its timer to a plain name only
+     :
+     | Note: The statement h = after d: f() binds the timer to h
+     | Hint: Bind the timer to a plain name and assign that name where the timer should go
+-----+

@@ -1,0 +1,19 @@
+# A timer whose code raises an exception that nothing catches. Nothing can
+# await a timer, so the worker stores no exception in its message: the runtime
+# prints the exception and goes on with the actor's next message.
+
+actor Watchdog(env):
+    after 10.0: env.exit(1)
+
+actor main(env):
+    wd = Watchdog(env)
+
+    def boom():
+        raise ValueError("raised in the code of a timer")
+
+    def check():
+        print("the actor went on after its timer raised")
+        env.exit(0)
+
+    after 0.1: boom()
+    after 0.3: check()

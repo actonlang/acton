@@ -155,6 +155,7 @@ typedef struct B_Msg *B_Msg;
 typedef struct $ConstCont *$ConstCont;
 
 extern struct B_MsgG_class B_MsgG_methods;
+extern struct B_TimerHandleG_class B_TimerHandleG_methods;
 extern struct $ActorG_class $ActorG_methods;
 extern struct $CatcherG_class $CatcherG_methods;
 extern struct $ContG_class $DoneG_methods;
@@ -187,6 +188,12 @@ struct B_Msg {
     $Actor $waiting;
     time_t $baseline;
     $Lock $wait_lock;
+    // Cancellation state of a timer message, TIMER_* below, in the padding
+    // after $wait_lock, so that B_Msg keeps its size. Read and changed with
+    // atomic operations: cancel(), the worker that is about to run the
+    // message's continuation and handle_timeout can act on it at the same
+    // time.
+    uint8_t $timer;
     // Ready stamp (stamp_us in rts.c), in the padding after $wait_lock: the
     // time ENQ_ready was given when it last made the actor ready to run this
     // message. That is the end of the continuation whose result the worker
@@ -194,6 +201,33 @@ struct B_Msg {
     uint32_t $ready_us;
     $WORD value;
     $int64 $globkey;
+};
+
+// States of B_Msg.$timer. A message starts TIMER_NONE, except a timer, the
+// message of $AFTER or $AFTER_NOW, which starts TIMER_PENDING.
+// TimerHandle.cancel() turns TIMER_PENDING into TIMER_CANCELLED, and the
+// worker that is about to run the continuation of a TIMER_PENDING message
+// turns it into TIMER_STARTED first. Both are compare-and-swaps, so only one
+// of them happens: either the continuation never runs, or cancel() comes too
+// late and does nothing. cancel() takes the message out of no queue. It goes
+// on like any timer, from the outgoing queue to the timer queue or the
+// mailbox, and the RTS drops it where it gets to it: in handle_timeout, which
+// takes it from the timer queue when it is due and does not put it in the
+// mailbox, or in the worker that takes it from the mailbox and finishes it
+// without running the continuation.
+#define TIMER_NONE       0      // not a timer
+#define TIMER_PENDING    1      // a timer that cancel() can still stop
+#define TIMER_STARTED    2      // a timer whose continuation has started
+#define TIMER_CANCELLED  3      // dropped instead of run
+
+// The TimerHandle builtin (class TimerHandle in __builtin__.act), which
+// "h = after d: f()" binds. It refers to the timer message it can cancel. The
+// compiler generates its class struct, in out/types/__builtin__.h, which
+// builtin.h includes. The object layout is declared here, and the methods are
+// defined in rts.c.
+struct B_TimerHandle {
+    struct B_TimerHandleG_class *$class;
+    B_Msg $msg;             // the timer message that $AFTER or $AFTER_NOW made
 };
 
 struct $ActorG_class {
@@ -262,8 +296,9 @@ struct $ConstCont {
 $Cont $CONSTCONT($WORD, $Cont);
 
 B_Msg $ASYNC($Actor, $Cont);
-B_Msg $AFTER(B_float, $Cont);
-B_Msg $AFTER_NOW(B_float, $Cont);
+B_TimerHandle $AFTER(B_float, $Cont);
+B_TimerHandle $AFTER_NOW(B_float, $Cont);
+B_TimerHandle B_TimerHandleG_newX(B_Msg m);
 $R $AWAIT($Cont, B_Msg);
 
 void init_db_queue(int64_t key);
@@ -367,6 +402,13 @@ B_str B_MsgD___str__(B_Msg self);
 B_str B_MsgD___repr__(B_Msg self);
 void B_MsgD___serialize__(B_Msg self, $Serial$state state);
 B_Msg B_MsgD___deserialize__(B_Msg res, $Serial$state state);
+
+bool B_TimerHandleD___bool__(B_TimerHandle self);
+B_str B_TimerHandleD___str__(B_TimerHandle self);
+B_str B_TimerHandleD___repr__(B_TimerHandle self);
+void B_TimerHandleD___serialize__(B_TimerHandle self, $Serial$state state);
+B_TimerHandle B_TimerHandleD___deserialize__(B_TimerHandle res, $Serial$state state);
+B_NoneType B_TimerHandleD_cancel(B_TimerHandle self);
 
 
 $ROW $serialize_rts();

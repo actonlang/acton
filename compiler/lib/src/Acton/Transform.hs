@@ -131,7 +131,7 @@ instance Transform Stmt where
       where env1                        = bindscope (bound is) env
     trans env (Data l mbp ss)           = Data l mbp (trans env ss)
     trans env (VarAssign l ps e)        = VarAssign l ps (trans env e)
-    trans env (After l now e e')        = After l now (trans env e) (trans env e')
+    trans env (After l mbp now e e')    = After l mbp now (trans env e) (trans env e')
     trans env (Decl l ds)               = Decl l (trans env ds)
     trans env s                         = s
 

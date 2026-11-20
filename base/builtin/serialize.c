@@ -18,6 +18,8 @@ static struct B_ValueError B_serialize_unregistered_class_error =
     STATIC_EXCEPTION(B_ValueError, "serialize: class not registered");
 static struct B_ValueError B_serialize_actor_error =
     STATIC_EXCEPTION(B_ValueError, "serialize: cannot serialize actors");
+static struct B_ValueError B_serialize_timer_handle_error =
+    STATIC_EXCEPTION(B_ValueError, "serialize: cannot serialize timer handles");
 static struct B_ValueError B_serialize_graph_too_large_error =
     STATIC_EXCEPTION(B_ValueError, "serialize: object graph too large");
 static struct B_ValueError B_serialize_object_too_large_error =
@@ -120,8 +122,17 @@ void $step_serialize($WORD self, $Serial$state state) {
             RAISE_EXC(&B_serialize_unregistered_class_error);
         if (class_id > ITEM_ID) { // not one of the Acton builtin datatypes, which have hand-crafted serializations
             if (!state->globmap && issubtype(class_id, ACTOR_ID))
-                // This also catches Msg or Cont because they reference the target actor transitively
+                // This also catches a Msg that an async call made, through the
+                // actor in its $to
                 RAISE_EXC(&B_serialize_actor_error);
+            if (!state->globmap && class_id == TIMERHANDLE_ID)
+                // The copy that deserialize made would refer to a copy of the
+                // timer's message, which is in no timer queue, so its cancel()
+                // would cancel nothing. The handle is also the only reference
+                // to a timer's message that Acton code gets, and that message
+                // refers to no actor once it is done or dropped (drop_timer in
+                // rts.c), so this check keeps serialize() away from it.
+                RAISE_EXC(&B_serialize_timer_handle_error);
             if (state->globmap) {
                 int64_t key = (int64_t)state->globmap(self);
                 if (key < 0) {
