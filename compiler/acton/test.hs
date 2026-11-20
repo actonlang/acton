@@ -12,7 +12,7 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString.Lazy.Char8 as LBS
 
-import Control.Exception (catch, IOException)
+import Control.Exception (catch, onException, IOException)
 import System.Directory
 import System.Directory.Recursive
 import System.Environment (getEnvironment, lookupEnv)
@@ -22,6 +22,12 @@ import System.FilePath.Posix
 import System.IO (IOMode(..), withBinaryFile)
 import System.Process
 import System.TimeIt
+import Control.Concurrent (threadDelay)
+import qualified System.IO as IO
+import qualified System.Posix.IO as PIO
+import qualified System.Posix.IO.ByteString as PIOB
+import qualified System.Posix.Signals as PS
+import qualified System.Posix.Terminal as PT
 import System.IO.Temp (withSystemTempDirectory)
 import qualified System.Info
 import qualified System.Timeout
@@ -3799,6 +3805,118 @@ workerStackTests = testGroup "worker stacks" $
   | System.Info.os == "linux"
   ]
 
+-- test/rts/stdio_raw and test/rts/stdio_raw_wait run with stdin on a new
+-- pseudo terminal, which these tests set to cooked mode first, and stdout and
+-- stderr on pipes. The tests read the settings of the terminal through its
+-- slave and type keys into its master. The terminal is not the controlling
+-- terminal of the program, so the keys that send signals in cooked mode send
+-- none, but the terminal does not pass them on to the program either.
+stdioTerminalTests = testGroup "stdio terminal" $
+  if System.Info.os `notElem` ["darwin", "linux"] then [] else
+  [ testCase "raw mode passes every key on and set_stdin(raw=False) restores the terminal" $ do
+      testBuildThing "" ExitSuccess False "../../test/rts/stdio_raw.act"
+      env0 <- getEnvironment
+      withPtyProgram "stdio_raw" env0 $ \master slave hOut ph -> do
+        line <- readLineWithin hOut
+        assertEqual "stdin and stdout" "stdin_is_tty True is_tty False" line
+        ttys <- readLineWithin hOut
+        assertEqual "stdin readers after two stdin_install" "tty handles 1" ttys
+        expectReady hOut
+        assertRawMode slave
+        -- Ctrl-C, Ctrl-Z, Ctrl-\, Ctrl-S, Ctrl-Q, Ctrl-V, Ctrl-Y, Ctrl-O, Enter
+        let keys = [3, 26, 28, 19, 17, 22, 25, 15, 13]
+        forM_ keys $ \k -> do
+          _ <- PIOB.fdWrite master (BS.singleton k)
+          threadDelay 20000
+        got <- readLineWithin hOut
+        assertEqual "bytes from the stdin handler" ("got [" ++ intercalate ", " (map show keys) ++ "]") got
+        cooked <- readLineWithin hOut
+        assertEqual "after set_stdin(raw=False)" "cooked" cooked
+        assertCookedMode slave
+        code <- waitWithin ph
+        assertEqual "exit code" ExitSuccess code
+        assertCookedMode slave
+  , testCase "the terminal is restored when a signal ends the program" $ do
+      testBuildThing "" ExitSuccess False "../../test/rts/stdio_raw_wait.act"
+      env0 <- getEnvironment
+      -- The crash handler starts lldb or gdb for a backtrace. With PATH on a
+      -- directory that does not exist it finds neither and goes on at once.
+      let noDebugger = ("PATH", "/nonexistent") : filter ((/= "PATH") . fst) env0
+      forM_ [ ("SIGHUP", PS.sigHUP, ExitFailure (-1), env0)
+            , ("SIGQUIT", PS.sigQUIT, ExitFailure (-3), env0)
+            , ("SIGINT", PS.sigINT, ExitSuccess, env0)
+            , ("SIGTERM", PS.sigTERM, ExitSuccess, env0)
+            , ("SIGSEGV", PS.sigSEGV, ExitFailure (-11), noDebugger)
+            ] $ \(name, sig, expCode, env) ->
+        withPtyProgram "stdio_raw_wait" env $ \_ slave hOut ph -> do
+          expectReady hOut
+          assertRawMode slave
+          Just pid <- getPid ph
+          PS.signalProcess sig pid
+          code <- waitWithin ph
+          assertEqual ("exit code after " ++ name) expCode code
+          assertCookedModeAfter ("after " ++ name) slave
+  , testCase "stdin_is_tty, stdout_is_tty and stderr_is_tty check their own stream" $ do
+      testBuildThing "" ExitSuccess False "../../test/rts/stdio_is_tty.act"
+      wd <- canonicalizePath "../../test/rts"
+      -- One stream on the slave of a new pseudo terminal, the others on pipes
+      forM_ [ ("stdin", "stdin True stdout False stderr False is_tty False")
+            , ("stdout", "stdin False stdout True stderr False is_tty True")
+            , ("stderr", "stdin False stdout False stderr True is_tty False")
+            ] $ \(stream, expected) -> do
+        (master, slave) <- PT.openPseudoTerminal
+        hPty <- PIO.dup slave >>= PIO.fdToHandle
+        let on s = if s == stream then UseHandle hPty else CreatePipe
+        (mIn, mOut, mErr, ph) <- createProcess (proc "./stdio_is_tty" [])
+            { cwd = Just wd, std_in = on "stdin", std_out = on "stdout", std_err = on "stderr" }
+        line <- readLineWithin (head (catMaybes [mOut, mErr]))
+        assertEqual ("with " ++ stream ++ " on a terminal") expected line
+        code <- waitWithin ph
+        assertEqual "exit code" ExitSuccess code
+        mapM_ IO.hClose (catMaybes [mIn, mOut, mErr])
+        mapM_ PIO.closeFd [master, slave]
+  ]
+  where
+    withPtyProgram exe env body = do
+      (master, slave) <- PT.openPseudoTerminal
+      attrs <- PT.getTerminalAttributes slave
+      PT.setTerminalAttributes slave (setModes attrs) PT.Immediately
+      hIn <- PIO.dup slave >>= PIO.fdToHandle
+      wd <- canonicalizePath "../../test/rts"
+      (_, Just hOut, Just hErr, ph) <- createProcess (proc ("./" ++ exe) [])
+          { cwd = Just wd, env = Just env, std_in = UseHandle hIn, std_out = CreatePipe, std_err = CreatePipe }
+      body master slave hOut ph
+        `onException` (terminateProcess ph >> IO.hGetContents hErr >>= IO.hPutStr IO.stderr)
+      mapM_ IO.hClose [hOut, hErr]
+      mapM_ PIO.closeFd [master, slave]
+    readLineWithin h = do
+      r <- System.Timeout.timeout (30*1000000) (IO.hGetLine h)
+      maybe (assertFailure "the program printed no line within 30 s") return r
+    expectReady h = do
+      line <- readLineWithin h
+      assertEqual "program output" "ready" line
+    waitWithin ph = do
+      r <- System.Timeout.timeout (30*1000000) (waitForProcess ph)
+      maybe (assertFailure "the program did not exit within 30 s") return r
+    -- The modes that raw mode turns off, and the output modes that it keeps
+    cookedModes = [ ("ISIG", PT.KeyboardInterrupts), ("IXON", PT.StartStopOutput)
+                  , ("IEXTEN", PT.ExtendedFunctions), ("ICRNL", PT.MapCRtoLF)
+                  , ("ICANON", PT.ProcessInput), ("ECHO", PT.EnableEcho) ]
+    outputModes = [ ("OPOST", PT.ProcessOutput), ("ONLCR", PT.MapLFtoCRLF) ]
+    setModes attrs = foldl PT.withMode attrs (map snd (cookedModes ++ outputModes))
+    modesOf slave = do
+      attrs <- PT.getTerminalAttributes slave
+      return [ (n, PT.terminalMode m attrs) | (n, m) <- cookedModes ++ outputModes ]
+    assertRawMode slave = do
+      ms <- modesOf slave
+      assertEqual "terminal modes in raw mode"
+                  ([ (n, False) | (n, _) <- cookedModes ] ++ [ (n, True) | (n, _) <- outputModes ]) ms
+    assertCookedModeAfter what slave = do
+      ms <- modesOf slave
+      assertEqual ("terminal modes " ++ what)
+                  [ (n, True) | (n, _) <- cookedModes ++ outputModes ] ms
+    assertCookedMode = assertCookedModeAfter "in cooked mode"
+
 rtsTests =
   testGroup "RTS"
   [
@@ -3806,6 +3924,7 @@ rtsTests =
           testBuildAndRun "" "foo --bar --rts-verbose" ExitSuccess False "../../test/rts/argv1.act"
 
   ,   workerStackTests
+  ,   stdioTerminalTests
 
   ,   testCase "arg parsing: --rts-verbose --rts-wthreads 7 foo --bar" $ do
           testBuildAndRun "" "--rts-verbose --rts-wthreads 7 foo --bar" ExitSuccess False "../../test/rts/argv2.act"

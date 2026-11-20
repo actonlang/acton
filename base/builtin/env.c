@@ -63,11 +63,46 @@ $R B_StdioD_errbG_local (B_Stdio self, $Cont c$cont, B_bytes b) {
     return $R_CONT(c$cont, B_None);
 }
 
-$R B_StdioD_set_stdinG_local (B_Stdio self, $Cont c$cont, B_bool canonical, B_bool echo) {
+#if defined(_WIN32) || defined(_WIN64)
+#else
+// While stdin is in raw mode, stdin_raw is set and stdin_cooked_attr holds the
+// settings from before raw mode, which set_stdin(raw=False) puts back. Only
+// the Stdio actor reads and writes them.
+static bool stdin_raw = false;
+static struct termios stdin_cooked_attr;
+
+// Raw mode, like UV_TTY_MODE_RAW of libuv: every byte is passed on as it
+// arrives, without echo, signals (ISIG: ^C ^Z ^\), flow control (IXON: ^S ^Q),
+// literal next and delayed suspend (IEXTEN: ^V, and ^Y on macOS) or CR to NL
+// mapping. The output flags are not changed, so OPOST and ONLCR keep turning
+// "\n" into CR LF.
+static void make_raw(struct termios *attr) {
+    attr->c_iflag &= ~(BRKINT | ICRNL | IGNCR | INLCR | INPCK | ISTRIP | IXON);
+    attr->c_cflag = (attr->c_cflag & ~CSIZE) | CS8;
+    attr->c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
+    attr->c_cc[VMIN] = 1;
+    attr->c_cc[VTIME] = 0;
+}
+#endif
+
+$R B_StdioD_set_stdinG_local (B_Stdio self, $Cont c$cont, B_bool canonical, B_bool echo, B_bool raw) {
 #if defined(_WIN32) || defined(_WIN64)
 #else
     struct termios attr;
-    tcgetattr(STDIN_FILENO, &attr);
+    if (tcgetattr(STDIN_FILENO, &attr) != 0)
+        return $R_CONT(c$cont, B_None);
+
+    if (raw != NULL) {
+        if (fromB_bool(raw) == true) {
+            if (!stdin_raw)
+                stdin_cooked_attr = attr;
+            stdin_raw = true;
+            make_raw(&attr);
+        } else if (stdin_raw) {
+            stdin_raw = false;
+            attr = stdin_cooked_attr;
+        }
+    }
 
     if (canonical != NULL) {
         if (fromB_bool(canonical) == true) {
@@ -91,10 +126,18 @@ $R B_StdioD_set_stdinG_local (B_Stdio self, $Cont c$cont, B_bool canonical, B_bo
     return $R_CONT(c$cont, B_None);
 }
 
+// The one stdin reader of the process, with the callback of the last
+// stdin_install in its data. A second reader on the terminal would race the
+// first for its bytes, since libuv opens the terminal anew for each handle.
+// The reader runs on the loop of the worker that the Stdio actor is pinned
+// to, so only that worker's thread reads and writes it.
+static uv_tty_t *stdin_tty = NULL;
+
 void read_stdin(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
     if (nread < 0){
         if (nread == UV_EOF) {
             uv_close((uv_handle_t *)stream, NULL);
+            stdin_tty = NULL;
         }
     } else if (nread > 0) {
         if (stream->data) {
@@ -105,13 +148,19 @@ void read_stdin(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
 }
 
 $R B_StdioD__on_stdin_bytesG_local (B_Stdio self, $Cont c$cont, $action cb) {
+    if (stdin_tty != NULL) {
+        stdin_tty->data = cb;
+        return $R_CONT(c$cont, B_None);
+    }
     // This should be the only call in Stdio that uses the libuv loop, so it is
     // safe to pin affinity here (and not earlier).
     pin_actor_affinity();
     uv_tty_t *tty = acton_malloc_rescanned(sizeof(uv_tty_t));
-    uv_tty_init(get_uv_loop(), tty, STDIN_FILENO, 1);
+    if (uv_tty_init(get_uv_loop(), tty, STDIN_FILENO, 1) != 0)
+        return $R_CONT(c$cont, B_None);
     tty->data = cb;
     uv_read_start((uv_stream_t*)tty, alloc_buffer, read_stdin);
+    stdin_tty = tty;
     return $R_CONT(c$cont, B_None);
 }
 
