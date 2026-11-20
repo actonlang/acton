@@ -1631,6 +1631,23 @@ class EnvRTS:
         """
         NotImplemented
 
+    def fd_stats(self) -> (open: ?u64, limit: ?u64):
+        """Read the number of open file descriptors and how many may be open.
+
+        open counts every descriptor of the process: files, sockets, pipes,
+        stdin, stdout and stderr, and those of the RTS itself. Other actors
+        can open and close descriptors while it is counted. It is None when
+        the descriptors cannot be listed, as when the process has as many
+        open as limit. On Windows, open counts the handles of the process,
+        of every kind, threads and events included.
+
+        limit is the most descriptors the process may have open. The RTS
+        raises it to the hard limit at startup. On macOS it is at most
+        kern.maxfilesperproc. On Windows it is None, since Windows sets no
+        such limit.
+        """
+        NotImplemented
+
     def perf_info(self) -> dict[str, str]:
         """Describe the performance counter backend, scope and machine."""
         NotImplemented
