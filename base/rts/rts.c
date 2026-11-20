@@ -650,6 +650,7 @@ void $ActorD___init__($Actor a) {
     a->$next = NULL;
     a->B_Msg = NULL;
     a->$outgoing = NULL;
+    a->$newborns = NULL;
     a->$waitsfor = NULL;
     a->$consume_hd = 0;
     a->$catcher = NULL;
@@ -694,6 +695,7 @@ $Actor $ActorD___deserialize__($Actor res, $Serial$state state) {
     res->$next = NULL;
     res->B_Msg = NULL;
     res->$outgoing = NULL;
+    res->$newborns = NULL;
     ACTON_STORE(res, res->$waitsfor, $step_deserialize(state));
     res->$consume_hd = (long)$val_deserialize(state);
     ACTON_STORE(res, res->$catcher, $step_deserialize(state));
@@ -1278,6 +1280,13 @@ B_NoneType $ConstructionEnd($Actor parent) {
         REGISTER_ACTOR(entry->actor->$globkey);
         if (entry->finalizer)
             GC_register_finalizer(entry->actor, entry->finalizer, NULL, NULL, NULL);
+#ifdef ACTON_DB
+        if (db) {
+            if (!parent->$newborns)
+                ACTON_STORE(parent, parent->$newborns, B_listG_new(NULL, NULL));
+            B_list_base_append((B_list_base)parent->$newborns, entry->actor);
+        }
+#endif
     }
     // Keep earlier parent sends first, then all startup messages, then the
     // ordinary construction sends. No target is scheduled until parent flushes.
@@ -1937,6 +1946,15 @@ void serialize_actor($Actor a, uuid_t *txnid) {
         out = out->$next;
     }
 }
+
+// A constructor need not send its actor a message. Save its initial state
+// with the parent before any construction output becomes runnable.
+void serialize_newborns($Actor parent, uuid_t *txnid) {
+    B_list actors = parent->$newborns;
+    if (actors)
+        for (int64_t i = 0; i < actors->length; i++)
+            serialize_actor(($Actor)actors->data[i], txnid);
+}
 #endif
 
 void BOOTSTRAP(int argc, char *argv[]) {
@@ -2007,6 +2025,7 @@ void save_actor_state($Actor current, B_Msg m, uint32_t ready_us) {
                         continue;
                     current->$consume_hd++;
                     serialize_actor(current, txnid);
+                    serialize_newborns(current, txnid);
                     FLUSH_outgoing_db(current, txnid);
                     serialize_msg(current->B_Msg, txnid);
 
@@ -2032,6 +2051,8 @@ void save_actor_state($Actor current, B_Msg m, uint32_t ready_us) {
                     if(ret2 == VAL_STATUS_COMMIT)
                         success = 1;
                 }
+                if (success)
+                    ACTON_STORE(current, current->$newborns, NULL);
                 FLUSH_outgoing_local(current, ready_us);
             } else {
 #endif
@@ -2778,6 +2799,7 @@ void wt_work_cb(uv_check_t *ev) {
                     if(txnid == NULL)
                         continue;
                     serialize_actor(current, txnid);
+                    serialize_newborns(current, txnid);
                     FLUSH_outgoing_db(current, txnid);
                     serialize_msg(current->B_Msg, txnid);
                     ret = remote_commit_txn(txnid, &minority_status, db);
@@ -2787,6 +2809,8 @@ void wt_work_cb(uv_check_t *ev) {
                     if(ret == VAL_STATUS_COMMIT)
                         success = 1;
                 }
+                if (success)
+                    ACTON_STORE(current, current->$newborns, NULL);
             } else {
 #endif
                 reverse_outgoing_queue(current);

@@ -759,6 +759,7 @@ clActor             = NClass [] (leftpath [cValue]) te Nothing
                         (primKW "msg_lock",   NSig (monotype $ tCon $ TC (gPrim "Lock") []) Property Nothing),
                         (primKW "affinity",   NSig (monotype $ tCon $ TC (gPrim "int64") []) Property Nothing),
                         (primKW "outgoing",   NSig (monotype (tMsg tWild)) Property Nothing),
+                        (primKW "newborns",   NSig (monotype (tList tActor)) Property Nothing),
                         (primKW "waitsfor",   NSig (monotype (tMsg tWild)) Property Nothing),
                         (primKW "consume_hd", NSig (monotype $ tCon $ TC (gPrim "int64") []) Property Nothing),
                         (primKW "catcher",    NSig (monotype $ tCon $ TC (gPrim "Catcher") []) Property Nothing),

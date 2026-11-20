@@ -217,6 +217,7 @@ struct $Actor {
     $Lock B_Msg_lock;
     $int64 $affinity;
     B_Msg $outgoing;
+    B_list $newborns;                 // Initial states pending the parent's DB commit
     B_Msg $waitsfor;
     $int64 $consume_hd;
     $Catcher $catcher;

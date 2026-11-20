@@ -113,6 +113,7 @@ struct deactQ_Apa {
     $Lock $msg_lock;
     $int64 $affinity;
     B_Msg $outgoing;
+    B_list $newborns;
     B_Msg $waitsfor;
     $int64 $consume_hd;
     $Catcher $catcher;
@@ -143,6 +144,7 @@ struct deactQ_Bepa {
     $Lock $msg_lock;
     $int64 $affinity;
     B_Msg $outgoing;
+    B_list $newborns;
     B_Msg $waitsfor;
     $int64 $consume_hd;
     $Catcher $catcher;
@@ -171,6 +173,7 @@ struct deactQ_main {
     $Lock $msg_lock;
     $int64 $affinity;
     B_Msg $outgoing;
+    B_list $newborns;
     B_Msg $waitsfor;
     $int64 $consume_hd;
     $Catcher $catcher;
