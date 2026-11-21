@@ -158,7 +158,7 @@ fn makeConfigHeader(
 ) *std.Build.Step.ConfigHeader {
     const t = target.result;
     return b.addConfigHeader(.{
-        .style = .{ .autoconf_undef = src.path("config.in") },
+        .style = .{ .autoconf_header = src.path("config.in") },
         .include_path = "config.h",
     }, .{
         .AC_APPLE_UNIVERSAL_BUILD = null,
