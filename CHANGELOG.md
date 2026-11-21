@@ -25,6 +25,9 @@
   UTF-8 decoding during program startup. [#3301]
 
 ### Compiler & Build
+- Reuse compiled runtime and bundled native libraries between projects,
+  avoiding a separate rebuild for every project directory. Resolved dependency
+  paths let Zig reuse the same cached objects across projects. [#3411]
 - Speed up compilation of large generated modules through compact name
   storage, cheaper name comparisons, and concurrent content hashing. On an
   M4 Pro, compact name storage reduced Acton compilation of half the generated
@@ -61,6 +64,12 @@
 - Avoid allocating temporary attribute-name strings in generated
   `__get_attr__()` methods, reducing allocation and garbage-collection work
   during reflective property lookup. [#3374]
+- Reduce temporary allocation for builtin slicing such as
+  `items[start:stop:step]`. Keep fresh slice objects and their integer bounds
+  on the C stack for lists, immutable lists, strings, bytes, and bytearrays,
+  including slice assignment and deletion on lists and bytearrays. Stored
+  slices and generic or user-defined slicing keep their usual allocation
+  behavior. [#3402]
 - Reduce allocation in synchronous `for` loops over builtin collections by
   keeping compiler-created iterators on the C stack. This covers mutable and
   immutable lists, dictionaries and sets, dictionary keys/values/items,
@@ -87,9 +96,12 @@
   integer shifts, such as `(value >> n) & mask`. Mixing an `int` shift count
   with a signed or unsigned fixed-width operand no longer introduces invalid
   pointer casts in generated C. [#3382]
-- Keep symbols needed by dynamic module libraries in optimized macOS
-  executables, fixing release builds that fail to load a library with a
-  `symbol not found in flat namespace` error. [#3298]
+- Build dynamic module libraries with their package dependencies' headers,
+  allowing REPL inputs such as `import std.math` to compile. On macOS,
+  include modules imported only by a dynamic library in its host executable
+  and retain their symbols in optimized builds, preventing load-time
+  missing-symbol errors and crashes when first importing a module in the
+  REPL. [#3298] [#3407] [#3412]
 - Keep cached output for modules with dots in their filenames, including
   names such as `y.root`, and binaries for nested modules such as `sub.x`,
   avoiding needless recompilation or reinstallation on every full build.
@@ -169,14 +181,40 @@
   and `std.json.encode(...)`: aon, argparse, base64, buildy, compress.gzip,
   compress.zlib, crypto.hash.md5, diff, hash.wyhash, http, json, math, qcheck,
   random, re, term, uri and xml. Base keeps `__builtin__`, `testing`,
-  `logging`, `time`, `file`, `fs`, `net` and `matrix`.
+  `logging`, `time`, `file`, `fs`, `net` and `matrix`. The guide and examples
+  use the new imports. [#3408] [#3410]
 - Breaking: `testing` keeps the test types and asserts, and the test runner
-  moved to `std.testing.runner`, which the generated `test_main` of a module
-  that imports `testing` calls. `NotEqualError` takes `print_diff` instead of
-  `diff_str`, and the runner renders the diff when it reports the failure, so
-  `str()` of a `NotEqualError` no longer contains the diff.
+  moved to `std.testing.runner`. Test discovery imports the runner automatically
+  for modules that import `testing`; custom runners must use the new namespace.
+  `NotEqualError` takes `print_diff` instead of `diff_str`, and the runner
+  renders the diff when it reports the failure, so `str()` of a `NotEqualError`
+  no longer contains the diff. [#3409]
 - Breaking: remove the `snappy` module. Use the
   [acton-snappy](https://github.com/actonlang/acton-snappy) package instead.
+  [#3415]
+- Reduce HTTP response sizes by enabling `compress=True` on `std.http.Listener`
+  or `std.http.TLSListener`. Text responses of at least 1 KiB use gzip or deflate
+  according to `Accept-Encoding` when compression makes them smaller. Partial
+  and already encoded responses stay unchanged. Cache headers vary on
+  `Accept-Encoding`, and existing strong ETags become weak after compression.
+  `std.http.Client` requests and decodes gzip/deflate responses by default,
+  removing `Content-Encoding` and `Content-Length` after decoding. Set
+  `compress=False` to disable this client behavior. [#3404]
+- Send binary response bodies through `std.http.Server` and `std.http.TLSServer`,
+  enabling transfer of binary content like images and response compression.
+  [#3403]
+- Compress and decompress byte buffers in gzip and zlib formats with
+  `std.compress.gzip` and `std.compress.zlib`. Each module provides `compress()`
+  and `decompress()`; invalid compressed data raises `ValueError`. [#3404]
+- Inspect and control the runtime through `env.rts`, an `EnvRTS` object
+  that can be passed to components needing runtime access. Query collector
+  settings with `gc_info()`, heap and collection totals with `gc_stats()`,
+  process memory and CPU time with `process_stats()`, and worker names,
+  actual stack sizes, and scheduling counters with `worker_info()` and
+  `worker_stats()`. Stack sizes are `None` until available. Inspect I/O
+  handles across workers with `io_handles()` and control collection with
+  `gc()`, `enable_gc()`, and `disable_gc()`.
+  [#3399]
 - Add `std.syslog`, a new module for sending and receiving syslog messages
   over UDP, TCP, and TLS. Use `Client` and `Server` for UDP, or `StreamClient`
   and `StreamServer` for TCP and TLS. The module includes an RFC 5424 codec
@@ -202,13 +240,18 @@
   and run in the calling actor without a message to `Env`. The protocol adds
   `rand_int()`, `rand_float()`, `below(n)` and `between(lo, hi)`, with
   half-open ranges and no modulo bias. Take `EnvRandom` where the numbers must
-  be secure, and any `Random` where they need not be.
+  be secure, and any `Random` where they need not be. [#3424]
 - Add the seeded `Xoshiro256` generator to `std.random`, and the functions
   `shuffle(r, items)` and `shuffled(r, items)`, which take any `Random` and
   any sequence with a length and `int` indexes, such as `list`, `str` or
   `bytes`. `shuffle` reorders a mutable sequence in place; `shuffled` returns
   a reordered copy of the same type. A seed gives the same sequence on every
-  platform and from one release to the next.
+  platform and from one release to the next. [#3424]
+- Read the bound address and port with `endpoint()` on `net` UDP, TCP, and
+  TLS listeners, HTTP(S) listeners, and `std.syslog` servers. HTTP(S) listeners
+  also accept `on_listen(listener, error)`, reporting readiness with
+  `error=None`. Listen on port 0 and query `endpoint().port` from that callback
+  to discover the assigned free port. [#3418]
 - Use private CAs and client certificates with `net.TLSConnection` and
   `net.TLSListener` through `ca_pem`, `cert_pem`, and `key_pem`.
   Listeners request client certificates with `client_auth=True`. Set
@@ -229,18 +272,19 @@
   cancels an attempt in progress, and closing a listener aborts unfinished
   handshakes while keeping accepted connections open. Failed handshakes report
   certificate rejection reasons or peer alerts when available. [#3346]
-- Compile regular expressions once with `re.compile(pattern)` and reuse the
+- Compile regular expressions once with `std.re.compile(pattern)` and reuse the
   resulting `Pattern` across calls and actors. Count or replace non-overlapping
-  matches with `re.count(pattern, string)` and
-  `re.replace(pattern, string, replacement)`, or the corresponding `Pattern`
+  matches with `std.re.count(pattern, string)` and
+  `std.re.replace(pattern, string, replacement)`, or the corresponding `Pattern`
   methods, without building a `Match` object for each result. Replacement text
-  is literal: backslashes and group references are ordinary text. `re.matches`
-  and `re.split` also compile once per call instead of once per match. Compiled
-  patterns use PCRE2 JIT on ARM64 and x86_64, with interpreter fallback for
-  unsupported patterns, unavailable executable memory, JIT stack exhaustion,
-  and explicit resource limits. Scans avoid repeated UTF-8 validation and
-  duplicate zero-width matches. Temporary matching data uses C allocation to
-  reduce GC work and is freed even when matching or result construction raises.
+  is literal: backslashes and group references are ordinary text.
+  `std.re.matches` and `std.re.split` also compile once per call instead of once
+  per match. Compiled patterns use PCRE2 JIT on ARM64 and x86_64, with
+  interpreter fallback for unsupported patterns, unavailable executable memory,
+  JIT stack exhaustion, and explicit resource limits. Scans avoid repeated
+  UTF-8 validation and duplicate zero-width matches. Temporary matching data
+  uses C allocation to reduce GC work and is freed even when matching or
+  result construction raises.
   On an Apple M1 with a 25 MB input, a regex-redux program using bulk operations
   took 33% less elapsed time and 80% less peak memory than the previous
   implementation. JIT reduced median elapsed time for the bulk version from
@@ -281,6 +325,11 @@
   their zone so they can be used for replies. Interface names are supported on
   Unix; Windows requires numeric interface indices. Unknown interface names
   are rejected. [#3342]
+- Send UDP datagrams from a dual-stack `net.UDPListener` bound to `::` to
+  IPv4 addresses on macOS, matching Linux behavior. [#3431]
+- Make `net.lookup_aaaa()` report an error on macOS for IPv4 addresses and
+  names with only IPv4 addresses, instead of returning IPv4-mapped IPv6
+  addresses. [#3432]
 - Absorb UDP datagram bursts with `net.UDPListener`'s `recv_buffer_size`
   parameter and `set_recv_buffer_size()` and `get_recv_buffer_size()` methods.
   The default of 0 keeps the system receive-buffer size; the operating system
@@ -300,6 +349,14 @@
   timeouts. Environment services initialize before the root actor starts.
   The old `process` module and `Env` forwarding methods are removed; call
   the service actors directly. [#2768] [#3315] [#3317]
+- Handle individual key presses on Unix terminals with
+  `env.stdio.set_stdin(raw=True)`, receiving control keys such as Ctrl-C as
+  input bytes. Set `raw=False` to restore the previous settings; terminal
+  settings are also restored on normal exit, SIGHUP, SIGQUIT, and handled
+  crashes.
+  Check each stream with `stdin_is_tty()`, `stdout_is_tty()`, and
+  `stderr_is_tty()`. Installing a new stdin handler replaces the previous
+  handler without starting a competing reader. [#3419]
 - Write raw bytes to stdout and stderr with `env.stdio.outb()` and
   `env.stdio.errb()`, preserving NUL bytes and invalid UTF-8. Text output uses
   `env.stdio.out()` and `env.stdio.err()`. [#3314]
@@ -314,6 +371,8 @@
   iterables grow the buffer as needed. Collection conversions to `bytes` and
   `bytearray` use the same construction path, and invalid byte values raise
   `ValueError` as soon as they are read. [#3371]
+- Speed up `std.diff` comparisons with many unique matching lines while
+  preserving diff output. [#3406]
 - Speed up `str.replace()` for single-byte search strings, including ASCII
   delimiters in Unicode text. A replacement count of 0 now returns without
   scanning the input. [#3373]
@@ -326,12 +385,17 @@
   when building the result raises, preventing memory leaks on allocation
   failure. XML text and attribute allocation failures now raise `MemoryError`
   instead of crashing. [#3276]
-- Decode XML CDATA sections larger than 10 MB with `xml.decode()` and
-  `std.xml.decode()`, up to libxml2's 1 GB limit. The maximum element nesting
-  depth also increases from 256 to 2048. [#3353]
+- Decode XML CDATA sections larger than 10 MB with `std.xml.decode()`, up to
+  libxml2's 1 GB limit. The maximum element nesting depth also increases from
+  256 to 2048. [#3353]
 - Format the full `u64` range correctly with `hex()` and `bin()`, instead of
   treating values above the signed 64-bit maximum as negative. For example,
   `hex(u64(18446744073709551615))` returns `"0xffffffffffffffff"`. [#3388]
+- Parse and convert integers correctly on Windows across the full 64-bit
+  range, including negative strings, signed minimum values, and conversions
+  between scalar types and `bigint`. Out-of-range `int` and narrow signed
+  conversions raise `ValueError` instead of accepting truncated values.
+  [#3420]
 - Fix parsing negative integer strings whose digit count exactly matches the
   parser's chunk size, including fixed-width integer constructors, and fix
   `bigint` `&`, `|`, and `^` results for negative operands. [#3246] [#3247]
@@ -354,6 +418,23 @@
   heap. [#3244] [#3290]
 
 ### Runtime
+- Fix cases where unreachable actors never ran their `__cleanup__` methods,
+  including after timers and uncaught exceptions. Idle workers no longer keep
+  actors alive through stale pointers, and cleanup messages sent between
+  continuations no longer wait for an actor that may never run again. [#3435]
+- Start reliably on Linux with unlimited or oversized stack limits, and
+  avoid worker stack overflows during deeply nested XML decoding. Threaded
+  builds use at least 16 MiB per worker and honor larger main-thread stacks
+  up to 64 MiB. The same default applies to GC helper threads on glibc Linux.
+  Worker creation failures report an error instead of hanging at startup.
+  [#3399]
+- Reduce allocation when boxing `int` values from -5 through 256 by reusing
+  static objects. Restore repeated references to boxed scalars correctly
+  during deserialization, including fixed-width integers. [#3398]
+- Enable process instruction and cycle counters with `--rts-perf` and read
+  them through `env.rts.perf_stats()`. `acton test perf` and `acton test scale`
+  enable counters automatically; child processes need their own option.
+  Unsupported or unavailable hardware measurements are `None`. [#3399]
 - Reduce long garbage-collection pauses on large heaps with opt-in
   generational collection. Minor collections collect young objects, and
   parallel marking runs in steps with the program stopped. Select
@@ -362,7 +443,7 @@
   remains the default. `ACTON_GC_PAUSE_MS` sets the marking time target per
   step (50 ms by default, 0 for one stop per collection). Stopping threads
   and finishing a collection can exceed that target.
-  `acton.rts.get_gc_info()` reports the active mode and pause target. [#3390]
+  `env.rts.gc_info()` reports the active mode and pause target. [#3390]
 - Reduce allocation overhead and memory use by disabling GC object end padding
   by default: a 16-byte object now occupies 16 bytes instead of 32. Across nine
   of ten benchmark loads on x86_64 Linux and an M1 Mac, this used 6% to 24%
@@ -373,7 +454,7 @@
 - Serialize boolean and narrow integer values using only their own bytes,
   avoiding reads beyond their storage and copies of adjacent fields into
   serialized data. [#3318]
-- Keep memory freed by `acton.rts.gc()` mapped for reuse, avoiding page faults
+- Keep memory freed by `env.rts.gc()` mapped for reuse, avoiding page faults
   when subsequent allocations reuse it. The call still runs a full collection;
   free blocks return to the operating system after remaining unused over
   several collections. [#3347]
@@ -385,7 +466,7 @@
   `gc_memory_limit` in `Build.act` or `GC_MEMORY_LIMIT` at startup, for example
   `GC_MEMORY_LIMIT=4G`. Set `gc_heap_ceiling_percent` or
   `GC_HEAP_CEILING_PERCENT` to `0` to restore stepwise heap growth.
-  `acton.rts.get_gc_info()` reports the active limit and ceiling. [#3312]
+  `env.rts.gc_info()` reports the active limit and ceiling. [#3312]
 - Avoid crashes and unnecessary heap growth around thread shutdown and
   concurrent garbage collection. On Linux, thread exit and cancellation no
   longer leave collection permanently disabled. Incremental collection no
@@ -400,7 +481,7 @@
   packed bits by default. Measured workloads on an Apple M1 and a Ryzen 9
   5950X used 2% to 14% less CPU time and 3% to 6% less peak memory than with
   mark bytes. Set `"gc_use_mark_bits": "false"` in `Build.act` to restore
-  mark bytes; `acton.rts.get_gc_info()` reports the layout as `mark_bits`.
+  mark bytes; `env.rts.gc_info()` reports the layout as `mark_bits`.
   [#3308]
 - Start more runtime workers under low open-file soft limits by raising the
   limit to the hard limit on Unix, capped at `kern.maxfilesperproc` on macOS.
@@ -445,10 +526,11 @@
   access on machines with more logical CPUs. Also remove unused CPU-mask setup
   that could fail at startup on Macs with 32 or more CPUs. [#3295] [#3297]
 - Inspect how long ready actors wait to run through RTS monitor logs,
-  sockets, or `--rts-mon-on-exit`. Workers report counts, total and maximum
-  wait times, and a histogram, with microsecond resolution. Wait statistics
-  are collected only when monitor output is enabled and are not included in
-  `acton.rts.rts_stats()`. [#3287]
+  sockets, `--rts-mon-on-exit`, or `env.rts.worker_stats()`. Workers report
+  counts, total and maximum wait times, and a histogram. Monitor output uses
+  microseconds; API counters use nanoseconds. Wait statistics are collected
+  only when monitor output is enabled; `waits_enabled` reports whether
+  collection is active. [#3287] [#3399]
 - Reduce garbage-collection work for numeric-heavy programs by allocating
   boxed scalars, ranges, and `bigint` digits as pointer-free objects and by
   prefetching only objects that the collector will scan. [#3248] [#3250]
@@ -485,7 +567,7 @@
   `GC_BYTES_PER_MARKER` at startup; `0` restores full marker participation.
   The initial mark stack also grows to 4,194,304 entries, while Windows keeps
   1,048,576, reducing slow overflow recovery on large heaps. Both settings
-  are reported by `acton.rts.get_gc_info()`. [#3268] [#3269]
+  are reported by `env.rts.gc_info()`. [#3268] [#3269]
 - Prefer performance cores when sizing the default GC marker pool on macOS
   and Linux. Include efficiency cores as needed to count at least 40% of
   logical CPUs before applying the 16-marker cap; `GC_MARKERS` and
@@ -503,7 +585,7 @@
   unnecessary signal-mask saves and restores around `try` blocks and raised
   exceptions. [#3240] [#3275]
 - Access runtime worker statistics atomically, removing data races between
-  worker updates and monitoring through `acton.rts.rts_stats()`. [#3234]
+  worker updates and monitoring through `env.rts.worker_stats()`. [#3234]
 - Reduce per-message statistics bookkeeping by reusing each worker's
   statistics entry, and use consistent 64-bit counters, worker indices, and
   timing values across platforms, including Windows. [#3279] [#3281]
@@ -515,7 +597,7 @@
   `/proc/self/fd` or `/dev/fd` or parsing `/proc/self/limits`. On macOS the
   limit includes the `kern.maxfilesperproc` cap that the kernel enforces. On
   Windows the count is the number of handles of the process, of every kind,
-  and the limit is `None`.
+  and the limit is `None`. [#3434]
 
 ### Packages & Distribution
 - Install stable Homebrew releases from prebuilt tarballs for macOS and Linux
@@ -527,6 +609,8 @@
   Concurrent builds can install the same dependency without conflicts. [#3325]
 
 ### Documentation
+- Document type aliases in the language guide, including parameterized and
+  protocol-constrained aliases, imports, and recursive definitions. [#3396]
 - Document that `del d[key]` does nothing when a dictionary key is missing,
   so callers do not need a membership check before deleting. [#3381]
 - Update the compiler developer guide to describe the compile pipeline,
@@ -546,7 +630,16 @@
   test three more times with that seed, shows the seed and how many of those
   runs failed the same way, and prints the `acton test --seed` command that
   runs the test with the seed again. Tests that draw from `t.random` run every
-  time instead of reusing a cached result.
+  time instead of reusing a cached result. [#3424]
+- Run online package tests in separate Linux and macOS CI jobs with
+  authenticated GitHub API requests, reducing rate-limit failures and allowing
+  network failures to be retried without rerunning the full test suite. [#3413]
+- Avoid listen-port collisions in network tests and the HTTP benchmark by
+  using automatically assigned ports and waiting for listener readiness.
+  [#3417] [#3418] [#3429]
+- Stabilize GC page-reuse and terminal-restoration tests, and save compiler
+  logs and process diagnostics when watch subprocess tests fail.
+  [#3422] [#3430]
 - Check runtime and C-extension pointer stores with `acton test --gc-check`.
   Tests run in generational mode with frequent collections and short marking
   steps, bypassing cached test results and failing when the checker detects
@@ -563,10 +656,13 @@
   compiler regressions, including cached modules and dependency APIs. [#3352]
 - Render tables in Webex merge notifications as aligned text in code blocks,
   preserving other Markdown and existing code blocks. [#3351]
+- Rebuild `acton.now`, `www.acton-lang.org`, and `acton.guide` after guide
+  source changes. Dispatch each rebuild independently so a failed trigger does
+  not cancel updates to the other sites. [#3395]
 - Let `compiler-bench --pipeline` measure both frontend and backend work for
   ordinary modules instead of failing after the frontend measurement. [#3325]
-- Build and test the external `actonlang/textfsm` package in CI with the newly
-  built Acton package. [#3340]
+- Build and test the external `actonlang/textfsm` and `stratoweave/actsnmp`
+  packages in CI with the newly built Acton package. [#3340] [#3416]
 - Treat a nonzero test-process exit as an error even if the test already
   reported success. `acton test` returns exit code 2 and includes the error in
   text and JSON summaries; ordinary assertion failures still return 1. [#3324]
@@ -591,6 +687,17 @@
 ### Compatibility Notes
 - Replace `env.stdio.is_tty()` with `env.stdio.stdout_is_tty()`.
   `stdin_is_tty()` and `stderr_is_tty()` check the other two streams. [#3421]
+- Update HTTP and HTTPS server handlers to pass `bytes` response bodies to
+  the `respond` callback, `send_response()`, and `std.http.build_response()`.
+  For text, use `respond(200, {}, text.encode())`; update explicit callback
+  signatures from `str` to `bytes`. [#3403]
+- Replace imports of `acton.rts` and calls taking `env.syscap` with methods
+  on `env.rts`; `Env.syscap` is removed. For example,
+  `acton.rts.get_gc_info(env.syscap)` becomes `env.rts.gc_info()`.
+  Heap and allocation statistics move to `gc_stats()`, resident memory
+  to `process_stats()`, `rts_stats()` to `worker_stats()`, and
+  `perf_snapshot()` to `perf_stats()`. Enable hardware counters with
+  `--rts-perf` instead of `ACTON_TEST_PERF=1`. [#3399]
 - Update C extensions for changed builtin helper names and container layouts.
   Dictionaries and sets now retain their `Hashable` witness, so
   `B_dictD_setitem()` and `B_dictD_get()` no longer take it as an argument.
@@ -603,13 +710,13 @@
   libraries update without barriers. [#3390]
 - Remove `gc_dirty_tracking_backend` from `Build.act`; the collector now
   uses manual write barriers instead of `mprotect`, `soft_dirty`, or
-  `userfaultfd`. `acton.rts.get_gc_info()` drops `configured_backend` and
+  `userfaultfd`. `env.rts.gc_info()` drops `configured_backend` and
   reports `mode` as `"ordinary"` or `"generational"`; use `pause_target_ms`
   to inspect the marking time target. [#3390]
 - Targets without thread support, including WebAssembly, can no longer
   build with the bundled collector. [#3390]
 - Replace `parse_message()`, `parse_request()`, and `parse_response()` in
-  `http` and `std.http` with one `MessageParser` per connection. Call
+  `std.http` with one `MessageParser` per connection. Call
   `feed(data)`, check `error`, and convert completed messages with
   `request_from_message()` or `response_from_message()`. For responses, use
   `MessageParser(responses=True)` and record each request with
@@ -618,13 +725,13 @@
 - Move environment-variable calls from `env` to `env.vars`, including
   `getenv`, `setenv`, `unsetenv`, and their byte variants.
   `env.stdout_write(s)` becomes `env.stdio.out(s)`; call `stdin_install`,
-  `set_stdin`, and `is_tty` on `env.stdio` as well. Output and `env.exit()`
+  `set_stdin`, and `stdout_is_tty` on `env.stdio` as well. Output and `env.exit()`
   go to separate actors, so wait for output with
   `await async env.stdio.out(s)` before calling `env.exit(...)`. Shutdown is
   asynchronous; code after `env.exit(n)` can still run, and awaiting the exit
   call does not wait for work in other actors. Await required output or cleanup
   before requesting exit, and return or branch after an error exit to avoid
-  running success code. [#3317] [#3365]
+  running success code. [#3317] [#3365] [#3421]
 - Replace `process.Process(...)` and `process.RunProcess(...)` with
   `env.process.spawn(...)` and `env.process.run(...)`. The `process` module
   is removed; drop `ProcessCap` construction and the capability argument.
@@ -6148,7 +6255,36 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#3388]: https://github.com/actonlang/acton/pull/3388
 [#3390]: https://github.com/actonlang/acton/pull/3390
 [#3391]: https://github.com/actonlang/acton/pull/3391
+[#3395]: https://github.com/actonlang/acton/pull/3395
+[#3396]: https://github.com/actonlang/acton/pull/3396
+[#3398]: https://github.com/actonlang/acton/pull/3398
+[#3399]: https://github.com/actonlang/acton/pull/3399
+[#3402]: https://github.com/actonlang/acton/pull/3402
+[#3403]: https://github.com/actonlang/acton/pull/3403
+[#3404]: https://github.com/actonlang/acton/pull/3404
+[#3406]: https://github.com/actonlang/acton/pull/3406
+[#3407]: https://github.com/actonlang/acton/pull/3407
+[#3408]: https://github.com/actonlang/acton/pull/3408
+[#3409]: https://github.com/actonlang/acton/pull/3409
+[#3410]: https://github.com/actonlang/acton/pull/3410
+[#3411]: https://github.com/actonlang/acton/pull/3411
+[#3412]: https://github.com/actonlang/acton/pull/3412
+[#3413]: https://github.com/actonlang/acton/pull/3413
+[#3415]: https://github.com/actonlang/acton/pull/3415
+[#3416]: https://github.com/actonlang/acton/pull/3416
+[#3417]: https://github.com/actonlang/acton/pull/3417
+[#3418]: https://github.com/actonlang/acton/pull/3418
+[#3419]: https://github.com/actonlang/acton/pull/3419
+[#3420]: https://github.com/actonlang/acton/pull/3420
 [#3421]: https://github.com/actonlang/acton/pull/3421
+[#3422]: https://github.com/actonlang/acton/pull/3422
+[#3424]: https://github.com/actonlang/acton/pull/3424
+[#3429]: https://github.com/actonlang/acton/pull/3429
+[#3430]: https://github.com/actonlang/acton/pull/3430
+[#3431]: https://github.com/actonlang/acton/pull/3431
+[#3432]: https://github.com/actonlang/acton/pull/3432
+[#3434]: https://github.com/actonlang/acton/pull/3434
+[#3435]: https://github.com/actonlang/acton/pull/3435
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
