@@ -11,6 +11,14 @@
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 
+# During the staged migration, value retains the legacy slots as well.
+protocol Show:
+    __str__: () -> str
+    __repr__: () -> str
+
+protocol Bool:
+    __bool__: () -> bool
+
 ## Built-in types ##################################################################################
 
 class value:
@@ -738,6 +746,17 @@ protocol Integral (Rational,Logical):
         return a >> b
 
     __invert__   : () -> Self
+
+# Root defaults are ordinary extensions, inherited by subclasses. More
+# specific builtin and user extensions override them through normal resolution.
+extension value (Show):
+    NotImplemented
+extension value (Bool):
+    NotImplemented
+extension object (Show):
+    NotImplemented
+extension object (Bool):
+    NotImplemented
 
 ## Number protocol extensions ######################################################################
 

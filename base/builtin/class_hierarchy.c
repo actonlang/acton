@@ -55,6 +55,33 @@ bool B_objectD___bool__(B_object self) {
     return true;
 }
 
+// Root protocol defaults call the default functions themselves. In particular,
+// they do not dispatch through the legacy value slots, which will be removed
+// when str/repr/truth conversion is switched to the protocols.
+B_str B_ShowD_valueD___str__(B_ShowD_value witness, B_value self) {
+    return B_valueD___str__(self);
+}
+
+B_str B_ShowD_valueD___repr__(B_ShowD_value witness, B_value self) {
+    return B_valueD___repr__(self);
+}
+
+bool B_BoolD_valueD___bool__(B_BoolD_value witness, B_value self) {
+    return B_valueD___bool__(self);
+}
+
+B_str B_ShowD_objectD___str__(B_ShowD_object witness, B_object self) {
+    return B_objectD___str__(self);
+}
+
+B_str B_ShowD_objectD___repr__(B_ShowD_object witness, B_object self) {
+    return B_valueD___repr__((B_value)self);
+}
+
+bool B_BoolD_objectD___bool__(B_BoolD_object witness, B_object self) {
+    return B_objectD___bool__(self);
+}
+
 struct $SerializableG_class $SerializableG_methods = {"$Serializable",UNASSIGNED,NULL, $SerializableD___init__,NULL,NULL};
 
 //struct B_valueG_class B_valueG_methods = {"B_value",UNASSIGNED,($SuperG_class)&$SerializableG_methods,B_valueD___init__,NULL,NULL, B_valueD___bool__,B_valueD___str__,B_valueD___str__};

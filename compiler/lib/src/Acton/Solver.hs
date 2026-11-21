@@ -655,6 +655,10 @@ reduce' eq c@(Proto _ env w TUni{} p)       = do defer [c]; return eq
 reduce' eq c@(Proto _ env w t@(TVar _ tv) p)
   | [wit] <- witSearch                      = do (eq',cs) <- solveProto env wit w t p
                                                  reduce (eq'++eq) cs
+  | null witSearch,
+    Just (parent,[wit]) <- inheritedShowBoolWitness env t p
+                                            = do (eq',cs) <- solveInheritedShowBool env parent wit w t p
+                                                 reduce (eq'++eq) cs
   | [wit] <- witSearch'                     = do (eq',cs) <- solveProto env wit w (tCon tc) p
                                                  reduce (eq'++eq) cs
   where witSearch                           = findWitness env t p
@@ -666,6 +670,10 @@ reduce' eq c@(Proto _ env w t@(TCon _ tc) p)
     isActor env (tcname tc)                 = do let e = eCall (eQVar primIdentityActor) []
                                                  return (mkEqn env w (proto2type t p) e : eq)
   | [wit] <- witSearch                      = do (eq',cs) <- solveProto env wit w t p
+                                                 reduce (eq'++eq) cs
+  | null witSearch,
+    Just (parent,[wit]) <- inheritedShowBoolWitness env t p
+                                            = do (eq',cs) <- solveInheritedShowBool env parent wit w t p
                                                  reduce (eq'++eq) cs
 --  | w1:w2:_ <- witSearch                    = error ("###### AMBIGUOUS: " ++ prstr c ++ " (" ++ prstrs [w1,w2] ++ ")") c w1
   | Just t' <- tExpand env tc               = reduce' eq c{ type1 = t' }
@@ -773,6 +781,16 @@ solveProto env wit w t p                    = do (cs,t',we) <- instWitness env p
                                                  unify env (noinfo 7) t t'
                                                  return ([mkEqn env w (proto2type t p) we], cs)
 
+-- Show/Bool only consume Self, so a parent's witness also accepts a subclass.
+-- Preserve the subclass in the evidence type (and hence in generic results),
+-- reusing the parent's witness through a representation-preserving cast. This
+-- is not sound for arbitrary protocols, whose methods may return Self.
+solveInheritedShowBool env parent wit w t p = do (cs,t',we) <- instWitness env p wit
+                                                 unify env (noinfo 7) parent t'
+                                                 let target = proto2type t p
+                                                     source = proto2type parent p
+                                                 return ([mkEqn env w target (eCAST source target we)], cs)
+
 solveSelAttr (wf,sc,d) (Sel info env w t1 n t2)
   | d == Just Static                        = tyerr n "A static method cannot be selected by instance:"
   | otherwise                               = do (cs,tvs,t) <- instantiate env sc
@@ -829,6 +847,19 @@ findWitness env t p         = filter match $ candidates t
         candidates (TVar _ v)           = witsByTName env (NoQ $ tvname v)
         candidates _                    = witsByPName env (tcname p)
 
+-- Follow the class MRO only for these two builtin protocols. Exact witnesses
+-- (including an explicit type-variable bound) are checked by the caller first.
+-- Stop at the first ancestor with witnesses, retaining any ambiguity there.
+inheritedShowBoolWitness :: Env -> Type -> PCon -> Maybe (Type,[Witness])
+inheritedShowBoolWitness env t p
+  | tcname p `elem` [qnShow,qnBoolProtocol]
+                            = listToMaybe [ (tCon c,ws) | (_,c) <- parents t,
+                                            let ws = findWitness env (tCon c) p, not (null ws) ]
+  | otherwise               = Nothing
+  where parents (TCon _ c) = drop 1 $ findAncestry env c
+        parents (TVar _ v) = findAncestry env (findTVBound env v)
+        parents _          = []
+
 findProtoByAttr env cn n    = case filter hasAttr $ witsByTName env cn of
                                 [] -> Nothing
                                 ws -> Just $ schematic' $ proto (last ws)   -- newest matching witness
@@ -842,7 +873,7 @@ hasWitness env (TCon _ c) p
 hasWitness env (TTuple _ prow krow) p
   | Just _ <- tupleComponents prow krow
                             = tcname p `elem` map fst tupleWits
-hasWitness env t p          =  not $ null $ findWitness env t p
+hasWitness env t p          =  not (null $ findWitness env t p) || isJust (inheritedShowBoolWitness env t p)
 
 
 ----------------------------------------------------------------------------------------------------------------------

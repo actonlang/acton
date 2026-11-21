@@ -3113,6 +3113,8 @@ main = do
         (_, _, _, discovered) <- liftIO $ Acton.Types.reconstruct Nothing Nothing env kchecked Nothing
         sort discovered `shouldBe` ["_test_async", "_test_env", "_test_sync"]
 
+      testShowBoolInheritance env0
+
       testAttributesInitialization env0
 
       it "keeps generated names stable within unchanged defs" $ do
@@ -6047,6 +6049,107 @@ testDocstrings env0 testname = do
         Just (Just doc) -> doc `shouldContain` "Just a docstring"
         Just Nothing -> expectationFailure "Function should have docstring"
         Nothing -> expectationFailure "Function not found"
+
+testShowBoolInheritance :: Acton.Env.Env0 -> Spec
+testShowBoolInheritance env0 = describe "Inherited Show and Bool witnesses" $ do
+  let check label source = liftIO $ do
+        let mn = S.modName [label]
+        parsed <- P.parseModule mn ("<" ++ label ++ ">") (unlines source) Nothing
+        env <- Acton.Env.mkEnv systemTypes env0 parsed
+        kinded <- Acton.Kinds.check env parsed
+        result@(iface, typed, _, _) <- Acton.Types.reconstruct Nothing Nothing env kinded Nothing
+        E.evaluate (rnf iface `seq` rnf typed)
+        pure result
+      extensions (I.NModule _ te _) = [n | (n, I.NExt{}) <- te]
+      keep =
+        [ "def keep[A(Show, Bool)](x: A) -> A:"
+        , "    return x"
+        ]
+
+  it "declares both protocols and supplies the four root extensions" $ do
+    Acton.Env.isProto env0 Builtin.qnShow `shouldBe` True
+    Acton.Env.isProto env0 Builtin.qnBoolProtocol `shouldBe` True
+    forM_ [Builtin.tValue, Builtin.tObject] $ \t ->
+      forM_ [Builtin.pShow, Builtin.pBoolProtocol] $ \p ->
+        Solver.hasWitness (TypeEnv.initTypeEnv env0) t p `shouldBe` True
+
+  forM_ [("value", ""), ("object", "(object)")] $ \(label, base) ->
+    it ("preserves a generic result type using inherited " ++ label ++ " defaults") $ do
+      (iface, typed, _, _) <- check ("show_bool_" ++ label)
+        ([ "class Example" ++ base ++ ":", "    pass" ] ++ keep ++
+         [ "def use(x: Example) -> Example:", "    return keep(x)" ])
+      extensions iface `shouldBe` []
+      let listing = Pretty.print typed
+      listing `shouldSatisfy` isInfixOf "keep@[Example]"
+      listing `shouldSatisfy` isInfixOf ("__builtin__.ShowD_" ++ label ++ "()")
+      listing `shouldSatisfy` isInfixOf ("__builtin__.BoolD_" ++ label ++ "()")
+
+  it "does not constrain the fields of a class using default formatting" $ do
+    (iface, _, _, _) <- check "show_bool_fields"
+      ([ "class Box[A]:", "    item: A"
+       , "    def __init__(self, item: A):", "        self.item = item"
+       , "class Plain:", "    pass" ] ++ keep ++
+       [ "def use(x: Box[Plain]) -> Box[Plain]:", "    return keep(x)" ])
+    extensions iface `shouldBe` []
+
+  it "preserves supplied generic evidence ahead of inherited defaults" $ do
+    (_, typed, _, _) <- check "show_bool_evidence"
+      [ "def display[A(Show)](x: A) -> str:", "    return Show.__str__(x)"
+      , "def truth[A(Bool)](x: A) -> bool:", "    return Bool.__bool__(x)" ]
+    let listing = Pretty.print typed
+    listing `shouldSatisfy` isInfixOf "return W_ShowD_A.__str__(x)"
+    listing `shouldSatisfy` isInfixOf "return W_BoolD_A.__bool__(x)"
+    listing `shouldSatisfy` (not . isInfixOf "ShowD_value()")
+    listing `shouldSatisfy` (not . isInfixOf "BoolD_value()")
+
+  it "uses the class bound when an unconstrained generic needs a default" $ do
+    (_, typed, _, _) <- check "show_bool_unconstrained"
+      [ "def display[A](x: A) -> str:", "    return Show.__str__(x)"
+      , "def truth[A](x: A) -> bool:", "    return Bool.__bool__(x)" ]
+    let listing = Pretty.print typed
+    listing `shouldSatisfy` isInfixOf "ShowD_value()"
+    listing `shouldSatisfy` isInfixOf "BoolD_value()"
+
+  it "instantiates captured witnesses in an inherited generic extension" $ do
+    (_, typed, _, _) <- check "show_bool_parent_capture"
+      [ "class Parent[A]:", "    item: A"
+      , "    def __init__(self, item: A):", "        self.item = item"
+      , "class Child[A](Parent[A]):", "    pass"
+      , "class Plain:", "    pass"
+      , "extension Parent[A(Show)](Show):"
+      , "    def __str__(self) -> str:", "        return Show.__str__(self.item)"
+      , "    def __repr__(self) -> str:", "        return Show.__repr__(self.item)"
+      , "def keep[A(Show)](x: A) -> A:", "    return x"
+      , "def use(x: Child[Plain]) -> Child[Plain]:", "    return keep(x)" ]
+    Pretty.print typed `shouldSatisfy` isInfixOf "ShowD_Parent@[Plain]("
+
+  it "uses the nearest class implementation in a bound type variable" $ do
+    (_, typed, _, _) <- check "show_bool_class_bound"
+      [ "class Parent:", "    pass", "class Child(Parent):", "    pass"
+      , "extension Parent(Show):"
+      , "    def __str__(self) -> str:", "        return \"parent\""
+      , "    def __repr__(self) -> str:", "        return \"Parent()\""
+      , "def display[A(Child)](x: A) -> str:", "    return Show.__str__(x)" ]
+    Pretty.print typed `shouldSatisfy` isInfixOf "ShowD_Parent()"
+
+  it "does not inherit an unrelated Self-producing protocol" $ do
+    let src =
+          [ "protocol Show:", "    clone: () -> Self"
+          , "class Parent:", "    pass", "class Child(Parent):", "    pass"
+          , "extension Parent(Show):"
+          , "    def clone(self) -> Parent:", "        return self"
+          , "def keep[A(Show)](x: A) -> A:", "    return x"
+          , "def use(x: Child) -> Child:", "    return keep(x)" ]
+    result <- liftIO $ E.try $ do
+      let mn = S.modName ["show_bool_unrelated"]
+      parsed <- P.parseModule mn "<show_bool_unrelated>" (unlines src) Nothing
+      env <- Acton.Env.mkEnv systemTypes env0 parsed
+      kinded <- Acton.Kinds.check env parsed
+      (_, typed, _, _) <- Acton.Types.reconstruct Nothing Nothing env kinded Nothing
+      E.evaluate (rnf typed)
+    case result of
+      Left (_ :: TypeError) -> pure ()
+      Right _ -> expectationFailure "A parent clone cannot produce an arbitrary child"
 
 -- Tests for uninitialized class attribute checking
 

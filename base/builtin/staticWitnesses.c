@@ -118,6 +118,10 @@ extern struct B_MinusD_IntegralD_bigint B_MinusD_IntegralD_bigintG_instance;
 extern struct B_IntegralD_bigint B_IntegralD_bigintG_instance;
 extern struct B_HashableD_bool B_HashableD_boolG_instance;
 extern struct B_RandomD_EnvRandom B_RandomD_EnvRandomG_instance;
+struct B_ShowD_value B_ShowD_valueG_instance = {&B_ShowD_valueG_methods};
+struct B_BoolD_value B_BoolD_valueG_instance = {&B_BoolD_valueG_methods};
+struct B_ShowD_object B_ShowD_objectG_instance = {&B_ShowD_objectG_methods};
+struct B_BoolD_object B_BoolD_objectG_instance = {&B_BoolD_objectG_methods};
 struct B_HashableD_bytes B_HashableD_bytesG_instance = {&B_HashableD_bytesG_methods};
 struct B_TimesD_bytes B_TimesD_bytesG_instance = {&B_TimesD_bytesG_methods};
 struct B_ContainerD_bytes B_ContainerD_bytesG_instance = {&B_ContainerD_bytesG_methods, (B_Eq)&B_OrdD_intG_instance};
@@ -431,6 +435,10 @@ struct B_HashableD_bool  B_HashableD_boolG_instance = {&B_HashableD_boolG_method
 struct B_RandomD_EnvRandom B_RandomD_EnvRandomG_instance = {&B_RandomD_EnvRandomG_methods};
 
 
+B_ShowD_value B_ShowD_valueG_witness = &B_ShowD_valueG_instance;
+B_BoolD_value B_BoolD_valueG_witness = &B_BoolD_valueG_instance;
+B_ShowD_object B_ShowD_objectG_witness = &B_ShowD_objectG_instance;
+B_BoolD_object B_BoolD_objectG_witness = &B_BoolD_objectG_instance;
 B_HashableD_bytes B_HashableD_bytesG_witness = &B_HashableD_bytesG_instance;
 B_MutIndexedD_array B_MutIndexedD_arrayD_intG_witness = &B_MutIndexedD_arrayD_intG_instance;
 B_MutIndexedD_array B_MutIndexedD_arrayD_floatG_witness = &B_MutIndexedD_arrayD_floatG_instance;

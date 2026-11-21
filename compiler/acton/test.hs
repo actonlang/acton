@@ -228,6 +228,84 @@ compilerTests =
           (code, out, err) <- runThing "" src
           assertEqual ("protocol receiver test should run: " ++ err) ExitSuccess code
           assertEqual "point3 should use its own extension" "(4,7)\n(5,6,7)\n" out
+  , testCase "inherited Show/Bool defaults use static root witnesses" $ do
+        withSystemTempDirectory "acton-show-bool-inherited" $ \tmp -> do
+          let src = tmp </> "show_bool_inherited_defaults.act"
+          copyFile "../../test/regression_auto/show_bool_inherited_defaults.act" src
+          (code, generated, err) <- buildThing "--quiet --dbg-no-lines --cgen" src
+          assertEqual ("C generation should succeed:\n" ++ generated ++ err) ExitSuccess code
+          forM_ ["ShowD_value", "BoolD_value", "ShowD_object", "BoolD_object"] $ \name -> do
+            assertBool (name ++ " should use the static witness")
+              (("B_" ++ name ++ "G_witness") `isInfixOf` generated)
+            assertBool (name ++ " should not allocate a root witness")
+              (not (("B_" ++ name ++ "G_new(") `isInfixOf` generated))
+  , testCase "inherited Show/Bool overrides load from cached interfaces" $ do
+        withSystemTempDirectory "acton-show-bool-interfaces" $ \tmp -> do
+          let project = "show_bool_interfaces"
+              fp = Fingerprint.formatFingerprint $ Fingerprint.updateFingerprintPrefix
+                     (Fingerprint.fingerprintPrefixForName project) 1
+              provider = tmp </> "src/provider.act"
+              plain = unlines ["class Example:", "    def __init__(self):", "        pass"]
+              custom = plain ++ unlines
+                [ "extension Example(Show):"
+                , "    def __str__(self) -> str:", "        return \"custom\""
+                , "    def __repr__(self) -> str:", "        return \"Example()\""
+                , "extension Example(Bool):"
+                , "    def __bool__(self) -> bool:", "        return False" ]
+              build label = do
+                (code,out,err) <- buildThing "--skip-build --jobs 2 --verbose" tmp
+                assertEqual (label ++ ":\n" ++ out ++ err) ExitSuccess code
+                pure out
+              consumerCode = do
+                c <- BC.unpack <$> BS.readFile (tmp </> "out/types" </> project </> "consumer.c")
+                let inc = tmp </> "out/types" </> project </> "consumer.closures.inc"
+                exists <- doesFileExist inc
+                support <- if exists then BC.unpack <$> BS.readFile inc else pure ""
+                pure (c ++ support)
+          createDirectoryIfMissing True (tmp </> "src")
+          writeFile (tmp </> "Build.act") $ unlines
+            [ "name = \"" ++ project ++ "\"", "fingerprint = " ++ fp ]
+          writeFile provider plain
+          writeFile (tmp </> "src/consumer.act") $ unlines
+            [ "import provider"
+            , "def keep[A(Show, Bool)](x: A) -> A:", "    return x"
+            , "def retain(x: provider.Example) -> provider.Example:", "    return keep(x)"
+            , "def display(x: provider.Example) -> str:", "    return Show.__str__(x)"
+            , "def truth(x: provider.Example) -> bool:", "    return Bool.__bool__(x)" ]
+          writeFile (tmp </> "src/main.act") $ unlines
+            [ "import consumer", "import provider", "actor main(env):"
+            , "    item = provider.Example()", "    consumer.retain(item)"
+            , "    print(consumer.display(item))", "    print(consumer.truth(item))"
+            , "    env.exit(0)" ]
+          _ <- build "inherited defaults"
+          cached <- build "cached interfaces"
+          assertBool "the consumer should reuse its cached interface"
+            ("Fresh consumer: using cached .tydb" `isInfixOf` cached)
+          defaults <- consumerCode
+          assertBool "initially the consumer uses the value default"
+            ("B_ShowD_valueG_witness" `isInfixOf` defaults)
+          writeFile provider custom
+          -- Instance-set invalidation is a separate incremental-build issue.
+          -- Recheck this consumer explicitly; the test here verifies lookup
+          -- from a provider whose changed interface has already been cached.
+          _ <- build "export explicit overrides"
+          appendFile (tmp </> "src/consumer.act") "\n# Recheck cached explicit overrides.\n"
+          changed <- build "import cached explicit overrides"
+          assertBool "the explicit implementations should come from a cached provider"
+            ("Fresh provider: using cached .tydb" `isInfixOf` changed)
+          overrides <- consumerCode
+          assertBool "the consumer should use the explicit implementation"
+            ("providerQ_ShowD_ExampleG_new" `isInfixOf` overrides)
+          writeFile provider plain
+          _ <- build "export restored inherited defaults"
+          appendFile (tmp </> "src/consumer.act") "\n# Recheck cached inherited defaults.\n"
+          restored <- build "import cached inherited defaults"
+          assertBool "the restored defaults should come from a cached provider"
+            ("Fresh provider: using cached .tydb" `isInfixOf` restored)
+          final <- consumerCode
+          assertBool "removing overrides should restore the inherited implementation"
+            ("B_ShowD_valueG_witness" `isInfixOf` final &&
+             not ("providerQ_ShowD_ExampleG_new" `isInfixOf` final))
   , testCase "builtin len and append eliminate concrete witness arguments" $ do
         withSystemTempDirectory "acton-builtin-len-append" $ \tmp -> do
           let src = tmp </> "builtin_len_append.act"

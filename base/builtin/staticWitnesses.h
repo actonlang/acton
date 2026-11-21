@@ -1,3 +1,7 @@
+extern B_ShowD_value B_ShowD_valueG_witness;
+extern B_BoolD_value B_BoolD_valueG_witness;
+extern B_ShowD_object B_ShowD_objectG_witness;
+extern B_BoolD_object B_BoolD_objectG_witness;
 extern B_HashableD_bytes B_HashableD_bytesG_witness;
 extern B_MutIndexedD_array B_MutIndexedD_arrayD_intG_witness;
 extern B_MutIndexedD_array B_MutIndexedD_arrayD_floatG_witness;

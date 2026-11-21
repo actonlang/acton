@@ -102,6 +102,10 @@ derivedHead (Derived n _)           = n
 
 staticWitnessName (Dot _ c a)       = (nm, NoQ a:as)
    where (nm,as)                    = staticWitnessName c
+-- Inherited Show/Bool evidence changes its receiver type without changing the
+-- witness object. Retain static recognition through that representation cast.
+staticWitnessName (Call _ (TApp _ (Var _ q) _) (PosArg e PosNil) KwdNil)
+    | q == primCAST                 = staticWitnessName e
 staticWitnessName (Call _ (Var _ v@(GName m n)) PosNil KwdNil)
     | m == mBuiltin, not (isInternal n)
                                     = (Just v, [])
