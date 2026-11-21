@@ -57,15 +57,15 @@ B_complex B_complexD___deserialize__(B_complex self, $Serial$state state) {
     return toB_complex(re + im * _Complex_I);
 }
 
-bool B_complexD___bool__(B_complex n) {
+bool B_complex_bool(B_complex n) {
     return n->val != 0.0;
 }
 
-B_str B_complexD___str__(B_complex c) {
+B_str B_complex_str(B_complex c) {
     return $FORMAT("%f + %f*I", creal(c->val), cimag(c->val));
 }
 
-B_str B_complexD___repr__(B_complex c) {
+B_str B_complex_repr(B_complex c) {
     return $FORMAT("%f + %f*I", creal(c->val), cimag(c->val));
 }
 
@@ -223,3 +223,7 @@ B_NoneType B_complex_hash(B_complex a, B_hasher h) {
     zig_hash_wyhash_update(h->_hasher, (const uint8_t *)parts, sizeof(parts));
     return B_None;
 }
+
+// Show/Bool protocol entry points and legacy class-method shims.
+B_DEFINE_SHOW(complex)
+B_DEFINE_BOOL(complex)

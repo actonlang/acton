@@ -55,3 +55,7 @@ int64_t $arrayD_U__len(B_array self);
 bool B_arrayD___bool__(B_array self);
 B_str B_arrayD___str__(B_array self);
 B_str B_arrayD___repr__(B_array self);
+
+// Formatting uses the element Show witnesses, independently of stored hashing.
+bool B_array_bool(B_array self);
+B_str B_array_str(B_array self, B_Show elements);

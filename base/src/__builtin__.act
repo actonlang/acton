@@ -391,11 +391,11 @@ class BaseException (value):
     def __init__(self, msg: ?str=None) -> None:
         self.error_message = msg if msg is not None else ""
 
-    def __str__(self):
-        return f"{self._name()}: {self.error_message}"
+    def __str__(self) -> str:
+        NotImplemented
 
-    def __repr__(self):
-        return "{self._name()}({self.error_message.__repr__()})"
+    def __repr__(self) -> str:
+        NotImplemented
 
     def _name(self) -> str:
         NotImplemented
@@ -423,22 +423,22 @@ class IndexError (LookupError):
         self.index = index
         self.error_message = msg if msg is not None else "List index out of range"
 
-    def __str__(self):
-        return f"{self._name()}: {self.error_message}, index: {self.index}"
+    def __str__(self) -> str:
+        NotImplemented
 
-    def __repr__(self):
-        return "{self._name()}({self.index}, {self.error_message.__repr__()})"
+    def __repr__(self) -> str:
+        NotImplemented
 
 class KeyError(LookupError):
     def __init__(self, key: value, msg: ?str=None):
         self.key = key
         self.error_message = msg if msg is not None else "Key not found"
 
-    def __str__(self):
-        return f"{self._name()}: {self.error_message}, key: {str(self.key)}"
+    def __str__(self) -> str:
+        NotImplemented
 
-    def __repr__(self):
-        return '{self._name()}({self.key.__repr__()}, {self.error_message.__repr__()})'
+    def __repr__(self) -> str:
+        NotImplemented
 
 class MemoryError (Exception):
     pass
@@ -451,11 +451,11 @@ class FileNotFoundError (OSError):
         self.error_message = ""
         self.filename = filename
 
-    def __str__(self):
-        return f"{self._name()}: No such file or directory: '{self.filename}'"
+    def __str__(self) -> str:
+        NotImplemented
 
-    def __repr__(self):
-        return '{self._name()}({self.filename.__repr__()})'
+    def __repr__(self) -> str:
+        NotImplemented
 
 class RuntimeError (Exception):
     pass
@@ -757,6 +757,180 @@ extension object (Show):
     NotImplemented
 extension object (Bool):
     NotImplemented
+
+## Builtin Show and Bool implementations ############################################################
+
+# Container Show witnesses retain the formatting witnesses of their elements;
+# Bool only tests the container itself and adds no Show constraints.
+extension int (Show):
+    NotImplemented
+extension int (Bool):
+    NotImplemented
+
+extension i32 (Show):
+    NotImplemented
+extension i32 (Bool):
+    NotImplemented
+
+extension i16 (Show):
+    NotImplemented
+extension i16 (Bool):
+    NotImplemented
+
+extension i8 (Show):
+    NotImplemented
+extension i8 (Bool):
+    NotImplemented
+
+extension u64 (Show):
+    NotImplemented
+extension u64 (Bool):
+    NotImplemented
+
+extension u32 (Show):
+    NotImplemented
+extension u32 (Bool):
+    NotImplemented
+
+extension u16 (Show):
+    NotImplemented
+extension u16 (Bool):
+    NotImplemented
+
+extension u8 (Show):
+    NotImplemented
+extension u8 (Bool):
+    NotImplemented
+
+extension u1 (Show):
+    NotImplemented
+extension u1 (Bool):
+    NotImplemented
+
+extension bigint (Show):
+    NotImplemented
+extension bigint (Bool):
+    NotImplemented
+
+extension float (Show):
+    NotImplemented
+extension float (Bool):
+    NotImplemented
+
+extension bool (Show):
+    NotImplemented
+extension bool (Bool):
+    NotImplemented
+
+extension complex (Show):
+    NotImplemented
+extension complex (Bool):
+    NotImplemented
+
+extension slice (Show):
+    NotImplemented
+extension slice (Bool):
+    NotImplemented
+
+extension range (Show):
+    NotImplemented
+extension range (Bool):
+    NotImplemented
+
+extension hasher (Show):
+    NotImplemented
+extension hasher (Bool):
+    NotImplemented
+
+extension bitarray (Show):
+    NotImplemented
+extension bitarray (Bool):
+    NotImplemented
+
+extension bitset (Show):
+    NotImplemented
+extension bitset (Bool):
+    NotImplemented
+
+extension str (Show):
+    NotImplemented
+extension str (Bool):
+    NotImplemented
+
+extension bytes (Show):
+    NotImplemented
+extension bytes (Bool):
+    NotImplemented
+
+extension bytearray (Show):
+    NotImplemented
+extension bytearray (Bool):
+    NotImplemented
+
+extension list[A(Show)] (Show):
+    NotImplemented
+extension list[A] (Bool):
+    NotImplemented
+
+extension ilist[A(Show)] (Show):
+    NotImplemented
+extension ilist[A] (Bool):
+    NotImplemented
+
+extension array[A(ArrayElement,Show)] (Show):
+    NotImplemented
+extension array[A(ArrayElement)] (Bool):
+    NotImplemented
+
+extension dict[A(Hashable,Show),B(Show)] (Show):
+    NotImplemented
+extension dict[A(Hashable),B] (Bool):
+    NotImplemented
+
+extension idict[A(Hashable,Show),B(Show)] (Show):
+    NotImplemented
+extension idict[A(Hashable),B] (Bool):
+    NotImplemented
+
+extension set[A(Hashable,Show)] (Show):
+    NotImplemented
+extension set[A(Hashable)] (Bool):
+    NotImplemented
+
+extension iset[A(Hashable,Show)] (Show):
+    NotImplemented
+extension iset[A(Hashable)] (Bool):
+    NotImplemented
+
+# Exception formatters are written in Acton. Their legacy class methods
+# forward here until the class-slot cutover.
+extension BaseException (Show):
+    def __str__(self):
+        return f"{self._name()}: {self.error_message}"
+
+    def __repr__(self):
+        return "{self._name()}({self.error_message.__repr__()})"
+
+extension IndexError (Show):
+    def __str__(self):
+        return f"{self._name()}: {self.error_message}, index: {self.index}"
+
+    def __repr__(self):
+        return "{self._name()}({self.index}, {self.error_message.__repr__()})"
+
+extension KeyError (Show):
+    def __str__(self):
+        return f"{self._name()}: {self.error_message}, key: {str(self.key)}"
+
+    def __repr__(self):
+        return '{self._name()}({self.key.__repr__()}, {self.error_message.__repr__()})'
+
+extension FileNotFoundError (Show):
+    def __str__(self):
+        return f"{self._name()}: No such file or directory: '{self.filename}'"
+
+    def __repr__(self):
+        return '{self._name()}({self.filename.__repr__()})'
 
 ## Number protocol extensions ######################################################################
 

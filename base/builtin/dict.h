@@ -162,3 +162,10 @@ static inline int64_t $dictD_U__len(B_dict self) {
 static inline int64_t $idictD_U__len(B_idict self) {
     return (int64_t)self->numelements;
 }
+
+// Formatting uses the element Show witnesses, independently of stored hashing.
+bool B_dict_bool(B_dict self);
+bool B_idict_bool(B_idict self);
+B_str B_idict_str(B_idict self, B_Show keys, B_Show values);
+
+B_str B_dict_base_str(B_dict_base self, B_Show keys, B_Show values);

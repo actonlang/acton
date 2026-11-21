@@ -249,7 +249,7 @@ B_bitset B_bitsetD_full(int64_t capacity) {
     return self;
 }
 
-bool B_bitsetD___bool__(B_bitset self) {
+bool B_bitset_bool(B_bitset self) {
     return self->count != 0;
 }
 
@@ -261,20 +261,20 @@ static B_list B_bitset_elements(B_bitset self) {
     while (B_bitset_find(self, next, (uint64_t)self->capacity, &elem)) {
         B_int value = toB_int(elem);
         list_wit->$class->append(list_wit, values,
-                                 value->$class->__repr__(value));
+                                 B_int_repr(value));
         next = (uint64_t)elem + 1;
     }
     return values;
 }
 
-B_str B_bitsetD___str__(B_bitset self) {
+B_str B_bitset_str(B_bitset self) {
     B_str values = B_strD_join_par('[', B_bitset_elements(self), ']');
     return $FORMAT("bitset(%lld, %.*s)", (long long)self->capacity,
                    values->nbytes, values->str);
 }
 
-B_str B_bitsetD___repr__(B_bitset self) {
-    return B_bitsetD___str__(self);
+B_str B_bitset_repr(B_bitset self) {
+    return B_bitset_str(self);
 }
 
 int64_t B_bitsetD_capacity(B_bitset self) {
@@ -511,3 +511,7 @@ B_bitset B_bitsetD___deserialize__(B_bitset self, $Serial$state state) {
     }
     return self;
 }
+
+// Show/Bool protocol entry points and legacy class-method shims.
+B_DEFINE_SHOW(bitset)
+B_DEFINE_BOOL(bitset)

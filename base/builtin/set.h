@@ -119,3 +119,10 @@ static inline int64_t $setD_U__len(B_set self) {
 static inline int64_t $isetD_U__len(B_iset self) {
     return (int64_t)self->data.numelements;
 }
+
+// Formatting uses the element Show witnesses, independently of stored hashing.
+bool B_set_bool(B_set self);
+bool B_iset_bool(B_iset self);
+B_str B_iset_str(B_iset self, B_Show elements);
+
+B_str B_set_table_str(B_set_table *self, B_Show elements);

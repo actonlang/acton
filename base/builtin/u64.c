@@ -59,15 +59,15 @@ B_u64 B_u64D___deserialize__(B_u64 n, $Serial$state state) {
     return toB_u64((uint64_t)(uintptr_t)$val_deserialize(state));
 }
 
-bool B_u64D___bool__(B_u64 n) {
+bool B_u64_bool(B_u64 n) {
     return n->val != 0;
 }
 
-B_str B_u64D___str__(B_u64 n) {
+B_str B_u64_str(B_u64 n) {
     return $FORMAT("%llu", (unsigned long long)n->val);
 }
 
-B_str B_u64D___repr__(B_u64 n) {
+B_str B_u64_repr(B_u64 n) {
     return $FORMAT("%llu", (unsigned long long)n->val);
 }
 
@@ -272,3 +272,7 @@ B_NoneType B_HashableD_u64D_hash(B_HashableD_u64 wit, B_u64 a, B_hasher h) {
     zig_hash_wyhash_update(h->_hasher, (const uint8_t *)&(a->val), 8);
     return B_None;
 }
+
+// Show/Bool protocol entry points and legacy class-method shims.
+B_DEFINE_SHOW(u64)
+B_DEFINE_BOOL(u64)

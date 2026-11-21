@@ -70,15 +70,15 @@ bool B_rangeD___next__(B_range self, $WORD *out) {
     return true;
 }
 
-bool B_rangeD___bool__(B_range self) {
+bool B_range_bool(B_range self) {
     return true;
 }
 
-B_str B_rangeD___repr__(B_range self) {
+B_str B_range_repr(B_range self) {
     return $FORMAT("<range object at %p>", self);
 }
 
-B_str B_rangeD___str__(B_range self) {
+B_str B_range_str(B_range self) {
     return $FORMAT("<range object at %p>", self);
 }
 
@@ -95,3 +95,7 @@ B_range B_rangeD___deserialize__(B_range self, $Serial$state state) {
     res->remaining = fromB_int((B_int)$step_deserialize(state));
     return res;
 }
+
+// Show/Bool protocol entry points and legacy class-method shims.
+B_DEFINE_SHOW(range)
+B_DEFINE_BOOL(range)

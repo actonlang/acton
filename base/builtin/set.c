@@ -262,14 +262,15 @@ static B_NoneType B_set_table_init_from_iterable(B_set_table *set, B_Hashable ha
     return B_None;
 }
 
-static B_str B_set_table_str(B_set_table *set) {
+B_str B_set_table_str(B_set_table *set, B_Show show) {
     B_list parts = B_listD_new(set->numelements);
     B_SequenceD_list wit = B_SequenceD_listG_witness;
     for (uint64_t i = 0; i <= set->mask; i++) {
         B_setentry *entry = &set->table[i];
         if (ACTIVE_ENTRY(entry)) {
             B_value elem = (B_value)entry->key;
-            wit->$class->append(wit, parts, elem->$class->__repr__(elem));
+            B_str part = show ? show->$class->__repr__(show, elem) : elem->$class->__repr__(elem);
+            wit->$class->append(wit, parts, part);
         }
     }
     return B_strD_join_par('{', parts, '}');
@@ -568,12 +569,12 @@ B_NoneType B_setD___init__(B_set set, B_Hashable hashwit, B_Iterable wit, $WORD 
     return B_set_table_init_from_iterable(&set->data, hashwit, wit, iterable);
 }
 
-bool B_setD___bool__(B_set self) {
+bool B_set_bool(B_set self) {
     return self->data.numelements > 0;
 }
 
 B_str B_setD___str__(B_set self) {
-    return B_set_table_str(&self->data);
+    return B_set_table_str(&self->data, NULL);
 }
 
 B_str B_setD___repr__(B_set self) {
@@ -626,12 +627,12 @@ B_NoneType B_isetD___init__(B_iset set, B_Hashable hashwit, B_Iterable wit, $WOR
     return B_set_table_init_from_iterable(&set->data, hashwit, wit, iterable);
 }
 
-bool B_isetD___bool__(B_iset self) {
+bool B_iset_bool(B_iset self) {
     return self->data.numelements > 0;
 }
 
 B_str B_isetD___str__(B_iset self) {
-    B_str contents = B_set_table_str(&self->data);
+    B_str contents = B_set_table_str(&self->data, NULL);
     return $FORMAT("iset(%s)", contents->str);
 }
 
@@ -942,3 +943,30 @@ B_NoneType B_HashableD_isetD_hash(B_HashableD_iset wit, B_iset set, B_hasher h) 
 
 #undef ACTIVE_ENTRY
 #undef dummy
+
+B_DEFINE_BOOL(set)
+B_DEFINE_BOOL(iset)
+
+
+
+B_str B_ShowD_setD___str__(B_ShowD_set witness, B_set self) {
+    return B_set_table_str(&self->data, witness->W_ShowD_AD_ShowD_set);
+}
+
+B_str B_ShowD_setD___repr__(B_ShowD_set witness, B_set self) {
+    return B_set_table_str(&self->data, witness->W_ShowD_AD_ShowD_set);
+}
+
+B_str B_iset_str(B_iset self, B_Show elements) {
+    B_str contents = B_set_table_str(&self->data, elements);
+    return $FORMAT("iset(%s)", contents->str);
+}
+
+
+B_str B_ShowD_isetD___str__(B_ShowD_iset witness, B_iset self) {
+    return B_iset_str(self, witness->W_ShowD_AD_ShowD_iset);
+}
+
+B_str B_ShowD_isetD___repr__(B_ShowD_iset witness, B_iset self) {
+    return B_iset_str(self, witness->W_ShowD_AD_ShowD_iset);
+}

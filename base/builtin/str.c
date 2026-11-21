@@ -1039,16 +1039,16 @@ B_NoneType B_strD___init__(B_str self, B_value s) {
     return B_None;
 }
 
-bool B_strD___bool__(B_str s) {
+bool B_str_bool(B_str s) {
     return s->nchars > 0;
 };
 
-B_str B_strD___str__(B_str s) {
+B_str B_str_str(B_str s) {
     return s;
 }
 
 
-B_str B_strD___repr__(B_str s) {
+B_str B_str_repr(B_str s) {
     struct byte_counts bs = byte_count(s->str, s->nbytes);
     // We aim to produce a simple, readable representation of the string
     // - Default to single quotes unless string contains single quotes
@@ -2187,11 +2187,11 @@ B_NoneType B_bytearrayD___init__(B_bytearray self, B_bytes b) {
     return B_None;
 }
 
-bool B_bytearrayD___bool__(B_bytearray s) {
+bool B_bytearray_bool(B_bytearray s) {
     return s->nbytes > 0;
 };
 
-B_str B_bytearrayD___str__(B_bytearray s) {
+B_str B_bytearray_str(B_bytearray s) {
     struct byte_counts bs = byte_count(s->str, s->nbytes);
     bool use_single_quotes = !(bs.dquotes==0 && bs.squotes>0);
     int64_t escaped_quotes = use_single_quotes ? bs.squotes : bs.dquotes;
@@ -2212,8 +2212,8 @@ B_str B_bytearrayD___str__(B_bytearray s) {
     return res;
 }
 
-B_str B_bytearrayD___repr__(B_bytearray s) {
-    return B_bytearrayD___str__(s);
+B_str B_bytearray_repr(B_bytearray s) {
+    return B_bytearray_str(s);
 }
 
 void B_bytearrayD___serialize__(B_bytearray str,$Serial$state state) {
@@ -3408,11 +3408,11 @@ B_NoneType B_bytesD___init__(B_bytes self, B_Iterable wit, $WORD iter) {
     return B_None;
 }
 
-bool B_bytesD___bool__(B_bytes s) {
+bool B_bytes_bool(B_bytes s) {
     return s->nbytes > 0;
 };
 
-B_str B_bytesD___str__(B_bytes s) {
+B_str B_bytes_str(B_bytes s) {
     struct byte_counts bs = byte_count(s->str, s->nbytes);
     bool use_single_quotes = !(bs.dquotes==0 && bs.squotes>0);
     int64_t escaped_quotes = use_single_quotes ? bs.squotes : bs.dquotes;
@@ -3432,8 +3432,8 @@ B_str B_bytesD___str__(B_bytes s) {
     return res;
 }
 
-B_str B_bytesD___repr__(B_bytes s) {
-    return  B_bytesD___str__(s);
+B_str B_bytes_repr(B_bytes s) {
+    return  B_bytes_str(s);
 }
 
 void B_bytesD___serialize__(B_bytes str,$Serial$state state) {
@@ -4706,7 +4706,7 @@ B_str $FORMAT_len(const char *format, int64_t nbytes, ...) {
         } else if (format_is("sra", conv)) {
             B_str s = va_arg(args, B_str);
             if (conv == 'r')
-                s = B_strD___repr__(s);
+                s = B_str_repr(s);
             else if (conv == 'a')
                 s = B_ascii((B_value)s);
             format_str(&b, s, left, width, prec);
@@ -4738,3 +4738,11 @@ B_str $FORMAT_len(const char *format, int64_t nbytes, ...) {
     b.data[b.len] = 0;
     return str_from_c(b.data, b.len, false, &B_str_invalid_utf8_error);
 }
+
+// Show/Bool protocol entry points and legacy class-method shims.
+B_DEFINE_SHOW(str)
+B_DEFINE_BOOL(str)
+B_DEFINE_SHOW(bytes)
+B_DEFINE_BOOL(bytes)
+B_DEFINE_SHOW(bytearray)
+B_DEFINE_BOOL(bytearray)

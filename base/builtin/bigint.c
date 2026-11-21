@@ -172,15 +172,15 @@ B_bigint B_bigintD___deserialize__(B_bigint res,$Serial$state state) {
     return res;
 }
 
-bool B_bigintD___bool__(B_bigint n) {
+bool B_bigint_bool(B_bigint n) {
     return zz_cmpi(&n->val,0);
 }
 
-B_str B_bigintD___str__(B_bigint n) {
+B_str B_bigint_str(B_bigint n) {
     return actStrFromCString(get_str(&n->val));
 }
 
-B_str B_bigintD___repr__(B_bigint n) {
+B_str B_bigint_repr(B_bigint n) {
     return actStrFromCString(get_str(&n->val));
 }
 
@@ -1305,3 +1305,7 @@ struct B_bigint B_bigint_strs[256] =
                          {&B_bigintG_methods, B_bigint_longs+253, 1, 1},
                          {&B_bigintG_methods, B_bigint_longs+254, 1, 1},
                          {&B_bigintG_methods, B_bigint_longs+255, 1, 1}};
+
+// Show/Bool protocol entry points and legacy class-method shims.
+B_DEFINE_SHOW(bigint)
+B_DEFINE_BOOL(bigint)

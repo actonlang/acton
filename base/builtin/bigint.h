@@ -69,3 +69,8 @@ bool B_bigint_le(B_bigint a, B_bigint b);
 bool B_bigint_gt(B_bigint a, B_bigint b);
 bool B_bigint_ge(B_bigint a, B_bigint b);
 B_NoneType B_bigint_hash(B_bigint a, B_hasher h);
+
+// Witness-free formatting and truth workers.
+bool B_bigint_bool(B_bigint self);
+B_str B_bigint_str(B_bigint self);
+B_str B_bigint_repr(B_bigint self);

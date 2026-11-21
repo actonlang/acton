@@ -103,13 +103,14 @@ static bool B_list_base_bool(B_list_base self) {
     return self->length > 0;
 }
 
-static B_str B_list_base_str(B_list_base self) {
+B_str B_list_base_str(B_list_base self, B_Show show) {
     B_list parts = B_listD_new(self->length);
     for (int i = 0; i < self->length; i++) {
         B_value elem = (B_value)self->data[i];
         // __repr__ allocates, and the array of parts is reached through
         // parts, so each store has a barrier.
-        B_str r = elem == B_None ? B_None_str : elem->$class->__repr__(elem);
+        B_str r = show ? show->$class->__repr__(show, elem)
+                       : elem == B_None ? B_None_str : elem->$class->__repr__(elem);
         $WORD *data = parts->data;
         ACTON_STORE_ELEM(data, parts->length, r);
         parts->length++;
@@ -465,12 +466,12 @@ B_NoneType B_listD___init__(B_list self, B_Iterable wit, $WORD iterable) {
     return B_list_base_init((B_list_base)self, wit, iterable);
 }
 
-bool B_listD___bool__(B_list self) {
+bool B_list_bool(B_list self) {
     return B_list_base_bool((B_list_base)self);
 }
 
 B_str B_listD___str__(B_list self) {
-    return B_list_base_str((B_list_base)self);
+    return B_list_base_str((B_list_base)self, NULL);
 }
 
 B_str B_listD___repr__(B_list self) {
@@ -525,12 +526,12 @@ B_NoneType B_ilistD___init__(B_ilist self, B_Iterable wit, $WORD iterable) {
     return B_list_base_init((B_list_base)self, wit, iterable);
 }
 
-bool B_ilistD___bool__(B_ilist self) {
+bool B_ilist_bool(B_ilist self) {
     return B_list_base_bool((B_list_base)self);
 }
 
 B_str B_ilistD___str__(B_ilist self) {
-    B_str contents = B_list_base_str((B_list_base)self);
+    B_str contents = B_list_base_str((B_list_base)self, NULL);
     return $FORMAT("ilist(%s)", contents->str);
 }
 
@@ -808,3 +809,30 @@ struct B_SequenceD_listG_class B_SequenceD_listG_methods = {
     B_SequenceD_listD_append,
     B_SequenceD_listD_reverse
 };
+
+B_DEFINE_BOOL(list)
+B_DEFINE_BOOL(ilist)
+
+
+
+B_str B_ShowD_listD___str__(B_ShowD_list witness, B_list self) {
+    return B_list_base_str((B_list_base)self, witness->W_ShowD_AD_ShowD_list);
+}
+
+B_str B_ShowD_listD___repr__(B_ShowD_list witness, B_list self) {
+    return B_list_base_str((B_list_base)self, witness->W_ShowD_AD_ShowD_list);
+}
+
+B_str B_ilist_str(B_ilist self, B_Show elements) {
+    B_str contents = B_list_base_str((B_list_base)self, elements);
+    return $FORMAT("ilist(%s)", contents->str);
+}
+
+
+B_str B_ShowD_ilistD___str__(B_ShowD_ilist witness, B_ilist self) {
+    return B_ilist_str(self, witness->W_ShowD_AD_ShowD_ilist);
+}
+
+B_str B_ShowD_ilistD___repr__(B_ShowD_ilist witness, B_ilist self) {
+    return B_ilist_str(self, witness->W_ShowD_AD_ShowD_ilist);
+}

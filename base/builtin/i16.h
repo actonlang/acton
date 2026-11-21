@@ -18,3 +18,8 @@ extern struct B_ZeroDivisionError B_i16_mod_zero_error;
 #define i16_MOD(a,b)       ( {if (b==0) RAISE_EXC(&B_i16_mod_zero_error); a%b;} )
 
 int16_t i16_pow(int16_t a, int16_t b);
+
+// Witness-free formatting and truth workers.
+bool B_i16_bool(B_i16 self);
+B_str B_i16_str(B_i16 self);
+B_str B_i16_repr(B_i16 self);

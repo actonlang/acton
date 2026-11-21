@@ -34,3 +34,8 @@ uint64_t zig_hash_wyhash_final(void *hasher);
 uint64_t zig_hash_wyhash_hash_buffer(uint64_t seed, const uint8_t *ptr, size_t len);
 
 uint64_t zig_hash_wyhash_hash(uint64_t seed, B_bytes data);
+
+// Witness-free formatting and truth workers.
+bool B_hasher_bool(B_hasher self);
+B_str B_hasher_str(B_hasher self);
+B_str B_hasher_repr(B_hasher self);

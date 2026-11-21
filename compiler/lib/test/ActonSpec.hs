@@ -6151,6 +6151,37 @@ testShowBoolInheritance env0 = describe "Inherited Show and Bool witnesses" $ do
       Left (_ :: TypeError) -> pure ()
       Right _ -> expectationFailure "A parent clone cannot produce an arbitrary child"
 
+  it "declares direct Show/Bool witnesses for native builtin types" $ do
+    let env = TypeEnv.initTypeEnv env0
+    forM_ ["int", "i32", "i16", "i8", "u64", "u32", "u16", "u8", "u1"
+          ,"bigint", "float", "bool", "complex", "str", "bytes", "bytearray"
+          ,"slice", "range", "hasher", "bitarray", "bitset"] $ \name -> do
+      let t = S.tCon (S.TC (Builtin.gBuiltin (S.name name)) [])
+      forM_ [Builtin.pShow, Builtin.pBoolProtocol] $ \p ->
+        length (Solver.findWitness env t p) `shouldBe` 1
+
+  it "captures the element Show witness for list formatting" $ do
+    typed <- typecheckSource env0 "show_builtin_list" $ unlines
+      [ "def render[A(Show)](xs: list[A]) -> str:"
+      , "    return Show.__repr__(xs)" ]
+    Pretty.print typed `shouldSatisfy` isInfixOf "ShowD_list@[A](W_ShowD_A)"
+
+  it "does not require Show to test the truth of a list" $ do
+    typed <- typecheckSource env0 "bool_builtin_list" $ unlines
+      [ "def truth(xs: list[(int)->str]) -> bool:"
+      , "    return Bool.__bool__(xs)" ]
+    let listing = Pretty.print typed
+    listing `shouldSatisfy` isInfixOf "BoolD_list@"
+    listing `shouldSatisfy` (not . isInfixOf "ShowD_")
+
+  it "keeps array formatting evidence for an opaque generic element" $ do
+    typed <- typecheckSource env0 "show_builtin_array" $ unlines
+      [ "def render[A(ArrayElement)](xs: array[A]) -> str:"
+      , "    return Show.__str__(xs)" ]
+    let listing = Pretty.print typed
+    listing `shouldSatisfy` isInfixOf "ShowD_array@[A]("
+    listing `shouldSatisfy` isInfixOf "ShowD_value()"
+
 -- Tests for uninitialized class attribute checking
 
 testAttributesInitialization :: Acton.Env.Env0 -> Spec

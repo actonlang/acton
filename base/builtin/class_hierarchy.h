@@ -51,3 +51,21 @@ struct $Serializable {
 extern struct $SerializableG_class $SerializableG_methods;
 $Serializable $SerializableG_new();
   
+
+// A scalar formatter needs no receiver-witness state. Keep the old class ABI
+// alongside the protocol ABI during migration; both call the same native code.
+#define B_DEFINE_SHOW(T) \
+    B_str B_##T##D___str__(B_##T self) { return B_##T##_str(self); } \
+    B_str B_##T##D___repr__(B_##T self) { return B_##T##_repr(self); } \
+    B_str B_ShowD_##T##D___str__(B_ShowD_##T witness, B_##T self) { \
+        return B_##T##_str(self); \
+    } \
+    B_str B_ShowD_##T##D___repr__(B_ShowD_##T witness, B_##T self) { \
+        return B_##T##_repr(self); \
+    }
+
+#define B_DEFINE_BOOL(T) \
+    bool B_##T##D___bool__(B_##T self) { return B_##T##_bool(self); } \
+    bool B_BoolD_##T##D___bool__(B_BoolD_##T witness, B_##T self) { \
+        return B_##T##_bool(self); \
+    }

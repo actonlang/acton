@@ -59,15 +59,15 @@ B_u32 B_u32D___deserialize__(B_u32 n, $Serial$state state) {
     return toB_u32((uint32_t)(uintptr_t)$val_deserialize(state));
 }
 
-bool B_u32D___bool__(B_u32 n) {
+bool B_u32_bool(B_u32 n) {
     return n->val != 0;
 }
 
-B_str B_u32D___str__(B_u32 n) {
+B_str B_u32_str(B_u32 n) {
     return $FORMAT("%lu", n->val);
 }
 
-B_str B_u32D___repr__(B_u32 n) {
+B_str B_u32_repr(B_u32 n) {
     return $FORMAT("%lu", n->val);
 }
 
@@ -272,3 +272,7 @@ B_NoneType B_HashableD_u32D_hash(B_HashableD_u32 wit, B_u32 a, B_hasher h) {
     zig_hash_wyhash_update(h->_hasher, (const uint8_t *)&a->val, sizeof(a->val));
     return B_None;
 }
+
+// Show/Bool protocol entry points and legacy class-method shims.
+B_DEFINE_SHOW(u32)
+B_DEFINE_BOOL(u32)

@@ -1,0 +1,153 @@
+# Explicit protocol calls exercise the new builtin implementations. Public
+# str/repr/bool still exercise the legacy ABI, sharing the same native workers.
+def check[A(Show, Bool)](x: A):
+    try:
+        assert Show.__str__(x) == str(x)
+        assert Show.__repr__(x) == repr(x)
+        assert Bool.__bool__(x) == bool(x)
+    except Exception as error:
+        print("Builtin Show/Bool check failed for", type(x))
+        raise error
+
+class Item:
+    def __init__(self, n: int):
+        self.n = n
+
+extension Item(Show):
+    def __str__(self) -> str:
+        return "item " + str(self.n)
+    def __repr__(self) -> str:
+        return "Item(" + str(self.n) + ")"
+
+extension Item(Bool):
+    def __bool__(self) -> bool:
+        return self.n != 0
+
+extension Item(Hashable):
+    def __eq__(self, other: Item) -> bool:
+        return self.n == other.n
+    def hash(self, h: hasher) -> None:
+        self.n.hash(h)
+
+class View[A(Show, Bool)]:
+    def __init__(self, item: A):
+        self.item = item
+    def display(self) -> str:
+        return Show.__str__(self.item)
+    def truth(self) -> bool:
+        return Bool.__bool__(self.item)
+
+# An opaque A gets the inherited value formatter. The array implementation must
+# honor that witness rather than infer the formatter from its storage kind.
+def opaque_array[A(ArrayElement)](xs: array[A]) -> str:
+    return Show.__str__(xs)
+
+def increment(x: int) -> int:
+    return x + 1
+
+actor main(env):
+    try:
+        check(0)
+        check(7)
+        check(-7)
+        check(i8(-3))
+        check(i16(-300))
+        check(i32(-70000))
+        check(u1(1))
+        check(u8(65))
+        assert Bool.__bool__(u8(200))
+        check(u16(50000))
+        check(u32(3000000000))
+        check(u64(0xffffffffffffffff))
+        check(bigint(0))
+        check(bigint("123456789012345678901234567890"))
+        check(0.0)
+        check(-1.5)
+        check(False)
+        check(True)
+        check(complex(0))
+        check(complex.from_real_imag(1.0, -2.0))
+        check("")
+        check("a'b\nå")
+        check(b"")
+        check(b"a\x00b")
+        check(bytearray(b""))
+        check(bytearray(b"a\x00b"))
+        check(slice(1, 7, 2))
+        empty_range: range = range(0)
+        nonempty_range: range = range(3)
+        check(empty_range)
+        check(nonempty_range)
+        check(hasher())
+        check(bitarray(0))
+        check(bitarray(4, True))
+        check(bitset(0))
+        check(bitset(8, [1, 3]))
+        ai: array[int] = array(3, 2)
+        af: array[float] = array(2, 1.5)
+        ae: array[int] = array(0)
+        check(ai)
+        check(af)
+        check(ae)
+        assert Show.__str__(ai) == "[|2, 2, 2|]"
+        assert Show.__repr__(af) == "[|1.5, 1.5|]"
+        assert opaque_array(ai).startswith("[|<")
+        check([1, 2])
+        check(["a", "b"])
+        check([[1], [2]])
+        check(ilist([1, 2]))
+        check({1: "x"})
+        check(idict([(1, "x")]))
+        check(set([1, 2]))
+        check(iset([1, 2]))
+        empty_list: list[int] = []
+        empty_dict: dict[int, str] = {}
+        empty_set: set[int] = set()
+        check(empty_list)
+        check(empty_dict)
+        check(empty_set)
+        callbacks: list[(int)->int] = []
+        assert not Bool.__bool__(callbacks)
+        callbacks.append(increment)
+        assert Bool.__bool__(callbacks)
+        one = Item(7)
+        other = Item(2)
+        assert Show.__str__(one) == "item 7"
+        assert Show.__repr__(one) == "Item(7)"
+        assert not Bool.__bool__(Item(0))
+        assert Bool.__bool__([Item(0)])
+        assert Show.__str__([one]) == "[Item(7)]"
+        assert Show.__repr__([one]) == "[Item(7)]"
+        assert Show.__str__(ilist([one])) == "ilist([Item(7)])"
+        assert Show.__str__([[one], [other]]) == "[[Item(7)], [Item(2)]]"
+        assert Show.__str__({one: other}) == "{{Item(7):Item(2)}}"
+        assert Show.__str__(idict([(one, other)])) == "idict({{Item(7):Item(2)}})"
+        assert Show.__str__(set([one])) == "{{Item(7)}}"
+        assert Show.__str__(iset([one])) == "iset({{Item(7)}})"
+        # Conversion failures use statically initialized native exceptions,
+        # which must not depend on per-object protocol-witness fields.
+        try:
+            int("not-an-integer")
+            assert False
+        except ValueError as error:
+            assert Show.__str__(error) == str(error)
+            assert "ValueError" in str(error)
+        check(ValueError("bad value"))
+        check(IndexError(4))
+        check(KeyError("missing"))
+        check(FileNotFoundError("missing.txt"))
+        assert "bad value" in Show.__str__(ValueError("bad value"))
+        assert "index: 4" in Show.__str__(IndexError(4))
+        assert "missing.txt" in Show.__str__(FileNotFoundError("missing.txt"))
+        # Captured container witnesses retain their element policies through serde.
+        view: View[list[Item]] = View([one])
+        restored = deserialize(serialize(view))
+        if isinstance(restored, View):
+            assert restored.display() == "[Item(7)]"
+            assert restored.truth()
+        else:
+            assert False
+        env.exit(0)
+    except Exception as error:
+        print(error)
+        env.exit(1)

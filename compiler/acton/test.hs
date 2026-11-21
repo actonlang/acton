@@ -228,6 +228,21 @@ compilerTests =
           (code, out, err) <- runThing "" src
           assertEqual ("protocol receiver test should run: " ++ err) ExitSuccess code
           assertEqual "point3 should use its own extension" "(4,7)\n(5,6,7)\n" out
+  , testCase "builtin Show/Bool scalar witnesses remain static" $ do
+        withSystemTempDirectory "acton-show-bool-builtins" $ \tmp -> do
+          let src = tmp </> "show_bool_builtins.act"
+          copyFile "../../test/regression_auto/show_bool_builtins.act" src
+          (code, generated, err) <- buildThing "--quiet --dbg-no-lines --cgen" src
+          assertEqual ("C generation should succeed:\n" ++ generated ++ err) ExitSuccess code
+          forM_ ["int", "i32", "i16", "i8", "u64", "u32", "u16", "u8", "u1"
+                ,"bigint", "float", "bool", "complex", "str", "bytes", "bytearray"
+                ,"slice", "range", "hasher", "bitarray", "bitset"] $ \typ ->
+            forM_ ["Show", "Bool"] $ \protocol -> do
+              let name = "B_" ++ protocol ++ "D_" ++ typ
+              assertBool (name ++ " should use its static witness")
+                ((name ++ "G_witness") `isInfixOf` generated)
+              assertBool (name ++ " should not allocate a scalar witness")
+                (not ((name ++ "G_new(") `isInfixOf` generated))
   , testCase "inherited Show/Bool defaults use static root witnesses" $ do
         withSystemTempDirectory "acton-show-bool-inherited" $ \tmp -> do
           let src = tmp </> "show_bool_inherited_defaults.act"

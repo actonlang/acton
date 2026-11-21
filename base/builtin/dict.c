@@ -281,7 +281,7 @@ static bool B_dict_base_bool(B_dict_base self) {
     return self->numelements > 0;
 }
 
-static B_str B_dict_base_str(B_dict_base self) {
+B_str B_dict_base_str(B_dict_base self, B_Show keys, B_Show values) {
     B_list parts = B_listD_new(self->numelements);
     B_SequenceD_list wit = B_SequenceD_listG_witness;
     if (self->table) {
@@ -291,8 +291,9 @@ static B_str B_dict_base_str(B_dict_base self) {
                 continue;
             B_value key = (B_value)entry->key;
             B_value value = (B_value)entry->value;
-            B_str keystr = key->$class->__repr__(key);
-            B_str valuestr = value ? value->$class->__repr__(value) : B_None_str;
+            B_str keystr = keys ? keys->$class->__repr__(keys, key) : key->$class->__repr__(key);
+            B_str valuestr = values ? values->$class->__repr__(values, value)
+                                   : value ? value->$class->__repr__(value) : B_None_str;
             B_str elem = acton_malloc(sizeof(struct B_str));
             elem->$class = &B_strG_methods;
             elem->nbytes = keystr->nbytes + valuestr->nbytes + 1;
@@ -408,12 +409,12 @@ B_NoneType B_dictD___init__(B_dict self, B_Hashable hashwit, B_Iterable wit, $WO
     return B_dict_base_init((B_dict_base)self, hashwit, wit, iterable);
 }
 
-bool B_dictD___bool__(B_dict self) {
+bool B_dict_bool(B_dict self) {
     return B_dict_base_bool((B_dict_base)self);
 }
 
 B_str B_dictD___str__(B_dict self) {
-    return B_dict_base_str((B_dict_base)self);
+    return B_dict_base_str((B_dict_base)self, NULL, NULL);
 }
 
 B_str B_dictD___repr__(B_dict self) {
@@ -447,12 +448,12 @@ B_NoneType B_idictD___init__(B_idict self, B_Hashable hashwit, B_Iterable wit, $
     return B_dict_base_init((B_dict_base)self, hashwit, wit, iterable);
 }
 
-bool B_idictD___bool__(B_idict self) {
+bool B_idict_bool(B_idict self) {
     return B_dict_base_bool((B_dict_base)self);
 }
 
 B_str B_idictD___str__(B_idict self) {
-    B_str contents = B_dict_base_str((B_dict_base)self);
+    B_str contents = B_dict_base_str((B_dict_base)self, NULL, NULL);
     return $FORMAT("idict(%s)", contents->str);
 }
 
@@ -1077,3 +1078,30 @@ B_NoneType B_dictD_clear(B_dict dict, B_Hashable hashwit) {
     return B_None;
 }
 */
+
+B_DEFINE_BOOL(dict)
+B_DEFINE_BOOL(idict)
+
+
+
+B_str B_ShowD_dictD___str__(B_ShowD_dict witness, B_dict self) {
+    return B_dict_base_str((B_dict_base)self, witness->W_ShowD_AD_ShowD_dict, witness->W_ShowD_BD_ShowD_dict);
+}
+
+B_str B_ShowD_dictD___repr__(B_ShowD_dict witness, B_dict self) {
+    return B_dict_base_str((B_dict_base)self, witness->W_ShowD_AD_ShowD_dict, witness->W_ShowD_BD_ShowD_dict);
+}
+
+B_str B_idict_str(B_idict self, B_Show keys, B_Show values) {
+    B_str contents = B_dict_base_str((B_dict_base)self, keys, values);
+    return $FORMAT("idict(%s)", contents->str);
+}
+
+
+B_str B_ShowD_idictD___str__(B_ShowD_idict witness, B_idict self) {
+    return B_idict_str(self, witness->W_ShowD_AD_ShowD_idict, witness->W_ShowD_BD_ShowD_idict);
+}
+
+B_str B_ShowD_idictD___repr__(B_ShowD_idict witness, B_idict self) {
+    return B_idict_str(self, witness->W_ShowD_AD_ShowD_idict, witness->W_ShowD_BD_ShowD_idict);
+}

@@ -10,3 +10,8 @@ void $rangeD_U_init(B_range self, int64_t start, int64_t stop, int64_t step);
 B_range $rangeD_U_new(int64_t start, int64_t stop, int64_t step);
 bool $rangeD_U__next_i64(B_range self, int64_t *out);
 bool B_rangeD___next__(B_range self, $WORD *out);
+
+// Witness-free formatting and truth workers.
+bool B_range_bool(B_range self);
+B_str B_range_str(B_range self);
+B_str B_range_repr(B_range self);

@@ -18,6 +18,41 @@ B_str B_valueD___str__ (B_value);
 B_str B_valueD___repr__ (B_value);
 
 
+// Legacy class slots forward directly to the protocol implementation. Keep
+// these bridges native: an Acton forwarding body captures a witness in each
+// object, while STATIC_EXCEPTION values bypass the Acton constructor.
+B_str B_BaseExceptionD___str__(B_BaseException self) {
+    return B_ShowD_BaseExceptionD___str__(B_ShowD_BaseExceptionG_witness, self);
+}
+
+B_str B_BaseExceptionD___repr__(B_BaseException self) {
+    return B_ShowD_BaseExceptionD___repr__(B_ShowD_BaseExceptionG_witness, self);
+}
+
+B_str B_IndexErrorD___str__(B_IndexError self) {
+    return B_ShowD_IndexErrorD___str__(B_ShowD_IndexErrorG_witness, self);
+}
+
+B_str B_IndexErrorD___repr__(B_IndexError self) {
+    return B_ShowD_IndexErrorD___repr__(B_ShowD_IndexErrorG_witness, self);
+}
+
+B_str B_KeyErrorD___str__(B_KeyError self) {
+    return B_ShowD_KeyErrorD___str__(B_ShowD_KeyErrorG_witness, self);
+}
+
+B_str B_KeyErrorD___repr__(B_KeyError self) {
+    return B_ShowD_KeyErrorD___repr__(B_ShowD_KeyErrorG_witness, self);
+}
+
+B_str B_FileNotFoundErrorD___str__(B_FileNotFoundError self) {
+    return B_ShowD_FileNotFoundErrorD___str__(B_ShowD_FileNotFoundErrorG_witness, self);
+}
+
+B_str B_FileNotFoundErrorD___repr__(B_FileNotFoundError self) {
+    return B_ShowD_FileNotFoundErrorD___repr__(B_ShowD_FileNotFoundErrorG_witness, self);
+}
+
 B_NoneType $SEQD___init__ ($SEQ self) {
     self->error_message = NULL;
     return B_None;

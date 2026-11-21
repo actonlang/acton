@@ -13,15 +13,15 @@ uint64_t B_hasherD_finalize (B_hasher self) {
     return h;
 }
 
-bool B_hasherD___bool__(B_hasher h) {
+bool B_hasher_bool(B_hasher h) {
     return true;
 }
 
-B_str B_hasherD___str__(B_hasher self) {
+B_str B_hasher_str(B_hasher self) {
     return $FORMAT("<hasher object at %p>", self);
 }
 
-B_str B_hasherD___repr__(B_hasher self) {
+B_str B_hasher_repr(B_hasher self) {
     return $FORMAT("<hasher object at %p>",self);
 }
 
@@ -100,3 +100,7 @@ B_hasher B_hasherD___deserialize__(B_hasher self, $Serial$state state) {
     // TODO
     return B_hasherG_new(0);
 }
+
+// Show/Bool protocol entry points and legacy class-method shims.
+B_DEFINE_SHOW(hasher)
+B_DEFINE_BOOL(hasher)

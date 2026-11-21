@@ -113,3 +113,10 @@ static inline __attribute__((always_inline)) B_list_base B_list_base_irepeat(B_l
     B_list_base_imul(lst, n);
     return lst;
 }
+
+// Formatting uses the element Show witnesses, independently of stored hashing.
+bool B_list_bool(B_list self);
+bool B_ilist_bool(B_ilist self);
+B_str B_ilist_str(B_ilist self, B_Show elements);
+
+B_str B_list_base_str(B_list_base self, B_Show elements);

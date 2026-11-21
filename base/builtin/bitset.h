@@ -45,3 +45,8 @@ B_NoneType $bitsetD_U_discard(B_bitset self, int64_t elem);
 static inline int64_t $bitsetD_U__len(B_bitset self) {
     return (int64_t)self->count;
 }
+
+// Witness-free formatting and truth workers.
+bool B_bitset_bool(B_bitset self);
+B_str B_bitset_str(B_bitset self);
+B_str B_bitset_repr(B_bitset self);

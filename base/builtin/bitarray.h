@@ -43,3 +43,8 @@ int64_t $bitarrayD_U__len(B_bitarray self);
 bool B_bitarrayD___bool__(B_bitarray self);
 B_str B_bitarrayD___str__(B_bitarray self);
 B_str B_bitarrayD___repr__(B_bitarray self);
+
+// Witness-free formatting and truth workers.
+bool B_bitarray_bool(B_bitarray self);
+B_str B_bitarray_str(B_bitarray self);
+B_str B_bitarray_repr(B_bitarray self);

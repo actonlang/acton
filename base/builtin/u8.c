@@ -59,15 +59,15 @@ B_u8 B_u8D___deserialize__(B_u8 n, $Serial$state state) {
     return toB_u8((uint8_t)(uintptr_t)$val_deserialize(state));
 }
 
-bool B_u8D___bool__(B_u8 n) {
+bool B_u8_bool(B_u8 n) {
     return n->val != 0;
 }
 
-B_str B_u8D___str__(B_u8 n) {
+B_str B_u8_str(B_u8 n) {
     return $FORMAT("%c",(unsigned char) n->val);
 }
 
-B_str B_u8D___repr__(B_u8 n) {
+B_str B_u8_repr(B_u8 n) {
     return $FORMAT("%c", (unsigned char)n->val);
 }
 
@@ -272,3 +272,7 @@ B_NoneType B_HashableD_u8D_hash(B_HashableD_u8 wit, B_u8 a, B_hasher h) {
     zig_hash_wyhash_update(h->_hasher, (const uint8_t *)&a->val, sizeof(a->val));
     return B_None;
 }
+
+// Show/Bool protocol entry points and legacy class-method shims.
+B_DEFINE_SHOW(u8)
+B_DEFINE_BOOL(u8)

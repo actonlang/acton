@@ -61,15 +61,15 @@ B_int B_intD___deserialize__(B_int n, $Serial$state state) {
     return toB_int((int64_t)(intptr_t)$val_deserialize(state));
 }
 
-bool B_intD___bool__(B_int n) {
+bool B_int_bool(B_int n) {
     return n->val != 0;
 }
 
-B_str B_intD___str__(B_int n) {
+B_str B_int_str(B_int n) {
     return $FORMAT("%lld", n->val);
 }
 
-B_str B_intD___repr__(B_int n) {
+B_str B_int_repr(B_int n) {
     return $FORMAT("%lld", n->val);
 }
 
@@ -560,3 +560,7 @@ B_NoneType B_HashableD_intD_hash(B_HashableD_int wit, B_int a, B_hasher h) {
     zig_hash_wyhash_update(h->_hasher, (const uint8_t *)&(a->val), 8);
     return B_None;
 }
+
+// Show/Bool protocol entry points and legacy class-method shims.
+B_DEFINE_SHOW(int)
+B_DEFINE_BOOL(int)

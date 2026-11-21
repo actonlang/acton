@@ -250,3 +250,14 @@ B_bytearray B_bytearray_zero(void);
 B_bytearray B_bytearray_mul(B_bytearray a, int64_t n);
 B_bytearray B_bytearray_iadd(B_bytearray a, B_bytearray b);
 B_bytearray B_bytearray_imul(B_bytearray a, int64_t n);
+
+// Witness-free formatting and truth workers.
+bool B_str_bool(B_str self);
+B_str B_str_str(B_str self);
+B_str B_str_repr(B_str self);
+bool B_bytes_bool(B_bytes self);
+B_str B_bytes_str(B_bytes self);
+B_str B_bytes_repr(B_bytes self);
+bool B_bytearray_bool(B_bytearray self);
+B_str B_bytearray_str(B_bytearray self);
+B_str B_bytearray_repr(B_bytearray self);

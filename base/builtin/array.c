@@ -75,11 +75,11 @@ B_NoneType B_arrayD___init__(B_array self, B_ArrayElement wit, int64_t length,
     return B_None;
 }
 
-bool B_arrayD___bool__(B_array self) {
+bool B_array_bool(B_array self) {
     return self->length != 0;
 }
 
-B_str B_arrayD___str__(B_array self) {
+B_str B_array_str(B_array self, B_Show show) {
     if (self->length > INT_MAX)
         RAISE_EXC(&B_array_representation_too_large_error);
 
@@ -88,15 +88,19 @@ B_str B_arrayD___str__(B_array self) {
     B_list parts = B_listD_new((int)self->length);
     if (self->kind == B_ARRAY_INT) {
         int64_t *data = self->data;
+        bool native = !show || show->$class == (struct B_ShowG_class *)&B_ShowD_intG_methods;
         for (int64_t i = 0; i < self->length; i++) {
-            B_str s = $FORMAT("%lld", data[i]);
+            B_str s = native ? $FORMAT("%lld", data[i])
+                             : show->$class->__repr__(show, toB_int(data[i]));
             ACTON_STORE(parts->data, parts->data[parts->length], s);
             parts->length++;
         }
     } else {
         double *data = self->data;
+        bool native = !show || show->$class == (struct B_ShowG_class *)&B_ShowD_floatG_methods;
         for (int64_t i = 0; i < self->length; i++) {
-            B_str s = $FORMAT("%g", data[i]);
+            B_str s = native ? $FORMAT("%g", data[i])
+                             : show->$class->__repr__(show, toB_float(data[i]));
             ACTON_STORE(parts->data, parts->data[parts->length], s);
             parts->length++;
         }
@@ -104,6 +108,10 @@ B_str B_arrayD___str__(B_array self) {
 
     B_str bracketed = B_strD_join_par('[', parts, ']');
     return $FORMAT("[|%.*s|]", bracketed->nbytes - 2, bracketed->str + 1);
+}
+
+B_str B_arrayD___str__(B_array self) {
+    return B_array_str(self, NULL);
 }
 
 B_str B_arrayD___repr__(B_array self) {
@@ -350,4 +358,16 @@ B_array B_arrayD___deserialize__(B_array self, $Serial$state state) {
     if (length > 0)
         memcpy(self->data, &row->blob[2], (size_t)length * sizeof(uint64_t));
     return self;
+}
+
+B_DEFINE_BOOL(array)
+
+
+
+B_str B_ShowD_arrayD___str__(B_ShowD_array witness, B_array self) {
+    return B_array_str(self, witness->W_ShowD_AD_ShowD_array);
+}
+
+B_str B_ShowD_arrayD___repr__(B_ShowD_array witness, B_array self) {
+    return B_array_str(self, witness->W_ShowD_AD_ShowD_array);
 }
