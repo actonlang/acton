@@ -29,6 +29,17 @@ impl hash, or, for a deferred back job, with a hash of its impl hash and
 its selected names.  The test result cache keys each test on its name's
 impl hash.
 
+The code of a module's NotImplemented bodies is the hand-written .ext.c
+next to its source, which its generated .c includes.  The recorded source
+hash covers the .ext.c, and the .ext.c's content hash is part of the own
+impl hash of each NotImplemented name.  An edit of the .ext.c alone thus
+changes the impl hash of the module, the tag of its generated .c and the
+key of every test that uses those names.  The C compiler's cache cannot
+stand in for this: Zig learns the files a C file includes only when it
+compiles that file, and the cache of a whole library forgets them when a
+build reuses the object, so a later edit of only the .ext.c would reuse
+the old library.
+
 Plan
 ----
 
@@ -59,11 +70,12 @@ them.  A discovered module is a CompileTask:
 A header can be trusted when the .tydb exists, its header reads and the
 compiler binary is not newer than the .tydb (--ignore-compiler-version
 skips that check).  It is trusted without reading the source when the
-source's stat (device, inode, size, mtime, ctime) equals the recorded one
-and its mtime is strictly older than the .tydb's.  Strictly, because on a
-file system with coarse timestamps a changed source and the .tydb written
-from its previous version can show the same time.  Otherwise it is
-trusted when the content hash of the source equals the recorded one, and
+module has no .ext.c, the source's stat (device, inode, size, mtime,
+ctime) equals the recorded one and its mtime is strictly older than the
+.tydb's.  Strictly, because on a file system with coarse timestamps a
+changed source and the .tydb written from its previous version can show
+the same time.  Otherwise it is trusted when the content hash of the
+source, with that of its .ext.c, equals the recorded one, and
 the recorded stat is then refreshed in place.  An editor overlay is
 compared by content hash only.  A module whose header is not trusted is
 read from its source.
@@ -337,6 +349,7 @@ import System.Directory
 import System.Environment (getExecutablePath)
 import System.FilePath.Posix
 import System.IO
+import System.IO.Error (isDoesNotExistError)
 import System.Posix.Files (deviceID, fileID, fileSize, getFileStatus, modificationTimeHiRes, statusChangeTimeHiRes)
 import Text.Show.Pretty (ppDoc)
 
@@ -389,11 +402,14 @@ importsOf (ParseErrorTask _)            = []
 
 -- | The text and bytes of one read of a module's source (two handles for a
 -- disk read): the text is parsed, the bytes are hashed, and the stat is
--- recorded in its .tydb.
+-- recorded in its .tydb.  The content hash of the module's .ext.c, read
+-- with it, goes into the recorded source hash and into the impl hashes of
+-- its NotImplemented names.
 data ModuleSource = ModuleSource
-  { sourceText  :: String
-  , sourceBytes :: B.ByteString
-  , sourceMeta  :: Maybe InterfaceFiles.SourceFileMeta     -- Nothing for an editor overlay
+  { sourceText    :: String
+  , sourceBytes   :: B.ByteString
+  , sourceMeta    :: Maybe InterfaceFiles.SourceFileMeta     -- Nothing for an editor overlay
+  , sourceExtHash :: Maybe B.ByteString                      -- Nothing without an .ext.c
   }
 
 -- | Generating C for one module.
@@ -1285,22 +1301,24 @@ buildGlobalTasks sp gopts opts projects pathsByProject seedFiles = do
 -- reused when the compiler binary is not newer than the .tydb and the source
 -- is unchanged: by recorded stat with the source older than the .tydb, else by
 -- content hash (then the recorded stat is refreshed in place).  An editor
--- overlay is compared by content only.  Otherwise only the source header is
--- parsed.  Reading can write: the stat refresh.
+-- overlay is compared by content only, and so is a module with an .ext.c,
+-- whose content hash the recorded one covers.  Otherwise only the source
+-- header is parsed.  Reading can write: the stat refresh.
 readModuleTask :: Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -> Paths -> A.ModName -> FilePath -> IO CompileTask
 readModuleTask sp gopts opts paths mn file = do
     reusable <- reusableHeader opts tydb
     case reusable of
       Nothing               -> fromSource =<< Source.readSource sp file
       Just (header, tydbNs) -> do
+        extHash <- readExtSourceHash file
         overlay <- Source.spReadOverlay sp file
         case overlay of
-          Just snap -> verify header snap Nothing
+          Just snap -> verify header snap extHash Nothing
           Nothing   -> do
             meta <- readSourceFileMeta file
-            if InterfaceFiles.summarySourceMeta header == Just meta && InterfaceFiles.sfmMTimeNs meta < tydbNs
+            if isNothing extHash && InterfaceFiles.summarySourceMeta header == Just meta && InterfaceFiles.sfmMTimeNs meta < tydbNs
               then return (TyTask header)
-              else Source.spReadFile sp file >>= \snap -> verify header snap (Just meta)
+              else Source.spReadFile sp file >>= \snap -> verify header snap extHash (Just meta)
   where
     tydb = tyDbPath paths mn
 
@@ -1314,8 +1332,8 @@ readModuleTask sp gopts opts paths mn file = do
     -- whole .tydb would re-derive its dependency rows from the stored
     -- per-name hashes, whose external dependencies are stripped, and so lose
     -- their users and hashes.
-    verify header snap meta = do
-      let hash = SHA256.hash (Source.ssBytes snap)
+    verify header snap extHash meta = do
+      let hash = moduleSourceHash (Source.ssBytes snap) extHash
           same = hash == InterfaceFiles.summarySourceHash header
       when (C.verbose gopts && Source.ssIsOverlay snap) $ do
         actTime <- Source.spGetModTime sp file
@@ -1357,9 +1375,32 @@ compilerNewerThan opts ns
 
 -- | A module source from a snapshot: an overlay records no stat.
 moduleSource :: FilePath -> Source.SourceSnapshot -> IO ModuleSource
-moduleSource file snap = ModuleSource (Source.ssText snap) (Source.ssBytes snap) <$> meta
+moduleSource file snap = ModuleSource (Source.ssText snap) (Source.ssBytes snap) <$> meta <*> readExtSourceHash file
   where meta | Source.ssIsOverlay snap  = return Nothing
              | otherwise                = Just <$> readSourceFileMeta file
+
+-- | The .ext.c next to a module's source, whose C code implements the
+-- module's NotImplemented bodies.  The generated .c includes it.
+extSourceFile :: FilePath -> FilePath
+extSourceFile file = dropExtension file <.> "ext.c"
+
+-- | The content hash of a module's .ext.c, Nothing when it has none.
+readExtSourceHash :: FilePath -> IO (Maybe B.ByteString)
+readExtSourceHash file = do
+    res <- try (B.readFile (extSourceFile file))
+    case res of
+      Right bytes -> return (Just (SHA256.hash bytes))
+      Left err
+        | isDoesNotExistError err -> return Nothing
+        | otherwise               -> throwIO err
+
+-- | The source hash a module's .tydb records: of the source bytes, combined
+-- with the content hash of the module's .ext.c when it has one.  The C
+-- compiler sees an .ext.c only through the generated .c, so an edit of the
+-- .ext.c alone must count as a change of the module.
+moduleSourceHash :: B.ByteString -> Maybe B.ByteString -> B.ByteString
+moduleSourceHash bytes Nothing        = SHA256.hash bytes
+moduleSourceHash bytes (Just extHash) = SHA256.hash (B.concat [SHA256.hash bytes, B.pack "ext.c:", extHash])
 
 -- | Read stable source metadata used for quick .tydb reuse checks.
 -- Device/inode act as file identity on POSIX so metadata drift from copies or
@@ -2534,11 +2575,14 @@ hashPass env source parsed checked = do
         step base done = when ((base + done) `rem` stride == 0) (report False (base + done))
     _            <- evaluate afterImplDeps
     report True 0
-    -- Of the raw bytes, so any edit of the source counts as a change.
-    sourceHash   <- forced (SHA256.hash (sourceBytes source))
+    -- Of the raw bytes and the .ext.c, so any edit of either counts as a
+    -- change.
+    sourceHash   <- forced (moduleSourceHash (sourceBytes source) (sourceExtHash source))
     imports      <- resolveAll (\m -> fmap ((,) m) <$> resolveModule resolver Pub m) MissingInterface headerImports
     srcHashes    <- forced =<< Hashing.nameHashesFromItemsWithProgress (step 0) srcItems
-    implOwn      <- forced =<< Hashing.nameHashesFromItemsWithProgress (step afterSource) implItems
+    -- The .ext.c is the implementation of the NotImplemented names.
+    implOwn      <- forced . Hashing.withExtImplHash (sourceExtHash source) implItems
+                      =<< Hashing.nameHashesFromItemsWithProgress (step afterSource) implItems
     keys         <- forced (M.keysSet srcHashes `Data.Set.union` M.keysSet implOwn)
     selfPub      <- forced =<< Hashing.nameInfoHashesWithProgress (step afterImpl) infos
     selfPubBits  <- forced (Hashing.withEscapeBits (checkedEscapes checked) selfPub)

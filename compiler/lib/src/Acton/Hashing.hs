@@ -24,6 +24,7 @@ module Acton.Hashing
   , nameInfoHashes
   , nameInfoHashesWithProgress
   , withEscapeBits
+  , withExtImplHash
   , nameHashesFromItemsWithProgress
   , pubSigSplitDepsFromNameInfoMapWithProgress
   , implSplitDepsFromItemsWithProgress
@@ -1695,6 +1696,22 @@ withEscapeBits summaries = M.mapWithKey addBits
   where
     bits = M.fromList [ (n, B.pack [ if mayEscape then '1' else '0' | (_, mayEscape) <- ps ]) | ([n], ps) <- summaries ]
     addBits n h = maybe h (\b -> SHA256.hash (h <> B.pack "escape:" <> b)) (M.lookup n bits)
+
+-- | Fold the content hash of a module's .ext.c into the own impl hash of
+-- each name whose definition has a NotImplemented body, as SHA256 of the
+-- hash, "ext.c:" and the content hash.  The C code of the .ext.c is the
+-- implementation of those names, so an edit of it is an impl change of
+-- exactly them and the names and tests that use them.
+withExtImplHash :: Maybe B.ByteString -> [TopLevelItem] -> M.Map A.Name B.ByteString -> M.Map A.Name B.ByteString
+withExtImplHash Nothing _ own            = own
+withExtImplHash (Just extHash) items own = M.mapWithKey addExt own
+  where
+    notImpl = Data.Set.fromList [ topLevelItemName item | item <- items, itemNotImpl item ]
+    addExt n h
+      | Data.Set.member n notImpl = SHA256.hash (h <> B.pack "ext.c:" <> extHash)
+      | otherwise                 = h
+    itemNotImpl (TLDecl _ d) = A.hasNotImpl (A.declbody d)
+    itemNotImpl (TLStmt _ s) = A.isNotImpl s
 
 prepareNameHashInputs :: A.ModName
                       -> Env.Env0

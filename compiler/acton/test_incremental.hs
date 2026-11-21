@@ -3272,6 +3272,59 @@ p60_plan_after_failed_fetch_fetches_again =
             (fetchError `isInfixOf` msg)
         Right _ -> assertFailure ("expected the " ++ which ++ " plan to fetch and fail")
 
+p61_ext_c_edit_rebuilds_module :: TestTree
+p61_ext_c_edit_rebuilds_module =
+  testCase "61-edit of only an .ext.c rebuilds its module and the binary" $ do
+    let proj = casesProjDir
+        src = casesSrcDir
+        modNative = modLabel proj "native"
+        modMain = modLabel proj "main"
+        prefix = T.pack casesProjName <> "Q_nativeQ_"
+        extC :: Int -> T.Text
+        extC n = T.unlines
+          [ "void " <> prefix <> "__ext_init__() {"
+          , "}"
+          , ""
+          , "int64_t " <> prefix <> "answer() {"
+          , "    return " <> T.pack (show n) <> ";"
+          , "}"
+          ]
+        mainAct :: T.Text -> T.Text
+        mainAct label = T.unlines
+          [ "import native"
+          , ""
+          , "actor main(env: Env):"
+          , "    print(\"" <> label <> "\", native.answer())"
+          , "    env.exit(0)"
+          ]
+    ensureCasesProject
+    writeFileUtf8 (src </> "native.act") $ T.unlines
+      [ "def answer() -> int:"
+      , "    NotImplemented"
+      ]
+    writeFileUtf8 (src </> "native.ext.c") (extC 1)
+    writeFileUtf8 (src </> "main.act") (mainAct "a")
+    _ <- buildOutIn proj
+    out1 <- runBinaryIn proj "main"
+    out1 @?= "a 1\n"
+    -- Zig's cache of the whole library learns the files a C file includes
+    -- only when it compiles that file. This build compiles only main's C and
+    -- reuses native's object, so afterwards the library's cache no longer
+    -- knows native.ext.c.
+    writeFileUtf8 (src </> "main.act") (mainAct "b")
+    _ <- buildOutIn proj
+    out2 <- runBinaryIn proj "main"
+    out2 @?= "b 1\n"
+    writeFileUtf8 (src </> "native.ext.c") (extC 2)
+    out3 <- buildOutIn proj
+    assertBool "expected native.act to type check after an edit of its .ext.c" (typechecked out3 modNative)
+    assertBool "did not expect main.act to type check after an edit of native.ext.c" (not (typechecked out3 modMain))
+    out3run <- runBinaryIn proj "main"
+    out3run @?= "b 2\n"
+    out4 <- buildOutIn proj
+    assertBool "did not expect native.act to type check again" (not (typechecked out4 modNative))
+    assertBool "did not expect native.act to compile again" (not (compiled out4 modNative))
+
 -- Compile events -------------------------------------------------------------
 
 -- | The events the compiler library reports while it rebuilds a small module
@@ -3570,6 +3623,7 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
       , p38_project_lock_blocks_build
       , p39_background_lock_does_not_block_build
       , p40_background_lock_blocks_watch
+      , p61_ext_c_edit_rebuilds_module
       ]
   , sequentialTestGroup "incremental-cache-cases" AllSucceed
       [ p41_stale_header_missing_import_reparses_source
