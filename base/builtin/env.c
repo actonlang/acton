@@ -23,6 +23,7 @@
 
 #if defined(_WIN32) || defined(_WIN64)
 #else
+#include <sys/ioctl.h>
 #include <termios.h>
 #endif
 #include <unistd.h>
@@ -124,6 +125,30 @@ $R B_StdioD_set_stdinG_local (B_Stdio self, $Cont c$cont, B_bool canonical, B_bo
     tcsetattr(STDIN_FILENO, TCSANOW, &attr);
 #endif
     return $R_CONT(c$cont, B_None);
+}
+
+// A terminal that reports no size gives 0 columns and 0 rows, like a new
+// pseudo terminal. On Windows the size is that of the visible window of the
+// console, not of its scrollback buffer.
+$R B_StdioD_term_sizeG_local (B_Stdio self, $Cont c$cont) {
+    int64_t columns = 0;
+    int64_t rows = 0;
+#if defined(_WIN32) || defined(_WIN64)
+    CONSOLE_SCREEN_BUFFER_INFO info;
+    if (GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &info)) {
+        columns = (int64_t)info.srWindow.Right - info.srWindow.Left + 1;
+        rows = (int64_t)info.srWindow.Bottom - info.srWindow.Top + 1;
+    }
+#else
+    struct winsize size;
+    if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &size) == 0) {
+        columns = size.ws_col;
+        rows = size.ws_row;
+    }
+#endif
+    if (columns <= 0 || rows <= 0)
+        return $R_CONT(c$cont, B_None);
+    return $R_CONT(c$cont, $NEWTUPLE(2, to$int(columns), to$int(rows)));
 }
 
 // The one stdin reader of the process, with the callback of the last

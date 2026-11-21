@@ -1973,6 +1973,15 @@ actor Stdio(envcap: _EnvCap, vars: EnvVar):
         """Check if stderr is a terminal"""
         NotImplemented
 
+    action def term_size() -> ?(columns: int, rows: int):
+        """Read the size of the terminal on stdout
+
+        None when stdout is not a terminal or when the terminal reports no
+        size. The size changes when the user resizes the terminal window, so
+        read it again before laying out output that depends on it.
+        """
+        NotImplemented
+
     action def _on_stdin_bytes(cb: action(bytes) -> None) -> None:
         NotImplemented
 

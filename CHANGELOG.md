@@ -516,6 +516,10 @@
   limit includes the `kern.maxfilesperproc` cap that the kernel enforces. On
   Windows the count is the number of handles of the process, of every kind,
   and the limit is `None`.
+- Read the size of the terminal on stdout, in columns and rows, with
+  `env.stdio.term_size()`. It is `None` when stdout is not a terminal or the
+  terminal reports no size. On Windows it is the size of the visible window
+  of the console.
 
 ### Packages & Distribution
 - Install stable Homebrew releases from prebuilt tarballs for macOS and Linux
