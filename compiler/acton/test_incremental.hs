@@ -14,7 +14,7 @@ import           Data.Word (Word64)
 import qualified Acton.Fingerprint as Fingerprint
 import qualified Crypto.Hash.SHA256 as SHA256
 import           Data.Function (on)
-import           Data.IORef (IORef, atomicModifyIORef', newIORef)
+import           Data.IORef (IORef, atomicModifyIORef', newIORef, readIORef)
 import           Data.List (elemIndex, find, groupBy, intercalate, isInfixOf, isPrefixOf, partition, sort, sortOn)
 import qualified Data.Map.Strict as M
 import           Data.Maybe (isJust)
@@ -90,23 +90,24 @@ inProcessCompileOptions = do
   distDir <- distPath
   return C.defaultCompileOptions { C.syspath = distDir, C.ignore_compiler_version = True }
 
--- | Plan a build of the requested files on a scheduler, as acton build and
--- watch mode do.
-planBuild :: C.GlobalOptions -> Compile.CompileScheduler -> C.CompileOptions -> Compile.PlanRequest -> IO Compile.CompilePlan
-planBuild gopts sched opts request = do
+-- | Plan a build of the requested files on a scheduler, reading sources
+-- through the given provider, as acton build and watch mode do.
+planBuild :: Source.SourceProvider -> C.GlobalOptions -> Compile.CompileScheduler -> C.CompileOptions -> Compile.PlanRequest -> IO Compile.CompilePlan
+planBuild sp gopts sched opts request = do
   ctx <- Compile.prepareCompileContext opts (Compile.requestFiles request)
-  Compile.prepareCompilePlan Source.diskSourceProvider gopts sched ctx request
+  Compile.prepareCompilePlan sp gopts sched ctx request
 
 -- | Plan and run one full build of every module of the project on a
--- scheduler, as `acton build` does, with the given global options and event
--- handler, then wait for its back jobs. Returns the result line.
-buildOnScheduler :: C.GlobalOptions -> (Compile.BuildEvent -> IO ()) -> Compile.CompileScheduler -> FilePath -> C.CompileOptions -> IO String
-buildOnScheduler gopts onEvent sched proj opts = do
+-- scheduler, as `acton build` does, reading sources through the given
+-- provider, with the given global options and event handler, then wait for
+-- its back jobs. Returns the result line.
+buildOnScheduler :: Source.SourceProvider -> C.GlobalOptions -> (Compile.BuildEvent -> IO ()) -> Compile.CompileScheduler -> FilePath -> C.CompileOptions -> IO String
+buildOnScheduler sp gopts onEvent sched proj opts = do
   names <- sort . map dropExtension . filter Project.isActFile <$> listDirectory (proj </> "src")
   let srcFiles = map (sourcePath proj) names
-  plan <- planBuild gopts sched opts (Compile.PlanRequest srcFiles Compile.WholeProject Nothing)
+  plan <- planBuild sp gopts sched opts (Compile.PlanRequest srcFiles Compile.WholeProject Nothing)
   gen <- Compile.currentGeneration sched
-  res <- Compile.runCompilePlan Source.diskSourceProvider gopts sched gen plan onEvent
+  res <- Compile.runCompilePlan sp gopts sched gen plan onEvent
   backFailure <- Compile.waitBackJobs sched gen
   return (buildResult res backFailure)
 
@@ -2152,7 +2153,7 @@ p35_changed_path_keeps_unaffected_provider =
     actAAbs <- canonicalizePath actA
     actMainAbs <- canonicalizePath actMain
     sched <- Compile.newCompileScheduler quietGlobalOptions
-    plan <- planBuild quietGlobalOptions sched opts (Compile.PlanRequest [actMainAbs] Compile.SelectedFiles (Just [actAAbs]))
+    plan <- planBuild Source.diskSourceProvider quietGlobalOptions sched opts (Compile.PlanRequest [actMainAbs] Compile.SelectedFiles (Just [actAAbs]))
     bTask <- case find (\t -> Compile.tkMod (Compile.gtKey t) == A.modName ["incremental_cases","b"]) (Compile.cpNeededTasks plan) of
       Just t -> pure t
       Nothing -> assertFailure "expected b in changed-path compile plan" >> fail "missing b task"
@@ -2211,7 +2212,7 @@ p35_dbp_changed_path_includes_provider =
     actAAbs <- canonicalizePath actA
     actMainAbs <- canonicalizePath actMain
     sched <- Compile.newCompileScheduler quietGlobalOptions
-    plan <- planBuild quietGlobalOptions sched opts (Compile.PlanRequest [actMainAbs] Compile.SelectedFiles (Just [actAAbs]))
+    plan <- planBuild Source.diskSourceProvider quietGlobalOptions sched opts (Compile.PlanRequest [actMainAbs] Compile.SelectedFiles (Just [actAAbs]))
     let selectedMods = [ Compile.tkMod (Compile.gtKey t) | t <- Compile.cpNeededTasks plan ]
     assertBool "expected changed-path plan to include DBP provider"
       (A.modName ["incremental_cases","provider"] `elem` selectedMods)
@@ -2314,7 +2315,7 @@ p36c_private_name_rechecks_dependent_on_one_scheduler =
     -- The first build checks a and leaves a's name map in the scheduler's
     -- module cache, where the second build finds it.
     sched <- Compile.newCompileScheduler quietGlobalOptions
-    let build = buildOnScheduler quietGlobalOptions onEvent sched proj opts
+    let build = buildOnScheduler Source.diskSourceProvider quietGlobalOptions onEvent sched proj opts
     first <- build
     assertEqual "first build" "result ok" first
     makeOnlyPublicNamePrivate
@@ -3207,9 +3208,9 @@ p56_changed_path_prunes_removed_module =
     sched <- Compile.newCompileScheduler quietGlobalOptions
     -- The first plan records the build spec, so the next plan follows the
     -- changed paths, as in watch mode and the LSP server.
-    _ <- planBuild quietGlobalOptions sched opts (Compile.PlanRequest [actMainAbs] Compile.SelectedFiles (Just []))
+    _ <- planBuild Source.diskSourceProvider quietGlobalOptions sched opts (Compile.PlanRequest [actMainAbs] Compile.SelectedFiles (Just []))
     removeFile actA
-    plan <- planBuild quietGlobalOptions sched opts (Compile.PlanRequest [actMainAbs] Compile.SelectedFiles (Just [actAAbs]))
+    plan <- planBuild Source.diskSourceProvider quietGlobalOptions sched opts (Compile.PlanRequest [actMainAbs] Compile.SelectedFiles (Just [actAAbs]))
     assertBool "expected a changed-path plan" (isJust (Compile.requestChanged (Compile.cpRequest plan)))
     assertArtifactsGone outsA
     assertArtifactsExist [rootMain, supportMain]
@@ -3314,13 +3315,119 @@ p60_plan_after_failed_fetch_fetches_again =
     -- Build.act is the same for both plans, so the second plan fetches
     -- only because the first fetch did not complete.
     forM_ ["first", "second" :: String] $ \which -> do
-      res <- E.try (planBuild quietGlobalOptions sched C.defaultCompileOptions
+      res <- E.try (planBuild Source.diskSourceProvider quietGlobalOptions sched C.defaultCompileOptions
                       (Compile.PlanRequest [actMain] Compile.SelectedFiles (Just [actMain])))
       case res of
         Left (Project.ProjectError msg) ->
           assertBool ("expected the " ++ which ++ " plan to fail in the fetch, got: " ++ msg)
             (fetchError `isInfixOf` msg)
         Right _ -> assertFailure ("expected the " ++ which ++ " plan to fetch and fail")
+
+-- Source written during a read ------------------------------------------------
+
+-- | A disk source provider that writes new text to a source file right after
+-- its first read of that file has completed, as an editor that saves the
+-- file while a build reads it. The new version gets an mtime in the past, so
+-- it is older than any .tydb the build writes. The returned reference tells
+-- whether the write happened.
+writeAfterFirstRead :: FilePath -> T.Text -> IO (Source.SourceProvider, IORef Bool)
+writeAfterFirstRead act text = do
+  actAbs <- canonicalizePath act
+  written <- newIORef False
+  let disk = Source.diskSourceProvider
+      readFile' path = do
+        snap <- Source.spReadFile disk path
+        _ <- E.evaluate (length (Source.ssText snap))
+        pathAbs <- canonicalizePath path
+        first <- atomicModifyIORef' written (\done -> (done || pathAbs == actAbs, not done && pathAbs == actAbs))
+        when first $ do
+          writeFileUtf8 act text
+          now <- getCurrentTime
+          setModificationTime act (addUTCTime (-10) now)
+        return snap
+  return (disk { Source.spReadFile = readFile' }, written)
+
+-- | Build every module of the cases project in process, reading sources
+-- through the given provider, and assert that the build ends ok.
+buildCasesWith :: Source.SourceProvider -> C.CompileOptions -> IO ()
+buildCasesWith sp opts = do
+  proj <- canonicalizePath casesProjDir
+  sched <- Compile.newCompileScheduler quietGlobalOptions
+  result <- buildOnScheduler sp quietGlobalOptions (\_ -> return ()) sched proj opts
+  assertEqual "build" "result ok" result
+
+-- | Assert that the provider wrote its new version during the build, and
+-- that the next plan reads that version from the source: the .tydb that the
+-- build wrote from the version it read must not be trusted.
+assertNextPlanReadsWrittenSource :: C.CompileOptions -> FilePath -> T.Text -> IORef Bool -> IO ()
+assertNextPlanReadsWrittenSource opts act text written = do
+  wrote <- readIORef written
+  assertBool ("expected the build to read " ++ act) wrote
+  actAbs <- canonicalizePath act
+  (paths, mn) <- Project.findPaths actAbs opts
+  task <- Compile.readModuleTask Source.diskSourceProvider quietGlobalOptions opts paths mn actAbs
+  case task of
+    Compile.ParseTask source _ _ -> Compile.sourceText source @?= T.unpack text
+    Compile.TyTask _ -> assertFailure ("the next plan trusts the .tydb of " ++ act ++ " although the file was written after the build read it")
+    _ -> assertFailure ("expected the next plan to read " ++ act ++ " from its source")
+
+p61_source_written_during_first_read :: TestTree
+p61_source_written_during_first_read =
+  testCase "61-source written during its first read is compiled next" $ do
+    let actA = casesSrcDir </> "a.act"
+    ensureCasesProject
+    writeFileUtf8 actA "aaa = 1\n"
+    opts <- inProcessCompileOptions
+    (sp, written) <- writeAfterFirstRead actA "aaa = 22\n"
+    buildCasesWith sp opts
+    assertNextPlanReadsWrittenSource opts actA "aaa = 22\n" written
+
+p62_source_written_during_changed_read :: TestTree
+p62_source_written_during_changed_read =
+  testCase "62-source written during the read of its change is compiled next" $ do
+    let actA = casesSrcDir </> "a.act"
+    ensureCasesProject
+    writeFileUtf8 actA "aaa = 1\n"
+    opts <- inProcessCompileOptions
+    buildCasesWith Source.diskSourceProvider opts
+    writeFileUtf8 actA "aaa = 2\n"
+    (sp, written) <- writeAfterFirstRead actA "aaa = 33\n"
+    buildCasesWith sp opts
+    assertNextPlanReadsWrittenSource opts actA "aaa = 33\n" written
+
+p63_source_written_during_front_reread :: TestTree
+p63_source_written_during_front_reread =
+  testCase "63-source written during the reread for its front passes is compiled next" $ do
+    let actA = casesSrcDir </> "a.act"
+        actB = casesSrcDir </> "b.act"
+        newB = T.unlines
+          [ "import a"
+          , ""
+          , "def g() -> int:"
+          , "    return a.f(1, 2)"
+          ]
+    ensureCasesProject
+    writeFileUtf8 actA $ T.unlines
+      [ "def f(x: int) -> int:"
+      , "    return x"
+      ]
+    writeFileUtf8 actB $ T.unlines
+      [ "import a"
+      , ""
+      , "def g() -> int:"
+      , "    return a.f(1)"
+      ]
+    opts <- inProcessCompileOptions
+    buildCasesWith Source.diskSourceProvider opts
+    -- A changed signature of a.f reruns the front passes of b, whose source
+    -- and .tydb are unchanged, so b's source is read again only for them.
+    writeFileUtf8 actA $ T.unlines
+      [ "def f(x: int, y: int = 0) -> int:"
+      , "    return x + y"
+      ]
+    (sp, written) <- writeAfterFirstRead actB newB
+    buildCasesWith sp opts
+    assertNextPlanReadsWrittenSource opts actB newB written
 
 -- Compile events -------------------------------------------------------------
 
@@ -3365,7 +3472,7 @@ recordCompileEvents = do
     eventLog <- EventLog <$> newIORef [] <*> newIORef [] <*> newIORef []
     let runScenario (title, edit, adjust) = do
           edit proj
-          result <- buildOnScheduler eventsGlobalOptions (recordEvent eventLog) sched proj (adjust options)
+          result <- buildOnScheduler Source.diskSourceProvider eventsGlobalOptions (recordEvent eventLog) sched proj (adjust options)
           stage <- takeLines (stageLines eventLog)
           outputs <- takeLines (outputLines eventLog)
           back <- takeLines (backLines eventLog)
@@ -3637,6 +3744,12 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
       , p53_imported_attr_inference_stays_selective
       , p54_unused_import_reads_no_names
       , p55_dbp_reads_selected_statements
+      ]
+  , -- Every test of this group writes a fresh fixture project first.
+    sequentialTestGroup "incremental-source-read-cases" AllFinish
+      [ p61_source_written_during_first_read
+      , p62_source_written_during_changed_read
+      , p63_source_written_during_front_reread
       ]
   , sequentialTestGroup "incremental-prune-cases" AllSucceed
       [ p56_changed_path_prunes_removed_module
