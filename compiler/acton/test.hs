@@ -217,6 +217,16 @@ compilerTests =
         testBuild "" ExitSuccess False proj
         (returnCode, _cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc "./out/bin/main" []){ cwd = Just proj } ""
         assertEqual ("unboxed bool method slot binary should run: " ++ cmdErr) ExitSuccess returnCode
+  , testCase "protocol generic receiver uses most specific extension" $ do
+        withSystemTempDirectory "acton-protocol-specificity" $ \tmp -> do
+          let src = tmp </> "protocol_generic_specificity.act"
+          copyFile "../../test/regression_auto/protocol_generic_specificity.act" src
+          copyFile "../../test/regression_auto/protocol_generic_specificity.ext.c"
+            (tmp </> "protocol_generic_specificity.ext.c")
+          testBuild "--jobs 2" ExitSuccess False src
+          (code, out, err) <- runThing "" src
+          assertEqual ("protocol receiver test should run: " ++ err) ExitSuccess code
+          assertEqual "point3 should use its own extension" "(4,7)\n(5,6,7)\n" out
   , testCase "builtin len and append eliminate concrete witness arguments" $ do
         withSystemTempDirectory "acton-builtin-len-append" $ \tmp -> do
           let src = tmp </> "builtin_len_append.act"

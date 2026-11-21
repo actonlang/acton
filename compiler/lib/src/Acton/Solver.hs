@@ -19,6 +19,7 @@ import Control.Monad.Except
 import qualified Data.Map.Strict as Map
 import Data.Map.Strict (Map)
 import qualified Data.IntSet as IntSet
+import qualified Data.Set as Set
 import qualified Control.Exception
 import Control.DeepSeq
 
@@ -369,7 +370,8 @@ solve' env select hist te eq cs
                   where ts                  = foldr (typeIntersect env) as $ map alts rs
                         ts'                 = if v `elem` optvs then typeDiff env ts [tOpt tWild] else ts
 --                        rev'                = (or $ r : map rev rs) || v `elem` posvs       -- (new, matches new solver but picks bad order for lower None)
-                        rev'                = (and $ r : map rev rs) || v `elem` posvs        -- (old, incorrect in general, but avoids the None problem)
+                        rev'                = (and $ r : map rev rs) || v `elem` posvs ||
+                                                v `Set.member` protocolReceivers
                 cond (RVar v as : rs)       = RVar v (foldr (typeUnion env) as $ map alts rs)
                 cond (RSkip : rs)           = RSkip
                 cond rs                     = error ("### condense " ++ show rs)
@@ -391,6 +393,32 @@ solve' env select hist te eq cs
         embvs                               = embvars cs
         univs                               = univars cs
         (posvs, negvs)                      = closePolVars (polvars te) cs
+
+        -- A protocol call introduces a fresh Self variable above the actual
+        -- argument. Prefer its most specific admissible type: trying witnesses
+        -- in declaration order could otherwise upcast a Child to Parent before
+        -- selecting an implementation. A rigid type variable likewise keeps its
+        -- supplied witness instead of falling back to its class bound's witness.
+        -- Follow variable-to-variable lower bounds too: constructor results
+        -- and call arguments can introduce several steps before Self. Keep
+        -- the existing None/optional ordering without a nominal lower bound.
+        -- Build the reachability index once per solve, not per candidate.
+        protocolReceivers = Set.intersection
+            (Set.fromList [ v | Proto _ _ _ (TUni _ v) _ <- solve_cs ])
+            (reachable Set.empty nominalBounds)
+          where lower (Sub _ scope _ t u) = [(scope,t,u)]
+                lower (Cast _ scope t u) = [(scope,t,u)]
+                lower _                  = []
+                bounds                   = [ (scope,t,v) | c <- solve_cs, (scope,t,TUni _ v) <- lower c ]
+                nominalBounds            = [ v | (scope,t,v) <- bounds, nominal (expanded scope t) ]
+                successors               = Map.fromListWith (++) [ (u,[v]) | (_,TUni _ u,v) <- bounds ]
+                reachable seen []        = seen
+                reachable seen (v:vs)
+                  | v `Set.member` seen = reachable seen vs
+                  | otherwise            = reachable (Set.insert v seen) (Map.findWithDefault [] v successors ++ vs)
+                nominal TCon{}           = True
+                nominal TVar{}           = True
+                nominal _                = False
 
         isVar RVar{}                        = True
         isVar _                             = False

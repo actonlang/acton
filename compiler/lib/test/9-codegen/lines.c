@@ -1,10 +1,6 @@
 /* Acton impl hash: test-hash */
 #include "rts/common.h"
 #include "out/types/lines.h"
-B_OrdD_int linesQ_W_1module;
-B_Eq linesQ_W_Apa_409;
-$EqOpt linesQ_W_2module;
-B_Eq linesQ_W_Apa_837;
 $R linesQ_L_1C_1cont ($action cb, $Cont C_cont, int64_t C_2res) {
     #line 9 "test/src/lines.act"
     int64_t v = C_2res;
@@ -237,7 +233,7 @@ $R linesQ_L_18C_5cont (linesQ_Apa a, linesQ_main self, B_Iterable W_Apa_857, B_N
     #line 49 "test/src/lines.act"
     int64_t v = 0LL;
     #line 50 "test/src/lines.act"
-    if (((bool (*) ($WORD, B_int, B_int))((B_Eq)(linesQ_W_Apa_837))->$class->__eq__)(linesQ_W_Apa_837, toB_int(v), toB_int(0LL))) {
+    if (v == 0LL) {
         #line 51 "test/src/lines.act"
         ((B_NoneType (*) (B_tuple, B_str, B_str, bool, bool))B_print)($NEWTUPLE(1, actStrFromLiteral("if branch", 9, 9)), actStrFromLiteral(" ", 1, 1), actStrFromLiteral("\n", 1, 1), false, false);
         #line 52 "test/src/lines.act"
@@ -276,7 +272,7 @@ $R linesQ_L_18C_5cont (linesQ_Apa a, linesQ_main self, B_Iterable W_Apa_857, B_N
         #line 66 "test/src/lines.act"
         i = (((int64_t)(i + 1LL)));
         #line 67 "test/src/lines.act"
-        if (((bool (*) ($WORD, B_int, B_int))((B_Eq)(linesQ_W_Apa_837))->$class->__eq__)(linesQ_W_Apa_837, toB_int(i), toB_int(1LL))) {
+        if (i == 1LL) {
             #line 68 "test/src/lines.act"
             ((B_NoneType (*) (B_tuple, B_str, B_str, bool, bool))B_print)($NEWTUPLE(1, actStrFromLiteral("continue path", 13, 13)), actStrFromLiteral(" ", 1, 1), actStrFromLiteral("\n", 1, 1), false, false);
             #line 69 "test/src/lines.act"
@@ -298,16 +294,16 @@ $R linesQ_L_18C_5cont (linesQ_Apa a, linesQ_main self, B_Iterable W_Apa_857, B_N
         $MaybeWord N_4maybe;
         B_Iterator N_4maybeG_next_iter = N_3iter;
         N_4maybe.just = N_4maybeG_next_iter->$class->__next__(N_4maybeG_next_iter, &N_4maybe.val);
-        B_int j;
+        int64_t j;
         if (N_4maybe.just) {
-            j = N_4maybe.val;
+            j = ((B_int)N_4maybe.val)->val;
             #line 79 "test/src/lines.act"
-            if (((bool (*) ($WORD, B_int, B_int))((B_Eq)(linesQ_W_Apa_837))->$class->__eq__)(linesQ_W_Apa_837, j, toB_int(2LL))) {
+            if (j == 2LL) {
                 #line 80 "test/src/lines.act"
                 continue;
             }
             #line 81 "test/src/lines.act"
-            ((B_NoneType (*) (B_tuple, B_str, B_str, bool, bool))B_print)($NEWTUPLE(2, actStrFromLiteral("for j", 5, 5), j), actStrFromLiteral(" ", 1, 1), actStrFromLiteral("\n", 1, 1), false, false);
+            ((B_NoneType (*) (B_tuple, B_str, B_str, bool, bool))B_print)($NEWTUPLE(2, actStrFromLiteral("for j", 5, 5), toB_int(j)), actStrFromLiteral(" ", 1, 1), actStrFromLiteral("\n", 1, 1), false, false);
         }
         else {
             break;
@@ -321,7 +317,7 @@ $R linesQ_L_18C_5cont (linesQ_Apa a, linesQ_main self, B_Iterable W_Apa_857, B_N
                 struct JumpBuf $frame;
                 if ($PUSH(&$frame)) {
                     #line 85 "test/src/lines.act"
-                    if (((bool (*) ($WORD, B_int, B_int))((B_Eq)(linesQ_W_Apa_837))->$class->__eq__)(linesQ_W_Apa_837, toB_int(v), toB_int(0LL))) {
+                    if (v == 0LL) {
                         #line 86 "test/src/lines.act"
                         $RAISE(((B_BaseException)B_ValueErrorG_new(actStrFromLiteral("boom", 4, 4))));
                         __builtin_unreachable();
@@ -641,12 +637,6 @@ linesQ_main linesQ_mainG_newact (B_Env env) {
     $ConstructionEnd(N_construction_parent);
     return G_act;
 }
-static void linesQ___init__$g0 () {
-    linesQ_W_1module = (B_OrdD_int)B_OrdD_intG_witness;
-    linesQ_W_Apa_409 = ((B_Eq)linesQ_W_1module);
-    linesQ_W_2module = $EqOptG_new(((B_Eq)linesQ_W_1module));
-    linesQ_W_Apa_837 = ((B_Eq)linesQ_W_2module);
-}
 int linesQ_done$ = 0;
 void linesQ___init__ () {
     if (linesQ_done$) return;
@@ -756,5 +746,4 @@ void linesQ___init__ () {
         linesQ_mainG_methods.__deserialize__ = linesQ_mainD___deserialize__;
         $register(&linesQ_mainG_methods);
     }
-    linesQ___init__$g0();
 }

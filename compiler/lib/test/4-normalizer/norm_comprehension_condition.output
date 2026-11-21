@@ -29,14 +29,12 @@ W_main_44: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
 
 W_main_21: __builtin__.Times[__builtin__.int, __builtin__.int] = __builtin__.IntegralD_int()
 
-W_main_114: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
-
-W_main_64: __builtin__.Eq[?__builtin__.int] = $EqOpt@[__builtin__.int](W_main_114)
+W_main_64: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
 
 actor main (env : __builtin__.Env):
     __startup__ : action() -> None
     proc def __startup__ () -> None:
-        W_main_32: __builtin__.Eq[__builtin__.list[?__builtin__.int]] = __builtin__.EqD_list@[?__builtin__.int](W_main_64)
+        W_main_32: __builtin__.Eq[__builtin__.list[__builtin__.int]] = __builtin__.EqD_list@[__builtin__.int](W_main_64)
         W_main_13: __builtin__.Iterable[__builtin__.list[__builtin__.int], __builtin__.int] = __builtin__.SequenceD_list@[__builtin__.int]().W_Collection
         pure def N_7compfun () -> __builtin__.list[__builtin__.int]:
             W_N_8w: __builtin__.Sequence[__builtin__.list[__builtin__.int], __builtin__.int] = __builtin__.SequenceD_list@[__builtin__.int]()

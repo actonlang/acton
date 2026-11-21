@@ -1,0 +1,36 @@
+# Keep the generic constructors and inferred method signatures of the
+# original reproducer: parent-first extension order must not widen point3
+# to point while inferring the receiver of Render.__str__.
+protocol Render:
+    __str__: () -> str
+
+extension int (Render):
+    NotImplemented
+
+class point[A]:
+    def __init__(self, x: A, y: A):
+        self.x = x
+        self.y = y
+
+class point3[A](point[A]):
+    def __init__(self, x: A, y: A, z: A):
+        self.x = x
+        self.y = y
+        self.z = z
+
+extension point[A(Render)] (Render):
+    def __str__(self):
+        return "("+Render.__str__(self.x)+","+Render.__str__(self.y)+")"
+
+extension point3[A(Render)] (Render):
+    def __str__(self):
+        return "("+Render.__str__(self.x)+","+Render.__str__(self.y)+","+Render.__str__(self.z)+")"
+
+
+actor main(env):
+    proc def __startup__():
+        p = point(4,7)
+        print(Render.__str__(p))
+        q = point3(5,6,7)
+        print(Render.__str__(q))
+        env.exit(0)
