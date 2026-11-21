@@ -1,10 +1,6 @@
 /* Acton impl hash: test-hash */
 #include "rts/common.h"
 #include "out/types/lines.h"
-B_OrdD_int linesQ_W_1module;
-B_Eq linesQ_W_Apa_1097;
-$EqOpt linesQ_W_2module;
-B_Eq linesQ_W_Apa_759;
 $R linesQ_L_1C_1cont (linesQ_Apa self, $Cont C_cont, B_NoneType C_2res) {
     #line 18 "test/src/lines.act"
     ((linesQ_Apa)(self))->z = 1LL;
@@ -236,16 +232,16 @@ $R linesQ_L_17C_9cont (linesQ_main self, $Cont C_cont, int64_t C_10res) {
         $MaybeWord N_4maybe;
         B_Iterator N_4maybeG_next_iter = N_3iter;
         N_4maybe.just = N_4maybeG_next_iter->$class->__next__(N_4maybeG_next_iter, &N_4maybe.val);
-        B_int j;
+        int64_t j;
         if (N_4maybe.just) {
-            j = N_4maybe.val;
+            j = ((B_int)N_4maybe.val)->val;
             #line 74 "test/src/lines.act"
-            if (((bool (*) ($WORD, B_int, B_int))((B_Eq)(linesQ_W_Apa_759))->$class->__eq__)(linesQ_W_Apa_759, j, toB_int(2LL))) {
+            if (j == 2LL) {
                 #line 75 "test/src/lines.act"
                 continue;
             }
             #line 76 "test/src/lines.act"
-            ((B_NoneType (*) (B_tuple, B_str, B_str, bool, bool))B_print)($NEWTUPLE(2, actStrFromLiteral("for j", 5, 5), j), actStrFromLiteral(" ", 1, 1), actStrFromLiteral("\n", 1, 1), false, false);
+            ((B_NoneType (*) (B_tuple, B_str, B_str, bool, bool))B_print)($NEWTUPLE(2, actStrFromLiteral("for j", 5, 5), toB_int(j)), actStrFromLiteral(" ", 1, 1), actStrFromLiteral("\n", 1, 1), false, false);
         }
         else {
             break;
@@ -259,7 +255,7 @@ $R linesQ_L_17C_9cont (linesQ_main self, $Cont C_cont, int64_t C_10res) {
                 struct JumpBuf $frame;
                 if ($PUSH(&$frame)) {
                     #line 80 "test/src/lines.act"
-                    if (((bool (*) ($WORD, B_int, B_int))((B_Eq)(linesQ_W_Apa_759))->$class->__eq__)(linesQ_W_Apa_759, toB_int(((int64_t)((linesQ_main)(self))->v)), toB_int(0LL))) {
+                    if (((int64_t)((linesQ_main)(self))->v) == 0LL) {
                         #line 81 "test/src/lines.act"
                         $RAISE(((B_BaseException)B_ValueErrorG_new(actStrFromLiteral("boom", 4, 4))));
                         __builtin_unreachable();
@@ -550,7 +546,7 @@ $R linesQ_mainD_myprocG_local (linesQ_main self, $Cont C_cont, int64_t i) {
     #line 29 "test/src/lines.act"
     ((B_NoneType (*) (B_tuple, B_str, B_str, bool, bool))B_print)($NEWTUPLE(2, actStrFromLiteral("myproc", 6, 6), toB_int(i)), actStrFromLiteral(" ", 1, 1), actStrFromLiteral("\n", 1, 1), false, false);
     #line 30 "test/src/lines.act"
-    if (((bool (*) ($WORD, B_int, B_int))((B_Eq)(linesQ_W_Apa_759))->$class->__eq__)(linesQ_W_Apa_759, toB_int(i), toB_int(2LL))) {
+    if (i == 2LL) {
         #line 31 "test/src/lines.act"
         ((B_Msg (*) ($WORD, int64_t))((B_Env)(((linesQ_main)(self))->env))->$class->exit)(((linesQ_main)(self))->env, 0LL);
     }
@@ -624,12 +620,6 @@ $R linesQ_mainG_newact ($Cont C_cont, B_Env env) {
     linesQ_main G_act = $NEWACTOR(linesQ_main);
     if ((void*)G_act->$class->__cleanup__ != (void*)$ActorD___cleanup__) $InstallFinalizer(G_act, linesQ_mainD_GCfinalizer);
     return $AWAIT($SKIPRES($CONSTCONT(G_act, C_cont)), $ASYNC((($Actor)G_act), (($Cont)((linesQ_L_31proc)$Proc0_R2_new(&linesQ_L_31procG_methods, G_act, env)))));
-}
-static void linesQ___init__$g0 () {
-    linesQ_W_1module = (B_OrdD_int)B_OrdD_intG_witness;
-    linesQ_W_Apa_1097 = ((B_Eq)linesQ_W_1module);
-    linesQ_W_2module = $EqOptG_new(((B_Eq)linesQ_W_1module));
-    linesQ_W_Apa_759 = ((B_Eq)linesQ_W_2module);
 }
 int linesQ_done$ = 0;
 void linesQ___init__ () {
@@ -741,5 +731,4 @@ void linesQ___init__ () {
         linesQ_mainG_methods.__deserialize__ = linesQ_mainD___deserialize__;
         $register(&linesQ_mainG_methods);
     }
-    linesQ___init__$g0();
 }

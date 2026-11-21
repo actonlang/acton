@@ -1,0 +1,78 @@
+# Protocol dispatch must use the most specific admissible receiver type,
+# independently of the order in which its extensions were declared.
+
+protocol Render:
+    render: () -> str
+
+protocol ReverseRender:
+    render: () -> str
+
+protocol Pair:
+    pair: (Self) -> str
+
+class Parent:
+    def __init__(self):
+        pass
+
+class Child(Parent):
+    pass
+
+class Grandchild(Child):
+    pass
+
+extension value(Render):
+    def render(self) -> str:
+        return "value"
+
+extension Parent(Render):
+    def render(self) -> str:
+        return "parent"
+
+extension Child(Render):
+    def render(self) -> str:
+        return "child"
+
+extension Child(ReverseRender):
+    def render(self) -> str:
+        return "child"
+
+extension Parent(ReverseRender):
+    def render(self) -> str:
+        return "parent"
+
+extension Parent(Pair):
+    def pair(self, other: Parent) -> str:
+        return "parent pair"
+
+extension Child(Pair):
+    def pair(self, other: Child) -> str:
+        return "child pair"
+
+def parent_view(x: Parent) -> str:
+    return Render.render(x)
+
+def generic[A(Render)](x: A) -> str:
+    return Render.render(x)
+
+def bounded_generic[A(Parent, Render)](x: A) -> str:
+    return Render.render(x)
+
+actor main(env):
+    p = Parent()
+    q = Child()
+    r = Grandchild()
+    assert Render.render(p) == "parent"
+    assert Render.render(q) == "child"
+    assert Render.render(r) == "child"
+    assert ReverseRender.render(p) == "parent"
+    assert ReverseRender.render(q) == "child"
+    assert ReverseRender.render(r) == "child"
+    assert Render.render(Child()) == "child"
+    assert generic(q) == "child"
+    assert bounded_generic(q) == "child"
+    assert parent_view(q) == "parent"
+    # Self must admit both arguments, so the mixed call uses Parent's witness.
+    assert Pair.pair(q, q) == "child pair"
+    assert Pair.pair(q, p) == "parent pair"
+    assert Pair.pair(p, q) == "parent pair"
+    env.exit(0)

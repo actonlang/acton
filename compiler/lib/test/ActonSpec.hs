@@ -2892,6 +2892,62 @@ main = do
       testTypes env0 ["witness_forward"]
       testTypes env0 ["witness_knot_methods"]
 
+      -- A protocol's fresh Self can be separated from its argument by several
+      -- subtype variables. Candidate declaration order must not widen Self.
+      forM_ [False, True] $ \childFirst -> do
+        let classes = unlines
+              [ "protocol Render:"
+              , "    render: () -> str"
+              , "class Parent:"
+              , "    def __init__(self):"
+              , "        pass"
+              , "class Child(Parent):"
+              , "    pass"
+              , "class Grandchild(Child):"
+              , "    pass"
+              , "extension value(Render):"
+              , "    def render(self) -> str:"
+              , "        return \"value\""
+              ]
+            extension name = unlines
+              [ "extension " ++ name ++ "(Render):"
+              , "    def render(self) -> str:"
+              , "        return \"" ++ name ++ "\""
+              ]
+            extensions = concatMap extension
+              (if childFirst then ["Child", "Parent"] else ["Parent", "Child"])
+            order = if childFirst then "child first" else "parent first"
+        forM_
+          [ ("constructor", "def target() -> str:\n    return Render.render(Child())\n", "Child")
+          , ("local binding", "def target() -> str:\n    x = Child()\n    return Render.render(x)\n", "Child")
+          , ("inherited extension", "def target() -> str:\n    return Render.render(Grandchild())\n", "Child")
+          , ("parent view", "def target(x: Parent) -> str:\n    return Render.render(x)\n", "Parent")
+          ] $ \(label, body, expected) ->
+            it ("selects the most specific protocol receiver for " ++ label ++ " (" ++ order ++ ")") $ do
+              typed <- typecheckSource env0 "protocol_specificity" (classes ++ extensions ++ body)
+              let code = Pretty.print typed
+              code `shouldSatisfy` isInfixOf ("= RenderD_" ++ expected ++ "()")
+              forM_ (filter (/= expected) ["value", "Parent", "Child"]) $ \other ->
+                code `shouldSatisfy` (not . isInfixOf ("= RenderD_" ++ other ++ "()"))
+        forM_ ["A(Render)", "A(Parent, Render)"] $ \bound ->
+          it ("preserves supplied protocol evidence for " ++ bound ++ " (" ++ order ++ ")") $ do
+            let body = "def target[" ++ bound ++ "](x: A) -> str:\n    return Render.render(x)\n"
+            typed <- typecheckSource env0 "protocol_generic_specificity" (classes ++ extensions ++ body)
+            Pretty.print typed `shouldSatisfy` isInfixOf "return W_RenderD_A.render(x)"
+            Pretty.print typed `shouldSatisfy` (not . isInfixOf "= RenderD_")
+
+      forM_ [False, True] $ \childFirst ->
+        it ("selects the child extension for generic class constructors (" ++
+            (if childFirst then "child first" else "parent first") ++ ")") $ do
+          src <- T.pack <$> (liftIO $ readFile "../../test/regression_auto/protocol_generic_specificity.act")
+          let (prefix, rest) = T.breakOn "extension point[" src
+              (parent, rest') = T.breakOn "extension point3[" rest
+              (child, suffix) = T.breakOn "actor main" rest'
+              reordered = prefix <> child <> parent <> suffix
+          typed <- typecheckSource env0 "protocol_generic_specificity"
+            (T.unpack $ if childFirst then reordered else src)
+          Pretty.print typed `shouldSatisfy` isInfixOf "= RenderD_point3@[__builtin__.int]("
+
       it "discovers functions with each testing context" $ do
         let src = unlines
               [ "import testing"
