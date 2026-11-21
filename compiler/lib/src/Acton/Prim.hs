@@ -111,13 +111,19 @@ primRCont           = gPrim "R_CONT"
 primRFail           = gPrim "R_FAIL"
 
 primEqOpt           = gPrim "EqOpt"
+primShowOpt         = gPrim "ShowOpt"
+primBoolOpt         = gPrim "BoolOpt"
 primEqTuple         = gPrim "EqTuple"
 primOrdTuple        = gPrim "OrdTuple"
 primHashableTuple   = gPrim "HashableTuple"
+primShowTuple       = gPrim "ShowTuple"
+primBoolTuple       = gPrim "BoolTuple"
 
 primIdentityActor   = gPrim "IdentityActor"
 
 primWEqNone         = gPrim "wEqNone"
+primWShowNone       = gPrim "wShowNone"
+primWBoolNone       = gPrim "wBoolNone"
 
 witIntegralInt      = GName mPrim $ Derived (deriveQ qnIntegral) $ Derived (deriveQ qnInt) suffixWitness
 witIntegralBigint  = GName mPrim $ Derived (deriveQ qnIntegral) $ Derived (deriveQ qnBigint) suffixWitness
@@ -658,12 +664,18 @@ primEnv             = [ (noq (bwName w), NDef (bwSchema w) NoDec Nothing) | w <-
                             (noq primRFail,         NDef scRFail NoDec Nothing),
 
                             (noq primEqOpt,         clEqOpt),
+                            (noq primShowOpt,       clOptWit qnShow),
+                            (noq primBoolOpt,       clOptWit qnBoolProtocol),
                             (noq primEqTuple,       clEqTuple),
                             (noq primOrdTuple,      clOrdTuple),
                             (noq primHashableTuple, clHashableTuple),
+                            (noq primShowTuple,     clTupleWit qnShow),
+                            (noq primBoolTuple,     clBoolTuple),
                             (noq primIdentityActor, clIdentityActor),
 
                             (noq primWEqNone,       NVar tEqNone),
+                            (noq primWShowNone,     NVar (tCon $ TC qnShow [tNone])),
+                            (noq primWBoolNone,     NVar (tCon $ TC qnBoolProtocol [tNone])),
                             (noq witIntegralInt,    NVar tIntegralInt),
 
                             (noq primISNOTNONE,     NDef scISNOTNONE NoDec Nothing),
@@ -963,13 +975,14 @@ scRFail             = tSchema [] tRFail
   where tRFail      = tFun fxProc (posRow tBaseException posNil) kwdNil tR
 
 
---  class $EqOpt[A] (Eq[?A]): pass
-clEqOpt             = NClass [qbind a] (leftpath [TC qnEq [tOpt $ tVar a]]) clTEnv Nothing
+-- Optional witnesses capture the corresponding witness for the present value.
+clEqOpt             = clOptWit qnEq
+clOptWit qn         = NClass [qbind a] (leftpath [TC qn [tOpt $ tVar a]]) clTEnv Nothing
   where clTEnv      = [ (initKW, NDef scInit NoDec Nothing) ]
-        scInit      = tSchema [] $ tFun fxPure (posRow (tCon $ TC qnEq [tVar a]) posNil) kwdNil tNone
+        scInit      = tSchema [] $ tFun fxPure (posRow (tCon $ TC qn [tVar a]) posNil) kwdNil tNone
         a           = TV KType (name "A")
 
---  class $EqTuple[W,P,K] (Eq[(*P,**K)]): pass, and likewise for Ord and Hashable.
+--  class $EqTuple[W,P,K] (Eq[(*P,**K)]): pass, likewise for Ord, Hashable and Show.
 --  W is the row of component witnesses for (*P,**K), passed to __init__ as one tuple
 clEqTuple           = clTupleWit qnEq
 clOrdTuple          = clTupleWit qnOrd
@@ -982,13 +995,26 @@ clTupleWit qn       = NClass [qbind w, qbind p, qbind k] (leftpath [TC qn [tTupl
         p           = TV PRow (name "P")
         k           = TV KRow (name "K")
 
+-- Tuple truth depends only on size. No component evidence is needed, even for
+-- open rows; the native constructor returns one stateless singleton witness.
+clBoolTuple         = NClass [qbind p, qbind k] (leftpath [TC qnBoolProtocol [tTuple (tVar p) (tVar k)]]) clTEnv Nothing
+  where clTEnv      = [ (initKW, NDef (tSchema [] $ tFun fxPure posNil kwdNil tNone) NoDec Nothing) ]
+        p           = TV PRow (name "P")
+        k           = TV KRow (name "K")
+
+optionalWits        :: [(QName, QName)]
+optionalWits        = [ (qnEq, primEqOpt), (qnShow, primShowOpt), (qnBoolProtocol, primBoolOpt) ]
+
+noneWits            :: [(QName, QName)]
+noneWits            = [ (qnEq, primWEqNone), (qnShow, primWShowNone), (qnBoolProtocol, primWBoolNone) ]
+
 -- The protocols the solver can derive for a closed tuple type, by structural
 -- induction over its components, and the prim witness classes implementing them.
 tupleWits           :: [(QName, QName)]
-tupleWits           = [ (qnEq, primEqTuple), (qnOrd, primOrdTuple), (qnHashable, primHashableTuple) ]
+tupleWits           = [ (qnEq, primEqTuple), (qnOrd, primOrdTuple), (qnHashable, primHashableTuple), (qnShow, primShowTuple) ]
 
 tupleProtos         :: [PCon]
-tupleProtos         = [ TC n [] | (n,_) <- tupleWits ]
+tupleProtos         = pBoolProtocol : [ TC n [] | (n,_) <- tupleWits ]
 
 --  class $IdentityActor (Identity[$Actor]): pass
 clIdentityActor     = NClass [] (leftpath [TC qnIdentity [tActor]]) [] Nothing                 -- methods not modelled

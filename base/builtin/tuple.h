@@ -28,3 +28,7 @@ B_tuple B_tupleG_new(int,...);
             $t->$class = &B_tupleG_methods;                               \
             $t->$class->__init__($t,0);                                  \
             $t; })
+
+// With no witnesses, retain the legacy dynamic representation of components.
+B_str B_tuple_str(B_tuple self, B_tuple witnesses);
+bool B_tuple_bool(B_tuple self);

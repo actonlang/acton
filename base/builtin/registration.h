@@ -98,7 +98,14 @@
 #define BITSETITERATOR_ID 77
 #define ARRAYITERATOR_ID 78
 
-#define PREASSIGNED 79
+#define SHOWOPT_ID 79
+#define BOOLOPT_ID 80
+#define SHOWTUPLE_ID 81
+#define BOOLTUPLE_ID 82
+#define WSHOWNONE_ID 83
+#define WBOOLNONE_ID 84
+
+#define PREASSIGNED 85
 
 
 /*

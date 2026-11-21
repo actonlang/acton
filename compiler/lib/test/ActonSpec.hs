@@ -6182,6 +6182,55 @@ testShowBoolInheritance env0 = describe "Inherited Show and Bool witnesses" $ do
     listing `shouldSatisfy` isInfixOf "ShowD_array@[A]("
     listing `shouldSatisfy` isInfixOf "ShowD_value()"
 
+  it "derives optional Show and Bool from the supplied present-value evidence" $ do
+    typed <- typecheckSource env0 "show_bool_optional" $ unlines
+      [ "def render[A(Show)](x: ?A) -> str:", "    return Show.__repr__(x)"
+      , "def truth[A(Bool)](x: ?A) -> bool:", "    return Bool.__bool__(x)" ]
+    let listing = Pretty.print typed
+    listing `shouldSatisfy` isInfixOf "$ShowOpt@[A](W_ShowD_A)"
+    listing `shouldSatisfy` isInfixOf "$BoolOpt@[A](W_BoolD_A)"
+
+  it "derives tuple Show from component evidence, including keyword rows" $ do
+    typed <- typecheckSource env0 "show_tuple" $ unlines
+      [ "def render[A(Show)](x: (A, label: str)) -> str:"
+      , "    return Show.__str__(x)" ]
+    let listing = Pretty.print typed
+    listing `shouldSatisfy` isInfixOf "$ShowTuple@"
+    listing `shouldSatisfy` isInfixOf "W_ShowD_A"
+    listing `shouldSatisfy` isInfixOf "ShowD_str()"
+
+  it "does not require element evidence for tuple truth" $ do
+    typed <- typecheckSource env0 "bool_tuple" $ unlines
+      [ "def truth(x: ((int)->str,)) -> bool:"
+      , "    return Bool.__bool__(x)" ]
+    let listing = Pretty.print typed
+    listing `shouldSatisfy` isInfixOf "$BoolTuple@"
+    listing `shouldSatisfy` (not . isInfixOf "BoolD_value")
+
+  it "supports tuple truth with an open row and no component evidence" $ do
+    typed <- typecheckSource env0 "bool_tuple_open" $ unlines
+      [ "def truth(x: (first: int, **)) -> bool:"
+      , "    return Bool.__bool__(x)" ]
+    let listing = Pretty.print typed
+    listing `shouldSatisfy` isInfixOf "$BoolTuple@"
+    listing `shouldSatisfy` (not . isInfixOf "BoolD_value")
+
+  it "uses dedicated Show and Bool evidence for None" $ do
+    typed <- typecheckSource env0 "show_bool_none" $ unlines
+      [ "def display() -> str:", "    return Show.__str__(None)"
+      , "def truth() -> bool:", "    return Bool.__bool__(None)" ]
+    let listing = Pretty.print typed
+    listing `shouldSatisfy` isInfixOf "$wShowNone"
+    listing `shouldSatisfy` isInfixOf "$wBoolNone"
+
+  it "preserves optional and tuple types in generic Show/Bool calls" $ do
+    (_, typed, _, _) <- check "show_bool_structural_keep"
+      (keep ++ [ "def optional(x: ?int) -> ?int:", "    return keep(x)"
+               , "def tuple(x: (int, str)) -> (int, str):", "    return keep(x)" ])
+    let listing = Pretty.print typed
+    listing `shouldSatisfy` isInfixOf "keep@[?__builtin__.int]"
+    listing `shouldSatisfy` isInfixOf "keep@[(__builtin__.int, __builtin__.str)]"
+
 -- Tests for uninitialized class attribute checking
 
 testAttributesInitialization :: Acton.Env.Env0 -> Spec

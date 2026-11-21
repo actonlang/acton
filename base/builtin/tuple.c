@@ -24,16 +24,19 @@ B_NoneType B_tupleD___init__(B_tuple self,int size ,...) {
     return B_None;
 }
 
-bool B_tupleD___bool__(B_tuple self) {
+bool B_tuple_bool(B_tuple self) {
     return self->size>0;
 }
 
-B_str B_tupleD___str__(B_tuple self) {
+B_str B_tuple_str(B_tuple self, B_tuple witnesses) {
     B_list s2 = B_listD_new(self->size);
     B_SequenceD_list wit = B_SequenceD_listG_witness;
     for (int i=0; i< self->size; i++) {
         B_value elem = (B_value)self->components[i];
-        if (elem == NULL) {
+        if (witnesses) {
+            B_Show w = (B_Show)witnesses->components[i];
+            wit->$class->append(wit, s2, w->$class->__repr__(w, elem));
+        } else if (elem == NULL) {
             wit->$class->append(wit,s2,B_None_str);
         } else {
             wit->$class->append(wit,s2,elem->$class->__repr__(elem));
@@ -42,6 +45,15 @@ B_str B_tupleD___str__(B_tuple self) {
     return B_strD_join_par('(',s2,')');
 }
 
+
+// Compatibility with the class slots until conversion uses the protocols.
+bool B_tupleD___bool__(B_tuple self) {
+    return B_tuple_bool(self);
+}
+
+B_str B_tupleD___str__(B_tuple self) {
+    return B_tuple_str(self, NULL);
+}
 
 void B_tupleD___serialize__(B_tuple self, $Serial$state state) {
     B_int prevkey = (B_int)B_dictD_get(state->done, self, NULL);

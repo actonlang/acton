@@ -123,6 +123,105 @@ extern struct B_EqG_class $wEqNoneG_class;
 extern B_Eq $wEqNone;
 
 
+// Show and Bool for optional values and tuples //////////////////////////////
+
+struct $ShowOpt;
+typedef struct $ShowOpt *$ShowOpt;
+
+struct $ShowOptG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    void (*__init__)($ShowOpt, B_Show);
+    void (*__serialize__)($ShowOpt, $Serial$state);
+    $ShowOpt (*__deserialize__)($ShowOpt, $Serial$state);
+    bool (*__bool__)($ShowOpt);
+    B_str (*__str__)($ShowOpt, $WORD);
+    B_str (*__repr__)($ShowOpt, $WORD);
+};
+
+struct $ShowOpt {
+    struct $ShowOptG_class *$class;
+    B_Show W_Show;
+};
+
+extern struct $ShowOptG_class $ShowOptG_methods;
+$ShowOpt $ShowOptG_new(B_Show);
+
+struct $BoolOpt;
+typedef struct $BoolOpt *$BoolOpt;
+
+struct $BoolOptG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    void (*__init__)($BoolOpt, B_Bool);
+    void (*__serialize__)($BoolOpt, $Serial$state);
+    $BoolOpt (*__deserialize__)($BoolOpt, $Serial$state);
+    bool (*__bool__)($BoolOpt, $WORD);
+    B_str (*__str__)($BoolOpt);
+    B_str (*__repr__)($BoolOpt);
+};
+
+struct $BoolOpt {
+    struct $BoolOptG_class *$class;
+    B_Bool W_Bool;
+};
+
+extern struct $BoolOptG_class $BoolOptG_methods;
+$BoolOpt $BoolOptG_new(B_Bool);
+
+struct $ShowTuple;
+typedef struct $ShowTuple *$ShowTuple;
+
+struct $ShowTupleG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    void (*__init__)($ShowTuple, B_tuple);
+    void (*__serialize__)($ShowTuple, $Serial$state);
+    $ShowTuple (*__deserialize__)($ShowTuple, $Serial$state);
+    bool (*__bool__)($ShowTuple);
+    B_str (*__str__)($ShowTuple, $WORD);
+    B_str (*__repr__)($ShowTuple, $WORD);
+};
+
+struct $ShowTuple {
+    struct $ShowTupleG_class *$class;
+    B_tuple W_Show;
+};
+
+extern struct $ShowTupleG_class $ShowTupleG_methods;
+$ShowTuple $ShowTupleG_new(B_tuple);
+
+struct $BoolTuple;
+typedef struct $BoolTuple *$BoolTuple;
+
+struct $BoolTupleG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    void (*__init__)($BoolTuple);
+    void (*__serialize__)($BoolTuple, $Serial$state);
+    $BoolTuple (*__deserialize__)($BoolTuple, $Serial$state);
+    bool (*__bool__)($BoolTuple, $WORD);
+    B_str (*__str__)($BoolTuple);
+    B_str (*__repr__)($BoolTuple);
+};
+
+struct $BoolTuple {
+    struct $BoolTupleG_class *$class;
+};
+
+extern struct $BoolTupleG_class $BoolTupleG_methods;
+$BoolTuple $BoolTupleG_new(void);
+
+extern struct B_ShowG_class $wShowNoneG_class;
+extern B_Show $wShowNone;
+extern struct B_BoolG_class $wBoolNoneG_class;
+extern B_Bool $wBoolNone;
+
+
 // IdentityActor //////////////////////////////////////////////////////
 
 struct $IdentityActor;

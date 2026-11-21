@@ -412,6 +412,212 @@ static struct B_Eq $wEqNone_instance = {&$wEqNoneG_class};
 B_Eq $wEqNone = &$wEqNone_instance;
 
 
+// Show and Bool for optional values and tuples //////////////////////////////
+
+// Optional witnesses preserve the supplied policy for the present value.
+// None is represented by NULL; it must never reach an element witness.
+
+static void $ShowOptD___init__($ShowOpt self, B_Show witness) {
+    self->W_Show = witness;
+}
+
+static void $ShowOptD_serialize($ShowOpt self, $Serial$state state) {
+    $step_serialize(self->W_Show, state);
+}
+
+static $ShowOpt $ShowOptD_deserialize($ShowOpt self, $Serial$state state) {
+    if (!self)
+        self = $DNEW($ShowOpt, state);
+    ACTON_STORE(self, self->W_Show, $step_deserialize(state));
+    return self;
+}
+
+static B_str $ShowOptD___str__($ShowOpt self, $WORD value) {
+    B_Show w = self->W_Show;
+    return value ? w->$class->__str__(w, value) : B_None_str;
+}
+
+static B_str $ShowOptD___repr__($ShowOpt self, $WORD value) {
+    B_Show w = self->W_Show;
+    return value ? w->$class->__repr__(w, value) : B_None_str;
+}
+
+struct $ShowOptG_class $ShowOptG_methods = {
+    .$GCINFO = "$ShowOpt",
+    .$class_id = UNASSIGNED,
+    .__init__ = $ShowOptD___init__,
+    .__serialize__ = $ShowOptD_serialize,
+    .__deserialize__ = $ShowOptD_deserialize,
+    .__bool__ = (bool (*)($ShowOpt))$default__bool__,
+    .__str__ = $ShowOptD___str__,
+    .__repr__ = $ShowOptD___repr__
+};
+
+$ShowOpt $ShowOptG_new(B_Show witness) {
+    return $NEW($ShowOpt, witness);
+}
+
+static void $BoolOptD___init__($BoolOpt self, B_Bool witness) {
+    self->W_Bool = witness;
+}
+
+static void $BoolOptD_serialize($BoolOpt self, $Serial$state state) {
+    $step_serialize(self->W_Bool, state);
+}
+
+static $BoolOpt $BoolOptD_deserialize($BoolOpt self, $Serial$state state) {
+    if (!self)
+        self = $DNEW($BoolOpt, state);
+    ACTON_STORE(self, self->W_Bool, $step_deserialize(state));
+    return self;
+}
+
+static bool $BoolOptD___bool__($BoolOpt self, $WORD value) {
+    B_Bool w = self->W_Bool;
+    return value && w->$class->__bool__(w, value);
+}
+
+struct $BoolOptG_class $BoolOptG_methods = {
+    .$GCINFO = "$BoolOpt",
+    .$class_id = UNASSIGNED,
+    .__init__ = $BoolOptD___init__,
+    .__serialize__ = $BoolOptD_serialize,
+    .__deserialize__ = $BoolOptD_deserialize,
+    .__bool__ = $BoolOptD___bool__,
+    .__str__ = (B_str (*)($BoolOpt))$default__str__,
+    .__repr__ = (B_str (*)($BoolOpt))$default__str__
+};
+
+$BoolOpt $BoolOptG_new(B_Bool witness) {
+    return $NEW($BoolOpt, witness);
+}
+
+static void $ShowTupleD___init__($ShowTuple self, B_tuple witness) {
+    self->W_Show = witness;
+}
+
+static void $ShowTupleD_serialize($ShowTuple self, $Serial$state state) {
+    $step_serialize(self->W_Show, state);
+}
+
+static $ShowTuple $ShowTupleD_deserialize($ShowTuple self, $Serial$state state) {
+    if (!self)
+        self = $DNEW($ShowTuple, state);
+    ACTON_STORE(self, self->W_Show, $step_deserialize(state));
+    return self;
+}
+
+static B_str $ShowTupleD___str__($ShowTuple self, $WORD value) {
+    return B_tuple_str((B_tuple)value, self->W_Show);
+}
+
+struct $ShowTupleG_class $ShowTupleG_methods = {
+    .$GCINFO = "$ShowTuple",
+    .$class_id = UNASSIGNED,
+    .__init__ = $ShowTupleD___init__,
+    .__serialize__ = $ShowTupleD_serialize,
+    .__deserialize__ = $ShowTupleD_deserialize,
+    .__bool__ = (bool (*)($ShowTuple))$default__bool__,
+    .__str__ = $ShowTupleD___str__,
+    .__repr__ = $ShowTupleD___str__
+};
+
+$ShowTuple $ShowTupleG_new(B_tuple witness) {
+    return $NEW($ShowTuple, witness);
+}
+
+// Stateless witnesses deserialize to their singleton, recording the row so
+// subsequent references in the same serialized graph retain sharing.
+static void $statelessWitness_serialize($WORD self, $Serial$state state) {
+}
+
+static $WORD $statelessWitness_deserialize($WORD self, $Serial$state state, $WORD singleton) {
+    if (!self) {
+        self = singleton;
+        B_dictD_setitem(state->done, toB_int(state->row_no-1), self);
+    }
+    return self;
+}
+
+static struct $BoolTuple $BoolTuple_instance;
+
+static void $BoolTupleD___init__($BoolTuple self) {
+}
+
+static bool $BoolTupleD___bool__($BoolTuple self, $WORD value) {
+    return B_tuple_bool((B_tuple)value);
+}
+
+static $BoolTuple $BoolTupleD_deserialize($BoolTuple self, $Serial$state state) {
+    return $statelessWitness_deserialize(self, state, &$BoolTuple_instance);
+}
+
+struct $BoolTupleG_class $BoolTupleG_methods = {
+    .$GCINFO = "$BoolTuple",
+    .$class_id = UNASSIGNED,
+    .__init__ = $BoolTupleD___init__,
+    .__serialize__ = (void (*)($BoolTuple, $Serial$state))$statelessWitness_serialize,
+    .__deserialize__ = $BoolTupleD_deserialize,
+    .__bool__ = $BoolTupleD___bool__,
+    .__str__ = (B_str (*)($BoolTuple))$default__str__,
+    .__repr__ = (B_str (*)($BoolTuple))$default__str__
+};
+
+static struct $BoolTuple $BoolTuple_instance = {&$BoolTupleG_methods};
+
+$BoolTuple $BoolTupleG_new(void) {
+    return &$BoolTuple_instance;
+}
+
+static B_str $wShowNoneD___str__(B_Show self, $WORD value) {
+    return B_None_str;
+}
+
+static bool $wBoolNoneD___bool__(B_Bool self, $WORD value) {
+    return false;
+}
+
+static struct B_Show $wShowNone_instance;
+
+static B_Show $wShowNoneD_deserialize(B_Show self, $Serial$state state) {
+    return $statelessWitness_deserialize(self, state, &$wShowNone_instance);
+}
+
+struct B_ShowG_class $wShowNoneG_class = {
+    .$GCINFO = "$wShowNone",
+    .$class_id = UNASSIGNED,
+    .__init__ = (B_NoneType (*)(B_Show))$default__init__,
+    .__serialize__ = (void (*)(B_Show, $Serial$state))$statelessWitness_serialize,
+    .__deserialize__ = $wShowNoneD_deserialize,
+    .__bool__ = (bool (*)(B_Show))$default__bool__,
+    .__str__ = $wShowNoneD___str__,
+    .__repr__ = $wShowNoneD___str__
+};
+
+static struct B_Show $wShowNone_instance = {&$wShowNoneG_class};
+B_Show $wShowNone = &$wShowNone_instance;
+
+static struct B_Bool $wBoolNone_instance;
+
+static B_Bool $wBoolNoneD_deserialize(B_Bool self, $Serial$state state) {
+    return $statelessWitness_deserialize(self, state, &$wBoolNone_instance);
+}
+
+struct B_BoolG_class $wBoolNoneG_class = {
+    .$GCINFO = "$wBoolNone",
+    .$class_id = UNASSIGNED,
+    .__init__ = (B_NoneType (*)(B_Bool))$default__init__,
+    .__serialize__ = (void (*)(B_Bool, $Serial$state))$statelessWitness_serialize,
+    .__deserialize__ = $wBoolNoneD_deserialize,
+    .__bool__ = $wBoolNoneD___bool__,
+    .__str__ = (B_str (*)(B_Bool))$default__str__,
+    .__repr__ = (B_str (*)(B_Bool))$default__str__
+};
+
+static struct B_Bool $wBoolNone_instance = {&$wBoolNoneG_class};
+B_Bool $wBoolNone = &$wBoolNone_instance;
+
+
 // IdentityActor //////////////////////////////////////////////////////
 
 extern struct $IdentityActorG_class $IdentityActorG_methods;

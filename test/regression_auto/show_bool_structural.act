@@ -1,0 +1,122 @@
+# Structural witnesses retain their element policies, including through serde.
+class Item:
+    def __init__(self, n: int):
+        self.n = n
+
+extension Item(Show):
+    def __str__(self) -> str:
+        return "item " + str(self.n)
+    def __repr__(self) -> str:
+        return "Item(" + str(self.n) + ")"
+
+extension Item(Bool):
+    def __bool__(self) -> bool:
+        return self.n != 0
+
+class View[A(Show, Bool)]:
+    def __init__(self, item: A):
+        self.item = item
+    def display(self) -> str:
+        return Show.__str__(self.item)
+    def representation(self) -> str:
+        return Show.__repr__(self.item)
+    def truth(self) -> bool:
+        return Bool.__bool__(self.item)
+
+def check_view[A(Show, Bool)](item: A, text: str, representation: str, truth: bool):
+    check_stored(View(item), text, representation, truth)
+
+def check_stored[A(Show, Bool)](view: View[A], text: str, representation: str, truth: bool):
+    assert view.display() == text
+    assert view.representation() == representation
+    assert view.truth() == truth
+    restored = deserialize(serialize(view))
+    if isinstance(restored, View):
+        assert restored.display() == text
+        assert restored.representation() == representation
+        assert restored.truth() == truth
+    else:
+        assert False
+
+# Explicit bounds must survive each structural derivation.
+def optional[A(Show, Bool)](x: ?A) -> (str, str, bool):
+    return (Show.__str__(x), Show.__repr__(x), Bool.__bool__(x))
+
+def pair[A(Show)](x: A, y: A) -> str:
+    return Show.__str__((x, y))
+
+# Bool does not need to know which extra fields an open row contains.
+def open_truth(x: (first: int, **)) -> bool:
+    return Bool.__bool__(x)
+
+def increment(x: int) -> int:
+    return x + 1
+
+actor main(env):
+    try:
+        assert Show.__str__(None) == "None"
+        assert Show.__repr__(None) == "None"
+        assert not Bool.__bool__(None)
+        assert Show.__str__(()) == "()"
+        assert not Bool.__bool__(())
+        assert Show.__str__((7,)) == "(7)"
+        assert Show.__repr__(("x", 7, None)) == "('x', 7, None)"
+        assert Bool.__bool__((0, False, ""))
+        # Tuple truth does not inspect components or need their witnesses.
+        assert Bool.__bool__((increment,))
+        assert open_truth((first=0, callback=increment))
+        assert Show.__str__((1, (2, "x"))) == "(1, (2, 'x'))"
+        named: (label: str, count: int) = (count=2, label="x")
+        assert Show.__str__(named) == "('x', 2)"
+        assert Show.__str__((7, label="x")) == "(7, 'x')"
+        zero: ?int = 0
+        number: ?int = 7
+        absent: ?int = None
+        assert optional(zero) == ("0", "0", False)
+        assert optional(number) == ("7", "7", True)
+        assert optional(absent) == ("None", "None", False)
+        word: ?str = "x"
+        empty_word: ?str = ""
+        flag: ?bool = False
+        assert optional(word) == ("x", "'x'", True)
+        assert optional(empty_word) == ("", "''", False)
+        assert optional(flag) == ("False", "False", False)
+        one = Item(7)
+        empty_item: ?Item = Item(0)
+        present_item: ?Item = one
+        absent_item: ?Item = None
+        assert optional(empty_item) == ("item 0", "Item(0)", False)
+        assert optional(present_item) == ("item 7", "Item(7)", True)
+        assert optional(absent_item) == ("None", "None", False)
+        assert pair(one, Item(2)) == "(Item(7), Item(2))"
+        assert Show.__repr__((one, None)) == "(Item(7), None)"
+        values: list[?int] = [0, None, 7]
+        assert Show.__str__(values) == "[0, None, 7]"
+        assert Show.__str__([(one, None), (Item(2), None)]) == "[(Item(7), None), (Item(2), None)]"
+        assert Show.__str__({"x": (one, None)}) == "{{'x':(Item(7), None)}}"
+        optional_list: ?list[Item] = []
+        assert not Bool.__bool__(optional_list)
+        optional_list = [one]
+        assert Bool.__bool__(optional_list)
+        assert Show.__str__(optional_list) == "[Item(7)]"
+        # Exercise all new witness serializers, including stateless singletons,
+        # nested witness graphs and both present and absent optional payloads.
+        none_view: View[None] = View(None)
+        check_stored(none_view, "None", "None", False)
+        none_pair: View[(None, None)] = View((None, None))
+        check_stored(none_pair, "(None, None)", "(None, None)", True)
+        check_view((), "()", "()", False)
+        check_view((None, None), "(None, None)", "(None, None)", True)
+        check_view((one, "x"), "(Item(7), 'x')", "(Item(7), 'x')", True)
+        check_view(absent_item, "None", "None", False)
+        check_view(empty_item, "item 0", "Item(0)", False)
+        check_view(present_item, "item 7", "Item(7)", True)
+        nested: ?(Item, ?str) = (one, None)
+        check_view(nested, "(Item(7), None)", "(Item(7), None)", True)
+        nested = None
+        check_view(nested, "None", "None", False)
+        check_view(values, "[0, None, 7]", "[0, None, 7]", True)
+        env.exit(0)
+    except Exception as error:
+        print(error)
+        env.exit(1)

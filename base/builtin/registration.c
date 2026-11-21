@@ -112,6 +112,12 @@ void $register_builtin() {
   $register_force(HASHABLETUPLE_ID,&$HashableTupleG_methods);
   $register_force(WEQNONE_ID,&$wEqNoneG_class);
   $register_force(IDENTITYACTOR_ID,&$IdentityActorG_methods);
+  $register_force(SHOWOPT_ID,&$ShowOptG_methods);
+  $register_force(BOOLOPT_ID,&$BoolOptG_methods);
+  $register_force(SHOWTUPLE_ID,&$ShowTupleG_methods);
+  $register_force(BOOLTUPLE_ID,&$BoolTupleG_methods);
+  $register_force(WSHOWNONE_ID,&$wShowNoneG_class);
+  $register_force(WBOOLNONE_ID,&$wBoolNoneG_class);
 }
 
 

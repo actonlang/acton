@@ -1297,8 +1297,9 @@ explainRequirement c                = case info c of
 -- A trailing hint for protocol requirements on tuple types, which are solved
 -- by derivation (Solver.reduce' over tupleWits), not witness search.
 protoHint (TTuple _ prow krow) p
-  | tcname p `notElem` map fst tupleWits
-                                       = text " (tuples can only implement Eq, Ord and Hashable)"
+  | tcname p `notElem` map tcname tupleProtos
+                                       = text " (tuples can only implement Eq, Ord, Hashable, Show and Bool)"
+  | tcname p == qnBoolProtocol          = empty
   | Nothing <- tupleComponents prow krow
                                        = text " (cannot be derived for a tuple with an open row)"
 protoHint _ _                          = empty
