@@ -68,6 +68,12 @@ the recorded stat is then refreshed in place.  An editor overlay is
 compared by content hash only.  A module whose header is not trusted is
 read from its source.
 
+The stat that a .tydb records is taken before the source is read, and one
+read gives both the text that is compiled and the bytes that are hashed.
+A write that lands during the read then leaves the source with a stat
+other than the recorded one, so the next plan compares content hashes and
+compiles the new version.
+
 Run
 ---
 
@@ -388,8 +394,8 @@ importsOf (ParseTask _ imps _)          = imps
 importsOf (ActonTask _ m)               = A.importsOf m
 importsOf (ParseErrorTask _)            = []
 
--- | The text and bytes of one read of a module's source (two handles for a
--- disk read): the text is parsed, the bytes are hashed, and the stat is
+-- | The text and bytes of one read of a module's source: the text is
+-- parsed, the bytes are hashed, and the stat, taken before the read, is
 -- recorded in its .tydb.
 data ModuleSource = ModuleSource
   { sourceText  :: String
@@ -1292,33 +1298,31 @@ readModuleTask :: Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -
 readModuleTask sp gopts opts paths mn file = do
     reusable <- reusableHeader opts tydb
     case reusable of
-      Nothing               -> fromSource =<< Source.readSource sp file
+      Nothing               -> fromSource =<< readModuleSource sp file
       Just (header, tydbNs) -> do
         overlay <- Source.spReadOverlay sp file
         case overlay of
-          Just snap -> verify header snap Nothing
+          Just snap -> verify header (snapshotSource Nothing snap)
           Nothing   -> do
             meta <- readSourceFileMeta file
             if InterfaceFiles.summarySourceMeta header == Just meta && InterfaceFiles.sfmMTimeNs meta < tydbNs
               then return (TyTask header)
-              else Source.spReadFile sp file >>= \snap -> verify header snap (Just meta)
+              else verify header =<< readSourceFile sp file meta
   where
     tydb = tyDbPath paths mn
 
-    fromSource snap = do
-      parsed <- parseSourceHeader mn file snap
-      case parsed of
-        Left diags        -> return (ParseErrorTask diags)
-        Right (imps, doc) -> (\source -> ParseTask source imps doc) <$> moduleSource file snap
+    fromSource source = either ParseErrorTask (\(imps, doc) -> ParseTask source imps doc)
+                          <$> parseSourceHeader mn file (sourceText source)
 
     -- The stat refresh updates one row, failures ignored.  Rewriting the
     -- whole .tydb would re-derive its dependency rows from the stored
     -- per-name hashes, whose external dependencies are stripped, and so lose
     -- their users and hashes.
-    verify header snap meta = do
-      let hash = SHA256.hash (Source.ssBytes snap)
+    verify header source = do
+      let hash = SHA256.hash (sourceBytes source)
           same = hash == InterfaceFiles.summarySourceHash header
-      when (C.verbose gopts && Source.ssIsOverlay snap) $ do
+          meta = sourceMeta source
+      when (C.verbose gopts && isNothing meta) $ do
         actTime <- Source.spGetModTime sp file
         tyTime  <- InterfaceFiles.interfaceModifiedTime tydb
         putStrLn ("[debug] readModuleTask " ++ modNameToString mn
@@ -1326,9 +1330,9 @@ readModuleTask sp gopts opts paths mn file = do
                   ++ " ty=" ++ show tyTime
                   ++ " hash=" ++ Hashing.shortHash hash
                   ++ " header=" ++ Hashing.shortHash (InterfaceFiles.summarySourceHash header)
-                  ++ " len=" ++ show (B.length (Source.ssBytes snap))
+                  ++ " len=" ++ show (B.length (sourceBytes source))
                   ++ if same then " (match)" else " (diff)")
-      if not same then fromSource snap else do
+      if not same then fromSource source else do
         when (isJust meta && meta /= InterfaceFiles.summarySourceMeta header) $
           void (trySync (InterfaceFiles.updateSourceMeta tydb meta))
         return (TyTask header)
@@ -1356,11 +1360,26 @@ compilerNewerThan opts ns
       status <- trySync (getExecutablePath >>= getFileStatus)
       return (either (const False) (\st -> InterfaceFiles.posixNanoseconds (modificationTimeHiRes st) > ns) status)
 
--- | A module source from a snapshot: an overlay records no stat.
-moduleSource :: FilePath -> Source.SourceSnapshot -> IO ModuleSource
-moduleSource file snap = ModuleSource (Source.ssText snap) (Source.ssBytes snap) <$> meta
-  where meta | Source.ssIsOverlay snap  = return Nothing
-             | otherwise                = Just <$> readSourceFileMeta file
+-- | Read a module's source once (overlay-aware).  An editor overlay records
+-- no stat.  A file on disk is read after its stat is taken (readSourceFile).
+readModuleSource :: Source.SourceProvider -> FilePath -> IO ModuleSource
+readModuleSource sp file = do
+    overlay <- Source.spReadOverlay sp file
+    case overlay of
+      Just snap -> return (snapshotSource Nothing snap)
+      Nothing   -> readSourceFile sp file =<< readSourceFileMeta file
+
+-- | Read a module's source file from disk, given the stat taken just before
+-- the read.  The stat must not be taken after the read: a write landing in
+-- between would pair the stat of the new version with the content of the
+-- version that was read, and a later plan would trust that stat.
+readSourceFile :: Source.SourceProvider -> FilePath -> InterfaceFiles.SourceFileMeta -> IO ModuleSource
+readSourceFile sp file meta = snapshotSource (Just meta) <$> Source.spReadFile sp file
+
+-- | A module source from a snapshot and the stat taken before it was read,
+-- Nothing for an editor overlay.
+snapshotSource :: Maybe InterfaceFiles.SourceFileMeta -> Source.SourceSnapshot -> ModuleSource
+snapshotSource meta snap = ModuleSource (Source.ssText snap) (Source.ssBytes snap) meta
 
 -- | Read stable source metadata used for quick .tydb reuse checks.
 -- Device/inode act as file identity on POSIX so metadata drift from copies or
@@ -1386,16 +1405,17 @@ docIndexEntry _ _ _ _                   = Nothing
 
 -- | The parsed source of a module.  A ParseTask parses the text read at
 -- discovery, whose hash decided it; a TyTask reads its source again
--- (overlay-aware).  Imports stay as written: the front stage adjusts them.
+-- (readModuleSource).  Imports stay as written: the front stage adjusts them.
 materialize :: Source.SourceProvider -> C.CompileOptions -> A.ModName -> FilePath -> Maybe (ParseProgress -> IO ())
             -> CompileTask -> IO (Either [Diagnostic String] (ModuleSource, A.Module))
 materialize sp opts mn file progress task = case task of
     ActonTask source m   -> return (Right (source, m))
     ParseErrorTask diags -> return (Left diags)
-    ParseTask source _ _ -> do display <- displayPath file
-                               fmap ((,) source) <$> parseActSource opts mn display (sourceText source) progress
-    TyTask _             -> do parsed <- parseActFile opts sp mn file progress
-                               forM parsed $ \(snap, m) -> (\source -> (source, m)) <$> moduleSource file snap
+    ParseTask source _ _ -> parse source
+    TyTask _             -> parse =<< readModuleSource sp file
+  where
+    parse source         = do display <- displayPath file
+                              fmap ((,) source) <$> parseActSource opts mn display (sourceText source) progress
 
 -- | A parsed module whose imports name the modules of their in-graph
 -- providers.  A plain import keeps its written name as its alias.
@@ -1449,12 +1469,11 @@ parseActSource opts mn actFile srcContent mOnProgress =
 
 -- | Parse only the header of a module's source: the modules it imports and
 -- its docstring.
-parseSourceHeader :: A.ModName -> FilePath -> Source.SourceSnapshot -> IO (Either [Diagnostic String] ([A.ModName], Maybe String))
-parseSourceHeader mn actFile snap = do
+parseSourceHeader :: A.ModName -> FilePath -> String -> IO (Either [Diagnostic String] ([A.ModName], Maybe String))
+parseSourceHeader mn actFile src = do
     display <- displayPath actFile
     tryDiagnostics (parserHandlers mn display src) (header display)
   where
-    src = Source.ssText snap
     header display = do
       (imps, mdoc) <- Acton.Parser.parseModuleHeader display src
       return (A.importedModules imps, mdoc)

@@ -1655,7 +1655,6 @@ p27_overlay_source_provider = testCase "27-overlay snapshots drive readModuleTas
       snapSame = Source.SourceSnapshot
         { Source.ssText = text
         , Source.ssBytes = bytes
-        , Source.ssIsOverlay = True
         }
       disk = Source.diskSourceProvider
       spSame = disk { Source.spReadOverlay = \path -> return (if path == actAAbs then Just snapSame else Nothing) }
@@ -1669,7 +1668,6 @@ p27_overlay_source_provider = testCase "27-overlay snapshots drive readModuleTas
       snapDiff = Source.SourceSnapshot
         { Source.ssText = textDiff
         , Source.ssBytes = bytesDiff
-        , Source.ssIsOverlay = True
         }
       spDiff = disk { Source.spReadOverlay = \path -> return (if path == actAAbs then Just snapDiff else Nothing) }
   taskDiff <- Compile.readModuleTask spDiff quietGlobalOptions C.defaultCompileOptions paths moduleA actAAbs

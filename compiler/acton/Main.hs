@@ -1551,7 +1551,7 @@ overlayChangedPaths sp mPaths = do
       case res of
         Left _ -> return Nothing
         Right snap ->
-          return (Just (normalise path, snap { Source.ssIsOverlay = True }))
+          return (Just (normalise path, snap))
 
 -- | How the CLI reports one build: its events, its log lines and the final
 -- step, on the progress UI.
