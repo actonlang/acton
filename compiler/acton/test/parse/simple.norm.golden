@@ -2,7 +2,9 @@
 
 == norm: simple ================================
 pure def main () -> None:
-    print@[(__builtin__.str,)](("\"Hello parse!\"",), "\" \"", "\"\\n\"", False, False)
+    W_main_9: __builtin__.Show[__builtin__.str] = __builtin__.ShowD_str()
+    W_main_3: __builtin__.Show[(__builtin__.str,)] = $ShowTuple@[(__builtin__.Show[__builtin__.str],), (__builtin__.str,), ()]((W_main_9,))
+    print@[(__builtin__.str,)](W_main_3, ("\"Hello parse!\"",), "\" \"", "\"\\n\"", False, False)
     return None
 ================================================
 

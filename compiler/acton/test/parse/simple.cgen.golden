@@ -1,12 +1,21 @@
 /* Acton impl hash: <hash> */
 #include "rts/common.h"
 #include "out/types/simple.h"
+B_ShowD_str simpleQ_W_2module;
+$ShowTuple simpleQ_W_3module;
 B_NoneType simpleQ_main () {
-    ((B_NoneType (*) (B_tuple, B_str, B_str, bool, bool))B_print)($NEWTUPLE(1, actStrFromLiteral("Hello parse!", 12, 12)), actStrFromLiteral(" ", 1, 1), actStrFromLiteral("\n", 1, 1), false, false);
+    B_Show W_main_9 = (B_Show)B_ShowD_strG_witness;
+    B_Show W_main_3 = ((B_Show)simpleQ_W_3module);
+    ((B_NoneType (*) (B_Show, B_tuple, B_str, B_str, bool, bool))B_print)(W_main_3, $NEWTUPLE(1, actStrFromLiteral("Hello parse!", 12, 12)), actStrFromLiteral(" ", 1, 1), actStrFromLiteral("\n", 1, 1), false, false);
     return B_None;
+}
+static void simpleQ___init__$g0 () {
+    simpleQ_W_2module = (B_ShowD_str)B_ShowD_strG_witness;
+    simpleQ_W_3module = $ShowTupleG_new(((B_tuple)((B_tuple)$NEWTUPLE(1, simpleQ_W_2module))));
 }
 int simpleQ_done$ = 0;
 void simpleQ___init__ () {
     if (simpleQ_done$) return;
     simpleQ_done$ = 1;
+    simpleQ___init__$g0();
 }

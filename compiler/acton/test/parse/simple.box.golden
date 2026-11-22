@@ -1,8 +1,14 @@
 
 
 == box: simple ================================
+W_2module: __builtin__.ShowD_str = __builtin__.ShowD_str()
+
+W_3module: $ShowTuple[(__builtin__.Show[__builtin__.str],), (__builtin__.str,), ()] = $ShowTuple@[(__builtin__.Show[__builtin__.str],), (__builtin__.str,), ()]((simple.W_2module,))
+
 pure def main () -> None:
-    print@[(__builtin__.str,)](("\"Hello parse!\"",), "\" \"", "\"\\n\"", (UNBOX __builtin__.bool False), (UNBOX __builtin__.bool False))
+    W_main_9: __builtin__.Show[__builtin__.str] = __builtin__.ShowD_str()
+    W_main_3: __builtin__.Show[(__builtin__.str,)] = simple.W_3module
+    print@[(__builtin__.str,)](W_main_3, ("\"Hello parse!\"",), "\" \"", "\"\\n\"", (UNBOX __builtin__.bool False), (UNBOX __builtin__.bool False))
     return None
 ===============================================
 

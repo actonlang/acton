@@ -228,6 +228,21 @@ compilerTests =
           (code, out, err) <- runThing "" src
           assertEqual ("protocol receiver test should run: " ++ err) ExitSuccess code
           assertEqual "point3 should use its own extension" "(4,7)\n(5,6,7)\n" out
+  , testCase "variadic print uses Show evidence and preserves output" $ do
+        withSystemTempDirectory "acton-show-bool-print" $ \tmp -> do
+          let src = tmp </> "show_bool_print.act"
+          copyFile "../../test/regression_auto/show_bool_print.act" src
+          copyFile "../../test/regression_auto/show_bool_print.ext.c" (tmp </> "show_bool_print.ext.c")
+          testBuild "--jobs 2" ExitSuccess False src
+          (code, out, err) <- runThing "" src
+          assertEqual "printing should succeed" ExitSuccess code
+          assertEqual "stdout uses each argument's Show policy" (concat
+            [ "\n", "7 hello None True 2.5\n"
+            , "item 3 [Item(4)] (Item(5), 6)\n"
+            , "item 7|tail!\n", "item 8 [Item(8)] (Item(8), None)\n"
+            , "star item 9\n", "one\0two\n", "True|True|True\n", "item 12\n"
+            , "tick1|tick2\n", "item 1 item 2\n" ]) out
+          assertEqual "stderr uses the same Show policies" "error item 10\n" err
   , testCase "typed Show/Bool conversions preserve native and generic paths" $ do
         withSystemTempDirectory "acton-show-bool-conversions" $ \tmp -> do
           let src = tmp </> "show_bool_conversions.act"

@@ -1542,6 +1542,8 @@ def ord(c: str) -> int:
 def pow [A(Number)] (a : A, b : A) -> A:
     return Number.__pow__(a,b)
 
+# Show on the positional row carries one renderer for each argument.
+print: [P(Show)] => (*P, sep: str, end: str, err: bool, flush: bool) -> None
 def print(*args, sep: str=" ", end: str="\n", err: bool=False, flush: bool=False) -> None:
     """Prints values
 

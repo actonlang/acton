@@ -65,20 +65,26 @@ proc def mutate (C_cont : $Cont[None], f : $proc[(__builtin__.int,), __builtin__
 # (recursive group)
 
 # recursive group:
-proc def L_5C_5cont (C_cont : $Cont[None], C_6res : None) -> $R:
-    print@[(__builtin__.str,)](("\"sent\"",), "\" \"", "\"\\n\"", False, False)
+proc def L_5C_5cont (W_discard_5 : __builtin__.Show[(__builtin__.str,)], C_cont : $Cont[None], C_6res : None) -> $R:
+    print@[(__builtin__.str,)](W_discard_5, ("\"sent\"",), "\" \"", "\"\\n\"", False, False)
     return $R_CONT@[None](C_cont, None)
 class L_6Cont ($Cont[None], __builtin__.value):
     @property
+    W_discard_5 : __builtin__.Show[(__builtin__.str,)]
+    @property
     C_cont : $Cont[None]
-    pure def __init__ (L_self : Self, C_cont : $Cont[None]) -> None:
+    pure def __init__ (L_self : Self, W_discard_5 : __builtin__.Show[(__builtin__.str,)], C_cont : $Cont[None]) -> None:
+        L_self.W_discard_5 = W_discard_5
         L_self.C_cont = C_cont
         return None
     proc def __call__ (L_self : Self, G_1 : None) -> $R:
+        W_discard_5: __builtin__.Show[(__builtin__.str,)] = L_self.W_discard_5
         C_cont: $Cont[None] = L_self.C_cont
-        return L_5C_5cont(C_cont, G_1)
+        return L_5C_5cont(W_discard_5, C_cont, G_1)
 proc def discard (C_cont : $Cont[None], f : $proc[(__builtin__.int,), __builtin__.float], x : __builtin__.int) -> $R:
-    return f.__exec__($SKIPRES@[__builtin__.float](L_6Cont(C_cont)), x)
+    W_discard_13: __builtin__.Show[__builtin__.str] = __builtin__.ShowD_str()
+    W_discard_5: __builtin__.Show[(__builtin__.str,)] = $ShowTuple@[(__builtin__.Show[__builtin__.str],), (__builtin__.str,), ()]((W_discard_13,))
+    return f.__exec__($SKIPRES@[__builtin__.float](L_6Cont(W_discard_5, C_cont)), x)
 # (recursive group)
 
 # recursive group:

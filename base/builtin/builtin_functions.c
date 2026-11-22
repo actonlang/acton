@@ -16,11 +16,6 @@
 
 // print //////////////////////////////////////////////////////////////////////////////
 
-static $WORD mkstr($WORD w) {
-    B_value w1 = (B_value)w;
-    return w1->$class->__str__(w);
-}
- 
 B_str __str__(B_value x) {
     if (x == B_None)
         return B_None_str;
@@ -28,7 +23,10 @@ B_str __str__(B_value x) {
         return x->$class->__str__(x);
 }
 
-B_NoneType B_print(B_tuple t, B_str sep_arg, B_str end_arg, bool stderr_arg, bool flush_arg) {
+B_NoneType B_print(B_Show show_args, B_tuple t, B_str sep_arg, B_str end_arg, bool stderr_arg, bool flush_arg) {
+    // The row bound in print's type guarantees structural tuple evidence.
+    // Its component policies are also preserved by generic *args forwarding.
+    B_tuple witnesses = (($ShowTuple)show_args)->W_Show;
     FILE *outfd = stdout;
     if (stderr_arg) {
         outfd = stderr;
@@ -48,7 +46,8 @@ B_NoneType B_print(B_tuple t, B_str sep_arg, B_str end_arg, bool stderr_arg, boo
     B_str *strs = acton_malloc(t->size * sizeof(B_str));
     int64_t tlen = end->nbytes;
     for (int i=0; i<t->size; i++) {
-        strs[i] = __str__((B_value)t->components[i]);
+        B_Show w = (B_Show)witnesses->components[i];
+        strs[i] = w->$class->__str__(w, t->components[i]);
         tlen += strs[i]->nbytes + (i > 0 ? sep->nbytes : 0);
     }
     char *s = acton_malloc_atomic(tlen);

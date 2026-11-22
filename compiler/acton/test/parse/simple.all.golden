@@ -16,7 +16,9 @@ T_9w def main () -> T_5w:
 
 == types: simple ================================
 pure def main () -> None:
-    print@[(__builtin__.str,)](*("Hello parse!",), sep = " ", end = "\\n", err = False, flush = False)
+    W_main_9: __builtin__.Show[__builtin__.str] = __builtin__.ShowD_str()
+    W_main_3: __builtin__.Show[(__builtin__.str,)] = $ShowTuple@[(__builtin__.Show[__builtin__.str],), (__builtin__.str,), ()]((W_main_9,))
+    print@[(__builtin__.str,)](W_main_3, *("Hello parse!",), sep = " ", end = "\\n", err = False, flush = False)
 =================================================
 
 
@@ -30,7 +32,9 @@ main : () -> None
 
 == norm: simple ================================
 pure def main () -> None:
-    print@[(__builtin__.str,)](("\"Hello parse!\"",), "\" \"", "\"\\n\"", False, False)
+    W_main_9: __builtin__.Show[__builtin__.str] = __builtin__.ShowD_str()
+    W_main_3: __builtin__.Show[(__builtin__.str,)] = $ShowTuple@[(__builtin__.Show[__builtin__.str],), (__builtin__.str,), ()]((W_main_9,))
+    print@[(__builtin__.str,)](W_main_3, ("\"Hello parse!\"",), "\" \"", "\"\\n\"", False, False)
     return None
 ================================================
 
@@ -38,7 +42,9 @@ pure def main () -> None:
 
 == deact: simple ================================
 pure def main () -> None:
-    print@[(__builtin__.str,)](("\"Hello parse!\"",), "\" \"", "\"\\n\"", False, False)
+    W_main_9: __builtin__.Show[__builtin__.str] = __builtin__.ShowD_str()
+    W_main_3: __builtin__.Show[(__builtin__.str,)] = $ShowTuple@[(__builtin__.Show[__builtin__.str],), (__builtin__.str,), ()]((W_main_9,))
+    print@[(__builtin__.str,)](W_main_3, ("\"Hello parse!\"",), "\" \"", "\"\\n\"", False, False)
     return None
 =================================================
 
@@ -46,7 +52,9 @@ pure def main () -> None:
 
 == cps: simple ================================
 pure def main () -> None:
-    print@[(__builtin__.str,)](("\"Hello parse!\"",), "\" \"", "\"\\n\"", False, False)
+    W_main_9: __builtin__.Show[__builtin__.str] = __builtin__.ShowD_str()
+    W_main_3: __builtin__.Show[(__builtin__.str,)] = $ShowTuple@[(__builtin__.Show[__builtin__.str],), (__builtin__.str,), ()]((W_main_9,))
+    print@[(__builtin__.str,)](W_main_3, ("\"Hello parse!\"",), "\" \"", "\"\\n\"", False, False)
     return None
 ===============================================
 
@@ -54,15 +62,23 @@ pure def main () -> None:
 
 == llift: simple ================================
 pure def main () -> None:
-    print@[(__builtin__.str,)](("\"Hello parse!\"",), "\" \"", "\"\\n\"", False, False)
+    W_main_9: __builtin__.Show[__builtin__.str] = __builtin__.ShowD_str()
+    W_main_3: __builtin__.Show[(__builtin__.str,)] = $ShowTuple@[(__builtin__.Show[__builtin__.str],), (__builtin__.str,), ()]((W_main_9,))
+    print@[(__builtin__.str,)](W_main_3, ("\"Hello parse!\"",), "\" \"", "\"\\n\"", False, False)
     return None
 =================================================
 
 
 
 == box: simple ================================
+W_2module: __builtin__.ShowD_str = __builtin__.ShowD_str()
+
+W_3module: $ShowTuple[(__builtin__.Show[__builtin__.str],), (__builtin__.str,), ()] = $ShowTuple@[(__builtin__.Show[__builtin__.str],), (__builtin__.str,), ()]((simple.W_2module,))
+
 pure def main () -> None:
-    print@[(__builtin__.str,)](("\"Hello parse!\"",), "\" \"", "\"\\n\"", (UNBOX __builtin__.bool False), (UNBOX __builtin__.bool False))
+    W_main_9: __builtin__.Show[__builtin__.str] = __builtin__.ShowD_str()
+    W_main_3: __builtin__.Show[(__builtin__.str,)] = simple.W_3module
+    print@[(__builtin__.str,)](W_main_3, ("\"Hello parse!\"",), "\" \"", "\"\\n\"", (UNBOX __builtin__.bool False), (UNBOX __builtin__.bool False))
     return None
 ===============================================
 
@@ -71,4 +87,6 @@ pure def main () -> None:
 #include "builtin/builtin.h"
 #include "rts/rts.h"
 B_NoneType simpleQ_main ();
+extern B_ShowD_str simpleQ_W_2module;
+extern $ShowTuple simpleQ_W_3module;
 void simpleQ___init__ ();

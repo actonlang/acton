@@ -3,4 +3,6 @@
 #include "builtin/builtin.h"
 #include "rts/rts.h"
 B_NoneType simpleQ_main ();
+extern B_ShowD_str simpleQ_W_2module;
+extern $ShowTuple simpleQ_W_3module;
 void simpleQ___init__ ();
