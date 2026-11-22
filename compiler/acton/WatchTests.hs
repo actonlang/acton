@@ -279,6 +279,21 @@ watchProcessTests = testGroup "watch subprocesses"
           appendFile (proj </> "src/main.act") "\n# Recover from failed build\n"
           awaitReports 1 output
           assertBool "the next successful build should run tests" =<< doesFileExist (proj </> "test-ran")
+  , testCase "a root actor that the module does not define is reported and the watch recovers" $
+      withProcessProject $ \acton proj system -> do
+        writeExecutable (system </> "zig/zig") ["touch build-ran"]
+        withActon acton proj ["build", "--watch", "--root", "main.app", "--syspath", system] $ \ph _ output -> do
+          await "report of the missing root actor" $ do
+            logText <- output
+            return $ if "Cannot use main.app as the root actor: module main does not define app" `isInfixOf` logText then Just () else Nothing
+          awaitGeneration proj
+          assertEqual "watch should survive a missing root actor" Nothing =<< getProcessExitCode ph
+          appendFile (proj </> "src/main.act") $ unlines
+            [ "actor app(env):"
+            , "    proc def __startup__():"
+            , "        env.exit(0)"
+            ]
+          awaitFile (proj </> "build-ran")
   , testCase "interrupted test generation retains both edited modules" $
       withProcessProject $ \acton proj system -> do
         writeFile (proj </> "src/other.act") $ unlines

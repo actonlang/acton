@@ -56,7 +56,7 @@ import Watch
 import FileUtil (readFile, writeFile, writeFileIfChanged)
 
 import Control.Concurrent.MVar
-import Control.Exception (throw,catch,finally,IOException,try,SomeException,onException,evaluate,bracket,mask)
+import Control.Exception (throw,catch,finally,IOException,try,SomeException,onException,evaluate,bracket,mask,displayException)
 import qualified Control.Concurrent.Async as Async
 import ProcessUtil (stopProcessGroup)
 import PerfScaling (validateScalingOptions, printScaleRecording, readScaleRecording)
@@ -957,6 +957,12 @@ localDependencyDirs gopts opts paths = do
     projects <- maybe (return M.empty) (localProjects (sysPath paths) root) =<< discoverBuildProjects gopts opts paths
     return [ (dir, projSrcDir ctx) | (dir, ctx) <- M.toList projects, dir /= root ]
 
+-- | Start a watch generation.  The watch outlives a generation that throws:
+-- the exception is logged, as a failed compile is, and the next change
+-- starts a new generation.
+startWatchGeneration :: CliWatchContext -> (Generation -> IO ()) -> IO ()
+startWatchGeneration ctx = void . startCompile (cwScheduler ctx) 0 (progressLogLine (cwProgressUI ctx) . displayException)
+
 -- | Run the project watch loop and schedule compiles on events: in the
 -- project's src directory and Build.act, and in the src directories and
 -- Build.act files of its local dependencies ('dependencyDirs', asked again
@@ -982,7 +988,7 @@ runWatchProject gopts projDir srcRoot dependencyDirs watchCtx runOnce = do
           atomicModifyIORef' pendingRef $ \(version, pending) ->
             let changed = nub <$> ((++) <$> pending <*> fmap (:[]) mpath)
             in ((version + 1, changed), ())
-          void $ startCompile (cwScheduler watchCtx) 0 $ \gen -> do
+          startWatchGeneration watchCtx $ \gen -> do
             (version, changed) <- readIORef pendingRef
             completed <- runOnce gen changed
             -- Canceled and failed generations leave their paths pending. A
@@ -1041,7 +1047,7 @@ runWatchFile gopts absFile watchCtx runOnce = do
         isTarget ev = isJust (fileWatchTrigger watchPath ev)
         onEvent stamps toTrigger ev =
           forM_ (toTrigger ev) (dispatchWatchTrigger (shouldTriggerFile stamps) schedule)
-        schedule mpath = void $ startCompile (cwScheduler watchCtx) 0 $ \gen ->
+        schedule mpath = startWatchGeneration watchCtx $ \gen ->
           runOnce gen (fmap (:[]) mpath)
     FS.withManager $ \mgr -> do
       _ <- FS.watchDir mgr watchDir isTarget (onEvent stampsRef (fileWatchTrigger watchPath))

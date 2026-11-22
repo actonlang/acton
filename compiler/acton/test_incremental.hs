@@ -32,7 +32,7 @@ import           Data.Time.Clock        (addUTCTime, getCurrentTime)
 import           Data.Time.Clock.POSIX  (posixSecondsToUTCTime)
 import           System.Directory       (setModificationTime)
 import qualified Control.Exception as E
-import           Control.Concurrent     (newEmptyMVar, readMVar, threadDelay, tryPutMVar, yield)
+import           Control.Concurrent     (newEmptyMVar, putMVar, readMVar, threadDelay, tryPutMVar, yield)
 import           Error.Diagnose (TabSize(..), WithUnicode(..), prettyDiagnostic)
 import           Prettyprinter (unAnnotate)
 
@@ -5132,13 +5132,34 @@ p64_new_generation_stops_type_check =
           now <- getCurrentTime
           if now < deadline then yield >> hold deadline else writeIORef heldOut True
         build gen = void (Compile.runCompilePlan Source.diskSourceProvider quietGlobalOptions sched gen plan onEvent)
-    _ <- Compile.startCompile sched 0 build
+    _ <- Compile.startCompile sched 0 (\_ -> return ()) build
     checking <- timeout (60 * 1000000) (readMVar holding)
     assertBool "expected the first build to report type check progress" (isJust checking)
-    _ <- Compile.startCompile sched 0 (\_ -> return ())
+    _ <- Compile.startCompile sched 0 (\_ -> return ()) (\_ -> return ())
     held <- readIORef heldOut
     Compile.stopCompile sched
     assertBool "startCompile waited for the held type check to end" (not held)
+
+-- Nothing waits for a run, so the exception that ends it goes to the
+-- failure handler.  A run that a newer generation cancels reports nothing.
+p65_run_exception_reaches_failure_handler :: TestTree
+p65_run_exception_reaches_failure_handler =
+  testCase "65-an exception that ends a run reaches the failure handler" $ do
+    sched <- Compile.newCompileScheduler quietGlobalOptions
+    failures <- newIORef []
+    reported <- newEmptyMVar
+    let onFailure e = do
+          atomicModifyIORef' failures (\fs -> (fs ++ [E.displayException e], ()))
+          void (tryPutMVar reported ())
+    _ <- Compile.startCompile sched 0 onFailure (\_ -> E.throwIO (userError "run failed"))
+    failed <- timeout (10 * 1000000) (readMVar reported)
+    assertBool "expected the failed run to reach the failure handler" (isJust failed)
+    running <- newEmptyMVar
+    _ <- Compile.startCompile sched 0 onFailure (\_ -> putMVar running () >> threadDelay maxBound)
+    readMVar running
+    _ <- Compile.startCompile sched 0 onFailure (\_ -> return ())
+    Compile.stopCompile sched
+    assertEqual "only the failed run reaches the failure handler" ["user error (run failed)"] =<< readIORef failures
 
 -- Compile events -------------------------------------------------------------
 
@@ -5498,5 +5519,5 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
       , p59_full_build_keeps_nested_module_binary
       ]
   , testGroup "incremental-fetch-cases" [ p60_plan_after_failed_fetch_fetches_again ]
-  , testGroup "incremental-generation-cases" [ p64_new_generation_stops_type_check ]
+  , testGroup "incremental-generation-cases" [ p64_new_generation_stops_type_check, p65_run_exception_reaches_failure_handler ]
   ]

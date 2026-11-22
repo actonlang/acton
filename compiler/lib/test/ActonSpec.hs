@@ -1888,13 +1888,13 @@ main = do
         oldCleanupStarted <- newEmptyMVar
         releaseOldCleanup <- newEmptyMVar
         newStarted <- newEmptyMVar
-        _ <- Compile.startCompile sched 0 $ \_ ->
+        _ <- Compile.startCompile sched 0 (\_ -> return ()) $ \_ ->
           E.finally
             (putMVar oldStarted () >> threadDelay 10000000)
             (putMVar oldCleanupStarted () >> takeMVar releaseOldCleanup)
         takeMVar oldStarted
         nextCompile <- async $
-          Compile.startCompile sched 0 $ \_ -> putMVar newStarted ()
+          Compile.startCompile sched 0 (\_ -> return ()) $ \_ -> putMVar newStarted ()
         takeMVar oldCleanupStarted
         E.finally
           (timeout 100000 (takeMVar newStarted) `shouldReturn` Nothing)

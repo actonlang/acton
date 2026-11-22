@@ -229,7 +229,9 @@ A CompileScheduler numbers its runs.  acton watch and the LSP server start
 a run for each change with startCompile, the LSP server after a debounce
 delay.  One caller at a time, the counter moves, the previous run is
 cancelled and awaited, and the new run starts unless startCompile
-numbered a newer generation during the delay.  A one-shot build runs as
+numbered a newer generation during the delay.  An exception that ends a
+run goes to the caller's failure handler, which acton watch logs and the
+LSP server shows, unless the run was cancelled.  A one-shot build runs as
 the scheduler's current generation, 0 on a fresh scheduler.  A run whose
 generation is no longer current is stale.  A stale run writes no front
 output, queues no back job and reports no event to the handler, and its
@@ -859,14 +861,16 @@ compileParallelism gopts
 -- new run. The cancel stops the previous generation's running parse and
 -- check passes where they are, and reaches a stage that is committing only
 -- where it blocks (startReady). After the delay the run starts only if
--- startCompile numbered no newer generation in the meantime.
-startCompile :: CompileScheduler -> Int -> (Generation -> IO ()) -> IO Generation
-startCompile sched delay run = modifyMVar (schedulerRun sched) $ \previous -> do
+-- startCompile numbered no newer generation in the meantime. Nothing waits
+-- for the run's result, so an exception that ends the run, other than a
+-- cancel, goes to onFailure while the generation is current.
+startCompile :: CompileScheduler -> Int -> (SomeException -> IO ()) -> (Generation -> IO ()) -> IO Generation
+startCompile sched delay onFailure run = modifyMVar (schedulerRun sched) $ \previous -> do
   number <- atomicModifyIORef' (schedulerCounter sched) (\newest -> (newest + 1, newest + 1))
   let gen = Generation number (schedulerCounter sched)
   mapM_ cancel previous
   thread <- async (do when (delay > 0) (threadDelay delay)
-                      whenCurrent gen (run gen))
+                      whenCurrent gen (trySync (run gen) >>= either (whenCurrent gen . onFailure) return))
   return (Just thread, gen)
 
 -- | Cancel the newest generation's run and wait for its finalizer.
