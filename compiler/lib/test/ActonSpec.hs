@@ -6204,6 +6204,42 @@ testShowBoolInheritance env0 = describe "Inherited Show and Bool witnesses" $ do
     typed <- typecheckSource env0 "show_variadic_evidence" src
     Pretty.print typed `shouldSatisfy` isInfixOf "W_ShowD_"
 
+  it "uses root Show and Bool defaults for actor references before deactorization" $ do
+    typed <- typecheckSource env0 "show_bool_actor_defaults" $ unlines
+      [ "actor Worker():", "    pass"
+      , "def convert(x: Worker) -> (str, str, bool):"
+      , "    return (str(x), repr(x), bool(x))" ]
+    let listing = Pretty.print typed
+    listing `shouldSatisfy` isInfixOf "ShowD_value()"
+    listing `shouldSatisfy` isInfixOf "BoolD_value()"
+
+  it "infers callback receivers before selecting inherited Show evidence" $ do
+    typed <- typecheckSource env0 "show_callback_inference" $ unlines
+      [ "emit: [P(Show)] => (*P) -> None"
+      , "def emit(*args):"
+      , "    pass"
+      , ""
+      , "actor Channel():"
+      , "    def cb_install(callback: action(Channel, bytes) -> None):"
+      , "        pass"
+      , "    def write(data: bytes):"
+      , "        pass"
+      , "    def close():"
+      , "        pass"
+      , ""
+      , "actor Server(conn):"
+      , "    def on_receive(c, data):"
+      , "        emit(c, data)"
+      , "        c.write(data)"
+      , "        c.close()"
+      , ""
+      , "actor Listener():"
+      , "    def accept(c):"
+      , "        s = Server(c)"
+      , "        c.cb_install(s.on_receive)"
+      , "    accept(Channel())" ]
+    Pretty.print typed `shouldSatisfy` isInfixOf "ShowD_value()"
+
   it "carries Show evidence through inferred variadic wrappers" $ do
     typed <- typecheckSource env0 "show_variadic_forward" $ unlines
       [ "def render(*args) -> str:", "    return str(args)"

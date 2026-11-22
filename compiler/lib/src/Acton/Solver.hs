@@ -621,11 +621,20 @@ allBelowProto env (TC n [t@TFX{},_])
   | n == primWrappedP               = [ schematic (wtype w) | w <- witsByPName env n, t == (head $ tcargs $ proto w) ]
 allBelowProto env p
   | p == pIdentity                  = ts ++ [ schematic $ tCon tc | tc <- tyactorsAll env ++ importedActors env ]
+  -- Explicit witnesses are not the complete candidate set for these two
+  -- protocols: nominal subclasses inherit their root implementations. Include
+  -- those classes before intersecting with callback/attribute candidates.
+  | tcname p `elem` [qnShow,qnBoolProtocol]
+                                    = typeUnion env ts (filter valueType (allBelow env tValue) ++ actors) ++
+                                      [tTuple tWild tWild,tOpt tWild,tFun tWild tWild tWild tWild,tNone]
   | tcname p `elem` map fst optionalWits
                                     = ts ++ [tTuple tWild tWild, tOpt tWild]
   | p `elem` tupleProtos            = ts ++ [tTuple tWild tWild]
   | otherwise                       = ts
-  where ts                          = [ schematic (wtype w) | w <- witsByPName env (tcname p) ] -- includes tvars; oldest first, lazy
+  where ts                          = [ schematic (wtype w) | w <- witsByPName env (tcname p), not (isShowRow (wtype w) p) ] -- includes tvars; oldest first, lazy
+        actors                      = [ schematic $ tCon tc | tc <- tyactorsAll env ++ importedActors env ]
+        valueType (TVar _ v)         = tvkind v == KType
+        valueType _                 = True
 
 -- Local candidate classes come from the in-memory type-id lattice (lazy, O(1)
 -- attribute lookup, preserving the speedup on large local modules); imported
@@ -907,7 +916,10 @@ inheritedShowBoolWitness env t p
                             = listToMaybe [ (tCon c,ws) | (_,c) <- parents t,
                                             let ws = findWitness env (tCon c) p, not (null ws) ]
   | otherwise               = Nothing
-  where parents (TCon _ c) = drop 1 $ findAncestry env c
+  -- Actors acquire their value superclass in Deactorizer, after type checking.
+  -- Their root defaults are already valid for the runtime object layout.
+  where parents (TCon _ c) | isActor env (tcname c) = [([],cValue)]
+        parents (TCon _ c) = drop 1 $ findAncestry env c
         parents (TVar _ v) | tvkind v == KType = findAncestry env (findTVBound env v)
         parents TFun{}     = [([],cValue)]
         parents _          = []
