@@ -680,44 +680,76 @@ actor _test_TLSListenerNoVerifyNeedsVerifyPeer(t: testing.EnvT):
 
 
 actor _test_TLSClientHandshakeTimeout(t: testing.EnvT):
-    """connect_timeout covers a handshake the server never answers"""
-    var errors: list[str] = []
-    var connected = False
+    """connect_timeout covers a handshake the server never answers
+
+    connect_timeout limits the whole attempt, so on a slow machine it can
+    expire before the TCP connection is up, which is reported as a connect
+    timeout. That attempt never reached the handshake, so the test makes a
+    new one with twice the timeout.
+    """
     var listener: ?net.TCPListener = None
+    var connect_timeout = 0.5
+    var attempt = 0
+    # Events of the current attempt
+    var events: list[str] = []
+    var done = False
 
     proc def __startup__():
         tcp_cap = net.TCPCap(net.NetCap(t.env.cap))
-        def on_listen(l: net.TCPListener, error: ?str):
-            if error is not None:
-                t.failure(AssertionError("listen error: " + error))
-                return
-            listener = l
-            net.TLSConnection(net.TCPConnectCap(tcp_cap), "127.0.0.1", l.endpoint().port, on_connect, on_receive, on_error, None,
-                              ca_pem=CA_PEM, connect_timeout=0.5)
-            after 1.5: check()
+        t.timeout(15.0)
 
-        def check():
+        def finish(error: ?str):
+            if done:
+                return
+            done = True
             if listener is not None:
                 listener.close()
-            if connected:
-                t.failure(AssertionError("connected without a handshake"))
-            elif errors != ["TLS handshake timed out"]:
-                t.failure(AssertionError("errors: " + str(errors)))
+            if error is not None:
+                t.failure(AssertionError(error))
             else:
                 t.success()
+
+        def connect():
+            attempt += 1
+            events = []
+            n = attempt
+            l = listener
+            if l is not None:
+                net.TLSConnection(net.TCPConnectCap(tcp_cap), "127.0.0.1", l.endpoint().port,
+                                  lambda c: on_event(n, "on_connect"), on_receive, lambda c, e: on_event(n, e), None,
+                                  ca_pem=CA_PEM, connect_timeout=connect_timeout)
+
+        def on_event(n: int, event: str):
+            if n != attempt:
+                finish("attempt %d: %s after its first event" % (n, event))
+                return
+            events.append(event)
+            if len(events) == 1:
+                # Time for a second event, which would be wrong
+                after 1.0: check()
+
+        def check():
+            if events == ["Connection attempt failed due to timeout"] and attempt < 4:
+                connect_timeout *= 2.0
+                connect()
+            elif events == ["TLS handshake timed out"]:
+                finish(None)
+            else:
+                finish("attempt %d, connect_timeout %s: %s" % (attempt, str(connect_timeout), str(events)))
+
+        def on_listen(l: net.TCPListener, error: ?str):
+            if error is not None:
+                finish("listen error: " + error)
+                return
+            listener = l
+            connect()
 
         def on_accept(s: net.TCPListenConnection):
             # Read the client hello, never answer
             s.cb_install(lambda s, d: None, lambda s, e: None, None)
 
-        def on_connect(c: net.TLSConnection):
-            connected = True
-
         def on_receive(c: net.TLSConnection, data: bytes):
             pass
-
-        def on_error(c: net.TLSConnection, error: str):
-            errors.append(error)
 
         net.TCPListener(net.TCPListenCap(tcp_cap), "127.0.0.1", 0, on_listen, on_accept)
 
