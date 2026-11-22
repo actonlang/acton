@@ -89,16 +89,27 @@ Plan
 prepareCompileContext finds the paths of the file that roots a build and
 makes the --dep overrides absolute.  prepareCompilePlan fetches the
 dependencies unless the scheduler's last completed fetch was of the same
-Build.act.  It discovers the projects (buildProjects), locks the
-dependency projects through the context's ccLockDependencies, and prunes
-the outputs of their deleted sources, so that a cached header cannot bring
-a deleted module back.  It then discovers their modules (buildGlobalTasks)
-and selects the modules to compile (selectPlan): the requested modules
-with everything they import or, for an incremental plan, the modules
-that the changed files affect.  A declared build library is compiled
-whole.  The LSP server plans an edit of a project it already discovered
-by reading the edited module again (readModuleTask) and selecting from
-the modules it keeps.
+Build.act (fetchPlanDependencies) and plans (planFetched).  The acton CLI
+calls the two steps itself and brings the derived modules of the build up
+to date in between.  planFetched discovers the projects (buildProjects),
+locks the dependency projects through the context's ccLockDependencies,
+and prunes the outputs of their deleted sources, so that a cached header
+cannot bring a deleted module back.  It then discovers their modules
+(buildGlobalTasks) and selects the modules to compile (selectPlan): the
+requested modules with everything they import or, for an incremental
+plan, the modules that the changed files affect.  A declared build
+library is compiled whole.  The LSP server plans an edit of a project it
+already discovered by reading the edited module again (readModuleTask)
+and selecting from the modules it keeps.
+
+A project's modules are the source files under its src directory and the
+derived modules under out/derived/src, which a function named in the
+derived_modules table of Build.act returns the source of.  A derived
+module is discovered and compiled like any other module.  Only the acton
+CLI runs the functions.  It looks at the input files of a function through
+the file facts of the build (fileFact), so a file that is an input file and
+an embedded file is read once, and it stops the build when such a file
+changes while the build runs.
 
 A build holds its root project's work lock, and from planning to its
 final build the locks of the dependency projects whose outputs it reads
@@ -252,9 +263,9 @@ The scheduler's workers run the back jobs of every generation, one job at
 a time each.  waitBackJobs waits for a generation's jobs, or returns its
 first failure.  The CLI waits before its Zig build.  The LSP server
 reports completion first and waits after.  A run outside any scheduler
-(runStandalonePlan for acton sig, standaloneBuild for the benchmarks) has
-no back queue: its BackReady events reach only its handler, and it
-prepares no deferred back job.
+(runStandalonePlan for acton sig and for the functions of derived modules,
+standaloneBuild for the benchmarks) has no back queue: its BackReady events
+reach only its handler, and it prepares no deferred back job.
 
 Module cache
 ------------
@@ -365,6 +376,7 @@ module Acton.Compile
   , PlanRequest(..)
   , CompilePlan(..)
   , prepareCompilePlan
+  , fetchPlanDependencies
   , planFetched
   , dependencyDirs
   , planDependencyDirs
@@ -372,13 +384,18 @@ module Acton.Compile
   , readModuleTask
   , FileFacts
   , newFileFacts
+  , listedIn
   , Recorded(..)
+  , statRule
   , FileChanged(..)
+  , changedWhileBuilding
   , fileFact
   , hashOfFile
   , markedContent
   , changedEmbeds
   , embeddedPaths
+  , readSourceFileMeta
+  , fileMeta
   , docIndexEntry
   , parseActSource
   , parseActFile
@@ -438,6 +455,7 @@ import Control.Concurrent.STM (TChan, TVar, atomically, check, modifyTVar', newT
 import Control.DeepSeq (NFData, force, rnf)
 import Control.Exception (Exception, Handler(..), SomeException, catch, catches, displayException, evaluate, finally, handle, mask_, throwIO, try)
 import Control.Monad
+import Data.Bifunctor (bimap, first)
 import Data.Binary (encode)
 import Data.Char (isControl, isHexDigit, isSpace)
 import Data.Functor.Identity (Identity(..))
@@ -1014,8 +1032,10 @@ hasParseStage ctx t                     = case gtTask t of
 -- are found, so that the paths and discovery see absolute overrides.  The
 -- Build.act stamp is read at the project path as the paths give it.  The
 -- context locks no dependency: a caller that holds dependency locks sets
--- ccLockDependencies.  A context serves one plan, which has looked at no
--- file yet (ccFiles).
+-- ccLockDependencies.  A context serves one build, which has looked at no
+-- file yet (ccFiles): its plan and, before that, the look at the input
+-- files of its derived modules and the plans that compile the modules of
+-- their functions (Acton.Derive).
 prepareCompileContext :: C.CompileOptions -> [FilePath] -> IO CompileContext
 prepareCompileContext _ []              = throwProjectError "No source files found"
 prepareCompileContext opts (first : _)  = do
@@ -1055,20 +1075,26 @@ data CompilePlan = CompilePlan
   , cpSourceSizes :: M.Map TaskKey Integer    -- each needed module's source size, 0 when missing
   }
 
--- | Plan a build.  A plan fetches dependencies and plans in full (the
--- request's changed paths are dropped) unless the scheduler's last
--- completed fetch was of the same Build.act.  The stamp is recorded once
--- the fetch completes, so the next plan fetches again after a fetch that
--- failed or was cancelled.  The plans of one scheduler never overlap:
--- startCompile awaits the cancelled run before it starts the next, and a
--- one-shot build plans once.
+-- | Plan a build.  A plan that fetches dependencies plans in full: the
+-- request's changed paths are dropped.  The plans of one scheduler never
+-- overlap: startCompile awaits the cancelled run before it starts the
+-- next, and a one-shot build plans once.
 prepareCompilePlan :: Source.SourceProvider -> C.GlobalOptions -> CompileScheduler -> CompileContext -> PlanRequest -> IO CompilePlan
 prepareCompilePlan sp gopts sched ctx request = do
+    fetched <- fetchPlanDependencies gopts sched ctx
+    planFetched sp gopts ctx (if fetched then request { requestChanged = Nothing } else request)
+
+-- | Fetch the dependencies of a build unless the scheduler's last completed
+-- fetch was of the same Build.act, and say whether it fetched.  The stamp
+-- is recorded once the fetch completes, so the next call fetches again
+-- after a fetch that failed or was cancelled.
+fetchPlanDependencies :: C.GlobalOptions -> CompileScheduler -> CompileContext -> IO Bool
+fetchPlanDependencies gopts sched ctx = do
     specChanged <- (/= stamp) <$> readIORef (schedulerBuildSpec sched)
     when specChanged $ do
       fetchDependencies gopts (ccPathsRoot ctx) (C.dep_overrides (ccOpts ctx))
       writeIORef (schedulerBuildSpec sched) stamp
-    planFetched sp gopts ctx (if specChanged then request { requestChanged = Nothing } else request)
+    return specChanged
   where
     stamp = Just (ccBuildStamp ctx)
 
@@ -1117,7 +1143,7 @@ buildProjects gopts ctx = withoutTestLibraries <$> projects
     projects
       | isTmp paths = return (M.singleton root scratch)
       | otherwise   = discoverProjects gopts sys root (C.dep_overrides opts)
-    scratch = ProjCtx { projRoot = root, projSrcDir = srcDir paths, projSysPath = sys, projBuildSpec = scratchBuildSpec root, projDeps = [] }
+    scratch = ProjCtx { projRoot = root, projSrcDir = srcDir paths, projDerived = Data.Set.empty, projSysPath = sys, projBuildSpec = scratchBuildSpec root, projDeps = [] }
     withoutTestLibraries
       | C.test opts = M.adjust (\p -> p { projBuildSpec = (projBuildSpec p) { BuildSpec.libraries = M.empty } }) root
       | otherwise   = id
@@ -1211,7 +1237,7 @@ selectRequested ctx g files = do
       absolute <- canonicalizePath file
       case [ gtKey t | t <- graphTasks g, taskSourceFile t == absolute ] of
         k : _ -> return (Just k)
-        []    -> do mn <- moduleNameFromFile (srcDir paths) (projName paths) absolute
+        []    -> do mn <- moduleOfSource paths absolute
                     return (gtKey <$> M.lookup (TaskKey (ccRootProj ctx) mn) (graphIndex g))
 
 -- | The modules an edit of the changed files affects: every dependent of a
@@ -1612,8 +1638,9 @@ recordedEmbeds header = M.fromList
     [ (InterfaceFiles.embeddedPath f, Recorded (InterfaceFiles.embeddedStat f) (InterfaceFiles.embeddedSha256 f) (InterfaceFiles.summaryModified header))
     | f <- InterfaceFiles.summaryEmbeds header ]
 
--- | What a plan saw at a path: the stat of the file, Nothing where it found
--- no file to read, and the SHA-256 of the content of a file.
+-- | What a plan saw at a path: the stat of what the path names, Nothing
+-- where it names nothing or cannot be read, and the SHA-256 of the content
+-- of a file, Nothing where no look found a file to read.
 type Seen = (Maybe InterfaceFiles.SourceFileMeta, Maybe String)
 
 -- | What one plan has seen of the files it looked at, by path, and the names
@@ -1653,28 +1680,37 @@ newtype FileChanged = FileChanged FilePath deriving (Show)
 instance Exception FileChanged where
   displayException (FileChanged path) = changedWhileBuilding path
 
+-- | The stat rule: the recorded SHA-256 stands for the content of a file
+-- with the given stat when the stat is the recorded one and the
+-- modification time is older than the file that holds the record.  Strictly
+-- older, since a file system with coarse timestamps can show the time of
+-- that file for content written after it.  Nothing for a file that has to
+-- be read.
+statRule :: Maybe Recorded -> InterfaceFiles.SourceFileMeta -> Maybe String
+statRule (Just r) meta
+  | recordedStat r == meta && InterfaceFiles.sfmMTimeNs meta < recordedWritten r = Just (recordedSha256 r)
+statRule _ _ = Nothing
+
 -- | The SHA-256 of the content of the file at a path, given the stat of the
 -- file or, where there is no file to read, the reason, which is returned as
--- it is.  The stat rule: the recorded SHA-256 stands for the content when
--- the stat is the recorded one and the modification time is older than the
--- file that holds the record.  Strictly older, since a file system with
--- coarse timestamps can show the time of that file for content written
--- after it.  Any other file is read (hashOfFile).  The first look of a plan
--- at a path keeps what it found, and a later look returns that without a
--- read.  A later look that brings another stat means that the file changed
--- while the plan ran (FileChanged).
-fileFact :: FileFacts -> Maybe Recorded -> FilePath -> Either e InterfaceFiles.SourceFileMeta -> IO (Either e String)
+-- it is, with the stat of what the path names, if any.  A file that the
+-- record stands for is not read (statRule).  Any other file is read
+-- (hashOfFile).  The first look of a plan at a path keeps what it found, and
+-- a later look returns that without a read.  A look that finds no file to
+-- read leaves the SHA-256 of an earlier look in place.  A later look that
+-- brings another stat means that the file changed while the plan ran
+-- (FileChanged).
+fileFact :: FileFacts -> Maybe Recorded -> FilePath -> Either (e, Maybe InterfaceFiles.SourceFileMeta) InterfaceFiles.SourceFileMeta -> IO (Either e String)
 fileFact facts recorded path status = do
     cell <- cellOf (seenFiles facts) path
     modifyMVar cell $ \seen -> do
       when (any ((/= stat) . fst) seen) (throwIO (FileChanged path))
-      sha <- traverse (\meta -> maybe (content meta) return (seen >>= snd)) status
-      return (Just (stat, either (const Nothing) Just sha), sha)
+      let known = seen >>= snd
+      sha <- traverse (\meta -> maybe (content meta) return known) status
+      return (Just (stat, either (const known) Just sha), first fst sha)
   where
-    stat = either (const Nothing) Just status
-    content meta = case recorded of
-      Just r | recordedStat r == meta && InterfaceFiles.sfmMTimeNs meta < recordedWritten r -> return (recordedSha256 r)
-      _                                                                                    -> hashOfFile path
+    stat = either snd Just status
+    content meta = maybe (hashOfFile path) return (statRule recorded meta)
 
 -- | An embedded path below a directory, as a plan sees it: the file as a
 -- .tydb records it, or why embed cannot take it.  A path names a regular
@@ -1686,12 +1722,15 @@ fileFact facts recorded path status = do
 -- it.
 embedFact :: FileFacts -> FilePath -> M.Map FilePath Recorded -> FilePath -> IO (Either String InterfaceFiles.EmbeddedFile)
 embedFact facts root records path = handle (return . Left . Embed.cannotBeRead path) $ do
-    status <- fmap fileMeta <$> Embed.embeddedFileStatus (listedIn facts) root path
+    status <- bimap (fmap (fmap fileMeta)) fileMeta <$> Embed.embeddedFileStatus (listedIn facts) root path
     sha    <- fileFact facts (M.lookup path records) (root </> path) status
-    return (InterfaceFiles.EmbeddedFile path . InterfaceFiles.sfmSize <$> status <*> sha <*> status)
+    return (file <$> first fst status <*> sha)
+  where
+    file meta sha = InterfaceFiles.EmbeddedFile path (InterfaceFiles.sfmSize meta) sha meta
 
--- | The message for an embedded path whose file changed since the plan first
--- looked at it.
+-- | The message for a path whose file changed since the plan first looked
+-- at it.  The path is the embedded path, or the path of an input file of a
+-- derived module below its project root.
 changedWhileBuilding :: FilePath -> String
 changedWhileBuilding path = path ++ " changed while the build ran. Run the build again"
 
@@ -1735,7 +1774,9 @@ changedEmbeds plan = Data.List.nub . concat <$> mapM changed (cpNeededTasks plan
 -- directories on the way to them from the directory that they count from,
 -- which are here with Nothing.  Each path is named as an event names it, and
 -- a path that is a symbolic link is here also as the file that it links to
--- (Embed.eventPaths).
+-- (Embed.eventPaths).  A build that brought derived modules up to date
+-- looked at their input files through the same facts (Acton.Derive), so
+-- they are here too.
 embeddedPaths :: CompilePlan -> IO (M.Map FilePath (Maybe InterfaceFiles.SourceFileMeta))
 embeddedPaths plan = do
     local <- localProjects (ccSysAbs ctx) (ccRootProj ctx) (cpProjMap plan)
@@ -1751,7 +1792,9 @@ embeddedPaths plan = do
     M.fromListWith (<|>) . concat <$> sequence
       [ do seen           <- readMVar cell
            (above, files) <- Embed.eventPaths resolved root (makeRelative root path)
-           return ([ (place, Nothing) | place <- above ] ++ [ (place, fst =<< seen) | place <- files ])
+           -- A stat with a SHA-256 is that of a file to read.  A stat
+           -- without one is that of something that embed cannot take.
+           return ([ (place, Nothing) | place <- above ] ++ [ (place, (\(stat, sha) -> stat <* sha) =<< seen) | place <- files ])
       | root <- map embedRoot (M.elems (M.intersection (buildPaths ctx (cpProjMap plan)) local))
       , (path, cell) <- M.toList cells, path `isUnder` root ]
   where ctx = cpContext plan
@@ -2007,10 +2050,9 @@ tydbOf env                              = tyDbPath (pathsOf env) (nameOf env)
 labelOf                                 :: ModuleEnv -> String
 labelOf env                             = moduleLabel (pathsOf env) (nameOf env)
 
--- | The module's file without its project prefix, as the diagnostics of its
--- code name it.
+-- | The module's file as the diagnostics of its code name it.
 labelFileOf                             :: ModuleEnv -> FilePath
-labelFileOf env                         = modNameToFilename (dropProjPrefix (pathsOf env) (nameOf env))
+labelFileOf env                         = moduleDisplayFile (pathsOf env) (nameOf env)
 
 -- | The current hashes of the modules a module imports.
 data Resolver = Resolver

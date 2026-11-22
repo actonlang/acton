@@ -279,6 +279,7 @@ renderReplBuildAct deps mproj =
           [ (replEvalModuleName, BuildSpec.Library [replEvalModuleName] "dynamic")
           , (replSessionModuleName, BuildSpec.Library [replSessionModuleName] "dynamic")
           ]
+      , BuildSpec.derived_modules = []
       }
   where
     deps' =

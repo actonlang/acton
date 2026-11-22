@@ -37,6 +37,20 @@
   UTF-8 decoding during program startup. [#3301]
 
 ### Compiler & Build
+- Add derived modules: the table `derived_modules` in `Build.act` names
+  modules whose source a function of the project returns while the build
+  runs, as in `schema: (function=gen.schema, inputs=["data/schema.txt"],
+  args=(prefix="S"))`. The module has no file under `src/`, and other modules
+  import it like any other module. The function gets a description of each
+  input file, a `std.build.derive.InputFile` with the path, the size and the
+  SHA-256 of the file and a method `read()` that returns its content, and
+  returns the source of one module as a `str` or of several modules as a
+  `dict[str, str]`. A build runs the function again when an input file, the
+  entry, the function or anything that the function uses changed, and stops
+  when an input file changes while the build runs. `acton build --watch` and
+  `acton test --watch` build again when an input file is saved, added or
+  removed. The guide page "Derived modules" has the rules for the table, the
+  function and the input paths.
 - Speed up compilation of large generated modules through compact name
   storage, cheaper name comparisons, and concurrent content hashing. On an
   M4 Pro, compact name storage reduced Acton compilation of half the generated

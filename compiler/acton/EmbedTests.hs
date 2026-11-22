@@ -6,7 +6,7 @@
 -- runs.  Programs that embed files, built through zig and run.  And builds
 -- in which an embedded file is not the one that its module was compiled with
 -- when zig has run.
-module EmbedTests (embedErrorTests, embedServerTests, embedProgramTests, embedChangedTests) where
+module EmbedTests (embedErrorTests, embedServerTests, embedProgramTests, embedChangedTests, withServerWithin, opened, edited) where
 
 import Control.Concurrent (forkIO, killThread)
 import Control.Concurrent.Chan (newChan, readChan, writeChan)
@@ -125,9 +125,9 @@ serverDiagnostics root = withServer root $ \notify published -> do
 -- a file of the project, which can be none.  A thread reads the messages of
 -- the server, so the action can give up a wait for diagnostics after some
 -- time and lose no message.  The test fails when the action takes more than
--- 120 seconds.
-withServer :: FilePath -> ((String -> Ae.Value -> IO ()) -> (FilePath -> IO [Ae.Value]) -> IO a) -> IO a
-withServer root action = do
+-- the given number of seconds.
+withServerWithin :: Int -> FilePath -> ((String -> Ae.Value -> IO ()) -> (FilePath -> IO [Ae.Value]) -> IO a) -> IO a
+withServerWithin seconds root action = do
     server <- canonicalizePath "../../dist/bin/lsp-server-acton"
     withFile "/dev/null" WriteMode $ \devNull ->
       withCreateProcess (proc server []) { std_in = CreatePipe, std_out = CreatePipe, std_err = UseHandle devNull } $ \(Just hin) (Just hout) _ process -> do
@@ -142,12 +142,12 @@ withServer root action = do
         notify "initialized" (Ae.object [])
         messages <- newChan
         reader   <- forkIO (forever (received hout >>= writeChan messages))
-        result <- Timeout.timeout (120 * 1000000) (action notify (publishedFor messages))
+        result <- Timeout.timeout (seconds * 1000000) (action notify (publishedFor messages))
         killThread reader
         -- The server is gone before the project is removed.
         terminateProcess process
         _ <- waitForProcess process
-        maybe (assertFailure "the language server did not publish the expected diagnostics within 120 seconds") return result
+        maybe (assertFailure ("the language server did not publish the expected diagnostics within " ++ show seconds ++ " seconds")) return result
   where
     publishedFor messages file = do
       message <- readChan messages
@@ -171,6 +171,10 @@ withServer root action = do
           _    <- B.hGetLine hout
           body <- B.hGet hout (read (B.unpack (B.filter (/= '\r') n)))
           maybe (assertFailure ("the language server sent no JSON: " ++ B.unpack body)) return (Ae.decodeStrict body)
+
+-- | Run an action with a language server, for at most 120 seconds.
+withServer :: FilePath -> ((String -> Ae.Value -> IO ()) -> (FilePath -> IO [Ae.Value]) -> IO a) -> IO a
+withServer = withServerWithin 120
 
 -- | Tell a language server that an editor opened a file of a project with
 -- the given text.

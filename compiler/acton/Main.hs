@@ -44,6 +44,7 @@ import qualified Acton.Fingerprint as Fingerprint
 import qualified Acton.SourceProvider as Source
 import qualified Acton.Zon as Zon
 import Acton.Compile
+import Acton.Derive
 import Acton.Fetch
 import Acton.Graph (closure)
 import Acton.Project
@@ -425,6 +426,7 @@ createProject name = do
           , BuildSpec.zig_dependencies = M.empty
           , BuildSpec.build_options = M.empty
           , BuildSpec.libraries = M.empty
+          , BuildSpec.derived_modules = []
           }
     createDirectoryIfMissing True srcRoot
     writeFile buildActPath (BuildSpec.renderBuildAct buildSpec)
@@ -608,11 +610,16 @@ withTempDirOpts opts action
   | otherwise = withScratchDirLock $ \scratchDir ->
       action opts { C.tempdir = scratchDir } True
 
+-- | What the generations of a watch share.  cwPending holds the paths that
+-- changed since the last generation that completed, or Nothing when they
+-- are not known and the next generation builds in full, and a version that
+-- rises with every event that schedules a generation.
 data CliWatchContext = CliWatchContext
   { cwScheduler :: CompileScheduler
   , cwProgressUI :: ProgressUI
   , cwProgressState :: ProgressState
   , cwEmbedded :: Chan (M.Map FilePath (Maybe InterfaceFiles.SourceFileMeta))  -- from each build that ended: embeddedPaths of its plan
+  , cwPending :: IORef (Int, Maybe [FilePath])
   }
 
 withCompileWatchContext :: C.GlobalOptions -> (CliWatchContext -> IO a) -> IO a
@@ -622,10 +629,20 @@ withCompileWatchContext gopts action = do
             (\previous -> void (installHandler sigTERM previous Nothing)) $ \_ ->
       bracket create cleanup action
   where
-    create = CliWatchContext <$> newCompileScheduler gopts <*> initProgressUI gopts <*> newProgressState <*> newChan
+    create = CliWatchContext <$> newCompileScheduler gopts <*> initProgressUI gopts <*> newProgressState <*> newChan <*> newIORef (0, Just [])
     cleanup ctx = do
       stopCompile (cwScheduler ctx)
       progressReset (cwProgressUI ctx) (cwProgressState ctx)
+
+-- | Add the source files of derived modules that a generation wrote or
+-- removed to the pending paths of its watch.  No later generation writes
+-- them again, so the generation that follows a canceled or failed one must
+-- still compile them and the modules that import them.  The version stays,
+-- so the generation still clears the pending paths when it completes.
+keepPending :: CliWatchContext -> [FilePath] -> IO ()
+keepPending watch files =
+    atomicModifyIORef' (cwPending watch) $ \(version, pending) ->
+      ((version, nub . (++ files) <$> pending), ())
 
 logProjectBuild :: C.GlobalOptions -> ProgressUI -> ProgressState -> FilePath -> IO ()
 logProjectBuild gopts progressUI progressState projDir =
@@ -798,6 +815,9 @@ runTestsWatch gopts opts topts mode paths = do
             progressState = cwProgressState watchCtx
         testParallel0 <- testMaxParallel gopts
         let testParallel = if mode `elem` [TestModePerf, TestModeScale, TestModeStress] then 1 else testParallel0
+        -- The stamp of the source file of each derived module when the
+        -- tests of this watch last ran.
+        testedRef <- newIORef M.empty
         let runOnce gen mChanged = do
               withProjectLockForGen gopts gen projDir $ do
                 logProjectBuild gopts progressUI progressState projDir
@@ -806,11 +826,19 @@ runTestsWatch gopts opts topts mode paths = do
                 -- Link the complete selected closure; cached modules still skip
                 -- unchanged compiler passes.
                 hadErrors <- if null selected then return False else
-                  compileFilesChanged sp gopts opts selected (testBuildScope srcFiles selected) Nothing (Just (watchCtx, gen))
+                  compileFilesChanged sp gopts opts UpdateDerived selected (testBuildScope srcFiles selected) Nothing (Just (watchCtx, gen))
                 unless hadErrors $ whenCurrent gen $ do
                   selectStart <- getTime Monotonic
                   testModules <- mapM (fmap modNameToString . moduleNameFromFile (srcDir paths) (projName paths)) selected
-                  modulesToTest <- selectTestModules paths srcFiles mChanged testModules
+                  derivedFiles <- map (derivedModuleFile projDir) . Data.Set.toList <$> derivedModuleNames projDir
+                  stamps <- M.fromList . zip derivedFiles <$> mapM readFileStamp derivedFiles
+                  tested <- readIORef testedRef
+                  -- A derived module whose source file changed since the
+                  -- tests last ran is a changed module: an input file or the
+                  -- module of its function may have changed its source, and
+                  -- no import shows that.
+                  let changedDerived = [ file | (file, stamp) <- M.toList stamps, M.lookup file tested /= Just stamp ]
+                  modulesToTest <- selectTestModules paths (srcFiles ++ derivedFiles) ((++ changedDerived) <$> mChanged) testModules
                   logTiming gopts opts (progressLogLine progressUI) "affected test selection" selectStart
                   unless (null modulesToTest) $ whenCurrent gen $
                     do
@@ -818,16 +846,21 @@ runTestsWatch gopts opts topts mode paths = do
                       testStart <- getTime Monotonic
                       void $ runProjectTests useColorOut gopts opts paths topts mode modulesToTest testParallel
                       logTiming gopts opts (progressLogLine progressUI) "test execution and cache" testStart
+                  whenCurrent gen $ writeIORef testedRef stamps
                 return (not hadErrors)
-        runWatchProject gopts projDir srcRoot (localDependencyDirs gopts opts paths) watchCtx runOnce
+        runWatchProject gopts projDir srcRoot (localWatchPaths gopts opts paths) watchCtx runOnce
 
+-- | The test modules to run after a build under --watch: all of them when
+-- the changed paths are not known, else those that changed and those that
+-- import a changed module, directly or through other modules.  'sources'
+-- holds the files under src and the source files of the derived modules.
 selectTestModules :: Paths -> [FilePath] -> Maybe [FilePath] -> [String] -> IO [String]
-selectTestModules paths srcFiles mChanged testModules =
+selectTestModules paths sources mChanged testModules =
     case mChanged of
       Nothing -> return testModules
       Just changedPaths -> do
         changedModules <- changedModulesFromPaths paths changedPaths
-        affected <- dependentTestModulesFromHeaders paths srcFiles changedModules
+        affected <- dependentTestModulesFromHeaders paths sources changedModules
         return (filter (`elem` testModules) affected)
 
 -- | Compute parallelism for test runs from jobs or core count.
@@ -845,7 +878,7 @@ exitWithTestCode code
 changedModulesFromPaths :: Paths -> [FilePath] -> IO [String]
 changedModulesFromPaths paths files = do
     mods <- forM files $ \file -> do
-      mn <- moduleNameFromFile (srcDir paths) (projName paths) file
+      mn <- moduleOfSource paths file
       return (modNameToString mn)
     return (Data.List.sort (nub mods))
 
@@ -855,9 +888,9 @@ readModuleImports paths mn =
       <$> InterfaceFiles.tryReadHeaderSummary (tyDbPath paths mn)
 
 dependentTestModulesFromHeaders :: Paths -> [FilePath] -> [String] -> IO [String]
-dependentTestModulesFromHeaders paths srcFiles changedModules = do
-    depsByMod <- forM srcFiles $ \file -> do
-      mn <- moduleNameFromFile (srcDir paths) (projName paths) file
+dependentTestModulesFromHeaders paths sources changedModules = do
+    depsByMod <- forM sources $ \file -> do
+      mn <- moduleOfSource paths file
       imps <- readModuleImports paths mn
       return (modNameToString mn, map modNameToString imps)
     -- importers keeps edges to modules outside the source list: a deleted
@@ -880,11 +913,11 @@ watchProjectAt gopts opts projDir = do
                           withProjectLockForGen gopts gen (projPath paths) $ do
                             logProjectBuild gopts progressUI progressState (projPath paths)
                             srcFiles <- projectSourceFiles paths
-                            hadErrors <- compileFilesChanged sp gopts opts srcFiles WholeProject mChanged (Just (watchCtx, gen))
+                            hadErrors <- compileFilesChanged sp gopts opts UpdateDerived srcFiles WholeProject mChanged (Just (watchCtx, gen))
                             when (not hadErrors && isNothing mChanged) $
                               generateProjectDocIndex sp gopts opts paths srcFiles
                             return (not hadErrors)
-                    runWatchProject gopts (projPath paths) (srcDir paths) (localDependencyDirs gopts opts paths) watchCtx runOnce
+                    runWatchProject gopts (projPath paths) (srcDir paths) (localWatchPaths gopts opts paths) watchCtx runOnce
 
 -- | Exit with an error unless a source file named on the command line exists.
 requireSourceFile :: FilePath -> IO ()
@@ -944,41 +977,51 @@ watchFile gopts opts file = do
         withTempDirOpts opts $ \opts' _ ->
           withCompileWatchContext gopts $ \watchCtx -> do
             let runOnce gen mChanged =
-                  void $ compileFilesChanged sp gopts opts' [absFile] SelectedFiles mChanged (Just (watchCtx, gen))
+                  void $ compileFilesChanged sp gopts opts' UpdateDerived [absFile] SelectedFiles mChanged (Just (watchCtx, gen))
             runWatchFile gopts absFile watchCtx runOnce
 
--- | The local projects that a project depends on (localProjects), as their
--- roots and src directories, which a watch must look at too.  While its
--- dependencies cannot be discovered, for example before the first build
--- fetches one, a project has none: the watch asks again after every build.
-localDependencyDirs :: C.GlobalOptions -> C.CompileOptions -> Paths -> IO [(FilePath, FilePath)]
-localDependencyDirs gopts opts paths = do
+-- | What a watch of a project looks at besides the src directory and the
+-- Build.act of the project: the local projects that it depends on
+-- (localProjects), as their roots and src directories, and the input paths
+-- of the derived modules of the project and of these dependencies, with the
+-- links of each resolved, as an event names a path.  While the dependencies
+-- of the project cannot be discovered, for example before the first build
+-- fetches one, it has neither: the watch asks again after every build.
+localWatchPaths :: C.GlobalOptions -> C.CompileOptions -> Paths -> IO ([(FilePath, FilePath)], [FilePath])
+localWatchPaths gopts opts paths = do
     root     <- normalizePathSafe (projPath paths)
     projects <- maybe (return M.empty) (localProjects (sysPath paths) root) =<< discoverBuildProjects gopts opts paths
-    return [ (dir, projSrcDir ctx) | (dir, ctx) <- M.toList projects, dir /= root ]
+    inputs   <- mapM normalizePathSafe [ dir </> input | (dir, ctx) <- M.toList projects
+                                                       , entry <- BuildSpec.derived_modules (projBuildSpec ctx), input <- BuildSpec.derivedInputs entry ]
+    return ([ (dir, projSrcDir ctx) | (dir, ctx) <- M.toList projects, dir /= root ], inputs)
 
 -- | Run the project watch loop and schedule compiles on events: in the
--- project's src directory and Build.act, and in the src directories and
--- Build.act files of its local dependencies ('dependencyDirs', asked again
--- after every build that completes, since a build may have fetched the
+-- project's src directory and Build.act, in the src directories and
+-- Build.act files of its local dependencies, and at the input paths of the
+-- derived modules of all these projects ('localPaths', asked again after
+-- every build that completes, since a build may have fetched the
 -- dependencies that the question needs, and whenever a Build.act changes).
 -- An event in a dependency asks for a full build, since the changed paths
 -- that an incremental build takes name the project's own modules.  The
--- thread of the watch looks at the embedded files of each build that ended
--- (embeddedWatch).
+-- watch of the embedded files takes the input paths, and the thread of the
+-- watch has it look at the embedded files of each build that ended
+-- (embeddedWatch).  Its stamps hold the files at the input paths as they
+-- are when the watch starts, as the stamps of the watch of src hold the
+-- files there: the first build follows.
 runWatchProject :: C.GlobalOptions
                 -> FilePath
                 -> FilePath
-                -> IO [(FilePath, FilePath)]
+                -> IO ([(FilePath, FilePath)], [FilePath])
                 -> CliWatchContext
                 -> (Generation -> Maybe [FilePath] -> IO Bool)
                 -> IO ()
-runWatchProject gopts projDir srcRoot dependencyDirs watchCtx runOnce = do
+runWatchProject gopts projDir srcRoot localPaths watchCtx runOnce = do
     stampsRef <- newIORef M.empty
-    pendingRef <- newIORef (0 :: Int, Just [])
+    embeddedStamps <- newIORef M.empty
     dependencyWatches <- newMVar M.empty
     afterBuild <- newIORef (return ())
-    let schedule mpath = do
+    let pendingRef = cwPending watchCtx
+        schedule mpath = do
           atomicModifyIORef' pendingRef $ \(version, pending) ->
             let changed = nub <$> ((++) <$> pending <*> fmap (:[]) mpath)
             in ((version + 1, changed), ())
@@ -998,13 +1041,19 @@ runWatchProject gopts projDir srcRoot dependencyDirs watchCtx runOnce = do
           Just (WatchSave saved _) -> Just (WatchSave saved Nothing)
           other                    -> other
         isBuildSpec ev = takeFileName (FS.eventPath ev) == "Build.act"
-        onBuildSpec mgr _ = do
-          watchDependencies mgr
+    (lookAtEmbedded, watchInputs) <- embeddedWatch embeddedStamps (onSource embeddedStamps) (schedule Nothing) (progressLogLine (cwProgressUI watchCtx))
+    let onBuildSpec mgr _ = do
+          watchLocal mgr
           schedule Nothing
         -- Each local dependency is watched once, and no longer once no
-        -- Build.act names it.
-        watchDependencies mgr = modifyMVar_ dependencyWatches $ \watches -> do
-          dirs <- M.fromList <$> dependencyDirs
+        -- Build.act names it.  The watch of the embedded files gets the
+        -- input paths that the Build.act files name.  The paths are asked
+        -- for under the lock of the watches, so that of two calls the one
+        -- that asks last also sets the watches last.
+        watchLocal mgr = modifyMVar_ dependencyWatches $ \watches -> do
+          (dependencies, inputs) <- localPaths
+          watchInputs inputs
+          let dirs = M.fromList dependencies
           sequence_ (M.elems (M.difference watches dirs))
           added <- forM (M.toList (M.difference dirs watches)) $ \(root, src) -> do
             hasSrc   <- doesDirectoryExist src
@@ -1016,11 +1065,11 @@ runWatchProject gopts projDir srcRoot dependencyDirs watchCtx runOnce = do
           return (M.union (M.intersection watches dirs) (M.fromList added))
     FS.withManager $ \mgr -> do
       recordStamps stampsRef srcRoot
+      mapM_ (recordStamps embeddedStamps) . snd =<< localPaths
       _ <- FS.watchTree mgr srcRoot (isJust . srcWatchTrigger) (onSource stampsRef srcWatchTrigger)
       _ <- FS.watchDir mgr projDir isBuildSpec (onBuildSpec mgr)
-      watchDependencies mgr
-      writeIORef afterBuild (watchDependencies mgr)
-      lookAtEmbedded <- embeddedWatch onSource (schedule Nothing) (progressLogLine (cwProgressUI watchCtx))
+      watchLocal mgr
+      writeIORef afterBuild (watchLocal mgr)
       schedule Nothing
       unless (C.quiet gopts) $
         putStrLn ("Watching for changes in " ++ projDir)
@@ -1036,6 +1085,7 @@ runWatchFile :: C.GlobalOptions
              -> IO ()
 runWatchFile gopts absFile watchCtx runOnce = do
     stampsRef <- newIORef M.empty
+    embeddedStamps <- newIORef M.empty
     let watchDir = takeDirectory absFile
         watchPath = normalise absFile
         isTarget ev = isJust (fileWatchTrigger watchPath ev)
@@ -1045,7 +1095,7 @@ runWatchFile gopts absFile watchCtx runOnce = do
           runOnce gen (fmap (:[]) mpath)
     FS.withManager $ \mgr -> do
       _ <- FS.watchDir mgr watchDir isTarget (onEvent stampsRef (fileWatchTrigger watchPath))
-      lookAtEmbedded <- embeddedWatch onEvent (schedule Nothing) (progressLogLine (cwProgressUI watchCtx))
+      (lookAtEmbedded, _) <- embeddedWatch embeddedStamps (onEvent embeddedStamps) (schedule Nothing) (progressLogLine (cwProgressUI watchCtx))
       schedule Nothing
       unless (C.quiet gopts) $
         putStrLn ("Watching for changes in " ++ absFile)
@@ -1423,25 +1473,33 @@ printDocs gopts opts = do
 compileReplHook :: C.GlobalOptions -> C.CompileOptions -> FilePath -> [FilePath] -> IO Bool
 compileReplHook gopts opts projDir srcFiles =
     withProjectLockNotice gopts projDir $
-      compileFilesChanged Source.diskSourceProvider gopts opts srcFiles SelectedFiles Nothing Nothing
+      compileFilesChanged Source.diskSourceProvider gopts opts UpdateDerived srcFiles SelectedFiles Nothing Nothing
 
 -- Compile Acton files ---------------------------------------------------------------------------------------------
 
 -- | Compile a set of files in a single-shot build.
 compileFiles :: Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -> [String] -> Scope -> IO ()
 compileFiles sp gopts opts srcFiles scope =
-    void $ compileFilesChanged sp gopts opts srcFiles scope Nothing Nothing
+    void $ compileFilesChanged sp gopts opts UpdateDerived srcFiles scope Nothing Nothing
+
+-- | Whether a build brings the derived modules of its projects up to date
+-- before it plans.  The build of a runner uses them as they are: those it
+-- needs are up to date when it starts.  It runs inside the build that
+-- brings them up to date, which holds the locks of its projects.
+data DerivedModules = UpdateDerived | KeepDerived deriving (Eq)
 
 -- | Compile with optional change set, wiring progress UI and back jobs.
+-- Returns whether the build had errors.
 compileFilesChanged :: Source.SourceProvider
                     -> C.GlobalOptions
                     -> C.CompileOptions
+                    -> DerivedModules
                     -> [String]
                     -> Scope
                     -> Maybe [FilePath]
                     -> Maybe (CliWatchContext, Generation)
                     -> IO Bool
-compileFilesChanged sp gopts opts srcFiles scope mChangedPaths mWatch = do
+compileFilesChanged sp gopts opts derivedModules srcFiles scope mChangedPaths mWatch = do
     (progressUI, progressState) <- case mWatch of
       Just (ctx, _) -> return (cwProgressUI ctx, cwProgressState ctx)
       Nothing -> do
@@ -1457,18 +1515,51 @@ compileFilesChanged sp gopts opts srcFiles scope mChangedPaths mWatch = do
         return (sched', gen')
     let cleanupProgress = whenCurrent gen (progressReset progressUI progressState)
     cleanupProgress
-    -- The plan locks the dependency projects, and the build holds them up to
-    -- and including its final build, which compiles their code.
+    -- The build locks the dependency projects, and holds them up to and
+    -- including its final build, which compiles their code.  The build of a
+    -- runner locks none: the build that runs it holds the lock of every
+    -- project that the runner project reaches.
     let waitForDependency dir =
           unless (C.quiet gopts) $ logLine ("Waiting for compiler lock in " ++ dir)
         runCompile locks = do
-          sp' <- overlayChangedPaths sp mChangedPaths
-          planStart <- getTime Monotonic
-          planRes <- try $
-            prepareCompileContext opts srcFiles >>= \ctx ->
-              prepareCompilePlan sp' gopts sched ctx { ccLockDependencies = lockDependencies locks waitForDependency }
-                                 (PlanRequest srcFiles scope mChangedPaths)
-          logTiming gopts opts logLine "compile planning" planStart
+          planStart   <- getTime Monotonic
+          derivedTime <- newIORef 0
+          planRes <- try $ do
+            unlocked <- prepareCompileContext opts srcFiles
+            let ctx = case derivedModules of
+                        UpdateDerived -> unlocked { ccLockDependencies = lockDependencies locks waitForDependency }
+                        KeepDerived   -> unlocked
+            fetched <- fetchPlanDependencies gopts sched ctx
+            -- Under --only-build no .act file is compiled, so no function
+            -- of a derived module runs.
+            updated <- if derivedModules == UpdateDerived && not (C.only_build opts)
+                         then do start   <- getTime Monotonic
+                                 written <- newIORef []
+                                 -- A watch keeps each file when it is written:
+                                 -- this generation can fail or be canceled
+                                 -- before every derived module is up to date.
+                                 let wrote files = do modifyIORef written (++ files)
+                                                      forM_ mWatch $ \(watch, _) -> keepPending watch files
+                                 updateDerivedModules sp gopts ctx (deriveDriver gopts opts logLine wrote)
+                                 logTiming gopts opts logLine "derived modules" start
+                                 end     <- getTime Monotonic
+                                 writeIORef derivedTime (diffTimeSpec end start)
+                                 readIORef written
+                         else return []
+            -- The paths of the context were found before the derived
+            -- modules were brought up to date.  They get the derived
+            -- modules of the root project as they are now.
+            names <- if isTmp (ccPathsRoot ctx) then return Data.Set.empty else derivedModuleNames (ccRootProj ctx)
+            let ctx'       = ctx { ccPathsRoot = (ccPathsRoot ctx) { derived = names } }
+                -- A whole-project build compiles the derived modules of the
+                -- root project too, whether or not a module imports them.
+                ownDerived = if scope == WholeProject then map (derivedModuleFile (ccRootProj ctx)) (Data.Set.toList names) else []
+                changed    = if fetched then Nothing else (++ updated) <$> mChangedPaths
+            sp' <- overlayChangedPaths sp changed
+            planFetched sp' gopts ctx' (PlanRequest (srcFiles ++ ownDerived) scope changed)
+          -- The time to bring the derived modules up to date has a timing
+          -- line of its own, so it is left out of this one.
+          logTiming gopts opts logLine "compile planning" . (planStart +) =<< readIORef derivedTime
           let reportPlanError (ProjectError msg) = do
                 if C.watch opts
                   then logLine msg
@@ -1516,6 +1607,53 @@ compileFilesChanged sp gopts opts srcFiles scope mChangedPaths mWatch = do
                 writeChan (cwEmbedded ctx) =<< embeddedPaths plan
           either reportPlanError (\plan -> runPlan plan <* tellWatch plan) planRes
     withDependencyLocks runCompile `finally` cleanupProgress
+
+-- | For a derived module, a line that says which function returned its
+-- source, to follow the diagnostics of the module.
+derivedModuleNote :: M.Map FilePath ProjCtx -> GlobalTask -> Maybe String
+derivedModuleNote projects t = do
+    ctx <- M.lookup (tkProj (gtKey t)) projects
+    guard (Data.Set.member local (projDerived ctx))
+    entry <- find (Data.Set.member name . BuildSpec.derivedModules) (BuildSpec.derived_modules (projBuildSpec ctx))
+    return ("Note: " ++ name ++ " is a derived module. The function " ++ BuildSpec.derivedFunction entry
+            ++ " returned its source (derived_modules in " ++ projectBuildAct (projRoot ctx) ++ ").")
+  where
+    local = dropProjPrefix (gtPaths t) (tkMod (gtKey t))
+    name  = modNameToString local
+
+-- | What updateDerivedModules needs from the CLI.  Under --skip-build no
+-- executable is built, so no function runs.  'wrote' is called with the
+-- source files of derived modules that were written or removed.
+deriveDriver :: C.GlobalOptions -> C.CompileOptions -> (String -> IO ()) -> ([FilePath] -> IO ()) -> Driver
+deriveDriver gopts opts logLine wrote = Driver
+    { driverRun     = not (C.skip_build opts)
+    , driverEvent   = \event -> case event of
+                        Diagnostics _ diags -> printDiagnostics gopts diags
+                        Info msg            -> logLine msg
+                        _                   -> return ()
+    , driverBuild   = buildRunner gopts opts
+    , driverWrote   = wrote
+    , driverLog     = \line -> unless (C.quiet gopts) (logLine line)
+    , driverInfo    = \line -> when (C.verbose gopts) (logLine line)
+    }
+
+-- | Build the executable of a root module of a runner project, which runs
+-- the function of a derived module: for the machine the build runs on, in
+-- the optimization mode of the build, without progress lines.  Returns
+-- whether it was built.  Like a build under --watch, it reports an error
+-- and returns, so that the caller says which derived module the error
+-- belongs to.
+buildRunner :: C.GlobalOptions -> C.CompileOptions -> FilePath -> IO Bool
+buildRunner gopts opts source =
+    not <$> compileFilesChanged Source.diskSourceProvider gopts { C.quiet = True } runnerOpts KeepDerived [source] SelectedFiles Nothing Nothing
+  where
+    runnerOpts = C.defaultCompileOptions
+      { C.optimize                = C.optimize opts
+      , C.syspath                 = C.syspath opts
+      , C.searchpath              = C.searchpath opts
+      , C.ignore_compiler_version = C.ignore_compiler_version opts
+      , C.watch                   = True
+      }
 
 overlayChangedPaths :: Source.SourceProvider -> Maybe [FilePath] -> IO Source.SourceProvider
 overlayChangedPaths sp mPaths = do
@@ -1868,6 +2006,7 @@ newCliReporter progressUI progressState gopts gen plan = do
           Diagnostics t diags -> do
             void (endRow (ProgressTaskKey (gtKey t)))
             logDiagnostics diags
+            mapM_ logLine (derivedModuleNote (cpProjMap plan) t)
           ParseStarted t ->
             startRow (ProgressTaskKey (gtKey t)) (parseActiveLine (tkMod (gtKey t))) (Just 0)
           ParseProgressed t p -> do
@@ -2001,7 +2140,7 @@ runCliPostCompile reporter gopts plan env = do
         preBinTasks
           | null (C.root opts') = map (\mn -> BinTask (A.GName mn (A.name "main")) False) rootModules
           | otherwise        = [binTask]
-    requestedModules <- mapM (moduleNameFromFile (srcDir pathsRoot) proj) (requestFiles (cpRequest plan))
+    requestedModules <- mapM (moduleOfSource pathsRoot) (requestFiles (cpRequest plan))
     let preTestBinTasks = [ BinTask (A.GName mn (A.name "test_main")) True
                           | mn <- rootModules, mn `elem` requestedModules ]
         selectedTasksByProj = M.fromListWith (++) [ (tkProj (gtKey t), [t]) | t <- neededTasks ]
@@ -2049,16 +2188,18 @@ runCliPostCompile reporter gopts plan env = do
             return False
 
 -- Generate documentation index for a project build by reading module names and
--- docstrings from cached .tydb headers or source headers.
+-- docstrings from cached .tydb headers or source headers.  The index lists the
+-- modules of 'srcFiles' and the derived modules of the project.
 generateProjectDocIndex :: Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -> Paths -> [String] -> IO ()
 generateProjectDocIndex sp gopts opts paths srcFiles = do
     unless (C.skip_build opts || C.only_build opts || isTmp paths) $ do
         let docDir = projectDocDir (projPath paths)
         createDirectoryIfMissing True docDir
         facts <- newFileFacts
-        entries <- catMaybes <$> forM srcFiles (\f -> do
-                     (p, mn) <- findPaths f opts
-                     docIndexEntry opts p mn <$> readModuleTask sp gopts opts facts p mn f)
+        derivedFiles <- map (derivedModuleFile (projPath paths)) . Data.Set.toList <$> derivedModuleNames (projPath paths)
+        entries <- catMaybes <$> forM (srcFiles ++ derivedFiles) (\f -> do
+                     mn <- moduleOfSource paths f
+                     docIndexEntry opts paths mn <$> readModuleTask sp gopts opts facts paths mn f)
         DocP.generateDocIndex docDir entries
 
 -- | Relative C source paths for selected tasks in one project.
@@ -2242,7 +2383,7 @@ selectRootActor env paths explicitRoot binTask = do
         Just problem
           | explicitRoot || isActor i -> do
               src <- readFile (srcFile paths m)
-              return (Left (Diag.actErrToDiagnostic "Compilation error" (modNameToFilename mn) src (A.nloc n')
+              return (Left (Diag.actErrToDiagnostic "Compilation error" (moduleDisplayFile paths m) src (A.nloc n')
                               ("Cannot use " ++ A.nstr n ++ " as the root actor: " ++ problem)))
           | otherwise -> return (Right Nothing)
       Nothing

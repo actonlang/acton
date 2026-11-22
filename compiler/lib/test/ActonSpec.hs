@@ -31,6 +31,7 @@ import qualified Acton.QuickType as QuickType
 import qualified Acton.CodeGen
 import qualified Acton.Diagnostics as Diag
 import qualified Acton.Compile as Compile
+import qualified Acton.Derive as Derive
 import qualified Acton.ExtSource as ExtSource
 import qualified Acton.Embed as Embed
 import qualified Acton.Graph as Graph
@@ -57,11 +58,12 @@ import Text.Megaparsec.Pos (sourceLine, unPos)
 import qualified Data.Text as T
 import qualified Data.Text.Short as TS
 import Data.List (foldl', isInfixOf, isPrefixOf, nub, sort, subsequences)
-import Data.Maybe (listToMaybe)
+import Data.Maybe (isJust, listToMaybe)
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as M
 import qualified Data.Set as Set
 import Data.IORef
+import Data.Bifunctor (bimap)
 import Data.Bits (shiftL, (.|.))
 import qualified Data.ByteString.Base16 as Base16
 import qualified Crypto.Hash.SHA256 as SHA256
@@ -2669,7 +2671,9 @@ main = do
             utf8 <- (== "UTF-8") . show <$> getFileSystemEncoding
             let nested = "web/a b*/" ++ (if utf8 then "\229" else "a") ++ ".txt"
                 names  = fmap Set.fromList . listDirectory
-                size   = fmap (fmap (toInteger . fileSize)) . Embed.embeddedFileStatus names dir
+                size   = fmap (bimap fst (toInteger . fileSize)) . Embed.embeddedFileStatus names dir
+                -- Whether a reason comes with a stat.
+                stat   = fmap (either (isJust . snd) (const False)) . Embed.embeddedFileStatus names dir
             createDirectoryIfMissing True (dir </> "web" </> "a b*")
             B8.writeFile (dir </> "web" </> "index.html") (B8.pack "hello\n")
             B8.writeFile (dir </> nested) (B8.pack "abc")
@@ -2695,6 +2699,9 @@ main = do
             size "web/pipe" `shouldReturn` Left "web/pipe is not a regular file"
             size "web/most" `shouldReturn` Right 2147483647
             size "web/over" `shouldReturn` Left "web/over has 2147483648 bytes, and embed takes a file of fewer than 2147483648 bytes"
+            -- The reason comes with the stat of what the path names.
+            forM_ ["web", "web/pipe", "web/over"] $ \path -> stat path `shouldReturn` True
+            forM_ ["web/none.html", "web/dangling.html", "web/index.html/x"] $ \path -> stat path `shouldReturn` False
             -- A directory without permissions.  Not every user is stopped by
             -- the mode, so the message is expected only when a listing fails.
             -- The directory gets its permissions back so that it can be removed.
@@ -2758,8 +2765,14 @@ main = do
         describe "The stat rule" $ do
           let stat mtime    = InterfaceFiles.SourceFileMeta mtime mtime 4 (Just 1) (Just 2)
               recorded      = Compile.Recorded (stat 1000) "recorded" 1001
-              look facts r  = Compile.fileFact facts r :: FilePath -> Either String InterfaceFiles.SourceFileMeta -> IO (Either String String)
+              look facts r  = Compile.fileFact facts r :: FilePath -> Either (String, Maybe InterfaceFiles.SourceFileMeta) InterfaceFiles.SourceFileMeta -> IO (Either String String)
               changed path  = \(Compile.FileChanged file) -> file == path
+
+          it "lets a record stand for a file with the recorded stat that is older than the record" $ do
+            Compile.statRule (Just recorded) (stat 1000) `shouldBe` Just "recorded"
+            Compile.statRule (Just recorded) (stat 999) `shouldBe` Nothing
+            Compile.statRule (Just recorded { Compile.recordedWritten = 1000 }) (stat 1000) `shouldBe` Nothing
+            Compile.statRule Nothing (stat 1000) `shouldBe` Nothing
 
           it "takes the recorded SHA-256 for a file with the recorded stat and reads nothing" $
             withSystemTempDirectory "acton-file-fact" $ \dir -> do
@@ -2808,8 +2821,8 @@ main = do
 
           it "returns the reason where there is no file to read" $ do
             facts <- Compile.newFileFacts
-            look facts (Just recorded) "none" (Left "no file") `shouldReturn` Left "no file"
-            look facts Nothing "none" (Left "a directory") `shouldReturn` Left "a directory"
+            look facts (Just recorded) "none" (Left ("no file", Nothing)) `shouldReturn` Left "no file"
+            look facts Nothing "web" (Left ("a directory", Just (stat 1000))) `shouldReturn` Left "a directory"
 
           it "stops at a later look of the plan that brings another stat" $
             withSystemTempDirectory "acton-file-fact" $ \dir -> do
@@ -2821,10 +2834,27 @@ main = do
               look facts Nothing path (Right ((stat 1000) { InterfaceFiles.sfmSize = 3 })) `shouldThrow` changed path
               look facts Nothing path (Right (stat 1001)) `shouldThrow` changed path
               look facts (Just recorded { Compile.recordedStat = stat 1001, Compile.recordedWritten = 1002 }) path (Right (stat 1001)) `shouldThrow` changed path
-              look facts Nothing path (Left "no file") `shouldThrow` changed path
+              look facts Nothing path (Left ("no file", Nothing)) `shouldThrow` changed path
+              look facts Nothing path (Left ("too large", Just (stat 1001))) `shouldThrow` changed path
               gone <- Compile.newFileFacts
-              _ <- look gone Nothing path (Left "no file")
+              _ <- look gone Nothing path (Left ("no file", Nothing))
               look gone Nothing path (Right (stat 1000)) `shouldThrow` changed path
+              look gone Nothing path (Left ("too large", Just (stat 1000))) `shouldThrow` changed path
+
+          it "takes a reason with the stat of an earlier look and keeps the SHA-256 of that look" $
+            withSystemTempDirectory "acton-file-fact" $ \dir -> do
+              let path = dir </> "abc"
+              B8.writeFile path (B8.pack "abc")
+              facts <- Compile.newFileFacts
+              sha <- look facts Nothing path (Right (stat 1000))
+              removeFile path
+              look facts Nothing path (Left ("too large", Just (stat 1000))) `shouldReturn` Left "too large"
+              look facts Nothing path (Right (stat 1000)) `shouldReturn` sha
+              -- A reason with a stat reads nothing, and the look that
+              -- follows it reads the file.
+              other <- Compile.newFileFacts
+              look other Nothing path (Left ("too large", Just (stat 1000))) `shouldReturn` Left "too large"
+              look other Nothing path (Right (stat 1000)) `shouldThrow` (\(_ :: E.IOException) -> True)
 
           it "writes the row of the embedded files and no other row" $
             withSystemTempDirectory "acton-update-embeds" $ \dir -> do
@@ -4969,7 +4999,7 @@ main = do
           createDirectoryLink (root </> "zigfoo") (root </> "zigfoo" </> "loop")
           createDirectoryLink elsewhere (root </> "zigfoo" </> "out_of_tree")
           let dep = BuildSpec.ZigDep Nothing Nothing (Just "zigfoo") M.empty ["zigfoo"]
-              spec = BuildSpec.BuildSpec "app" Nothing "0x0" M.empty (M.singleton "zigfoo" dep) M.empty M.empty
+              spec = BuildSpec.BuildSpec "app" Nothing "0x0" M.empty (M.singleton "zigfoo" dep) M.empty M.empty []
               stamps = Testing.zigDependencyStamps [(root, spec)]
           before <- stamps
           M.keys before `shouldBe` ["app:zigfoo"]
@@ -4989,7 +5019,7 @@ main = do
           writeFile (root </> "Build.act") "name = \"bindings\"\n"
           writeFile (lib </> "lib.c") "int lib(void) { return 1; }\n"
           let dep = BuildSpec.ZigDep Nothing Nothing (Just "..") M.empty ["lib"]
-              spec = BuildSpec.BuildSpec "bindings" Nothing "0x0" M.empty (M.singleton "lib" dep) M.empty M.empty
+              spec = BuildSpec.BuildSpec "bindings" Nothing "0x0" M.empty (M.singleton "lib" dep) M.empty M.empty []
               stamps = Testing.zigDependencyStamps [(root, spec)]
           before <- stamps
           forM_ ["out/test/cache.json", "snapshots/a.txt", "src/m.act"] $ \f -> writeFile (root </> f) "changed"
@@ -5012,6 +5042,17 @@ main = do
             , ("ACTON_GC_PAUSE_MS", "5")
             , ("GC_MARKERS", "2")
             ]
+
+    describe "Derive" $ do
+      it "lets an input path stand for the files below it, except a file whose name starts with a dot, a file below a directory whose name starts with a dot, and a --tydb copy" $ do
+        filter (Derive.standsFor "web")
+          [ "web/index.html", "web/sub/app.js", "web/app.js~", "web/404", "web/.DS_Store", "web/.cache/kept.txt", "web/sub/.app.js.swp"
+          , "web/page.tydb/data.mdb", "web/sub/page.tydb", "webs/index.html", "other.txt" ]
+          `shouldBe` ["web/index.html", "web/sub/app.js", "web/app.js~", "web/404"]
+        -- A path that is written in inputs is taken as it is written.
+        filter (Derive.standsFor "web/.well-known") ["web/.well-known/acme.txt", "web/.well-known/.hidden"] `shouldBe` ["web/.well-known/acme.txt"]
+        Derive.standsFor "data/.config" "data/.config" `shouldBe` True
+        Derive.standsFor "src/page.tydb" "src/page.tydb/data.mdb" `shouldBe` True
 
     -- BuildSpec: parsing and update-in-place of Build.act (canonical layout)
     describe "BuildSpec" $ do
@@ -5088,6 +5129,190 @@ main = do
             BuildSpec.build_options spec `shouldBe` M.empty
             BuildSpec.renderBuildAct spec `shouldSatisfy` (not . isInfixOf "build_options")
             Ae.eitherDecode' json `shouldBe` Right spec
+
+      it "reads, renders and updates derived modules" $ do
+        let source = unlines
+              [ "name = \"demo\""
+              , "fingerprint = 0x1234abcd5678ef00"
+              , "# The modules that functions return"
+              , "derived_modules = {"
+              , "    schema: ("
+              , "        function=gen.rfcgen.schema,"
+              , "        inputs=[\"gen/header.act\", \"yang/\", \"outer/x\", \"src/out/x\"],"
+              , "        args=(strip=\"web/build\", braces=\"{{x}}\", depth=3, ratio=-1.5, flag=True, note=None,"
+              , "              names=[\"a\", \"b\"], sizes={\"k\": 1})"
+              , "    ),"
+              , "    {fleetmgr, flotilla.layers}: (function=spec.modules),"
+              , "    fleetmgr.webui_assets: (function=webui.gen.assets, inputs=[\"webui/build\"])"
+              , "}"
+              ]
+            expected =
+              [ BuildSpec.DerivedEntry (Set.singleton "schema") "gen.rfcgen.schema" ["gen/header.act", "yang/", "outer/x", "src/out/x"]
+                  (M.fromList [ ("strip", Ae.String "web/build"), ("braces", Ae.String "{x}"), ("depth", Ae.Number 3), ("ratio", Ae.Number (-1.5))
+                              , ("flag", Ae.Bool True), ("note", Ae.Null), ("names", Ae.toJSON ["a", "b" :: String])
+                              , ("sizes", Ae.object [("k", Ae.Number 1)]) ])
+              , BuildSpec.DerivedEntry (Set.fromList ["fleetmgr", "flotilla.layers"]) "spec.modules" [] M.empty
+              , BuildSpec.DerivedEntry (Set.singleton "fleetmgr.webui_assets") "webui.gen.assets" ["webui/build"] M.empty
+              ]
+        case BuildSpec.parseBuildAct source of
+          Left err -> expectationFailure err
+          Right (spec,_,_) -> do
+            BuildSpec.derived_modules spec `shouldBe` expected
+            let json = BuildSpec.encodeBuildSpecJSON spec
+            Ae.eitherDecode' json `shouldBe` Right spec
+            BuildSpec.renderBuildAct spec `shouldSatisfy` isInfixOf "    {\n        fleetmgr,\n        flotilla.layers\n    }: (\n        function=spec.modules\n    ),"
+            BuildSpec.renderBuildAct spec `shouldSatisfy` isInfixOf "function=gen.rfcgen.schema"
+            BuildSpec.renderBuildAct spec `shouldSatisfy` isInfixOf
+              "args=(braces=\"{{x}}\", depth=3, flag=True, names=[\"a\", \"b\"], note=None, ratio=-1.5, sizes={\"k\": 1}, strip=\"web/build\")"
+            forM_ [Right (BuildSpec.renderBuildAct spec), BuildSpec.updateBuildActFromJSON source json] $ \result ->
+              case result of
+                Left err -> expectationFailure err
+                Right rendered -> case BuildSpec.parseBuildAct rendered of
+                  Left err -> expectationFailure (rendered ++ ": " ++ err)
+                  Right (spec2,_,_) -> spec2 `shouldBe` spec
+            -- An update that does not mention the table keeps its entries,
+            -- and the comment before it.
+            case BuildSpec.updateBuildActFromJSON source "{\"build_options\":{\"feature\":\"true\"}}" of
+              Left err -> expectationFailure err
+              Right rendered -> do
+                rendered `shouldSatisfy` isInfixOf "# The modules that functions return\nderived_modules = {\n    schema: ("
+                fmap (\(s,_,_) -> BuildSpec.derived_modules s) (BuildSpec.parseBuildAct rendered) `shouldBe` Right expected
+
+      it "reads the module names of a derived module entry as a set" $ do
+        let source names = "name = \"demo\"\nfingerprint = 0x1234abcd5678ef00\n\nderived_modules = {\n    " ++ names ++ ": (function=spec.modules)\n}\n"
+            json modules = BL.fromStrict (B8.pack ("{\"name\":\"demo\",\"fingerprint\":\"0x1234abcd5678ef00\",\"derived_modules\":[{\"modules\":"
+                                                   ++ modules ++ ",\"function\":\"spec.modules\"}]}"))
+            expected = [BuildSpec.DerivedEntry (Set.fromList ["fleetmgr", "flotilla.layers"]) "spec.modules" [] M.empty]
+        -- The names are read the same on one line and on several, with and
+        -- without a comma after the last name.
+        forM_ [ "{fleetmgr, flotilla.layers}", "{flotilla.layers, fleetmgr}", "{fleetmgr, flotilla.layers,}"
+              , "{\n        fleetmgr,\n        flotilla.layers\n    }", "{\n        flotilla.layers,\n        fleetmgr,\n    }" ] $ \names ->
+          case BuildSpec.parseBuildAct (source names) of
+            Left err -> expectationFailure err
+            Right (spec,_,_) -> do
+              BuildSpec.derived_modules spec `shouldBe` expected
+              map BuildSpec.derivedLabel (BuildSpec.derived_modules spec) `shouldBe` ["fleetmgr"]
+              BuildSpec.renderBuildAct spec `shouldSatisfy` isInfixOf "    {\n        fleetmgr,\n        flotilla.layers\n    }: ("
+              BL.toStrict (BuildSpec.encodeBuildSpecJSON spec) `shouldSatisfy` B8.isInfixOf (B8.pack "[\"fleetmgr\",\"flotilla.layers\"]")
+              Ae.eitherDecode' (json "[\"flotilla.layers\",\"fleetmgr\"]") `shouldBe` Right spec
+        case Ae.eitherDecode' (json "[\"fleetmgr\",\"fleetmgr\"]") :: Either String BuildSpec.BuildSpec of
+          Left err -> err `shouldSatisfy` isInfixOf "the entry fleetmgr names the module fleetmgr twice"
+          Right _  -> expectationFailure "a name twice in one entry should be rejected"
+
+      it "writes the names of a derived module entry one per line" $ do
+        let header = "name = \"demo\"\nfingerprint = 0x1234abcd5678ef00\n"
+            twelve = [ "adapters.platform_" ++ show i | i <- [10 .. 20 :: Int] ] ++ ["server_yang"]
+            entries =
+              [ BuildSpec.DerivedEntry (Set.singleton "schema") "gen.schema" ["gen/header.act"] M.empty
+              , BuildSpec.DerivedEntry (Set.fromList ["tables", "layers.base"]) "gen.modules" [] M.empty
+              , BuildSpec.DerivedEntry (Set.fromList twelve) "gen_adata.modules" [] M.empty
+              ]
+            table = unlines $
+              [ "derived_modules = {"
+              , "    schema: ("
+              , "        function=gen.schema,"
+              , "        inputs=[\"gen/header.act\"]"
+              , "    ),"
+              , "    {"
+              , "        layers.base,"
+              , "        tables"
+              , "    }: ("
+              , "        function=gen.modules"
+              , "    ),"
+              , "    {"
+              ] ++ map (\name -> "        " ++ name ++ ",") (init twelve) ++
+              [ "        server_yang"
+              , "    }: ("
+              , "        function=gen_adata.modules"
+              , "    )"
+              , "}"
+              ]
+            patch = Ae.encode (Ae.object [("derived_modules", Ae.toJSON entries)])
+        -- acton spec update writes the table of its JSON.  The text is the
+        -- same in a Build.act that has no table, in one with an empty table
+        -- and in one whose table has other entries.
+        forM_ ["", "derived_modules = {\n}\n", "derived_modules = {\n    {tables, schema}: (function=gen.old)\n}\n"] $ \old ->
+          case BuildSpec.updateBuildActFromJSON (header ++ old) patch of
+            Left err -> expectationFailure err
+            Right written -> do
+              written `shouldBe` header ++ table
+              case BuildSpec.parseBuildAct written of
+                Left err -> expectationFailure err
+                Right (spec,_,_) -> do
+                  BuildSpec.derived_modules spec `shouldBe` entries
+                  BuildSpec.renderBuildAct spec `shouldSatisfy` isInfixOf table
+                  -- A command such as acton pkg remove reads Build.act and
+                  -- writes it from the JSON of what it read, which leaves
+                  -- the table as it is.
+                  BuildSpec.updateBuildActFromJSON written (BuildSpec.encodeBuildSpecJSON spec) `shouldBe` Right written
+
+      it "defaults absent derived modules to no entries" $ do
+        let source = "name = \"demo\"\nfingerprint = 0x1234abcd5678ef00\n"
+        case BuildSpec.parseBuildAct source of
+          Left err -> expectationFailure err
+          Right (spec,_,_) -> do
+            BuildSpec.derived_modules spec `shouldBe` []
+            BuildSpec.renderBuildAct spec `shouldSatisfy` (not . isInfixOf "derived_modules")
+            Ae.eitherDecode' "{\"name\":\"demo\",\"fingerprint\":\"0x1234abcd5678ef00\"}" `shouldBe` Right spec
+
+      it "rejects derived modules that are not written as the table expects" $ do
+        let cases =
+              [ ("{\"schema\": (function=gen.schema)}", "to the left of its colon an entry has a module name, or several module names in braces")
+              , ("{schema: (function=\"gen.schema\")}", "function of the entry schema is a module name followed by the function's name, written without quotes")
+              , ("{schema: (function=schema)}", "for example function=gen.schema, found schema")
+              , ("{schema: (inputs=[\"a\"])}", "the entry schema has no function")
+              , ("{schema: (function=gen.schema, outputs=[\"a\"])}", "has the unknown field outputs")
+              , ("{schema: (function=gen.schema, inputs=\"a\")}", "inputs of the entry schema must be a list of plain string literals")
+              , ("{schema: (function=gen.schema, inputs=[\"/etc/passwd\"])}", "must be a relative path inside the project")
+              , ("{schema: (function=gen.schema, inputs=[\"a/../../b\"])}", "must be a relative path inside the project")
+              , ("{schema: (function=gen.schema, args={\"a\": 1})}", "args of the entry schema are the keyword arguments of its function")
+              , ("{schema: (function=gen.schema, args=(a=b))}", "the argument a of the entry schema must be a literal")
+              , ("{schema: (function=gen.schema, args=(a=[f(1)]))}", "the argument a of the entry schema must be a literal")
+              , ("{schema: (function=gen.schema, args=(a={1: 2}))}", "the argument a of the entry schema must be a literal")
+              , ("{schema: (function=gen.schema, args=(a=-\"x\"))}", "the argument a of the entry schema must be a literal")
+              , ("{schema: (function=gen.schema), {other, schema}: (function=gen.schema)}", "the module schema is named by two entries")
+              , ("{{schema, other, schema}: (function=gen.schema)}", "the entry {other, schema} names the module schema twice")
+              , ("{(schema, other): (function=gen.schema)}", "to the left of its colon an entry has a module name, or several module names in braces")
+              , ("{(schema): (function=gen.schema)}", "to the left of its colon an entry has a module name, or several module names in braces")
+              , ("{{schema, *other}: (function=gen.schema)}", "to the left of its colon an entry has a module name, or several module names in braces")
+              , ("{f(x): (function=gen.schema)}", "to the left of its colon an entry has a module name, or several module names in braces")
+              , ("{schema: gen.schema}", "the entry schema must be written as (function=..., inputs=[...], args=(...))")
+              , ("{schema: (gen.schema, inputs=[\"a\"])}", "the entry schema must be written as (function=..., inputs=[...], args=(...))")
+              , ("{**other}", "an entry must be written as name: (function=...)")
+              , ("{schema: (function=gen.schema, inputs=[\"a\", b])}", "inputs of the entry schema must be a list of plain string literals")
+              , ("{schema: (function=gen.schema, inputs=[\"./a\"])}", "must be a relative path inside the project")
+              , ("{schema: (function=gen.schema, inputs=[\"a\\\\b\"])}", "must be a relative path inside the project")
+              , ("{schema: (function=gen.schema, inputs=[\"\"])}", "must be a relative path inside the project")
+              , ("{schema: (function=gen.schema, inputs=[\"out/x\"])}", "the input path \"out/x\" of the entry schema is in out, which a build writes and which is not committed")
+              , ("{schema: (function=gen.schema, inputs=[\"out/é\"])}", "the input path \"out/é\" of the entry schema is in out, which a build writes and which is not committed")
+              , ("{schema: (function=gen.schema, inputs=[\"out\"])}", "is in out, which a build writes and which is not committed")
+              , ("{schema: (function=gen.schema, inputs=[\"out//derived/\"])}", "is in out, which a build writes and which is not committed")
+              , ("[schema]", "expected a dict of entries")
+              ]
+            header = "name = \"demo\"\nfingerprint = 0x1234abcd5678ef00\n\n"
+        forM_ cases $ \(expr, expected) ->
+          case BuildSpec.parseBuildAct (header ++ "derived_modules = " ++ expr ++ "\n") of
+            Left err -> do
+              err `shouldSatisfy` isInfixOf expected
+              err `shouldSatisfy` isInfixOf "at line 4"
+            Right _ -> expectationFailure (expr ++ " should be rejected")
+        -- A message about an entry gives the line of the entry.
+        case BuildSpec.parseBuildAct (header ++ "derived_modules = {\n    schema: (function=gen.schema),\n    other: (inputs=[\"a\"])\n}\n") of
+          Left err -> err `shouldSatisfy` isInfixOf "at line 6: the entry other has no function"
+          Right _  -> expectationFailure "an entry without a function should be rejected"
+        -- These checks can fail only for an entry that is read from JSON.
+        let decodeEntry entry = Ae.eitherDecode' (BL.fromStrict (B8.pack
+              ("{\"name\":\"demo\",\"fingerprint\":\"0x1234abcd5678ef00\",\"derived_modules\":[" ++ entry ++ "]}"))) :: Either String BuildSpec.BuildSpec
+        forM_ [ ("{\"modules\":[],\"function\":\"gen.schema\"}", "an entry names at least one module")
+              , ("{\"modules\":[\"a/b\"],\"function\":\"gen.schema\"}", "\"a/b\" is not a module name")
+              , ("{\"modules\":[\"schema\"],\"function\":\"schema\"}", "function of the entry schema must be a module name followed by the function's name, found \"schema\"")
+              , ("{\"modules\":[\"schema\"],\"function\":\"gen.schema\",\"args\":{\"a-b\":1}}", "the argument name \"a-b\" of the entry schema is not a parameter name")
+              , ("{\"modules\":[\"schema\"],\"function\":\"gen.schema\",\"output\":\"x\"}", "the entry schema has the unknown field output. The fields are function, inputs and args")
+              , ("{\"modules\":[\"schema\"],\"function\":\"gen.schema\",\"inputs\":[\"out/x\"]}", "the input path \"out/x\" of the entry schema is in out")
+              ] $ \(entry, expected) ->
+          case decodeEntry entry of
+            Left err -> err `shouldSatisfy` isInfixOf expected
+            Right _  -> expectationFailure (entry ++ " should be rejected")
 
       it "preserves omitted build options and replaces or clears explicit updates" $ do
         let source = optionsBuildAct "{\"feature\": \"true\", \"label\": \"old\"}"
@@ -5170,6 +5395,23 @@ main = do
                 Right rendered -> case BuildSpec.parseBuildAct rendered of
                   Left err -> expectationFailure err
                   Right (spec2,_,_) -> spec2 `shouldBe` spec
+
+      it "reads the path of a dependency back as it was rendered" $ do
+        -- A character outside ASCII, a backslash, a quote and braces in the
+        -- path of a dependency.
+        forM_ ["deps/a", "/home/josé/demo", "C:\\Users\\josé\\demo", "/tmp/ƒ", "/tmp/a \"b\" {c}"] $ \dir -> do
+          let source = followsBuildAct "path=\"deps/a\""
+          case BuildSpec.parseBuildAct source of
+            Left err -> expectationFailure err
+            Right (spec,_,_) -> do
+              let moved = spec { BuildSpec.dependencies = M.map (\dep -> dep { BuildSpec.path = Just dir }) (BuildSpec.dependencies spec) }
+              forM_ [ Right (BuildSpec.renderBuildAct moved)
+                    , BuildSpec.updateBuildActFromJSON source (BuildSpec.encodeBuildSpecJSON moved)
+                    ] $ \result -> case result of
+                Left err -> expectationFailure (dir ++ ": " ++ err)
+                Right rendered -> case BuildSpec.parseBuildAct rendered of
+                  Left err -> expectationFailure (rendered ++ ": " ++ err)
+                  Right (spec2,_,_) -> spec2 `shouldBe` moved
 
       it "rejects invalid archive subdirectories in Build.act and JSON" $ do
         forM_ (["", "/tmp/widgets", "../widgets", "packages/../../widgets", "packages/../widgets", "C:/widgets", "C:widgets", "packages\\widgets", "one\0two"] :: [String]) $ \dir -> do

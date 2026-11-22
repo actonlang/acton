@@ -1,0 +1,256 @@
+"""Runs the function of a derived module
+
+A derived module is a module that an entry of the derived_modules table in
+Build.act names.  The entry also names a function, input paths and
+arguments.  The function returns the source of the module from a
+description of each input file and the arguments.  acton build writes a
+program for the entry and runs it when the module is out of date.  The
+program imports this module as runner and the module of the function as fn.
+Its root actor passes One or Many a function that calls the function of the
+entry.  For an entry with the function gen.schema and the argument
+prefix="S", the root actor has the line:
+
+    run = runner.One(env, lambda inputs: fn.schema(inputs, prefix="S"))
+
+The first parameter of the function of an entry is a dict[str, InputFile].
+It holds the description of each input file by the file's path, relative to
+the project root, with / between the components.  A description has the
+path, the size and the SHA-256 of the file, and its method read returns the
+content.  The other parameters of the function take the arguments of the
+entry.  A function that returns str returns the source of the one module
+that its entry names, and One runs it.  A function that returns a
+dict[str, str] returns the source of several modules by module name, as an
+import statement writes the name, and Many runs it.  After the run acton
+build checks that the function returned exactly the modules that its entry
+names.
+
+The function gets no Env, so it reaches no network and no process, and no
+file but the input files, through their descriptions.  It may create actors
+and call them, and they get no Env either.  This module does the file
+access of a run.
+
+A test of a function needs no file: input_of returns the description of
+content that the test makes up.
+"""
+
+import crypto.hash.sha256 as sha256
+import file
+import json
+
+
+class InputFile(object):
+    """The description of an input file
+
+    - path is relative to the project root, with / between the components
+    - size is the size of the content in bytes
+    - sha256 is the SHA-256 of the content, as 64 lowercase hexadecimal digits
+    """
+    path: str
+    size: int
+    sha256: str
+
+    def __init__(self, path: str, size: int, sha256: str, reader: proc() -> bytes):
+        """reader returns the content of the file, and read calls it"""
+        self.path = path
+        self.size = size
+        self.sha256 = sha256
+        self._reader = reader
+
+    proc def read(self) -> bytes:
+        """The content of the file
+
+        Raises ValueError when the content does not have the size and the
+        SHA-256 of the description.
+        """
+        content = self._reader()
+        if len(content) != self.size or sha256.hash(content).hex() != self.sha256:
+            raise ValueError("the input file " + self.path + " changed while the function ran")
+        return content
+
+def input_of(path: str, content: bytes) -> InputFile:
+    """The description of an input file with the given path and content
+
+    No file is read: read returns the given content.
+    """
+    return InputFile(path, len(content), sha256.hash(content).hex(), lambda: content)
+
+
+class Manifest(object):
+    """What acton build tells a run
+
+    - root is the project root
+    - out is the directory that the sources of the modules are written to
+    - modules are the modules that the entry names
+    - inputs are the input files in sorted order: the path of each, relative
+      to root, with the size and the SHA-256 of its content
+    """
+    root: str
+    out: str
+    modules: list[str]
+    inputs: list[(path: str, size: int, sha256: str)]
+
+    def __init__(self, root: str, out: str, modules: list[str], inputs: list[(path: str, size: int, sha256: str)]):
+        self.root = root
+        self.out = out
+        self.modules = modules
+        self.inputs = inputs
+
+    @staticmethod
+    def from_json(text: str) -> Manifest:
+        jd = json.decode(text)
+        return Manifest(manifest_str("root", jd.get("root")), manifest_str("out", jd.get("out")),
+                        manifest_strs("modules", jd.get("modules")), manifest_inputs(jd.get("inputs")))
+
+
+def manifest_str(key: str, val: ?value) -> str:
+    if isinstance(val, str):
+        return val
+    raise ValueError("manifest: " + key + " is not a string")
+
+def manifest_int(key: str, val: ?value) -> int:
+    if isinstance(val, int):
+        return val
+    raise ValueError("manifest: " + key + " is not an integer")
+
+def manifest_strs(key: str, val: ?value) -> list[str]:
+    res = []
+    if isinstance(val, list):
+        items: list[?value] = val
+        for item in items:
+            res.append(manifest_str(key, item))
+        return res
+    raise ValueError("manifest: " + key + " is not a list")
+
+def manifest_inputs(val: ?value) -> list[(path: str, size: int, sha256: str)]:
+    res = []
+    if isinstance(val, list):
+        items: list[?value] = val
+        for item in items:
+            if isinstance(item, dict):
+                f: dict[str, ?value] = item
+                res.append((path=manifest_str("path", f.get("path")), size=manifest_int("size", f.get("size")),
+                            sha256=manifest_str("sha256", f.get("sha256"))))
+            else:
+                raise ValueError("manifest: an input file is not an object")
+        return res
+    raise ValueError("manifest: inputs is not a list")
+
+def is_module_name(name: str) -> bool:
+    """Whether name has the form of a module name
+
+    The form is that of a module name in an import statement: components
+    with "." between them, each made of letters, decimal digits and
+    underscores and not starting with a digit.  A keyword and the name of a
+    type variable have this form too, and an import statement accepts
+    neither.
+    """
+    for part in name.split("."):
+        if len(part) == 0 or part[0].isdecimal():
+            return False
+        for ch in part:
+            if not (ch.isalpha() or ch.isdecimal() or ch == "_"):
+                return False
+    return True
+
+def check_names(modules: dict[str, str]) -> None:
+    """Raise ValueError unless every returned name has the form of a module name
+
+    write_modules makes the path of a module's file from the components of
+    its name, and acton build reads the names of the returned modules from
+    the paths of the written files.  Without this check a name such as a..b
+    would be written to the file of the module a.b.
+    """
+    for name in modules.keys():
+        if not is_module_name(name):
+            raise ValueError('the function returned "' + name + '", which is not a module name')
+
+
+actor Files(env: Env):
+    """The file access of a run"""
+    fcap = file.FileCap(env.cap)
+    rcap = file.ReadFileCap(fcap)
+    wcap = file.WriteFileCap(fcap)
+    fs = file.FS(fcap)
+
+    def read_file(path: str) -> bytes:
+        """The content of the file at path
+
+        The file is closed before the content is returned, so a run has one
+        file open for reading at a time.
+        """
+        f = file.ReadFile(rcap, path)
+        data = f.read()
+        await async f.close()
+        return data
+
+    def manifest() -> Manifest:
+        if len(env.argv) != 2:
+            raise ValueError("usage: " + env.argv[0] + " MANIFEST")
+        return Manifest.from_json(read_file(env.argv[1]).decode())
+
+    def write_modules(m: Manifest, modules: dict[str, str]) -> None:
+        """Write the source of each module to its file under m.out
+
+        Returns when every file is written and closed.
+        """
+        check_names(modules)
+        made = set()
+        for name, source in modules.items():
+            parts = name.split(".")
+            d = m.out
+            for part in parts[:-1]:
+                d = d + "/" + part
+                if d not in made:
+                    made.add(d)
+                    await async fs.mkdir(d)
+            wf = file.WriteFile(wcap, d + "/" + parts[-1] + ".act")
+            await async wf.write(source.encode())
+            await async wf.close()
+
+
+def input_files(files: Files, m: Manifest) -> dict[str, InputFile]:
+    """The description of each input file of a run, by path
+
+    No file is opened here.  The read method of a description has files read
+    the file of that description, so code that has a description can read
+    that one file and no other.
+    """
+    inputs = {}
+    for f in m.inputs:
+        inputs[f.path] = InputFile(f.path, f.size, f.sha256, lambda: files.read_file(m.root + "/" + f.path))
+    return inputs
+
+
+actor One(env: Env, fn: proc(dict[str, InputFile]) -> str):
+    """Run a function that returns the source of the one module that its entry names
+
+    fn gets the descriptions of the input files.
+    """
+    files = Files(env)
+
+    proc def __startup__():
+        try:
+            m = files.manifest()
+            if len(m.modules) != 1:
+                raise ValueError("the function returns the source of one module, and its entry names " + str(len(m.modules)))
+            await async files.write_modules(m, {m.modules[0]: fn(input_files(files, m))})
+            env.exit(0)
+        except Exception as exc:
+            print(str(exc), err=True)
+            env.exit(1)
+
+actor Many(env: Env, fn: proc(dict[str, InputFile]) -> dict[str, str]):
+    """Run a function that returns the sources of several modules by module name
+
+    fn gets the descriptions of the input files.
+    """
+    files = Files(env)
+
+    proc def __startup__():
+        try:
+            m = files.manifest()
+            await async files.write_modules(m, fn(input_files(files, m)))
+            env.exit(0)
+        except Exception as exc:
+            print(str(exc), err=True)
+            env.exit(1)

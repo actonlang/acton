@@ -1,5 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables #-}
-module WatchTests (watchTriggerTests, watchProcessTests, buildAct, writeExecutable) where
+module WatchTests (watchTriggerTests, watchProcessTests, buildAct, writeExecutable, withActon, awaitWithin, awaitGenerationWithin) where
 
 import Control.Concurrent (threadDelay)
 import Control.Exception (IOException, catch, finally, mask, onException, try)
@@ -9,7 +9,7 @@ import Data.IORef
 import qualified Data.Map as M
 import Data.Time.Calendar (fromGregorian)
 import Data.Time.Clock (UTCTime(..), addUTCTime)
-import Data.List (intercalate, isInfixOf, isPrefixOf, isSuffixOf, tails)
+import Data.List (intercalate, isInfixOf, isPrefixOf, isSuffixOf, sort, tails)
 import Data.Maybe (isJust, mapMaybe)
 import System.Directory
 import System.Exit
@@ -128,6 +128,48 @@ watchTriggerTests = testGroup "watch triggers"
         embedWatchTrigger embedded (event "/p/data/sub/text.txt" t0 FS.IsFile) @?= Just WatchFull
   , testCase "attribute changes of an embedded file are skipped" $
       embedWatchTrigger embedded (FS.ModifiedAttributes "/p/web/app.js" t0 FS.IsFile) @?= Nothing
+  , testCase "a save of a file that an input path names or stands for asks for a full build once the file changed" $
+      forM_ [FS.Modified, FS.Added, FS.Removed] $ \event ->
+        -- An input path that is written with a name that starts with a dot
+        -- is taken as it is written.
+        forM_ ["/p/web/app.js", "/p/web/sub/new.css", "/p/web/app.js~", "/p/data/schema.txt", "/p/web/.well-known/acme.txt"] $ \path ->
+          inputWatchTrigger inputs (event path t0 FS.IsFile) @?= Just (WatchSave path Nothing)
+  , testCase "a file that no input path stands for asks for nothing" $
+      forM_ [FS.Modified, FS.Added, FS.Removed] $ \event -> do
+        forM_ ["/p/web/.DS_Store", "/p/web/.cache/kept.txt", "/p/web/page.tydb/data.mdb", "/p/webs/app.js", "/p/other.txt", "/p/data/other.txt"] $ \path ->
+          inputWatchTrigger inputs (event path t0 FS.IsFile) @?= Nothing
+        inputWatchTrigger [] (event "/p/web/app.js" t0 FS.IsFile) @?= Nothing
+  , testCase "a directory at or below an input path asks for a full build when it appears or goes" $ do
+      forM_ ["/p/web", "/p/web/", "/p/web/sub", "/p/web/sub/"] $ \dir -> do
+        forM_ [FS.Added, FS.Removed, FS.WatchedDirectoryRemoved] $ \event ->
+          inputWatchTrigger inputs (event dir t0 FS.IsDirectory) @?= Just WatchFull
+        inputWatchTrigger inputs (FS.Modified dir t0 FS.IsDirectory) @?= Nothing
+      forM_ ["/p/web/.git", "/p/web/page.tydb/", "/p/data"] $ \dir ->
+        inputWatchTrigger inputs (FS.Added dir t0 FS.IsDirectory) @?= Nothing
+  , testCase "attribute changes of an input file are skipped" $
+      inputWatchTrigger inputs (FS.ModifiedAttributes "/p/web/app.js" t0 FS.IsFile) @?= Nothing
+  , testCase "the directories at or below a path that the input paths name or stand for" $
+      withSystemTempDirectory "acton-watch-input-directories" $ \tmp -> do
+        dir <- canonicalizePath tmp
+        forM_ ["web/sub/deep", "web/.git/objects", "web/.well-known/sub", "web/page.tydb", "other/sub", "linked/sub"] $ \sub ->
+          createDirectoryIfMissing True (dir </> sub)
+        writeFile (dir </> "web/app.js") "let a = 1\n"
+        createSymbolicLink (dir </> "linked") (dir </> "web/link")
+        let at = fmap sort . inputDirectoriesAt (map (dir </>) ["web", "web/.well-known", "web/app.js", "missing"]) . (dir </>)
+            under = map (dir </>)
+        at "web" >>= (@?= under ["web", "web/.well-known", "web/.well-known/sub", "web/sub", "web/sub/deep"])
+        at "web/sub" >>= (@?= under ["web/sub", "web/sub/deep"])
+        forM_ ["web/app.js", "missing", "other", "web/.git"] $ \path ->
+          at path >>= (@?= [])
+  , testCase "the stamp of one file is recorded" $
+      withSystemTempDirectory "acton-watch-record-file" $ \dir -> do
+        stamps <- newIORef M.empty
+        let path = dir </> "schema.txt"
+        writeFile path "one\n"
+        recordStamps stamps path
+        shouldTriggerFile stamps path >>= (@?= False)
+        writeFile path "three\n"
+        shouldTriggerFile stamps path >>= (@?= True)
   , testCase "the stamp of a file is the stamp of its stat" $
       withSystemTempDirectory "acton-watch-stat" $ \dir -> do
         let path = dir </> "text.txt"
@@ -167,7 +209,8 @@ watchTriggerTests = testGroup "watch triggers"
       withSystemTempDirectory "acton-watch-embedded" $ \tmp -> do
         dir    <- canonicalizePath tmp
         builds <- newIORef (0 :: Int)
-        look   <- embeddedWatch (\_ _ _ -> return ()) (modifyIORef builds (+ 1)) assertFailure
+        stamps <- newIORef M.empty
+        (look, _) <- embeddedWatch stamps (\_ _ -> return ()) (modifyIORef builds (+ 1)) assertFailure
         let path = dir </> "text.txt"
         writeFile path "one\n"
         one <- statOf path
@@ -178,8 +221,45 @@ watchTriggerTests = testGroup "watch triggers"
         writeFile path "three\n"
         look (M.fromList [(path, Just one)])
         (@?= 1) =<< readIORef builds
+  , testCase "the embedded watch tells of the files that an input path stands for, also in a directory that appears" $
+      withSystemTempDirectory "acton-watch-inputs" $ \tmp -> do
+        dir      <- canonicalizePath tmp
+        stamps   <- newIORef M.empty
+        triggers <- newIORef []
+        let onEvent toTrigger ev = forM_ (toTrigger ev) (\trigger -> modifyIORef triggers (trigger :))
+            told trigger = await ("the trigger " ++ show trigger) ((\ts -> if trigger `elem` ts then Just () else Nothing) <$> readIORef triggers)
+            saved path = WatchSave (dir </> path) Nothing
+        createDirectory (dir </> "data")
+        (_, watchInputs) <- embeddedWatch stamps onEvent (return ()) assertFailure
+        watchInputs [dir </> "data", dir </> "later/"]
+        -- The events of one directory arrive in the order of the writes.
+        writeFile (dir </> "data/.hidden") "hidden\n"
+        writeFile (dir </> "data/one.txt") "one\n"
+        told (saved "data/one.txt")
+        (@?= False) . elem (saved "data/.hidden") =<< readIORef triggers
+        -- A directory that appears below an input path is watched when
+        -- the trigger of its event is there.
+        writeIORef triggers []
+        createDirectory (dir </> "data/sub")
+        told WatchFull
+        writeFile (dir </> "data/sub/two.txt") "two\n"
+        told (saved "data/sub/two.txt")
+        -- A directory that appears at an input path.
+        writeIORef triggers []
+        createDirectory (dir </> "later")
+        told WatchFull
+        writeFile (dir </> "later/three.txt") "three\n"
+        told (saved "later/three.txt")
+        -- The paths that are given last are the input paths.
+        watchInputs [dir </> "later"]
+        writeFile (dir </> "data/four.txt") "four\n"
+        writeFile (dir </> "later/five.txt") "five\n"
+        told (saved "later/five.txt")
+        (@?= False) . elem (saved "data/four.txt") =<< readIORef triggers
   ]
   where t0 = UTCTime (fromGregorian 2026 1 1) 0
+        -- The input paths of the derived modules of a project.
+        inputs = ["/p/web", "/p/data/schema.txt", "/p/web/.well-known"]
         -- What a build saw at the paths of two embedded files and of the
         -- directories on the way to them: it read web/app.js and found no
         -- file to read at data/sub/text.txt.
@@ -777,7 +857,7 @@ watchProcessTests = testGroup "watch subprocesses"
     awaitReports count output = await "successful test report" $ do
       logText <- output
       return $ if length (filter ("tests passed" `isInfixOf`) (lines logText)) >= count then Just () else Nothing
-    awaitGeneration proj = await "watch generation completion" (Just <$> withProjectLock proj (return ()))
+    awaitGeneration = awaitGenerationWithin 120
     zigRuns proj = length . lines <$> readOutput (proj </> "zig-runs")
     awaitZigRuns proj n = await ("Zig run " ++ show n) $ do
       runs <- zigRuns proj
@@ -905,9 +985,21 @@ readOutput path = (BS.unpack <$> BS.readFile path) `catch` \(_ :: IOException) -
 awaitPid :: FilePath -> FilePath -> IO ProcessID
 awaitPid proj name = await name (readMaybe <$> readOutput (proj </> name))
 
+-- Wait until no generation of a watch runs in the project, for at most the
+-- given number of seconds. A generation holds the lock of the project from
+-- its start to its end.
+awaitGenerationWithin :: Int -> FilePath -> IO ()
+awaitGenerationWithin seconds proj =
+    awaitWithin seconds "the end of the generation" (Just <$> withProjectLock proj (return ()))
+
 await :: String -> IO (Maybe a) -> IO a
-await label check = do
-    result <- Timeout.timeout 120000000 loop
+await = awaitWithin 120
+
+-- Run the check every 20 ms until it gives a value. The test fails when the
+-- check gives no value within the given number of seconds.
+awaitWithin :: Int -> String -> IO (Maybe a) -> IO a
+awaitWithin seconds label check = do
+    result <- Timeout.timeout (seconds * 1000000) loop
     case result of
       Just value -> return value
       Nothing -> assertFailure ("Timed out waiting for " ++ label)

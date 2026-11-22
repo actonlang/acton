@@ -1,0 +1,181 @@
+import std.build.derive as derive
+
+import file
+import testing
+
+# The SHA-256 of b"abc" and of no content
+ABC = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+EMPTY = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+
+def _test_module_names():
+    for name in ["schema", "a.b.c", "_private", "v2.layer_0", "Schema"]:
+        testing.assertTrue(derive.is_module_name(name), name)
+    for name in ["", "a..b", ".a", "a.", "2a", "a.2b", "a/b", "a-b", "a b", "../a"]:
+        testing.assertFalse(derive.is_module_name(name), name)
+
+def _test_returned_names():
+    # A returned name is a module name
+    derive.check_names({"schema": "", "layers.a": "", "layers.a.b": ""})
+    derive.check_names({})
+    for name in ["schema/x", "schema..x", "../schema", ""]:
+        try:
+            derive.check_names({name: ""})
+            testing.error("accepted " + name)
+        except ValueError:
+            pass
+
+def _test_manifest():
+    # A brace in a string literal is written twice
+    m = derive.Manifest.from_json('{{"root": "/p", "out": "/p/out/derived/tmp/schema/src", "modules": ["schema", "a.b"],'
+                                  + ' "inputs": [{{"path": "data/a.txt", "size": 3, "sha256": "' + ABC + '"}},'
+                                  + ' {{"path": "data/b.bin", "size": 3000000000000, "sha256": "' + EMPTY + '"}}]}}')
+    testing.assertEqual(m.root, "/p")
+    testing.assertEqual(m.out, "/p/out/derived/tmp/schema/src")
+    testing.assertEqual(m.modules, ["schema", "a.b"])
+    testing.assertEqual([f.path for f in m.inputs], ["data/a.txt", "data/b.bin"])
+    testing.assertEqual([f.size for f in m.inputs], [3, 3000000000000])
+    testing.assertEqual([f.sha256 for f in m.inputs], [ABC, EMPTY])
+    for text in ['{{"out": "o", "modules": [], "inputs": []}}',
+                 '{{"root": 1, "out": "o", "modules": [], "inputs": []}}',
+                 '{{"root": "r", "out": "o", "modules": "m", "inputs": []}}',
+                 '{{"root": "r", "out": "o", "modules": [1], "inputs": []}}',
+                 '{{"root": "r", "out": "o", "modules": [], "inputs": {{}}}}',
+                 '{{"root": "r", "out": "o", "modules": []}}',
+                 '{{"root": "r", "out": "o", "modules": [], "inputs": ["data/a.txt"]}}',
+                 '{{"root": "r", "out": "o", "modules": [], "inputs": [{{"size": 3, "sha256": "' + ABC + '"}}]}}',
+                 '{{"root": "r", "out": "o", "modules": [], "inputs": [{{"path": "a", "sha256": "' + ABC + '"}}]}}',
+                 '{{"root": "r", "out": "o", "modules": [], "inputs": [{{"path": "a", "size": "3", "sha256": "' + ABC + '"}}]}}',
+                 '{{"root": "r", "out": "o", "modules": [], "inputs": [{{"path": "a", "size": 3}}]}}']:
+        try:
+            derive.Manifest.from_json(text)
+            testing.error("accepted " + text)
+        except ValueError:
+            pass
+
+def _test_input_of():
+    """input_of describes the content that it is given"""
+    f = derive.input_of("web/app.js", b"abc")
+    testing.assertEqual(f.path, "web/app.js")
+    testing.assertEqual(f.size, 3)
+    testing.assertEqual(f.sha256, ABC)
+    testing.assertEqual(f.read(), b"abc")
+    empty = derive.input_of("web/empty", b"")
+    testing.assertEqual(empty.size, 0)
+    testing.assertEqual(empty.sha256, EMPTY)
+    testing.assertEqual(empty.read(), b"")
+
+pure def described(path: str, content: bytes) -> (str, int, str):
+    """The path, the size and the SHA-256 of the description of the given content"""
+    f = derive.input_of(path, content)
+    return (f.path, f.size, f.sha256)
+
+def _test_description_without_effect():
+    """input_of and the attributes of a description have no effect: a pure function uses them"""
+    testing.assertEqual(described("web/app.js", b"abc"), ("web/app.js", 3, ABC))
+
+def _test_read_changed_content():
+    """read raises when the content is not the described content"""
+    testing.assertEqual(derive.InputFile("data/a.txt", 3, ABC, lambda: b"abc").read(), b"abc")
+    # Other content of the described size, and content of another size
+    for content in [b"abd", b"abcd", b""]:
+        try:
+            derive.InputFile("data/a.txt", 3, ABC, lambda: content).read()
+            testing.error("read returned " + str(content))
+        except ValueError as exc:
+            testing.assertEqual(exc.error_message, "the input file data/a.txt changed while the function ran")
+
+actor _test_input_files(t: testing.EnvT):
+    """input_files opens no file, and read returns the content of the file of its description"""
+
+    proc def __startup__():
+        try:
+            fc = file.FileCap(t.env.cap)
+            fs = file.FS(fc)
+            tmpdir = fs.mktmpdir()
+            try:
+                for name, content in [("kept", b"abc"), ("written", b"abd")]:
+                    wf = file.WriteFile(file.WriteFileCap(fc), tmpdir + "/" + name)
+                    await async wf.write(content)
+                    await async wf.close()
+                # The manifest describes the content abc for each file.  The
+                # file written holds other content, and there is no file
+                # missing: a description is made without opening its file.
+                m = derive.Manifest(tmpdir, tmpdir, [], [(path=name, size=3, sha256=ABC) for name in ["kept", "missing", "written"]])
+                inputs = derive.input_files(derive.Files(t.env), m)
+                testing.assertEqual(list(inputs.keys()), ["kept", "missing", "written"])
+                testing.assertEqual([f.path for f in inputs.values()], ["kept", "missing", "written"])
+                testing.assertEqual([f.size for f in inputs.values()], [3, 3, 3])
+                testing.assertEqual([f.sha256 for f in inputs.values()], [ABC, ABC, ABC])
+                testing.assertEqual(inputs["kept"].read(), b"abc")
+                try:
+                    inputs["written"].read()
+                    testing.error("read returned content that is not the described content")
+                except ValueError as exc:
+                    testing.assertEqual(exc.error_message, "the input file written changed while the function ran")
+            finally:
+                await async fs.rmtree(tmpdir)
+            t.success()
+        except AssertionError as exc:
+            t.failure(exc)
+        except Exception as exc:
+            t.error(exc)
+
+actor _test_read_closes_files(t: testing.EnvT):
+    """read leaves no input file open"""
+
+    proc def __startup__():
+        try:
+            fc = file.FileCap(t.env.cap)
+            fs = file.FS(fc)
+            tmpdir = fs.mktmpdir()
+            try:
+                names = ["f" + str(i) for i in range(32)]
+                for name in names:
+                    wf = file.WriteFile(file.WriteFileCap(fc), tmpdir + "/" + name)
+                    await async wf.write(name.encode())
+                    await async wf.close()
+                described = [derive.input_of(name, name.encode()) for name in names]
+                m = derive.Manifest(tmpdir, tmpdir, [], [(path=f.path, size=f.size, sha256=f.sha256) for f in described])
+                inputs = derive.input_files(derive.Files(t.env), m)
+                open_before = t.env.rts.fd_stats().open
+                contents = {name: f.read() for name, f in inputs.items()}
+                open_after = t.env.rts.fd_stats().open
+                testing.assertEqual(contents, {name: name.encode() for name in names})
+                # fd_stats counts every descriptor of the process, and other
+                # actors open and close descriptors meanwhile.  A read that
+                # left its input file open would add len(names).
+                if open_before is not None and open_after is not None:
+                    testing.assertTrue(int(open_after) < int(open_before) + len(names),
+                                       "%d descriptors open before the reads and %d after" % (int(open_before), int(open_after)))
+            finally:
+                await async fs.rmtree(tmpdir)
+            t.success()
+        except AssertionError as exc:
+            t.failure(exc)
+        except Exception as exc:
+            t.error(exc)
+
+actor _test_write_modules_mkdir_error(t: testing.EnvT):
+    """write_modules raises the error of a directory that it cannot create"""
+
+    proc def __startup__():
+        try:
+            fs = file.FS(file.FileCap(t.env.cap))
+            tmpdir = fs.mktmpdir()
+            try:
+                files = derive.Files(t.env)
+                # The directory out is missing, so no directory can be
+                # created in it.
+                m = derive.Manifest(tmpdir, tmpdir + "/out", [], [])
+                try:
+                    await async files.write_modules(m, {"layers.a": ""})
+                    testing.error("wrote a module to a directory that is missing")
+                except OSError as exc:
+                    testing.assertTrue(exc.error_message.startswith("Error creating directory"), exc.error_message)
+            finally:
+                await async fs.rmtree(tmpdir)
+            t.success()
+        except AssertionError as exc:
+            t.failure(exc)
+        except Exception as exc:
+            t.error(exc)

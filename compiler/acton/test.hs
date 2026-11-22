@@ -47,6 +47,7 @@ import qualified Paths_acton
 import qualified Repl
 import qualified WatchTests
 import qualified EmbedTests
+import qualified DerivedTests
 import qualified PerfTests
 import qualified TestOutputTests
 import qualified ZigProgressTests
@@ -105,6 +106,7 @@ main = do
       , parseFlagTests
       , WatchTests.watchTriggerTests
       , WatchTests.watchProcessTests
+      , DerivedTests.derivedModuleTests
       , PerfTests.perfTests
       , TestOutputTests.testOutputTests
       , ZigProgressTests.zigProgressTests
