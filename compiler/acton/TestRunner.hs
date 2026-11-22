@@ -31,7 +31,7 @@ import Data.IORef
 import Data.Char (isSpace, isHexDigit, toLower)
 import Data.List (isPrefixOf, isSuffixOf, foldl', isInfixOf, intercalate)
 import qualified Data.List
-import Data.Maybe (catMaybes, listToMaybe, isJust, fromMaybe)
+import Data.Maybe (catMaybes, listToMaybe, isJust, isNothing, fromMaybe)
 import qualified Data.Map as M
 import qualified Data.IntMap.Strict as IM
 import qualified Data.Set as Set
@@ -462,7 +462,7 @@ runPerfComparison color gopts topts (oldOpts, oldPaths, oldSource) (newOpts, new
                 Left failed -> (M.empty, failed)
                 Right (old, new) -> (M.singleton modName (M.singleton testName (trRaw old)), new)
               old = lookupPerfData baseline res
-              details = map staticLine (formatTestDetailLines color (C.testShowLog topts) res) ++ formatTestPerfLines color old res
+              details = map staticLine (formatTestDetailLines color (C.testShowLog topts) (displayModName newPaths (trModule res)) res) ++ formatTestPerfLines color old res
               line = formatTestFinalLineRenderer color True (fromIntegral (2 * C.testTime topts)) width name res
           _ <- testUiFinalize ui key line
           _ <- testUiInsertDetails ui key details
@@ -523,7 +523,7 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
             nameWidth = max 20 (maxNameLen + 5)
             runContext = mkRunContext opts topts mode buildOptions (testRunEnvironment environment)
             ctxHash = contextHashBytes runContext
-            useCache = not (C.testNoCache topts) && not (C.testGcCheck topts) && mode == TestModeRun
+            useCache = not (C.testNoCache topts) && not (C.testGcCheck topts) && isNothing (C.testSeed topts) && mode == TestModeRun
         when (mode == TestModePerf) $ forM_ (C.testCompare topts) $ \path -> do
           exists <- doesFileExist path
           unless exists $ printErrorAndExit ("Performance baseline does not exist: " ++ path)
@@ -532,7 +532,7 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
           then readPerfData (projPath paths </> "perf_data") else return perfData
         perfHostInfo <- if mode == TestModePerf then readPerfHostInfo opts topts buildOptions else return AesonKM.empty
         let detailLines res =
-              map staticLine (formatTestDetailLines useColorOut (C.testShowLog topts) res) ++
+              map staticLine (formatTestDetailLines useColorOut (C.testShowLog topts) (displayModName paths (trModule res)) res) ++
               if mode == TestModePerf
                 then formatTestPerfLines useColorOut (lookupPerfData perfData res) res
                 else []
@@ -573,6 +573,7 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
             TestModePerf -> putStrLn "Skipping test result cache in perf mode; running all selected tests"
             TestModeStress -> putStrLn "Skipping test result cache in stress mode; running all selected tests"
             _ | C.testGcCheck topts -> putStrLn "Skipping test result cache (--gc-check); running all selected tests"
+              | isJust (C.testSeed topts) -> putStrLn "Skipping test result cache (--seed); running all selected tests"
               | otherwise -> putStrLn "Skipping test result cache (--no-cache); running all selected tests"
         when (not emitJson && showCached && not (null cachedResults)) $
           putStrLn ("Using cached results for " ++ show (length cachedResults) ++ " tests")
@@ -788,6 +789,12 @@ outputJsonReport paths mode baseline elapsed results = do
                , AesonKey.fromString "skip_reason" Aeson..= trSkipReason res
                , AesonKey.fromString "exception" Aeson..= trException res
                , AesonKey.fromString "output" Aeson..= combinedOutput
+               ] ++
+               -- The seed of the first failed run that drew from t.random
+               [ AesonKey.fromString key Aeson..= v
+               | Aeson.Object obj <- [trRaw res]
+               , key <- ["seed", "seed_replays", "seed_reproduced"]
+               , Just v <- [AesonKM.lookup (AesonKey.fromString key) obj]
                ] ++
                [ AesonKey.fromString "performance" Aeson..= perfJson (lookupPerfData baseline res) res
                | mode == TestModePerf
@@ -1359,21 +1366,11 @@ testCmdArgs mode topts
                  , "--max-time", show maxTime
                  , "--min-time", show minTime
                  ]
-    in baseArgs ++ stressWorkerArgs ++ tagArgs ++ rtsArgs
+    in baseArgs ++ stressWorkerArgs ++ seedArgs ++ tagArgs ++ rtsArgs
   where
+    seedArgs = maybe [] (\seed -> ["--seed", show seed]) (C.testSeed topts)
     tagArgs = concatMap (\tag -> ["--tag", tag]) (C.testTags topts)
     rtsArgs = maybe [] (\n -> ["--rts-wthreads", show n]) (C.testRtsWthreads topts)
-
--- | Normalize test names by stripping prefixes and wrappers.
-displayTestName :: String -> String
-displayTestName name =
-    let withoutPrefix =
-          if "_test_" `isPrefixOf` name
-            then drop 6 name
-            else name
-    in if "_wrapper" `isSuffixOf` withoutPrefix
-         then take (length withoutPrefix - length "_wrapper") withoutPrefix
-         else withoutPrefix
 
 -- | Parse a single JSON line emitted by test binaries.
 parseJsonLine :: T.Text -> Maybe Aeson.Value

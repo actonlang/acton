@@ -1,5 +1,5 @@
 import net
-import random
+import std.random
 import testing
 import time
 
@@ -74,155 +74,163 @@ actor TLSClientServerProbe(t: testing.EnvT, protocols: list[str]=[]):
     var listener_refs: list[net.TLSListener] = []
     var client_refs: list[net.TLSConnection] = []
     var server_conn_refs: list[net.TLSListenConnection] = []
-    timeout_sw = time.Stopwatch()
-    listen_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
-    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
 
-    def _close_client_ref(conn: net.TLSConnection):
-        def _noop(c: net.TLSConnection):
-            pass
-        conn.close(_noop)
+    proc def __startup__():
+        timeout_sw = time.Stopwatch()
+        listen_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+        conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
 
-    def _close_listener():
-        if listener_refs:
-            listener_refs.pop(0).close()
+        def _close_client_ref(conn: net.TLSConnection):
+            def _noop(c: net.TLSConnection):
+                pass
+            conn.close(_noop)
 
-    def _close_client():
-        if client_refs:
-            _close_client_ref(client_refs.pop(0))
+        def _close_listener():
+            if listener_refs:
+                listener_refs.pop(0).close()
 
-    def _close_server_conn():
-        if server_conn_refs:
-            server_conn_refs.pop(0).close()
+        def _close_client():
+            if client_refs:
+                _close_client_ref(client_refs.pop(0))
 
-    def _finish_success():
-        if done:
-            return
-        done = True
-        _close_listener()
-        _close_client()
-        _close_server_conn()
-        t.success()
+        def _close_server_conn():
+            if server_conn_refs:
+                server_conn_refs.pop(0).close()
 
-    def _finish_failure(msg: str):
-        if done:
-            return
-        done = True
-        _close_listener()
-        _close_client()
-        _close_server_conn()
-        t.failure(AssertionError(msg))
+        def _finish_success():
+            if done:
+                return
+            done = True
+            _close_listener()
+            _close_client()
+            _close_server_conn()
+            t.success()
 
-    def _finish_error(msg: str):
-        if done:
-            return
-        done = True
-        _close_listener()
-        _close_client()
-        _close_server_conn()
-        t.error(Exception(msg))
+        def _finish_failure(msg: str):
+            if done:
+                return
+            done = True
+            _close_listener()
+            _close_client()
+            _close_server_conn()
+            t.failure(AssertionError(msg))
 
-    def _start_client(port: int):
-        conn = net.TLSConnection(conn_cap, "127.0.0.1", port, _on_client_connect, _on_client_receive, _on_client_error, _on_client_remote_close, False, protocols)
-        if client_refs:
-            client_refs[0] = conn
-        else:
-            client_refs.append(conn)
+        def _finish_error(msg: str):
+            if done:
+                return
+            done = True
+            _close_listener()
+            _close_client()
+            _close_server_conn()
+            t.error(Exception(msg))
 
-    def _on_client_connect(c: net.TLSConnection):
-        if client_refs:
-            client_refs[0] = c
-        else:
-            client_refs.append(c)
-        await async c.write(b"PING")
-
-    def _on_client_receive(c: net.TLSConnection, data: bytes):
-        if data == b"PONG":
-            _finish_success()
-        else:
-            _finish_failure("Unexpected response: " + str(data))
-
-    def _on_client_error(c: net.TLSConnection, msg: str):
-        _finish_failure("TLS client error: " + msg)
-
-    def _on_client_remote_close(c: net.TLSConnection):
-        if not done:
-            _finish_failure("TLS server closed before response")
-
-    def _on_server_receive(c: net.TLSListenConnection, data: bytes):
-        if server_conn_refs:
-            server_conn_refs[0] = c
-        else:
-            server_conn_refs.append(c)
-        if data == b"PING":
-            await async c.write(b"PONG")
-        else:
-            _finish_failure("Unexpected request: " + str(data))
-
-    def _on_server_error(c: net.TLSListenConnection, error: str):
-        _finish_error("TLS server error: " + error)
-
-    def _on_server_close(c: net.TLSListenConnection):
-        if server_conn_refs and server_conn_refs[0] is c:
-            server_conn_refs.pop(0)
-
-    def _on_accept(c: net.TLSListenConnection):
-        if server_conn_refs:
-            server_conn_refs[0] = c
-        else:
-            server_conn_refs.append(c)
-        c.cb_install(_on_server_receive, _on_server_error, _on_server_close)
-
-    def _on_listen(listener, err):
-        if err is not None:
-            if attempts < 10:
-                attempts += 1
-                _start_listener()
+        def _start_client(port: int):
+            conn = net.TLSConnection(conn_cap, "127.0.0.1", port, _on_client_connect, _on_client_receive, _on_client_error, _on_client_remote_close, False, protocols)
+            if client_refs:
+                client_refs[0] = conn
             else:
-                _finish_error("TLS listen failed: " + err)
-            return
-        if started:
-            return
-        started = True
-        after 0: _start_client(port)
+                client_refs.append(conn)
 
-    def _timeout():
-        _finish_error("timeout")
+        def _on_client_connect(c: net.TLSConnection):
+            if client_refs:
+                client_refs[0] = c
+            else:
+                client_refs.append(c)
+            await async c.write(b"PING")
 
-    def _watchdog():
-        if done:
-            return
-        if timeout_sw.elapsed().to_float() >= TLS_TEST_TIMEOUT_S:
-            _timeout()
-        else:
-            after WATCHDOG_INTERVAL_S: _watchdog()
+        def _on_client_receive(c: net.TLSConnection, data: bytes):
+            if data == b"PONG":
+                _finish_success()
+            else:
+                _finish_failure("Unexpected response: " + str(data))
 
-    def _start_listener():
-        port = random.randint(20000, 45000)
-        l = net.TLSListener(
-            listen_cap,
-            "127.0.0.1",
-            port,
-            CERT_PEM.encode(),
-            KEY_PEM.encode(),
-            _on_listen,
-            _on_accept
-        )
-        if listener_refs:
-            listener_refs[0] = l
-        else:
-            listener_refs.append(l)
+        def _on_client_error(c: net.TLSConnection, msg: str):
+            _finish_failure("TLS client error: " + msg)
 
-    _start_listener()
-    _watchdog()
+        def _on_client_remote_close(c: net.TLSConnection):
+            if not done:
+                _finish_failure("TLS server closed before response")
+
+        def _on_server_receive(c: net.TLSListenConnection, data: bytes):
+            if server_conn_refs:
+                server_conn_refs[0] = c
+            else:
+                server_conn_refs.append(c)
+            if data == b"PING":
+                await async c.write(b"PONG")
+            else:
+                _finish_failure("Unexpected request: " + str(data))
+
+        def _on_server_error(c: net.TLSListenConnection, error: str):
+            _finish_error("TLS server error: " + error)
+
+        def _on_server_close(c: net.TLSListenConnection):
+            if server_conn_refs and server_conn_refs[0] is c:
+                server_conn_refs.pop(0)
+
+        def _on_accept(c: net.TLSListenConnection):
+            if server_conn_refs:
+                server_conn_refs[0] = c
+            else:
+                server_conn_refs.append(c)
+            c.cb_install(_on_server_receive, _on_server_error, _on_server_close)
+
+        def _on_listen(listener, err):
+            if err is not None:
+                if attempts < 10:
+                    attempts += 1
+                    _start_listener()
+                else:
+                    _finish_error("TLS listen failed: " + err)
+                return
+            if started:
+                return
+            started = True
+            after 0: _start_client(port)
+
+        def _timeout():
+            _finish_error("timeout")
+
+        def _watchdog():
+            if done:
+                return
+            if timeout_sw.elapsed().to_float() >= TLS_TEST_TIMEOUT_S:
+                _timeout()
+            else:
+                after WATCHDOG_INTERVAL_S: _watchdog()
+
+        def _start_listener():
+            port = std.random.randint(20000, 45000)
+            l = net.TLSListener(
+                listen_cap,
+                "127.0.0.1",
+                port,
+                CERT_PEM.encode(),
+                KEY_PEM.encode(),
+                _on_listen,
+                _on_accept
+            )
+            if listener_refs:
+                listener_refs[0] = l
+            else:
+                listener_refs.append(l)
+
+        _start_listener()
+        _watchdog()
 
 
 actor _TLSClientServer(t: testing.EnvT):
-    TLSClientServerProbe(t)
+
+
+    proc def __startup__():
+        TLSClientServerProbe(t)
 
 
 actor _TLSClientServerALPNProtocols(t: testing.EnvT):
-    TLSClientServerProbe(t, ALPN_PROTOCOLS)
+
+
+    proc def __startup__():
+        TLSClientServerProbe(t, ALPN_PROTOCOLS)
 
 
 actor _TLSQueuedWriteRoundtrip(t: testing.EnvT):
@@ -397,7 +405,7 @@ actor _TLSQueuedWriteRoundtrip(t: testing.EnvT):
             after WATCHDOG_INTERVAL_S: _watchdog()
 
     def _start_listener():
-        port = random.randint(20000, 45000)
+        port = std.random.randint(20000, 45000)
         client_connected = False
         request_started = False
         server_recv = []
@@ -418,8 +426,9 @@ actor _TLSQueuedWriteRoundtrip(t: testing.EnvT):
         else:
             listener_refs.append(l)
 
-    _start_listener()
-    _watchdog()
+    proc def __startup__():
+        _start_listener()
+        _watchdog()
 
 
 actor _TLSListenerDropKeepsAcceptedConnection(t: testing.EnvT):
@@ -570,7 +579,7 @@ actor _TLSListenerDropKeepsAcceptedConnection(t: testing.EnvT):
 
     def _start_listener():
         phase = "listener-starting"
-        port = random.randint(20000, 45000)
+        port = std.random.randint(20000, 45000)
         listener = net.TLSListener(
             listen_cap,
             "127.0.0.1",
@@ -581,8 +590,9 @@ actor _TLSListenerDropKeepsAcceptedConnection(t: testing.EnvT):
             _on_accept
         )
 
-    _start_listener()
-    _watchdog()
+    proc def __startup__():
+        _start_listener()
+        _watchdog()
 
 
 actor _TLSImmediateConnectError(t: testing.EnvT):
@@ -644,8 +654,9 @@ actor _TLSImmediateConnectError(t: testing.EnvT):
         else:
             after WATCHDOG_INTERVAL_S: _watchdog()
 
-    after 0: _start_client()
-    _watchdog()
+    proc def __startup__():
+        after 0: _start_client()
+        _watchdog()
 
 
 actor _TLSListenerPortZero(t: testing.EnvT):
@@ -671,12 +682,13 @@ actor _TLSListenerPortZero(t: testing.EnvT):
             finish("TLS listen failed: " + err)
             return
         listener = l
-        port = l.local_port()
+        ep = l.endpoint()
+        port = ep.port
         if port <= 0:
             finish("listener on port 0 reports port %d" % port)
             return
-        if l.local_address() != "127.0.0.1":
-            finish("listener reports local address " + l.local_address())
+        if ep.address != "127.0.0.1":
+            finish("listener reports local address " + ep.address)
             return
         net.TLSConnection(conn_cap, "127.0.0.1", port, _on_connect, _on_receive, _on_error, None, False)
 
@@ -693,5 +705,6 @@ actor _TLSListenerPortZero(t: testing.EnvT):
     def _on_error(c: net.TLSConnection, msg: str):
         finish("TLS client error: " + msg)
 
-    after 5: finish("timeout")
-    net.TLSListener(listen_cap, "127.0.0.1", 0, CERT_PEM.encode(), KEY_PEM.encode(), _on_listen, _on_accept)
+    proc def __startup__():
+        after 5: finish("timeout")
+        net.TLSListener(listen_cap, "127.0.0.1", 0, CERT_PEM.encode(), KEY_PEM.encode(), _on_listen, _on_accept)

@@ -1,47 +1,49 @@
 import testing
 
-import std.argparse as argparse
-import std.base64 as base64
-import std.crypto.hash.md5 as md5
-import std.diff as diff
-import std.hash.wyhash as wyhash
-import std.http as http
-import std.json as json
-import std.math as math
-import std.qcheck as qcheck
-import std.random as random
-import std.re as re
-import std.snappy as snappy
-import std.term as term
-import std.xml as xml
+import std.argparse
+import std.base64
+import std.compress.gzip
+import std.compress.zlib
+import std.crypto.hash.md5
+import std.diff
+import std.hash.wyhash
+import std.http
+import std.json
+import std.math
+import std.qcheck
+import std.random
+import std.re
+import std.term
+import std.xml
 
 from std.uri import URI, quote, unquote
 
 
 def _test_std_namespace_data_modules():
-    testing.assertEqual(base64.decode(base64.encode(b"hello")), b"hello")
-    testing.assertEqual(json.encode({"answer": 42}), r"""{"answer":42}""")
+    testing.assertEqual(std.base64.decode(std.base64.encode(b"hello")), b"hello")
+    testing.assertEqual(std.compress.gzip.compress(b"hello")[:2], b"\x1f\x8b")
+    testing.assertEqual(std.compress.zlib.compress(b"hello")[:1], b"\x78")
+    testing.assertEqual(std.json.encode({"answer": 42}), r"""{"answer":42}""")
     json_numbers = r"""{"a":1000000000000,"b":-1000000000000,"c":18446744073709551615}"""
-    testing.assertEqual(json.encode(json.decode(json_numbers)), json_numbers)
+    testing.assertEqual(std.json.encode(std.json.decode(json_numbers)), json_numbers)
     json_number_list = r"""[1000000000000,-1000000000000,18446744073709551615]"""
-    testing.assertEqual(json.encode_list(json.decode_list(json_number_list)), json_number_list)
-    json_bigint = json.decode(r"""{"value":-18446744073709551617}""")["value"]
+    testing.assertEqual(std.json.encode_list(std.json.decode_list(json_number_list)), json_number_list)
+    json_bigint = std.json.decode(r"""{"value":-18446744073709551617}""")["value"]
     testing.assertTrue(isinstance(json_bigint, bigint), "std.json bigint decoded with the wrong type")
     if isinstance(json_bigint, bigint):
         testing.assertEqual(json_bigint, bigint("-18446744073709551617"))
-    testing.assertEqual(json.encode({"value": json_bigint}), r"""{"value":-18446744073709551617}""")
-    testing.assertEqual(json.encode({"value": json_bigint}, bigint_as_string=True), r"""{"value":"-18446744073709551617"}""")
-    testing.assertEqual(xml.encode(xml.Node("a", text="hello")), "<a>hello</a>")
-    testing.assertEqual(snappy.decompress(snappy.compress(b"hello hello hello")), b"hello hello hello")
-    testing.assertEqual(md5.hash(b"abc"), b"\x90\x01\x50\x98\x3c\xd2\x4f\xb0\xd6\x96\x3f\x7d\x28\xe1\x7f\x72")
-    testing.assertEqual(wyhash.hash(2, b"abc"), 0x32dd92e4b2915153)
+    testing.assertEqual(std.json.encode({"value": json_bigint}), r"""{"value":-18446744073709551617}""")
+    testing.assertEqual(std.json.encode({"value": json_bigint}, bigint_as_string=True), r"""{"value":"-18446744073709551617"}""")
+    testing.assertEqual(std.xml.encode(std.xml.Node("a", text="hello")), "<a>hello</a>")
+    testing.assertEqual(std.crypto.hash.md5.hash(b"abc"), b"\x90\x01\x50\x98\x3c\xd2\x4f\xb0\xd6\x96\x3f\x7d\x28\xe1\x7f\x72")
+    testing.assertEqual(std.hash.wyhash.hash(2, b"abc"), 0x32dd92e4b2915153)
 
 
 def _test_std_namespace_xml_decode():
-    testing.assertEqual(xml.encode(xml.decode("<a><b>hello</b></a>")), "<a><b>hello</b></a>")
+    testing.assertEqual(std.xml.encode(std.xml.decode("<a><b>hello</b></a>")), "<a><b>hello</b></a>")
     try:
-        xml.decode("")
-    except xml.XmlParseError as e:
+        std.xml.decode("")
+    except std.xml.XmlParseError as e:
         testing.assertEqual(e.error_message, "Document is empty")
     else:
         testing.error("std.xml.decode accepted an empty document")
@@ -49,56 +51,56 @@ def _test_std_namespace_xml_decode():
 
 def _test_std_namespace_json_strings():
     source = r'{"key\u0000tail":"value\u0000tail"}'
-    data = json.decode(source)
+    data = std.json.decode(source)
     item = data[b"key\x00tail".decode()]
     if isinstance(item, str):
         testing.assertEqual(item.encode(), b"value\x00tail")
     else:
         raise AssertionError("std.json decoded a string with the wrong type")
-    testing.assertEqual(json.encode(data), source)
+    testing.assertEqual(std.json.encode(data), source)
     array_source = r'["value\u0000tail"]'
-    items = json.decode_list(array_source)
+    items = std.json.decode_list(array_source)
     item = items[0]
     if isinstance(item, str):
         testing.assertEqual(item.encode(), b"value\x00tail")
     else:
         raise AssertionError("std.json decoded an array string with the wrong type")
-    testing.assertEqual(json.encode_list(items), array_source)
+    testing.assertEqual(std.json.encode_list(items), array_source)
 
 
 def _test_std_namespace_pure_helpers():
-    testing.assertEqual(diff.diff("same", "same"), "")
-    testing.assertEqual(math.sqrt(9.0), 3.0)
+    testing.assertEqual(std.diff.diff("same", "same"), "")
+    testing.assertEqual(std.math.sqrt(9.0), 3.0)
     testing.assertEqual(quote("hello world"), "hello%20world")
     testing.assertEqual(unquote("hello%20world"), "hello world")
     testing.assertEqual(URI("https://example.com/path").host, "example.com")
-    testing.assertEqual(term.red + "x" + term.normal, "\x1b[31mx\x1b[0m")
+    testing.assertEqual(std.term.red + "x" + std.term.normal, "\x1b[31mx\x1b[0m")
 
 
 def _test_std_namespace_parsers_and_random():
-    parser = argparse.Parser()
+    parser = std.argparse.Parser()
     parser.add_option("count", "int", default=1, short="c")
     args = parser.parse(["./app", "-c", "4"])
     testing.assertEqual(args.get_int("count"), 4)
 
-    m = re.match("foo([0-9]+)", "foo123")
+    m = std.re.match("foo([0-9]+)", "foo123")
     testing.assertNotNone(m, "std.re.match returned None")
-    testing.assertNotNone(re.match("a.b", "a" + chr(0) + "b"), "std.re.match stopped at a NUL")
+    testing.assertNotNone(std.re.match("a.b", "a" + chr(0) + "b"), "std.re.match stopped at a NUL")
 
-    n = random.randint(1, 4)
+    n = std.random.randint(1, 4)
     testing.assertTrue(1 <= n and n < 4, "std.random.randint outside expected range")
 
     def prop_true():
         return True
 
-    prop_ok = qcheck.qcheck_0("std qcheck smoke", prop_true)
+    prop_ok = std.qcheck.qcheck_0("std qcheck smoke", prop_true)
     testing.assertEqual(prop_ok, 0)
 
 
 def _test_std_namespace_protocol_module():
-    response = http.build_response(b"1.1", 200, {}, "ok")
+    response = std.http.build_response(b"1.1", 200, {}, b"ok")
     testing.assertEqual(response[:15], b"HTTP/1.1 200 OK")
-    # Same parser as base's http: pipelined responses in one feed all come out
-    msgs = http.MessageParser().feed(b"HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\none" + b"HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\ntwo")
-    testing.assertEqual([http.Response(b"1.1", 200, {"content-length": "3"}, b"one"), http.Response(b"1.1", 200, {"content-length": "3"}, b"two")],
-                        [http.response_from_message(m) for m in msgs])
+    # Pipelined responses in one feed all come out
+    msgs = std.http.MessageParser().feed(b"HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\none" + b"HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\ntwo")
+    testing.assertEqual([std.http.Response(b"1.1", 200, {"content-length": "3"}, b"one"), std.http.Response(b"1.1", 200, {"content-length": "3"}, b"two")],
+                        [std.http.response_from_message(m) for m in msgs])

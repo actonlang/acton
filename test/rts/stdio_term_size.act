@@ -1,0 +1,11 @@
+# The RTS tests in compiler/acton/test.hs run this program with stdout on a
+# pseudo terminal or on a pipe. It prints what env.stdio.term_size() returns
+# on stderr, which is always a pipe.
+actor main(env: Env):
+    proc def __startup__():
+        size = env.stdio.term_size()
+        if size is not None:
+            print("columns", size.columns, "rows", size.rows, err=True)
+        else:
+            print("None", err=True)
+        env.exit(0)

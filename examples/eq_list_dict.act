@@ -1,122 +1,119 @@
 actor main(env):
-   a = [1,2,3]
-   if a == [1,2,3]:
-      print("Equal, correct")
-   else:
-      print("Not equal, wrong")
+    proc def __startup__():
+       a = [1,2,3]
+       if a == [1,2,3]:
+          print("Equal, correct")
+       else:
+          print("Not equal, wrong")
 
-   if a == [1,2]:
-      print("Equal, wrong")
-   else:
-      print("Not equal, correct")
-      
-   if a == [1,5,2]:
-      print("Equal, wrong")
-   else:
-      print("Not equal, correct")
+       if a == [1,2]:
+          print("Equal, wrong")
+       else:
+          print("Not equal, correct")
 
-   if [3.5,7.2] == [3.5, 7.2]:
-      print("Equal, correct")
-   else:
-      print("Not equal, wrong")
+       if a == [1,5,2]:
+          print("Equal, wrong")
+       else:
+          print("Not equal, correct")
 
-   if [a,a] == [[1,2,3],[1,2,3]]:
-         print("Equal, correct")
-   else:
-      print("Not equal, wrong")
-      
-   if [a,a] == [[1,2,3],[1,3]]:
-      print("Equal, wrong")
-   else:
-      print("Not equal, correct")
+       if [3.5,7.2] == [3.5, 7.2]:
+          print("Equal, correct")
+       else:
+          print("Not equal, wrong")
 
-   if ["hello", "world"]==["Hello","word"]:
-      print("Equal, wrong")
-   else:
-      print("Not equal, correct")
+       if [a,a] == [[1,2,3],[1,2,3]]:
+             print("Equal, correct")
+       else:
+          print("Not equal, wrong")
 
-   d1, d2 : dict[str,str]
-   d1 = {}
-   d1["Sweden"] = "Stockholm"
-   d1["Norway"] ="Oslo"
-   d1["Denmark"] = "Copenhagen"
-   
-   d2 = {}
-   d2["Norway"] ="Oslo"
-   d2["Denmark"] = "Copenhagen"
-   d2["Sweden"] = "Stockholm"
+       if [a,a] == [[1,2,3],[1,3]]:
+          print("Equal, wrong")
+       else:
+          print("Not equal, correct")
 
-   if d1==d2:
-      print("Equal, correct")
-   else:
-      print("Not equal, wrong")
+       if ["hello", "world"]==["Hello","word"]:
+          print("Equal, wrong")
+       else:
+          print("Not equal, correct")
 
-   d2["Finland"] = "Helsinki"
+       d1: dict[str,str] = {}
+       d1["Sweden"] = "Stockholm"
+       d1["Norway"] ="Oslo"
+       d1["Denmark"] = "Copenhagen"
 
-   if d1==d2:
-      print("Equal, wrong")
-   else:
-      print("Not equal, correct")
+       d2: dict[str,str] = {}
+       d2["Norway"] ="Oslo"
+       d2["Denmark"] = "Copenhagen"
+       d2["Sweden"] = "Stockholm"
 
-   d3, d4 : dict[bool,dict[str,str]]
-   d3 = {}
-   d3[True] = d1
-   d3[False] = d2
+       if d1==d2:
+          print("Equal, correct")
+       else:
+          print("Not equal, wrong")
 
-   d4 = {}
-   d4[False] = d2
-   d4[True] = d1
+       d2["Finland"] = "Helsinki"
 
-   if d3==d4:
-      print("Equal, correct")
-   else:
-      print("Not equal, wrong")
+       if d1==d2:
+          print("Equal, wrong")
+       else:
+          print("Not equal, correct")
 
-   d2["Estonia"] = "Tallinn"
+       d3: dict[bool,dict[str,str]] = {}
+       d3[True] = d1
+       d3[False] = d2
 
-   if d3==d4:
-      print("Equal, correct")
-   else:
-      print("Not equal, wrong")
+       d4: dict[bool,dict[str,str]] = {}
+       d4[False] = d2
+       d4[True] = d1
 
-   print("now to Ord")
+       if d3==d4:
+          print("Equal, correct")
+       else:
+          print("Not equal, wrong")
 
-   if ([3,4,5] < [3,4,5,8]):
-      print("lt, correct")
-   else:
-      print("Not lt, wrong")
+       d2["Estonia"] = "Tallinn"
 
-   if ([3,4,5] < [3,4,6,8]):
-      print("lt, correct")
-   else:
-      print("Not lt, wrong")
+       if d3==d4:
+          print("Equal, correct")
+       else:
+          print("Not equal, wrong")
 
-   if ([3,4,5,6,7] < [3,4,6,1,2,3,4]):
-      print("lt, correct")
-   else:
-      print("Not lt, wrong")
+       print("now to Ord")
 
-   if ([3,4,5,6,7] <= [3,4,6,1,2,3,4]):
-      print("le, correct")
-   else:
-      print("Not le, wrong")
+       if ([3,4,5] < [3,4,5,8]):
+          print("lt, correct")
+       else:
+          print("Not lt, wrong")
 
-   if ([3,4,6,1,2,3,4] > [3,4,5,6,7]):
-      print("gt, correct")
-   else:
-      print("Not gt, wrong")
+       if ([3,4,5] < [3,4,6,8]):
+          print("lt, correct")
+       else:
+          print("Not lt, wrong")
 
-   if d1 < d2:
-      print("lt, correct")
-   else:
-      print("Not lt, wrong")
+       if ([3,4,5,6,7] < [3,4,6,1,2,3,4]):
+          print("lt, correct")
+       else:
+          print("Not lt, wrong")
 
-   if d3 <= d4:
-      print("le, correct")
-   else:
-      print("Not le, wrong")
-      
+       if ([3,4,5,6,7] <= [3,4,6,1,2,3,4]):
+          print("le, correct")
+       else:
+          print("Not le, wrong")
 
-   env.exit(0)
-    
-   
+       if ([3,4,6,1,2,3,4] > [3,4,5,6,7]):
+          print("gt, correct")
+       else:
+          print("Not gt, wrong")
+
+       if d1 < d2:
+          print("lt, correct")
+       else:
+          print("Not lt, wrong")
+
+       if d3 <= d4:
+          print("le, correct")
+       else:
+          print("Not le, wrong")
+
+
+       env.exit(0)

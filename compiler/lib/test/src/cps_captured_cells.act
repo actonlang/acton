@@ -1,4 +1,4 @@
-import json
+import std.json
 
 proc def capture() -> None:
     value: ?str = None
@@ -8,7 +8,7 @@ proc def capture() -> None:
         print(value)
         print(value is None)
         print(value is not None)
-        print(json.encode({"value": value}))
+        print(std.json.encode({"value": value}))
 
     try:
         value = "world"

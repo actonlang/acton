@@ -1,25 +1,26 @@
 import net
-import std.syslog as syslog
+import std.syslog
 
 
 actor main(env):
-    def finish(client: syslog.Client):
-        client.close()
-        env.exit(0)
+    proc def __startup__():
+        def finish(client: std.syslog.Client):
+            client.close()
+            env.exit(0)
 
-    def connected(client: syslog.Client):
-        client.log("Hello from Acton", severity=syslog.INFO,
-                   facility=syslog.LOCAL0, hostname="localhost",
-                   app_name="syslog-client",
-                   structured_data={"event@32473": [("instance", "one")]})
-        # Allow the asynchronous send to run before exiting. UDP has no
-        # delivery acknowledgement; this delay does not guarantee delivery.
-        after 0.2: finish(client)
+        def connected(client: std.syslog.Client):
+            client.log("Hello from Acton", severity=std.syslog.INFO,
+                       facility=std.syslog.LOCAL0, hostname="localhost",
+                       app_name="syslog-client",
+                       structured_data={"event@32473": [("instance", "one")]})
+            # Allow the asynchronous send to run before exiting. UDP has no
+            # delivery acknowledgement; this delay does not guarantee delivery.
+            after 0.2: finish(client)
 
-    def failed(client: syslog.Client, error: str):
-        print("Syslog client error:", error)
-        client.close()
-        env.exit(1)
+        def failed(client: std.syslog.Client, error: str):
+            print("Syslog client error:", error)
+            client.close()
+            env.exit(1)
 
-    cap = net.UDPConnectCap(net.UDPCap(net.NetCap(env.cap)))
-    syslog.Client(cap, "127.0.0.1", 5514, connected, failed)
+        cap = net.UDPConnectCap(net.UDPCap(net.NetCap(env.cap)))
+        std.syslog.Client(cap, "127.0.0.1", 5514, connected, failed)

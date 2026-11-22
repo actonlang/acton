@@ -164,6 +164,19 @@
   [#3325]
 
 ### Standard Library
+- Breaking: the library modules that were in both base and std are now only
+  in std. Import them with the `std.` prefix, for example `import std.json`
+  and `std.json.encode(...)`: aon, argparse, base64, buildy, compress.gzip,
+  compress.zlib, crypto.hash.md5, diff, hash.wyhash, http, json, math, qcheck,
+  random, re, term, uri and xml. Base keeps `__builtin__`, `testing`,
+  `logging`, `time`, `file`, `fs`, `net` and `matrix`.
+- Breaking: `testing` keeps the test types and asserts, and the test runner
+  moved to `std.testing.runner`, which the generated `test_main` of a module
+  that imports `testing` calls. `NotEqualError` takes `print_diff` instead of
+  `diff_str`, and the runner renders the diff when it reports the failure, so
+  `str()` of a `NotEqualError` no longer contains the diff.
+- Breaking: remove the `snappy` module. Use the
+  [acton-snappy](https://github.com/actonlang/acton-snappy) package instead.
 - Add `std.syslog`, a new module for sending and receiving syslog messages
   over UDP, TCP, and TLS. Use `Client` and `Server` for UDP, or `StreamClient`
   and `StreamServer` for TCP and TLS. The module includes an RFC 5424 codec
@@ -183,6 +196,19 @@
   outermost named handler; set `app_name` to override it.
   The guide includes runnable UDP and TCP examples and TLS configuration.
   [#3323] [#3344] [#3375] [#3384]
+- Add `env.random`, the capability to draw secure random numbers, and the
+  builtin `Random` protocol it implements. `rand_u64()` and `rand_bytes(n)`
+  come from a per-thread ChaCha8 generator seeded from the operating system,
+  and run in the calling actor without a message to `Env`. The protocol adds
+  `rand_int()`, `rand_float()`, `below(n)` and `between(lo, hi)`, with
+  half-open ranges and no modulo bias. Take `EnvRandom` where the numbers must
+  be secure, and any `Random` where they need not be.
+- Add the seeded `Xoshiro256` generator to `std.random`, and the functions
+  `shuffle(r, items)` and `shuffled(r, items)`, which take any `Random` and
+  any sequence with a length and `int` indexes, such as `list`, `str` or
+  `bytes`. `shuffle` reorders a mutable sequence in place; `shuffled` returns
+  a reordered copy of the same type. A seed gives the same sequence on every
+  platform and from one release to the next.
 - Use private CAs and client certificates with `net.TLSConnection` and
   `net.TLSListener` through `ca_pem`, `cert_pem`, and `key_pem`.
   Listeners request client certificates with `client_auth=True`. Set
@@ -326,6 +352,10 @@
   Hashing user-defined values, including dictionary and set operations, now
   keeps the temporary hasher on the stack instead of allocating it on the GC
   heap. [#3244] [#3290]
+- Add `std.term.display_width()`, the number of columns a string takes on a
+  terminal. CJK ideographs and most emoji take two columns, and combining
+  marks and control characters take none, so a program can align text and
+  place the cursor after it.
 
 ### Runtime
 - Reduce long garbage-collection pauses on large heaps with opt-in
@@ -484,6 +514,16 @@
 - Send garbage-collector errors to stderr on Windows and terminate
   immediately with exit code 3 on fatal collector errors, avoiding dialogs
   that leave unattended programs waiting. [#3390]
+- Read the number of file descriptors the process has open, and the most it
+  may have open, with `env.rts.fd_stats()` instead of listing
+  `/proc/self/fd` or `/dev/fd` or parsing `/proc/self/limits`. On macOS the
+  limit includes the `kern.maxfilesperproc` cap that the kernel enforces. On
+  Windows the count is the number of handles of the process, of every kind,
+  and the limit is `None`.
+- Read the size of the terminal on stdout, in columns and rows, with
+  `env.stdio.term_size()`. It is `None` when stdout is not a terminal or the
+  terminal reports no size. On Windows it is the size of the visible window
+  of the console.
 
 ### Packages & Distribution
 - Install stable Homebrew releases from prebuilt tarballs for macOS and Linux
@@ -508,6 +548,13 @@
   capture timing, purity requirements, and callback behavior. [#3242]
 
 ### Testing & CI
+- Add `t.random`, a source of random numbers on `testing.SyncT`, `AsyncT` and
+  `EnvT` that implements `Random`. Each run of a test draws from a generator
+  with a new seed. When a run that drew from it fails, `acton test` runs the
+  test three more times with that seed, shows the seed and how many of those
+  runs failed the same way, and prints the `acton test --seed` command that
+  runs the test with the seed again. Tests that draw from `t.random` run every
+  time instead of reusing a cached result.
 - Check runtime and C-extension pointer stores with `acton test --gc-check`.
   Tests run in generational mode with frequent collections and short marking
   steps, bypassing cached test results and failing when the checker detects
@@ -550,6 +597,8 @@
   anchored to the original test start. [#3245]
 
 ### Compatibility Notes
+- Replace `env.stdio.is_tty()` with `env.stdio.stdout_is_tty()`.
+  `stdin_is_tty()` and `stderr_is_tty()` check the other two streams. [#3421]
 - Update C extensions for changed builtin helper names and container layouts.
   Dictionaries and sets now retain their `Hashable` witness, so
   `B_dictD_setitem()` and `B_dictD_get()` no longer take it as an argument.
@@ -6107,6 +6156,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#3388]: https://github.com/actonlang/acton/pull/3388
 [#3390]: https://github.com/actonlang/acton/pull/3390
 [#3391]: https://github.com/actonlang/acton/pull/3391
+[#3421]: https://github.com/actonlang/acton/pull/3421
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0

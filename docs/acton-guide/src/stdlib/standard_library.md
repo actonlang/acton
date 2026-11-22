@@ -9,6 +9,7 @@ scope.</p>
 
 Modules:
 
-- [math](math.md)
-- [re](re.md)
+- [std.math](math.md)
+- [std.random](random.md)
+- [std.re](re.md)
 - [std.syslog](syslog.md)

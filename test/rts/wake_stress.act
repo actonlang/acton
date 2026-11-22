@@ -47,7 +47,8 @@ actor Watchdog(env: Env):
         last = seen
         after now 0.5: check()
 
-    after now 0.5: check()
+    proc def __startup__():
+        after now 0.5: check()
 
 
 actor Driver(env: Env, wd: Watchdog):
@@ -91,10 +92,12 @@ actor Driver(env: Env, wd: Watchdog):
             else:
                 next_step()
 
-    for i in range(LEAVES):
-        leaves.append(Leaf())
-    next_step()
+    proc def __startup__():
+        for i in range(LEAVES):
+            leaves.append(Leaf())
+        next_step()
 
 
 actor main(env):
-    Driver(env, Watchdog(env))
+    proc def __startup__():
+        Driver(env, Watchdog(env))

@@ -10,5 +10,6 @@ class TestClass(object):
         self.z = self.x + self.y  # OK: both x and y are initialized
 
 actor main(env):
-    t = TestClass()
-    env.exit(0)
+    proc def __startup__():
+        t = TestClass()
+        env.exit(0)

@@ -14,6 +14,7 @@ def risky_operation() -> int:
     return 42
 
 actor main(env):
-    t = TestClass()
-    print("x =", t.x, "y =", t.y)
-    env.exit(0)
+    proc def __startup__():
+        t = TestClass()
+        print("x =", t.x, "y =", t.y)
+        env.exit(0)

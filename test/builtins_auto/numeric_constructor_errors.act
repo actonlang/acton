@@ -46,33 +46,34 @@ def check_base_requires_str(a: atom):
     expect_value_error(lambda: bigint(a, 16))
 
 actor main(env):
-    try:
-        check_unsupported(OtherAtom())
-        check_unsupported(b"1")
-        check_unsupported(complex(1))
-        # The digits must run to the end of the str, a NUL does not end them
-        check_invalid_int_str("12" + chr(0) + "34")
-        check_invalid_int_str("12" + chr(0))
-        check_invalid_int_str("")
-        check_invalid_float_str("")
-        check_invalid_float_str("abc")
-        check_invalid_float_str("1.5" + chr(0) + "5")
-        check_base_requires_str(5.0)
-        check_base_requires_str(5)
-        expect_value_error(lambda: int(5.0, 16))
-        expect_value_error(lambda: u8(5, 16))
-        # A negative str padded to a full parse chunk (18 digits) must keep
-        # its sign, so unsigned types reject it
-        padded = "-" + "0" * 17 + "5"
-        expect_value_error(lambda: u64(padded))
-        expect_value_error(lambda: u32(padded))
-        expect_value_error(lambda: u16(padded))
-        expect_value_error(lambda: u8(padded))
-        assert int("123") == 123
-        assert int("10", 2) == 2
-        assert bigint("123") == bigint(123)
-        assert float("1.5") == 1.5
-        env.exit(0)
-    except Exception as e:
-        print(e)
-        env.exit(1)
+    proc def __startup__():
+        try:
+            check_unsupported(OtherAtom())
+            check_unsupported(b"1")
+            check_unsupported(complex(1))
+            # The digits must run to the end of the str, a NUL does not end them
+            check_invalid_int_str("12" + chr(0) + "34")
+            check_invalid_int_str("12" + chr(0))
+            check_invalid_int_str("")
+            check_invalid_float_str("")
+            check_invalid_float_str("abc")
+            check_invalid_float_str("1.5" + chr(0) + "5")
+            check_base_requires_str(5.0)
+            check_base_requires_str(5)
+            expect_value_error(lambda: int(5.0, 16))
+            expect_value_error(lambda: u8(5, 16))
+            # A negative str padded to a full parse chunk (18 digits) must keep
+            # its sign, so unsigned types reject it
+            padded = "-" + "0" * 17 + "5"
+            expect_value_error(lambda: u64(padded))
+            expect_value_error(lambda: u32(padded))
+            expect_value_error(lambda: u16(padded))
+            expect_value_error(lambda: u8(padded))
+            assert int("123") == 123
+            assert int("10", 2) == 2
+            assert bigint("123") == bigint(123)
+            assert float("1.5") == 1.5
+            env.exit(0)
+        except Exception as e:
+            print(e)
+            env.exit(1)

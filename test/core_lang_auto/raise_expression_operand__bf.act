@@ -1,0 +1,4 @@
+pure def invalid() -> int:
+    return raise 42
+
+actor main(env): pass

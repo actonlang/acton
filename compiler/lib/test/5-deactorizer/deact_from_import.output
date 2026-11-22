@@ -1,10 +1,10 @@
 from deact import Apa
-W_Manager_124: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+W_Manager_122: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
 
 # recursive group:
 class Manager ($Actor, __builtin__.value):
-    proc def __init__ (self : Self) -> None:
-        pass
+    com def __init__ (self : Self) -> None:
+        return None
     proc def create_decoderG_local (self : Self) -> __builtin__.StringDecoder:
         decoder: __builtin__.StringDecoder = __builtin__.StringDecoderG_newact(self.decode_callback, "\"utf-8\"", None)
         return decoder
@@ -22,24 +22,45 @@ class Manager ($Actor, __builtin__.value):
         return $ASYNCf@[None](self, proc lambda: self.decode_callbackG_local(s))
 class main ($Actor, __builtin__.value):
     @property
-    mgr : Manager
-    @property
-    decoder : __builtin__.StringDecoder
-    @property
-    apa : deact.Apa
-    proc def __init__ (self : Self, env : __builtin__.Env) -> None:
-        self.mgr = ManagerG_newact()
-        self.decoder = $AWAITf@[__builtin__.StringDecoder]((async self.mgr.create_decoder)())
-        self.apa = $AWAITf@[deact.Apa]((async self.mgr.create_apa)())
-        (async env.exit)(W_Manager_124.__fromatom__(0))
-proc def ManagerG_newact () -> Manager:
-    G_act: Manager = $NEWACTOR@[Manager]()
-    $InstallFinalizer@[Manager](G_act)
-    $AWAITf@[None]($ASYNCf@[None](G_act, proc lambda: G_act.__init__()))
+    env : __builtin__.Env
+    com def __init__ (self : Self, env : __builtin__.Env) -> None:
+        self.env = env
+        $MarkStartup((async self.__startup__)())
+        return None
+    proc def __startup__G_local (self : Self) -> None:
+        mgr: Manager = ManagerG_newact()
+        decoder: __builtin__.StringDecoder = $AWAITf@[__builtin__.StringDecoder]((async mgr.create_decoder)())
+        apa: deact.Apa = $AWAITf@[deact.Apa]((async mgr.create_apa)())
+        (async self.env.exit)(W_Manager_122.__fromatom__(0))
+        return None
+    action def __startup__ (self : Self) -> None:
+        return $ASYNCf@[None](self, proc lambda: self.__startup__G_local())
+com def ManagerG_newact () -> Manager:
+    N_construction_parent: $Actor = $ConstructionBegin()
+    if $PUSH():
+        G_act: Manager = $NEWACTOR@[Manager]()
+        $ConstructionEnter(G_act)
+        $InstallFinalizer@[Manager](G_act)
+        G_act.__init__()
+        $DROP()
+    else:
+        N_construction_exception: __builtin__.BaseException = $POP()
+        $ConstructionAbort(N_construction_parent, N_construction_exception)
+        $RAISE@[None](N_construction_exception)
+    $ConstructionEnd(N_construction_parent)
     return G_act
-proc def mainG_newact (env : __builtin__.Env) -> main:
-    G_act: main = $NEWACTOR@[main]()
-    $InstallFinalizer@[main](G_act)
-    $AWAITf@[None]($ASYNCf@[None](G_act, proc lambda: G_act.__init__(env)))
+com def mainG_newact (env : __builtin__.Env) -> main:
+    N_construction_parent: $Actor = $ConstructionBegin()
+    if $PUSH():
+        G_act: main = $NEWACTOR@[main]()
+        $ConstructionEnter(G_act)
+        $InstallFinalizer@[main](G_act)
+        G_act.__init__(env)
+        $DROP()
+    else:
+        N_construction_exception: __builtin__.BaseException = $POP()
+        $ConstructionAbort(N_construction_parent, N_construction_exception)
+        $RAISE@[None](N_construction_exception)
+    $ConstructionEnd(N_construction_parent)
     return G_act
 # (recursive group)

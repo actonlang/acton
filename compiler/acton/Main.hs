@@ -429,7 +429,7 @@ createProject name = do
       ++ "```sh\nacton build\n./out/bin/" ++ name ++ "\n```\n"
       )
     createDirectoryIfMissing True (srcDir paths)
-    writeFile (joinPath [(srcDir paths), name ++ ".act"]) "#\n#\n\nactor main(env):\n    print(\"Hello World!\")\n    env.exit(0)\n"
+    writeFile (joinPath [(srcDir paths), name ++ ".act"]) "#\n#\n\nactor main(env):\n    proc def __startup__():\n        print(\"Hello World!\")\n        env.exit(0)\n\n    __startup__()\n"
     putStrLn("Created project " ++ name)
     putStrLn("Next: cd " ++ name ++ " && acton build && ./out/bin/" ++ name)
     gitAvailable <- isGitAvailable
@@ -1551,7 +1551,7 @@ overlayChangedPaths sp mPaths = do
       case res of
         Left _ -> return Nothing
         Right snap ->
-          return (Just (normalise path, snap { Source.ssIsOverlay = True }))
+          return (Just (normalise path, snap))
 
 -- | How the CLI reports one build: its events, its log lines and the final
 -- step, on the progress UI.
@@ -2021,8 +2021,9 @@ runCliPostCompile reporter gopts plan env = do
                           | mn <- rootModules, mn `elem` requestedModules ]
         selectedTasksByProj = M.fromListWith (++) [ (tkProj (gtKey t), [t]) | t <- neededTasks ]
         depModuleOptsByProj = depModuleOptionsByProj selectedTasksByProj projMap
-        selectedModuleSources = selectedCSourceEntriesForProj rootProj (M.findWithDefault [] rootProj selectedTasksByProj)
-        rootBuildLibraries = explicitBuildLibraries selectedModuleSources rootSpec
+        rootTasks = M.findWithDefault [] rootProj selectedTasksByProj
+        selectedModuleSources = selectedCSourceEntriesForProj rootProj rootTasks
+        rootBuildLibraries = explicitBuildLibraries env rootProj rootTasks rootSpec
         rootModuleSources = excludeLibrarySources rootBuildLibraries selectedModuleSources
         rootDepModuleOpts = M.findWithDefault M.empty rootProj depModuleOptsByProj
         rootDepPathOverrides = projectDepPathOverrides projMap rootProj
@@ -2076,21 +2077,38 @@ generateProjectDocIndex sp gopts opts paths srcFiles = do
 
 -- | Relative C source paths for selected tasks in one project.
 selectedCSourceEntriesForProj :: FilePath -> [GlobalTask] -> [FilePath]
-selectedCSourceEntriesForProj proj tasks =
-    nub
-      [ collapseDots (makeRelativeOrAbsolute proj (generatedPath (gtPaths t) (tkMod (gtKey t)) cFile))
-      | t <- tasks
-      ]
+selectedCSourceEntriesForProj proj tasks = nub (map (taskCSourceEntry proj) tasks)
 
-explicitBuildLibraries :: [FilePath] -> BuildSpec.BuildSpec -> [BuildLibrary]
-explicitBuildLibraries selectedSources spec =
-    [ BuildLibrary libName (BuildSpec.libLinkage lib) sources
+-- | The C source path of a task relative to the root of its project 'proj'.
+taskCSourceEntry :: FilePath -> GlobalTask -> FilePath
+taskCSourceEntry proj t = collapseDots (makeRelativeOrAbsolute proj (generatedPath (gtPaths t) (tkMod (gtKey t)) cFile))
+
+-- | The libraries of 'spec' that have a module among the selected tasks of
+-- project 'proj'. A dynamic library also gets the init functions of the
+-- modules that its modules import from outside the library.
+explicitBuildLibraries :: Acton.Env.Env0 -> FilePath -> [GlobalTask] -> BuildSpec.BuildSpec -> [BuildLibrary]
+explicitBuildLibraries env proj tasks spec =
+    [ BuildLibrary libName linkage sources importInits
     | (libName, lib) <- M.toList (BuildSpec.libraries spec)
-    , let sources = map moduleCSource (BuildSpec.libModules lib)
-    , any (`Data.Set.member` selectedSet) sources
+    , let linkage = BuildSpec.libLinkage lib
+          sources = map moduleCSource (BuildSpec.libModules lib)
+          members = [ t | t <- tasks, taskCSourceEntry proj t `elem` sources ]
+          inLibrary mn = mn `elem` map (tkMod . gtKey) members
+          importInits
+            | linkage == "dynamic" = nub [ Acton.CodeGen.genInitName env mn
+                                         | t <- members, mn <- map (providerName t) (importsOf (gtTask t))
+                                         , mn /= Acton.Builtin.mBuiltin, not (inLibrary mn)
+                                         ]
+            | otherwise            = []
+    , not (null members)
     ]
   where
-    selectedSet = Data.Set.fromList selectedSources
+    -- A parsed module's import is a spelling that its provider among the
+    -- tasks resolves to a module name. The imports of a cached interface, and
+    -- imports of modules outside the build such as those of std, already are
+    -- module names. A cached interface also lists __builtin__, which every
+    -- executable contains.
+    providerName t mn = maybe mn tkMod (M.lookup mn (gtImportProviders t))
     moduleCSource modName =
       collapseDots ("out/types/" ++ BuildSpec.specName spec ++ "/" ++ map dotToSlash modName ++ ".c")
     dotToSlash c
@@ -2173,11 +2191,15 @@ removeUndeclaredRoots paths modules bins = do
 
 data BinTask = BinTask { rootActor :: A.QName, isTest :: Bool } deriving (Show)
 
-data BuildLibrary = BuildLibrary { buildLibName :: String, buildLibLinkage :: String, buildLibSources :: [FilePath] } deriving (Show)
+-- | An explicit library of a project. 'buildLibImportInits' holds the C names
+-- of the init functions of the modules that a dynamic library imports from
+-- outside itself, and is empty for a static library.
+data BuildLibrary = BuildLibrary { buildLibName :: String, buildLibLinkage :: String, buildLibSources :: [FilePath], buildLibImportInits :: [String] } deriving (Show)
 
 encodeBuildLibraries :: [BuildLibrary] -> String
 encodeBuildLibraries libs =
     intercalate "|" [ buildLibName lib ++ ":" ++ buildLibLinkage lib ++ ":" ++ intercalate "," (buildLibSources lib)
+                      ++ ":" ++ intercalate "," (buildLibImportInits lib)
                     | lib <- libs
                     ]
 
@@ -2578,10 +2600,16 @@ genBuildZig template sys spec zigDeps depModuleOpts =
                    ]
                    ++ moduleOpts
                    ++ [ "    });" ]
+    -- A dynamic library resolves the dependency's symbols in the
+    -- executable, so it takes only the dependency's headers.
     pkgLibLink (name, _) =
       "    libActonProject.root_module.linkLibrary(actdep_" ++ name ++ ".artifact(\"ActonProject\"));\n"
-      ++ "    for (explicit_static_libraries.items) |libActonExplicit| {\n"
-      ++ "        libActonExplicit.root_module.linkLibrary(actdep_" ++ name ++ ".artifact(\"ActonProject\"));\n"
+      ++ "    for (explicit_libraries.items) |libActonExplicit| {\n"
+      ++ "        if (libActonExplicit.linkage == .dynamic) {\n"
+      ++ "            libActonExplicit.root_module.include_dirs.append(b.allocator, .{ .other_step = actdep_" ++ name ++ ".artifact(\"ActonProject\") }) catch @panic(\"OOM\");\n"
+      ++ "        } else {\n"
+      ++ "            libActonExplicit.root_module.linkLibrary(actdep_" ++ name ++ ".artifact(\"ActonProject\"));\n"
+      ++ "        }\n"
       ++ "    }\n"
     pkgExeLink (name, _) = "            executable.root_module.linkLibrary(actdep_" ++ name ++ ".artifact(\"ActonProject\"));\n"
 

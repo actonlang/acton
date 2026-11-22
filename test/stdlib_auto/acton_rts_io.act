@@ -1,7 +1,8 @@
 actor main(env):
-    rts_monitor = env.rts
-    for k,v in rts_monitor.io_handles().items():
-        print("Worker", k)
-        for hid, handle in v.items():
-            print("  %d:" % int(hid), handle)
-    env.exit(0)
+    proc def __startup__():
+        rts_monitor = env.rts
+        for k,v in rts_monitor.io_handles().items():
+            print("Worker", k)
+            for hid, handle in v.items():
+                print("  %d:" % int(hid), handle)
+        env.exit(0)

@@ -1,9 +1,9 @@
-ERROR: [error Syntax error]: Import statements must appear at the beginning of a module, preceded only by a possible docstring
-     ╭──▶ test.act@2:1-2:7
+ERROR: [error Syntax error]: Only declarations and assignments are allowed at the module top level
+     ╭──▶ test.act@1:1-1:1
      │
-   2 │ import math
-     • ┬───── 
-     • ╰╸ Import statements must appear at the beginning of a module, preceded only by a possible docstring
+   1 │ print("hello")
+     •  
+     • ╰╸ Only declarations and assignments are allowed at the module top level
      •
-     │ Hint: Move all imports before the module's top-level definitions
+     │ Hint: Assign the value to a name or move runtime work into a function or an actor startup method
 ─────╯

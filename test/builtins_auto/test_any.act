@@ -21,11 +21,12 @@ def test_any3():
     return
 
 actor main(env):
-    try:
-        test_any1()
-        test_any2()
-        test_any3()
-        env.exit(0)
-    except Exception as e:
-        print(e)
-        env.exit(1)
+    proc def __startup__():
+        try:
+            test_any1()
+            test_any2()
+            test_any3()
+            env.exit(0)
+        except Exception as e:
+            print(e)
+            env.exit(1)

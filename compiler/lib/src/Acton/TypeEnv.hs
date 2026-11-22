@@ -117,11 +117,11 @@ tyinfos0                        = IntMap.fromDistinctAscList pairs
                                     (wOpt,      [wOpt],                 [wOpt,tNone]),      -- Watch out for tNone here!
                                     (tNone,     [wOpt,tNone],           [tNone]),
                                     (wFun,      [wOpt, wFun],           [wFun]),
-                                    (wTuple,    [wOpt, wTuple],         [wTuple]),
-                                    (fxProc,    [fxProc],               [fxProc,fxMut,fxPure,fxAction]),
-                                    (fxMut,     [fxProc,fxMut],         [fxMut,fxPure]),
-                                    (fxPure,    [fxProc,fxMut,fxPure],  [fxPure]),
-                                    (fxAction,  [fxProc,fxAction],      [fxAction])
+                                    (wTuple,    [wOpt, wTuple],         [wTuple])
+                                  ] ++
+                                  [ (tTFX fx, [tTFX g | g <- effectsInProgramOrder, subeffect fx g],
+                                              [tTFX g | g <- effectsInProgramOrder, subeffect g fx])
+                                  | fx <- effectsInProgramOrder
                                   ]
         wFun                    = tFun tWild tWild tWild tWild
         wTuple                  = tTuple tWild tWild
@@ -878,7 +878,6 @@ instance USubst Stmt where
     usubstWith s (Assert l e mbe)         = Assert l (usubstWith s e) (usubstWith s mbe)
     usubstWith s (Delete l t)             = Delete l (usubstWith s t)
     usubstWith s (Return l mbe)           = Return l (usubstWith s mbe)
-    usubstWith s (Raise l e)              = Raise l (usubstWith s e)
     usubstWith s (If l bs els)            = If l (usubstWith s bs) (usubstWith s els)
     usubstWith s (While l e b els)        = While l (usubstWith s e) (usubstWith s b) (usubstWith s els)
     usubstWith s (For l p e b els)        = For l (usubstWith s p) (usubstWith s e) (usubstWith s b) (usubstWith s els)
@@ -891,6 +890,7 @@ instance USubst Stmt where
     usubstWith s stmt                     = stmt
 
 instance USubst Expr where
+    usubstWith s (Raise l e t)       = Raise l (usubstWith s e) (usubstWith s t)
     usubstWith s (Call l e p k)       = Call l (usubstWith s e) (usubstWith s p) (usubstWith s k)
     usubstWith s (TApp l e ts)        = TApp l (usubstWith s e) (usubstWith s ts)
     usubstWith s (Let l ss e)         = Let l (usubstWith s ss) (usubstWith s e)

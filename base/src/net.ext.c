@@ -108,6 +108,13 @@ static B_NoneType net_lookup_address(B_str name,
     hints.ai_family = family;
     hints.ai_socktype = socktype;
     hints.ai_protocol = protocol;
+#ifdef __APPLE__
+    // Apple's getaddrinfo reads ai_flags 0 as AI_DEFAULT, whose
+    // AI_V4MAPPED_CFG answers an AAAA lookup of an IPv4 address, or of a
+    // name with only IPv4 addresses, with IPv4-mapped addresses
+    // (::ffff:127.0.0.1). Linux finds no address. Keep the rest.
+    hints.ai_flags = AI_DEFAULT & ~AI_V4MAPPED_CFG;
+#endif
 
     struct dns_cb_data *cb_data = (struct dns_cb_data *)GC_malloc_uncollectable(sizeof(struct dns_cb_data));
     if (cb_data == NULL) {
@@ -297,6 +304,14 @@ static int make_sockaddr(B_str address, int64_t port, struct sockaddr_storage *d
     return r;
 }
 
+// Turns an IPv4 address into an IPv4-mapped IPv6 address, ::ffff:192.0.2.1
+static void map_ipv4_to_ipv6(struct sockaddr_storage *addr) {
+    struct sockaddr_in addr4 = *(struct sockaddr_in *)addr;
+    struct sockaddr_in6 *addr6 = (struct sockaddr_in6 *)addr;
+    uv_ip6_addr("::ffff:0.0.0.0", ntohs(addr4.sin_port), addr6);
+    memcpy(&addr6->sin6_addr.s6_addr[12], &addr4.sin_addr, 4);
+}
+
 static int make_udp_bind_addr(int family, struct sockaddr_storage *dest) {
     if (family == AF_INET) {
         struct sockaddr_in addr4;
@@ -448,6 +463,20 @@ static void udp_close_initialized_handle(uv_udp_t *udp) {
     }
 }
 
+// Local address and port of a UDP socket, "" and 0 if they cannot be read
+static void udp_local_names(const uv_udp_t *udp, char *addr, size_t addr_len, int *port) {
+    addr[0] = '\0';
+    *port = 0;
+    struct sockaddr_storage name;
+    int namelen = sizeof(name);
+    if (uv_udp_getsockname(udp, (struct sockaddr *)&name, &namelen) == 0) {
+        if (sockaddr_to_addr_port((struct sockaddr *)&name, addr, addr_len, port) != 0) {
+            addr[0] = '\0';
+            *port = 0;
+        }
+    }
+}
+
 static int udp_connection_start(netQ_UDPConnection self, B_str ip_address, int family) {
     uv_udp_t *udp = (uv_udp_t *)acton_malloc_rescanned(sizeof(uv_udp_t));
     int r = uv_udp_init(get_uv_loop(), udp);
@@ -493,6 +522,11 @@ static int udp_connection_start(netQ_UDPConnection self, B_str ip_address, int f
     self->_sock = (int64_t)(intptr_t)udp;
     ACTON_WBAR(self, &self->_sock, udp);
     self->_ip_version = family == AF_INET ? 4LL : 6LL;
+    char local_address[NET_ADDRSTRLEN];
+    int local_port;
+    udp_local_names(udp, local_address, sizeof(local_address), &local_port);
+    ACTON_STORE(self, self->_local_address, actStrFromCStringCopy(local_address));
+    self->_local_port = local_port;
     ACTON_STORE(self, self->_remote_address, ip_address);
     self->$class->_on_udp_ready(self);
     return 0;
@@ -680,6 +714,11 @@ $R netQ_UDPListenerD__initG_local (netQ_UDPListener self, $Cont c$cont) {
 
     self->_sock = (int64_t)(intptr_t)udp;
     ACTON_WBAR(self, &self->_sock, udp);
+    char local_address[NET_ADDRSTRLEN];
+    int local_port;
+    udp_local_names(udp, local_address, sizeof(local_address), &local_port);
+    ACTON_STORE(self, self->_local_address, actStrFromCStringCopy(local_address));
+    self->_local_port = local_port;
     $action2 f = ($action2)self->on_listen;
     f->$class->__asyn__(f, self, B_None);
     return $R_CONT(c$cont, B_None);
@@ -814,6 +853,12 @@ $R netQ_UDPListenerD_sendG_local (netQ_UDPListener self, $Cont c$cont, B_bytes d
 
     struct sockaddr_storage dest;
     if (make_sockaddr(address, port, &dest) == 0) {
+        // The socket is IPv6 when its bind address is (has a colon). Linux
+        // takes an IPv4 destination on it as is, macOS refuses that
+        // (EINVAL); both take it as an IPv4-mapped address.
+        if (dest.ss_family == AF_INET && strchr((const char *)fromB_str(self->address), ':') != NULL) {
+            map_ipv4_to_ipv6(&dest);
+        }
         udp_listener_send_to(self, udp, data, (const struct sockaddr *)&dest, dest_name);
     } else if (strchr(addr, ':') != NULL || strchr(addr, '%') != NULL) {
         // A malformed IPv6 address or zone is no host name
@@ -1297,6 +1342,11 @@ $R netQ_TCPListenerD__initG_local (netQ_TCPListener self, $Cont c$cont) {
 
     self->_stream = (int64_t)(intptr_t)server;
     ACTON_WBAR(self, &self->_stream, server);
+    char local_address[NET_ADDRSTRLEN];
+    int local_port;
+    tcp_listener_names(self->_stream, local_address, sizeof(local_address), &local_port);
+    ACTON_STORE(self, self->_local_address, actStrFromCStringCopy(local_address));
+    self->_local_port = local_port;
     $action2 f = ($action2)self->on_listen;
     f->$class->__asyn__(f, self, B_None);
     return $R_CONT(c$cont, B_None);
@@ -2569,6 +2619,11 @@ $R netQ_TLSListenerD__initG_local (netQ_TLSListener self, $Cont c$cont) {
 
     self->_tls_owner = (int64_t)(intptr_t)owner;
     self->_stream = (int64_t)(intptr_t)server;
+    char local_address[NET_ADDRSTRLEN];
+    int local_port;
+    tcp_listener_names(self->_stream, local_address, sizeof(local_address), &local_port);
+    ACTON_STORE(self, self->_local_address, actStrFromCStringCopy(local_address));
+    self->_local_port = local_port;
     $action2 f = ($action2)self->on_listen;
     f->$class->__asyn__(f, self, B_None);
     return $R_CONT(c$cont, B_None);

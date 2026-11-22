@@ -1,0 +1,10 @@
+class Failure[T](Exception):
+    def __init__(self, value: T):
+        self.error_message = "failure"
+        self.value = value
+
+# This declaration is invalid even though nobody instantiates the actor.
+actor Invalid():
+    var started = raise Failure(self)
+
+actor main(env): pass

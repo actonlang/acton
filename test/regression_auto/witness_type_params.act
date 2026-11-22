@@ -14,10 +14,11 @@ def same[T](a: Bag[T], b: Bag[T]) -> bool:
     return a == b
 
 actor main(env):
-    i: Bag[int] = Bag(1)
-    s: Bag[str] = Bag(1)
-    if same(i, Bag(1)) and same(s, Bag(1)) and not same(i, Bag(2)):
-        env.exit(0)
-    else:
-        print("A witness built from a type parameter compared bags wrongly")
-        env.exit(1)
+    proc def __startup__():
+        i: Bag[int] = Bag(1)
+        s: Bag[str] = Bag(1)
+        if same(i, Bag(1)) and same(s, Bag(1)) and not same(i, Bag(2)):
+            env.exit(0)
+        else:
+            print("A witness built from a type parameter compared bags wrongly")
+            env.exit(1)

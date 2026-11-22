@@ -20,32 +20,8 @@ actor Worker(wid: int, report: action(int, int) -> None):
         report(wid, total)
 
 actor main(env):
-    # The test compares these lines with the settings it built.
     info = env.rts.gc_info()
-    print("mode=" + info.mode)
-    print("backend=" + info.backend)
     pause = info.pause_target_ms
-    if pause is not None:
-        print("pause_target_us=" + str(int(pause * 1000.0)))
-    else:
-        print("pause_target_us=None")
-    print("block_size=" + str(info.block_size))
-    print("end_padding=" + str(info.end_padding))
-    print("small_object_size=" + str(small_object_size()))
-    print("thread_local_size_limit=" + str(info.thread_local_size_limit))
-    print("no_thread_local_warmup=" + str(info.no_thread_local_warmup))
-    print("thread_local_refill_blocks=" + str(info.thread_local_refill_blocks))
-    print("realloc_no_free=" + str(info.realloc_no_free))
-    print("realloc_frees_moved=" + str(realloc_frees_moved()))
-    print("mark_range_stealing=" + str(info.mark_range_stealing))
-    print("mark_bits=" + str(info.mark_bits))
-    print("bytes_per_marker=" + str(info.bytes_per_marker))
-    print("initial_mark_stack_size=" + str(info.initial_mark_stack_size))
-    print("alloc_budget_percent=" + str(info.alloc_budget_percent))
-    print("heap_ceiling_percent=" + str(info.heap_ceiling_percent))
-    print("memory_limit=" + str(info.memory_limit))
-    print("memory_limit_known=" + str(info.memory_limit > 0))
-
     var done = 0
 
     def report(wid: int, total: int):
@@ -59,6 +35,31 @@ actor main(env):
             env.exit(0)
 
     # Allocate from several worker threads at once.
-    for wid in range(4):
-        w = Worker(wid, report)
-        async w.work()
+
+    proc def __startup__():
+        print("mode=" + info.mode)
+        print("backend=" + info.backend)
+        if pause is not None:
+            print("pause_target_us=" + str(int(pause * 1000.0)))
+        else:
+            print("pause_target_us=None")
+        print("block_size=" + str(info.block_size))
+        print("end_padding=" + str(info.end_padding))
+        print("small_object_size=" + str(small_object_size()))
+        print("thread_local_size_limit=" + str(info.thread_local_size_limit))
+        print("no_thread_local_warmup=" + str(info.no_thread_local_warmup))
+        print("thread_local_refill_blocks=" + str(info.thread_local_refill_blocks))
+        print("realloc_no_free=" + str(info.realloc_no_free))
+        print("realloc_frees_moved=" + str(realloc_frees_moved()))
+        print("mark_range_stealing=" + str(info.mark_range_stealing))
+        print("mark_bits=" + str(info.mark_bits))
+        print("bytes_per_marker=" + str(info.bytes_per_marker))
+        print("initial_mark_stack_size=" + str(info.initial_mark_stack_size))
+        print("alloc_budget_percent=" + str(info.alloc_budget_percent))
+        print("heap_ceiling_percent=" + str(info.heap_ceiling_percent))
+        print("memory_limit=" + str(info.memory_limit))
+        print("memory_limit_known=" + str(info.memory_limit > 0))
+
+        for wid in range(4):
+            w = Worker(wid, report)
+            async w.work()

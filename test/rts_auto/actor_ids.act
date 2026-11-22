@@ -1,17 +1,23 @@
 # Actors that several workers create at the same time get ids of their own
 
 actor Child(report: action(str) -> None):
-    report(actorid())
+
+
+    proc def __startup__():
+        report(actorid())
 
 actor Spawner(children: int, report: action(str) -> None, ping: action() -> None):
-    for i in range(children):
-        Child(report)
-        # Messages take keys too. A varying number of them between two new
-        # actors puts the actors' keys at varying places in each worker's
-        # sequence of keys.
-        for j in range(i % 3):
-            ping()
-    report(actorid())
+
+
+    proc def __startup__():
+        for i in range(children):
+            Child(report)
+            # Messages take keys too. A varying number of them between two new
+            # actors puts the actors' keys at varying places in each worker's
+            # sequence of keys.
+            for j in range(i % 3):
+                ping()
+        report(actorid())
 
 actor main(env):
     spawners = 32
@@ -36,5 +42,6 @@ actor main(env):
                     env.exit(1)
             env.exit(0)
 
-    for i in range(spawners):
-        Spawner(children, report, ping)
+    proc def __startup__():
+        for i in range(spawners):
+            Spawner(children, report, ping)

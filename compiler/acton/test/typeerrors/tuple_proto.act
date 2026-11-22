@@ -3,5 +3,6 @@ def f() -> str:
     return d[(1, [2])]
 
 actor main(env):
-    print(f())
-    env.exit(0)
+    proc def __startup__():
+        print(f())
+        env.exit(0)

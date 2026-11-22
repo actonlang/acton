@@ -1,7 +1,7 @@
 #!/usr/bin/env runacton
 
-import argparse
-import random
+import std.argparse
+import std.random
 import net
 
 # Tests that involve running an Acton program together with the database
@@ -298,30 +298,32 @@ actor Tester(env, verbose, port_chunk, app_wthreads=4):
 
         #
 
-    test_ddb_server()
+    proc def __startup__():
+        test_ddb_server()
 
 actor main(env):
-    p = argparse.Parser()
-    p.add_bool("verbose", "verbose mode")
+    proc def __startup__():
+        p = std.argparse.Parser()
+        p.add_bool("verbose", "verbose mode")
 
-    verbose = '--verbose' in set(env.argv)
+        verbose = '--verbose' in set(env.argv)
 
-    # compute random base port between PORT_CHUNK_MIN and PORT_CHUNK_MAX
-    # in increments of PORT_CHUNK_SIZE
-    port_chunk = random.randint(int(PORT_CHUNK_MIN/PORT_CHUNK_SIZE), int(PORT_CHUNK_MAX/PORT_CHUNK_SIZE)) * PORT_CHUNK_SIZE
+        # compute random base port between PORT_CHUNK_MIN and PORT_CHUNK_MAX
+        # in increments of PORT_CHUNK_SIZE
+        port_chunk = std.random.randint(int(PORT_CHUNK_MIN/PORT_CHUNK_SIZE), int(PORT_CHUNK_MAX/PORT_CHUNK_SIZE)) * PORT_CHUNK_SIZE
 
-    t = Tester(env, verbose, port_chunk)
+        t = Tester(env, verbose, port_chunk)
 
-    def test_timeout():
-        print("Test timeout")
-        await async t.error("Test failed - timeout reached")
-        await async t.stop(True, "timeout")
+        def test_timeout():
+            print("Test timeout")
+            await async t.error("Test failed - timeout reached")
+            await async t.stop(True, "timeout")
 
-    def unconditional_exit():
-        print("Unconditional exit")
-        await async t.error("Giving up...")
-        await async t.report()
-        env.exit(1)
+        def unconditional_exit():
+            print("Unconditional exit")
+            await async t.error("Giving up...")
+            await async t.report()
+            env.exit(1)
 
-    after 21: test_timeout()
-    after 25: unconditional_exit()
+        after 21: test_timeout()
+        after 25: unconditional_exit()

@@ -121,10 +121,11 @@ def check() -> None:
 
 
 actor main(env):
-    try:
-        check()
-        print("bytes fromiter passed")
-        env.exit(0)
-    except Exception as exc:
-        print("bytes fromiter failed:", exc)
-        env.exit(1)
+    proc def __startup__():
+        try:
+            check()
+            print("bytes fromiter passed")
+            env.exit(0)
+        except Exception as exc:
+            print("bytes fromiter failed:", exc)
+            env.exit(1)

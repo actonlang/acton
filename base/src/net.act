@@ -106,6 +106,8 @@ actor UDPConnection(cap: UDPConnectCap, address: str, port: int, on_connect: act
     var _state = 0
     var _dns_errors = 0
     var _dns_error = ""
+    var _local_address = ""
+    var _local_port = 0
     var _remote_address = ""
     var _ip_version = 0
 
@@ -124,7 +126,6 @@ actor UDPConnection(cap: UDPConnectCap, address: str, port: int, on_connect: act
 
     proc def _pin_affinity() -> None:
         NotImplemented
-    _pin_affinity()
 
     def _on_dns_resolve(ip_version: int, result: list[str]):
         if _state != STATE_RESOLVING:
@@ -221,10 +222,13 @@ actor UDPConnection(cap: UDPConnectCap, address: str, port: int, on_connect: act
         return _remote_address
 
     action def endpoints() -> (local_address: str, local_port: int, remote_address: str, remote_port: int):
-        """Local and remote address and port, empty and 0 when not set up"""
+        """Local and remote address and port of the current or most recent connection
+
+        Empty addresses and port 0 before the first connection.
+        """
         if _remote_address == "":
             return (local_address="", local_port=0, remote_address="", remote_port=0)
-        return (local_address=local_address(), local_port=local_port(), remote_address=_remote_address, remote_port=port)
+        return (local_address=_local_address, local_port=_local_port, remote_address=_remote_address, remote_port=port)
 
     action def metrics():
         return (connections=_connections,
@@ -234,7 +238,10 @@ actor UDPConnection(cap: UDPConnectCap, address: str, port: int, on_connect: act
                 datagrams_in=_datagrams_in,
                 datagrams_out=_datagrams_out)
 
-    _connect(self)
+    proc def __startup__():
+        _pin_affinity()
+
+        _connect(self)
 
 
 actor UDPListener(cap: UDPListenCap, address: str, port: int, on_listen: action(UDPListener, ?str) -> None, on_receive: action(UDPListener, bytes, str, int) -> None, on_error: action(UDPListener, str) -> None, recv_buffer_size: int=0):
@@ -248,8 +255,12 @@ actor UDPListener(cap: UDPListenCap, address: str, port: int, on_listen: action(
     The source address of a received datagram from an IPv6 link-local
     address includes the zone, like fe80::1%eth0, so it can be passed back
     to send().
+
+    Port 0 picks a free port, see endpoint().
     """
     var _sock = -1
+    var _local_address = ""
+    var _local_port = 0
     var _bytes_in: u64 = 0
     var _bytes_out: u64 = 0
     var _datagrams_in: u64 = 0
@@ -288,6 +299,12 @@ actor UDPListener(cap: UDPListenCap, address: str, port: int, on_listen: action(
     action def local_port() -> int:
         NotImplemented
 
+    action def endpoint() -> (address: str, port: int):
+        """Address and port of the socket, empty and 0 when closed"""
+        if _sock == -1:
+            return (address="", port=0)
+        return (address=_local_address, port=_local_port)
+
     action def metrics():
         return (bytes_in=_bytes_in,
                 bytes_out=_bytes_out,
@@ -300,7 +317,9 @@ actor UDPListener(cap: UDPListenCap, address: str, port: int, on_listen: action(
     proc def _init() -> None:
         """Implementation internal"""
         NotImplemented
-    _init()
+
+    proc def __startup__():
+        _init()
 
 
 actor TCPConnection(cap: TCPConnectCap, address: str, port: int, on_connect: action(TCPConnection) -> None, on_receive: action(TCPConnection, bytes) -> None, on_error: action(TCPConnection, str) -> None, on_remote_close: ?action(TCPConnection) -> None=None, connect_timeout: float=10.0):
@@ -354,7 +373,6 @@ actor TCPConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
 
     proc def _pin_affinity() -> None:
         NotImplemented
-    _pin_affinity()
 
     # TODO: we should not just connect to the first IPv4 and first IPv6 result
     # but rather arrange them in order of preference and try them in that order,
@@ -600,7 +618,10 @@ actor TCPConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
                 bytes_in=_bytes_in,
                 bytes_out=_bytes_out)
 
-    _connect(self)
+    proc def __startup__():
+        _pin_affinity()
+
+        _connect(self)
 
 
 actor TCPListenConnection(cap: _TCPListenConnectCap, server_client: int, worker_id: int):
@@ -670,19 +691,24 @@ actor TCPListenConnection(cap: _TCPListenConnectCap, server_client: int, worker_
     proc def _init() -> None:
         """Implementation internal"""
         NotImplemented
-    _init()
+
+    proc def __startup__():
+        _init()
+
 
 actor TCPListener(cap: TCPListenCap, address: str, port: int, on_listen: action(TCPListener, ?str) -> None, on_accept: action(TCPListenConnection) -> None):
     """TCP Listener
 
     Listens on address and port, where port 0 picks a free port, see
-    local_port(). on_listen is called with None once listening, or with an
+    endpoint(). on_listen is called with None once listening, or with an
     error. Each accepted connection is passed to on_accept.
 
     A listening socket keeps the actor alive, also when nothing else refers
     to it. close() stops listening, connections already accepted stay open.
     """
     var _stream = -1
+    var _local_address = ""
+    var _local_port = 0
     def create_tcp_listen_connection(cap: _TCPListenConnectCap, client: int, worker_id: int):
         """Implementation internal"""
         c = TCPListenConnection(cap, client, worker_id)
@@ -704,6 +730,12 @@ actor TCPListener(cap: TCPListenCap, address: str, port: int, on_listen: action(
         """Local port of the listening socket, 0 when closed"""
         NotImplemented
 
+    action def endpoint() -> (address: str, port: int):
+        """Address and port of the listening socket, empty and 0 when not listening"""
+        if _stream == -1:
+            return (address="", port=0)
+        return (address=_local_address, port=_local_port)
+
     action def __cleanup__() -> None:
         NotImplemented
 
@@ -713,7 +745,10 @@ actor TCPListener(cap: TCPListenCap, address: str, port: int, on_listen: action(
     proc def _init():
         """Implementation internal"""
         NotImplemented
-    _init()
+
+    proc def __startup__():
+        _init()
+
 
 def _addr_port(address: str, port: int) -> str:
     if ":" in address:
@@ -806,13 +841,16 @@ actor TLSListenConnection(cap: _TCPListenConnectCap, server_stream: int, tls_own
     proc def _init() -> None:
         """Implementation internal"""
         NotImplemented
-    _init()
+
+    proc def __startup__():
+        _init()
+
 
 actor TLSListener(cap: TCPListenCap, address: str, port: int, cert_pem: bytes, key_pem: bytes, on_listen: action(TLSListener, ?str) -> None, on_accept: action(TLSListenConnection) -> None, client_auth: bool=False, verify_tls: bool=True, ca_pem: ?bytes=None, verify_peer: ?action(list[bytes], int) -> bool=None, protocols: list[str]=[], handshake_timeout: float=60.0):
     """TLS Listener
 
     Listens on address and port, where port 0 picks a free port, see
-    local_port(). Each connection that completes the TLS handshake is passed
+    endpoint(). Each connection that completes the TLS handshake is passed
     to on_accept.
 
     client_auth=True asks clients for a certificate, which the listener does
@@ -842,6 +880,8 @@ actor TLSListener(cap: TCPListenCap, address: str, port: int, cert_pem: bytes, k
     """
     var _stream = -1
     var _tls_owner = -1
+    var _local_address = ""
+    var _local_port = 0
     def create_tls_listen_connection(cap: _TCPListenConnectCap, stream: int, tls_owner: int, worker_id: int):
         """Implementation internal"""
         c = TLSListenConnection(cap, stream, tls_owner, worker_id)
@@ -884,6 +924,12 @@ actor TLSListener(cap: TCPListenCap, address: str, port: int, cert_pem: bytes, k
         """Local port of the listening socket, 0 when closed"""
         NotImplemented
 
+    action def endpoint() -> (address: str, port: int):
+        """Address and port of the listening socket, empty and 0 when not listening"""
+        if _stream == -1:
+            return (address="", port=0)
+        return (address=_local_address, port=_local_port)
+
     action def __cleanup__() -> None:
         NotImplemented
 
@@ -894,12 +940,14 @@ actor TLSListener(cap: TCPListenCap, address: str, port: int, cert_pem: bytes, k
         """Implementation internal"""
         NotImplemented
 
-    if verify_peer is not None and not client_auth:
-        async on_listen(self, "TLSListener: verify_peer needs client_auth=True")
-    elif client_auth and not verify_tls and verify_peer is None:
-        async on_listen(self, "TLSListener: client_auth=True with verify_tls=False needs verify_peer")
-    else:
-        _init()
+    proc def __startup__():
+        if verify_peer is not None and not client_auth:
+            async on_listen(self, "TLSListener: verify_peer needs client_auth=True")
+        elif client_auth and not verify_tls and verify_peer is None:
+            async on_listen(self, "TLSListener: client_auth=True with verify_tls=False needs verify_peer")
+        else:
+            _init()
+
 
 actor TLSConnection(cap: TCPConnectCap, address: str, port: int, on_connect: action(TLSConnection) -> None, on_receive: action(TLSConnection, bytes) -> None, on_error: action(TLSConnection, str) -> None, on_remote_close: ?action(TLSConnection) -> None=None, verify_tls: bool=True, protocols: list[str]=[], ca_pem: ?bytes=None, cert_pem: ?bytes=None, key_pem: ?bytes=None, server_name: ?str=None, verify_peer: ?action(list[bytes], int) -> bool=None, connect_timeout: float=10.0):
     """TLS connection
@@ -960,7 +1008,6 @@ actor TLSConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
 
     proc def _pin_affinity() -> None:
         NotImplemented
-    _pin_affinity()
 
     action def _on_tls_connect(attempt: int):
         if attempt != _attempt or _state != STATE_CONNECTING:
@@ -1081,4 +1128,8 @@ actor TLSConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
         _state = STATE_CONNECTING
         after connect_timeout: _connect_timeout(attempt)
         _connect_tls()
-    _connect(self)
+
+    proc def __startup__():
+        _pin_affinity()
+
+        _connect(self)

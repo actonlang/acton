@@ -1,0 +1,16 @@
+"""Compression in the gzip format, RFC 1952"""
+
+def compress(data: bytes) -> bytes:
+    """data compressed in the gzip format, at the default level
+
+    Raises ValueError when the data cannot be compressed.
+    """
+    NotImplemented
+
+
+def decompress(data: bytes) -> bytes:
+    """data decompressed from the gzip format
+
+    Raises ValueError when data is not in the gzip format.
+    """
+    NotImplemented

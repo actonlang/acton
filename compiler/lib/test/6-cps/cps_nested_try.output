@@ -18,17 +18,17 @@ proc def ret_inner (C_cont : proc(__builtin__.int) -> $R, x : __builtin__.int) -
                             N_tmp: __builtin__.int = W_ret_inner_5.__fromatom__(1)
                             $DROP()
                             $DROP_C()
-                            $RAISE($RET(N_tmp))
+                            $RAISE@[None]($RET(N_tmp))
                         $DROP()
                     else:
                         N_1x: __builtin__.BaseException = $POP()
                         if isinstance(N_1x, ValueError):
                             pass
                         else:
-                            $RAISE(N_1x)
+                            $RAISE@[None](N_1x)
                     proc def C_7cont (C_8res : None) -> $R:
                         $DROP_C()
-                        $RAISE($SEQ())
+                        $RAISE@[None]($SEQ())
                         return $R_CONTc@[None](C_1cont, None)
                     return force_cps($SKIPRESc@[__builtin__.int](C_7cont), x)
                 else:
@@ -36,8 +36,8 @@ proc def ret_inner (C_cont : proc(__builtin__.int) -> $R, x : __builtin__.int) -
                     if isinstance(N_2x, ValueError):
                         pass
                     else:
-                        $RAISE(N_2x)
-                    $RAISE($SEQ())
+                        $RAISE@[None](N_2x)
+                    $RAISE@[None]($SEQ())
                     return $R_CONTc@[None](C_1cont, None)
             return $PUSH_Cc(C_5try)
         else:
@@ -50,7 +50,7 @@ proc def ret_inner (C_cont : proc(__builtin__.int) -> $R, x : __builtin__.int) -
                 pass
                 return $R_CONTc@[None](C_1cont, None)
             else:
-                $RAISE(N_3xx)
+                $RAISE@[None](N_3xx)
                 return $R_CONTc@[None](C_1cont, None)
     return $PUSHF_Cc(C_3try)
 
@@ -72,16 +72,16 @@ proc def ret_else (C_cont : proc(__builtin__.int) -> $R, x : __builtin__.int) ->
                         if W_ret_else_7.__gt__(x, W_ret_else_5.__fromatom__(0)):
                             N_5tmp: __builtin__.int = W_ret_else_5.__fromatom__(1)
                             $DROP_C()
-                            $RAISE($RET(N_5tmp))
+                            $RAISE@[None]($RET(N_5tmp))
                     else:
                         N_6x: __builtin__.BaseException = $POP()
                         if isinstance(N_6x, ValueError):
                             pass
                         else:
-                            $RAISE(N_6x)
+                            $RAISE@[None](N_6x)
                     proc def C_15cont (C_16res : None) -> $R:
                         $DROP_C()
-                        $RAISE($SEQ())
+                        $RAISE@[None]($SEQ())
                         return $R_CONTc@[None](C_9cont, None)
                     return force_cps($SKIPRESc@[__builtin__.int](C_15cont), x)
                 else:
@@ -89,8 +89,8 @@ proc def ret_else (C_cont : proc(__builtin__.int) -> $R, x : __builtin__.int) ->
                     if isinstance(N_7x, ValueError):
                         pass
                     else:
-                        $RAISE(N_7x)
-                    $RAISE($SEQ())
+                        $RAISE@[None](N_7x)
+                    $RAISE@[None]($SEQ())
                     return $R_CONTc@[None](C_9cont, None)
             return $PUSH_Cc(C_13try)
         else:
@@ -103,6 +103,6 @@ proc def ret_else (C_cont : proc(__builtin__.int) -> $R, x : __builtin__.int) ->
                 pass
                 return $R_CONTc@[None](C_9cont, None)
             else:
-                $RAISE(N_8xx)
+                $RAISE@[None](N_8xx)
                 return $R_CONTc@[None](C_9cont, None)
     return $PUSHF_Cc(C_11try)

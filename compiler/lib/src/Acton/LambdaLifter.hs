@@ -335,7 +335,8 @@ closureCon fx p t
   | isCont (tFun fx p kwdNil t)         = TC primCont [rtype p]
   | fx == fxProc                        = TC primProc [rtail p, contArg (rtype p)]
   | fx == fxAction                      = TC primAction [p,t]
-  | fx == fxMut                         = TC primMut [p,t]
+  -- Communication effects share the direct-call ABI of mut closures.
+  | fx `elem` [fxMut,fxCom] = TC primMut [p,t]
   | fx == fxPure                        = TC primPure [p,t]
   | otherwise                           = error ("### BAD closureCon fx: " ++ prstr fx)
   where contArg (TFun _ fx p _ r)       = rtype p
@@ -372,7 +373,7 @@ instance Lift Expr where
       | closedType env e                = do let t@TFun{effect = fx}    = typeOf env e
                                                  attr | isCont t        = attr_call_
                                                       | fx == fxProc    = attr_call_
-                                                      | fx == fxMut     = attr_eval_
+                                                      | fx `elem` [fxMut,fxCom] = attr_eval_
                                                       | fx == fxPure    = attr_eval_
                                                       | fx == fxAction  = attr_asyn_
                                              e' <- llSub env e

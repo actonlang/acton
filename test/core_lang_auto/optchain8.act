@@ -9,11 +9,12 @@ actor Child():
         return 42
 
 actor main(env):
-    children = {"a": Child()}
-    dres = {tag: c.get_data()! for tag, c in children.items()}
-    lres = [c.get_data()! for c in children.values()]
-    sres = {c.get_data()! for c in children.values()}
-    if dres["a"] == 42 and lres[0] == 42 and 42 in sres:
-        env.exit(0)
-    else:
-        env.exit(1)
+    proc def __startup__():
+        children = {"a": Child()}
+        dres = {tag: c.get_data()! for tag, c in children.items()}
+        lres = [c.get_data()! for c in children.values()]
+        sres = {c.get_data()! for c in children.values()}
+        if dres["a"] == 42 and lres[0] == 42 and 42 in sres:
+            env.exit(0)
+        else:
+            env.exit(1)

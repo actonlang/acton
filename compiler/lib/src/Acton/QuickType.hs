@@ -123,7 +123,7 @@ qSchema env f e@(Var _ n)           = case findQName n env of
                                                 t' = if restype t == tR then t else t{ restype = tSelf }
                                             in (tSchema (q++q') $ vsubst [(tvSelf,tCon tc)] t', fxPure, Just NoDec, e)
                                         NAct q p k _ _ ->
-                                            (tSchema q (tFun fxProc p k (tCon0 n q)), fxPure, Just NoDec, e)
+                                            (tSchema q (tFun fxCom p k (tCon0 n q)), fxPure, Just NoDec, e)
                                         i -> error ("### qSchema Var unexpected " ++ prstr (noq n,i))
 qSchema env f e@(Dot _ (Var _ x) n)
   | NClass q _ _ _ <- info          = let tc = TC x (map tVar $ qbound q)
@@ -160,6 +160,8 @@ qInst env f ts e                    = case qSchema env f e of
                                         (sc, _, _, _) -> error ("###### qInst [" ++ prstrs ts ++ "] " ++ prstr e ++ " is " ++ prstr sc)
 
 instance QType Expr where
+    qType env f (Raise l e t)       = (t, fx, Raise l e' t)
+      where (_,fx,e')              = qType env f e
     qType env f e@Var{}             = qInst env f [] e
     qType env f e@Dot{}             = qInst env f [] e
     qType env f (TApp _ e ts)       = qInst env f ts e
@@ -193,7 +195,7 @@ instance QType Expr where
              (t,fx1,e')             = qType (define te env) f e
              (_,fx2,ss')            = qType env f ss
     qType env f (Async l e)         = case expanded env t of
-                                        TFun _ (TFX _ FXAction) p k t' -> (tFun fxProc p k (tMsg t'), fx, Async l e')
+                                        TFun _ (TFX _ FXAction) p k t' -> (tFun fxCom p k (tMsg t'), fx, Async l e')
       where (t, fx, e')             = qType env f e
     qType env f (Await l e)         = case expanded env t of
                                         TCon _ (TC c [t]) | c == qnMsg -> (t, fxProc, Await l e')

@@ -34,7 +34,7 @@ import Control.DeepSeq
 import Prelude hiding((<>))
 
 version :: [Int]
-version = [0,39]
+version = [0,42]
 
 data Module     = Module        { modname::ModName, imps::[Import], mdoc::Maybe String, mbody::Suite } deriving (Eq,Show,Generic,NFData)
 
@@ -53,7 +53,6 @@ data Stmt       = Expr          { sloc::SrcLoc, expr::Expr }
                 | Pass          { sloc::SrcLoc }
                 | Delete        { sloc::SrcLoc, target::Target }
                 | Return        { sloc::SrcLoc, optExpr::Maybe Expr }
-                | Raise         { sloc::SrcLoc, expr::Expr }
                 | Break         { sloc::SrcLoc }
                 | Continue      { sloc::SrcLoc }
                 | If            { sloc::SrcLoc, branches::[Branch], els::Suite }
@@ -118,6 +117,7 @@ data Expr       = Var           { eloc::SrcLoc, var::QName }
                 | Paren         { eloc::SrcLoc, exp1::Expr }
                 | Box           { tp :: Type, exp1 :: Expr }
                 | UnBox         { tp :: Type, exp1 :: Expr }
+                | Raise         { eloc::SrcLoc, exp1::Expr, tp::Type } -- inferred result type; never returns
                 deriving (Show,Read,NFData,Generic)
 
 data Pattern    = PWild         { ploc::SrcLoc, pann::Maybe Type }
@@ -280,7 +280,7 @@ uniwild k l i   = UV k l (-(i*2+1))
 
 data TCon       = TC { tcname::QName, tcargs::[Type] } deriving (Eq,Show,Read,Generic,NFData)
 
-data FX         = FXPure | FXMut | FXProc | FXAction deriving (Eq,Show,Read,Generic,NFData)
+data FX         = FXPure | FXMut | FXProc | FXAction | FXCom deriving (Eq,Show,Read,Generic,NFData)
 
 data QBind      = QBind TVar [TCon] deriving (Eq,Show,Read,Generic,NFData)
 
@@ -335,7 +335,8 @@ sDef n p t b fx = sDecl [Def NoLoc n [] p KwdNIL (Just t) b NoDec fx Nothing]
 sReturn e       = Return NoLoc (Just e)
 sAssign p e     = Assign NoLoc [p] e
 sMutAssign t e  = MutAssign NoLoc t e
-sRaise e        = Raise NoLoc e
+eRaise e        = Raise NoLoc e tWild
+sRaise e        = sExpr (eRaise e)
 sExpr e         = Expr NoLoc e
 sDecl ds        = Decl NoLoc ds
 sIf bs els      = If NoLoc bs els
@@ -437,6 +438,7 @@ fxPure          = tTFX FXPure
 fxMut           = tTFX FXMut
 fxProc          = tTFX FXProc
 fxAction        = tTFX FXAction
+fxCom           = tTFX FXCom
 fxWild          = tWild
 
 fxFun fx1 fx2   = tFun fxPure (posRow (tF0 fx1) posNil) kwdNil (tF0 fx2)
@@ -751,7 +753,6 @@ instance Eq Stmt where
     x@Pass{}            ==  y@Pass{}            = True
     x@Delete{}          ==  y@Delete{}          = target x == target y
     x@Return{}          ==  y@Return{}          = optExpr x == optExpr y
-    x@Raise{}           ==  y@Raise{}           = expr x == expr y
     x@Break{}           ==  y@Break{}           = True
     x@Continue{}        ==  y@Continue{}        = True
     x@If{}              ==  y@If{}              = branches x == branches y && els x == els y
@@ -779,6 +780,7 @@ instance Eq Decl where
     _                               == _                            = False
 
 instance Eq Expr where
+    x@Raise{}           ==  y@Raise{}           = exp1 x == exp1 y && tp x == tp y
     x@Var{}             ==  y@Var{}             = var x == var y
     x@Int{}             ==  y@Int{}             = lexeme x == lexeme y
     x@Float{}           ==  y@Float{}           = lexeme x == lexeme y
@@ -937,6 +939,23 @@ importedModules                     = concatMap named
     named (FromImport _ mn _)       = [mn]
     named (FromImportAll _ mn)      = [mn]
 
+mTesting, mTestRunner               :: ModName
+mTesting                            = ModName [name "testing"]
+mTestRunner                         = ModName [name "std", name "testing", name "runner"]
+
+-- | A module that imports testing is a test module: test discovery gives it
+-- a test_main actor that calls std.testing.runner.test_runner.
+importsTesting                      :: [Import] -> Bool
+importsTesting                      = elem (Import NoLoc [ModuleItem mTesting Nothing])
+
+-- | The imports of a module, with std.testing.runner added to a test module.
+withTestRunner                      :: [Import] -> [Import]
+withTestRunner is
+  | importsTesting is && runner `notElem` is
+                                    = is ++ [runner]
+  | otherwise                       = is
+  where runner                      = Import NoLoc [ModuleItem mTestRunner Nothing]
+
 unop op e                           = UnOp l0 op e
 binop e1 op e2                      = BinOp l0 e1 op e2
 cmp e1 op e2                        = CompOp l0 e1 [OpArg op e2]
@@ -988,13 +1007,14 @@ isIdent s@(c:cs)                    = isAlpha c && all isAlphaNum cs && not (isK
 
 isKeyword x                         = x `Data.Set.member` rws
   where rws                         = Data.Set.fromDistinctAscList [
-                                        "False","None","NotImplemented","Self","True","action","after","and","as",
+                                        "False","None","NotImplemented","Self","True","after","and","as",
                                         "assert","async","await","break","continue","def","del","elif","else",
                                         "except","finally","for","if","in","is","isinstance",
-                                        "lambda","mut","not","or","pass","proc","pure","raise","return","try",
+                                        "lambda","not","or","pass","raise","return","try",
                                         "var","while","with","yield","_"
                                         -- The following are soft keywords and not included in the above list:
-                                        -- "actor","class","extension","from","import","protocol","type"
+                                        -- "action","actor","class","com","extension","from","import",
+                                        -- "mut","proc","protocol","pure","type"
                                       ]
 
 isSig Signature{}                   = True

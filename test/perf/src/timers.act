@@ -32,14 +32,24 @@ actor TimerBenchmark(t: testing.AsyncT, order: int):
                 delay = 0.000001 + 0.000999 * float(count - i - 1) / float(count - 1)
             after delay: tick()
 
-    run()
+    proc def __startup__():
+        run()
 
 
 actor _test_equal(t: testing.AsyncT):
-    TimerBenchmark(t, 0)
+
+
+    proc def __startup__():
+        TimerBenchmark(t, 0)
 
 actor _test_increasing(t: testing.AsyncT):
-    TimerBenchmark(t, 1)
+
+
+    proc def __startup__():
+        TimerBenchmark(t, 1)
 
 actor _test_decreasing(t: testing.AsyncT):
-    TimerBenchmark(t, -1)
+
+
+    proc def __startup__():
+        TimerBenchmark(t, -1)

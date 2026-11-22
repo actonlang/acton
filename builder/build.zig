@@ -321,11 +321,13 @@ pub fn build(b: *std.Build) void {
     var explicit_static_libraries = ArrayList(*std.Build.Step.Compile).empty;
     var explicit_dynamic_library_names = ArrayList([]const u8).empty;
     var explicit_dynamic_library_installs = ArrayList(*std.Build.Step).empty;
+    var explicit_dynamic_library_import_inits = ArrayList([]const u8).empty;
     var has_dynamic_libraries = false;
     defer explicit_libraries.deinit(b.allocator);
     defer explicit_static_libraries.deinit(b.allocator);
     defer explicit_dynamic_library_names.deinit(b.allocator);
     defer explicit_dynamic_library_installs.deinit(b.allocator);
+    defer explicit_dynamic_library_import_inits.deinit(b.allocator);
 
     var lib_it = std.mem.splitScalar(u8, acton_libraries, '|');
     while (lib_it.next()) |raw_lib| {
@@ -336,6 +338,9 @@ pub fn build(b: *std.Build) void {
         const lib_name = std.mem.trim(u8, field_it.next() orelse "", " \t\r");
         const lib_linkage = std.mem.trim(u8, field_it.next() orelse "", " \t\r");
         const lib_sources = std.mem.trim(u8, field_it.next() orelse "", " \t\r");
+        // For a dynamic library, the init functions of the modules that it
+        // imports from outside itself.
+        const lib_import_inits = std.mem.trim(u8, field_it.next() orelse "", " \t\r");
         if (lib_name.len == 0 or lib_sources.len == 0) continue;
 
         const lib_dynamic = std.mem.eql(u8, lib_linkage, "dynamic");
@@ -351,6 +356,15 @@ pub fn build(b: *std.Build) void {
         if (enable_lto) libActonExplicit.lto = .thin;
         if (lib_dynamic) {
             libActonExplicit.linker_allow_shlib_undefined = true;
+            var init_it = std.mem.splitScalar(u8, lib_import_inits, ',');
+            while (init_it.next()) |raw_init| {
+                const symbol = std.mem.trim(u8, raw_init, " \t\r");
+                if (symbol.len == 0) continue;
+                explicit_dynamic_library_import_inits.append(b.allocator, symbol) catch |err| {
+                    std.log.err("Error appending explicit dynamic library import init: {}", .{err});
+                    std.process.exit(1);
+                };
+            }
         }
 
         var source_it = std.mem.splitScalar(u8, lib_sources, ',');
@@ -525,6 +539,18 @@ pub fn build(b: *std.Build) void {
                         // ones the executable does not use itself, and
                         // rdynamic does not keep them, so keep every section.
                         executable.link_gc_sections = false;
+                        // The linker also takes an object file from an archive
+                        // only for an undefined symbol of the executable, not
+                        // for one of a dynamic library. A dynamic library
+                        // calls the init function of each module it imports
+                        // from outside itself, so name each of these functions
+                        // as an undefined symbol of the executable (the -u
+                        // option of the linker). The linker then takes the
+                        // object file of its module from its archive. Mach-O
+                        // spells a C name with a leading underscore.
+                        for (explicit_dynamic_library_import_inits.items) |symbol| {
+                            executable.forceUndefinedSymbol(b.fmt("_{s}", .{symbol}));
+                        }
                         executable.root_module.addRPathSpecial("@executable_path/../lib");
                         executable.root_module.addRPathSpecial("@executable_path/lib");
                         executable.root_module.addRPathSpecial("@executable_path");
@@ -560,6 +586,31 @@ pub fn build(b: *std.Build) void {
             executable.root_module.link_libc = true;
             executable.root_module.link_libcpp = true;
             b.installArtifact(executable);
+        }
+    }
+
+    // Zig names a package by its path from the build root. The build root
+    // of a project in /home/u/foo is /home/u/foo/out/zig, so that project
+    // compiles the libuv that is bundled with an Acton in /opt/acton with
+    //
+    //     -I /home/u/foo/out/zig/../../../../../opt/acton/deps/libuv/include
+    //
+    // and a project in /home/u/bar compiles the same files with
+    //
+    //     -I /home/u/bar/out/zig/../../../../../opt/acton/deps/libuv/include
+    //
+    // Zig finds a compiled C file again only when its include directories
+    // are written as before, so without this loop every project directory
+    // compiles the bundled libraries for itself. Resolved, both projects
+    // compile with -I /opt/acton/deps/libuv/include and the libraries
+    // are compiled once. The loop goes over every package of the build,
+    // also those of the project's own dependencies, and changes only the
+    // way a directory is written: a path without ".." stays as it is, and
+    // two directories, such as two versions of a dependency, remain two
+    // packages.
+    for (b.graph.dependency_cache.values()) |dependency| {
+        if (dependency.builder.root.root_dir.path) |path| {
+            dependency.builder.root.root_dir.path = b.pathResolve(&.{path});
         }
     }
 }

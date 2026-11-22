@@ -1,0 +1,9 @@
+actor Other():
+    var state: int = 1
+    def read() -> int:
+        return state
+
+actor Invalid(other: Other):
+    value = other.read()
+
+actor main(env): pass

@@ -3,32 +3,33 @@
 # consumed as a boxed B_bool, dereferencing the raw value as a pointer.
 
 actor main(env):
-    t = (1, "x")
-    e = ()
-    if t:
-        pass
-    else:
-        env.exit(1)
-    if e:
-        env.exit(1)
-    if not t:
-        env.exit(1)
-    if not e:
-        pass
-    else:
-        env.exit(1)
-    n = 0
-    while t:
-        n += 1
-        if n == 3:
-            break
-    if n != 3:
-        env.exit(1)
-    while e:
-        env.exit(1)
-    x = "yes" if t else "no"
-    y = "yes" if e else "no"
-    if x != "yes" or y != "no":
-        env.exit(1)
-    print("Success")
-    env.exit(0)
+    proc def __startup__():
+        t = (1, "x")
+        e = ()
+        if t:
+            pass
+        else:
+            env.exit(1)
+        if e:
+            env.exit(1)
+        if not t:
+            env.exit(1)
+        if not e:
+            pass
+        else:
+            env.exit(1)
+        n = 0
+        while t:
+            n += 1
+            if n == 3:
+                break
+        if n != 3:
+            env.exit(1)
+        while e:
+            env.exit(1)
+        x = "yes" if t else "no"
+        y = "yes" if e else "no"
+        if x != "yes" or y != "no":
+            env.exit(1)
+        print("Success")
+        env.exit(0)

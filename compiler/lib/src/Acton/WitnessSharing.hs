@@ -397,7 +397,6 @@ stmt env s = case s of
     AugAssign _ a _ b -> expr env a >> expr env b >> bindValues env (target a)
     Expr _ e -> visit [e]
     Return _ e -> visit (maybe [] (:[]) e)
-    Raise _ e -> visit [e]
     Assert _ e x -> visit (e : maybe [] (:[]) x)
     Delete _ e -> visit [e]
     After _ _ a b -> visit [a,b]
@@ -465,6 +464,7 @@ association (StarStar e) = [e]
 -- call-site expressions are visited normally.
 children :: Expr -> [Expr]
 children e = case e of
+    Raise _ x _ -> [x]
     Async _ x -> [x]
     Await _ x -> [x]
     Index _ x y -> [x,y]
@@ -709,7 +709,6 @@ walkStmt e b s = case s of
     AugAssign l x op y -> AugAssign l <$> e x <*> pure op <*> e y
     Expr l x -> Expr l <$> e x
     Return l x -> Return l <$> mapM e x
-    Raise l x -> Raise l <$> e x
     Assert l x y -> Assert l <$> e x <*> mapM e y
     Delete l x -> Delete l <$> e x
     After l now x y -> After l now <$> e x <*> e y
@@ -723,6 +722,7 @@ walkStmt e b s = case s of
 
 walkExpr :: Monad m => (Expr -> m Expr) -> Expr -> m Expr
 walkExpr e x = case x of
+    Raise l x t -> (\y -> Raise l y t) <$> e x
     Call l f p k -> Call l <$> e f <*> pos p <*> kwd k
     TApp l f ts -> TApp l <$> e f <*> pure ts
     Paren l x -> Paren l <$> e x

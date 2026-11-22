@@ -23,7 +23,10 @@
 #    (never-parked) Watchdog actor converts the hang to exit 1.
 
 actor Watchdog(env):
-    after 10.0: env.exit(1)
+
+
+    proc def __startup__():
+        after 10.0: env.exit(1)
 
 actor Prod():
     var i = 0
@@ -71,4 +74,5 @@ actor main(env):
         async w2.go()
         async w3.go()
 
-    go()
+    proc def __startup__():
+        go()

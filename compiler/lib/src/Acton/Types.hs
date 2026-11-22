@@ -72,7 +72,7 @@ reconstruct progressCb inferredCb env0 (Module m i mdoc ss) bareMod = do --trace
                                              (te,ss1) <- infTop progressCb inferredCb env1 ss
                                              let env2 = defineClosed te (setMod m env0)
                                                  (teT,ssT,tests) =
-                                                   if hasTesting i
+                                                   if importsTesting i
                                                      then let (testSs, discovered) = testStmts env2 (fromMaybe (modNameToString m) bareMod) ss1
                                                           in (te ++ testEnv, ss1 ++ testSs, discovered)
                                                      else (te, ss1, [])
@@ -89,7 +89,6 @@ reconstruct progressCb inferredCb env0 (Module m i mdoc ss) bareMod = do --trace
 
   where env1                            = reserveClosed (assigned ss) (initTypeEnv env0)
         env0'                           = convEnvProtos env0
-        hasTesting i                    = Import NoLoc [ModuleItem (ModName [name "testing"]) Nothing] `elem` i
         rmTests (Assign _ [PVar _ n _] _ : ss)
           | nstr n `elem` ["__unit_tests","__simple_sync_tests","__sync_tests","__async_tests","__env_tests"]
                                         = rmTests ss
@@ -850,6 +849,7 @@ qualifyDefaultExprExcept env excluded e
         temporaryDefaultRef (Internal Tempvar _ _) = True
         temporaryDefaultRef _                      = False
 
+        qexpr (Raise l e t)             = Raise l (qexpr e) t
         qexpr (Var l q@QName{})         = Var l (unalias env q)
         qexpr (Call l f p k)            = Call l (qexpr f) (qposarg p) (qkwdarg k)
         qexpr (Let l ss x)              = Let l (map qstmt ss) (qexpr x)
@@ -914,7 +914,6 @@ qualifyDefaultExprExcept env excluded e
         qstmt (Assert l x msg)           = Assert l (qexpr x) (fmap qexpr msg)
         qstmt (Delete l x)               = Delete l (qexpr x)
         qstmt (Return l x)               = Return l (fmap qexpr x)
-        qstmt (Raise l x)                = Raise l (qexpr x)
         qstmt (If l bs els)              = If l (map qbranch bs) (map qstmt els)
         qstmt (While l x ss els)         = While l (qexpr x) (map qstmt ss) (map qstmt els)
         qstmt (For l p x ss els)         = For l (qpat p) (qexpr x) (map qstmt ss) (map qstmt els)
@@ -1282,8 +1281,6 @@ instance InfEnv Stmt where
     infEnv env (Return l (Just e))      = do t <- currRet
                                              (cs,e') <- inferSub env t e
                                              return (cs, [], Return l (Just e'))
-    infEnv env (Raise l e)              = do (cs,t,e') <- infer env e
-                                             return (Cast (locinfo2 32 e) env t tException : cs, [], Raise l e')
     infEnv env s@(Break _)              = return ([], [], s)
     infEnv env s@(Continue _)           = return ([], [], s)
     infEnv env (If l bs els)            = do (css,tes,bs') <- fmap unzip3 $ mapM (infLiveEnv env) bs
@@ -1496,8 +1493,7 @@ matchDefAssumption env cs1 def@Def{dname=n, qbinds=q1}
         t0 | inClass env                = addSelf t (Just dec)
            | otherwise                  = t
         env0                            = tydefineVars q0 env
-        fx | inAct env                  = dfx def
-           | otherwise                  = effect t0
+        fx                              = effect t0
 
         match cs eq def                 = do --traceM ("## matchDefAssumption " ++ prstr n ++ ": [" ++ prstrs q0 ++ "] => ")
                                              --traceM (render (nest 4 $ vcat $ map pretty $ Cast info env0 t1 t0 : cs))
@@ -1557,11 +1553,12 @@ instance InfEnv Decl where
     infEnv env d@(Actor _ n q p k b ddoc)
       | nodup (p,k)                     = case findName n env of
                                              NReserved -> do
-                                                 te <- infActorEnv env b
+                                                 let b' = actorBaseSignatures b
+                                                 te <- infActorEnv env b'
                                                  prow <- deferDefaultRow (prowOf p)
                                                  krow <- deferDefaultRow (krowOf k)
                                                  --traceM ("\n## infEnv actor " ++ prstr (n, NAct q prow krow te ddoc))
-                                                 return ([], [(n, NAct q prow krow te ddoc)], d)
+                                                 return ([], [(n, NAct q prow krow te ddoc)], d{dbody = b'})
                                              _ ->
                                                  illegalRedef n
 
@@ -1797,10 +1794,16 @@ instance (Check a) => Check [a] where
 
 ------------------
 
+-- These contracts will come from the base actor when actors support inheritance.
+actorBaseSignatures ss =
+    [Signature (loc n) [n] (monotype $ tFun fxAction posNil kwdNil tNone) NoDec
+    | n <- methods ss, n == name "__startup__"] ++ ss
+
 infActorEnv env ss                      = do dsigs <- mapM mkNDef ddefs                                 -- exposed defs without sigs
                                              bsigs <- mapM mkNVar pvars                                 -- exposed assigns without sigs
                                              return (abssigs ++ unSig concsigs ++ dsigs ++ bsigs)       -- abstract sigs ++ exposed sigs + the above
-  where sigs                            = [ (n, NSig sc dec Nothing) | Signature _ ns sc dec <- ss, n <- ns ]
+  where sigs                            = nubBy (\a b -> fst a == fst b)
+                                             [ (n, NSig sc dec Nothing) | Signature _ ns sc dec <- ss, n <- ns ]
         (concsigs, abssigs)             = partition ((`elem`(dvars++pvars)) . fst) sigs
         dvars                           = methods ss \\ dom sigs
         ddefs                           = [ d | Decl _ ds <- ss, d@Def{dname=n} <- ds, n `elem` dvars ]
@@ -1930,8 +1933,9 @@ scanSelfAssigns env self classBody stmts = scanSuite [] stmts
     -- Return would give back an uninitialized object, so it doesn't excuse initialization
     branchExitsEarly :: Suite -> Bool
     branchExitsEarly []                 = False
-    branchExitsEarly stmts              = case last stmts of
-                                              Raise _ _ -> True  -- Only raise truly prevents object creation
+    branchExitsEarly stmts
+      | stmtRaises (last stmts)         = True
+      | otherwise                      = case last stmts of
                                               -- Recursively check nested if/else
                                               If _ branches elseBranch ->
                                                   all (\(Branch _ body) -> branchExitsEarly body) branches &&
@@ -1947,6 +1951,7 @@ scanSelfAssigns env self classBody stmts = scanSuite [] stmts
                                                          (null elseBranch || branchExitsEarly elseBranch)
                                               _ -> False
     scanSuite seen []                   = []
+    scanSuite _ (s:_) | stmtRaises s     = []
     -- Handle assignments
     scanSuite seen (MutAssign _ (Dot _ (Var _ qn) n) e : rest)
         | noq qn == self                = if checkNoSelfReference self seen e
@@ -2112,7 +2117,6 @@ scanSelfAssigns env self classBody stmts = scanSuite [] stmts
                                         = scanSuite seen rest  -- Continue: assert doesn't leak self
         | otherwise                     = []  -- STOP: assert references self
     scanSuite _ (Return _ _ : _)        = []  -- STOP: early exit
-    scanSuite _ (Raise _ _ : _)         = []  -- STOP: raises exception
     -- Skip past break and continue - they are loop control flow, and we skip loops anyway
     scanSuite seen (Break _ : rest)     = scanSuite seen rest
     scanSuite seen (Continue _ : rest)  = scanSuite seen rest
@@ -2160,6 +2164,7 @@ checkNoSelfReference self seen expr = checkExpr expr
   where
     -- Check if an expression is allowed
     checkExpr :: Expr -> Bool
+    checkExpr (Raise _ e _)             = checkExpr e
     checkExpr (Await _ _)               = False  -- Await is not allowed
     checkExpr (Var _ qn) | noq qn == self
                                         = False  -- Direct reference to self not allowed
@@ -2375,11 +2380,11 @@ instance Check Decl where
     checkEnv env (Actor l n q p k b ddoc)
                                         = do --traceM ("## checkEnv actor " ++ prstr n)
                                              checkIndependentDefaults (withDefaultLocalNames (assigned b) env) p k
-                                             pushFX fxProc tNone
+                                             pushFX fxCom tNone
                                              wellformed env1 q
                                              (csp,te1,p') <- infEnv env1 p
                                              (csk,te2,k') <- infEnv (define te1 env1) k
-                                             (csb,te,b') <- infSuiteEnv (define te2 $ define te1 env1) b
+                                             (csb,te,b') <- infSuiteEnv (define te2 $ define te1 env1) initialization
                                              -- At this point, each name defined in b has the type given by its annotations
                                              -- and possible type signatures. Now check that these types are no less general
                                              -- than the recursion assumption on actor n itself (which is distinct from any
@@ -2392,7 +2397,17 @@ instance Check Decl where
                                                  k'' = inlineDefaultsK (eq1++eq0) k'
                                                  act = Actor l n (noqual env q) (qualWPar env q p'') k'' body ddoc
                                              return (cs1, act)
-      where env1                        = withDefaultLocalNames (bound (p,k) ++ assigned b) $
+      where startup = name "__startup__"
+            -- Accept the migration-era terminal call, but schedule startup
+            -- exactly once regardless of whether that call was written.
+            bindings = case reverse b of
+                Expr _ (Call _ (Var _ (NoQ n)) PosNil KwdNil) : rest | n == startup -> reverse rest
+                _ -> b
+            startupDefs = [d | Decl _ ds <- bindings, d@Def{dname=n} <- ds, n == startup]
+            initialization = bindings ++
+                [ sExpr $ eCall (eQVar primMarkStartup) [eCall (eAsync $ eVar startup) []]
+                | not (null startupDefs) ]
+            env1                        = withDefaultLocalNames (bound (p,k) ++ assigned b) $
                                           reserve (bound (p,k) ++ assigned b) $ setInAct $
                                           define [(selfKW, NVar (tCon tc))] $ tydefineVars q env
             tc                          = TC (NoQ n) (map tVar $ qbound q)
@@ -2617,7 +2632,7 @@ instance Infer Expr where
                                                         return (cs0++cs1, t', app t' (tApp x (ts++tvs)) $ protoWitsOf (cs0++cs1))
                                             NAct q p k _ _ -> do
 --                                                when (abstractActor env n) (err1 n "Abstract actor cannot be instantiated:")
-                                                (cs,tvs,t) <- instantiateDefaults env (tSchema q (tFun fxProc p k (tCon0 (unalias env n) q)))
+                                                (cs,tvs,t) <- instantiateDefaults env (tSchema q (tFun fxCom p k (tCon0 (unalias env n) q)))
                                                 return (cs, t, app t (tApp x tvs) $ protoWitsOf cs)
                                             NSig _ _ _ -> nameReserved n
                                             NReserved -> nameReserved n
@@ -2651,7 +2666,7 @@ instance Infer Expr where
                                              t' <- newUnivar env
                                              let tf fx = tFun fx prow krow
                                              return (Cast (locinfo2 74 e) env t (tf fxAction t') :
-                                                     cs, tf fxProc (tMsg t'), Async l e)    -- produce a proc returning Msg[t']
+                                                     cs, tf fxCom (tMsg t'), Async l e)     -- enqueue without waiting
     infer env (Await l e)               = do t0 <- newUnivar env
                                              (cs1,e') <- inferSub env (tMsg t0) e
                                              fx <- currFX
@@ -2670,6 +2685,9 @@ instance Infer Expr where
                                              w <- newWitness
                                              return (Proto (locinfo2 77 e) env w t (pISliceable t0) :
                                                      cs1++cs2, t, eCall (eDot (eVar w) getsliceKW) [e', sliz2exp sl'])
+    infer env (Raise l e _)             = do (cs,e') <- inferSub env tException e
+                                             t <- newUnivar env
+                                             return (cs, t, Raise l e' t)
     infer env (Cond l e1 e e2)          = do t0 <- newUnivar env
                                              (cs0,env',s,_,e') <- inferTest env e
                                              (cs1,e1') <- inferSub env' t0 e1
@@ -3289,14 +3307,14 @@ dername a b                             = Derived (name a) (name b)
 
 dictAssign dictname cl dict             = sAssign (pVar (name dictname) (tDict tStr (testing cl))) (mkDict cl dict)
 
-testing tstr                            = tCon (TC (gname [name "testing"] (name tstr)) [])
+testing tstr                            = tCon (TC (GName mTesting (name tstr)) [])
 
 mkDict cl as                            = eCall (tApp (eQVar primMkDict) [tStr, testing cl]) [w,Dict NoLoc as]
     where w                             = eCall (eQVar (gname [name "__builtin__"] (dername "Hashable" "str"))) []
 
 testActor                               = sDecl [Actor NoLoc (name "test_main") []
                                                  PosNIL (KwdPar (name "env")  (Just tEnv) Nothing KwdNIL)
-                                             [sExpr (eCall (eQVar (gname [name "testing"] (name "test_runner")))
+                                             [sExpr (eCall (eQVar (GName mTestRunner (name "test_runner")))
                                                            (map (eVar . name) ["env","__unit_tests","__simple_sync_tests","__sync_tests","__async_tests","__env_tests"]))] Nothing]
 
 row2list (TRow _ _ _ t _ r)             = t : row2list r
@@ -3304,7 +3322,7 @@ row2list (TNil _ _)                     = []
 
 mkAssoc d testType modName =
     Assoc (Strings NoLoc [nstr (dname d)])
-          (eCall (eQVar (gname [name "testing"] testType))
+          (eCall (eQVar (GName mTesting testType))
                  [ eVar (dname d)
                  , Strings NoLoc [nstr (dname d)]
                  , comment (dbody d)
@@ -3315,7 +3333,7 @@ mkAssoc d testType modName =
 
 mkAssocActor (Actor _ n _ _ _ body _) testType modName =
     Assoc (Strings NoLoc [nstr n])
-          (eCall (eQVar (gname [name "testing"] testType))
+          (eCall (eQVar (GName mTesting testType))
                  [ eVar n
                  , Strings NoLoc [nstr n]
                  , comment body
@@ -3375,13 +3393,13 @@ genTestActorWrappers ss =
     isTestActor _ = False
 
     checkTestActorParams PosNIL (KwdPar _ (Just t) _ KwdNIL) =
-        t == tCon (TC (gname [name "testing"] (name "SyncT")) []) ||
-        t == tCon (TC (gname [name "testing"] (name "AsyncT")) []) ||
-        t == tCon (TC (gname [name "testing"] (name "EnvT")) [])
+        t == tCon (TC (GName mTesting (name "SyncT")) []) ||
+        t == tCon (TC (GName mTesting (name "AsyncT")) []) ||
+        t == tCon (TC (GName mTesting (name "EnvT")) [])
     checkTestActorParams (PosPar _ (Just t) _ PosNIL) KwdNIL =
-        t == tCon (TC (gname [name "testing"] (name "SyncT")) []) ||
-        t == tCon (TC (gname [name "testing"] (name "AsyncT")) []) ||
-        t == tCon (TC (gname [name "testing"] (name "EnvT")) [])
+        t == tCon (TC (GName mTesting (name "SyncT")) []) ||
+        t == tCon (TC (GName mTesting (name "AsyncT")) []) ||
+        t == tCon (TC (GName mTesting (name "EnvT")) [])
     checkTestActorParams _ _ = False
 
     -- Collect all function names to check for conflicts
@@ -3451,7 +3469,7 @@ data TestType = UnitTest | SimpleSyncTest | SyncTest | AsyncTest | EnvTest
 testType (NDef (TSchema _ [] (TFun _ fx ppar kpar res)) _ _)
                                         = case (res, fx, row2list ppar, row2list kpar) of
                                              -- Functions with no parameters
-                                             (r, fx', [], [])  | validReturn r && (fx' == fxPure || fx' == fxMut) -> Just UnitTest
+                                             (r, fx', [], [])  | validReturn r && fx' `elem` [fxPure,fxMut,fxCom] -> Just UnitTest
                                              (r, fx', [], [])  | validReturn r && fx' == fxProc                   -> Just SimpleSyncTest
                                              -- Functions with positional test parameters
                                              (r, fx', [t], []) | t == syncT  && validReturn r                     -> Just SyncTest
@@ -3463,7 +3481,7 @@ testType (NDef (TSchema _ [] (TFun _ fx ppar kpar res)) _ _)
                                              (r, fx', [], [t]) | t == envT   && validReturn r                     -> Just EnvTest
                                              _                                                                    -> Nothing
     where validReturn r                 = r == tNone || r == TNone NoLoc || r == tStr
-          syncT                         = tCon (TC (gname [name "testing"] (name "SyncT")) [])
-          asyncT                        = tCon (TC (gname [name "testing"] (name "AsyncT")) [])
-          envT                          = tCon (TC (gname [name "testing"] (name "EnvT")) [])
+          syncT                         = tCon (TC (GName mTesting (name "SyncT")) [])
+          asyncT                        = tCon (TC (GName mTesting (name "AsyncT")) [])
+          envT                          = tCon (TC (GName mTesting (name "EnvT")) [])
 testType _                              = Nothing

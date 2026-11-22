@@ -56,4 +56,5 @@ def test7(x: Dict[int]):
     return x[1]
 
 actor main(env):
-    env.exit(0)
+    proc def __startup__():
+        env.exit(0)

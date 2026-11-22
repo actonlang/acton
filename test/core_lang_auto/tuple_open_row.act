@@ -6,7 +6,8 @@ def f() -> int:
     return total
 
 actor main(env):
-      if f() == 13:
-          env.exit(0)
-      else:
-          env.exit(1)
+    proc def __startup__():
+          if f() == 13:
+              env.exit(0)
+          else:
+              env.exit(1)

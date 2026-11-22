@@ -1,14 +1,13 @@
 actor main(env):
-  print(["abc","def"])
-  print([["abc","def"],["ghi"]])
-  print(repr("kalle"))
-  s = {"abc"}
-  s.add("def")
-  print(s)
-  d = {}
-  for i in range(10):
-      d[i] = str(i)
-  print(d)
-  env.exit(0)
-  
-  
+    proc def __startup__():
+      print(["abc","def"])
+      print([["abc","def"],["ghi"]])
+      print(repr("kalle"))
+      s = {"abc"}
+      s.add("def")
+      print(s)
+      d = {}
+      for i in range(10):
+          d[i] = str(i)
+      print(d)
+      env.exit(0)

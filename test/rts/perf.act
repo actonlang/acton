@@ -1,9 +1,10 @@
 actor main(env: Env):
-    enabled = env.rts.perf_info()["status"] != "not enabled at process start"
-    print("enabled" if enabled else "disabled")
-    for arg in env.argv[1:]:
-        print(arg)
-    if not enabled:
-        assert env.rts.perf_stats().instructions is None
-        assert env.rts.perf_stats().cycles is None
-    env.exit(0)
+    proc def __startup__():
+        enabled = env.rts.perf_info()["status"] != "not enabled at process start"
+        print("enabled" if enabled else "disabled")
+        for arg in env.argv[1:]:
+            print(arg)
+        if not enabled:
+            assert env.rts.perf_stats().instructions is None
+            assert env.rts.perf_stats().cycles is None
+        env.exit(0)

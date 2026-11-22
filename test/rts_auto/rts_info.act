@@ -1,45 +1,46 @@
 actor main(env: Env):
-    rts = env.rts
-    info = rts.worker_info()
-    assert set(info) == set(range(env.nr_wthreads + 1))
-    assert info[0].name == "main"
-    # Returned containers belong to the caller.
-    del info[0]
-    assert 0 in rts.worker_info()
+    proc def __startup__():
+        rts = env.rts
+        info = rts.worker_info()
+        assert set(info) == set(range(env.nr_wthreads + 1))
+        assert info[0].name == "main"
+        # Returned containers belong to the caller.
+        del info[0]
+        assert 0 in rts.worker_info()
 
-    stats = rts.worker_stats()
-    assert set(stats) == set(range(env.nr_wthreads + 1))
-    for worker in stats.values():
-        assert worker.state in ["poof", "work", "idle", "sleep"]
-    before = sum([int(s.conts_count) for s in stats.values()])
-    # Let another continuation run before sampling again.
-    await async env.stdio.out("")
-    count_after = sum([int(s.conts_count) for s in rts.worker_stats().values()])
-    assert count_after > before
+        stats = rts.worker_stats()
+        assert set(stats) == set(range(env.nr_wthreads + 1))
+        for worker in stats.values():
+            assert worker.state in ["poof", "work", "idle", "sleep"]
+        before = sum([int(s.conts_count) for s in stats.values()])
+        # Let another continuation run before sampling again.
+        await async env.stdio.out("")
+        count_after = sum([int(s.conts_count) for s in rts.worker_stats().values()])
+        assert count_after > before
 
-    rts.start_gc_performance_measurement()
-    rts.disable_gc()
-    rts.enable_gc()
-    rts.gc()
-    gc = rts.gc_stats()
-    assert gc.heap_size >= gc.free_bytes
-    assert gc.free_bytes >= gc.unmapped_bytes
-    assert gc.mem_usage == gc.heap_size - gc.free_bytes
-    assert gc.total_bytes >= gc.bytes_since_gc
-    assert gc.total_ms == gc.mark_ms + gc.sweep_ms
+        rts.start_gc_performance_measurement()
+        rts.disable_gc()
+        rts.enable_gc()
+        rts.gc()
+        gc = rts.gc_stats()
+        assert gc.heap_size >= gc.free_bytes
+        assert gc.free_bytes >= gc.unmapped_bytes
+        assert gc.mem_usage == gc.heap_size - gc.free_bytes
+        assert gc.total_bytes >= gc.bytes_since_gc
+        assert gc.total_ms == gc.mark_ms + gc.sweep_ms
 
-    process = rts.process_stats()
-    if process.rss is not None:
-        assert process.rss! > 0
-    if process.peak_rss is not None:
-        assert process.peak_rss! > 0
-    perf = rts.perf_info()
-    assert "backend" in perf
-    assert "scope" in perf
-    counters = rts.perf_stats()
-    if counters.user_ns is not None:
-        assert rts.perf_stats().user_ns! >= counters.user_ns!
+        process = rts.process_stats()
+        if process.rss is not None:
+            assert process.rss! > 0
+        if process.peak_rss is not None:
+            assert process.peak_rss! > 0
+        perf = rts.perf_info()
+        assert "backend" in perf
+        assert "scope" in perf
+        counters = rts.perf_stats()
+        if counters.user_ns is not None:
+            assert rts.perf_stats().user_ns! >= counters.user_ns!
 
-    handles = rts.io_handles()
-    assert set(handles) == set(range(env.nr_wthreads + 1))
-    env.exit(0)
+        handles = rts.io_handles()
+        assert set(handles) == set(range(env.nr_wthreads + 1))
+        env.exit(0)

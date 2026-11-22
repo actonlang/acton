@@ -21,6 +21,7 @@ module Acton.Testing
   , buildTestHashInfos
   , classifyCachedTests
   , updateTestCacheEntry
+  , testResultRandom
   , mkTestKey
   , testNameCandidates
   , lookupTestInfo
@@ -45,6 +46,7 @@ import Data.Binary (encode)
 import qualified Crypto.Hash.SHA256 as SHA256
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Key as AesonKey
+import qualified Data.Aeson.KeyMap as KM
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy as BL
 import Data.Either (partitionEithers)
@@ -519,12 +521,21 @@ buildTestHashInfo cacheRef paths ctxHash nameMap testName = do
             runHash = hashRun implHash depsHash ctxHash
         return (TestHashInfo (Just implHash) (Just runHash) (Just resolved) (Just deps))
 
--- | Update the cache map with a new test result.
+-- | Whether a run of the test drew from t.random
+testResultRandom :: TestResult -> Bool
+testResultRandom res = case trRaw res of
+    Aeson.Object obj -> KM.lookup (AesonKey.fromString "random") obj == Just (Aeson.Bool True)
+    _ -> False
+
+-- | Update the cache map with a new test result. A test that draws from
+-- t.random gets new seeds every time it runs, so its result is not kept.
 updateTestCacheEntry :: M.Map String TestHashInfo
                      -> M.Map String TestCacheEntry
                      -> TestResult
                      -> M.Map String TestCacheEntry
-updateTestCacheEntry testHashInfos acc res =
+updateTestCacheEntry testHashInfos acc res
+  | testResultRandom res = M.delete (mkTestKey (trModule res) (trName res)) acc
+  | otherwise =
     let key = mkTestKey (trModule res) (trName res)
         info = M.lookup key testHashInfos
         runHash = maybe "" (\ti -> fromMaybe "" (thiRunHash ti)) info

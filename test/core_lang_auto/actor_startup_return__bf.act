@@ -1,0 +1,5 @@
+actor Invalid():
+    def __startup__():
+        return 1
+
+actor main(env): pass

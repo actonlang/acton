@@ -17,7 +17,8 @@ def check_bytearray() -> bool:
             bytearray(b":").join(iter(parts)) == bytearray(b"a:b:c"))
 
 actor main(env):
-    if not check_str() or not check_bytes() or not check_bytearray():
-        print("join list fast path failed")
-        env.exit(1)
-    env.exit(0)
+    proc def __startup__():
+        if not check_str() or not check_bytes() or not check_bytearray():
+            print("join list fast path failed")
+            env.exit(1)
+        env.exit(0)

@@ -18,11 +18,11 @@ actor Pinger(cb: action(Pinger) -> None):
 actor Watchdog(env: Env):
     # Independent timer: if main and Pinger deadlock, main's own timers never
     # fire and only this actor can end the test.
-    after 10.0: env.exit(2)
+    proc def __startup__():
+        after 10.0: env.exit(2)
 
 actor main(env):
     var op: ?Pinger = None
-    w = Watchdog(env)
 
     def on_ping(p: Pinger):
         op!.poke(1)
@@ -34,8 +34,10 @@ actor main(env):
             env.exit(0 if n == 4 else 1)
         after 0.2: check()
 
-    # Start Pinger through pinger, not op!, so that only the calls in on_ping
-    # depend on how these statements are compiled.
-    pinger = Pinger(on_ping)
-    op = pinger
-    pinger.start()
+    proc def __startup__():
+        w = Watchdog(env)
+        # Start Pinger through pinger, not op!, so that only the calls in on_ping
+        # depend on how these statements are compiled.
+        pinger = Pinger(on_ping)
+        op = pinger
+        pinger.start()

@@ -202,7 +202,6 @@ instance Vars Stmt where
     freeQ (Pass _)                  = []
     freeQ (Delete _ t)              = freeQ t
     freeQ (Return _ e)              = freeQ e
-    freeQ (Raise _ e)               = freeQ e
     freeQ (Break _)                 = []
     freeQ (Continue _)              = []
     freeQ (If _ branches els)       = freeQ branches ++ freeQ els
@@ -273,6 +272,7 @@ instance Vars Expr where
     freeQ (Ellipsis _)              = []
     freeQ (Strings _ ss)            = []
     freeQ (BStrings _ ss)           = []
+    freeQ (Raise _ e _)             = freeQ e
     freeQ (Call _ e ps ks)          = freeQ e ++ freeQ ps ++ freeQ ks
     freeQ (TApp _ e ts)             = freeQ e ++ freeQ ts
     freeQ (Let _ ss e)              = (freeQ ss ++ freeQ e) `diffQ` bound ss

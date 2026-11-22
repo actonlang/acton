@@ -199,18 +199,19 @@ def check_sum(fail: list[str]):
         fail.append("sum of int or str")
 
 actor main(env):
-    fail: list[str] = []
-    try:
-        check_list_iadd(fail)
-        check_list_imul(fail)
-        check_list_self(fail)
-        check_list_targets(fail)
-        check_bytearray(fail)
-        check_immutable(fail)
-        check_sum(fail)
-    except Exception as e:
-        fail.append("unexpected exception: " + str(e))
-    if fail:
-        print("Failed:", fail)
-        env.exit(1)
-    env.exit(0)
+    proc def __startup__():
+        fail: list[str] = []
+        try:
+            check_list_iadd(fail)
+            check_list_imul(fail)
+            check_list_self(fail)
+            check_list_targets(fail)
+            check_bytearray(fail)
+            check_immutable(fail)
+            check_sum(fail)
+        except Exception as e:
+            fail.append("unexpected exception: " + str(e))
+        if fail:
+            print("Failed:", fail)
+            env.exit(1)
+        env.exit(0)

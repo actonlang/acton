@@ -173,7 +173,6 @@ updateOverlay path txt =
   let snap = Source.SourceSnapshot
         { Source.ssText = T.unpack txt
         , Source.ssBytes = TE.encodeUtf8 txt
-        , Source.ssIsOverlay = True
         }
   in atomicModifyIORef' overlaysRef $ \m -> (HM.insert path snap m, ())
 

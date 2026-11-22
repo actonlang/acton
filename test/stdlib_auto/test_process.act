@@ -48,5 +48,6 @@ actor main(env):
         # TODO: fix on macos 10.15!?
         finish(0)
 
-    test()
-    after 3: ex()
+    proc def __startup__():
+        test()
+        after 3: ex()

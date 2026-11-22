@@ -92,6 +92,7 @@ def check_ascii():
     assert [ord(char) for char in text[::-1]] == list(range(127, -1, -1))
 
 actor main(env):
-    check()
-    check_ascii()
-    env.exit(0)
+    proc def __startup__():
+        check()
+        check_ascii()
+        env.exit(0)

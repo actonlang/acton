@@ -185,126 +185,127 @@ mut def marked(x: bigint, trace: list[int], tag: int) -> bigint:
     return x
 
 actor main(env):
-    n = bigint("123456789012345678901234567890")
-    m = bigint("987654321098765432109876543210")
-    assert bigint_add(n, m) == bigint("1111111110111111111011111111100")
-    assert bigint_sub(m, n) == bigint("864197532086419753208641975320")
-    assert bigint_mul(bigint(1234567), bigint(7654321)) == bigint("9449772114007")
-    assert bigint_pow(bigint(2), bigint(100)) == bigint("1267650600228229401496703205376")
-    assert bigint_neg(n) == -n and bigint_pos(n) == n
-    assert bigint_zero() == bigint(0)
-    assert bigint_fromatom(123) == bigint(123)
-    assert bigint_eq(n, bigint(str(n))) and not bigint_ne(n, n)
-    assert bigint_lt(n, m) and bigint_le(n, n)
-    assert bigint_gt(m, n) and bigint_ge(n, n)
-    assert bigint_and(bigint(12), bigint(10)) == bigint(8)
-    assert bigint_or(bigint(12), bigint(10)) == bigint(14)
-    assert bigint_xor(bigint(12), bigint(10)) == bigint(6)
-    assert bigint_invert(bigint(7)) == bigint(-8)
-    assert bigint_lshift(bigint(1), 100) == bigint_pow(bigint(2), bigint(100))
-    assert bigint_rshift(bigint_pow(bigint(2), bigint(100)), 97) == bigint(8)
-    assert bigint_floordiv(bigint(100), bigint(7)) == bigint(14)
-    assert bigint_mod(bigint(100), bigint(7)) == bigint(2)
-    q, r = bigint_divmod(bigint(100), bigint(7))
-    assert q == bigint(14) and r == bigint(2)
-    assert bigint_truediv(bigint(7), bigint(2)) == 3.5
-    assert bigint_float(bigint(7)) == 7.0
-    assert bigint_int(bigint(-7)) == -7 and bigint_index(bigint(7)) == 7
-    assert bigint_round(bigint(12345), -2) == bigint(12300)
-    assert bigint_round(bigint(-12345), -2) == bigint(-12300)
-    assert bigint_abs(bigint(-7)) == 7.0
-    assert bigint_trunc(bigint(7)) == 7
-    assert bigint_floor(bigint(7)) == 7 and bigint_ceil(bigint(7)) == 7
-    assert bigint_numerator(bigint(7)) == 7 and bigint_denominator(bigint(7)) == 1
-    assert bigint_conjugate(n) == n
-    h = hasher()
-    bigint_hash(n, h)
-    assert h.finalize() == hash(n)
-    try:
-        bigint_complex(n)
-        assert False
-    except NotImplementedError:
-        pass
-    try:
-        bigint_real(n)
-        assert False
-    except NotImplementedError:
-        pass
-    try:
-        bigint_imag(n)
-        assert False
-    except NotImplementedError:
-        pass
-    try:
-        bigint_int(n)
-        assert False
-    except ValueError:
-        pass
-    try:
-        bigint_floordiv(n, bigint(0))
-        assert False
-    except ZeroDivisionError:
-        pass
-    try:
-        bigint_truediv(n, bigint(0))
-        assert False
-    except ZeroDivisionError:
-        pass
-    try:
-        bigint_lshift(bigint(1), -1)
-        assert False
-    except ValueError:
-        pass
-    try:
-        bigint_pow(bigint(2), bigint(-1))
-        assert False
-    except ValueError:
-        pass
-    a = complex.from_real_imag(3.0, 4.0)
-    b = complex.from_real_imag(1.0, -2.0)
-    assert complex_add(a, b) == complex.from_real_imag(4.0, 2.0)
-    assert complex_sub(a, b) == complex.from_real_imag(2.0, 6.0)
-    assert complex_mul(a, b) == complex.from_real_imag(11.0, -2.0)
-    assert complex_neg(a) == complex.from_real_imag(-3.0, -4.0)
-    assert complex_pos(a) == a and complex_complex(a) == a
-    assert complex_zero() == complex.from_real_imag(0.0, 0.0)
-    assert complex_eq(a, a) and complex_ne(a, b)
-    assert complex_real(a) == 3.0 and complex_imag(a) == 4.0
-    assert complex_abs(a) == 5.0
-    assert complex_conjugate(a) == complex.from_real_imag(3.0, -4.0)
-    z = complex_truediv(a, complex.from_real_imag(2.0, 0.0))
-    assert complex_real(z) == 1.5 and complex_imag(z) == 2.0
-    p = complex_pow(complex.from_real_imag(2.0, 0.0), complex.from_real_imag(3.0, 0.0))
-    assert abs(complex_real(p) - 8.0) < 1e-10
-    assert abs(complex_imag(p)) < 1e-10
-    try:
-        complex_truediv(a, complex_zero())
-        assert False
-    except ZeroDivisionError:
-        pass
-    try:
-        complex_fromatom(1)
-        assert False
-    except NotImplementedError:
-        pass
-    nan = float("nan")
-    nc = complex.from_real_imag(nan, 0.0)
-    assert not complex_eq(nc, nc) and complex_ne(nc, nc)
-    pz = complex.from_real_imag(0.0, 0.0)
-    nz = complex.from_real_imag(float("-0.0"), float("-0.0"))
-    assert complex_eq(pz, nz)
-    h = hasher()
-    complex_hash(nz, h)
-    assert h.finalize() == hash(pz)
-    assert generic_add(n, bigint(1)) == n + bigint(1)
-    assert generic_add(a, b) == complex_add(a, b)
-    assert generic_le(n, m)
-    real: float = generic_real(a)
-    trunc: bigint = generic_trunc(n)
-    assert real == 3.0 and trunc == n
-    trace: list[int] = []
-    value = marked(bigint(1), trace, 1) + marked(bigint(2), trace, 2)
-    assert value == bigint(3) and trace == [1, 2]
-    boxed = [bigint_truediv(bigint(7), bigint(2)), bigint_float(bigint(2))]
-    assert boxed == [3.5, 2.0]
-    env.exit(0)
+    proc def __startup__():
+        n = bigint("123456789012345678901234567890")
+        m = bigint("987654321098765432109876543210")
+        assert bigint_add(n, m) == bigint("1111111110111111111011111111100")
+        assert bigint_sub(m, n) == bigint("864197532086419753208641975320")
+        assert bigint_mul(bigint(1234567), bigint(7654321)) == bigint("9449772114007")
+        assert bigint_pow(bigint(2), bigint(100)) == bigint("1267650600228229401496703205376")
+        assert bigint_neg(n) == -n and bigint_pos(n) == n
+        assert bigint_zero() == bigint(0)
+        assert bigint_fromatom(123) == bigint(123)
+        assert bigint_eq(n, bigint(str(n))) and not bigint_ne(n, n)
+        assert bigint_lt(n, m) and bigint_le(n, n)
+        assert bigint_gt(m, n) and bigint_ge(n, n)
+        assert bigint_and(bigint(12), bigint(10)) == bigint(8)
+        assert bigint_or(bigint(12), bigint(10)) == bigint(14)
+        assert bigint_xor(bigint(12), bigint(10)) == bigint(6)
+        assert bigint_invert(bigint(7)) == bigint(-8)
+        assert bigint_lshift(bigint(1), 100) == bigint_pow(bigint(2), bigint(100))
+        assert bigint_rshift(bigint_pow(bigint(2), bigint(100)), 97) == bigint(8)
+        assert bigint_floordiv(bigint(100), bigint(7)) == bigint(14)
+        assert bigint_mod(bigint(100), bigint(7)) == bigint(2)
+        q, r = bigint_divmod(bigint(100), bigint(7))
+        assert q == bigint(14) and r == bigint(2)
+        assert bigint_truediv(bigint(7), bigint(2)) == 3.5
+        assert bigint_float(bigint(7)) == 7.0
+        assert bigint_int(bigint(-7)) == -7 and bigint_index(bigint(7)) == 7
+        assert bigint_round(bigint(12345), -2) == bigint(12300)
+        assert bigint_round(bigint(-12345), -2) == bigint(-12300)
+        assert bigint_abs(bigint(-7)) == 7.0
+        assert bigint_trunc(bigint(7)) == 7
+        assert bigint_floor(bigint(7)) == 7 and bigint_ceil(bigint(7)) == 7
+        assert bigint_numerator(bigint(7)) == 7 and bigint_denominator(bigint(7)) == 1
+        assert bigint_conjugate(n) == n
+        h = hasher()
+        bigint_hash(n, h)
+        assert h.finalize() == hash(n)
+        try:
+            bigint_complex(n)
+            assert False
+        except NotImplementedError:
+            pass
+        try:
+            bigint_real(n)
+            assert False
+        except NotImplementedError:
+            pass
+        try:
+            bigint_imag(n)
+            assert False
+        except NotImplementedError:
+            pass
+        try:
+            bigint_int(n)
+            assert False
+        except ValueError:
+            pass
+        try:
+            bigint_floordiv(n, bigint(0))
+            assert False
+        except ZeroDivisionError:
+            pass
+        try:
+            bigint_truediv(n, bigint(0))
+            assert False
+        except ZeroDivisionError:
+            pass
+        try:
+            bigint_lshift(bigint(1), -1)
+            assert False
+        except ValueError:
+            pass
+        try:
+            bigint_pow(bigint(2), bigint(-1))
+            assert False
+        except ValueError:
+            pass
+        a = complex.from_real_imag(3.0, 4.0)
+        b = complex.from_real_imag(1.0, -2.0)
+        assert complex_add(a, b) == complex.from_real_imag(4.0, 2.0)
+        assert complex_sub(a, b) == complex.from_real_imag(2.0, 6.0)
+        assert complex_mul(a, b) == complex.from_real_imag(11.0, -2.0)
+        assert complex_neg(a) == complex.from_real_imag(-3.0, -4.0)
+        assert complex_pos(a) == a and complex_complex(a) == a
+        assert complex_zero() == complex.from_real_imag(0.0, 0.0)
+        assert complex_eq(a, a) and complex_ne(a, b)
+        assert complex_real(a) == 3.0 and complex_imag(a) == 4.0
+        assert complex_abs(a) == 5.0
+        assert complex_conjugate(a) == complex.from_real_imag(3.0, -4.0)
+        z = complex_truediv(a, complex.from_real_imag(2.0, 0.0))
+        assert complex_real(z) == 1.5 and complex_imag(z) == 2.0
+        p = complex_pow(complex.from_real_imag(2.0, 0.0), complex.from_real_imag(3.0, 0.0))
+        assert abs(complex_real(p) - 8.0) < 1e-10
+        assert abs(complex_imag(p)) < 1e-10
+        try:
+            complex_truediv(a, complex_zero())
+            assert False
+        except ZeroDivisionError:
+            pass
+        try:
+            complex_fromatom(1)
+            assert False
+        except NotImplementedError:
+            pass
+        nan = float("nan")
+        nc = complex.from_real_imag(nan, 0.0)
+        assert not complex_eq(nc, nc) and complex_ne(nc, nc)
+        pz = complex.from_real_imag(0.0, 0.0)
+        nz = complex.from_real_imag(float("-0.0"), float("-0.0"))
+        assert complex_eq(pz, nz)
+        h = hasher()
+        complex_hash(nz, h)
+        assert h.finalize() == hash(pz)
+        assert generic_add(n, bigint(1)) == n + bigint(1)
+        assert generic_add(a, b) == complex_add(a, b)
+        assert generic_le(n, m)
+        real: float = generic_real(a)
+        trunc: bigint = generic_trunc(n)
+        assert real == 3.0 and trunc == n
+        trace: list[int] = []
+        value = marked(bigint(1), trace, 1) + marked(bigint(2), trace, 2)
+        assert value == bigint(3) and trace == [1, 2]
+        boxed = [bigint_truediv(bigint(7), bigint(2)), bigint_float(bigint(2))]
+        assert boxed == [3.5, 2.0]
+        env.exit(0)

@@ -17,11 +17,11 @@ about the machine and its load.
 Run it from test/perf.
 """
 
-import argparse
-import crypto.hash.md5
+import std.argparse
+import std.crypto.hash.md5
 import file
-import json
-import math
+import std.json
+import std.math
 import time
 
 
@@ -91,7 +91,7 @@ def acton_info(stderr: str) -> ?dict[str, ?value]:
     for line in stderr.splitlines():
         if line.startswith("{{"):
             try:
-                info = obj(json.decode(line)).get("test_info")
+                info = obj(std.json.decode(line)).get("test_info")
                 if info is not None:
                     complete = obj(info).get("complete")
                     if isinstance(complete, bool) and complete:
@@ -165,7 +165,7 @@ def collect(lines: list[str]) -> (dict[str, list[dict[str, ?value]]], list[dict[
     for line in lines:
         if not line.strip():
             continue
-        d = obj(json.decode(line))
+        d = obj(std.json.decode(line))
         if d.get("kind") is not None:
             hosts.append(d)
             continue
@@ -305,10 +305,10 @@ def esc(s: str) -> str:
     return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
 
 def log10(x: float) -> float:
-    return math.log(x) / math.log(10.0)
+    return std.math.log(x) / std.math.log(10.0)
 
 def log2(x: float) -> float:
-    return math.log(x) / math.log(2.0)
+    return std.math.log(x) / std.math.log(2.0)
 
 def tick_text(v: float) -> str:
     """1, 2, 5, 20, 0.5, 0.002, 1k, 20k"""
@@ -530,7 +530,7 @@ def page_html(machines: list[list[str]], css: str, js: str, intro: str) -> str:
              '<p class="lede">Tests of test/perf/src/scheduling.act in Acton and in Go and Tokio ports, run interleaved on each machine with test/perf/src/xlang.act. Compare runtimes within one machine only.</p></header>',
              intro]
     tail = ['<div id="tip" aria-hidden="true" hidden></div>',
-            '<script type="application/json" id="panel-data">' + json.encode(panels) + "</script>",
+            '<script type="application/json" id="panel-data">' + std.json.encode(panels) + "</script>",
             "<script>" + js + "</script></main>"]
     return "\n".join(head + top + sections + tail) + "\n"
 
@@ -543,7 +543,7 @@ actor main(env: Env):
     wcap = file.WriteFileCap(fcap)
     fs = file.FS(fcap)
 
-    var args = argparse.Args()
+    var args = std.argparse.Args()
     var out: ?file.WriteFile = None
     var child: ?RunProcess = None
     var pending: ?proc(int, str, str) -> None = None
@@ -607,7 +607,7 @@ actor main(env: Env):
     proc def write_line(d: dict[str, ?value]) -> None:
         o = out
         if o is not None:
-            await async o.write((json.encode(d) + "\n").encode())
+            await async o.write((std.json.encode(d) + "\n").encode())
 
     proc def record() -> dict[str, ?value]:
         rep, threads, test, runtime = current
@@ -731,7 +731,7 @@ actor main(env: Env):
         if code != 0 or len(reports) == 0:
             rec["error"] = "exit %d: %s" % (code, stderr[-300:])
         else:
-            d = obj(json.decode(reports[-1]))
+            d = obj(std.json.decode(reports[-1]))
             bodies = number(d["bodies"])
             rec["version"] = d.get("version")
             rec["samples"] = len(array(d["samples"]))
@@ -758,7 +758,7 @@ actor main(env: Env):
             tmp = fs.mktmpdir(prefix="xlang-")
         next_step()
 
-    proc def cmd_run(a: argparse.Args) -> None:
+    proc def cmd_run(a: std.argparse.Args) -> None:
         output = a.get_str("output")
         counters = a.get_str("counters")
         if counters not in ["acton", "perf", "off"]:
@@ -793,7 +793,7 @@ actor main(env: Env):
                         steps.append((rep, t, test, rt))
         source = a.get_str("scheduling")
         try:
-            digest = hexdigest(crypto.hash.md5.hash(read(source)))
+            digest = hexdigest(std.crypto.hash.md5.hash(read(source)))
             if digest != SCHEDULING_MD5:
                 print("xlang: warning: " + source + " has changed since the Go and Tokio ports were checked against it", err=True)
         except Exception:
@@ -801,7 +801,7 @@ actor main(env: Env):
         out = file.WriteFile(wcap, output, append=True)
         run(["uname", "-srm"], None, start)
 
-    proc def cmd_build(a: argparse.Args) -> None:
+    proc def cmd_build(a: std.argparse.Args) -> None:
         compiler = a.get_str("compiler")
         if compiler == "":
             compiler = "../../dist/bin/acton"
@@ -836,7 +836,7 @@ actor main(env: Env):
         print("$ " + (" ".join(cmd) if directory == "." else "(cd " + directory + " && " + " ".join(cmd) + ")"))
         run(cmd, directory, next_build)
 
-    proc def cmd_page(a: argparse.Args) -> None:
+    proc def cmd_page(a: std.argparse.Args) -> None:
         machines = []
         for path in a.get_strlist("files"):
             machines.append(read(path).decode().splitlines())
@@ -850,47 +850,48 @@ actor main(env: Env):
         print("Wrote " + output)
         finish(0)
 
-    proc def cmd_summary(a: argparse.Args) -> None:
+    proc def cmd_summary(a: std.argparse.Args) -> None:
         lines = []
         for path in a.get_strlist("files"):
             lines.extend(read(path).decode().splitlines())
         print(summarize(lines))
         finish(0)
 
-    try:
-        p = argparse.Parser()
-        r = p.add_cmd("run", "Run the tests in each runtime, interleaved, and append JSON lines to a file", cmd_run)
-        r.add_arg("output", "file to append results to")
-        r.add_option("reps", "int", default=1, help="repeats")
-        r.add_option("rep_offset", "int", default=0, help="number the repeats from this + 1, for runs split into chunks")
-        r.add_option("threads", "str", default="4", help="thread counts, separated by spaces")
-        r.add_option("tests", "str", default="", help="tests to run, separated by commas (default: all)")
-        r.add_option("runtimes", "str", default="acton,go,tokio", help="runtimes to run, separated by commas")
-        r.add_option("acton", "str", default="", help="Acton's scheduling test binary, a release build (default: " + BINARIES["acton"] + ")")
-        r.add_option("go", "str", default="", help="the Go port (default: " + BINARIES["go"] + ")")
-        r.add_option("tokio", "str", default="", help="the Tokio port (default: " + BINARIES["tokio"] + ")")
-        r.add_option("counters", "str", default="acton", help="acton: Acton's harness counts cycles (as acton test perf does); perf: also Go and Tokio under perf stat (Linux); off: no counters")
-        r.add_option("time", "int", default=0, help="time budget per run in ms instead of each test's default")
-        r.add_option("label", "str", default="", help="free text for the machine lines, such as the Acton build")
-        r.add_option("scheduling", "str", default="src/scheduling.act", help="the Acton tests the ports mirror")
-        b = p.add_cmd("build", "Build Acton's test binary in release mode, the Go port and the Tokio port", cmd_build)
-        b.add_option("compiler", "str", default="", help="the acton compiler (default: ../../dist/bin/acton, else acton on PATH)")
-        b.add_option("cpu", "str", default="native", help="CPU to build Acton and the Tokio port for; Go keeps GOAMD64 or GOARM64 from the environment")
-        g = p.add_cmd("page", "Write a web page with charts and tables, one section per result file (one file per machine)", cmd_page)
-        g.add_arg("files", "result files, one per machine", nargs="+")
-        g.add_option("output", "str", default="xlang.html", help="the page to write")
-        g.add_option("intro", "str", default="", help="an HTML fragment to put under the title, such as findings")
-        s = p.add_cmd("summary", "Print tables of medians from result files", cmd_summary)
-        s.add_arg("files", "result files", nargs="+")
-        args = p.parse(env.argv)
-        cmd = args.cmd
-        if cmd is not None:
-            cmd(args)
-        else:
-            p.print_usage()
-            finish(2)
-    except argparse.PrintUsage as error:
-        print(error.error_message)
-        finish(0)
-    except Exception as error:
-        fail(error)
+    proc def __startup__():
+        try:
+            p = std.argparse.Parser()
+            r = p.add_cmd("run", "Run the tests in each runtime, interleaved, and append JSON lines to a file", cmd_run)
+            r.add_arg("output", "file to append results to")
+            r.add_option("reps", "int", default=1, help="repeats")
+            r.add_option("rep_offset", "int", default=0, help="number the repeats from this + 1, for runs split into chunks")
+            r.add_option("threads", "str", default="4", help="thread counts, separated by spaces")
+            r.add_option("tests", "str", default="", help="tests to run, separated by commas (default: all)")
+            r.add_option("runtimes", "str", default="acton,go,tokio", help="runtimes to run, separated by commas")
+            r.add_option("acton", "str", default="", help="Acton's scheduling test binary, a release build (default: " + BINARIES["acton"] + ")")
+            r.add_option("go", "str", default="", help="the Go port (default: " + BINARIES["go"] + ")")
+            r.add_option("tokio", "str", default="", help="the Tokio port (default: " + BINARIES["tokio"] + ")")
+            r.add_option("counters", "str", default="acton", help="acton: Acton's harness counts cycles (as acton test perf does); perf: also Go and Tokio under perf stat (Linux); off: no counters")
+            r.add_option("time", "int", default=0, help="time budget per run in ms instead of each test's default")
+            r.add_option("label", "str", default="", help="free text for the machine lines, such as the Acton build")
+            r.add_option("scheduling", "str", default="src/scheduling.act", help="the Acton tests the ports mirror")
+            b = p.add_cmd("build", "Build Acton's test binary in release mode, the Go port and the Tokio port", cmd_build)
+            b.add_option("compiler", "str", default="", help="the acton compiler (default: ../../dist/bin/acton, else acton on PATH)")
+            b.add_option("cpu", "str", default="native", help="CPU to build Acton and the Tokio port for; Go keeps GOAMD64 or GOARM64 from the environment")
+            g = p.add_cmd("page", "Write a web page with charts and tables, one section per result file (one file per machine)", cmd_page)
+            g.add_arg("files", "result files, one per machine", nargs="+")
+            g.add_option("output", "str", default="xlang.html", help="the page to write")
+            g.add_option("intro", "str", default="", help="an HTML fragment to put under the title, such as findings")
+            s = p.add_cmd("summary", "Print tables of medians from result files", cmd_summary)
+            s.add_arg("files", "result files", nargs="+")
+            args = p.parse(env.argv)
+            cmd = args.cmd
+            if cmd is not None:
+                cmd(args)
+            else:
+                p.print_usage()
+                finish(2)
+        except std.argparse.PrintUsage as error:
+            print(error.error_message)
+            finish(0)
+        except Exception as error:
+            fail(error)

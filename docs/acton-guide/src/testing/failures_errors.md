@@ -12,14 +12,13 @@ For example, if a test attempts to retrieve `https://dummyjson.com/products/1` a
 
 Source:
 ```python
-import random
 import testing
 
 def _test_failure():
     testing.assertEqual(1, 2)
 
-def _test_flaky():
-    i = random.randint(0, 2)
+def _test_flaky(t: testing.SyncT):
+    i = t.random.below(3)
     if i == 0:
         return
     elif i == 1:
@@ -41,22 +40,28 @@ acton test
 
 Output:
 ```sh
-Building project in /home/user/foo
-  Compiling example.act for release
-   Finished compilation in   0.020 s
-  Final compilation step
-   Finished final compilation step in   0.482 s
-
 Tests - module example:
-  error:                 ERR: 454 errors out of  454 runs in 52.733ms
+   error:           ERR            : 2269 runs in 50.162ms @ 45233.4/s
+    outcomes: 2269 err
     ValueError: 
-  flaky:                 FLAKY FAIL: 231 failures out of  471 runs in 52.819ms
+   failure:         FAIL           : 1547 runs in 50.165ms @ 30838.2/s
+    outcomes: 1547 fail
     testing.NotEqualError: Expected equal values but they are non-equal. A: 1 B: 2
-  failure:               FAIL: 408 failures out of  408 runs in 52.837ms
+    @@ -1,1 +1,1 @@
+    -1
+    +2
+
+   flaky:           FLAKY ERR/FAIL : 1838 runs in 50.218ms @ 36600.4/s
+    outcomes: 604 ok, 616 fail, 618 err
     testing.NotEqualError: Expected equal values but they are non-equal. A: 1 B: 2
+    @@ -1,1 +1,1 @@
+    -1
+    +2
 
-1 error and 2 failure out of 3 tests (0.691s)
+    seed: 5423337750926700240 (failed the same way in 3 of 3 replays)
+    rerun: acton test --module example --name flaky --seed 5423337750926700240
 
+1 error and 2 failure out of 3 tests ( 0.331 s)
 ```
 
 Unit tests are a good starting point for testing small units of your program. Pure functions are deterministic and are thus preferable for tests over non-deterministic tests using actors. You are limited in what you can do though, since all called functions must be pure.

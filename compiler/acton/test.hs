@@ -12,7 +12,7 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString.Lazy.Char8 as LBS
 
-import Control.Exception (catch, IOException)
+import Control.Exception (catch, onException, IOException)
 import System.Directory
 import System.Directory.Recursive
 import System.Environment (getEnvironment, lookupEnv)
@@ -22,6 +22,12 @@ import System.FilePath.Posix
 import System.IO (IOMode(..), withBinaryFile)
 import System.Process
 import System.TimeIt
+import Control.Concurrent (threadDelay)
+import qualified System.IO as IO
+import qualified System.Posix.IO as PIO
+import qualified System.Posix.IO.ByteString as PIOB
+import qualified System.Posix.Signals as PS
+import qualified System.Posix.Terminal as PT
 import System.IO.Temp (withSystemTempDirectory)
 import qualified System.Info
 import qualified System.Timeout
@@ -298,6 +304,32 @@ compilerTests =
               (not ("B_list_base_iter(" `isInfixOf` c))
           assertBool "generic reverse should retain dispatch" ("$class->reverse" `isInfixOf` body "generic_reverse")
           assertBool "generic slicing should retain dispatch" ("$class->__getslice__" `isInfixOf` body "generic_slice")
+  , testCase "builtin slice temporaries stay within their native consumer" $ do
+        withSystemTempDirectory "acton-builtin-slice-temporaries" $ \tmp -> do
+          let src = tmp </> "builtin_slice_temporaries.act"
+          copyFile "../../test/regression_auto/builtin_slice_temporaries.act" src
+          (code, generated, err) <- buildThing "--quiet --dbg-no-lines --cgen" src
+          assertEqual ("C generation should succeed:\n" ++ generated ++ err) ExitSuccess code
+          let body name = unlines $ takeWhile (/= "}") $ dropWhile
+                (not . isInfixOf ("builtin_slice_temporariesQ_" ++ name ++ " (")) (lines generated)
+          forM_ ["list_slice", "ilist_slice", "str_slice", "bytes_slice", "bytearray_slice",
+                 "optional_slice", "nested_slices", "list_set_slice", "list_del_slice",
+                 "bytearray_set_slice", "bytearray_del_slice"] $ \name -> do
+            let c = body name
+            assertBool (name ++ " should use an automatic descriptor")
+              ("&(struct B_slice)" `isInfixOf` c)
+            assertBool (name ++ " should not allocate its descriptor or bound boxes")
+              (not ("B_sliceG_new(" `isInfixOf` c || "toB_int(" `isInfixOf` c))
+          assertBool "optional bounds should be evaluated into locals"
+            ("B_int $slice_start = a;" `isInfixOf` body "optional_slice")
+          forM_ ["make_slice", "generic_slice", "custom_slice"] $ \name -> do
+            assertBool (name ++ " must keep its heap descriptor")
+              ("B_sliceG_new(" `isInfixOf` body name)
+            assertBool (name ++ " must not use automatic descriptor storage")
+              (not ("&(struct B_slice)" `isInfixOf` body name))
+          assertBool "an existing descriptor should pass through unchanged"
+            ("span" `isInfixOf` body "stored_slice" &&
+             not ("&(struct B_slice)" `isInfixOf` body "stored_slice"))
   , testCase "builtin dict and set operations call shared native implementations" $ do
         withSystemTempDirectory "acton-builtin-hash-containers" $ \tmp -> do
           let src = tmp </> "builtin_hash_container_ops.act"
@@ -547,7 +579,8 @@ compilerTests =
             ]
           writeFile (proj </> "src" </> "main.act") $ unlines
             [ "actor main(env):"
-            , "    env.exit(0)"
+            , "    proc def __startup__():"
+            , "        env.exit(0)"
             ]
           assertMissing "acton FILE outside a project" tmp [missing] missing
           assertMissing "acton build FILE outside a project" tmp ["build", missing] missing
@@ -585,9 +618,10 @@ compilerTests =
             , "import c"
             , ""
             , "actor main(env: Env):"
-            , "    print(a.foo())"
-            , "    print(c.bar())"
-            , "    env.exit(0)"
+            , "    proc def __startup__():"
+            , "        print(a.foo())"
+            , "        print(c.bar())"
+            , "        env.exit(0)"
             ]
           (returnCode, _cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc actonExe ["build", "--color", "never", "src/b.act"]){ cwd = Just proj } ""
           assertEqual ("acton should build executable with dynamic module library: " ++ cmdErr) ExitSuccess returnCode
@@ -658,28 +692,89 @@ compilerTests =
             [ "import a"
             , ""
             , "actor main(env: Env):"
-            , "    print(a.total(100))"
-            , "    env.exit(0)"
+            , "    proc def __startup__():"
+            , "        print(a.total(100))"
+            , "        env.exit(0)"
             ]
           (returnCode, _cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc actonExe ["build", "--release", "--color", "never"]){ cwd = Just proj } ""
           assertEqual ("acton should build release executable with dynamic module library: " ++ cmdErr) ExitSuccess returnCode
           (runCode, runOut, runErr) <- readCreateProcessWithExitCode (proc binPath []) ""
           assertEqual ("release dynamic executable should load liba and run: " ++ runErr) ExitSuccess runCode
           assertEqual "release dynamic executable output" "4950\n" runOut
+  , testCase "dynamic module library imports" $ do
+        -- Module a in liba imports the std modules std.base64 and std.math and
+        -- the project module c, and module b imports none of them. liba
+        -- resolves their symbols against the executable when the executable
+        -- loads it, so the executable must contain all three modules. The
+        -- second build reads a and c from their cached interfaces.
+        withSystemTempDirectory "acton-dynamic-module-imports" $ \proj -> do
+          actonExe <- canonicalizePath "../../dist/bin/acton"
+          let srcDir = proj </> "src"
+              binPath = proj </> "out" </> "bin" </> "b"
+              mkFp name = Fingerprint.formatFingerprint
+                (Fingerprint.updateFingerprintPrefix
+                  (Fingerprint.fingerprintPrefixForName name) 1)
+          createDirectoryIfMissing True srcDir
+          writeFile (proj </> "Build.act") $ unlines
+            [ "name = \"dynamic_module_imports\""
+            , "fingerprint = " ++ mkFp "dynamic_module_imports"
+            , "libraries = {"
+            , "    \"a\": (modules=[\"a\"], linkage=\"dynamic\")"
+            , "}"
+            ]
+          writeFile (srcDir </> "a.act") $ unlines
+            [ "import std.base64"
+            , "import std.math"
+            , "import c"
+            , ""
+            , "def greeting() -> str:"
+            , "    return std.base64.encode(c.name().encode()).decode() + \" \" + str(int(std.math.sqrt(16.0)))"
+            ]
+          writeFile (srcDir </> "c.act") $ unlines
+            [ "def name() -> str:"
+            , "    return \"hello\""
+            ]
+          writeFile (srcDir </> "b.act") $ unlines
+            [ "import a"
+            , ""
+            , "actor main(env: Env):"
+            , "    proc def __startup__():"
+            , "        print(a.greeting())"
+            , "        env.exit(0)"
+            ]
+          (returnCode, _cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc actonExe ["build", "--color", "never"]){ cwd = Just proj } ""
+          assertEqual ("acton should build executable with dynamic module library: " ++ cmdErr) ExitSuccess returnCode
+          (runCode, runOut, runErr) <- readCreateProcessWithExitCode (proc binPath []) ""
+          assertEqual ("dynamic executable should load liba and run: " ++ runErr) ExitSuccess runCode
+          assertEqual "dynamic executable output" "aGVsbG8= 4\n" runOut
+          writeFile (srcDir </> "b.act") $ unlines
+            [ "import a"
+            , ""
+            , "actor main(env: Env):"
+            , "    proc def __startup__():"
+            , "        print(a.greeting())"
+            , "        print(a.greeting())"
+            , "        env.exit(0)"
+            ]
+          (rebuildCode, _rebuildOut, rebuildErr) <- readCreateProcessWithExitCode (proc actonExe ["build", "--color", "never"]){ cwd = Just proj } ""
+          assertEqual ("acton should rebuild executable with dynamic module library: " ++ rebuildErr) ExitSuccess rebuildCode
+          (rerunCode, rerunOut, rerunErr) <- readCreateProcessWithExitCode (proc binPath []) ""
+          assertEqual ("rebuilt dynamic executable should load liba and run: " ++ rerunErr) ExitSuccess rerunCode
+          assertEqual "rebuilt dynamic executable output" "aGVsbG8= 4\naGVsbG8= 4\n" rerunOut
   , sequentialTestGroup "repl" AllSucceed
     [ testCase "renders retained session and eval source" $ do
         let inputs =
               [ "def label() -> str:\n    return \"old function\""
               , "def label() -> str:\n    return \"new function\""
               , "answer = 42"
-              , "import math"
+              , "import std.math"
               , "class Box(object):\n    def __init__(self, name: str):\n        self.name = name\n    def describe(self) -> str:\n        return \"class \" + self.name"
-              , "actor Foo():\n    print(\"old Foo\")"
-              , "actor Foo():\n    print(\"hello from Foo\")"
+              , "actor Foo():\n    proc def __startup__():\n        print(\"old Foo\")\n    __startup__()"
+              , "actor Foo():\n    proc def __startup__():\n        print(\"hello from Foo\")\n    __startup__()"
               ]
         st <- foldM Repl.addReplInput Repl.emptyReplState inputs
         let sessionSrc = Repl.renderReplSessionSource st
-            evalSrc = Repl.renderReplEvalSource st (Repl.ReplExpr "math.sqrt(9.0)")
+            evalSrc = Repl.renderReplEvalSource st (Repl.ReplExpr "std.math.sqrt(9.0)")
         assertBool "repl should retain declarations in session module"
           ("actor Foo():" `isInfixOf` sessionSrc)
         assertBool "repl should retain classes in session module"
@@ -691,7 +786,7 @@ compilerTests =
         assertBool "repl eval should import session module"
           ("from repl_session import *" `isInfixOf` evalSrc)
         assertBool "repl eval should retain imports used by expressions"
-          ("import math" `isInfixOf` evalSrc)
+          ("import std.math" `isInfixOf` evalSrc)
         assertBool "repl eval should replay retained setup"
           ("answer = 42" `isInfixOf` evalSrc)
         assertBool "repl eval should not duplicate retained declarations"
@@ -720,8 +815,8 @@ compilerTests =
               , "label()"
               , "answer = 42"
               , "answer"
-              , "import math"
-              , "math.sqrt(9.0)"
+              , "import std.math"
+              , "std.math.sqrt(9.0)"
               , "print(\"direct print\")"
               , "proc def log():"
               , "    print(\"proc call\")"
@@ -749,12 +844,20 @@ compilerTests =
               , ""
               , "Other().say()"
               , "actor Foo():"
-              , "    print(\"old Foo\")"
+              , "    proc def __startup__():"
+              , "        print(\"old Foo\")"
+              , "    action def ready():"
+              , "        pass"
               , ""
               , "actor Foo():"
-              , "    print(\"hello from Foo\")"
+              , "    proc def __startup__():"
+              , "        print(\"hello from Foo\")"
+              , "    action def ready():"
+              , "        pass"
               , ""
               , "f = Foo()"
+              -- Construction does not wait for startup; a subsequent message does.
+              , "f.ready()"
               , "def gone() -> str:"
               , "    return \"reset leak\""
               , ""
@@ -777,7 +880,7 @@ compilerTests =
         assertBool "repl should evaluate retained local names"
           ("42\n" `isInfixOf` cmdOut)
         assertBool "repl should make retained imports visible to eval"
-          ("3\n" `isInfixOf` cmdOut)
+          ("acton> 3\n" `isInfixOf` cmdOut)
         assertBool "repl should run direct print calls without printing None"
           ("direct print\n" `isInfixOf` cmdOut)
         assertBool "repl should run retained proc calls without printing None"
@@ -858,6 +961,23 @@ compilerTests =
             "name = \"real_project\"\n" parentBuildAct
           replBuildActExists <- doesFileExist (proj </> ".acton-repl" </> "Build.act")
           assertBool "repl should write Build.act in owned subdir" replBuildActExists
+
+    , testCase "imports a std module as the first input" $ do
+        -- The second input calls std.math from librepl_eval, which resolves
+        -- the call against the executable, so the executable must contain
+        -- std.math although the session has nothing else that uses it.
+        withSystemTempDirectory "acton-repl-first-import" $ \tmp -> do
+          actonExe <- canonicalizePath "../../dist/bin/acton"
+          let input = unlines
+                [ "import std.math"
+                , "std.math.sqrt(9.0)"
+                , ":q"
+                ]
+          (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode
+            (proc actonExe ["repl", "--color", "never", "--tempdir", tmp]) input
+          assertEqual ("acton repl should exit successfully: " ++ cmdErr) ExitSuccess returnCode
+          assertBool ("repl should evaluate a call of a std module imported first: " ++ cmdOut ++ cmdErr)
+            ("acton> 3\n" `isInfixOf` cmdOut)
     ]
 
   , testCase "deps" $ do
@@ -930,8 +1050,9 @@ compilerTests =
             [ "import provider"
             , ""
             , "actor main(env):"
-            , "    print(provider.make_box().get())"
-            , "    env.exit(0)"
+            , "    proc def __startup__():"
+            , "        print(provider.make_box().get())"
+            , "        env.exit(0)"
             ]
           firstLog <- assertOk "initial dbp build" =<<
             runBuild ["build", "--skip-build", "--verbose", "--color", "never"]
@@ -944,8 +1065,9 @@ compilerTests =
             [ "import provider"
             , ""
             , "actor main(env):"
-            , "    print(provider.unused_0())"
-            , "    env.exit(0)"
+            , "    proc def __startup__():"
+            , "        print(provider.unused_0())"
+            , "        env.exit(0)"
             ]
           changedConsumerLog <- assertOk "changed consumer updates dbp selection" =<<
             runBuild ["build", "--skip-build", "--verbose", "--color", "never"]
@@ -976,9 +1098,10 @@ compilerTests =
             [ "import provider"
             , ""
             , "actor main(env):"
-            , "    f = provider.local_container_name"
-            , "    print(\"ok\")"
-            , "    env.exit(0)"
+            , "    proc def __startup__():"
+            , "        f = provider.local_container_name"
+            , "        print(\"ok\")"
+            , "        env.exit(0)"
             ]
           _thirdLog <- assertOk "dbp local name shadows builtin" =<<
             runBuild ["build", "--skip-build", "--verbose", "--color", "never"]
@@ -988,8 +1111,9 @@ compilerTests =
             [ "import provider"
             , ""
             , "actor main(env):"
-            , "    print(provider.render_box())"
-            , "    env.exit(0)"
+            , "    proc def __startup__():"
+            , "        print(provider.render_box())"
+            , "        env.exit(0)"
             ]
           fourthLog <- assertOk "dbp keeps extension" =<<
             runBuild ["build", "--skip-build", "--verbose", "--color", "never"]
@@ -1000,7 +1124,8 @@ compilerTests =
             [ "import provider"
             , ""
             , "actor main(env):"
-            , "    env.exit(0)"
+            , "    proc def __startup__():"
+            , "        env.exit(0)"
             ]
           fifthLog <- assertOk "dbp empty interest" =<<
             runBuild ["build", "--skip-build", "--verbose", "--color", "never"]
@@ -1067,8 +1192,9 @@ compilerTests =
             [ "import b"
             , ""
             , "actor main(env):"
-            , "    print(b.exposed())"
-            , "    env.exit(0)"
+            , "    proc def __startup__():"
+            , "        print(b.exposed())"
+            , "        env.exit(0)"
             ]
           logTxt <- assertOk "dbp skips library boundary" =<<
             runBuild ["build", "--skip-build", "--verbose", "--color", "never", "src/c.act"]
@@ -1108,7 +1234,8 @@ compilerTests =
             ]
           writeFile (rootProj </> "src" </> "main.act") $ unlines
             [ "actor main(env):"
-            , "    env.exit(0)"
+            , "    proc def __startup__():"
+            , "        env.exit(0)"
             ]
           writeFile (specProj </> "Build.act") $ unlines
             [ "name = \"spec_proj\""
@@ -1181,7 +1308,8 @@ compilerTests =
             ]
           writeFile (rootProj </> "src" </> "main.act") $ unlines
             [ "actor main(env):"
-            , "    env.exit(0)"
+            , "    proc def __startup__():"
+            , "        env.exit(0)"
             ]
           (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode
             (proc actonExe ["fetch"]) { cwd = Just rootProj, env = Just envWithHome } ""
@@ -1289,7 +1417,8 @@ compilerTests =
             [ "import mid"
             , ""
             , "actor main(env):"
-            , "    env.exit(mid.marker())"
+            , "    proc def __startup__():"
+            , "        env.exit(mid.marker())"
             ]
 
           (returnCode, cmdOut, cmdErr) <- runBuild rootProj
@@ -1380,8 +1509,9 @@ compilerTests =
               [ "import mid.used"
               , ""
               , "actor main(env: Env):"
-              , "    print(mid.used.value())"
-              , "    env.exit(0)"
+              , "    proc def __startup__():"
+              , "        print(mid.used.value())"
+              , "        env.exit(0)"
               ]
 
             assertBuildOk "initial build of mid dependency" =<< runBuild midProj
@@ -1406,8 +1536,9 @@ compilerTests =
               ]
             writeFile actFile $ unlines
               [ "actor main(env):"
-              , "    print(\"Hello, world\")"
-              , "    env.exit(0)"
+              , "    proc def __startup__():"
+              , "        print(\"Hello, world\")"
+              , "        env.exit(0)"
               ]
             runActon "build" ExitSuccess False proj
             zon <- readFile (proj </> "out/zig/build.zig.zon")
@@ -1428,8 +1559,9 @@ compilerTests =
             writeFile actFile $ unlines
               [ "#!/usr/bin/env runacton"
               , "actor main(env):"
-              , "    print(\"Hello, world\")"
-              , "    env.exit(0)"
+              , "    proc def __startup__():"
+              , "        print(\"Hello, world\")"
+              , "        env.exit(0)"
               ]
             perms <- getPermissions actFile
             setPermissions actFile perms{ executable = True }
@@ -1445,8 +1577,9 @@ compilerTests =
             writeFile script $ unlines
               [ "#!/usr/bin/env runacton"
               , "actor main(env):"
-              , "    print(\"Hello from runacton\")"
-              , "    env.exit(0)"
+              , "    proc def __startup__():"
+              , "        print(\"Hello from runacton\")"
+              , "        env.exit(0)"
               ]
             perms <- getPermissions script
             setPermissions script perms{ executable = True }
@@ -1472,14 +1605,16 @@ compilerTests =
               ]
             writeFile mainFile $ unlines
               [ "actor main(env):"
-              , "    print(\"Project main\")"
-              , "    env.exit(0)"
+              , "    proc def __startup__():"
+              , "        print(\"Project main\")"
+              , "        env.exit(0)"
               ]
             writeFile script $ unlines
               [ "#!/usr/bin/env runacton"
               , "actor main(env):"
-              , "    print(\"Script main\")"
-              , "    env.exit(0)"
+              , "    proc def __startup__():"
+              , "        print(\"Script main\")"
+              , "        env.exit(0)"
               ]
             perms <- getPermissions script
             setPermissions script perms{ executable = True }
@@ -1662,7 +1797,8 @@ parseFlagTests =
         writeBuildActAt rootProj "sig_root" [("sig_dep", depProj)]
         writeFile (rootProj </> "src" </> "main.act") $ unlines
           [ "actor main(env):"
-          , "    env.exit(0)"
+          , "    proc def __startup__():"
+          , "        env.exit(0)"
           ]
 
         (sigCode, sigOut, sigErr) <- readCreateProcessWithExitCode
@@ -1734,7 +1870,8 @@ parseFlagTests =
           [ "from lib import _private"
           , ""
           , "actor main(env):"
-          , "    env.exit(0)"
+          , "    proc def __startup__():"
+          , "        env.exit(0)"
           ]
         (importCode, _importOut, importErr) <- readCreateProcessWithExitCode
           (proc actonExe ["build", "--syspath", sysPath, "--skip-build", "src/main.act"])
@@ -1756,7 +1893,8 @@ parseFlagTests =
           [ "from lib import _private"
           , ""
           , "actor main(env):"
-          , "    env.exit(0)"
+          , "    proc def __startup__():"
+          , "        env.exit(0)"
           ]
         (cachedImportCode, _cachedImportOut, cachedImportErr) <- readCreateProcessWithExitCode
           (proc actonExe ["build", "--syspath", sysPath, "--skip-build", "src/main.act"])
@@ -1807,6 +1945,39 @@ parseFlagTests =
         stress <- run ["stress", "--name", "budget", "--max-time", "20", "--max-iter", "2", "--stress-workers", "1"] ExitSuccess
         assertBool "the stress repetition budget is independent of the watchdog"
           ("\"iterations\":1" `isInfixOf` stress)
+  , testCase "acton test shows and replays the seed of a failed run" $ do
+      withSystemTempDirectory "acton-test-seed" $ \proj -> do
+        acton <- canonicalizePath "../../dist/bin/acton"
+        let name = "test_seed"
+            fp = Fingerprint.formatFingerprint
+              (Fingerprint.updateFingerprintPrefix
+                (Fingerprint.fingerprintPrefixForName name) 1)
+            srcDir = proj </> "src"
+            run args expected = do
+              (code, out, err) <- readCreateProcessWithExitCode
+                (proc acton (["test"] ++ args ++ ["--rts-wthreads", "2"]))
+                  { cwd = Just proj } ""
+              assertEqual ("acton test " ++ unwords args ++ " exit code:\n" ++ out ++ err) expected code
+              return out
+        createDirectoryIfMissing True srcDir
+        writeFile (proj </> "Build.act") $ unlines
+          [ "name = " ++ show name
+          , "fingerprint = " ++ fp
+          ]
+        copyFile "test/project/test_seed/src/test_seed.act" (srcDir </> "test_seed.act")
+        fixed <- run ["--seed", "42"] (ExitFailure 1)
+        assertBool ("every run with a failing seed fails:\n" ++ fixed)
+          ("FAIL" `isInfixOf` fixed && not ("FLAKY" `isInfixOf` fixed))
+        assertBool ("the seed and the command to rerun it are shown:\n" ++ fixed)
+          ("    seed: 42\n" `isInfixOf` fixed
+           && "rerun: acton test --module test_seed --name even --seed 42" `isInfixOf` fixed)
+        _ <- run ["--seed", "2"] ExitSuccess
+        fresh <- run [] (ExitFailure 1)
+        assertBool ("new seeds find the failure, which its seed replays:\n" ++ fresh)
+          ("(failed the same way in 3 of 3 replays)" `isInfixOf` fresh)
+        report <- run ["--seed", "42", "--json"] (ExitFailure 1)
+        assertBool ("the JSON report has the seed:\n" ++ report)
+          ("\"seed\":42" `isInfixOf` report)
   , testCase "acton test compiles selected modules and their imports" $ do
       withSystemTempDirectory "acton-test-selection" $ \proj -> do
         acton <- canonicalizePath "../../dist/bin/acton"
@@ -1850,8 +2021,9 @@ parseFlagTests =
           , "import provider"
           , ""
           , "actor _test_foo(t: testing.EnvT):"
-          , "    assert provider.ready()"
-          , "    t.success()"
+          , "    proc def __startup__():"
+          , "        assert provider.ready()"
+          , "        t.success()"
           , ""
           , "def _test_foobar() -> None:"
           , "    assert std.math.sqrt(9.0) == 3.0"
@@ -1875,7 +2047,8 @@ parseFlagTests =
           [ "import testing"
           , ""
           , "actor Foo(t: testing.EnvT):"
-          , "    t.success()"
+          , "    proc def __startup__():"
+          , "        t.success()"
           ]
         writeFile (srcDir </> "broken.act") $ unlines
           [ "import testing"
@@ -1885,8 +2058,9 @@ parseFlagTests =
           ]
         writeFile (srcDir </> "app.act") $ unlines
           [ "actor main(env):"
-          , "    print(\"standalone app\")"
-          , "    env.exit(0)"
+          , "    proc def __startup__():"
+          , "        print(\"standalone app\")"
+          , "        env.exit(0)"
           ]
 
         checkTests ["--name", "oo"] []
@@ -2027,8 +2201,9 @@ parseFlagTests =
           [ "import header_helper.api"
           , ""
           , "actor main(env):"
-          , "    assert header_helper.api.value() == 42"
-          , "    env.exit(0)"
+          , "    proc def __startup__():"
+          , "        assert header_helper.api.value() == 42"
+          , "        env.exit(0)"
           ]
         writeSource app "chosen"
           [ "import testing"
@@ -2106,10 +2281,12 @@ parseFlagTests =
         writeFile (proj </> "Build.act") ("name = " ++ show name ++ "\nfingerprint = " ++ fp ++ "\n")
         writeFile (proj </> "src/main.act") $ unlines
           [ "actor first(env: Env):"
-          , "    env.exit(11)"
+          , "    proc def __startup__():"
+          , "        env.exit(11)"
           , ""
           , "actor second(env: Env):"
-          , "    env.exit(12)"
+          , "    proc def __startup__():"
+          , "        env.exit(12)"
           ]
         build "first"
         forM_ ["build.zig", "build.zig.zon"] $ \file ->
@@ -2156,7 +2333,8 @@ parseFlagTests =
           , "    testing.assertEqual(1, 1)"
           , ""
           , "actor main(env):"
-          , "    env.exit(0)"
+          , "    proc def __startup__():"
+          , "        env.exit(0)"
           ]
         buildOut <- run ["build", "--timing", "--color", "always"]
         forM_ [ "compile planning", "Acton compilation", "dependency build preparation"
@@ -2438,11 +2616,12 @@ actonProjTests =
             , "fingerprint = " ++ mkFp "std_json_import"
             ]
           writeFile (proj </> "src" </> "main.act") $ unlines
-            [ "import std.json as json"
+            [ "import std.json"
             , ""
             , "actor main(env):"
-            , "    print(json.encode({\"answer\": 42}))"
-            , "    env.exit(0)"
+            , "    proc def __startup__():"
+            , "        print(std.json.encode({\"answer\": 42}))"
+            , "        env.exit(0)"
             ]
           (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode
             (proc actonExe ["build", "--color", "never"]) { cwd = Just proj } ""
@@ -2486,8 +2665,9 @@ actonProjTests =
             , "    def hash(self, h):"
             , "        retained = lambda: h"
             , "actor main(env):"
-            , "    print(hash(Bad(1)))"
-            , "    env.exit(0)"
+            , "    proc def __startup__():"
+            , "        print(hash(Bad(1)))"
+            , "        env.exit(0)"
             ]
           (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode
             (proc actonExe ["build", "--skip-build", "--color", "never"])
@@ -2590,10 +2770,11 @@ actonProjTests =
             [ "from acton_lmdb.lmdb import ready"
             , ""
             , "actor main(env):"
-            , "    if ready():"
-            , "        env.exit(0)"
-            , "    else:"
-            , "        env.exit(1)"
+            , "    proc def __startup__():"
+            , "        if ready():"
+            , "            env.exit(0)"
+            , "        else:"
+            , "            env.exit(1)"
             ]
           writeFile (wrapperProj </> "Build.act") $ unlines
             [ "name = \"acton_lmdb\""
@@ -2679,8 +2860,9 @@ actonProjTests =
             [ "import lib1.greet"
             , ""
             , "actor main(env):"
-            , "    print(lib1.greet.hello())"
-            , "    env.exit(0)"
+            , "    proc def __startup__():"
+            , "        print(lib1.greet.hello())"
+            , "        env.exit(0)"
             ]
           writeFile (lib </> "Build.act") $ unlines
             [ "name = \"lib1\""
@@ -2775,10 +2957,11 @@ actonProjTests =
             , "import dep_c"
             , ""
             , "actor main(env):"
-            , "    if dep_a.ready() and dep_b.ready() and dep_c.ready():"
-            , "        env.exit(0)"
-            , "    else:"
-            , "        env.exit(1)"
+            , "    proc def __startup__():"
+            , "        if dep_a.ready() and dep_b.ready() and dep_c.ready():"
+            , "            env.exit(0)"
+            , "        else:"
+            , "            env.exit(1)"
             ]
           writeWrapper depAProj "dep_a" "../zig_common" "lib"
           writeWrapper depBProj "dep_b" "../zig_common" "lib"
@@ -2817,8 +3000,9 @@ actonProjTests =
             ]
           writeFile mainAct $ unlines
             [ "actor main(env):"
-            , "    print(\"hello\")"
-            , "    env.exit(0)"
+            , "    proc def __startup__():"
+            , "        print(\"hello\")"
+            , "        env.exit(0)"
             ]
           actonExe <- canonicalizePath "../../dist/bin/acton"
           (returnCode, _cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc actonExe ["build", "--dep", "dep_a=deps"]){ cwd = Just proj } ""
@@ -2852,8 +3036,8 @@ actonProjTests =
             srcDir = proj </> "src"
             fooAct = srcDir </> "foo.act"
             barAct = srcDir </> "bar.act"
-            fooContent = "actor main(env):\n    print(\"foo\")\n    env.exit(0)\n"
-            barContent = "actor main(env):\n    print(\"bar\")\n    env.exit(0)\n"
+            fooContent = "actor main(env):\n    proc def __startup__():\n        print(\"foo\")\n        env.exit(0)\n"
+            barContent = "actor main(env):\n    proc def __startup__():\n        print(\"bar\")\n        env.exit(0)\n"
             barC    = proj </> "out/types/prune_partials/bar.c"
             barH    = proj </> "out/types/prune_partials/bar.h"
             barTydb = proj </> "out/types/prune_partials/bar.tydb"
@@ -2881,7 +3065,7 @@ actonProjTests =
               flatTydb = proj </> "src" </> "pkg.nested.tydb"
           createDirectoryIfMissing True srcDir
           writeFile (proj </> "Build.act") "name = \"ty_nested\"\nfingerprint = 0x36cff6d86d8575b6\n"
-          writeFile nestedAct "actor main(env):\n    env.exit(0)\n"
+          writeFile nestedAct "actor main(env):\n    proc def __startup__():\n        env.exit(0)\n"
           acton <- canonicalizePath "../../dist/bin/acton"
           (returnCode, cmdOut, cmdErr) <-
             readCreateProcessWithExitCode (proc acton ["--skip-build", "--tydb", "src/pkg/nested.act"]){ cwd = Just proj } ""
@@ -2893,7 +3077,7 @@ actonProjTests =
   , testCase "full build prunes stale roots and bins" $ do
         let proj = "test/project/prune_roots"
             barAct = proj </> "src/bar.act"
-            barContent = "#\n# removed in test to trigger pruning\n\nactor main(env):\n    print(\"bar\")\n    env.exit(0)\n"
+            barContent = "#\n# removed in test to trigger pruning\n\nactor main(env):\n    proc def __startup__():\n        print(\"bar\")\n        env.exit(0)\n"
             barRoot = proj </> "out/types/bar.root.c"
             barBin  = proj </> "out/bin/bar"
         -- Start from a clean slate and write bar.act to ensure it exists
@@ -3033,17 +3217,18 @@ gcBuildOptionTests = testGroup "GC metadata build options"
           writeApp dir name (gcOptions False False)
           writeFile (dir </> "src/main.act") $ unlines
             [ "import bridge"
-            , "import std.json as json"
+            , "import std.json"
             , ""
             , "actor main(env):"
-            , "    records = bridge.make()"
-            , "    large = \"x\" * 16384"
-            , "    env.rts.gc()"
-            , "    assert bridge.churn() == 8128"
-            , "    env.rts.gc()"
-            , "    assert large == \"x\" * 16384"
-            , "    print(json.encode({\"count\": bridge.verify(records)}))"
-            , "    env.exit(0)"
+            , "    proc def __startup__():"
+            , "        records = bridge.make()"
+            , "        large = \"x\" * 16384"
+            , "        env.rts.gc()"
+            , "        assert bridge.churn() == 8128"
+            , "        env.rts.gc()"
+            , "        assert large == \"x\" * 16384"
+            , "        print(std.json.encode({\"count\": bridge.verify(records)}))"
+            , "        env.exit(0)"
             ]
         let sharedFiles = [dir </> file | dir <- [bridge, shared], file <- ["Build.act", "src/lib.act"]]
         originalShared <- mapM BS.readFile sharedFiles
@@ -3661,8 +3846,9 @@ dependencyDeclarationTests =
         , "import yang.api"
         , ""
         , "actor main(env):"
-        , "    print(platform.answer() + yang.api.first_only())"
-        , "    env.exit(0)"
+        , "    proc def __startup__():"
+        , "        print(platform.answer() + yang.api.first_only())"
+        , "        env.exit(0)"
         ]
       expectSuccess "full build with the selected following dependency" =<<
         readCreateProcessWithExitCode (proc acton ["build", "--color", "never"]){ cwd = Just app } ""
@@ -3817,6 +4003,147 @@ workerStackTests = testGroup "worker stacks" $
   | System.Info.os == "linux"
   ]
 
+-- test/rts/stdio_raw and test/rts/stdio_raw_wait run with stdin on a new
+-- pseudo terminal, which these tests set to cooked mode first, and stdout and
+-- stderr on pipes. The tests read the settings of the terminal through its
+-- slave and type keys into its master. The terminal is not the controlling
+-- terminal of the program, so the keys that send signals in cooked mode send
+-- none, but the terminal does not pass them on to the program either.
+stdioTerminalTests = testGroup "stdio terminal" $
+  if System.Info.os `notElem` ["darwin", "linux"] then [] else
+  [ testCase "raw mode passes every key on and set_stdin(raw=False) restores the terminal" $ do
+      testBuildThing "" ExitSuccess False "../../test/rts/stdio_raw.act"
+      env0 <- getEnvironment
+      withPtyProgram "stdio_raw" env0 $ \master slave hOut ph -> do
+        line <- readLineWithin hOut
+        assertEqual "stdin and stdout" "stdin_is_tty True stdout_is_tty False" line
+        ttys <- readLineWithin hOut
+        assertEqual "stdin readers after two stdin_install" "tty handles 1" ttys
+        expectReady hOut
+        assertRawMode slave
+        -- Ctrl-C, Ctrl-Z, Ctrl-\, Ctrl-S, Ctrl-Q, Ctrl-V, Ctrl-Y, Ctrl-O, Enter
+        let keys = [3, 26, 28, 19, 17, 22, 25, 15, 13]
+        forM_ keys $ \k -> do
+          _ <- PIOB.fdWrite master (BS.singleton k)
+          threadDelay 20000
+        got <- readLineWithin hOut
+        assertEqual "bytes from the stdin handler" ("got [" ++ intercalate ", " (map show keys) ++ "]") got
+        cooked <- readLineWithin hOut
+        assertEqual "after set_stdin(raw=False)" "cooked" cooked
+        assertCookedMode slave
+        code <- waitWithin ph
+        assertEqual "exit code" ExitSuccess code
+        assertCookedMode slave
+  , testCase "the terminal is restored when a signal ends the program" $ do
+      testBuildThing "" ExitSuccess False "../../test/rts/stdio_raw_wait.act"
+      env0 <- getEnvironment
+      -- The crash handler starts lldb or gdb for a backtrace. With PATH on a
+      -- directory that does not exist it finds neither and goes on at once.
+      let noDebugger = ("PATH", "/nonexistent") : filter ((/= "PATH") . fst) env0
+      forM_ [ ("SIGHUP", PS.sigHUP, ExitFailure (-1), env0)
+            , ("SIGQUIT", PS.sigQUIT, ExitFailure (-3), env0)
+            , ("SIGINT", PS.sigINT, ExitSuccess, env0)
+            , ("SIGTERM", PS.sigTERM, ExitSuccess, env0)
+            , ("SIGSEGV", PS.sigSEGV, ExitFailure (-11), noDebugger)
+            ] $ \(name, sig, expCode, env) ->
+        withPtyProgram "stdio_raw_wait" env $ \_ slave hOut ph -> do
+          expectReady hOut
+          assertRawMode slave
+          Just pid <- getPid ph
+          PS.signalProcess sig pid
+          code <- waitWithin ph
+          assertEqual ("exit code after " ++ name) expCode code
+          assertCookedModeAfter ("after " ++ name) slave
+  , testCase "stdin_is_tty, stdout_is_tty and stderr_is_tty check their own stream" $ do
+      testBuildThing "" ExitSuccess False "../../test/rts/stdio_is_tty.act"
+      wd <- canonicalizePath "../../test/rts"
+      -- One stream on the slave of a new pseudo terminal, the others on pipes
+      forM_ [ ("stdin", "stdin True stdout False stderr False")
+            , ("stdout", "stdin False stdout True stderr False")
+            , ("stderr", "stdin False stdout False stderr True")
+            ] $ \(stream, expected) -> do
+        (master, slave) <- PT.openPseudoTerminal
+        hPty <- PIO.dup slave >>= PIO.fdToHandle
+        let on s = if s == stream then UseHandle hPty else CreatePipe
+        (mIn, mOut, mErr, ph) <- createProcess (proc "./stdio_is_tty" [])
+            { cwd = Just wd, std_in = on "stdin", std_out = on "stdout", std_err = on "stderr" }
+        line <- readLineWithin (head (catMaybes [mOut, mErr]))
+        assertEqual ("with " ++ stream ++ " on a terminal") expected line
+        code <- waitWithin ph
+        assertEqual "exit code" ExitSuccess code
+        mapM_ IO.hClose (catMaybes [mIn, mOut, mErr])
+        mapM_ PIO.closeFd [master, slave]
+  , testCase "term_size reads the size of the terminal on stdout" $ do
+      testBuildThing "" ExitSuccess False "../../test/rts/stdio_term_size.act"
+      wd <- canonicalizePath "../../test/rts"
+      -- A new pseudo terminal has no size, 0 columns and 0 rows, until stty
+      -- sets one. The size of the terminal on stdin does not count.
+      forM_ [ ("stdout on a terminal of 97 by 31", Just (97, 31), "stdout", "columns 97 rows 31")
+            , ("stdout on a terminal with no size", Nothing, "stdout", "None")
+            , ("stdin on a terminal of 97 by 31 and stdout on a pipe", Just (97, 31), "stdin", "None")
+            ] $ \(what, size, stream, expected) -> do
+        (master, slave) <- PT.openPseudoTerminal
+        forM_ size $ \(columns, rows) -> do
+          hStty <- PIO.dup slave >>= PIO.fdToHandle
+          (_, _, _, sttyPh) <- createProcess (proc "stty" ["cols", show columns, "rows", show rows])
+              { std_in = UseHandle hStty }
+          sttyCode <- waitWithin sttyPh
+          assertEqual "stty exit code" ExitSuccess sttyCode
+        hPty <- PIO.dup slave >>= PIO.fdToHandle
+        let on s = if s == stream then UseHandle hPty else CreatePipe
+        (mIn, mOut, Just hErr, ph) <- createProcess (proc "./stdio_term_size" [])
+            { cwd = Just wd, std_in = on "stdin", std_out = on "stdout", std_err = CreatePipe }
+        line <- readLineWithin hErr
+        assertEqual ("with " ++ what) expected line
+        code <- waitWithin ph
+        assertEqual "exit code" ExitSuccess code
+        mapM_ IO.hClose (catMaybes [mIn, mOut, Just hErr])
+        mapM_ PIO.closeFd [master, slave]
+  ]
+  where
+    withPtyProgram exe env body = do
+      (master, slave) <- PT.openPseudoTerminal
+      attrs <- PT.getTerminalAttributes slave
+      PT.setTerminalAttributes slave (setModes attrs) PT.Immediately
+      hIn <- PIO.dup slave >>= PIO.fdToHandle
+      wd <- canonicalizePath "../../test/rts"
+      -- SIGQUIT and SIGSEGV dump core by default. A core of an Acton
+      -- program is several GB and takes longer to write than the test waits
+      -- where core dumps are on, as in CI.
+      (_, Just hOut, Just hErr, ph) <- createProcess (proc "sh" ["-c", "ulimit -c 0 && exec \"$@\"", "sh", "./" ++ exe])
+          { cwd = Just wd, env = Just env, std_in = UseHandle hIn, std_out = CreatePipe, std_err = CreatePipe }
+      body master slave hOut ph
+        `onException` (terminateProcess ph >> IO.hGetContents hErr >>= IO.hPutStr IO.stderr)
+      mapM_ IO.hClose [hOut, hErr]
+      mapM_ PIO.closeFd [master, slave]
+    readLineWithin h = do
+      r <- System.Timeout.timeout (30*1000000) (IO.hGetLine h)
+      maybe (assertFailure "the program printed no line within 30 s") return r
+    expectReady h = do
+      line <- readLineWithin h
+      assertEqual "program output" "ready" line
+    waitWithin ph = do
+      r <- System.Timeout.timeout (30*1000000) (waitForProcess ph)
+      maybe (assertFailure "the program did not exit within 30 s") return r
+    -- The modes that raw mode turns off, and the output modes that it keeps
+    cookedModes = [ ("ISIG", PT.KeyboardInterrupts), ("IXON", PT.StartStopOutput)
+                  , ("IEXTEN", PT.ExtendedFunctions), ("ICRNL", PT.MapCRtoLF)
+                  , ("ICANON", PT.ProcessInput), ("ECHO", PT.EnableEcho) ]
+    outputModes = [ ("OPOST", PT.ProcessOutput), ("ONLCR", PT.MapLFtoCRLF) ]
+    setModes attrs = foldl PT.withMode attrs (map snd (cookedModes ++ outputModes))
+    modesOf slave = do
+      attrs <- PT.getTerminalAttributes slave
+      return [ (n, PT.terminalMode m attrs) | (n, m) <- cookedModes ++ outputModes ]
+    assertRawMode slave = do
+      ms <- modesOf slave
+      assertEqual "terminal modes in raw mode"
+                  ([ (n, False) | (n, _) <- cookedModes ] ++ [ (n, True) | (n, _) <- outputModes ]) ms
+    assertCookedModeAfter what slave = do
+      ms <- modesOf slave
+      assertEqual ("terminal modes " ++ what)
+                  [ (n, True) | (n, _) <- cookedModes ++ outputModes ] ms
+    assertCookedMode = assertCookedModeAfter "in cooked mode"
+
 rtsTests =
   testGroup "RTS"
   [
@@ -3824,6 +4151,7 @@ rtsTests =
           testBuildAndRun "" "foo --bar --rts-verbose" ExitSuccess False "../../test/rts/argv1.act"
 
   ,   workerStackTests
+  ,   stdioTerminalTests
 
   ,   testCase "arg parsing: --rts-verbose --rts-wthreads 7 foo --bar" $ do
           testBuildAndRun "" "--rts-verbose --rts-wthreads 7 foo --bar" ExitSuccess False "../../test/rts/argv2.act"
@@ -4034,7 +4362,7 @@ archiveDependencyTests =
         case BuildSpec.updateBuildActFromJSON source patch of
           Left err -> assertFailure err
           Right updated -> length updated `seq` writeFile (app </> "Build.act") updated
-        writeFile (app </> "src/main.act") "import widgets\n\nactor main(env):\n    print(widgets.value())\n    env.exit(0)\n"
+        writeFile (app </> "src/main.act") "import widgets\n\nactor main(env):\n    proc def __startup__():\n        print(widgets.value())\n        env.exit(0)\n"
         expectSuccess "persistent local override" =<< run app ["build", "--skip-build"]
 
   , testCase "rejects missing and non-project archive subdirectories" $
@@ -4101,7 +4429,7 @@ archiveDependencyTests =
         (proc "tar" ["-C", tmp, "-czf", archive, "monorepo-snapshot"])
           { env = Just (("COPYFILE_DISABLE", "1") : filter ((/= "COPYFILE_DISABLE") . fst) env0) } ""
       writeProject app "app" []
-      writeFile (app </> "src/main.act") "import widgets\nimport tools\n\nactor main(env):\n    print(widgets.value() + tools.value())\n    env.exit(0)\n"
+      writeFile (app </> "src/main.act") "import widgets\nimport tools\n\nactor main(env):\n    proc def __startup__():\n        print(widgets.value() + tools.value())\n        env.exit(0)\n"
       action tmp app archive run
 
     add run app archive name dir = expectSuccess "add archive project" =<< run app

@@ -1,20 +1,19 @@
 # Concurrent JSON POST requests to a local HTTP server.
 
-import http
-import json
+import std.http
+import std.json
 import net
-import random
 
 actor Requests(cap: net.TCPConnectCap, port: int, first: int, stride: int, n: int,
                done: action(int) -> None, fail: action(str) -> None):
     var current = first
     var total = 0
 
-    def send(client: http.Client):
-        body = json.encode({"value": current}).encode()
+    def send(client: std.http.Client):
+        body = std.json.encode({"value": current}).encode()
         client.post("/api", body, receive, {"Content-Type": "application/json"})
 
-    def receive(client: http.Client, response: http.Response):
+    def receive(client: std.http.Client, response: std.http.Response):
         if response.status != 200:
             fail("HTTP status %d" % response.status)
             return
@@ -26,16 +25,15 @@ actor Requests(cap: net.TCPConnectCap, port: int, first: int, stride: int, n: in
             client.close()
             done(total)
 
-    def error(client: http.Client, message: str):
+    def error(client: std.http.Client, message: str):
         fail(message)
 
-    client = http.Client(cap, "127.0.0.1", send, error, scheme="http", port=port)
+    client = std.http.Client(cap, "127.0.0.1", send, error, scheme="http", port=port)
 
 actor main(env):
     n = int(env.argv[1]) if len(env.argv) > 1 else 10
     tcp = net.TCPCap(net.NetCap(env.cap))
     connect = net.TCPConnectCap(tcp)
-    port = random.randint(20000, 50000)
     workers = min([64, n])
     var remaining = workers
     var total = 0
@@ -51,18 +49,18 @@ actor main(env):
             print(total)
             env.exit(0)
 
-    def request(server: http.Server, req: http.Request, respond: action(int, dict[str, str], str) -> None):
-        obj = json.decode(req.body.decode())
-        respond(200, {"Content-Type": "application/json"}, str(obj["value"]))
+    def request(server: std.http.Server, req: std.http.Request, respond: action(int, dict[str, str], bytes) -> None):
+        obj = std.json.decode(req.body.decode())
+        respond(200, {"Content-Type": "application/json"}, str(obj["value"]).encode())
 
-    def server_error(server: http.Server, message: str):
+    def server_error(server: std.http.Server, message: str):
         fail(message)
 
-    def accepted(server: http.Server):
+    def accepted(server: std.http.Server):
         await async server.cb_install(request, server_error)
 
     def accept(connection: net.TCPListenConnection):
-        server = http.Server(connection, accepted, None)
+        server = std.http.Server(connection, accepted, None)
         await async server.cb_install(request, server_error)
         await async connection.cb_install(server.on_conn_receive, server.on_conn_error, None)
 
@@ -70,7 +68,8 @@ actor main(env):
         if error is not None:
             fail(error)
         else:
+            port = listener.local_port()
             for first in range(1, workers + 1):
                 Requests(connect, port, first, workers, n, done, fail)
 
-    listener = net.TCPListener(net.TCPListenCap(tcp), "127.0.0.1", port, listening, accept)
+    listener = net.TCPListener(net.TCPListenCap(tcp), "127.0.0.1", 0, listening, accept)

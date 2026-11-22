@@ -4,13 +4,14 @@ actor Other():
         cb('from the other side')
 
 actor main(env):
-    def callback(cb_arg):
-        print("The callback has been called with argument:", cb_arg)
-        env.exit(0)
+    proc def __startup__():
+        def callback(cb_arg):
+            print("The callback has been called with argument:", cb_arg)
+            env.exit(0)
 
-    def _work():
-        o = Other()
-        o.foo(callback)
+        def _work():
+            o = Other()
+            o.foo(callback)
 
-    after 10: env.exit(1)
-    _work()
+        after 10: env.exit(1)
+        _work()

@@ -19,13 +19,14 @@ def fun2():
     return complete
 
 actor main(env):
-    out1 = fun1()
-    if out1 != 42:
-        print("Bad 1:", out1)
-        env.exit(1)
+    proc def __startup__():
+        out1 = fun1()
+        if out1 != 42:
+            print("Bad 1:", out1)
+            env.exit(1)
 
-    out2 = fun2()
-    if out2 != False:
-        print("Bad 2:", out2)
+        out2 = fun2()
+        if out2 != False:
+            print("Bad 2:", out2)
 
-    env.exit(0)
+        env.exit(0)

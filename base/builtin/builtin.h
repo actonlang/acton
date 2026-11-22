@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <inttypes.h>
 #include <string.h>
 #include <math.h>
 #include <ctype.h>

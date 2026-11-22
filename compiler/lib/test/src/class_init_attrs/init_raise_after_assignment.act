@@ -12,5 +12,6 @@ class TestClass(object):
             raise ValueError("This comes after assignment")
 
 actor main(env):
-    t = TestClass()
-    env.exit(0)
+    proc def __startup__():
+        t = TestClass()
+        env.exit(0)

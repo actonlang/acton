@@ -1,0 +1,60 @@
+com def produce(x: int) -> int:
+    return x + 1
+
+com def deliver(x: int) -> int:
+    return x * 2
+
+com def combine(x: int) -> int:
+    return deliver(produce(x))
+
+pure def increment(x: int) -> int:
+    return x + 1
+
+com def apply_com(f: com(int) -> int, x: int) -> int:
+    return f(x)
+
+proc def apply_proc(f: proc(int) -> int, x: int) -> int:
+    return f(x)
+
+# Effect names are contextual; send and spawn are also ordinary names.
+class Names(object):
+    def __init__(self):
+        pass
+
+    def send(self, spawn: int, com: int) -> int:
+        return spawn + com
+
+    def pure(self, mut: int, proc: int, action: int) -> int:
+        return mut + proc + action
+
+    def mut(self, pure: int) -> int:
+        return pure + 1
+
+    def proc(self, action: int) -> int:
+        return action + 1
+
+    def action(self, pure: int) -> int:
+        return pure + 1
+
+proc def run_checks(env):
+    c = com lambda x: combine(x)
+    assert c(4) == 10
+    assert apply_com(combine, 7) == 16
+    assert apply_com(increment, 8) == 9
+    assert apply_com(produce, 9) == 10
+    assert apply_com(deliver, 10) == 20
+    assert apply_proc(produce, 11) == 12
+    assert apply_proc(deliver, 12) == 24
+    assert apply_proc(combine, 13) == 28
+    names = Names()
+    assert names.send(14, 15) == 29
+    pure = names
+    mut = pure.pure(mut=1, proc=2, action=3)
+    proc = pure.mut(pure=mut)
+    action = pure.proc(action=proc)
+    assert pure.action(pure=action) == 9
+    env.exit(0)
+
+actor main(env):
+    proc def __startup__():
+        run_checks(env)

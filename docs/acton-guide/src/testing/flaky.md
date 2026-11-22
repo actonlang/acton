@@ -4,11 +4,10 @@ Flaky tests are those that have different outcomes during different runs, i.e. t
 
 Source:
 ```python
-import random
 import testing
 
-def _test_flaky():
-    i = random.randint(0, 2)
+def _test_flaky(t: testing.SyncT):
+    i = t.random.below(3)
     if i == 0:
         return
     elif i == 1:
@@ -24,20 +23,18 @@ acton test
 
 Output:
 ```sh
-Building project in /home/user/foo
-  Compiling example.act for release
-   Finished compilation in   0.017 s
-  Final compilation step
-   Finished final compilation step in   0.453 s
-
 Tests - module example:
-  flaky:                 FLAKY FAIL: 565 failures out of 1140 runs in 50.043ms
+   flaky:           FLAKY ERR/FAIL : 1838 runs in 50.218ms @ 36600.4/s
+    outcomes: 604 ok, 616 fail, 618 err
     testing.NotEqualError: Expected equal values but they are non-equal. A: 1 B: 2
+    @@ -1,1 +1,1 @@
+    -1
+    +2
 
-1 out of 1 tests failed (0.625s)
+    seed: 5423337750926700240 (failed the same way in 3 of 3 replays)
+    rerun: acton test --module example --name flaky --seed 5423337750926700240
 
+1 out of 1 tests failed ( 0.331 s)
 ```
 
-```admonish
-Note how this test case is only made possible because the random module has incorrect effects. The type says it is pure while in reality, it is not. There is an issue to improve this by applying a proper effect to the random module, see https://github.com/actonlang/acton/issues/1729, after which this example needs to be rewritten.
-```
+The test draws its random numbers from `t.random`, so `acton test` shows the seed of the first failed run and a command that runs the test with that seed again. See [Random numbers in tests](random.md).

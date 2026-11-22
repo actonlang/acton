@@ -1,20 +1,21 @@
-import argparse
+import std.argparse
 import testing
+import std.testing.runner
 
 
 def _test_non_gc_memory_samples():
     for rss, gc, expected in [(0, 10, -10), (10, 20, -10), (10, 10, 0), (30, 10, 20)]:
-        testing.assertEqual(testing.non_gc_mem_usage(u64(rss), u64(gc)), expected)
+        testing.assertEqual(std.testing.runner.non_gc_mem_usage(u64(rss), u64(gc)), expected)
     limit: u64 = 0x7fffffffffffffff
-    testing.assertEqual(testing.non_gc_mem_usage(limit, limit), 0)
-    testing.assertEqual(testing.non_gc_mem_usage(limit - 10, limit), -10)
-    testing.assertEqual(testing.non_gc_mem_usage(limit, limit - 10), 10)
+    testing.assertEqual(std.testing.runner.non_gc_mem_usage(limit, limit), 0)
+    testing.assertEqual(std.testing.runner.non_gc_mem_usage(limit - 10, limit), -10)
+    testing.assertEqual(std.testing.runner.non_gc_mem_usage(limit, limit - 10), 10)
 
-    info = testing.TestInfo(testing.Test("memory", "", "executor"))
+    info = std.testing.runner.TestInfo(testing.Test("memory", "", "executor"))
     for before, end in [(-20, -10), (-10, 0), (0, -10)]:
-        delta = testing.non_gc_mem_usage(u64(30 + end), u64(30)) - testing.non_gc_mem_usage(u64(30 + before), u64(30))
-        result = testing.TestResult(True, None, None, 1.0, 0, delta)
-        testing.assertEqual(testing.TestResult.from_json(result.to_json()).non_gc_mem_usage_delta, delta)
+        delta = std.testing.runner.non_gc_mem_usage(u64(30 + end), u64(30)) - std.testing.runner.non_gc_mem_usage(u64(30 + before), u64(30))
+        result = std.testing.runner.TestResult(True, None, None, 1.0, 0, delta)
+        testing.assertEqual(std.testing.runner.TestResult.from_json(result.to_json()).non_gc_mem_usage_delta, delta)
         info.update(True, result)
     testing.assertEqual(info.non_gc_mem_inc_count, 2)
     testing.assertTrue(info.leaky)
@@ -22,15 +23,15 @@ def _test_non_gc_memory_samples():
     testing.assertEqual(info.non_gc_mem_usage_delta_avg, expected_avg)
 
 
-def config(performance: bool) -> testing.TestRunnerConfig:
-    parser = argparse.Parser()
+def config(performance: bool) -> std.testing.runner.TestRunnerConfig:
+    parser = std.argparse.Parser()
     parser.add_bool("no_output", "")
     parser.add_bool("scaling", "")
     parser.add_option("tag", "strlist", default=[])
     for name, default in [("min-iter", 1), ("max-iter", 1), ("min-time", 0), ("max-time", 10000),
-                          ("stress-workers", 0), ("time", 10), ("scale", 1)]:
+                          ("stress-workers", 0), ("time", 10), ("scale", 1), ("seed", -1)]:
         parser.add_option(name, "int", default=default)
-    return testing.TestRunnerConfig(performance, False, parser.parse(["executor"]))
+    return std.testing.runner.TestRunnerConfig(performance, False, parser.parse(["executor"]))
 
 
 class BrokenSnapshot(testing.AsyncTest):
@@ -63,6 +64,11 @@ proc def snapshot(t: testing.AsyncT):
     t.success()
 
 
+proc def seeded_failure(t: testing.AsyncT):
+    t.random.rand_u64()
+    t.failure(AssertionError("seeded failure"))
+
+
 proc def measurement_failure(t: testing.AsyncT):
     for scale in t.loop():
         pass
@@ -75,6 +81,16 @@ proc def measurement_failure(t: testing.AsyncT):
 actor _test_executor_completes(t: testing.EnvT):
     var pending = 0
     var completed: set[int] = set()
+    var first_runs = 0
+
+    proc def first_run_fails(rt: testing.AsyncT):
+        # Fails only in its first run, so its seed does not fail again
+        rt.random.rand_u64()
+        first_runs += 1
+        if first_runs == 1:
+            rt.failure(AssertionError("first run failure"))
+        else:
+            rt.success()
 
     def run(performance: bool, fn: proc(testing.AsyncT) -> None, outcome: str):
         executor_id = pending
@@ -85,7 +101,7 @@ actor _test_executor_completes(t: testing.EnvT):
         if outcome == "success" and not performance:
             cfg.max_iter = 2
 
-        def complete(received_id: int, received_test: testing.Test, info: ?testing.TestInfo):
+        def complete(received_id: int, received_test: testing.Test, info: ?std.testing.runner.TestInfo):
             try:
                 testing.assertEqual(received_id, executor_id)
                 testing.assertEqual(received_test, definition)
@@ -110,6 +126,21 @@ actor _test_executor_completes(t: testing.EnvT):
                         testing.assertNone(info.success)
                         testing.assertEqual(info.num_errors, 1)
                         testing.assertEqual(info.exception, "ValueError: test body error")
+                    elif outcome == "seeded":
+                        testing.assertEqual(info.success, False)
+                        testing.assertEqual(info.num_failures, 1)
+                        testing.assertTrue(info.random)
+                        testing.assertNotNone(info.seed)
+                        # Performance runs do not replay a failed run
+                        replays = 0 if performance else 3
+                        testing.assertEqual(info.seed_replays, replays)
+                        testing.assertEqual(info.seed_reproduced, replays)
+                    elif outcome == "unreproduced":
+                        testing.assertEqual(info.success, False)
+                        testing.assertEqual(info.num_iterations, 1)
+                        testing.assertNotNone(info.seed)
+                        testing.assertEqual(info.seed_replays, 3)
+                        testing.assertEqual(info.seed_reproduced, 0)
                     elif outcome == "skip":
                         testing.assertEqual(info.success, True)
                         testing.assertTrue(info.skipped)
@@ -119,6 +150,8 @@ actor _test_executor_completes(t: testing.EnvT):
                         testing.assertEqual(info.num_errors, 0)
                         testing.assertEqual(info.num_failures, 0)
                         testing.assertTrue(info.num_iterations >= 1)
+                        testing.assertFalse(info.random)
+                        testing.assertNone(info.seed)
                         if not performance:
                             testing.assertEqual(info.num_iterations, 2)
                     if performance:
@@ -132,15 +165,7 @@ actor _test_executor_completes(t: testing.EnvT):
         def progress(executor_id: int, iterations: int, drift_us: int, drift_total_us: int, est_iter_ms: float, phase_resolution_us: int, target_sweep_iters: int, calibrating: bool):
             t.failure(AssertionError("Unexpected stress progress"))
 
-        executor = testing.TestExecutor(t.env.rts, cfg, definition, complete, progress, t.env, executor_id, 1, 1)
-
-    for performance in [False, True]:
-        run(performance, success, "success")
-        run(performance, failure, "failure")
-        run(performance, error, "error")
-        run(performance, skip, "skip")
-        run(performance, snapshot, "internal")
-    run(True, measurement_failure, "measurement")
+        executor = std.testing.runner.TestExecutor(t.env.rts, cfg, definition, complete, progress, t.env, executor_id, 1, 1)
 
     def check():
         # This deadline is far below the executors' ten-second budget. A lost
@@ -151,4 +176,15 @@ actor _test_executor_completes(t: testing.EnvT):
         except Exception as e:
             t.failure(e)
 
-    after 1: check()
+    proc def __startup__():
+        for performance in [False, True]:
+            run(performance, success, "success")
+            run(performance, failure, "failure")
+            run(performance, error, "error")
+            run(performance, skip, "skip")
+            run(performance, seeded_failure, "seeded")
+            run(performance, snapshot, "internal")
+        run(True, measurement_failure, "measurement")
+        run(False, first_run_fails, "unreproduced")
+
+        after 1: check()

@@ -1011,7 +1011,7 @@ afterDefKeyword line
   where
     stripEffect s =
       case words s of
-        w:_ | w `elem` ["mut", "proc", "pure", "action"] ->
+        w:_ | w `elem` ["mut", "proc", "pure", "action", "com"] ->
               Just (dropWhile isSpace (drop (length w) s))
         _ -> Nothing
 

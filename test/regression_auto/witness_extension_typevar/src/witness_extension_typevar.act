@@ -27,8 +27,9 @@ def f(b: Box[int]) -> bool:
     return check(b, bag.Bag(1))
 
 actor main(env):
-    if f(Box(3)):
-        env.exit(0)
-    else:
-        print("The shared Container witness compared two equal bags as different")
-        env.exit(1)
+    proc def __startup__():
+        if f(Box(3)):
+            env.exit(0)
+        else:
+            print("The shared Container witness compared two equal bags as different")
+            env.exit(1)

@@ -1,0 +1,7 @@
+# The RTS tests in compiler/acton/test.hs run this program with stdin on a
+# pseudo terminal and end it with a signal. It puts stdin in raw mode, prints
+# "ready" and waits.
+actor main(env: Env):
+    proc def __startup__():
+        await async env.stdio.set_stdin(raw=True)
+        print("ready")

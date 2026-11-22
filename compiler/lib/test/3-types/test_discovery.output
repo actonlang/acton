@@ -1,6 +1,8 @@
 import logging
 
 import testing
+
+import std.testing.runner
 W_MathTester_6: __builtin__.Plus[__builtin__.int] = __builtin__.IntegralD_int()
 
 actor MathTester ():
@@ -10,28 +12,37 @@ actor MathTester ():
 pure def _test_foo () -> None:
     pass
 
-W__test_SimpleSyncTester_268: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+W__test_SimpleSyncTester_362: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
 
-W__test_SimpleSyncTester_234: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
+W__test_SimpleSyncTester_328: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
 
 # recursive group:
 actor _test_SimpleSyncTester ():
-    m: MathTester = MathTester()
-    print@[(__builtin__.str,)](*("SimpleSyncTester.test()",), sep = " ", end = "\\n", err = False, flush = False)
-    testing.assertEqual@[__builtin__.int](W__test_SimpleSyncTester_234, a = m.add(a = W__test_SimpleSyncTester_268.__fromatom__(1), b = W__test_SimpleSyncTester_268.__fromatom__(2)), b = W__test_SimpleSyncTester_268.__fromatom__(3), msg = "1 + 2 = 3", print_vals = True, print_diff = True)
+    __startup__ : action() -> None
+    proc def __startup__ () -> None:
+        m: MathTester = MathTester()
+        print@[(__builtin__.str,)](*("SimpleSyncTester.test()",), sep = " ", end = "\\n", err = False, flush = False)
+        testing.assertEqual@[__builtin__.int](W__test_SimpleSyncTester_328, a = m.add(a = W__test_SimpleSyncTester_362.__fromatom__(1), b = W__test_SimpleSyncTester_362.__fromatom__(2)), b = W__test_SimpleSyncTester_362.__fromatom__(3), msg = "1 + 2 = 3", print_vals = True, print_diff = True)
+    $MarkStartup((async $WRAP@[(), (), None](self, __startup__))())
 actor _SyncTester (t : testing.SyncT):
-    log: logging.Logger = logging.Logger(handler = t.log_handler)
-    m: MathTester = MathTester()
-    log.info(msg = "SyncTester.test()", data = None)
-    print@[(__builtin__.str,)](*("SyncTester.test()",), sep = " ", end = "\\n", err = False, flush = False)
-    testing.assertEqual@[__builtin__.int](W__test_SimpleSyncTester_234, a = m.add(a = W__test_SimpleSyncTester_268.__fromatom__(1), b = W__test_SimpleSyncTester_268.__fromatom__(2)), b = W__test_SimpleSyncTester_268.__fromatom__(3), msg = "1 + 2 = 3", print_vals = True, print_diff = True)
+    __startup__ : action() -> None
+    proc def __startup__ () -> None:
+        log: logging.Logger = logging.Logger(handler = t.log_handler)
+        m: MathTester = MathTester()
+        log.info(msg = "SyncTester.test()", data = None)
+        print@[(__builtin__.str,)](*("SyncTester.test()",), sep = " ", end = "\\n", err = False, flush = False)
+        testing.assertEqual@[__builtin__.int](W__test_SimpleSyncTester_328, a = m.add(a = W__test_SimpleSyncTester_362.__fromatom__(1), b = W__test_SimpleSyncTester_362.__fromatom__(2)), b = W__test_SimpleSyncTester_362.__fromatom__(3), msg = "1 + 2 = 3", print_vals = True, print_diff = True)
+    $MarkStartup((async $WRAP@[(), (), None](self, __startup__))())
 actor _SyncTesterCore ():
-    m: MathTester = MathTester()
-    print@[(__builtin__.str,)](*("SimpleSyncTester.test()",), sep = " ", end = "\\n", err = False, flush = False)
-    testing.assertEqual@[__builtin__.int](W__test_SimpleSyncTester_234, a = m.add(a = W__test_SimpleSyncTester_268.__fromatom__(1), b = W__test_SimpleSyncTester_268.__fromatom__(2)), b = W__test_SimpleSyncTester_268.__fromatom__(3), msg = "1 + 2 = 3", print_vals = True, print_diff = True)
+    __startup__ : action() -> None
+    proc def __startup__ () -> None:
+        m: MathTester = MathTester()
+        print@[(__builtin__.str,)](*("SimpleSyncTester.test()",), sep = " ", end = "\\n", err = False, flush = False)
+        testing.assertEqual@[__builtin__.int](W__test_SimpleSyncTester_328, a = m.add(a = W__test_SimpleSyncTester_362.__fromatom__(1), b = W__test_SimpleSyncTester_362.__fromatom__(2)), b = W__test_SimpleSyncTester_362.__fromatom__(3), msg = "1 + 2 = 3", print_vals = True, print_diff = True)
+    $MarkStartup((async $WRAP@[(), (), None](self, __startup__))())
 # (recursive group)
 
-proc def _test_simple_sync () -> None:
+com def _test_simple_sync () -> None:
     s: _SyncTesterCore = _SyncTesterCore()
 
 proc def _test_sync (t : testing.SyncT) -> __builtin__.str:
@@ -39,24 +50,30 @@ proc def _test_sync (t : testing.SyncT) -> __builtin__.str:
     m: MathTester = MathTester()
     return str(val = m.add(a = W__test_sync_11.__fromatom__(1), b = W__test_sync_11.__fromatom__(2)))
 
-W_AsyncTester_183: __builtin__.Number[__builtin__.float] = __builtin__.RealFloatD_float()
-
-W_AsyncTester_125: __builtin__.Hashable[__builtin__.str] = __builtin__.HashableD_str()
-
 # recursive group:
 actor AsyncTester (t : testing.AsyncT):
-    log: logging.Logger = logging.Logger(handler = t.log_handler)
-    proc def test () -> None:
-        log.info(msg = "AsyncTester.test()", data = $mkDict@[__builtin__.str, __builtin__.str](W_AsyncTester_125, {"data": "test"}))
-        t.success(output = None)
-    after W_AsyncTester_183.__fromatom__(0): test()
+    __startup__ : action() -> None
+    proc def __startup__ () -> None:
+        W_AsyncTester_31: __builtin__.Hashable[__builtin__.str] = __builtin__.HashableD_str()
+        W_AsyncTester_57: __builtin__.Number[__builtin__.float] = __builtin__.RealFloatD_float()
+        log: logging.Logger = logging.Logger(handler = t.log_handler)
+        proc def test () -> None:
+            log.info(msg = "AsyncTester.test()", data = $mkDict@[__builtin__.str, __builtin__.str](W_AsyncTester_31, {"data": "test"}))
+            t.success(output = None)
+        after W_AsyncTester_57.__fromatom__(0): test()
+    $MarkStartup((async $WRAP@[(), (), None](self, __startup__))())
 actor EnvTester (t : testing.EnvT):
-    log: logging.Logger = logging.Logger(handler = t.log_handler)
-    proc def test () -> None:
-        log.info(msg = "EnvTester.test() wthreads:", data = $mkDict@[__builtin__.str, __builtin__.int](W_AsyncTester_125, {"nr_wthreads": t.env.nr_wthreads}))
-        print@[(__builtin__.str, __builtin__.int)](*("EnvTester.test() wthreads:", t.env.nr_wthreads), sep = " ", end = "\\n", err = False, flush = False)
-        t.success(output = None)
-    after W_AsyncTester_183.__fromatom__(0): test()
+    __startup__ : action() -> None
+    proc def __startup__ () -> None:
+        W_AsyncTester_162: __builtin__.Hashable[__builtin__.str] = __builtin__.HashableD_str()
+        W_AsyncTester_220: __builtin__.Number[__builtin__.float] = __builtin__.RealFloatD_float()
+        log: logging.Logger = logging.Logger(handler = t.log_handler)
+        proc def test () -> None:
+            log.info(msg = "EnvTester.test() wthreads:", data = $mkDict@[__builtin__.str, __builtin__.int](W_AsyncTester_162, {"nr_wthreads": t.env.nr_wthreads}))
+            print@[(__builtin__.str, __builtin__.int)](*("EnvTester.test() wthreads:", t.env.nr_wthreads), sep = " ", end = "\\n", err = False, flush = False)
+            t.success(output = None)
+        after W_AsyncTester_220.__fromatom__(0): test()
+    $MarkStartup((async $WRAP@[(), (), None](self, __startup__))())
 # (recursive group)
 
 proc def _test_SimpleSyncTester_wrapper () -> None:
@@ -71,9 +88,9 @@ proc def _test_AsyncTester (t : testing.AsyncT) -> None:
 proc def _test_EnvTester (t : testing.EnvT) -> None:
     EnvTester(t)
 
-__unit_tests: __builtin__.dict[__builtin__.str, testing.UnitTest] = $mkDict@[__builtin__.str, testing.UnitTest](__builtin__.HashableD_str(), {"_test_foo": testing.UnitTest(_test_foo, "_test_foo", "", "test_discovery")})
+__unit_tests: __builtin__.dict[__builtin__.str, testing.UnitTest] = $mkDict@[__builtin__.str, testing.UnitTest](__builtin__.HashableD_str(), {"_test_foo": testing.UnitTest(_test_foo, "_test_foo", "", "test_discovery"), "_test_simple_sync": testing.UnitTest(_test_simple_sync, "_test_simple_sync", "", "test_discovery")})
 
-__simple_sync_tests: __builtin__.dict[__builtin__.str, testing.SimpleSyncTest] = $mkDict@[__builtin__.str, testing.SimpleSyncTest](__builtin__.HashableD_str(), {"_test_simple_sync": testing.SimpleSyncTest(_test_simple_sync, "_test_simple_sync", "", "test_discovery"), "_test_SimpleSyncTester_wrapper": testing.SimpleSyncTest(_test_SimpleSyncTester_wrapper, "_test_SimpleSyncTester_wrapper", "", "test_discovery")})
+__simple_sync_tests: __builtin__.dict[__builtin__.str, testing.SimpleSyncTest] = $mkDict@[__builtin__.str, testing.SimpleSyncTest](__builtin__.HashableD_str(), {"_test_SimpleSyncTester_wrapper": testing.SimpleSyncTest(_test_SimpleSyncTester_wrapper, "_test_SimpleSyncTester_wrapper", "", "test_discovery")})
 
 __sync_tests: __builtin__.dict[__builtin__.str, testing.SyncTest] = $mkDict@[__builtin__.str, testing.SyncTest](__builtin__.HashableD_str(), {"_test_sync": testing.SyncTest(_test_sync, "_test_sync", "", "test_discovery"), "_test__SyncTester": testing.SyncTest(_test__SyncTester, "_test__SyncTester", "", "test_discovery")})
 
@@ -82,4 +99,4 @@ __async_tests: __builtin__.dict[__builtin__.str, testing.AsyncTest] = $mkDict@[_
 __env_tests: __builtin__.dict[__builtin__.str, testing.EnvTest] = $mkDict@[__builtin__.str, testing.EnvTest](__builtin__.HashableD_str(), {"_test_EnvTester": testing.EnvTest(_test_EnvTester, "_test_EnvTester", "", "test_discovery")})
 
 actor test_main (env : __builtin__.Env):
-    testing.test_runner(env, __unit_tests, __simple_sync_tests, __sync_tests, __async_tests, __env_tests)
+    std.testing.runner.test_runner(env, __unit_tests, __simple_sync_tests, __sync_tests, __async_tests, __env_tests)

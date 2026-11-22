@@ -166,10 +166,11 @@ def split_scalar_endo(k: bigint):
 
 
 actor main(env):
-    n = int(env.argv[1]) if len(env.argv) > 1 else 1
-    private_key = bigint("20775598474904240222758871485654738649026525153462921990999819694398496339603")
-    point = Point.base()
-    for _ in range(n):
-        point = point.multiply(private_key)
-    print(hexadecimal(point.x) + "," + hexadecimal(point.y))
-    env.exit(0)
+    proc def __startup__():
+        n = int(env.argv[1]) if len(env.argv) > 1 else 1
+        private_key = bigint("20775598474904240222758871485654738649026525153462921990999819694398496339603")
+        point = Point.base()
+        for _ in range(n):
+            point = point.multiply(private_key)
+        print(hexadecimal(point.x) + "," + hexadecimal(point.y))
+        env.exit(0)

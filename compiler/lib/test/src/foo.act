@@ -283,66 +283,69 @@ def process_nested(data: list[(str, bar.Data)]) -> dict[str, list[bar.Data]]:
 actor main(env):
     """Main actor demonstrating bar module usage"""
 
-    # Create and use bar.Data
-    d1 = bar.Data("hello", "greeting")
-    d2 = create_data("world")
-    d3 = bar.combine_data(d1, d2)
+    greeting: str = "hello"
 
-    print("Data 1:", d1.get_info())
-    print("Data 2:", d2.get_info())
-    print("Combined:", d3.get_info())
+    proc def __startup__():
+        # Create and use bar.Data
+        d1 = bar.Data(greeting, "greeting")
+        d2 = create_data("world")
+        d3 = bar.combine_data(d1, d2)
 
-    # Use list instead of container for simplicity
-    data_list = [d1, d2, d3]
+        print("Data 1:", d1.get_info())
+        print("Data 2:", d2.get_info())
+        print("Combined:", d3.get_info())
 
-    # Filter long values
-    long_values = []
-    for d in data_list:
-        if len(d.value) > 5:
-            long_values.append(d.value)
-    print("Long values:", long_values)
+        # Use list instead of container for simplicity
+        data_list = [d1, d2, d3]
 
-    # Use DataManager
-    manager = DataManager("test_manager")
-    manager.add_data(d1)
-    manager.add_data(d2)
+        # Filter long values
+        long_values = []
+        for d in data_list:
+            if len(d.value) > 5:
+                long_values.append(d.value)
+        print("Long values:", long_values)
 
-    found = manager.find_by_label("greeting")
-    if found is not None:
-        print("Found:", found.get_value())
+        # Use DataManager
+        manager = DataManager("test_manager")
+        manager.add_data(d1)
+        manager.add_data(d2)
 
-    # Use actors
-    handler = DataHandler(d1)
-    handler.update(d2)
-    handler.combine_with(d3)
+        found = manager.find_by_label("greeting")
+        if found is not None:
+            print("Found:", found.get_value())
 
-    processor = bar.DataProcessor()
-    handler.send_to_processor(processor)
+        # Use actors
+        handler = DataHandler(d1)
+        handler.update(d2)
+        handler.combine_with(d3)
 
-    # Process some data
-    processor.enqueue(d1)
-    processor.enqueue(d2)
-    processed = processor.process_next()
-    if processed is not None:
-        print("Processed:", processed.get_info())
+        processor = bar.DataProcessor()
+        handler.send_to_processor(processor)
 
-    print("Processor stats:", processor.get_stats())
+        # Process some data
+        processor.enqueue(d1)
+        processor.enqueue(d2)
+        processed = processor.process_next()
+        if processed is not None:
+            print("Processed:", processed.get_info())
 
-    # Use transformation functions
-    transformed = process_with_prefix(d1, "PREFIX_")
-    print("Transformed:", transformed.get_info())
+        print("Processor stats:", processor.get_stats())
 
-    # Complex operations
-    items = [("key1", d1), ("key2", d2), ("key1", d3)]
-    grouped = process_nested(items)
-    print("Grouped count:", len(grouped))
+        # Use transformation functions
+        transformed = process_with_prefix(d1, "PREFIX_")
+        print("Transformed:", transformed.get_info())
 
-    # Use protocol functionality
-    processed_results = bar.process_items([d1, d2, d3])
-    print("Processed via protocol:", processed_results)
+        # Complex operations
+        items = [("key1", d1), ("key2", d2), ("key1", d3)]
+        grouped = process_nested(items)
+        print("Grouped count:", len(grouped))
 
-    # Check metadata
-    meta = d1.get_metadata()
-    print("Metadata:", meta)
+        # Use protocol functionality
+        processed_results = bar.process_items([d1, d2, d3])
+        print("Processed via protocol:", processed_results)
 
-    env.exit(0)
+        # Check metadata
+        meta = d1.get_metadata()
+        print("Metadata:", meta)
+
+        env.exit(0)

@@ -1,0 +1,13 @@
+class Failure[T](Exception):
+    def __init__(self, value: T):
+        self.error_message = "failure"
+        self.value = value
+
+class Explodes[T](object):
+    def __init__(self, value: T):
+        raise Failure(value)
+
+actor Invalid():
+    value = Explodes(self)
+
+actor main(env): pass

@@ -1,0 +1,4 @@
+actor Invalid(message: Msg[int]):
+    value = await message
+
+actor main(env): pass

@@ -1,0 +1,35 @@
+# The RTS tests in compiler/acton/test.hs run this program with stdin on a
+# pseudo terminal, read the settings of the terminal and type keys into it.
+#
+# It prints whether stdin and stdout are terminals, installs a stdin handler
+# and then replaces it with another one, prints how many tty handles the
+# workers have, puts stdin in raw mode and prints "ready". The handler collects
+# the bytes up to a carriage return and prints them, then the program leaves
+# raw mode, prints "cooked" and exits. The replaced handler must get nothing.
+actor main(env: Env):
+    proc def __startup__():
+        got: list[int] = []
+
+        def replaced(b: bytes):
+            print("replaced handler got", list(b))
+
+        def on_key(b: bytes):
+            for c in b:
+                got.append(c)
+            if 13 in got:
+                print("got", got)
+                await async env.stdio.set_stdin(raw=False)
+                print("cooked")
+                env.exit(0)
+
+        print("stdin_is_tty", env.stdio.stdin_is_tty(), "stdout_is_tty", env.stdio.stdout_is_tty())
+        await async env.stdio.stdin_install(on_stdin_bytes=replaced)
+        await async env.stdio.stdin_install(on_stdin_bytes=on_key)
+        ttys = 0
+        for handles in env.rts.io_handles().values():
+            for h in handles.values():
+                if h.typ == "tty":
+                    ttys += 1
+        print("tty handles", ttys)
+        await async env.stdio.set_stdin(raw=True)
+        print("ready")

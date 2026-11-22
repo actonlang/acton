@@ -1,12 +1,10 @@
 Building file test/syntaxerrors/err7.act using temporary scratch directory
-[error Parse error]: unexpected 'a'
-                     expecting type variable (upper case letter optionally followed by digits)
-
-     +--> test/syntaxerrors/err7.act@1:6-1:7
+[error Syntax error]: Only declarations and assignments are allowed at the module top level
+     +--> test/syntaxerrors/err7.act@1:1-1:1
      |
    1 | f : [a (Eq)] => (a,a) -> bool
-     :      ^ 
-     :      `- unexpected 'a'
-     :         expecting type variable (upper case letter optionally followed by digits)
-     :         
+     :  
+     : `- Only declarations and assignments are allowed at the module top level
+     :
+     | Hint: Assign the value to a name or move runtime work into a function or an actor startup method
 -----+

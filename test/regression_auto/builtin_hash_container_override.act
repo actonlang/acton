@@ -10,5 +10,6 @@ def custom_get(d: dict[str,float], key: int) -> int:
     return Alternate.get(d, key)
 
 actor main(env):
-    assert custom_get({}, 10) == 42
-    env.exit(0)
+    proc def __startup__():
+        assert custom_get({}, 10) == 42
+        env.exit(0)

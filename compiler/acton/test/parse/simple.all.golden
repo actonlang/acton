@@ -66,7 +66,7 @@ pure def main () -> None:
     return None
 ===============================================
 
-/* Acton impl hash: 6877d6bf416748a6291f6ede1336a0a4aa68aa2e59396c68b9626e5d99d66375 */
+/* Acton impl hash: 6cb9c70e242ed1da388d1b2dec7c77244ad7e96fdb338cf6374d61d827b9e475 */
 #pragma once
 #include "builtin/builtin.h"
 #include "rts/rts.h"

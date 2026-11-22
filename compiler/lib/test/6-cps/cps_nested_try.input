@@ -13,14 +13,14 @@ proc def ret_inner (x : __builtin__.int) -> __builtin__.int:
                     N_tmp: __builtin__.int = W_ret_inner_5.__fromatom__(1)
                     $DROP()
                     $DROP()
-                    $RAISE($RET(N_tmp))
+                    $RAISE@[None]($RET(N_tmp))
                 $DROP()
             else:
                 N_1x: __builtin__.BaseException = $POP()
                 if isinstance(N_1x, ValueError):
                     pass
                 else:
-                    $RAISE(N_1x)
+                    $RAISE@[None](N_1x)
             force_cps(x)
             $DROP()
         else:
@@ -28,8 +28,8 @@ proc def ret_inner (x : __builtin__.int) -> __builtin__.int:
             if isinstance(N_2x, ValueError):
                 pass
             else:
-                $RAISE(N_2x)
-        $RAISE($SEQ())
+                $RAISE@[None](N_2x)
+        $RAISE@[None]($SEQ())
     else:
         N_3xx: __builtin__.BaseException = $POP()
         pass
@@ -39,7 +39,7 @@ proc def ret_inner (x : __builtin__.int) -> __builtin__.int:
         elif isinstance(N_3xx, $SEQ):
             pass
         else:
-            $RAISE(N_3xx)
+            $RAISE@[None](N_3xx)
     N_4tmp: __builtin__.int = W_ret_inner_5.__fromatom__(0)
     return N_4tmp
 
@@ -56,13 +56,13 @@ proc def ret_else (x : __builtin__.int) -> __builtin__.int:
                 if W_ret_else_7.__gt__(x, W_ret_else_5.__fromatom__(0)):
                     N_5tmp: __builtin__.int = W_ret_else_5.__fromatom__(1)
                     $DROP()
-                    $RAISE($RET(N_5tmp))
+                    $RAISE@[None]($RET(N_5tmp))
             else:
                 N_6x: __builtin__.BaseException = $POP()
                 if isinstance(N_6x, ValueError):
                     pass
                 else:
-                    $RAISE(N_6x)
+                    $RAISE@[None](N_6x)
             force_cps(x)
             $DROP()
         else:
@@ -70,8 +70,8 @@ proc def ret_else (x : __builtin__.int) -> __builtin__.int:
             if isinstance(N_7x, ValueError):
                 pass
             else:
-                $RAISE(N_7x)
-        $RAISE($SEQ())
+                $RAISE@[None](N_7x)
+        $RAISE@[None]($SEQ())
     else:
         N_8xx: __builtin__.BaseException = $POP()
         pass
@@ -81,6 +81,6 @@ proc def ret_else (x : __builtin__.int) -> __builtin__.int:
         elif isinstance(N_8xx, $SEQ):
             pass
         else:
-            $RAISE(N_8xx)
+            $RAISE@[None](N_8xx)
     N_9tmp: __builtin__.int = W_ret_else_5.__fromatom__(0)
     return N_9tmp

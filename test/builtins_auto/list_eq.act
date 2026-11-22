@@ -80,11 +80,12 @@ def test_dispatch():
         raise ValueError("list != swallowed an element exception")
 
 actor main(env):
-    try:
-        test_eq_only()
-        test_ordered()
-        test_dispatch()
-        env.exit(0)
-    except Exception as e:
-        print(e)
-        env.exit(1)
+    proc def __startup__():
+        try:
+            test_eq_only()
+            test_ordered()
+            test_dispatch()
+            env.exit(0)
+        except Exception as e:
+            print(e)
+            env.exit(1)

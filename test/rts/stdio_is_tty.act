@@ -1,0 +1,12 @@
+# The RTS tests in compiler/acton/test.hs run this program with one of stdin,
+# stdout and stderr on a pseudo terminal and the others on pipes. It prints
+# which of them are terminals on both stdout and stderr, so that the tests can
+# read the line from whichever of the two is a pipe.
+actor main(env: Env):
+    proc def __startup__():
+        stdin_tty = env.stdio.stdin_is_tty()
+        stdout_tty = env.stdio.stdout_is_tty()
+        stderr_tty = env.stdio.stderr_is_tty()
+        print("stdin", stdin_tty, "stdout", stdout_tty, "stderr", stderr_tty)
+        print("stdin", stdin_tty, "stdout", stdout_tty, "stderr", stderr_tty, err=True)
+        env.exit(0)

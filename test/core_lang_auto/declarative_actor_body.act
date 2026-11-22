@@ -1,0 +1,33 @@
+class Pair(object):
+    first: int
+    second: int
+
+    def __init__(self, first: int, second: int):
+        self.first = first
+        self.second = second
+
+actor Counter(initial: int):
+    """Bindings establish the state; executable setup lives in startup."""
+    left, right = (initial, initial + 1)
+    pair = Pair(left, right)
+    var count: int = pair.first + pair.second
+
+    def read() -> int:
+        return count
+
+    def increment():
+        count += 1
+
+    proc def __startup__():
+        if initial > 0:
+            increment()
+
+
+actor main(env):
+    counter = Counter(4)
+
+    proc def __startup__():
+        assert counter.read() == 10
+        counter.increment()
+        assert counter.read() == 11
+        env.exit(0)

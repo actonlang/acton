@@ -13,6 +13,7 @@ def through_base(obj: Base) -> bool:
     return obj.flag()
 
 actor main(env: Env):
-    if through_base(Child()):
-        env.exit(0)
-    env.exit(1)
+    proc def __startup__():
+        if through_base(Child()):
+            env.exit(0)
+        env.exit(1)

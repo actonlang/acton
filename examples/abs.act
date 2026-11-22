@@ -1,4 +1,5 @@
 actor main(env):
-    x = -3
-    print(abs(x))
-    env.exit(0)
+    proc def __startup__():
+        x = -3
+        print(abs(x))
+        env.exit(0)

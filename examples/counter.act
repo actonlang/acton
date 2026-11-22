@@ -6,7 +6,8 @@ actor counter(initval):
         return val
 
 actor main(env):
-    ctr = counter(0)
-    n = ctr.next()
-    print(n)
-    env.exit(0)
+    proc def __startup__():
+        ctr = counter(0)
+        n = ctr.next()
+        print(n)
+        env.exit(0)

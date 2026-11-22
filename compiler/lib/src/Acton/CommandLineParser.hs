@@ -91,6 +91,7 @@ data CompileOptions   = CompileOptions {
                          kinds       :: Bool,
                          types       :: Bool,
                          escape_analysis :: Bool,
+                         initialization_analysis :: Bool,
                          witness_stats :: Bool,
                          sigs        :: Bool,
                          norm        :: Bool,
@@ -132,6 +133,7 @@ defaultCompileOptions = CompileOptions
     , kinds                   = False
     , types                   = False
     , escape_analysis         = False
+    , initialization_analysis = False
     , witness_stats           = False
     , sigs                    = False
     , norm                    = False
@@ -165,7 +167,7 @@ defaultCompileOptions = CompileOptions
 -- | Whether a dump flag is set, from --parse through --cgen.  A dump takes
 -- the place of the normal build output.  --ccmd and --tydb are not dumps.
 altOutput :: CompileOptions -> Bool
-altOutput opts = any ($ opts) [parse, parse_ast, kinds, types, escape_analysis, sigs, norm, deact, cps, llift, box, hgen, cgen]
+altOutput opts = any ($ opts) [parse, parse_ast, kinds, types, escape_analysis, initialization_analysis, sigs, norm, deact, cps, llift, box, hgen, cgen]
 
 data BuildOptions = BuildOptions
     { buildCompile :: CompileOptions
@@ -243,6 +245,7 @@ data TestOptions = TestOptions
     , testRtsWthreads  :: Maybe Int
     , testGcCheck      :: Bool
     , testTags         :: [String]
+    , testSeed         :: Maybe Integer
     , testMaxIterSet   :: Bool
     , testMaxTimeSet   :: Bool
     , testMinTimeSet   :: Bool
@@ -412,6 +415,7 @@ compileOptionsWith optimization = CompileOptions
         <*> switch (long "kinds"        <> help "Show all the result after kind-checking")
         <*> switch (long "types"        <> help "Show all inferred expression types")
         <*> switch (long "escape-analysis" <> help "Show experimental parameter escape analysis")
+        <*> switch (long "initialization-analysis" <> help "Show advisory constructor cycle-safety analysis")
         <*> switch (long "witness-stats" <> help "Print per-module witness constructions after sharing as JSON lines")
         <*> switch (long "sigs"         <> help "Show the inferred type signatures")
         <*> switch (long "norm"         <> help "Show the result after syntactic normalization")
@@ -596,12 +600,13 @@ testOptions mode = mkTestOptions
     <*> optional (option wthreadsReader (long "rts-wthreads" <> metavar "N" <> help "Run each test process with N runtime worker threads (default: one per CPU core, at least 4)"))
     <*> switch (long "gc-check" <> help "Run each test process in generational GC mode with the write-barrier checker (ACTON_GC_CHECK=1)")
     <*> many (strOption (long "tag" <> metavar "TAG" <> help "Enable test capability TAG for testing.require()"))
+    <*> ordinary Nothing (optional (option seedReader (long "seed" <> metavar "SEED" <> help "Seed t.random with SEED in every run, to repeat a failed run")))
     <*> many (strOption (long "module" <> metavar "MODULE" <> help "Filter on test module name"))
     <*> many (strOption (long "name" <> metavar "NAME" <> help "Filter on test name (regex, anchored; use .* for substrings)"))
   where
     defaultOptimize = if mode == OrdinaryOptions then Debug else ReleaseFast
     ordinary fallback parser = if mode == OrdinaryOptions then parser else pure fallback
-    mkTestOptions testCompile testShowLog testShowCached testNoCache testJson testRecord testSnapshotUpdate testIter testMaxIterOpt testMinIter testMaxTimeOpt testMinTimeOpt testTime testScale testStartScale testEndScale testMaxMemory testStressWorkers testRtsWthreads testGcCheck testTags testModules testNames =
+    mkTestOptions testCompile testShowLog testShowCached testNoCache testJson testRecord testSnapshotUpdate testIter testMaxIterOpt testMinIter testMaxTimeOpt testMinTimeOpt testTime testScale testStartScale testEndScale testMaxMemory testStressWorkers testRtsWthreads testGcCheck testTags testSeed testModules testNames =
       TestOptions
         { testCompile = testCompile
         , testShowLog = testShowLog
@@ -626,12 +631,18 @@ testOptions mode = mkTestOptions
         , testRtsWthreads = testRtsWthreads
         , testGcCheck = testGcCheck
         , testTags = testTags
+        , testSeed = testSeed
         , testMaxIterSet = isJust testMaxIterOpt
         , testMaxTimeSet = isJust testMaxTimeOpt
         , testMinTimeSet = isJust testMinTimeOpt
         , testModules = testModules
         , testNames = testNames
         }
+
+seedReader :: ReadM Integer
+seedReader = eitherReader $ \s -> case reads s :: [(Integer, String)] of
+    [(n, "")] | n >= 0 && n < 2^(63 :: Int) -> Right n
+    _ -> Left "Expected a seed in the range 0 to 2^63 - 1"
 
 scaleReader :: ReadM Int
 scaleReader = eitherReader $ \s -> case reads s :: [(Integer, String)] of

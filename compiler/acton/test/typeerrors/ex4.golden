@@ -1,13 +1,13 @@
 Building file test/typeerrors/ex4.act using temporary scratch directory
    ex4  Parse done                                                               0.000 s
 [error]: Incompatible types
-     +--> ex4.act@5:22-5:26
+     +--> ex4.act@6:26-6:30
      |
    1 | def f(x,y):
      :     ^ 
      :     `- f is defined here
      :
-   5 |     print("a".center(f(3)))
-     :                      ^--- 
-     :                      `- keyword argument(s) 'y' is missing in call to f
+   6 |         print("a".center(f(3)))
+     :                          ^--- 
+     :                          `- keyword argument(s) 'y' is missing in call to f
 -----+

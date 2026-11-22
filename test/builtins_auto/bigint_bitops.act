@@ -123,16 +123,17 @@ def check_cross(fail: list[str]):
         check_value(fail, "~" + str(a), ~a, ref_bitop(a, -1, "^"))
 
 actor main(env):
-    fail: list[str] = []
-    try:
-        check_reported(fail)
-        check_table(fail)
-        check_cross(fail)
-    except Exception as e:
-        fail.append("unexpected exception: " + str(e))
-    if fail:
-        print("Failed:", len(fail))
-        for f in fail[:40]:
-            print(f)
-        env.exit(1)
-    env.exit(0)
+    proc def __startup__():
+        fail: list[str] = []
+        try:
+            check_reported(fail)
+            check_table(fail)
+            check_cross(fail)
+        except Exception as e:
+            fail.append("unexpected exception: " + str(e))
+        if fail:
+            print("Failed:", len(fail))
+            for f in fail[:40]:
+                print(f)
+            env.exit(1)
+        env.exit(0)

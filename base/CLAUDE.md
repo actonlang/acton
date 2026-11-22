@@ -38,6 +38,16 @@ cd base && zig build
 - Env and its service actors: env.vars (EnvVar), env.stdio (Stdio) and
   env.process (EnvProcess, which starts Process and RunProcess), with their
   C in `__builtin__.ext.c` and `builtin/env.c`
+- env.random (EnvRandom), a class whose methods run in the calling actor,
+  with secure random bytes from a per-thread ChaCha8 generator in
+  `base/__root.zig`, and the Random protocol it implements
+- An extension written in `__builtin__.act`, such as EnvRandom(Random), needs
+  its witness object (`B_RandomD_EnvRandomG_witness`) defined by hand in
+  `builtin/staticWitnesses.c` and declared in `builtin/staticWitnesses.h`;
+  the compiler generates only its class
+- A method in `__builtin__.act` cannot share its name with a builtin type
+  (`int`, `bytes`, `u64`, ...): inside the class or protocol body the method
+  hides the type
 
 #### `file.act` / `file.ext.c`
 - File I/O operations
@@ -54,35 +64,23 @@ cd base && zig build
 - Sleep/delay functions
 - Time formatting
 
-### Data Processing
+#### `testing.act` / `testing.ext.c`
+- Test types the compiler discovers tests by (`SyncT`, `AsyncT`, `EnvT`,
+  `UnitTest`, ...), `PerfLoop` and the asserts
+- `TestRandom`, the `t.random` of `SyncT`, `AsyncT` and `EnvT`, which draws
+  from a generator that `std.testing.runner` seeds for every run
+- The runner that the generated `test_main` calls is `std.testing.runner`
+  in `std/src/testing/runner.act`
 
-#### `json.act` / `json.ext.c`
-- JSON parsing and generation
-- Type-safe JSON handling
+#### `logging.act`, `fs.act`, `matrix.act`
 
-#### `xml.act` / `xml.ext.c`
-- XML parsing
-- DOM manipulation
+### Modules in std
 
-#### `base64.act` / `base64.ext.c`
-- Base64 encoding/decoding
-
-### Advanced Modules
-
-#### `http.act`
-- HTTP client/server
-- Request/response handling
-- WebSocket support
-
-#### `re.act` / `re.ext.c`
-- Regular expressions
-- Pattern matching
-- String substitution
-
-#### `numpy.act` / `numpy.c`
-- Numerical arrays
-- Mathematical operations
-- Compatible subset of NumPy
+Every other library module (json, xml, re, http, base64, math, random,
+argparse, diff, term, ...) lives in `std/src/` and is imported as
+`std.<name>`. Inside the std project a module imports its siblings by their
+bare names. A std module named like a base module shadows the base module
+for every std module, so std has no module named `testing`.
 
 ## Builtin Types (`builtin/`)
 

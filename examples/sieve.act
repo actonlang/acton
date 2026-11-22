@@ -1,9 +1,9 @@
-import math
+import std.math
 
 def sieve(n):
     isPrime = [True] * n
     isPrime[0] = False; isPrime[1] = False
-    for i in range(2, int(math.sqrt(float(n)))+1):
+    for i in range(2, int(std.math.sqrt(float(n)))+1):
         if isPrime[i]:
             for k in range(i*i,n,i): isPrime[k] = False
 
@@ -26,8 +26,9 @@ def primesTo(n):
 
 
 actor main(env):
-    if (len(env.argv) >= 2) and env.argv[1].isdecimal():
-        print(count(sieve(int(env.argv[1]))))
-    else:
-        print("Usage: sieve <positive integer>")
-    env.exit(0)
+    proc def __startup__():
+        if (len(env.argv) >= 2) and env.argv[1].isdecimal():
+            print(count(sieve(int(env.argv[1]))))
+        else:
+            print("Usage: sieve <positive integer>")
+        env.exit(0)

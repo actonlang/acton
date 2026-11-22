@@ -1,29 +1,28 @@
 import testing
 
-import re
-import std.re as std_re
+import std.re
 
 def _test_match_basic():
     """Basic regexp matching
     """
-    m = re.match("foo[a-z]+", "åbc123 foobar åbc123")
+    m = std.re.match("foo[a-z]+", "åbc123 foobar åbc123")
     testing.assertNotNone(m, "basic regexp matching failed")
 
 def _test_match_unicode_escapes():
-    m = re.match(r"[\x{0000}-\x{10FFFF}]", "x")
+    m = std.re.match(r"[\x{0000}-\x{10FFFF}]", "x")
     testing.assertNotNone(m, "unicode \\x{{}} regexp matching failed")
 
 def _test_match_nul():
     """A NUL in the text or the pattern is an ordinary character
     """
     nul = chr(0)
-    testing.assertNotNone(re.match("a.b", "a" + nul + "b"), "NUL not matched by .")
-    testing.assertNotNone(re.match("b", "a" + nul + "b"), "text after a NUL not searched")
-    m = re.match("x" + nul + "y", "ax" + nul + "yb")
+    testing.assertNotNone(std.re.match("a.b", "a" + nul + "b"), "NUL not matched by .")
+    testing.assertNotNone(std.re.match("b", "a" + nul + "b"), "text after a NUL not searched")
+    m = std.re.match("x" + nul + "y", "ax" + nul + "yb")
     testing.assertNotNone(m, "NUL in the pattern not matched")
     if m is not None:
         testing.assertEqual(m.group[0], "x" + nul + "y", "pattern or group cut at its NUL")
-    n = re.match("(?P<n>." + nul + ".)", "ax" + nul + "yb")
+    n = std.re.match("(?P<n>." + nul + ".)", "ax" + nul + "yb")
     testing.assertNotNone(n, "NUL in a named group not matched")
     if n is not None:
         testing.assertEqual(n.named["n"], "x" + nul + "y", "named group cut at its NUL")
@@ -31,7 +30,7 @@ def _test_match_nul():
 def _test_match_group():
     """Regexp matching with groups
     """
-    m = re.match("foo([a-z]+)", "åbc123 foobar åbc123")
+    m = std.re.match("foo([a-z]+)", "åbc123 foobar åbc123")
     testing.assertNotNone(m, "group matching failed")
     if m is not None:
         testing.assertEqual(m.group[0], "foobar", "whole group match failed")
@@ -40,7 +39,7 @@ def _test_match_group():
 def _test_match_nested_group():
     """Regexp matching with groups
     """
-    m = re.match("foo((B)[A-Z]+)", "åbc123 fooBAR åbc123")
+    m = std.re.match("foo((B)[A-Z]+)", "åbc123 fooBAR åbc123")
     testing.assertNotNone(m, "group matching failed")
     if m is not None:
         testing.assertEqual(m.group[0], "fooBAR", "whole group match failed")
@@ -50,7 +49,7 @@ def _test_match_nested_group():
 def _test_match_nested_group_without_match():
     """Regexp matching with groups
     """
-    m = re.match("foo((Z?)[A-Z]+)", "åbc123 fooBAR åbc123")
+    m = std.re.match("foo((Z?)[A-Z]+)", "åbc123 fooBAR åbc123")
     testing.assertNotNone(m, "group matching failed")
     if m is not None:
         testing.assertEqual(m.group[0], "fooBAR", "whole group match failed")
@@ -60,7 +59,7 @@ def _test_match_nested_group_without_match():
 def _test_match_named_groups():
     """Regexp matching with named groups
     """
-    m = re.match("(?P<mypattern>foo[a-z]+)", "åbc123 foobar åbc123")
+    m = std.re.match("(?P<mypattern>foo[a-z]+)", "åbc123 foobar åbc123")
     testing.assertNotNone(m, "regexp matching with named groups failed")
     if m is not None:
         testing.assertEqual(m.named["mypattern"], "foobar", "named group ('foobar') match failed")
@@ -68,7 +67,7 @@ def _test_match_named_groups():
 def _test_match_named_groups_without_match():
     """Regexp matching with named groups but without a match on an inner group
     """
-    m = re.match("(?P<mypattern>foo((?P<inner>AAA)|[a-z]+))", "åbc123 foobar åbc123")
+    m = std.re.match("(?P<mypattern>foo((?P<inner>AAA)|[a-z]+))", "åbc123 foobar åbc123")
     testing.assertNotNone(m, "regexp matching with named groups failed")
     if m is not None:
         testing.assertEqual(m.named["mypattern"], "foobar", "named group ('foobar') match failed")
@@ -76,7 +75,7 @@ def _test_match_named_groups_without_match():
 def _test_match_multi_groups():
     """Regexp matching with multiple groups including named groups
     """
-    m = re.match("([0-9]+).*(?P<mypattern>foo[a-z]+) *(?P<myotherpattern>bar[A-Za-z0-9]+)", "åbc123 foobar barEX4MPLE åbc123")
+    m = std.re.match("([0-9]+).*(?P<mypattern>foo[a-z]+) *(?P<myotherpattern>bar[A-Za-z0-9]+)", "åbc123 foobar barEX4MPLE åbc123")
     testing.assertNotNone(m, "regexp matching with multiple groups failed")
     if m is not None:
         testing.assertEqual(m.group[0], "123 foobar barEX4MPLE", "failed to match")
@@ -87,7 +86,7 @@ def _test_match_multi_groups():
 def _test_match_matches():
     """Regexp finding all matches
     """
-    ms = re.matches(r"foo[0-9]+", "åbc123 foo1 foo2 foo3 åbc123 foo4")
+    ms = std.re.matches(r"foo[0-9]+", "åbc123 foo1 foo2 foo3 åbc123 foo4")
     testing.assertEqual(len(ms), 4, "failed to find all matches")
     testing.assertEqual(ms[0].group[0], "foo1", "failed to match first match")
     testing.assertEqual(ms[1].group[0], "foo2", "failed to match second match")
@@ -96,11 +95,10 @@ def _test_match_matches():
 
 def _test_match_matches_zero_width_non_ascii():
     """matches steps over a non-ASCII character after a zero-width match"""
-    ms = re.matches("x*", "éa")
+    ms = std.re.matches("x*", "éa")
     testing.assertEqual([m.start_pos for m in ms], [0, 1])
     for subject, position in [("abc", 1), ("é🙂b", 2)]:
-        testing.assertEqual([m.start_pos for m in re.matches("(?=b)", subject)], [position])
-        testing.assertEqual([m.start_pos for m in std_re.matches("(?=b)", subject)], [position])
+        testing.assertEqual([m.start_pos for m in std.re.matches("(?=b)", subject)], [position])
 
 def _test_count_replace():
     """Bulk operations use the same matches and treat replacement text literally"""
@@ -126,25 +124,17 @@ def _test_count_replace():
         ("(?P<n>a+)", "baaa", "", 1, "b"),
     ]
     for pattern, subject, replacement, count, result in cases:
-        p = re.compile(pattern)
-        sp = std_re.compile(pattern)
+        p = std.re.compile(pattern)
         testing.assertEqual(len(p.matches(subject)), count)
-        testing.assertEqual(len(sp.matches(subject)), count)
-        testing.assertEqual(re.count(pattern, subject), count)
+        testing.assertEqual(std.re.count(pattern, subject), count)
         testing.assertEqual(p.count(subject), count)
-        testing.assertEqual(std_re.count(pattern, subject), count)
-        testing.assertEqual(sp.count(subject), count)
-        testing.assertEqual(re.replace(pattern, subject, replacement), result)
+        testing.assertEqual(std.re.replace(pattern, subject, replacement), result)
         testing.assertEqual(p.replace(subject, replacement), result)
-        testing.assertEqual(std_re.replace(pattern, subject, replacement), result)
-        testing.assertEqual(sp.replace(subject, replacement), result)
 
 def _test_count_replace_errors():
     """Bulk operations preserve compilation, capture boundary and match limit errors"""
-    for f in [lambda: re.count("(", "a") > 0,
-              lambda: std_re.count("(", "a") > 0,
-              lambda: re.replace("(", "a", "_") != "",
-              lambda: std_re.replace("(", "a", "_") != ""]:
+    for f in [lambda: std.re.count("(", "a") > 0,
+              lambda: std.re.replace("(", "a", "_") != ""]:
         try:
             f()
         except ValueError as error:
@@ -153,16 +143,11 @@ def _test_count_replace_errors():
             testing.error("Expected ValueError for an invalid pattern")
 
     for pattern, subject in [(r"a\C", "aé"), (r"(\C)\C", "é")]:
-        p = re.compile(pattern)
-        sp = std_re.compile(pattern)
-        for f in [lambda: re.count(pattern, subject) > 0,
+        p = std.re.compile(pattern)
+        for f in [lambda: std.re.count(pattern, subject) > 0,
                   lambda: p.count(subject) > 0,
-                  lambda: std_re.count(pattern, subject) > 0,
-                  lambda: sp.count(subject) > 0,
-                  lambda: re.replace(pattern, subject, "_") != "",
-                  lambda: p.replace(subject, "_") != "",
-                  lambda: std_re.replace(pattern, subject, "_") != "",
-                  lambda: sp.replace(subject, "_") != ""]:
+                  lambda: std.re.replace(pattern, subject, "_") != "",
+                  lambda: p.replace(subject, "_") != ""]:
             for _ in range(3):
                 try:
                     f()
@@ -171,24 +156,17 @@ def _test_count_replace_errors():
                 else:
                     testing.error("Expected ValueError for a match or capture that splits a character")
         testing.assertEqual(p.count("ab"), 1)
-        testing.assertEqual(sp.count("ab"), 1)
         testing.assertEqual(p.replace("ab", "_"), "_")
-        testing.assertEqual(sp.replace("ab", "_"), "_")
 
     subject = "a" * 1000 + "x"
     for pattern, expected in [("(*LIMIT_MATCH=10)(.)*x", "PCRE2 matching error: -47"),
                               ("(*LIMIT_HEAP=1)(.)*x", "PCRE2 matching error: -63"),
                               ("(*LIMIT_DEPTH=10)(.)*x", "PCRE2 matching error: -53")]:
-        p = re.compile(pattern)
-        sp = std_re.compile(pattern)
-        for f in [lambda: re.count(pattern, subject) > 0,
+        p = std.re.compile(pattern)
+        for f in [lambda: std.re.count(pattern, subject) > 0,
                   lambda: p.count(subject) > 0,
-                  lambda: std_re.count(pattern, subject) > 0,
-                  lambda: sp.count(subject) > 0,
-                  lambda: re.replace(pattern, subject, "_") != "",
-                  lambda: p.replace(subject, "_") != "",
-                  lambda: std_re.replace(pattern, subject, "_") != "",
-                  lambda: sp.replace(subject, "_") != ""]:
+                  lambda: std.re.replace(pattern, subject, "_") != "",
+                  lambda: p.replace(subject, "_") != ""]:
             for _ in range(3):
                 try:
                     f()
@@ -197,9 +175,7 @@ def _test_count_replace_errors():
                 else:
                     testing.error("Expected RuntimeError: " + expected)
         testing.assertEqual(p.count("x"), 1)
-        testing.assertEqual(sp.count("x"), 1)
         testing.assertEqual(p.replace("x", "_"), "_")
-        testing.assertEqual(sp.replace("x", "_"), "_")
 
 def _test_match_backward_spans():
     """Reject assertion subroutines whose whole match goes backward"""
@@ -208,16 +184,11 @@ def _test_match_backward_spans():
         (r"(?(DEFINE)(?<x>\Ka))(?<=(?&x))", "aa", 1),
     ]
     for pattern, subject, pos in cases:
-        p = re.compile(pattern)
-        sp = std_re.compile(pattern)
+        p = std.re.compile(pattern)
         for f in [lambda: p.match(subject, pos) is not None,
-                  lambda: sp.match(subject, pos) is not None,
                   lambda: len(p.matches(subject)) > 0,
-                  lambda: len(sp.matches(subject)) > 0,
                   lambda: p.count(subject) > 0,
-                  lambda: sp.count(subject) > 0,
-                  lambda: p.replace(subject, "_") != "",
-                  lambda: sp.replace(subject, "_") != ""]:
+                  lambda: p.replace(subject, "_") != ""]:
             try:
                 f()
             except ValueError as error:
@@ -225,16 +196,14 @@ def _test_match_backward_spans():
             else:
                 testing.error("Expected ValueError for a reversed or backward whole match")
         testing.assertNone(p.match("b"))
-        testing.assertNone(sp.match("b"))
         testing.assertEqual(p.count("b"), 0)
-        testing.assertEqual(sp.replace("b", "_"), "b")
 
 def _test_match_positions():
     """Test that match positions (start_pos and end_pos) are correct."""
     # In "abc def ghi", the substring "def" starts at index 4 and ends at index 7 (0-based indexing)
     # "a"=0, "b"=1, "c"=2, " "=3, "d"=4, "e"=5, "f"=6, " "=7, "g"=8, ...
 
-    m = re.match("def", "abc def ghi")
+    m = std.re.match("def", "abc def ghi")
     testing.assertNotNone(m, "Should have matched 'def' in 'abc def ghi'")
     if m is not None:
         testing.assertEqual(m.start_pos, 4)
@@ -245,7 +214,7 @@ def _test_match_positions():
 def _test_match_positions_non_ascii():
     """Match positions are code point indexes, also for non-ASCII strings"""
     s = "åäö def ghi"
-    m = re.match("def", s)
+    m = std.re.match("def", s)
     testing.assertNotNone(m, "Should have matched 'def'")
     if m is not None:
         testing.assertEqual(m.start_pos, 4)
@@ -256,46 +225,46 @@ def _test_match_start_pos():
     """Test that start_pos controls where the search begins."""
     s = "def def"
 
-    m1 = re.match("def", s)
+    m1 = std.re.match("def", s)
     testing.assertNotNone(m1, "Should have matched first 'def'")
     if m1 is not None:
         testing.assertEqual(m1.start_pos, 0)
         testing.assertEqual(m1.end_pos, 3)
 
-    m2 = re.match("def", s, start_pos=4)
+    m2 = std.re.match("def", s, start_pos=4)
     testing.assertNotNone(m2, "Should have matched second 'def' starting at index 4")
     if m2 is not None:
         testing.assertEqual(m2.start_pos, 4)
         testing.assertEqual(m2.end_pos, 7)
 
-    m3 = re.match("def", s, start_pos=5)
+    m3 = std.re.match("def", s, start_pos=5)
     testing.assertNone(m3, "start_pos should skip earlier matches")
 
 def _test_match_start_pos_non_ascii():
     """start_pos is a code point index, also for non-ASCII strings"""
     s = "éa éa"
-    m1 = re.match("a", s, 2)
+    m1 = std.re.match("a", s, 2)
     testing.assertNotNone(m1, "Should have matched second 'a' starting at index 2")
     if m1 is not None:
         testing.assertEqual(m1.start_pos, 4)
         testing.assertEqual(m1.end_pos, 5)
-    m2 = re.match("a", s, 5)
+    m2 = std.re.match("a", s, 5)
     testing.assertNone(m2, "start_pos at end of string should give no match")
 
 def _test_split_no_match():
     """Split: pattern does not match anywhere"""
-    res = re.split("xyz", "abc def ghi")
+    res = std.re.split("xyz", "abc def ghi")
     testing.assertEqual(res, ["abc def ghi"])
 
 def _test_split_simple():
     """Split: simple split on whitespace"""
-    res = re.split(" ", "abc def ghi")
+    res = std.re.split(" ", "abc def ghi")
     testing.assertEqual(res, ["abc", "def", "ghi"])
 
 def _test_split_capturing_groups():
     """Split: capturing groups included in the result"""
     # Pattern with capturing group: split on digits but capture them
-    res = re.split("([0-9]+)", "abc123def456ghi")
+    res = std.re.split("([0-9]+)", "abc123def456ghi")
     # Expected: split around numbers, but include numbers as separate entries
     # Result should be: ["abc", "123", "def", "456", "ghi"]
     testing.assertEqual(res, ["abc", "123", "def", "456", "ghi"])
@@ -303,21 +272,21 @@ def _test_split_capturing_groups():
 def _test_split_start():
     """Split: pattern at the start of the string"""
     # Pattern at start
-    res = re.split("^", "abc")
+    res = std.re.split("^", "abc")
     # Splitting at start doesn't consume characters, capturing groups are none.
     # splitting at start by "^" returns ['', 'abc']
     testing.assertEqual(res, ["", "abc"])
 
 def _test_split_end():
     """Split: pattern at the end of the string"""
-    res = re.split("$", "abc")
+    res = std.re.split("$", "abc")
     testing.assertEqual(res, ["abc", ""])
 
 def _test_split_zero_width():
     """Split: zero-width matches should not cause infinite loops"""
     # Pattern matches empty string (use a look-ahead to get zero-width matches)
     # For example: matches position after every character
-    res = re.split("(?=b)", "abc")
+    res = std.re.split("(?=b)", "abc")
     # This should split before each 'b', but if pattern is zero-width, we must ensure no infinite loop.
     # "abc" split at "(?=b)" gives ["a", "bc"] because it finds a zero-width match before 'b'.
     testing.assertEqual(res, ["a", "bc"])
@@ -326,14 +295,14 @@ def _test_split_maxsplit():
     """Split: respect max_split parameter"""
     # Pattern that splits on space
     s = "one two three four five"
-    res = re.split(" ", s, max_split=2)
+    res = std.re.split(" ", s, max_split=2)
     # max_split=2 means we do at most 2 splits: ["one", "two", "three four five"]
     testing.assertEqual(res, ["one", "two", "three four five"])
 
 def _test_split_empty_pattern():
     """Split: empty pattern should raise an error"""
     try:
-        re.split("", "abc")
+        std.re.split("", "abc")
     except ValueError:
         return
     testing.error("split with empty pattern should raise ValueError")
@@ -343,21 +312,19 @@ def _test_split_with_named_groups():
     # Even though split doesn't do anything special with named groups beyond capturing them,
     # they appear as normal capturing groups. Named groups are included in m.group, so
     # the order in group matches is determined by their group number, not their name.
-    res = re.split("(?P<number>[0-9]+)", "abc123def")
+    res = std.re.split("(?P<number>[0-9]+)", "abc123def")
     testing.assertEqual(res, ["abc", "123", "def"])
 
 def _test_match_backslash_c():
     """\\C matches a single byte: a whole ASCII character, but only part of a
     multi-byte one. A match or group that splits a character is an error."""
-    m = re.match(r"a\C", "xab")
+    m = std.re.match(r"a\C", "xab")
     testing.assertNotNone(m, "\\C did not match an ASCII character")
     if m is not None:
         testing.assertEqual(m.group[0], "ab")
     expected = "matched substring starts or ends inside a character"
-    for split in [lambda: re.match(r"a\C", "aé") is not None,
-                  lambda: re.match(r"(\C)\C", "é") is not None,
-                  lambda: std_re.match(r"a\C", "aé") is not None,
-                  lambda: std_re.match(r"(\C)\C", "é") is not None]:
+    for split in [lambda: std.re.match(r"a\C", "aé") is not None,
+                  lambda: std.re.match(r"(\C)\C", "é") is not None]:
         for _ in range(100):
             try:
                 split()
@@ -370,22 +337,17 @@ def _test_match_long_subject():
     """A repeated group over a long subject needs much more than pcre2's
     initial 20 KiB of backtracking frames"""
     s = "a" * 100000 + "x"
-    m = re.match("(.)*x", s)
+    m = std.re.match("(.)*x", s)
     testing.assertNotNone(m, "no match in a long subject")
     if m is not None:
         testing.assertEqual(m.end_pos, 100001)
         testing.assertEqual(m.group[1], "a")
-    n = std_re.match("(.)*x", s)
-    testing.assertNotNone(n, "no match in a long subject")
-    if n is not None:
-        testing.assertEqual(n.end_pos, 100001)
-        testing.assertEqual(n.group[1], "a")
 
 def _test_match_many_groups():
     """300 groups, 30 of them named"""
     pattern = "(a)" * 270 + "".join(["(?P<g" + str(i) + ">b)" for i in range(30)])
     subject = "x" + "a" * 270 + "b" * 30
-    m = re.match(pattern, subject)
+    m = std.re.match(pattern, subject)
     testing.assertNotNone(m, "no match with 300 groups")
     if m is not None:
         testing.assertEqual(len(m.group), 301)
@@ -393,21 +355,15 @@ def _test_match_many_groups():
         testing.assertEqual(m.group[300], "b")
         testing.assertEqual(len(m.named), 30)
         testing.assertEqual(m.named["g29"], "b")
-    n = std_re.match(pattern, subject)
-    testing.assertNotNone(n, "no match with 300 groups")
-    if n is not None:
-        testing.assertEqual(len(n.group), 301)
-        testing.assertEqual(n.named["g29"], "b")
 
 def _test_match_errors():
     """Invalid patterns and start positions raise ValueError. Exceeding the
     match or heap limit set in the pattern raises RuntimeError."""
     s = "a" * 1000 + "x"
     value_errors = [
-        (lambda: re.match("(", "a") is not None, "regex compilation failed at offset 1: missing closing parenthesis"),
-        (lambda: std_re.match("(", "a") is not None, "regex compilation failed at offset 1: missing closing parenthesis"),
-        (lambda: re.match("a", "abc", -1) is not None, "PCRE2 matching failed: negative start_pos"),
-        (lambda: re.match("a", "abc", 4) is not None, "start position is greater than string length"),
+        (lambda: std.re.match("(", "a") is not None, "regex compilation failed at offset 1: missing closing parenthesis"),
+        (lambda: std.re.match("a", "abc", -1) is not None, "PCRE2 matching failed: negative start_pos"),
+        (lambda: std.re.match("a", "abc", 4) is not None, "start position is greater than string length"),
     ]
     for f, expected in value_errors:
         for _ in range(100):
@@ -418,10 +374,8 @@ def _test_match_errors():
             else:
                 testing.error("Expected ValueError: " + expected)
     runtime_errors = [
-        (lambda: re.match("(*LIMIT_MATCH=10)(.)*x", s) is not None, "PCRE2 matching error: -47"),
-        (lambda: std_re.match("(*LIMIT_MATCH=10)(.)*x", s) is not None, "PCRE2 matching error: -47"),
-        (lambda: re.match("(*LIMIT_HEAP=1)(.)*x", s) is not None, "PCRE2 matching error: -63"),
-        (lambda: std_re.match("(*LIMIT_HEAP=1)(.)*x", s) is not None, "PCRE2 matching error: -63"),
+        (lambda: std.re.match("(*LIMIT_MATCH=10)(.)*x", s) is not None, "PCRE2 matching error: -47"),
+        (lambda: std.re.match("(*LIMIT_HEAP=1)(.)*x", s) is not None, "PCRE2 matching error: -63"),
     ]
     for f, expected in runtime_errors:
         for _ in range(100):
@@ -433,8 +387,8 @@ def _test_match_errors():
                 testing.error("Expected RuntimeError: " + expected)
 
 def _test_match_start_pos_before_pattern():
-    """re.match checks start_pos before it compiles the pattern"""
-    for f in [lambda: re.match("(", "a", -1) is not None, lambda: std_re.match("(", "a", -1) is not None]:
+    """std.re.match checks start_pos before it compiles the pattern"""
+    for f in [lambda: std.re.match("(", "a", -1) is not None]:
         try:
             f()
         except ValueError as error:
@@ -442,12 +396,7 @@ def _test_match_start_pos_before_pattern():
         else:
             testing.error("Expected ValueError for a negative start_pos")
 
-def _desc(m: ?re.Match) -> str:
-    if m is not None:
-        return m.pattern + " | " + m.string + " | " + str(m.start_pos) + " | " + str(m.end_pos) + " | " + str(m.group) + " | " + str(m.named)
-    return "None"
-
-def _std_desc(m: ?std_re.Match) -> str:
+def _desc(m: ?std.re.Match) -> str:
     if m is not None:
         return m.pattern + " | " + m.string + " | " + str(m.start_pos) + " | " + str(m.end_pos) + " | " + str(m.group) + " | " + str(m.named)
     return "None"
@@ -467,16 +416,12 @@ _compile_cases = [
 def _test_compile_match():
     """A compiled pattern matches as the module functions do"""
     for c in _compile_cases:
-        p = re.compile(c.0)
-        sp = std_re.compile(c.0)
+        p = std.re.compile(c.0)
         testing.assertEqual(p.pattern, c.0)
-        expected = _desc(re.match(c.0, c.1, c.2))
+        expected = _desc(std.re.match(c.0, c.1, c.2))
         testing.assertEqual(_desc(p.match(c.1, c.2)), expected)
-        testing.assertEqual(_std_desc(sp.match(c.1, c.2)), expected)
-        testing.assertEqual(_std_desc(std_re.match(c.0, c.1, c.2)), expected)
         if c.2 == 0:
             testing.assertEqual(_desc(p.match(c.1)), expected)
-            testing.assertEqual(_std_desc(sp.match(c.1)), expected)
 
 def _test_compile_matches_split():
     """matches and split of a compiled pattern give the module functions' results"""
@@ -490,22 +435,17 @@ def _test_compile_matches_split():
         ("q", "abc"),
     ]
     for c in cases:
-        p = re.compile(c.0)
-        sp = std_re.compile(c.0)
-        expected = [_desc(m) for m in re.matches(c.0, c.1)]
+        p = std.re.compile(c.0)
+        expected = [_desc(m) for m in std.re.matches(c.0, c.1)]
         testing.assertEqual([_desc(m) for m in p.matches(c.1)], expected)
-        testing.assertEqual([_std_desc(m) for m in sp.matches(c.1)], expected)
         for max_split in [0, 1, 2]:
-            parts = re.split(c.0, c.1, max_split)
+            parts = std.re.split(c.0, c.1, max_split)
             testing.assertEqual(p.split(c.1, max_split), parts)
-            testing.assertEqual(sp.split(c.1, max_split), parts)
-            testing.assertEqual(std_re.split(c.0, c.1, max_split), parts)
-    testing.assertEqual(re.compile(",").split("a,b"), ["a", "b"])
+    testing.assertEqual(std.re.compile(",").split("a,b"), ["a", "b"])
 
 def _test_compile_reuse():
     """One compiled pattern matches many subjects"""
-    p = re.compile(r"(?P<y>[0-9]{4})-(?P<m>[0-9]{2})")
-    sp = std_re.compile(r"(?P<y>[0-9]{4})-(?P<m>[0-9]{2})")
+    p = std.re.compile(r"(?P<y>[0-9]{4})-(?P<m>[0-9]{2})")
     for i in range(10000):
         y = str(1000 + i % 9000)
         mo = str(10 + i % 90)
@@ -516,21 +456,11 @@ def _test_compile_reuse():
             testing.assertEqual(m.group, [y + "-" + mo, y, mo])
             testing.assertEqual(m.named, {"y": y, "m": mo})
             testing.assertEqual(m.start_pos, 5)
-        n = sp.match(s)
-        testing.assertNotNone(n)
-        if n is not None:
-            testing.assertEqual(n.named, {"y": y, "m": mo})
         testing.assertNone(p.match("date " + y + "/" + mo))
 
-class _CyclicPattern(re.Pattern):
+class _CyclicPattern(std.re.Pattern):
     def __init__(self, pattern: str):
-        re.Pattern.__init__(self, pattern)
-        self.cycle = []
-        self.cycle.append(self)
-
-class _StdCyclicPattern(std_re.Pattern):
-    def __init__(self, pattern: str):
-        std_re.Pattern.__init__(self, pattern)
+        std.re.Pattern.__init__(self, pattern)
         self.cycle = []
         self.cycle.append(self)
 
@@ -538,9 +468,8 @@ def _test_compile_survives_collections(t: testing.SyncT):
     """A Pattern keeps its code while many other Patterns are collected"""
     t.timeout(30)
     p = _CyclicPattern("(b+)c")
-    sp = _StdCyclicPattern("(b+)c")
     for i in range(20000):
-        q = re.compile("x" + str(i) + "(y+)z")
+        q = std.re.compile("x" + str(i) + "(y+)z")
         m = q.match("ax" + str(i) + "yyz")
         testing.assertNotNone(m)
         if m is not None:
@@ -550,57 +479,41 @@ def _test_compile_survives_collections(t: testing.SyncT):
             testing.assertNotNone(n)
             if n is not None:
                 testing.assertEqual(n.group, ["bbbc", "bbb"])
-            testing.assertEqual(_std_desc(sp.match("abbbc")), _desc(n))
 
 def _test_compile_recompile():
     """A recompiled Pattern has new code, which matches, counts and replaces as before"""
     pattern = "(?P<n>a+)b"
     subject = "ab caab é"
-    expected = _desc(re.match(pattern, subject, 3))
-    p = re.compile(pattern)
-    sp = std_re.compile(pattern)
+    expected = _desc(std.re.match(pattern, subject, 3))
+    p = std.re.compile(pattern)
     for _ in range(3):
         code = p._code
-        std_code = sp._code
         p._recompile()
-        sp._recompile()
         testing.assertNotEqual(p._code, code)
-        testing.assertNotEqual(sp._code, std_code)
-        testing.assertNotEqual(re.compile(pattern)._code, p._code)
-        testing.assertNotEqual(std_re.compile(pattern)._code, sp._code)
+        testing.assertNotEqual(std.re.compile(pattern)._code, p._code)
         testing.assertEqual(p.pattern, pattern)
-        testing.assertEqual(sp.pattern, pattern)
         testing.assertEqual(_desc(p.match(subject, 3)), expected)
-        testing.assertEqual(_std_desc(sp.match(subject, 3)), expected)
         testing.assertEqual(p.count(subject), 2)
-        testing.assertEqual(sp.count(subject), 2)
         testing.assertEqual(p.replace(subject, "_"), "_ c_ é")
-        testing.assertEqual(sp.replace(subject, "_"), "_ c_ é")
 
 def _test_compile_jit_fallback():
     """Interpreter fallback preserves captures and bulk operations"""
     for pattern, subject in [("(*NO_JIT)(a+)", "aaa"),
                              (r"(\C)", "a"),
                              ("(a|b)+$", "a" * 10000)]:
-        expected = re.match(pattern, subject)
-        p = re.compile(pattern)
-        sp = std_re.compile(pattern)
+        expected = std.re.match(pattern, subject)
+        p = std.re.compile(pattern)
         testing.assertNotNone(expected)
         testing.assertEqual(_desc(p.match(subject)), _desc(expected))
-        testing.assertEqual(_std_desc(sp.match(subject)), _desc(expected))
         testing.assertEqual(p.count(subject), 1)
-        testing.assertEqual(sp.count(subject), 1)
         testing.assertEqual(p.replace(subject, "_"), "_")
-        testing.assertEqual(sp.replace(subject, "_"), "_")
         testing.assertNone(p.match(""))
-        testing.assertNone(sp.match(""))
 
 def _test_compile_many_groups():
     """A compiled pattern with 300 groups, 30 of them named, matches twice"""
     pattern = "(a)" * 270 + "".join(["(?P<g" + str(i) + ">b)" for i in range(30)])
     subject = "x" + "a" * 270 + "b" * 30
-    p = re.compile(pattern)
-    sp = std_re.compile(pattern)
+    p = std.re.compile(pattern)
     for _ in range(2):
         m = p.match(subject)
         testing.assertNotNone(m, "no match with 300 groups")
@@ -608,40 +521,29 @@ def _test_compile_many_groups():
             testing.assertEqual(len(m.group), 301)
             testing.assertEqual(m.group[300], "b")
             testing.assertEqual(m.named["g29"], "b")
-        n = sp.match(subject)
-        testing.assertNotNone(n, "no match with 300 groups")
-        if n is not None:
-            testing.assertEqual(len(n.named), 30)
     testing.assertNone(p.match("x"))
     repeated = subject + subject
-    testing.assertEqual(re.count(pattern, repeated), 2)
+    testing.assertEqual(std.re.count(pattern, repeated), 2)
     testing.assertEqual(p.count(repeated), 2)
-    testing.assertEqual(std_re.count(pattern, repeated), 2)
-    testing.assertEqual(sp.count(repeated), 2)
-    testing.assertEqual(re.replace(pattern, repeated, "_"), "x_x_")
+    testing.assertEqual(std.re.replace(pattern, repeated, "_"), "x_x_")
     testing.assertEqual(p.replace(repeated, "_"), "x_x_")
-    testing.assertEqual(std_re.replace(pattern, repeated, "_"), "x_x_")
-    testing.assertEqual(sp.replace(repeated, "_"), "x_x_")
 
 def _test_compile_errors():
-    """re.compile raises ValueError for an invalid pattern. A compiled
+    """std.re.compile raises ValueError for an invalid pattern. A compiled
     pattern raises the errors of the module functions."""
     s = "a" * 1000 + "x"
-    p = re.compile("a")
-    sp = std_re.compile("a")
-    limit_match = re.compile("(*LIMIT_MATCH=10)(.)*x")
-    std_limit_heap = std_re.compile("(*LIMIT_HEAP=1)(.)*x")
-    split_char = re.compile(r"a\C")
-    std_split_char = std_re.compile(r"(\C)\C")
+    p = std.re.compile("a")
+    limit_match = std.re.compile("(*LIMIT_MATCH=10)(.)*x")
+    limit_heap = std.re.compile("(*LIMIT_HEAP=1)(.)*x")
+    split_char = std.re.compile(r"a\C")
+    split_capture = std.re.compile(r"(\C)\C")
     value_errors = [
-        (lambda: re.compile("(") is not None, "regex compilation failed at offset 1: missing closing parenthesis"),
-        (lambda: std_re.compile("(") is not None, "regex compilation failed at offset 1: missing closing parenthesis"),
+        (lambda: std.re.compile("(") is not None, "regex compilation failed at offset 1: missing closing parenthesis"),
         (lambda: p.match("abc", -1) is not None, "PCRE2 matching failed: negative start_pos"),
-        (lambda: sp.match("abc", 4) is not None, "start position is greater than string length"),
+        (lambda: p.match("abc", 4) is not None, "start position is greater than string length"),
         (lambda: split_char.match("aé") is not None, "matched substring starts or ends inside a character"),
-        (lambda: std_split_char.match("é") is not None, "matched substring starts or ends inside a character"),
-        (lambda: len(re.compile("").split("abc")) > 0, "empty pattern"),
-        (lambda: len(std_re.compile("").split("abc")) > 0, "empty pattern"),
+        (lambda: split_capture.match("é") is not None, "matched substring starts or ends inside a character"),
+        (lambda: len(std.re.compile("").split("abc")) > 0, "empty pattern"),
     ]
     for f, expected in value_errors:
         for _ in range(100):
@@ -653,7 +555,7 @@ def _test_compile_errors():
                 testing.error("Expected ValueError: " + expected)
     runtime_errors = [
         (lambda: limit_match.match(s) is not None, "PCRE2 matching error: -47"),
-        (lambda: std_limit_heap.match(s) is not None, "PCRE2 matching error: -63"),
+        (lambda: limit_heap.match(s) is not None, "PCRE2 matching error: -63"),
     ]
     for f, expected in runtime_errors:
         for _ in range(100):
@@ -664,10 +566,10 @@ def _test_compile_errors():
             else:
                 testing.error("Expected RuntimeError: " + expected)
     # The patterns still match after their errors
-    testing.assertEqual(_desc(p.match("xa")), _desc(re.match("a", "xa")))
+    testing.assertEqual(_desc(p.match("xa")), _desc(std.re.match("a", "xa")))
     testing.assertNotNone(split_char.match("xab"))
 
-actor _PatternUser(p: re.Pattern, sp: std_re.Pattern, first: int, n: int, done: action(int) -> None):
+actor _PatternUser(p: std.re.Pattern, anchored: std.re.Pattern, first: int, n: int, done: action(int) -> None):
     """Match n subjects with patterns shared with other actors, count wrong results"""
     def run():
         wrong = 0
@@ -679,7 +581,7 @@ actor _PatternUser(p: re.Pattern, sp: std_re.Pattern, first: int, n: int, done: 
                     wrong += 1
             else:
                 wrong += 1
-            k = sp.match(s)
+            k = anchored.match(s)
             if k is not None:
                 if k.named["num"] != str(i) or k.end_pos != len(s):
                     wrong += 1
@@ -687,31 +589,32 @@ actor _PatternUser(p: re.Pattern, sp: std_re.Pattern, first: int, n: int, done: 
                 wrong += 1
             if i % 10 == 0:
                 both = s + chr(0) + s
-                if p.count(both) != 2 or sp.count(both) != 1:
+                if p.count(both) != 2 or anchored.count(both) != 1:
                     wrong += 1
                 if p.replace(both, "_") != "_" + chr(0) + "_":
                     wrong += 1
-                if sp.replace(both, "_") != s + chr(0) + "_":
+                if anchored.replace(both, "_") != s + chr(0) + "_":
                     wrong += 1
         done(wrong)
 
 actor _test_compile_shared_between_actors(t: testing.AsyncT):
     """Actors on several threads match with the same Patterns at once"""
-    p = re.compile(r"id (?P<num>[0-9]+) é([0-9])")
-    sp = std_re.compile(r"id (?P<num>[0-9]+) é([0-9])$")
     workers = 8
     var pending = workers
     var wrong = 0
 
-    def done(w: int):
-        pending -= 1
-        wrong += w
-        if pending == 0:
-            if wrong == 0:
-                t.success()
-            else:
-                t.failure(AssertionError(str(wrong) + " matches gave a wrong result"))
+    proc def __startup__():
+        p = std.re.compile(r"id (?P<num>[0-9]+) é([0-9])")
+        anchored = std.re.compile(r"id (?P<num>[0-9]+) é([0-9])$")
+        def done(w: int):
+            pending -= 1
+            wrong += w
+            if pending == 0:
+                if wrong == 0:
+                    t.success()
+                else:
+                    t.failure(AssertionError(str(wrong) + " matches gave a wrong result"))
 
-    for i in range(workers):
-        u = _PatternUser(p, sp, i * 3000, 3000, done)
-        u.run()
+        for i in range(workers):
+            u = _PatternUser(p, anchored, i * 3000, 3000, done)
+            u.run()

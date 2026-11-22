@@ -16,9 +16,10 @@ def build() -> Cell:
     return c
 
 actor main(env):
-    c1 = Cell()
-    c1.v = PORT          # module global u64 -> ?value field
-    c2 = build()
-    if isinstance(c1.v, atom) and isinstance(c2.v, atom):
-        env.exit(0)
-    env.exit(1)
+    proc def __startup__():
+        c1 = Cell()
+        c1.v = PORT          # module global u64 -> ?value field
+        c2 = build()
+        if isinstance(c1.v, atom) and isinstance(c2.v, atom):
+            env.exit(0)
+        env.exit(1)

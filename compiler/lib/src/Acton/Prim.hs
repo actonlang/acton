@@ -87,6 +87,12 @@ tRET                = tCon $ TC primRET []
 primASSERT          = gPrim "ASSERT"
 primNEWACTOR        = gPrim "NEWACTOR"
 primInstallFinalizer = gPrim "InstallFinalizer"
+primConstructionBegin = gPrim "ConstructionBegin"
+primConstructionEnter = gPrim "ConstructionEnter"
+primConstructionEnd = gPrim "ConstructionEnd"
+primConstructionAbort = gPrim "ConstructionAbort"
+primMarkStartup = gPrim "MarkStartup"
+
 
 attr_finalizer      = name "GCfinalizer"
 
@@ -148,6 +154,7 @@ primWrapProc        = gPrim "wWrapProc"
 primWrapAction      = gPrim "wWrapAction"
 primWrapMut         = gPrim "wWrapMut"
 primWrapPure        = gPrim "wWrapPure"
+primWrapCom         = gPrim "wWrapCom"
 
 primWRAP            = gPrim "WRAP"
 
@@ -621,6 +628,12 @@ primEnv             = [ (noq (bwName w), NDef (bwSchema w) NoDec Nothing) | w <-
                             (noq primASSERT,        NDef scASSERT NoDec Nothing),
                             (noq primNEWACTOR,      NDef scNEWACTOR NoDec Nothing),
                             (noq primInstallFinalizer, NDef scGCfinalizer NoDec Nothing),
+                            (noq primConstructionBegin, NDef (monotype $ tFun0 [] tActor) NoDec Nothing),
+                            (noq primConstructionEnter, NDef (monotype $ tFun0 [tActor] tNone) NoDec Nothing),
+                            (noq primConstructionEnd, NDef (monotype $ tFun0 [tActor] tNone) NoDec Nothing),
+                            (noq primConstructionAbort, NDef (monotype $ tFun0 [tActor,tBaseException] tNone) NoDec Nothing),
+                            (noq primMarkStartup, NDef (monotype $ tFun fxCom (posRow (tMsg tNone) posNil) kwdNil tNone) NoDec Nothing),
+
 
                             (noq primISINSTANCE,    NDef scISINSTANCE NoDec Nothing),
                             (noq primISINSTANCE0,   NDef scISINSTANCE NoDec Nothing),
@@ -746,6 +759,7 @@ clActor             = NClass [] (leftpath [cValue]) te Nothing
                         (primKW "msg_lock",   NSig (monotype $ tCon $ TC (gPrim "Lock") []) Property Nothing),
                         (primKW "affinity",   NSig (monotype $ tCon $ TC (gPrim "int64") []) Property Nothing),
                         (primKW "outgoing",   NSig (monotype (tMsg tWild)) Property Nothing),
+                        (primKW "newborns",   NSig (monotype (tList tActor)) Property Nothing),
                         (primKW "waitsfor",   NSig (monotype (tMsg tWild)) Property Nothing),
                         (primKW "consume_hd", NSig (monotype $ tCon $ TC (gPrim "int64") []) Property Nothing),
                         (primKW "catcher",    NSig (monotype $ tCon $ TC (gPrim "Catcher") []) Property Nothing),
@@ -887,9 +901,10 @@ scPOP               = tSchema [] tPOP
 scDROP              = tSchema [] tDROP
   where tDROP       = tFun fxPure posNil kwdNil tNone
 
---  $RAISE          : (BaseException) -> None
-scRAISE             = tSchema [] tRAISE
-  where tRAISE      = tFun fxPure (posRow tBaseException posNil) kwdNil tNone
+--  $RAISE          : [A] => (BaseException) -> A   (never returns)
+scRAISE             = tSchema [qbind a] tRAISE
+  where tRAISE      = tFun fxPure (posRow tBaseException posNil) kwdNil (tVar a)
+        a           = TV KType (name "A")
 
 
 --  $ASSERT         : pure (bool, ?str) -> None
@@ -900,6 +915,9 @@ scASSERT            = tSchema [] tASSERT
 scNEWACTOR          = tSchema [QBind a [cActor]] tNEWACTOR
   where tNEWACTOR   = tFun fxPure posNil kwdNil (tVar a)
         a           = TV KType $ name "A"
+
+-- MarkStartup : com(Msg[None]) -> None
+scMarkStartup = monotype $ tFun fxCom (posRow (tMsg tNone) posNil) kwdNil tNone
 
 --  $GCfinalizer    : [A($Actor)] => pure (A) -> None
 scGCfinalizer       = tSchema [QBind a [cActor]] tGCfin
@@ -1336,6 +1354,7 @@ clWrapped           = NClass [qbind s, qbind x, qbind y] [] te Nothing
 primWits            = [ WInst []        fxAction (pWrapped fxProc fxProc)   primWrapAction path,
                         WInst []        fxProc   (pWrapped fxProc fxProc)   primWrapProc path,
                         WInst []        fxMut    (pWrapped fxMut  fxMut)    primWrapMut path,
+                        WInst []        fxCom    (pWrapped fxCom   fxCom)   primWrapCom path,
                         WInst [qbind y] fxPure   (pWrapped fxPure (tVar y)) primWrapPure path
                       ]
   where path        = [Left (noQ "_")]
@@ -1347,5 +1366,6 @@ isPUSH _                        = False
 isPUSHF (Call _ (Var _ x) _ _)  = x == primPUSHF
 isPUSHF _                       = False
 
+isRAISE (Call _ (TApp _ (Var _ x) _) _ _) = x == primRAISE
 isRAISE (Call _ (Var _ x) _ _)  = x == primRAISE
 isRAISE _                       = False

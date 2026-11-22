@@ -1,130 +1,32 @@
 import logging
 import net
-import random
-import re
+import std.random
+import std.re
 import testing
 
 actor _test_TCPClientSideClose(t: testing.EnvT):
-    log = logging.Logger(t.log_handler)
-    test_payload = b"Stay a while and listen."
-    address = "127.0.0.1"
     var retries = 10
-    var port = random.randint(10000, 40000)
-    tcp_cap = net.TCPCap(net.NetCap(t.env.cap))
-
+    var port = std.random.randint(10000, 40000)
     var recv_buf: list[bytes] = []
 
     var client = None
 
-    def on_server_receive(s, payload):
-        recv_buf.append(payload)
+    proc def __startup__():
+        log = logging.Logger(t.log_handler)
+        test_payload = b"Stay a while and listen."
+        address = "127.0.0.1"
+        tcp_cap = net.TCPCap(net.NetCap(t.env.cap))
 
-    def on_server_error(s, errmsg):
-        log.error(errmsg)
-        t.failure(AssertionError("server error: " + errmsg))
-
-    def on_server_remote_close(s):
-        try:
-            testing.assertEqual(test_payload, bytes([]).join(recv_buf), "Did not receive expected data before remote close event")
-        except AssertionError as ex:
-            t.failure(ex)
-        except Exception as ex:
-            t.error(ex)
-        else:
-            t.success()
-
-    def on_listen(l, error):
-        if error is not None:
-            m = re.match(r"address already in use", error)
-            if m is not None:
-                if retries > 0:
-                    log.debug("address already in use (%d), retrying..." % port)
-                    _start()
-                    return
-            log.error(error)
-            t.failure(AssertionError("listen error: " + error))
-        else:
-            _connect_client()
-
-    def on_listen_accept(s):
-        s.cb_install(on_server_receive, on_server_error, on_server_remote_close)
-
-    def _connect_client():
-        client = net.TCPConnection(net.TCPConnectCap(tcp_cap), address, port, on_connect, on_receive, on_error)
-
-    def on_connect(c):
-        c.write(test_payload)
-        c.close(lambda c: None)
-
-    def on_receive(c, payload):
-        pass
-
-    def on_error(c, errmsg):
-        # Retry since server might not be up yet
-        after 0.1: _connect_client()
-
-    def _start():
-        retries -= 1
-        port = random.randint(10000, 40000)
-        server = net.TCPListener(net.TCPListenCap(tcp_cap), address, port, on_listen, on_listen_accept)
-    _start()
-
-actor test_tcp_server_side_close(t: testing.EnvT, test_payload: bytes):
-    log = logging.Logger(t.log_handler)
-    address = "127.0.0.1"
-    var retries = 10
-    var port = random.randint(10000, 40000)
-    tcp_cap = net.TCPCap(net.NetCap(t.env.cap))
-
-    recv_buf: list[bytes] = []
-
-    var client = None
-
-    def on_server_receive(s, payload):
-        pass
-
-    def on_server_error(s, errmsg):
-        log.error(errmsg)
-        t.failure(AssertionError("server error: " + errmsg))
-
-    def on_listen(l, error):
-        if error is not None:
-            m = re.match(r"address already in use", error)
-            if m is not None:
-                if retries > 0:
-                    _start()
-                    log.info("address already in use, retrying...")
-                    return
-            log.error(error)
-            t.failure(AssertionError("listen error: " + error))
-        else:
-            _connect_client()
-
-    def on_listen_accept(s):
-        s.cb_install(on_server_receive, on_server_error, None)
-        s.write(test_payload)
-        s.close()
-
-    def _connect_client():
-        client = net.TCPConnection(net.TCPConnectCap(tcp_cap), address, port, on_connect, on_receive, on_error, on_remote_close)
-
-    def on_connect(c):
-        pass
-
-    def on_receive(c: net.TCPConnection, payload):
-        if client is not None and client is c:
+        def on_server_receive(s, payload):
             recv_buf.append(payload)
 
-    def on_error(c, errmsg):
-        # Retry since server might not be up yet
-        after 0.1: _connect_client()
+        def on_server_error(s, errmsg):
+            log.error(errmsg)
+            t.failure(AssertionError("server error: " + errmsg))
 
-    def on_remote_close(c: net.TCPConnection):
-        if client is not None and client is c:
+        def on_server_remote_close(s):
             try:
-                recv = bytes([]).join(recv_buf)
-                testing.assertEqual(len(test_payload), len(recv), "Did not receive expected %d bytes before remote close event, got %d bytes, retry: %d" % (len(test_payload), len(recv), retries))
-                testing.assertEqual(test_payload, recv, "Received data differs from the data the server wrote", print_vals=False, print_diff=False)
+                testing.assertEqual(test_payload, bytes([]).join(recv_buf), "Did not receive expected data before remote close event")
             except AssertionError as ex:
                 t.failure(ex)
             except Exception as ex:
@@ -132,14 +34,117 @@ actor test_tcp_server_side_close(t: testing.EnvT, test_payload: bytes):
             else:
                 t.success()
 
-    def _start():
-        retries -= 1
-        port = random.randint(10000, 40000)
-        server = net.TCPListener(net.TCPListenCap(tcp_cap), address, port, on_listen, on_listen_accept)
-    _start()
+        def on_listen(l, error):
+            if error is not None:
+                m = std.re.match(r"address already in use", error)
+                if m is not None:
+                    if retries > 0:
+                        log.debug("address already in use (%d), retrying..." % port)
+                        _start()
+                        return
+                log.error(error)
+                t.failure(AssertionError("listen error: " + error))
+            else:
+                _connect_client()
+
+        def on_listen_accept(s):
+            s.cb_install(on_server_receive, on_server_error, on_server_remote_close)
+
+        def _connect_client():
+            client = net.TCPConnection(net.TCPConnectCap(tcp_cap), address, port, on_connect, on_receive, on_error)
+
+        def on_connect(c):
+            c.write(test_payload)
+            c.close(lambda c: None)
+
+        def on_receive(c, payload):
+            pass
+
+        def on_error(c, errmsg):
+            # Retry since server might not be up yet
+            after 0.1: _connect_client()
+
+        def _start():
+            retries -= 1
+            port = std.random.randint(10000, 40000)
+            server = net.TCPListener(net.TCPListenCap(tcp_cap), address, port, on_listen, on_listen_accept)
+        _start()
+
+actor test_tcp_server_side_close(t: testing.EnvT, test_payload: bytes):
+    var retries = 10
+    var port = std.random.randint(10000, 40000)
+    var client = None
+
+    proc def __startup__():
+        log = logging.Logger(t.log_handler)
+        address = "127.0.0.1"
+        tcp_cap = net.TCPCap(net.NetCap(t.env.cap))
+
+        recv_buf: list[bytes] = []
+
+        def on_server_receive(s, payload):
+            pass
+
+        def on_server_error(s, errmsg):
+            log.error(errmsg)
+            t.failure(AssertionError("server error: " + errmsg))
+
+        def on_listen(l, error):
+            if error is not None:
+                m = std.re.match(r"address already in use", error)
+                if m is not None:
+                    if retries > 0:
+                        _start()
+                        log.info("address already in use, retrying...")
+                        return
+                log.error(error)
+                t.failure(AssertionError("listen error: " + error))
+            else:
+                _connect_client()
+
+        def on_listen_accept(s):
+            s.cb_install(on_server_receive, on_server_error, None)
+            s.write(test_payload)
+            s.close()
+
+        def _connect_client():
+            client = net.TCPConnection(net.TCPConnectCap(tcp_cap), address, port, on_connect, on_receive, on_error, on_remote_close)
+
+        def on_connect(c):
+            pass
+
+        def on_receive(c: net.TCPConnection, payload):
+            if client is not None and client is c:
+                recv_buf.append(payload)
+
+        def on_error(c, errmsg):
+            # Retry since server might not be up yet
+            after 0.1: _connect_client()
+
+        def on_remote_close(c: net.TCPConnection):
+            if client is not None and client is c:
+                try:
+                    recv = bytes([]).join(recv_buf)
+                    testing.assertEqual(len(test_payload), len(recv), "Did not receive expected %d bytes before remote close event, got %d bytes, retry: %d" % (len(test_payload), len(recv), retries))
+                    testing.assertEqual(test_payload, recv, "Received data differs from the data the server wrote", print_vals=False, print_diff=False)
+                except AssertionError as ex:
+                    t.failure(ex)
+                except Exception as ex:
+                    t.error(ex)
+                else:
+                    t.success()
+
+        def _start():
+            retries -= 1
+            port = std.random.randint(10000, 40000)
+            server = net.TCPListener(net.TCPListenCap(tcp_cap), address, port, on_listen, on_listen_accept)
+        _start()
 
 actor _test_TCPServerSideClose(t: testing.EnvT):
-    test_tcp_server_side_close(t, b"Stay a while and listen.")
+
+
+    proc def __startup__():
+        test_tcp_server_side_close(t, b"Stay a while and listen.")
 
 actor _test_TCPServerSideCloseLargePayload(t: testing.EnvT):
     """Server-side close delivers a payload larger than the socket send buffer
@@ -150,9 +155,11 @@ actor _test_TCPServerSideCloseLargePayload(t: testing.EnvT):
     before it closes the handle, or the client receives a truncated payload.
     http.Listener closes this way on Connection: close and for HTTP/1.0.
     """
-    test_tcp_server_side_close(t, ("x" * 4000000).encode())
 
-# The tests below listen on port 0, so they need no retries for ports in use.
+    proc def __startup__():
+        test_tcp_server_side_close(t, ("x" * 4000000).encode())
+
+    # The tests below listen on port 0, so they need no retries for ports in use.
 
 actor tcp_test_result(t: testing.EnvT, what: str):
     """The result of one test, for what"""
@@ -179,69 +186,71 @@ actor tcp_test_result(t: testing.EnvT, what: str):
 
 actor _test_TCPListenerPortZero(t: testing.EnvT):
     """A listener on port 0 reports its port, and both ends know each other's address"""
-    tcp_cap = net.TCPCap(net.NetCap(t.env.cap))
-    base = tcp_test_result(t, "listener port zero")
     var port = 0
     var listener: ?net.TCPListener = None
     var client: ?net.TCPConnection = None
 
-    def on_listen(l: net.TCPListener, error: ?str):
-        if error is not None:
-            base.failure("listen error: " + error)
-            return
-        listener = l
-        port = l.local_port()
-        if port <= 0:
-            base.failure("listener on port 0 reports port %d" % port)
-            return
-        if l.local_address() != "127.0.0.1":
-            base.failure("listener reports local address " + l.local_address())
-            return
-        client = net.TCPConnection(net.TCPConnectCap(tcp_cap), "127.0.0.1", port, on_connect, on_receive, on_error)
+    proc def __startup__():
+        tcp_cap = net.TCPCap(net.NetCap(t.env.cap))
+        base = tcp_test_result(t, "listener port zero")
+        def on_listen(l: net.TCPListener, error: ?str):
+            if error is not None:
+                base.failure("listen error: " + error)
+                return
+            listener = l
+            ep = l.endpoint()
+            port = ep.port
+            if port <= 0:
+                base.failure("listener on port 0 reports port %d" % port)
+                return
+            if ep.address != "127.0.0.1":
+                base.failure("listener reports local address " + ep.address)
+                return
+            client = net.TCPConnection(net.TCPConnectCap(tcp_cap), "127.0.0.1", port, on_connect, on_receive, on_error)
 
-    def on_accept(s: net.TCPListenConnection):
-        s.cb_install(on_server_receive, on_server_error, None)
+        def on_accept(s: net.TCPListenConnection):
+            s.cb_install(on_server_receive, on_server_error, None)
 
-    def on_server_receive(s: net.TCPListenConnection, data: bytes):
-        # The client sends its local port
-        ep = s.endpoints()
-        try:
-            testing.assertEqual(ep.remote_address, "127.0.0.1", "accepted connection remote address")
-            testing.assertEqual(str(ep.remote_port), data.decode(), "accepted connection remote port")
-            testing.assertEqual(ep.local_address, "127.0.0.1", "accepted connection local address")
-            testing.assertEqual(ep.local_port, port, "accepted connection local port")
-        except AssertionError as e:
-            base.failure(str(e))
-            return
-        s.close()
-        if listener is not None:
-            listener.close()
-        base.success()
+        def on_server_receive(s: net.TCPListenConnection, data: bytes):
+            # The client sends its local port
+            ep = s.endpoints()
+            try:
+                testing.assertEqual(ep.remote_address, "127.0.0.1", "accepted connection remote address")
+                testing.assertEqual(str(ep.remote_port), data.decode(), "accepted connection remote port")
+                testing.assertEqual(ep.local_address, "127.0.0.1", "accepted connection local address")
+                testing.assertEqual(ep.local_port, port, "accepted connection local port")
+            except AssertionError as e:
+                base.failure(str(e))
+                return
+            s.close()
+            if listener is not None:
+                listener.close()
+            base.success()
 
-    def on_server_error(s: net.TCPListenConnection, errmsg: str):
-        base.failure("server error: " + errmsg)
+        def on_server_error(s: net.TCPListenConnection, errmsg: str):
+            base.failure("server error: " + errmsg)
 
-    def on_connect(c: net.TCPConnection):
-        ep = c.endpoints()
-        try:
-            testing.assertEqual(ep.remote_address, "127.0.0.1", "client remote address")
-            testing.assertEqual(ep.remote_port, port, "client remote port")
-            testing.assertEqual(ep.local_address, "127.0.0.1", "client local address")
-            testing.assertTrue(ep.local_port > 0, "client local port")
-            testing.assertEqual(c.ip_version(), 4, "client IP version")
-        except AssertionError as e:
-            base.failure(str(e))
-            return
-        c.write(str(ep.local_port).encode())
+        def on_connect(c: net.TCPConnection):
+            ep = c.endpoints()
+            try:
+                testing.assertEqual(ep.remote_address, "127.0.0.1", "client remote address")
+                testing.assertEqual(ep.remote_port, port, "client remote port")
+                testing.assertEqual(ep.local_address, "127.0.0.1", "client local address")
+                testing.assertTrue(ep.local_port > 0, "client local port")
+                testing.assertEqual(c.ip_version(), 4, "client IP version")
+            except AssertionError as e:
+                base.failure(str(e))
+                return
+            c.write(str(ep.local_port).encode())
 
-    def on_receive(c: net.TCPConnection, data: bytes):
-        pass
+        def on_receive(c: net.TCPConnection, data: bytes):
+            pass
 
-    def on_error(c: net.TCPConnection, errmsg: str):
-        base.failure("client error: " + errmsg)
+        def on_error(c: net.TCPConnection, errmsg: str):
+            base.failure("client error: " + errmsg)
 
-    after 5: base.timeout("no connection")
-    net.TCPListener(net.TCPListenCap(tcp_cap), "127.0.0.1", 0, on_listen, on_accept)
+        after 5: base.timeout("no connection")
+        net.TCPListener(net.TCPListenCap(tcp_cap), "127.0.0.1", 0, on_listen, on_accept)
 
 
 actor tcp_refused_once(t: testing.EnvT, address: str):
@@ -250,364 +259,376 @@ actor tcp_refused_once(t: testing.EnvT, address: str):
     Connects after the listener is closed, with a short connect_timeout, and
     waits past the timeout for a second report.
     """
-    tcp_cap = net.TCPCap(net.NetCap(t.env.cap))
-    base = tcp_test_result(t, "refused connect")
     var errors: list[str] = []
     var connected = False
 
-    def on_listen(l: net.TCPListener, error: ?str):
-        if error is not None:
-            base.failure("listen error: " + error)
-            return
-        port = l.local_port()
-        l.close()
-        after 0.1: connect(port)
+    proc def __startup__():
+        tcp_cap = net.TCPCap(net.NetCap(t.env.cap))
+        base = tcp_test_result(t, "refused connect")
+        def on_listen(l: net.TCPListener, error: ?str):
+            if error is not None:
+                base.failure("listen error: " + error)
+                return
+            port = l.endpoint().port
+            l.close()
+            after 0.1: connect(port)
 
-    def connect(port: int):
-        net.TCPConnection(net.TCPConnectCap(tcp_cap), address, port, on_connect, on_receive, on_error, None, connect_timeout=0.5)
-        after 1.5: check()
+        def connect(port: int):
+            net.TCPConnection(net.TCPConnectCap(tcp_cap), address, port, on_connect, on_receive, on_error, None, connect_timeout=0.5)
+            after 1.5: check()
 
-    def check():
-        if connected:
-            base.failure("connected to a closed listener")
-        elif len(errors) != 1:
-            base.failure("expected one error, got %d: %s" % (len(errors), str(errors)))
-        elif errors[0].find("refused") == -1:
-            base.failure("expected connection refused, got: " + errors[0])
-        else:
-            base.success()
+        def check():
+            if connected:
+                base.failure("connected to a closed listener")
+            elif len(errors) != 1:
+                base.failure("expected one error, got %d: %s" % (len(errors), str(errors)))
+            elif errors[0].find("refused") == -1:
+                base.failure("expected connection refused, got: " + errors[0])
+            else:
+                base.success()
 
-    def on_accept(s: net.TCPListenConnection):
-        base.failure("closed listener accepted a connection")
+        def on_accept(s: net.TCPListenConnection):
+            base.failure("closed listener accepted a connection")
 
-    def on_connect(c: net.TCPConnection):
-        connected = True
+        def on_connect(c: net.TCPConnection):
+            connected = True
 
-    def on_receive(c: net.TCPConnection, data: bytes):
-        pass
+        def on_receive(c: net.TCPConnection, data: bytes):
+            pass
 
-    def on_error(c: net.TCPConnection, errmsg: str):
-        errors.append(errmsg)
+        def on_error(c: net.TCPConnection, errmsg: str):
+            errors.append(errmsg)
 
-    after 5: base.timeout("no result")
-    net.TCPListener(net.TCPListenCap(tcp_cap), "127.0.0.1", 0, on_listen, on_accept)
+        after 5: base.timeout("no result")
+        net.TCPListener(net.TCPListenCap(tcp_cap), "127.0.0.1", 0, on_listen, on_accept)
 
 
 actor _test_TCPListenerCloseRefusedOnce(t: testing.EnvT):
     """close() stops listening, a refused connection is reported once"""
-    tcp_refused_once(t, "127.0.0.1")
+
+    proc def __startup__():
+        tcp_refused_once(t, "127.0.0.1")
 
 
 actor _test_TCPConnectLocalhostRefusedOnce(t: testing.EnvT):
     """A refused name that resolves to IPv4 and IPv6 is reported once"""
-    tcp_refused_once(t, "localhost")
+
+    proc def __startup__():
+        tcp_refused_once(t, "localhost")
 
 
 actor _test_TCPConnectLocalhost(t: testing.EnvT):
     """A name resolving to IPv4 and IPv6 connects once, the refused family is not reported"""
-    tcp_cap = net.TCPCap(net.NetCap(t.env.cap))
-    base = tcp_test_result(t, "localhost connect")
     var connects = 0
     var errors: list[str] = []
 
-    def on_listen(l: net.TCPListener, error: ?str):
-        if error is not None:
-            base.failure("listen error: " + error)
-            return
-        # Only IPv4 listens, so an IPv6 attempt to localhost is refused
-        net.TCPConnection(net.TCPConnectCap(tcp_cap), "localhost", l.local_port(), on_connect, on_receive, on_error)
-        after 1.0: check(l)
+    proc def __startup__():
+        tcp_cap = net.TCPCap(net.NetCap(t.env.cap))
+        base = tcp_test_result(t, "localhost connect")
+        def on_listen(l: net.TCPListener, error: ?str):
+            if error is not None:
+                base.failure("listen error: " + error)
+                return
+            # Only IPv4 listens, so an IPv6 attempt to localhost is refused
+            net.TCPConnection(net.TCPConnectCap(tcp_cap), "localhost", l.endpoint().port, on_connect, on_receive, on_error)
+            after 1.0: check(l)
 
-    def check(l: net.TCPListener):
-        l.close()
-        if connects != 1 or len(errors) != 0:
-            base.failure("expected one connect and no errors, got %d connects and errors %s" % (connects, str(errors)))
-        else:
-            base.success()
+        def check(l: net.TCPListener):
+            l.close()
+            if connects != 1 or len(errors) != 0:
+                base.failure("expected one connect and no errors, got %d connects and errors %s" % (connects, str(errors)))
+            else:
+                base.success()
 
-    def on_accept(s: net.TCPListenConnection):
-        s.close()
+        def on_accept(s: net.TCPListenConnection):
+            s.close()
 
-    def on_connect(c: net.TCPConnection):
-        connects += 1
+        def on_connect(c: net.TCPConnection):
+            connects += 1
 
-    def on_receive(c: net.TCPConnection, data: bytes):
-        pass
+        def on_receive(c: net.TCPConnection, data: bytes):
+            pass
 
-    def on_error(c: net.TCPConnection, errmsg: str):
-        errors.append(errmsg)
+        def on_error(c: net.TCPConnection, errmsg: str):
+            errors.append(errmsg)
 
-    after 5: base.timeout("no result")
-    net.TCPListener(net.TCPListenCap(tcp_cap), "127.0.0.1", 0, on_listen, on_accept)
+        after 5: base.timeout("no result")
+        net.TCPListener(net.TCPListenCap(tcp_cap), "127.0.0.1", 0, on_listen, on_accept)
 
 
 actor _test_TCPConnectUnresolvable(t: testing.EnvT):
     """A host name that does not resolve is reported, once"""
-    t.timeout(10)
-    tcp_cap = net.TCPCap(net.NetCap(t.env.cap))
-    base = tcp_test_result(t, "unresolvable name")
     var errors: list[str] = []
     var connected = False
     var reported = False
 
-    def on_connect(c: net.TCPConnection):
-        connected = True
+    proc def __startup__():
+        t.timeout(10)
+        tcp_cap = net.TCPCap(net.NetCap(t.env.cap))
+        base = tcp_test_result(t, "unresolvable name")
+        def on_connect(c: net.TCPConnection):
+            connected = True
 
-    def on_receive(c: net.TCPConnection, data: bytes):
-        pass
+        def on_receive(c: net.TCPConnection, data: bytes):
+            pass
 
-    def on_error(c: net.TCPConnection, errmsg: str):
-        errors.append(errmsg)
-        if not reported:
-            reported = True
-            # Wait a little for a second report
-            after 0.5: check()
+        def on_error(c: net.TCPConnection, errmsg: str):
+            errors.append(errmsg)
+            if not reported:
+                reported = True
+                # Wait a little for a second report
+                after 0.5: check()
 
-    def check():
-        if connected:
-            base.failure("connected to an unresolvable name")
-        elif len(errors) != 1:
-            base.failure("expected one error, got %d: %s" % (len(errors), str(errors)))
-        elif errors[0].find("DNS") == -1 and errors[0].find("timeout") == -1:
-            base.failure("expected a DNS error or timeout, got: " + errors[0])
-        else:
-            base.success()
+        def check():
+            if connected:
+                base.failure("connected to an unresolvable name")
+            elif len(errors) != 1:
+                base.failure("expected one error, got %d: %s" % (len(errors), str(errors)))
+            elif errors[0].find("DNS") == -1 and errors[0].find("timeout") == -1:
+                base.failure("expected a DNS error or timeout, got: " + errors[0])
+            else:
+                base.success()
 
-    after 8: base.timeout("unresolvable name not reported")
-    # .invalid never resolves (RFC 2606); connect_timeout covers resolution
-    net.TCPConnection(net.TCPConnectCap(tcp_cap), "nonexistent.invalid", 80, on_connect, on_receive, on_error, None, connect_timeout=5.0)
+        after 8: base.timeout("unresolvable name not reported")
+        # .invalid never resolves (RFC 2606); connect_timeout covers resolution
+        net.TCPConnection(net.TCPConnectCap(tcp_cap), "nonexistent.invalid", 80, on_connect, on_receive, on_error, None, connect_timeout=5.0)
 
 
 actor _test_TCPCloseWhileConnecting(t: testing.EnvT):
     """close() right after creating a connection cancels the attempt"""
-    tcp_cap = net.TCPCap(net.NetCap(t.env.cap))
-    base = tcp_test_result(t, "close while connecting")
     var closes = 0
     var events: list[str] = []
 
-    def on_listen(l: net.TCPListener, error: ?str):
-        if error is not None:
-            base.failure("listen error: " + error)
-            return
-        c = net.TCPConnection(net.TCPConnectCap(tcp_cap), "127.0.0.1", l.local_port(), on_connect, on_receive, on_error, None, connect_timeout=0.3)
-        c.close(on_close)
-        # Past connect_timeout, which must not fire either
-        after 0.6: check(l)
+    proc def __startup__():
+        tcp_cap = net.TCPCap(net.NetCap(t.env.cap))
+        base = tcp_test_result(t, "close while connecting")
+        def on_listen(l: net.TCPListener, error: ?str):
+            if error is not None:
+                base.failure("listen error: " + error)
+                return
+            c = net.TCPConnection(net.TCPConnectCap(tcp_cap), "127.0.0.1", l.endpoint().port, on_connect, on_receive, on_error, None, connect_timeout=0.3)
+            c.close(on_close)
+            # Past connect_timeout, which must not fire either
+            after 0.6: check(l)
 
-    def check(l: net.TCPListener):
-        l.close()
-        if closes != 1:
-            base.failure("expected on_close once, got %d" % closes)
-        elif len(events) != 0:
-            base.failure("events after close: " + str(events))
-        else:
-            base.success()
+        def check(l: net.TCPListener):
+            l.close()
+            if closes != 1:
+                base.failure("expected on_close once, got %d" % closes)
+            elif len(events) != 0:
+                base.failure("events after close: " + str(events))
+            else:
+                base.success()
 
-    def on_accept(s: net.TCPListenConnection):
-        s.close()
+        def on_accept(s: net.TCPListenConnection):
+            s.close()
 
-    def on_close(c: net.TCPConnection):
-        closes += 1
+        def on_close(c: net.TCPConnection):
+            closes += 1
 
-    def on_connect(c: net.TCPConnection):
-        events.append("on_connect")
+        def on_connect(c: net.TCPConnection):
+            events.append("on_connect")
 
-    def on_receive(c: net.TCPConnection, data: bytes):
-        events.append("on_receive")
+        def on_receive(c: net.TCPConnection, data: bytes):
+            events.append("on_receive")
 
-    def on_error(c: net.TCPConnection, errmsg: str):
-        events.append("on_error: " + errmsg)
+        def on_error(c: net.TCPConnection, errmsg: str):
+            events.append("on_error: " + errmsg)
 
-    after 5: base.timeout("no result")
-    net.TCPListener(net.TCPListenCap(tcp_cap), "127.0.0.1", 0, on_listen, on_accept)
+        after 5: base.timeout("no result")
+        net.TCPListener(net.TCPListenCap(tcp_cap), "127.0.0.1", 0, on_listen, on_accept)
 
 
 actor _test_TCPServerResetReported(t: testing.EnvT):
     """A connection reset by the server is reported to the client via on_error"""
-    tcp_cap = net.TCPCap(net.NetCap(t.env.cap))
-    base = tcp_test_result(t, "server reset")
     var listener: ?net.TCPListener = None
 
-    def on_listen(l: net.TCPListener, error: ?str):
-        if error is not None:
-            base.failure("listen error: " + error)
-            return
-        listener = l
-        net.TCPConnection(net.TCPConnectCap(tcp_cap), "127.0.0.1", l.local_port(), on_connect, on_receive, on_error, on_remote_close)
+    proc def __startup__():
+        tcp_cap = net.TCPCap(net.NetCap(t.env.cap))
+        base = tcp_test_result(t, "server reset")
+        def on_listen(l: net.TCPListener, error: ?str):
+            if error is not None:
+                base.failure("listen error: " + error)
+                return
+            listener = l
+            net.TCPConnection(net.TCPConnectCap(tcp_cap), "127.0.0.1", l.endpoint().port, on_connect, on_receive, on_error, on_remote_close)
 
-    def on_accept(s: net.TCPListenConnection):
-        s.cb_install(on_server_receive, on_server_error, None)
+        def on_accept(s: net.TCPListenConnection):
+            s.cb_install(on_server_receive, on_server_error, None)
 
-    def on_server_receive(s: net.TCPListenConnection, data: bytes):
-        s.abort()
+        def on_server_receive(s: net.TCPListenConnection, data: bytes):
+            s.abort()
 
-    def on_server_error(s: net.TCPListenConnection, errmsg: str):
-        base.failure("server error: " + errmsg)
+        def on_server_error(s: net.TCPListenConnection, errmsg: str):
+            base.failure("server error: " + errmsg)
 
-    def on_connect(c: net.TCPConnection):
-        c.write(b"x")
+        def on_connect(c: net.TCPConnection):
+            c.write(b"x")
 
-    def on_receive(c: net.TCPConnection, data: bytes):
-        pass
+        def on_receive(c: net.TCPConnection, data: bytes):
+            pass
 
-    def on_error(c: net.TCPConnection, errmsg: str):
-        if listener is not None:
-            listener.close()
-        if errmsg.find("reset") == -1:
-            base.failure("expected a reset, got: " + errmsg)
-        else:
-            base.success()
+        def on_error(c: net.TCPConnection, errmsg: str):
+            if listener is not None:
+                listener.close()
+            if errmsg.find("reset") == -1:
+                base.failure("expected a reset, got: " + errmsg)
+            else:
+                base.success()
 
-    def on_remote_close(c: net.TCPConnection):
-        base.failure("reset reported as an orderly close")
+        def on_remote_close(c: net.TCPConnection):
+            base.failure("reset reported as an orderly close")
 
-    after 5: base.timeout("reset not reported")
-    net.TCPListener(net.TCPListenCap(tcp_cap), "127.0.0.1", 0, on_listen, on_accept)
+        after 5: base.timeout("reset not reported")
+        net.TCPListener(net.TCPListenCap(tcp_cap), "127.0.0.1", 0, on_listen, on_accept)
 
 
 actor _test_TCPClientResetReported(t: testing.EnvT):
     """A connection reset by the client is reported to the server via on_error"""
-    tcp_cap = net.TCPCap(net.NetCap(t.env.cap))
-    base = tcp_test_result(t, "client reset")
     var listener: ?net.TCPListener = None
 
-    def on_listen(l: net.TCPListener, error: ?str):
-        if error is not None:
-            base.failure("listen error: " + error)
-            return
-        listener = l
-        net.TCPConnection(net.TCPConnectCap(tcp_cap), "127.0.0.1", l.local_port(), on_connect, on_receive, on_error)
+    proc def __startup__():
+        tcp_cap = net.TCPCap(net.NetCap(t.env.cap))
+        base = tcp_test_result(t, "client reset")
+        def on_listen(l: net.TCPListener, error: ?str):
+            if error is not None:
+                base.failure("listen error: " + error)
+                return
+            listener = l
+            net.TCPConnection(net.TCPConnectCap(tcp_cap), "127.0.0.1", l.endpoint().port, on_connect, on_receive, on_error)
 
-    def on_accept(s: net.TCPListenConnection):
-        s.cb_install(on_server_receive, on_server_error, on_server_remote_close)
-        s.write(b"hello")
+        def on_accept(s: net.TCPListenConnection):
+            s.cb_install(on_server_receive, on_server_error, on_server_remote_close)
+            s.write(b"hello")
 
-    def on_server_receive(s: net.TCPListenConnection, data: bytes):
-        pass
+        def on_server_receive(s: net.TCPListenConnection, data: bytes):
+            pass
 
-    def on_server_error(s: net.TCPListenConnection, errmsg: str):
-        if listener is not None:
-            listener.close()
-        if errmsg.find("reset") == -1:
-            base.failure("expected a reset, got: " + errmsg)
-        else:
-            base.success()
+        def on_server_error(s: net.TCPListenConnection, errmsg: str):
+            if listener is not None:
+                listener.close()
+            if errmsg.find("reset") == -1:
+                base.failure("expected a reset, got: " + errmsg)
+            else:
+                base.success()
 
-    def on_server_remote_close(s: net.TCPListenConnection):
-        base.failure("reset reported as an orderly close")
+        def on_server_remote_close(s: net.TCPListenConnection):
+            base.failure("reset reported as an orderly close")
 
-    def on_connect(c: net.TCPConnection):
-        pass
+        def on_connect(c: net.TCPConnection):
+            pass
 
-    def on_receive(c: net.TCPConnection, data: bytes):
-        c.abort()
+        def on_receive(c: net.TCPConnection, data: bytes):
+            c.abort()
 
-    def on_error(c: net.TCPConnection, errmsg: str):
-        base.failure("client error: " + errmsg)
+        def on_error(c: net.TCPConnection, errmsg: str):
+            base.failure("client error: " + errmsg)
 
-    after 5: base.timeout("reset not reported")
-    net.TCPListener(net.TCPListenCap(tcp_cap), "127.0.0.1", 0, on_listen, on_accept)
+        after 5: base.timeout("reset not reported")
+        net.TCPListener(net.TCPListenCap(tcp_cap), "127.0.0.1", 0, on_listen, on_accept)
 
 
 actor _test_TCPAcceptLeavesNoHandles(t: testing.EnvT):
     """Accepting and closing connections leaves no TCP handles behind"""
-    tcp_cap = net.TCPCap(net.NetCap(t.env.cap))
-    base = tcp_test_result(t, "accepted handles")
-    monitor = t.env.rts
-    CONNECTIONS = 3
     var baseline = 0
     var closed = 0
     var listener: ?net.TCPListener = None
 
-    def tcp_handles() -> int:
-        n = 0
-        for wthread_id, handles in monitor.io_handles().items():
-            for k, v in handles.items():
-                if v.typ == "tcp":
-                    n += 1
-        return n
+    proc def __startup__():
+        tcp_cap = net.TCPCap(net.NetCap(t.env.cap))
+        base = tcp_test_result(t, "accepted handles")
+        monitor = t.env.rts
+        CONNECTIONS = 3
+        def tcp_handles() -> int:
+            n = 0
+            for wthread_id, handles in monitor.io_handles().items():
+                for k, v in handles.items():
+                    if v.typ == "tcp":
+                        n += 1
+            return n
 
-    def on_listen(l: net.TCPListener, error: ?str):
-        if error is not None:
-            base.failure("listen error: " + error)
-            return
-        listener = l
-        baseline = tcp_handles()
-        for i in range(CONNECTIONS):
-            net.TCPConnection(net.TCPConnectCap(tcp_cap), "127.0.0.1", l.local_port(), on_connect, on_receive, on_error, on_remote_close)
+        def on_listen(l: net.TCPListener, error: ?str):
+            if error is not None:
+                base.failure("listen error: " + error)
+                return
+            listener = l
+            baseline = tcp_handles()
+            for i in range(CONNECTIONS):
+                net.TCPConnection(net.TCPConnectCap(tcp_cap), "127.0.0.1", l.endpoint().port, on_connect, on_receive, on_error, on_remote_close)
 
-    def on_accept(s: net.TCPListenConnection):
-        s.close()
+        def on_accept(s: net.TCPListenConnection):
+            s.close()
 
-    def on_connect(c: net.TCPConnection):
-        pass
+        def on_connect(c: net.TCPConnection):
+            pass
 
-    def on_receive(c: net.TCPConnection, data: bytes):
-        pass
+        def on_receive(c: net.TCPConnection, data: bytes):
+            pass
 
-    def on_error(c: net.TCPConnection, errmsg: str):
-        base.failure("client error: " + errmsg)
+        def on_error(c: net.TCPConnection, errmsg: str):
+            base.failure("client error: " + errmsg)
 
-    def on_remote_close(c: net.TCPConnection):
-        closed += 1
-        if closed == CONNECTIONS:
-            # Let the closes complete
-            after 0.2: check()
+        def on_remote_close(c: net.TCPConnection):
+            closed += 1
+            if closed == CONNECTIONS:
+                # Let the closes complete
+                after 0.2: check()
 
-    def check():
-        n = tcp_handles()
-        if listener is not None:
-            listener.close()
-        if n > baseline:
-            base.failure("%d TCP handles left, %d before connecting" % (n, baseline))
-        else:
-            base.success()
+        def check():
+            n = tcp_handles()
+            if listener is not None:
+                listener.close()
+            if n > baseline:
+                base.failure("%d TCP handles left, %d before connecting" % (n, baseline))
+            else:
+                base.success()
 
-    after 5: base.timeout("connections not closed")
-    net.TCPListener(net.TCPListenCap(tcp_cap), "127.0.0.1", 0, on_listen, on_accept)
+        after 5: base.timeout("connections not closed")
+        net.TCPListener(net.TCPListenCap(tcp_cap), "127.0.0.1", 0, on_listen, on_accept)
 
 
 actor _test_TCPListenOnZone(t: testing.EnvT):
     """A listener takes an IPv6 address with a zone, and a client reaches it"""
-    tcp_cap = net.TCPCap(net.NetCap(t.env.cap))
-    base = tcp_test_result(t, "listen on zone")
     var listener: ?net.TCPListener = None
     var zone_error = ""
 
-    def on_listen(l: net.TCPListener, error: ?str):
-        if error is not None:
-            # Fails also without IPv6, so find out which it is
-            zone_error = error
-            net.TCPListener(net.TCPListenCap(tcp_cap), "::1", 0, on_ipv6_listen, on_accept)
-            return
-        listener = l
-        net.TCPConnection(net.TCPConnectCap(tcp_cap), "::1", l.local_port(), on_connect, on_receive, on_error)
+    proc def __startup__():
+        tcp_cap = net.TCPCap(net.NetCap(t.env.cap))
+        base = tcp_test_result(t, "listen on zone")
+        def on_listen(l: net.TCPListener, error: ?str):
+            if error is not None:
+                # Fails also without IPv6, so find out which it is
+                zone_error = error
+                net.TCPListener(net.TCPListenCap(tcp_cap), "::1", 0, on_ipv6_listen, on_accept)
+                return
+            listener = l
+            net.TCPConnection(net.TCPConnectCap(tcp_cap), "::1", l.endpoint().port, on_connect, on_receive, on_error)
 
-    def on_ipv6_listen(l: net.TCPListener, error: ?str):
-        l.close()
-        if error is not None:
-            # No IPv6 on this host
+        def on_ipv6_listen(l: net.TCPListener, error: ?str):
+            l.close()
+            if error is not None:
+                # No IPv6 on this host
+                base.success()
+            else:
+                base.failure("listen on ::1%1 failed: " + zone_error)
+
+        def on_accept(s: net.TCPListenConnection):
+            s.close()
+
+        def on_connect(c: net.TCPConnection):
+            c.close(lambda c: None)
+            if listener is not None:
+                listener.close()
             base.success()
-        else:
-            base.failure("listen on ::1%1 failed: " + zone_error)
 
-    def on_accept(s: net.TCPListenConnection):
-        s.close()
+        def on_receive(c: net.TCPConnection, data: bytes):
+            pass
 
-    def on_connect(c: net.TCPConnection):
-        c.close(lambda c: None)
-        if listener is not None:
-            listener.close()
-        base.success()
+        def on_error(c: net.TCPConnection, errmsg: str):
+            base.failure("client error: " + errmsg)
 
-    def on_receive(c: net.TCPConnection, data: bytes):
-        pass
-
-    def on_error(c: net.TCPConnection, errmsg: str):
-        base.failure("client error: " + errmsg)
-
-    after 5: base.timeout("no connection")
-    net.TCPListener(net.TCPListenCap(tcp_cap), "::1%1", 0, on_listen, on_accept)
+        after 5: base.timeout("no connection")
+        net.TCPListener(net.TCPListenCap(tcp_cap), "::1%1", 0, on_listen, on_accept)
 
 
 actor _test_TCPDroppedConnectionsClosed(t: testing.EnvT):
@@ -616,53 +637,54 @@ actor _test_TCPDroppedConnectionsClosed(t: testing.EnvT):
     A stale pointer can keep an actor or two reachable for a while, so the
     test is done once half of the connections are closed.
     """
-    tcp_cap = net.TCPCap(net.NetCap(t.env.cap))
-    base = tcp_test_result(t, "dropped connections")
-    CONNECTIONS = 10
     var accepted = 0
     var closed = 0
     var listener: ?net.TCPListener = None
     var clients: list[net.TCPConnection] = []
 
-    def on_listen(l: net.TCPListener, error: ?str):
-        if error is not None:
-            base.failure("listen error: " + error)
-            return
-        listener = l
-        for i in range(CONNECTIONS):
-            net.TCPConnection(net.TCPConnectCap(tcp_cap), "127.0.0.1", l.local_port(), on_connect, on_receive, on_error, on_remote_close)
+    proc def __startup__():
+        tcp_cap = net.TCPCap(net.NetCap(t.env.cap))
+        base = tcp_test_result(t, "dropped connections")
+        CONNECTIONS = 10
+        def on_listen(l: net.TCPListener, error: ?str):
+            if error is not None:
+                base.failure("listen error: " + error)
+                return
+            listener = l
+            for i in range(CONNECTIONS):
+                net.TCPConnection(net.TCPConnectCap(tcp_cap), "127.0.0.1", l.endpoint().port, on_connect, on_receive, on_error, on_remote_close)
 
-    def on_accept(s: net.TCPListenConnection):
-        # Drop the connection without cb_install() or close()
-        accepted += 1
-        if accepted == CONNECTIONS:
-            collect()
+        def on_accept(s: net.TCPListenConnection):
+            # Drop the connection without cb_install() or close()
+            accepted += 1
+            if accepted == CONNECTIONS:
+                collect()
 
-    def collect():
-        if not base.is_done():
-            t.env.rts.gc()
-            after 0.05: collect()
+        def collect():
+            if not base.is_done():
+                t.env.rts.gc()
+                after 0.05: collect()
 
-    def on_connect(c: net.TCPConnection):
-        clients.append(c)
+        def on_connect(c: net.TCPConnection):
+            clients.append(c)
 
-    def on_receive(c: net.TCPConnection, data: bytes):
-        pass
+        def on_receive(c: net.TCPConnection, data: bytes):
+            pass
 
-    def on_error(c: net.TCPConnection, errmsg: str):
-        on_remote_close(c)
+        def on_error(c: net.TCPConnection, errmsg: str):
+            on_remote_close(c)
 
-    def on_remote_close(c: net.TCPConnection):
-        closed += 1
-        if closed == CONNECTIONS // 2:
-            finish()
+        def on_remote_close(c: net.TCPConnection):
+            closed += 1
+            if closed == CONNECTIONS // 2:
+                finish()
 
-    def finish():
-        if listener is not None:
-            listener.close()
-        for c in clients:
-            c.close(lambda c: None)
-        base.success()
+        def finish():
+            if listener is not None:
+                listener.close()
+            for c in clients:
+                c.close(lambda c: None)
+            base.success()
 
-    after 5: base.timeout("%d of %d dropped connections closed" % (closed, CONNECTIONS))
-    net.TCPListener(net.TCPListenCap(tcp_cap), "127.0.0.1", 0, on_listen, on_accept)
+        after 5: base.timeout("%d of %d dropped connections closed" % (closed, CONNECTIONS))
+        net.TCPListener(net.TCPListenCap(tcp_cap), "127.0.0.1", 0, on_listen, on_accept)

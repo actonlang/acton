@@ -37,11 +37,11 @@ class Holder[A(Eq)](object):
         return a == b
 
 class Documented(object):
+    """A documented class must not block witness pooling."""
     @staticmethod
     def marker() -> int:
         return 7
 
-    """A harmless class string after a method must not block witness pooling."""
 
 actor Peer():
     pass
@@ -74,48 +74,49 @@ early_bucket_result = Bucket([Entry(1), Entry(2)]) == Bucket([Entry(1), Entry(2)
 global_holder = make_holder()
 
 actor main(env):
-    assert early_result and early_bucket_result
-    first_bucket = Bucket([Entry(1), Entry(2)])
-    assert first_bucket == Bucket([Entry(1), Entry(2)])
-    assert first_bucket != Bucket([Entry(1), Entry(3)])
-    bucket_copy = deserialize(serialize(first_bucket))
-    assert isinstance(bucket_copy, Bucket)
-    if isinstance(bucket_copy, Bucket):
-        assert first_bucket == bucket_copy
-    xs = [Entry(1), Entry(2)]
-    ys = [Entry(1), Entry(2)]
-    assert compare_left(xs, ys) and compare_right(xs, ys)
-    assert not compare_left(xs, [Entry(3)])
-    assert global_holder.same(xs, ys)
-    a = make_holder()
-    b = make_holder()
-    a.marker = 7
-    assert b.marker == 0
-    data = serialize(Pair(a, b))
-    restored = deserialize(data)
-    assert serialize(restored) == data
-    assert isinstance(restored, Pair)
-    if isinstance(restored, Pair):
-        assert restored.left.same(xs, ys)
-        assert not restored.right.same(xs, [Entry(9)])
-        restored.left.marker = 8
-        assert restored.right.marker == 0
-    d = {Entry(1): "one", Entry(2): "two"}
-    assert d[Entry(1)] == "one"
-    s = {Entry(1), Entry(2)}
-    total = 0
-    for x in s:
-        total += x.n
-    assert total == 3
-    assert Documented.marker() == 7
-    # Lifted comprehensions receive their own witness parameters. Exercise
-    # different implementations so accidental capture of a module witness fails.
-    by_entry = keyed([Entry(1), Entry(2)])
-    by_number = keyed([3, 4])
-    assert by_entry[Entry(1)].n == 1
-    assert by_number[3] == 3
-    first = Peer()
-    second = Peer()
-    assert same_peer(first, first)
-    assert not same_peer(first, second)
-    env.exit(0)
+    proc def __startup__():
+        assert early_result and early_bucket_result
+        first_bucket = Bucket([Entry(1), Entry(2)])
+        assert first_bucket == Bucket([Entry(1), Entry(2)])
+        assert first_bucket != Bucket([Entry(1), Entry(3)])
+        bucket_copy = deserialize(serialize(first_bucket))
+        assert isinstance(bucket_copy, Bucket)
+        if isinstance(bucket_copy, Bucket):
+            assert first_bucket == bucket_copy
+        xs = [Entry(1), Entry(2)]
+        ys = [Entry(1), Entry(2)]
+        assert compare_left(xs, ys) and compare_right(xs, ys)
+        assert not compare_left(xs, [Entry(3)])
+        assert global_holder.same(xs, ys)
+        a = make_holder()
+        b = make_holder()
+        a.marker = 7
+        assert b.marker == 0
+        data = serialize(Pair(a, b))
+        restored = deserialize(data)
+        assert serialize(restored) == data
+        assert isinstance(restored, Pair)
+        if isinstance(restored, Pair):
+            assert restored.left.same(xs, ys)
+            assert not restored.right.same(xs, [Entry(9)])
+            restored.left.marker = 8
+            assert restored.right.marker == 0
+        d = {Entry(1): "one", Entry(2): "two"}
+        assert d[Entry(1)] == "one"
+        s = {Entry(1), Entry(2)}
+        total = 0
+        for x in s:
+            total += x.n
+        assert total == 3
+        assert Documented.marker() == 7
+        # Lifted comprehensions receive their own witness parameters. Exercise
+        # different implementations so accidental capture of a module witness fails.
+        by_entry = keyed([Entry(1), Entry(2)])
+        by_number = keyed([3, 4])
+        assert by_entry[Entry(1)].n == 1
+        assert by_number[3] == 3
+        first = Peer()
+        second = Peer()
+        assert same_peer(first, first)
+        assert not same_peer(first, second)
+        env.exit(0)

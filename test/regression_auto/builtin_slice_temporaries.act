@@ -1,0 +1,145 @@
+# Fresh descriptors passed to known builtin workers stay within the native call.
+
+def list_slice(xs: list[int], a: int, b: int, k: int) -> list[int]:
+    return xs[a:b:k]
+
+def ilist_slice(xs: ilist[int], a: int, b: int, k: int) -> ilist[int]:
+    return xs[a:b:k]
+
+def str_slice(xs: str, a: int, b: int, k: int) -> str:
+    return xs[a:b:k]
+
+def bytes_slice(xs: bytes, a: int, b: int, k: int) -> bytes:
+    return xs[a:b:k]
+
+def bytearray_slice(xs: bytearray, a: int, b: int, k: int) -> bytearray:
+    return xs[a:b:k]
+
+def optional_slice(xs: str, a: ?int, b: ?int, k: ?int) -> str:
+    return xs.__getslice__(slice(a, b, k))
+
+def nested_slices(xs: str, a: ?int, b: ?int) -> str:
+    return xs.__getslice__(slice(a, b)) + xs.__getslice__(slice(b, a, -1))
+
+mut def list_set_slice(xs: list[int], a: int, b: int, src: Iterable[int]):
+    xs[a:b] = src
+
+mut def list_del_slice(xs: list[int], a: int, b: int, k: int):
+    del xs[a:b:k]
+
+mut def bytearray_set_slice(xs: bytearray, a: int, b: int, src: Iterable[int]):
+    xs[a:b] = src
+
+mut def bytearray_del_slice(xs: bytearray, a: int, b: int, k: int):
+    del xs[a:b:k]
+
+# Neither a returned descriptor nor a generic consumer has the local proof.
+def make_slice(a: ?int, b: ?int, k: ?int) -> slice:
+    return slice(a, b, k)
+
+def stored_slice(xs: list[int], span: slice) -> list[int]:
+    return xs.__getslice__(span)
+
+def generic_slice[S(ISliceable[int])](xs: S) -> S:
+    return xs[1::2]
+
+# A user-defined slice method is free to retain the descriptor.
+class Saved(object):
+    span: slice
+    def __init__(self, span: slice):
+        self.span = span
+    def apply(self, xs: list[int]) -> list[int]:
+        return xs.__getslice__(self.span)
+
+extension Saved(ISliceable[int]):
+    def __getitem__(self, i: int) -> int:
+        return i
+    def __getslice__(self, span: slice) -> Saved:
+        return Saved(span)
+
+def custom_slice(xs: Saved) -> Saved:
+    return xs[1::2]
+
+# Slice assignment can call an input iterator and collect before reading bounds.
+class Collecting(object):
+    rts: EnvRTS
+    def __init__(self, rts: EnvRTS):
+        self.rts = rts
+
+extension Collecting(Iterable[int]):
+    def __iter__(self) -> Iterator[int]:
+        self.rts.gc()
+        return iter([8, 9, 10])
+
+mut def bound(log: list[int], n: int) -> int:
+    log.append(n)
+    return n
+
+def check_bounds():
+    xs = [0, 1, 2, 3, 4]
+    frozen = ilist(xs)
+    text = "aå中🙂z"
+    raw = b"abcde"
+    mutable = bytearray(raw)
+    # Compare the optimized call with the original stored-descriptor ABI.
+    for a in [-100, -5, -1, 0, 2, 5, 100]:
+        for b in [-100, -5, -1, 0, 2, 5, 100]:
+            for k in [-3, -1, 1, 2, 4]:
+                span = make_slice(a, b, k)
+                assert list_slice(xs, a, b, k) == stored_slice(xs, span)
+                assert list(ilist_slice(frozen, a, b, k)) == stored_slice(xs, span)
+                assert str_slice(text, a, b, k) == text.__getslice__(span)
+                assert bytes_slice(raw, a, b, k) == raw.__getslice__(span)
+                assert bytearray_slice(mutable, a, b, k) == mutable.__getslice__(span)
+    assert optional_slice(text, None, None, None) == text
+    assert optional_slice(text, None, None, -1) == "z🙂中åa"
+    assert optional_slice(text, 1, -1, None) == "å中🙂"
+    assert nested_slices("abcde", 1, 3) == "bcdc"
+    assert list_slice(xs, -9223372036854775808, 9223372036854775807, 1) == xs
+    assert optional_slice(text, None, None, 2) == "a中z"
+    assert ""[:] == "" and b""[::-1] == b""
+    assert generic_slice(xs) == [1, 3]
+    for k in [0]:
+        try:
+            list_slice(xs, 0, 3, k)
+            assert False
+        except ValueError:
+            pass
+        try:
+            optional_slice(text, None, None, k)
+            assert False
+        except ValueError:
+            pass
+
+actor Pinger():
+    def ping():
+        pass
+
+actor main(env):
+    proc def __startup__():
+        pinger = Pinger()
+        check_bounds()
+        log: list[int] = []
+        assert [0, 1, 2, 3][bound(log, 1):bound(log, 4):bound(log, 2)] == [1, 3]
+        assert log == [1, 4, 2]
+        xs = [0, 1, 2, 3, 4]
+        list_set_slice(xs, 1, 3, Collecting(env.rts))
+        assert xs == [0, 8, 9, 10, 3, 4]
+        list_del_slice(xs, 5, 0, -2)
+        assert xs == [0, 9, 3]
+        # Aliasing source and destination still requires the existing RHS snapshot.
+        list_set_slice(xs, 1, 2, xs)
+        assert xs == [0, 0, 9, 3, 3]
+        raw = bytearray(bytes([0, 1, 2, 3, 4]))
+        bytearray_set_slice(raw, 1, 3, Collecting(env.rts))
+        assert raw == bytearray(bytes([0, 8, 9, 10, 3, 4]))
+        bytearray_del_slice(raw, 5, 0, -2)
+        assert raw == bytearray(bytes([0, 9, 3]))
+        saved = custom_slice(Saved(slice()))
+        env.rts.gc()
+        assert saved.apply([0, 1, 2, 3, 4]) == [1, 3]
+        # The native calls are also safe in a resumable actor function.
+        for i in range(3):
+            assert optional_slice("abcde", i, None, None) == "abcde"[i:]
+            await async pinger.ping()
+        env.exit(0)

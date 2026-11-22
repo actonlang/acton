@@ -156,16 +156,8 @@ def myers_diff(e: list[str], f: list[str], i: int = 0, j: int = 0) -> list[Op]:
             f_idx = unique_lines_f[line][0]
             anchors.append((e_idx, f_idx))
 
-    # Sort anchors by position in e
-    # We'll do a simple bubble sort that uses a temporary variable for the swap
-    sorted_anchors = list(anchors)  # Make a copy
-    for i in range(len(sorted_anchors)):
-        for j in range(len(sorted_anchors) - i - 1):
-            if sorted_anchors[j].0 > sorted_anchors[j+1].0:
-                # Swap using a temporary variable
-                temp = sorted_anchors[j]
-                sorted_anchors[j] = sorted_anchors[j+1]
-                sorted_anchors[j+1] = temp
+    # Sort anchors by position in e (e indices are unique, so lexicographic order agrees)
+    sorted_anchors = sorted(anchors)
 
     # Extract sorted indices
     sorted_e_indices = []

@@ -55,5 +55,6 @@ actor main(env):
         print("Test timeout, exiting with error")
         finish(1)
 
-    test()
-    after 3: ex()
+    proc def __startup__():
+        test()
+        after 3: ex()

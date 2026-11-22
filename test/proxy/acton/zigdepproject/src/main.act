@@ -4,7 +4,8 @@ import zlib.lib as z
 # in deps/zlib and its transitive zlib_upstream .url. Acton must fetch that archive
 # through the proxy before zig uses the seeded cache during final compilation.
 actor main(env):
-    c = z.compress(b"hello world")
-    d = z.decompress(c)
-    print("roundtrip ok:", d == b"hello world")
-    env.exit(0)
+    proc def __startup__():
+        c = z.compress(b"hello world")
+        d = z.decompress(c)
+        print("roundtrip ok:", d == b"hello world")
+        env.exit(0)

@@ -255,7 +255,6 @@ DEPS += dist/deps/libuuid
 DEPS += dist/deps/libuv
 DEPS += dist/deps/libxml2
 DEPS += dist/deps/libyyjson
-DEPS += dist/deps/libsnappy_c
 
 .PHONE: clean-downloads
 clean-downloads:
@@ -351,18 +350,17 @@ dist/deps/libargp: deps-download/$(LIBARGP_REF).tar.gz $(LIBARGP_BUILD_ZIG)
 	touch "$(TD)/$@"
 
 # /deps/libbsdnt --------------------------------------------
-LIBBSDNT_REF=cf7db3414867b8b4a5561bc9aa94a8050d0225c4
-LIBBSDNT_BUILD_ZIG=deps/libbsdnt/build.zig
+LIBBSDNT_REF=dfee908e3d8570f5a8cfc5c8f31f3ab8fea6c701
 deps-download/$(LIBBSDNT_REF).tar.gz:
 	mkdir -p deps-download
 	$(CURL) -o $@ https://github.com/actonlang/bsdnt/archive/$(LIBBSDNT_REF).tar.gz
 
-dist/deps/libbsdnt: deps-download/$(LIBBSDNT_REF).tar.gz $(LIBBSDNT_BUILD_ZIG)
+dist/deps/libbsdnt: deps-download/$(LIBBSDNT_REF).tar.gz
 	rm -rf "$@"
 	mkdir -p "$@"
 	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<"
-	cp "$(TD)/$(LIBBSDNT_BUILD_ZIG)" "$@/build.zig"
-	rm -rf "$@/.github" "$@/configure" "$@/test"
+	# Keep the fork's tests so zig build test works in the extracted tree.
+	rm -rf "$@/.github" "$@/configure"
 	touch "$(TD)/$@"
 
 # /deps/libgc --------------------------------------------
@@ -512,21 +510,6 @@ dist/deps/pcre2: deps-download/$(LIBPCRE2_REF).tar.gz $(LIBPCRE2_BUILD_ZIG)
 	cp "$(TD)/$(LIBPCRE2_BUILD_ZIG)" "$@/build.zig"
 	rm -rf "$@/.github" "$@/autogen.sh" "$@/doc" "$@/maint" "$@/testdata" "$@/vms"
 	rm -f "$@"/132html "$@"/CheckMan "$@"/CleanTxt "$@"/Detrail "$@"/PrepareRelease "$@"/RunGrepTest "$@"/RunTest "$@"/pcre2-config.in "$@"/perltest.sh
-	touch "$(TD)/$@"
-
-# /deps/libsnappy_c --------------------------------------------
-LIBSNAPPY_C_REF=dc05e026488865bc69313a68bcc03ef2e4ea8e83
-LIBSNAPPY_C_BUILD_ZIG=deps/libsnappy_c/build.zig
-deps-download/$(LIBSNAPPY_C_REF).tar.gz:
-	mkdir -p deps-download
-	$(CURL) -o $@ https://github.com/google/snappy/archive/$(LIBSNAPPY_C_REF).tar.gz
-
-dist/deps/libsnappy_c: deps-download/$(LIBSNAPPY_C_REF).tar.gz $(LIBSNAPPY_C_BUILD_ZIG)
-	rm -rf "$@"
-	mkdir -p "$@"
-	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<"
-	cp "$(TD)/$(LIBSNAPPY_C_BUILD_ZIG)" "$@/build.zig"
-	rm -rf "$@/.github" "$@/cmake" "$@/docs" "$@/testdata" "$@/third_party"
 	touch "$(TD)/$@"
 
 dist/deps/libnetstring: deps/libnetstring $(DIST_ZIG)

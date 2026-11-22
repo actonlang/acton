@@ -24,7 +24,7 @@ struct B_ZeroDivisionError B_int_mod_zero_error =
 // Auxiliary //////////////////////////////////////////////////////////////////////////////
 
 // only called with e>=0.
-long int_pow(long a, long e) {
+int64_t int_pow(int64_t a, int64_t e) {
     if (e == 0) return 1;
     if (e == 1) return a;
     if (e%2 == 0) return int_pow(a*a,e/2);
@@ -35,14 +35,15 @@ long int_pow(long a, long e) {
 
 int64_t B_intG_new(B_atom a, B_int base) {  // base is optional
     B_bigint b = B_bigintG_new(a, base);
-    int sz = b->val.size;
-    unsigned long n = sz == 0 ? 0 : b->val.n[0];
-    if (labs(sz) > 1 || (sz==1 && n > 0x7ffffffffffffffful) || sz == -1 && n > 0x8000000000000000ul) {
+    int64_t sz = b->val.size;
+    uint64_t n = sz == 0 ? 0 : b->val.n[0];
+    if (llabs(sz) > 1 || (sz==1 && n > INT64_MAX) || (sz == -1 && n > (UINT64_C(1) << 63))) {
         char errmsg[1024];
         snprintf(errmsg, sizeof(errmsg), "int(): value %s out of range for type int",get_str(&b->val));
         RAISE(B_ValueError, actStrFromCStringCopy(errmsg));
     }
-    return n*sz;
+    // Subtract before negating so INT64_MIN stays representable.
+    return sz < 0 ? -(int64_t)(n - 1) - 1 : (int64_t)n;
 }
  
 B_NoneType B_intD___init__(B_int self, B_atom a, B_int base){
@@ -57,7 +58,7 @@ void B_intD___serialize__(B_int n, $Serial$state state) {
 }
 
 B_int B_intD___deserialize__(B_int n, $Serial$state state) {
-    return toB_int((long)$val_deserialize(state));
+    return toB_int((int64_t)(intptr_t)$val_deserialize(state));
 }
 
 bool B_intD___bool__(B_int n) {
@@ -392,7 +393,7 @@ B_int B_IntegralD_intD___pow__(B_IntegralD_int wit,  B_int a, B_int b) {
     int64_t bval = b->val;
     if ( bval < 0) {
         char errmsg[1024];
-        snprintf(errmsg, sizeof(errmsg), "int.__pow__: negative exponent %ld ",(long)bval);
+        snprintf(errmsg, sizeof(errmsg), "int.__pow__: negative exponent %" PRId64 " ",bval);
         RAISE(B_ValueError, actStrFromCStringCopy(errmsg));
     }
     return toB_int(int_pow(aval,bval));
@@ -415,7 +416,7 @@ $WORD B_IntegralD_intD_imag(B_IntegralD_int wit, B_int a, B_Real wit2) {
 }
 
 $WORD B_IntegralD_intD___abs__(B_IntegralD_int wit, B_int a, B_Real wit2) {
-    return wit2->$class->__fromatom__(wit2,(B_atom)toB_int(labs(a->val)));
+    return wit2->$class->__fromatom__(wit2,(B_atom)toB_int(llabs(a->val)));
 }
 
 B_int B_IntegralD_intD_conjugate(B_IntegralD_int wit,  B_int a) {

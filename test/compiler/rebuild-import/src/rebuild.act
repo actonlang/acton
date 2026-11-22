@@ -3,5 +3,6 @@
 import net
 
 actor main(env):
-    print("Hello World!")
-    env.exit(0)
+    proc def __startup__():
+        print("Hello World!")
+        env.exit(0)

@@ -6,9 +6,28 @@ VECTORS: list[bytes] = [
     b"acton-bytes-regression-\xff\xfe\x80\x00\x11\x22", # longer than 8 bytes, with an embedded NUL character to ensure it can't be str
 ]
 
+# This actor never receives a message: its constructor state must be saved
+# by the activation that creates it.
+actor Snapshot(marker: int):
+    value = marker
+
+actor SnapshotProbe(on_ready: action(Snapshot) -> None):
+    def park():
+        pass
+
+    proc def __startup__():
+        snapshot = Snapshot(42)
+        on_ready(snapshot)
+        # Deliberately await our own queued method. This activation cannot
+        # finish, so Snapshot must be persisted by the await commit path.
+        await async park()
+
+
 actor Tester(env, port):
     var _lsock = None
     var i = 0
+    var snapshot: ?Snapshot = None
+    var snapshot_received = False
     # Bytes values carried in actor state and persisted through DB resume.
     var payloads: list[bytes] = []
 
@@ -21,6 +40,8 @@ actor Tester(env, port):
                 print("Unhandled error:", error)
             print("Attempting to re-establish listening socket")
             _lsock = _init_listen()
+        else:
+            print("NOW LISTENING ON", str(port))
 
     def _on_server_accept(c):
         c.cb_install(_on_server_receive, _on_server_error)
@@ -58,12 +79,13 @@ actor Tester(env, port):
             c.write(result)
         if data == b"ENV":
             # After a restore from the DB, EnvVar and Stdio still answer. The
-            # is_tty() result is assigned so that the call waits for the reply
-            # from Stdio.
+            # stdout_is_tty() result is assigned so that the call waits for the
+            # reply from Stdio.
             path = env.vars.getenv("PATH")
-            tty = env.stdio.is_tty()
-            ok = path is not None
-            result = b"OK" if ok else b"FAIL env services"
+            tty = env.stdio.stdout_is_tty()
+            # Snapshot has never processed a message of its own.
+            ok = path is not None and snapshot is not None and snapshot.value == 42
+            result = b"OK" if ok else b"FAIL env services or constructor state"
             print("RECV", c, data.decode(), "RESPONSE:", result)
             c.write(result)
 
@@ -74,14 +96,21 @@ actor Tester(env, port):
         listen_cap = net.TCPListenCap(net.TCPCap(net.NetCap(env.cap)))
         print("Starting to listen...")
         s = net.TCPListener(listen_cap, "0.0.0.0", port, _on_listen, _on_server_accept)
-        print("NOW LISTENING ON", str(port))
 
         return s
 
-    _lsock = _init_listen()
+    def _snapshot_ready(s: Snapshot):
+        # Keep the original snapshot if the blocked activation is replayed.
+        if snapshot_received:
+            return
+        snapshot_received = True
+        snapshot = s
+        _lsock = _init_listen()
+
+    proc def __startup__():
+        probe = SnapshotProbe(_snapshot_ready)
 
 
 actor main(env):
     port = int(env.argv[1])
-    var t = None
-    t = Tester(env, port)
+    var t = Tester(env, port)

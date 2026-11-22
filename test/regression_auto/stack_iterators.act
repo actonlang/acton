@@ -189,17 +189,18 @@ actor Counter():
         return 1
 
 actor main(env):
-    check_collections()
-    check_control()
-    check_mutation()
-    check_gc(env.rts)
-    counter = Counter()
+    proc def __startup__():
+        check_collections()
+        check_control()
+        check_mutation()
+        check_gc(env.rts)
+        counter = Counter()
 
-    def suspended():
-        total = 0
-        for value in [1, 2, 3]:
-            total += value + await async counter.tick()
-        assert total == 9
-        env.exit(0)
+        def suspended():
+            total = 0
+            for value in [1, 2, 3]:
+                total += value + await async counter.tick()
+            assert total == 9
+            env.exit(0)
 
-    suspended()
+        suspended()

@@ -1,12 +1,12 @@
 Building file test/syntaxerrors/err1.act using temporary scratch directory
 [error Parse error]: unexpected "if x>pass:<newline>   "
-                     expecting end of line or simple statement
+                     expecting "after", "assert", "break", "continue", "del", "pass", "return", "yield", '=', atomic expression, comma, docstring, end of line, or expression statement
 
      +--> test/syntaxerrors/err1.act@1:11-1:12
      |
    1 | def f(x): if x>pass:
      :           ^ 
      :           `- unexpected "if x>pass:<newline>   "
-     :              expecting end of line or simple statement
+     :              expecting "after", "assert", "break", "continue", "del", "pass", "return", "yield", '=', atomic expression, comma, docstring, end of line, or expression statement
      :              
 -----+

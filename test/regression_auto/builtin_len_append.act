@@ -74,50 +74,51 @@ mut def element(trace: list[int]) -> int:
     return 7
 
 actor main(env):
-    assert list_length([]) == 0
-    xs = [1, 2, 3]
-    assert list_length(xs) == 3
-    assert ilist_length(ilist(xs)) == 3
-    d = {"one": 1, "two": 2}
-    assert dict_length(d) == 2
-    assert idict_length(idict(d.items())) == 2
-    assert set_length({1, 1, 2}) == 2
-    assert iset_length(iset([1, 1, 2])) == 2
-    # Unicode length counts characters, and an embedded NUL is a character too.
-    assert str_length("aå中🙂") == 4
-    assert str_length("a\0🙂") == 3
-    assert bytes_length(b"a\0b") == 3
-    data = bytearray(b"a\0b")
-    assert bytearray_length(data) == 3
-    data.append(4)
-    assert bytearray_length(data) == 4
-    assert bitset_length(bitset(130, [1, 64, 129])) == 3
-    assert array_length(array(5, 2)) == 5
-    assert array_length(array(7, 2.5)) == 7
-    assert bitarray_length(bitarray(65, True)) == 65
-    # Generic dispatch and a user-defined Collection must retain their behavior.
-    assert generic_length(xs) == 3
-    assert generic_length(Sized(xs)) == 103
-    app = Appender()
-    app.append(5)
-    assert app.values == [105]
-    # Append must keep its boxed element ABI for concrete and generic values.
-    ints: list[int] = []
-    floats: list[float] = []
-    objects: list[Sized] = []
-    obj = Sized([8])
-    for i in range(1000):
-        append_value(ints, i)
-        append_value(floats, float(i) + 0.5)
-        append_value(objects, obj)
-    assert len(ints) == 1000 and ints[999] == 999
-    assert len(floats) == 1000 and floats[999] == 999.5
-    assert len(objects) == 1000 and objects[999].values == [8]
-    generic_append(ints, 1000)
-    assert len(ints) == 1001 and ints[1000] == 1000
-    trace: list[int] = []
-    receiver(ints, trace).append(element(trace))
-    assert trace == [1, 2] and ints[-1] == 7
-    assert len(receiver(ints, trace)) == 1002
-    assert trace == [1, 2, 1]
-    env.exit(0)
+    proc def __startup__():
+        assert list_length([]) == 0
+        xs = [1, 2, 3]
+        assert list_length(xs) == 3
+        assert ilist_length(ilist(xs)) == 3
+        d = {"one": 1, "two": 2}
+        assert dict_length(d) == 2
+        assert idict_length(idict(d.items())) == 2
+        assert set_length({1, 1, 2}) == 2
+        assert iset_length(iset([1, 1, 2])) == 2
+        # Unicode length counts characters, and an embedded NUL is a character too.
+        assert str_length("aå中🙂") == 4
+        assert str_length("a\0🙂") == 3
+        assert bytes_length(b"a\0b") == 3
+        data = bytearray(b"a\0b")
+        assert bytearray_length(data) == 3
+        data.append(4)
+        assert bytearray_length(data) == 4
+        assert bitset_length(bitset(130, [1, 64, 129])) == 3
+        assert array_length(array(5, 2)) == 5
+        assert array_length(array(7, 2.5)) == 7
+        assert bitarray_length(bitarray(65, True)) == 65
+        # Generic dispatch and a user-defined Collection must retain their behavior.
+        assert generic_length(xs) == 3
+        assert generic_length(Sized(xs)) == 103
+        app = Appender()
+        app.append(5)
+        assert app.values == [105]
+        # Append must keep its boxed element ABI for concrete and generic values.
+        ints: list[int] = []
+        floats: list[float] = []
+        objects: list[Sized] = []
+        obj = Sized([8])
+        for i in range(1000):
+            append_value(ints, i)
+            append_value(floats, float(i) + 0.5)
+            append_value(objects, obj)
+        assert len(ints) == 1000 and ints[999] == 999
+        assert len(floats) == 1000 and floats[999] == 999.5
+        assert len(objects) == 1000 and objects[999].values == [8]
+        generic_append(ints, 1000)
+        assert len(ints) == 1001 and ints[1000] == 1000
+        trace: list[int] = []
+        receiver(ints, trace).append(element(trace))
+        assert trace == [1, 2] and ints[-1] == 7
+        assert len(receiver(ints, trace)) == 1002
+        assert trace == [1, 2, 1]
+        env.exit(0)

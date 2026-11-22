@@ -19,7 +19,7 @@ actor Server(env, ready: action(int) -> None):
             print("listen error", err)
             env.exit(2)
         else:
-            ready(l.local_port())
+            ready(l.endpoint().port)
 
     def on_receive(c, data: bytes):
         junk = [str(i) for i in range(30)]
@@ -68,7 +68,8 @@ actor Client(env, port: int, id: int, connections: int, trips: int, done: action
     def open_one():
         conn = net.TCPConnection(net.TCPConnectCap(net.TCPCap(net.NetCap(env.cap))), "127.0.0.1", port, on_connect, on_receive, on_error)
 
-    open_one()
+    proc def __startup__():
+        open_one()
 
 actor main(env):
     clients = int(env.argv[1]) if len(env.argv) > 1 else 16
@@ -95,4 +96,6 @@ actor main(env):
     def timeout():
         print("TIMEOUT", left)
         env.exit(3)
-    after 60: timeout()
+
+    proc def __startup__():
+        after 60: timeout()

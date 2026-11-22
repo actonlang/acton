@@ -63,7 +63,8 @@ def fannkuch(n: int) -> (int, int):
     return checksum, maximum
 
 actor main(env):
-    n = int(env.argv[1]) if len(env.argv) > 1 else 7
-    checksum, maximum = fannkuch(n)
-    print("%d\nPfannkuchen(%d) = %d" % (checksum, n, maximum))
-    env.exit(0)
+    proc def __startup__():
+        n = int(env.argv[1]) if len(env.argv) > 1 else 7
+        checksum, maximum = fannkuch(n)
+        print("%d\nPfannkuchen(%d) = %d" % (checksum, n, maximum))
+        env.exit(0)

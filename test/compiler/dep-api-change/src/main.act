@@ -1,6 +1,7 @@
 import libfoo
 
 actor main(env):
-    result = libfoo.calculate(21)
-    print("Result: %d" % result)
-    env.exit(0)
+    proc def __startup__():
+        result = libfoo.calculate(21)
+        print("Result: %d" % result)
+        env.exit(0)

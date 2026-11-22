@@ -144,6 +144,23 @@ message resurrects the actor for the duration of the cleanup; Boehm finalizers
 are one-shot, so after the cleanup message has been processed and the last
 reference dropped, the actor is collected without the finalizer running again.
 
+A finalizer runs on whichever thread allocates once the collector has found
+objects to finalize. Inside a continuation, the cleanup message joins the
+outgoing queue of the running actor and is sent with that actor's other
+messages. Anywhere else, including the worker loop between continuations, it
+is sent at once.
+
+Any stack word that points to an unreachable actor keeps it alive. A worker
+with nothing to run waits in libuv's poll, whose frame holds an array of 1024
+events that the kernel fills only partly, and that frame reuses the stack
+where the worker ran continuations. Right before each poll, the worker zeroes
+that part of its stack (`clear_before_poll`, `base/rts/rts.c`), so that the
+pointers its earlier calls left there do not keep actors alive, and their
+`__cleanup__` from running, for as long as the worker waits. It also drops and
+zeroes the exception frame of the worker loop (`jump0` in the worker context),
+whose setjmp saved registers that can point to a continuation that the worker
+ran.
+
 ## IO and native libraries
 
 The native IO stack (libuv, tlsuv, mbedtls and the native objects owned by

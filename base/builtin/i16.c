@@ -35,14 +35,14 @@ int16_t i16_pow(int16_t a, int16_t e) {
 
 int16_t B_i16G_new(B_atom a, B_int base) {
     B_bigint b = B_bigintG_new(a, base);
-    long sz = b->val.size;
-    unsigned long n = sz == 0 ? 0 : b->val.n[0];
-    if (labs(sz) > 1 || (sz==1 && n > 0x7ffful) || (sz == -1 && n > 0x8000ul)) {
+    int64_t sz = b->val.size;
+    uint64_t n = sz == 0 ? 0 : b->val.n[0];
+    if (llabs(sz) > 1 || (sz==1 && n > 0x7ffful) || (sz == -1 && n > 0x8000ul)) {
         char errmsg[1024];
         snprintf(errmsg, sizeof(errmsg), "i16(): value %s out of range for type i16",get_str(&b->val));
         RAISE(B_ValueError, actStrFromCStringCopy(errmsg));
     }
-    return (int16_t)(n*sz);
+    return (int16_t)((int64_t)n*sz);
 }
 
 

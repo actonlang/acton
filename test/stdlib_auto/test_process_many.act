@@ -3,14 +3,12 @@ actor GC(env):
         env.rts.gc()
         after 0.0001: _tihi()
 
-    after 0: _tihi()
+    proc def __startup__():
+        after 0: _tihi()
 
 
 actor main(env: Env):
     var num=1000
-    if len(env.argv) > 1:
-        num = int(env.argv[1])
-
     var done = False
     var exited = 0
     def on_exit(p, exit_code, term_signal, stdout_buf, stderr_buf):
@@ -47,4 +45,8 @@ actor main(env: Env):
             i += 1
             after 0: run_tests()
 
-    after 0: run_tests()
+    proc def __startup__():
+        if len(env.argv) > 1:
+            num = int(env.argv[1])
+
+        after 0: run_tests()

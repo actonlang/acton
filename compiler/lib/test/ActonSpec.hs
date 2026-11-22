@@ -14,11 +14,14 @@ import qualified Acton.Names as Names
 import qualified Acton.Printer as AP
 import qualified Acton.DocPrinter as DocP
 import qualified Acton.Env
+import qualified Acton.Solver as Solver
+import qualified Acton.TypeEnv as TypeEnv
 import qualified Acton.EscapeAnalysis as Escape
+import qualified Acton.InitializationAnalysis as Init
 import Acton.Env (CompilationError(..))
 import qualified Acton.Kinds
 import qualified Acton.Types
-import Acton.TypeEnv (TypeError(..),typeReport)
+import Acton.TypeEnv (TypeError(..),typeReport,initTypeEnv)
 import qualified Acton.Normalizer
 import qualified Acton.Deactorizer
 import qualified Acton.CPS
@@ -39,6 +42,7 @@ import qualified Acton.Testing as Testing
 import qualified Acton.Transform as Transform
 import qualified Acton.WitnessSharing as Witness
 import qualified Data.IntMap.Strict as IM
+import qualified Data.IntSet as IS
 import qualified InterfaceFiles
 import Pretty (print, prettyText)
 import qualified Pretty
@@ -223,12 +227,96 @@ hashDecl l doc =
 
 
 
+-- | The interface directories that tests type check against: std's, then base's.
+systemTypes :: [FilePath]
+systemTypes = Project.systemTypePaths (".." </> ".." </> "dist")
+
 main :: IO ()
 main = do
   let sysTypesPath = ".." </> ".." </> "dist" </> "base" </> "out" </> "types"
   env0 <- Acton.Env.initEnv sysTypesPath False
 
   sydTest $ do
+    describe "Communication effects" $ do
+      let hierarchy =
+            [ (S.FXPure, [S.FXPure,S.FXMut,S.FXCom,S.FXProc])
+            , (S.FXMut, [S.FXMut,S.FXProc])
+            , (S.FXProc, [S.FXProc])
+            , (S.FXAction, [S.FXAction,S.FXProc])
+            , (S.FXCom, [S.FXCom,S.FXProc])
+            ]
+          effects = map fst hierarchy
+          included a b = maybe False (elem b) (lookup a hierarchy)
+          ordered = sort . map show
+      forM_ effects $ \a -> do
+        it ("enumerates the bounds of " ++ show a) $ do
+          ordered (Solver.allAbove env0 (S.tTFX a)) `shouldBe`
+            ordered [S.tTFX b | b <- effects, included a b]
+          ordered (Solver.allBelow (initTypeEnv env0) (S.tTFX a)) `shouldBe`
+            ordered [S.tTFX b | b <- effects, included b a]
+          let infos = TypeEnv.tyinfos0
+              matching = [info | info <- IM.elems infos, TypeEnv.tywild info == S.tTFX a]
+          length matching `shouldBe` 1
+          forM_ matching $ \info -> do
+            ordered [TypeEnv.tywild (infos IM.! i) | i <- IS.toList (TypeEnv.tyabove info)] `shouldBe`
+              ordered [S.tTFX b | b <- effects, included a b]
+            ordered [TypeEnv.tywild (infos IM.! i) | i <- IS.toList (TypeEnv.tybelow info)] `shouldBe`
+              ordered [S.tTFX b | b <- effects, included b a]
+        forM_ effects $ \b ->
+          it ("compares and combines " ++ show a ++ " with " ++ show b) $ do
+            Acton.Env.subeffect a b `shouldBe` included a b
+            Acton.Env.castable env0 (S.tTFX a) (S.tTFX b) `shouldBe`
+              (included a b || (a == S.FXMut && b == S.FXPure))
+            let lower = [c | c <- effects, included c a, included c b]
+                upper = [c | c <- effects, included a c, included b c]
+                greatest = [c | c <- lower, all (`included` c) lower]
+                least = [c | c <- upper, all (included c) upper]
+            Acton.Env.glb env0 (S.tTFX a) (S.tTFX b) `shouldBe`
+              (S.tTFX <$> listToMaybe greatest)
+            Acton.Env.lub env0 (S.tTFX a) (S.tTFX b) `shouldBe`
+              (S.tTFX <$> listToMaybe least)
+      it "preserves old binary tags and round-trips the new effects" $ do
+        forM_ (zip [0..] effects) $ \(tag,fx) -> do
+          Data.Binary.encode fx `shouldBe` BL.pack [tag]
+          Data.Binary.decode (Data.Binary.encode fx) `shouldBe` fx
+      it "distinguishes the public hashes of all five effects" $ do
+        let info fx = I.NDef (S.monotype $ S.tFun (S.tTFX fx) S.posNil S.kwdNil S.tNone) S.NoDec Nothing
+        length (nub $ map (publicHashFor . info) effects) `shouldBe` length effects
+      forM_ effects $ \fx -> do
+        let word = prettyText fx
+        it ("uses " ++ word ++ " as an annotation and as an ordinary name") $ do
+          S.isKeyword word `shouldBe` False
+          let src = unlines
+                [ word ++ " def annotated() -> int:"
+                , "    return 1"
+                , "def " ++ word ++ "(" ++ word ++ ": int) -> int:"
+                , "    return " ++ word
+                , "def closures():"
+                , "    f = " ++ word ++ " lambda: 1"
+                , "    xs = [x for x in [1] if " ++ word ++ " lambda: True]"
+                , "    return (f, xs)"
+                ]
+          expectChunkedParseMatchesSerial src
+          ast <- liftIO $ P.parseModuleSerial (S.modName ["communication"]) "communication.act" src Nothing
+          let defs = [d | S.Decl _ ds <- S.mbody ast, d@S.Def{} <- ds]
+          map S.dfx (take 1 defs) `shouldBe` [S.tTFX fx]
+          reparsed <- liftIO $ P.parseModuleSerial (S.modName ["communication"]) "communication.act" (prettyText ast) Nothing
+          prettyText reparsed `shouldBe` prettyText ast
+      it "infers com when a function calls both pure and com functions" $ do
+        ast <- typecheckSource env0 "communication_join" $ unlines
+          [ "def combine(f: pure() -> None, g: com() -> None):"
+          , "    f()"
+          , "    g()"
+          ]
+        fmap S.dfx (findTypedDef "combine" ast) `shouldBe` Just S.fxCom
+      forM_ [("pure","com"),("mut","com"),("com","mut"),("com","proc")] $ \(bodyFx,callFx) ->
+        it ("rejects " ++ callFx ++ " calls in a " ++ bodyFx ++ " body") $ do
+          let src = unlines [bodyFx ++ " def invalid(f: " ++ callFx ++ "() -> None):", "    f()"]
+          result <- liftIO $ E.try (typecheckSource env0 "communication_invalid" src)
+          case result of
+            Left (_ :: TypeError) -> pure ()
+            Right _ -> expectationFailure "Unexpectedly accepted incompatible effects"
+
     describe "Raw operator result types" $ do
       let raw t n = S.UnBox t (S.eInt n)
           shifted t op = S.BinOp NoLoc (raw t 16) op (raw Builtin.tInt 1)
@@ -2899,9 +2987,8 @@ main = do
               , "    t.success()"
               ]
             moduleName = S.modName ["context_test_discovery"]
-            sysTypesPath = ".." </> ".." </> "dist" </> "base" </> "out" </> "types"
         parsed <- liftIO $ P.parseModule moduleName "<context_test_discovery>" src Nothing
-        env <- liftIO $ Acton.Env.mkEnv [sysTypesPath] env0 parsed
+        env <- liftIO $ Acton.Env.mkEnv systemTypes env0 parsed
         kchecked <- liftIO $ Acton.Kinds.check env parsed
         (_, _, _, discovered) <- liftIO $ Acton.Types.reconstruct Nothing Nothing env kchecked Nothing
         sort discovered `shouldBe` ["_test_async", "_test_env", "_test_sync"]
@@ -2956,10 +3043,9 @@ main = do
         let src = "value = 41\n"
             moduleName = S.modName ["top_non_total_sig"]
             actFile = "<top_non_total_sig>"
-            sysTypesPath = ".." </> ".." </> "dist" </> "base" </> "out" </> "types"
             onInferred names sig = modifyIORef' sigsRef ((names, sig) :)
         parsed <- liftIO $ P.parseModule moduleName actFile src Nothing
-        env <- liftIO $ Acton.Env.mkEnv [sysTypesPath] env0 parsed
+        env <- liftIO $ Acton.Env.mkEnv systemTypes env0 parsed
         kchecked <- liftIO $ Acton.Kinds.check env parsed
         _ <- liftIO $ Acton.Types.reconstruct Nothing (Just onInferred) env kchecked Nothing
         sigs <- liftIO $ reverse <$> readIORef sigsRef
@@ -3133,6 +3219,217 @@ main = do
           Left NoItem{} -> pure ()
           Left err -> expectationFailure $ "Expected NoItem error, got " ++ show err
           Right _ -> expectationFailure "Expected type check failure for private name access"
+
+    describe "Constructor cycle-safety analysis" $ do
+      let analyze src = liftIO $ Init.analyzeModule <$> P.parseModuleSerial (S.modName ["cycles"]) "cycles.act" (unlines src) Nothing
+          usage report path param = listToMaybe
+            [ safe | (q,ps) <- M.toList (Init.parameterSafety report), [S.nstr (S.noq q)] == path
+                   , (n,safe) <- ps, S.nstr n == param ]
+          selfSafe report path = listToMaybe
+            [safe | (q,safe) <- M.toList (Init.selfSafety report), [S.nstr (S.noq q)] == path]
+          expect report path param answer = usage report path param `shouldBe` Just answer
+          box = [ "class Box:", "    def __init__(self, p):", "        self.saved = p" ]
+      it "uses graph module identities for dump requests in special projects" $
+        withSystemTempDirectory "initialization-module-name" $ \dir ->
+          forM_ ["base", "acton_scratch", "ordinary"] $ \projectName -> do
+            let root = dir </> projectName
+                source = root </> "src" </> "__builtin__.act"
+            createDirectoryIfMissing True (root </> "src")
+            let prefix = Fingerprint.fingerprintPrefixForName projectName
+                fp = Fingerprint.formatFingerprint ((fromIntegral prefix `shiftL` 32) .|. 0x1)
+            writeFile (root </> "Build.act") ("name = \"" ++ projectName ++ "\"\nfingerprint = " ++ fp ++ "\n")
+            writeFile source ""
+            let opts = C.defaultCompileOptions { C.syspath = dir, C.initialization_analysis = True }
+            (paths, requested) <- Project.findPaths source opts
+            graphName <- Project.moduleNameFromFile (Project.srcDir paths) projectName source
+            requested `shouldBe` graphName
+      it "accepts unused parameters and references used only in methods" $ do
+        report <- analyze
+          [ "actor Child(parent, unused):", "    def get():", "        return parent.result" ]
+        expect report ["Child"] "parent" True
+        expect report ["Child"] "unused" True
+      it "propagates unsafe uses backwards through actor aliases" $ do
+        report <- analyze
+          [ "actor Safe(p):", "    a = p", "    b = a"
+          , "actor Unsafe(p):", "    a = p", "    b = a", "    value = b.item" ]
+        expect report ["Safe"] "p" True
+        expect report ["Unsafe"] "p" False
+      it "equates bare actor fields with explicit self selections" $ do
+        report <- analyze
+          [ "actor Child(p):", "    saved = p", "    value = self.saved.item" ]
+        expect report ["Child"] "p" False
+      it "distinguishes class parameter names from their stored fields" $ do
+        report <- analyze $ box ++
+          [ "class Bad:", "    def __init__(self, saved):", "        self.saved = saved", "        value = self.saved.item" ]
+        expect report ["Box"] "p" True
+        expect report ["Bad"] "saved" False
+      it "forwards positional and reordered keyword arguments" $ do
+        report <- analyze
+          [ "actor Child(parent, number=0):", "    saved = parent", "    n = number + 1"
+          , "actor Forward(p):", "    child = Child(number=0, parent=p)"
+          , "actor Bad(p):", "    child = Child(parent=None, number=p)" ]
+        expect report ["Forward"] "p" True
+        expect report ["Bad"] "p" False
+      it "allows mutually recursive constructor contracts with no unsafe use" $ do
+        report <- analyze
+          [ "actor Alpha(p):", "    b = Beta(p)"
+          , "actor Beta(p):", "    a = Alpha(p)"
+          , "actor Root(probe):", "    child = Alpha(self)" ]
+        expect report ["Alpha"] "p" True
+        expect report ["Beta"] "p" True
+        selfSafe report ["Root"] `shouldBe` Just True
+      it "propagates a bad use through a recursive constructor group" $ do
+        report <- analyze
+          [ "actor Alpha(p):", "    b = Beta(p)"
+          , "actor Beta(p):", "    a = Alpha(p)", "    value = p.item"
+          , "actor Root(probe):", "    child = Alpha(self)" ]
+        expect report ["Alpha"] "p" False
+        expect report ["Beta"] "p" False
+        selfSafe report ["Root"] `shouldBe` Just False
+        finished <- liftIO $ timeout 2000000 $ E.evaluate $ length (show report)
+        finished `shouldSatisfy` (/= Nothing)
+      it "supports callback forwarding through class fields into actors" $ do
+        report <- analyze
+          [ "actor Driver(cb):", "    def run():", "        cb()"
+          , "class Adapter:", "    def __init__(self, cb):", "        self.callback = cb"
+          , "        self.driver = Driver(self.callback)"
+          , "actor Parent(probe):", "    def done():", "        pass", "    adapter = Adapter(done)" ]
+        expect report ["Driver"] "cb" True
+        expect report ["Adapter"] "cb" True
+        selfSafe report ["Parent"] `shouldBe` Just True
+      it "distinguishes constructor parameters from class methods with the same name" $ do
+        report <- analyze
+          [ "class Box:", "    def __init__(self, cb, loop):"
+          , "        self.callback = cb", "        if loop is not None:", "            self.saved = loop"
+          , "    def loop(self):", "        pass"
+          , "actor Parent(probe):", "    def done():", "        pass", "    box = Box(done, None)" ]
+        expect report ["Box"] "cb" True
+        expect report ["Box"] "loop" False
+        selfSafe report ["Parent"] `shouldBe` Just True
+      it "treats ordinary functions as opaque even when their body is available" $ do
+        report <- analyze
+          [ "def identity(x):", "    return x"
+          , "actor Child(p):", "    saved = identity(p)"
+          , "actor Parent(probe):", "    child = Child(self)" ]
+        expect report ["Child"] "p" False
+        selfSafe report ["Parent"] `shouldBe` Just False
+      it "propagates parameter unsafety through constructor arguments" $ do
+        report <- analyze
+          [ "actor Child(env):", "    cap = env.cap"
+          , "actor Parent(env):", "    child = Child(env)" ]
+        expect report ["Child"] "env" False
+        expect report ["Parent"] "env" False
+      it "rejects initialization-time calls to own methods that hide parameter uses" $ do
+        report <- analyze
+          [ "actor Child(p):", "    def initial():", "        return p.item", "    value = initial()" ]
+        expect report ["Child"] "p" False
+      it "defers startup bodies but treats ordinary calls eagerly" $ do
+        report <- analyze
+          [ "actor Good(p):", "    proc def __startup__():", "        print(p.item)", "    __startup__()"
+          , "actor Bad(p):", "    proc def __startup__():", "        print(p.item)", "    dispatch = __startup__()", "    saved = p" ]
+        expect report ["Good"] "p" True
+        expect report ["Bad"] "p" False
+      it "retains self provenance through bound callback aliases and lambdas" $ do
+        report <- analyze
+          [ "actor Child(cb):", "    def run():", "        cb()"
+          , "actor Good(probe):", "    def done():", "        pass", "    cb = done", "    child = Child(cb)"
+          , "actor Lambda(probe):", "    def done():", "        pass", "    child = Child(lambda: self.done())"
+          , "actor Bad(probe):", "    def done():", "        pass", "    cb = done", "    result = cb()" ]
+        selfSafe report ["Good"] `shouldBe` Just True
+        selfSafe report ["Lambda"] `shouldBe` Just True
+        selfSafe report ["Bad"] `shouldBe` Just False
+      it "recognizes implicit self captures in actor lambdas" $ do
+        report <- analyze
+          [ "actor Toucher(cb):", "    result = cb()"
+          , "actor Parent(p):", "    child = Toucher(lambda: p.item)" ]
+        expect report ["Parent"] "p" False
+      it "retains provenance through constructor results and self aliases" $ do
+        report <- analyze $ box ++
+          [ "actor Good(probe):", "    me = self", "    child = Box(me)"
+          , "actor Bad(probe):", "    child = Box(self)", "    value = child.saved.result" ]
+        selfSafe report ["Good"] `shouldBe` Just True
+        selfSafe report ["Bad"] `shouldBe` Just False
+      it "propagates constructor result use into conditional parameter contracts" $ do
+        report <- analyze $ box ++
+          [ "actor Wrapper(p):", "    box = Box(p)", "    value = box.saved.item"
+          , "actor Parent(probe):", "    wrapped = Wrapper(self)" ]
+        expect report ["Wrapper"] "p" False
+        selfSafe report ["Parent"] `shouldBe` Just False
+      it "handles nonobserving tuple storage but rejects inspection" $ do
+        report <- analyze
+          [ "actor Child(p):", "    saved = p"
+          , "actor Good(probe):", "    child = Child((self,))"
+          , "actor Inspect(p):", "    x = p.0"
+          , "actor Bad(probe):", "    child = Inspect((self,))" ]
+        selfSafe report ["Good"] `shouldBe` Just True
+        selfSafe report ["Bad"] `shouldBe` Just False
+      it "does not borrow constructor contracts for shadowed callable parameters" $ do
+        report <- analyze $ box ++
+          [ "actor Parent(Box):", "    child = Box(self)" ]
+        expect report ["Parent"] "Box" False
+      it "rejects unmatched expanded arguments and existing-object publication" $ do
+        report <- analyze $ box ++
+          [ "actor Spread(probe):", "    args = (self,)", "    child = Box(*args)"
+          , "class Publish:", "    def __init__(self, dst):", "        dst.saved = self" ]
+        selfSafe report ["Spread"] `shouldBe` Just False
+        expect report ["Publish"] "dst" False
+      it "does not certify opaque native or inherited initializers" $ do
+        report <- analyze
+          [ "class Native:", "    def __init__(self, p):", "        NotImplemented"
+          , "class Inherited(Native):", "    pass"
+          , "actor Parent(probe):", "    child = Inherited(self)" ]
+        expect report ["Native"] "p" False
+        selfSafe report ["Parent"] `shouldBe` Just False
+      it "uses imported constructor contracts" $ do
+        provider <- liftIO $ P.parseModuleSerial (S.modName ["provider"]) "provider.act" (unlines box) Nothing
+        consumer <- liftIO $ P.parseModuleSerial (S.modName ["consumer"]) "consumer.act"
+          "from provider import Box\nactor Parent(probe):\n    child = Box(self)\n" Nothing
+        let resolve (S.NoQ n) | S.nstr n == "Box" = S.QName (S.modName ["provider"]) n
+            resolve q = q
+            report = Init.analyzeModules [(provider,id),(consumer,resolve)]
+        selfSafe report ["Parent"] `shouldBe` Just True
+      it "does not resolve arbitrary member calls as module-qualified constructors" $ do
+        ast <- liftIO $ P.parseModuleSerial (S.modName ["cycles"]) "cycles.act"
+          "actor Child(p):\n    saved = witness.method(p)\n" Nothing
+        let resolve S.QName{} = error "member access was incorrectly treated as a module name"
+            resolve q = q
+            report = Init.analyzeModules [(ast,resolve)]
+        expect report ["Child"] "p" False
+      it "matches source module aliases for imported constructor calls" $ do
+        provider <- liftIO $ P.parseModuleSerial (S.modName ["provider"]) "provider.act" (unlines box) Nothing
+        consumer <- liftIO $ P.parseModuleSerial (S.modName ["consumer"]) "consumer.act"
+          "import provider as dep\nactor Parent(probe):\n    child = dep.Box(self)\n" Nothing
+        let resolve (S.QName m n) | S.modPath m == ["dep"] = S.QName (S.modName ["provider"]) n
+            resolve q = q
+            report = Init.analyzeModules [(provider,id),(consumer,resolve)]
+        selfSafe report ["Parent"] `shouldBe` Just True
+      it "analyzes reconstructed class and actor syntax including wrapped callbacks" $ do
+        typed <- typecheckSource env0 "cycle_typed" $ unlines
+          [ "actor Child(cb: action() -> None):", "    def run():", "        cb()"
+          , "actor Parent(probe):", "    def done():", "        pass", "    child = Child(done)" ]
+        selfSafe (Init.analyzeModule typed) ["Parent"] `shouldBe` Just True
+      it "analyzes typed class storage of a partially initialized actor" $ do
+        typed <- typecheckSource env0 "cycle_typed_class" $ unlines
+          [ "class Box(object):", "    parent: Parent"
+          , "    def __init__(self, parent: Parent):", "        self.parent = parent"
+          , "actor Parent(probe):", "    box = Box(self)" ]
+        let report = Init.analyzeModule typed
+        expect report ["Box"] "parent" True
+        selfSafe report ["Parent"] `shouldBe` Just True
+      it "matches reconstructed generic class constructors with protocol witnesses" $ do
+        typed <- typecheckSource env0 "cycle_typed_generic" $ unlines
+          [ "class Box[T(Hashable)](object):", "    key: T", "    parent: Parent"
+          , "    def __init__(self, key: T, parent: Parent):", "        self.key = key", "        self.parent = parent"
+          , "actor Parent(probe):", "    box = Box(\"key\", self)" ]
+        let report = Init.analyzeModule typed
+        expect report ["Box"] "parent" True
+        selfSafe report ["Parent"] `shouldBe` Just True
+      it "solves long constructor dependency chains without executing their bodies" $ do
+        let actor i = ["actor Chain" ++ show i ++ "(p):", "    next = Chain" ++ show (i+1) ++ "(p)"]
+        report <- analyze $ concatMap actor [0..199 :: Int] ++ ["actor Chain200(p):", "    value = p.item"]
+        finished <- liftIO $ timeout 2000000 $ E.evaluate $ length (show report)
+        finished `shouldSatisfy` (/= Nothing)
+        expect report ["Chain0"] "p" False
 
     describe "Experimental parameter escape analysis" $ do
       it "propagates aliases and direct calls to escape sinks" $ do
@@ -3409,9 +3706,8 @@ main = do
                 return [ (pn, if mayEscape then Escape.MayEscape else Escape.NoEscape)
                        | (pn,mayEscape) <- stored ]
         let providerFile = "<escape_provider>"
-            sysTypesPath = ".." </> ".." </> "dist" </> "base" </> "out" </> "types"
         providerParsed <- liftIO $ P.parseModule providerName providerFile providerSrc Nothing
-        providerEnv <- liftIO $ Acton.Env.mkEnv [sysTypesPath] env0 providerParsed
+        providerEnv <- liftIO $ Acton.Env.mkEnv systemTypes env0 providerParsed
         providerKinds <- liftIO $ Acton.Kinds.check providerEnv providerParsed
         (providerNMod, providerTyped, _, _) <-
           liftIO $ Acton.Types.reconstruct Nothing Nothing providerEnv providerKinds Nothing
@@ -5163,19 +5459,17 @@ parseAct env0 modulePath = do
   let moduleComponents = splitDirectories modulePath
       moduleName = S.modName moduleComponents
       act_file = "test" </> "src" </> modulePath ++ ".act"
-      sysTypesPath = ".." </> ".." </> "dist" </> "base" </> "out" </> "types"
 
   src <- liftIO $ readFile act_file
   parsed <- liftIO $ P.parseModule moduleName act_file src Nothing
-  env <- liftIO $ Acton.Env.mkEnv [sysTypesPath] env0 parsed
+  env <- liftIO $ Acton.Env.mkEnv systemTypes env0 parsed
   return (env, parsed)
 
 typecheckSource env0 modName src = do
   let moduleName = S.modName [modName]
       actFile = "<" ++ modName ++ ">"
-      sysTypesPath = ".." </> ".." </> "dist" </> "base" </> "out" </> "types"
   parsed <- liftIO $ P.parseModule moduleName actFile src Nothing
-  env <- liftIO $ Acton.Env.mkEnv [sysTypesPath] env0 parsed
+  env <- liftIO $ Acton.Env.mkEnv systemTypes env0 parsed
   kchecked <- liftIO $ Acton.Kinds.check env parsed
   (_, tchecked, _, _) <- liftIO $ Acton.Types.reconstruct Nothing Nothing env kchecked Nothing
   return tchecked

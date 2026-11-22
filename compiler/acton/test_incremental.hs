@@ -14,7 +14,7 @@ import           Data.Word (Word64)
 import qualified Acton.Fingerprint as Fingerprint
 import qualified Crypto.Hash.SHA256 as SHA256
 import           Data.Function (on)
-import           Data.IORef (IORef, atomicModifyIORef', newIORef)
+import           Data.IORef (IORef, atomicModifyIORef', newIORef, readIORef)
 import           Data.List (elemIndex, find, groupBy, intercalate, isInfixOf, isPrefixOf, partition, sort, sortOn)
 import qualified Data.Map.Strict as M
 import           Data.Maybe (isJust)
@@ -90,23 +90,24 @@ inProcessCompileOptions = do
   distDir <- distPath
   return C.defaultCompileOptions { C.syspath = distDir, C.ignore_compiler_version = True }
 
--- | Plan a build of the requested files on a scheduler, as acton build and
--- watch mode do.
-planBuild :: C.GlobalOptions -> Compile.CompileScheduler -> C.CompileOptions -> Compile.PlanRequest -> IO Compile.CompilePlan
-planBuild gopts sched opts request = do
+-- | Plan a build of the requested files on a scheduler, reading sources
+-- through the given provider, as acton build and watch mode do.
+planBuild :: Source.SourceProvider -> C.GlobalOptions -> Compile.CompileScheduler -> C.CompileOptions -> Compile.PlanRequest -> IO Compile.CompilePlan
+planBuild sp gopts sched opts request = do
   ctx <- Compile.prepareCompileContext opts (Compile.requestFiles request)
-  Compile.prepareCompilePlan Source.diskSourceProvider gopts sched ctx request
+  Compile.prepareCompilePlan sp gopts sched ctx request
 
 -- | Plan and run one full build of every module of the project on a
--- scheduler, as `acton build` does, with the given global options and event
--- handler, then wait for its back jobs. Returns the result line.
-buildOnScheduler :: C.GlobalOptions -> (Compile.BuildEvent -> IO ()) -> Compile.CompileScheduler -> FilePath -> C.CompileOptions -> IO String
-buildOnScheduler gopts onEvent sched proj opts = do
+-- scheduler, as `acton build` does, reading sources through the given
+-- provider, with the given global options and event handler, then wait for
+-- its back jobs. Returns the result line.
+buildOnScheduler :: Source.SourceProvider -> C.GlobalOptions -> (Compile.BuildEvent -> IO ()) -> Compile.CompileScheduler -> FilePath -> C.CompileOptions -> IO String
+buildOnScheduler sp gopts onEvent sched proj opts = do
   names <- sort . map dropExtension . filter Project.isActFile <$> listDirectory (proj </> "src")
   let srcFiles = map (sourcePath proj) names
-  plan <- planBuild gopts sched opts (Compile.PlanRequest srcFiles Compile.WholeProject Nothing)
+  plan <- planBuild sp gopts sched opts (Compile.PlanRequest srcFiles Compile.WholeProject Nothing)
   gen <- Compile.currentGeneration sched
-  res <- Compile.runCompilePlan Source.diskSourceProvider gopts sched gen plan onEvent
+  res <- Compile.runCompilePlan sp gopts sched gen plan onEvent
   backFailure <- Compile.waitBackJobs sched gen
   return (buildResult res backFailure)
 
@@ -688,8 +689,9 @@ p01_init = testCase "01-init" $ do
     [ "import b"
     , ""
     , "actor main(env: Env):"
-    , "    print(b.baa())"
-    , "    env.exit(0)"
+    , "    proc def __startup__():"
+    , "        print(b.baa())"
+    , "        env.exit(0)"
     ]
 
 p02_initial_build :: TestTree
@@ -852,8 +854,9 @@ f01_init = testCase "01-init" $ do
     [ "import b"
     , ""
     , "actor main(env: Env):"
-    , "    print(b.baa())"
-    , "    env.exit(0)"
+    , "    proc def __startup__():"
+    , "        print(b.baa())"
+    , "        env.exit(0)"
     ]
 
 f02_initial_build :: TestTree
@@ -961,7 +964,8 @@ p14_partial_rebuild = testCase "14-partial rebuild" $ do
   ensureCasesProject
   writeFileUtf8 (casesSrcDir </> "rebuild.act") $ T.unlines
     [ "actor main(env: Env):"
-    , "    env.exit(0)"
+    , "    proc def __startup__():"
+    , "        env.exit(0)"
     ]
   res1 <- runActonIn casesProjDir ["build", "--color", "never"]
   assertExitSuccess "initial build" res1
@@ -973,10 +977,11 @@ p15_rebuild_import :: TestTree
 p15_rebuild_import = testCase "15-rebuild with stdlib import" $ do
   ensureCasesProject
   writeFileUtf8 (casesSrcDir </> "rebuild.act") $ T.unlines
-    [ "import json"
+    [ "import std.json"
     , ""
     , "actor main(env: Env):"
-    , "    env.exit(0)"
+    , "    proc def __startup__():"
+    , "        env.exit(0)"
     ]
   res1 <- runActonIn casesProjDir ["build", "--color", "never"]
   assertExitSuccess "initial build" res1
@@ -994,7 +999,8 @@ p15b_transitive_stdlib_import = testCase "15b-transitive stdlib import via cache
         , "    pass"
         , ""
         , "actor main(env):"
-        , "    env.exit(0)"
+        , "    proc def __startup__():"
+        , "        env.exit(0)"
         ]
   ensureCasesProject
   writeFileUtf8 (src </> "b.act") $ T.unlines
@@ -1021,9 +1027,10 @@ p15c_transitive_extension_import = testCase "15c-transitive extension via cached
       writeMain imports = writeFileUtf8 (src </> "main.act") $ T.unlines $ imports ++
         [ ""
         , "actor main(env):"
-        , "    for e in b.make():"
-        , "        print(e)"
-        , "    env.exit(0)"
+        , "    proc def __startup__():"
+        , "        for e in b.make():"
+        , "            print(e)"
+        , "        env.exit(0)"
         ]
   ensureCasesProject
   writeFileUtf8 (src </> "a.act") $ T.unlines
@@ -1072,9 +1079,10 @@ p16_dep_api_change = testCase "16-dependency API change triggers rebuild" $ do
     [ "import libfoo.lib"
     , ""
     , "actor main(env: Env):"
-    , "    result = libfoo.lib.calculate(21)"
-    , "    print(\"Result: %d\" % result)"
-    , "    env.exit(0)"
+    , "    proc def __startup__():"
+    , "        result = libfoo.lib.calculate(21)"
+    , "        print(\"Result: %d\" % result)"
+    , "        env.exit(0)"
     ]
   res1 <- runActonIn casesProjDir ["build", "--color", "never"]
   assertExitSuccess "initial build" res1
@@ -1103,9 +1111,10 @@ p17_dep_impl_change = testCase "17-dependency impl change triggers back job" $ d
     [ "import libfoo.lib"
     , ""
     , "actor main(env: Env):"
-    , "    result = libfoo.lib.calculate(21)"
-    , "    print(\"Result: %d\" % result)"
-    , "    env.exit(0)"
+    , "    proc def __startup__():"
+    , "        result = libfoo.lib.calculate(21)"
+    , "        print(\"Result: %d\" % result)"
+    , "        env.exit(0)"
     ]
   res1 <- runActonIn casesProjDir ["build", "--color", "never"]
   assertExitSuccess "initial build" res1
@@ -1149,8 +1158,9 @@ p17b_dep_escape_change = testCase "17b-dependency escape change rechecks Hashabl
     , "        self.x.hash(h)"
     , ""
     , "actor main(env: Env):"
-    , "    print(hash(Point(3)))"
-    , "    env.exit(0)"
+    , "    proc def __startup__():"
+    , "        print(hash(Point(3)))"
+    , "        env.exit(0)"
     ]
   res1 <- runActonIn casesProjDir ["build", "--color", "never"]
   assertExitSuccess "initial build" res1
@@ -1186,8 +1196,9 @@ p17c_refresh_keeps_escape = testCase "17c-impl refresh keeps escape summaries" $
         , "        self.x.hash(h)"
         , ""
         , "actor main(env: Env):"
-        , "    print(hash(Point(u.g())))"
-        , "    env.exit(0)"
+        , "    proc def __startup__():"
+        , "        print(hash(Point(u.g())))"
+        , "        env.exit(0)"
         ]
   ensureCasesProjectWithDeps []
   writeFileUtf8 (casesSrcDir </> "v.act") $ T.unlines
@@ -1242,8 +1253,9 @@ p17d_codegen_refresh_keeps_escape = testCase "17d-codegen refresh keeps escape s
         , "        self.x.hash(h)"
         , ""
         , "actor main(env: Env):"
-        , "    print(hash(Point(3)))"
-        , "    env.exit(0)"
+        , "    proc def __startup__():"
+        , "        print(hash(Point(3)))"
+        , "        env.exit(0)"
         ]
   ensureCasesProjectWithDeps []
   writeFileUtf8 (casesSrcDir </> "u.act") $ T.unlines
@@ -1283,7 +1295,8 @@ p18_type_only_deps = testCase "18-type-only deps in signatures" $ do
     ]
   writeFileUtf8 (src </> "c.act") $ T.unlines
     [ "actor main(env: Env):"
-    , "    env.exit(0)"
+    , "    proc def __startup__():"
+    , "        env.exit(0)"
     ]
   _ <- buildOutIn proj
   writeFileUtf8 (src </> "a.act") $ T.unlines
@@ -1324,8 +1337,9 @@ p19_unused_import = testCase "19-unused import does not propagate" $ do
     [ "import b"
     , ""
     , "actor main(env: Env):"
-    , "    b.bar()"
-    , "    env.exit(0)"
+    , "    proc def __startup__():"
+    , "        b.bar()"
+    , "        env.exit(0)"
     ]
   _ <- buildOutIn proj
   writeFileUtf8 (src </> "b.act") $ T.unlines
@@ -1357,8 +1371,9 @@ p20_add_remove_names = testCase "20-add/remove top-level names" $ do
     [ "import b"
     , ""
     , "actor main(env: Env):"
-    , "    b.bar()"
-    , "    env.exit(0)"
+    , "    proc def __startup__():"
+    , "        b.bar()"
+    , "        env.exit(0)"
     ]
   _ <- buildOutIn proj
   writeFileUtf8 (src </> "a.act") $ T.unlines
@@ -1406,8 +1421,9 @@ p21_recursive_group = testCase "21-recursive group impl change propagates" $ do
     [ "import b"
     , ""
     , "actor main(env: Env):"
-    , "    b.use()"
-    , "    env.exit(0)"
+    , "    proc def __startup__():"
+    , "        b.use()"
+    , "        env.exit(0)"
     ]
   _ <- buildOutIn proj
   writeFileUtf8 (src </> "a.act") $ T.unlines
@@ -1446,8 +1462,9 @@ p22_multibind = testCase "22-multi-binding updates per-name hashes" $ do
     [ "import b"
     , ""
     , "actor main(env: Env):"
-    , "    b.get()"
-    , "    env.exit(0)"
+    , "    proc def __startup__():"
+    , "        b.get()"
+    , "        env.exit(0)"
     ]
   _ <- buildOutIn proj
   writeFileUtf8 (src </> "a.act") "x, y = 1, 3\n"
@@ -1478,8 +1495,9 @@ p23_codegen_mismatch = testCase "23-codegen hash mismatch triggers rebuild" $ do
     [ "import b"
     , ""
     , "actor main(env: Env):"
-    , "    b.bar()"
-    , "    env.exit(0)"
+    , "    proc def __startup__():"
+    , "        b.bar()"
+    , "        env.exit(0)"
     ]
   _ <- buildOutIn proj
   rewriteFirstLine bC "/* Acton impl hash: deadbeef */"
@@ -1518,8 +1536,9 @@ p24_codegen_equal_hash = testCase "24-codegen equal hash mismatch formats single
     [ "import b"
     , ""
     , "actor main(env: Env):"
-    , "    b.bar()"
-    , "    env.exit(0)"
+    , "    proc def __startup__():"
+    , "        b.bar()"
+    , "        env.exit(0)"
     ]
   -- The single-delta message is emitted by the EAGER codegen refresh; under
   -- default-on DBP the module would be deferred, so pin this path explicitly.
@@ -1554,8 +1573,9 @@ p25_whitespace_change = testCase "25-whitespace-only change does not propagate" 
     [ "import b"
     , ""
     , "actor main(env: Env):"
-    , "    b.bar()"
-    , "    env.exit(0)"
+    , "    proc def __startup__():"
+    , "        b.bar()"
+    , "        env.exit(0)"
     ]
   _ <- buildOutIn proj
   writeFileUtf8 (src </> "a.act") $ T.unlines
@@ -1579,8 +1599,9 @@ p26_corrupt_ty_header = testCase "26-corrupt .tydb header forces re-parse" $ do
     [ "import a"
     , ""
     , "actor main(env: Env):"
-    , "    print(a.aaa)"
-    , "    env.exit(0)"
+    , "    proc def __startup__():"
+    , "        print(a.aaa)"
+    , "        env.exit(0)"
     ]
   _ <- buildOutIn proj
   removePathForcibly tyA
@@ -1601,8 +1622,9 @@ p26_ty_version_mismatch = testCase "26b-.tydb version mismatch forces re-parse" 
     [ "import a"
     , ""
     , "actor main(env: Env):"
-    , "    print(a.aaa)"
-    , "    env.exit(0)"
+    , "    proc def __startup__():"
+    , "        print(a.aaa)"
+    , "        env.exit(0)"
     ]
   _ <- buildOutIn proj
   rewriteTyVersion tyA (map (+ 1) A.version)
@@ -1622,8 +1644,9 @@ p27_overlay_source_provider = testCase "27-overlay snapshots drive readModuleTas
     [ "import a"
     , ""
     , "actor main(env: Env):"
-    , "    print(a.aaa)"
-    , "    env.exit(0)"
+    , "    proc def __startup__():"
+    , "        print(a.aaa)"
+    , "        env.exit(0)"
     ]
   _ <- buildOutIn proj
   actAAbs <- canonicalizePath actA
@@ -1632,7 +1655,6 @@ p27_overlay_source_provider = testCase "27-overlay snapshots drive readModuleTas
       snapSame = Source.SourceSnapshot
         { Source.ssText = text
         , Source.ssBytes = bytes
-        , Source.ssIsOverlay = True
         }
       disk = Source.diskSourceProvider
       spSame = disk { Source.spReadOverlay = \path -> return (if path == actAAbs then Just snapSame else Nothing) }
@@ -1646,7 +1668,6 @@ p27_overlay_source_provider = testCase "27-overlay snapshots drive readModuleTas
       snapDiff = Source.SourceSnapshot
         { Source.ssText = textDiff
         , Source.ssBytes = bytesDiff
-        , Source.ssIsOverlay = True
         }
       spDiff = disk { Source.spReadOverlay = \path -> return (if path == actAAbs then Just snapDiff else Nothing) }
   taskDiff <- Compile.readModuleTask spDiff quietGlobalOptions C.defaultCompileOptions paths moduleA actAAbs
@@ -1708,8 +1729,9 @@ p28_protocol_extension_deps = testCase "28-protocol/extension deps are recorded 
     , "import b"
     , ""
     , "actor main(env: Env):"
-    , "    b.runner(a.Widget())"
-    , "    env.exit(0)"
+    , "    proc def __startup__():"
+    , "        b.runner(a.Widget())"
+    , "        env.exit(0)"
     ]
   _ <- buildOutIn proj
   nameHashesA <- readTyNameHashes tyA
@@ -1780,8 +1802,9 @@ p29_protocol_impl_rebuild = testCase "29-protocol impl change triggers back jobs
     [ "import b"
     , ""
     , "actor main(env: Env):"
-    , "    print(b.calc())"
-    , "    env.exit(0)"
+    , "    proc def __startup__():"
+    , "        print(b.calc())"
+    , "        env.exit(0)"
     ]
   _ <- buildOutIn proj
   out1 <- runBinaryIn proj "c"
@@ -1839,8 +1862,9 @@ p30_only_build = testCase "30-only-build skips front passes" $ do
     [ "import b"
     , ""
     , "actor main(env: Env):"
-    , "    b.bar()"
-    , "    env.exit(0)"
+    , "    proc def __startup__():"
+    , "        b.bar()"
+    , "        env.exit(0)"
     ]
   _ <- buildOutIn proj
   writeFileUtf8 (src </> "a.act") "aaa = 2\n"
@@ -1884,8 +1908,9 @@ p31_missing_interfaces = testCase "31-missing interfaces rebuild front passes" $
     [ "import b"
     , ""
     , "actor main(env: Env):"
-    , "    b.bar()"
-    , "    env.exit(0)"
+    , "    proc def __startup__():"
+    , "        b.bar()"
+    , "        env.exit(0)"
     ]
   _ <- buildOutIn proj
   interfaces <- InterfaceFiles.listInterfaceDirsRecursive (proj </> "out/types")
@@ -1905,8 +1930,9 @@ p32_project_alt_output = testCase "32-project --types emits output" $ do
     [ "import a"
     , ""
     , "actor main(env: Env):"
-    , "    print(a.aaa)"
-    , "    env.exit(0)"
+    , "    proc def __startup__():"
+    , "        print(a.aaa)"
+    , "        env.exit(0)"
     ]
   _ <- buildOutIn proj
   res@(ec, out) <- runActonIn proj ["build", "--color", "never", "--types"]
@@ -2012,9 +2038,10 @@ p33_comprehensive_hashes = testCase "33-comprehensive hash propagation" $ do
     , "import b"
     , ""
     , "actor main(env: Env):"
-    , "    l = a.Local(3)"
-    , "    print(b.use_values() + b.use_method(l))"
-    , "    env.exit(0)"
+    , "    proc def __startup__():"
+    , "        l = a.Local(3)"
+    , "        print(b.use_values() + b.use_method(l))"
+    , "        env.exit(0)"
     ]
   _ <- buildOutIn proj
   let tyDep = depDir </> "out" </> "types" </> "libfoo" </> "lib.tydb"
@@ -2073,8 +2100,9 @@ p34_removed_import_module = testCase "34-removed imported module fails before Zi
     [ "import b"
     , ""
     , "actor main(env: Env):"
-    , "    print(b.bar())"
-    , "    env.exit(0)"
+    , "    proc def __startup__():"
+    , "        print(b.bar())"
+    , "        env.exit(0)"
     ]
   _ <- buildOutIn proj
   supportExists <- artifactExists (outA ++ ".closures.inc")
@@ -2114,15 +2142,16 @@ p35_changed_path_keeps_unaffected_provider =
       [ "import b"
       , ""
       , "actor main(env: Env):"
-      , "    print(b.bar())"
-      , "    env.exit(0)"
+      , "    proc def __startup__():"
+      , "        print(b.bar())"
+      , "        env.exit(0)"
       ]
     _ <- buildOutIn proj
     writeFileUtf8 actA "aaa = 2\n"
     actAAbs <- canonicalizePath actA
     actMainAbs <- canonicalizePath actMain
     sched <- Compile.newCompileScheduler quietGlobalOptions
-    plan <- planBuild quietGlobalOptions sched opts (Compile.PlanRequest [actMainAbs] Compile.SelectedFiles (Just [actAAbs]))
+    plan <- planBuild Source.diskSourceProvider quietGlobalOptions sched opts (Compile.PlanRequest [actMainAbs] Compile.SelectedFiles (Just [actAAbs]))
     bTask <- case find (\t -> Compile.tkMod (Compile.gtKey t) == A.modName ["incremental_cases","b"]) (Compile.cpNeededTasks plan) of
       Just t -> pure t
       Nothing -> assertFailure "expected b in changed-path compile plan" >> fail "missing b task"
@@ -2167,8 +2196,9 @@ p35_dbp_changed_path_includes_provider =
       , "import b"
       , ""
       , "actor main(env: Env):"
-      , "    print(a.fa() + b.fb())"
-      , "    env.exit(0)"
+      , "    proc def __startup__():"
+      , "        print(a.fa() + b.fb())"
+      , "        env.exit(0)"
       ]
     _ <- buildOutInArgs proj ["--skip-build"]
     writeFileUtf8 actA $ T.unlines
@@ -2180,7 +2210,7 @@ p35_dbp_changed_path_includes_provider =
     actAAbs <- canonicalizePath actA
     actMainAbs <- canonicalizePath actMain
     sched <- Compile.newCompileScheduler quietGlobalOptions
-    plan <- planBuild quietGlobalOptions sched opts (Compile.PlanRequest [actMainAbs] Compile.SelectedFiles (Just [actAAbs]))
+    plan <- planBuild Source.diskSourceProvider quietGlobalOptions sched opts (Compile.PlanRequest [actMainAbs] Compile.SelectedFiles (Just [actAAbs]))
     let selectedMods = [ Compile.tkMod (Compile.gtKey t) | t <- Compile.cpNeededTasks plan ]
     assertBool "expected changed-path plan to include DBP provider"
       (A.modName ["incremental_cases","provider"] `elem` selectedMods)
@@ -2203,8 +2233,9 @@ p36_removed_dep_name_triggers_front_refresh =
       [ "import libfoo.lib"
       , ""
       , "actor main(env: Env):"
-      , "    print(libfoo.lib.foo())"
-      , "    env.exit(0)"
+      , "    proc def __startup__():"
+      , "        print(libfoo.lib.foo())"
+      , "        env.exit(0)"
       ]
     res1 <- runActonIn proj ["build", "--color", "never", "--skip-build"]
     assertExitSuccess "initial build" res1
@@ -2282,7 +2313,7 @@ p36c_private_name_rechecks_dependent_on_one_scheduler =
     -- The first build checks a and leaves a's name map in the scheduler's
     -- module cache, where the second build finds it.
     sched <- Compile.newCompileScheduler quietGlobalOptions
-    let build = buildOnScheduler quietGlobalOptions onEvent sched proj opts
+    let build = buildOnScheduler Source.diskSourceProvider quietGlobalOptions onEvent sched proj opts
     first <- build
     assertEqual "first build" "result ok" first
     makeOnlyPublicNamePrivate
@@ -2309,8 +2340,9 @@ p37_impl_refresh_missing_dep_hashes_reruns_front =
           , "    return libfoo.lib.foo() + libfoo.lib.bar()"
           , ""
           , "actor main(env: Env):"
-          , "    print(value())"
-          , "    env.exit(0)"
+          , "    proc def __startup__():"
+          , "        print(value())"
+          , "        env.exit(0)"
           ]
     writeFileUtf8 depSrc $ T.unlines
       [ "def foo() -> int:"
@@ -2357,7 +2389,8 @@ p38_project_lock_blocks_build =
     ensureCasesProject
     writeFileUtf8 (src </> "main.act") $ T.unlines
       [ "actor main(env: Env):"
-      , "    env.exit(0)"
+      , "    proc def __startup__():"
+      , "        env.exit(0)"
       ]
     actonExe <- actonPath
     res <- Project.withProjectLock proj $ do
@@ -2404,7 +2437,8 @@ p39_background_lock_does_not_block_build =
     ensureCasesProject
     writeFileUtf8 (src </> "main.act") $ T.unlines
       [ "actor main(env: Env):"
-      , "    env.exit(0)"
+      , "    proc def __startup__():"
+      , "        env.exit(0)"
       ]
     withBackgroundCompilerLockHeld proj $ do
       res@(_ec, out) <- runActonIn proj ["build", "--color", "never", "--verbose"]
@@ -2420,7 +2454,8 @@ p40_background_lock_blocks_watch =
     ensureCasesProject
     writeFileUtf8 (src </> "main.act") $ T.unlines
       [ "actor main(env: Env):"
-      , "    env.exit(0)"
+      , "    proc def __startup__():"
+      , "        env.exit(0)"
       ]
     withBackgroundCompilerLockHeld proj $ do
       actonExe <- actonPath
@@ -2463,8 +2498,9 @@ p41_stale_header_missing_import_reparses_source =
       [ "import b"
       , ""
       , "actor main(env: Env):"
-      , "    print(b.bar())"
-      , "    env.exit(0)"
+      , "    proc def __startup__():"
+      , "        print(b.bar())"
+      , "        env.exit(0)"
       ]
     _ <- buildOutIn proj
     writeFileUtf8 actB $ T.unlines
@@ -2499,8 +2535,9 @@ p42_metadata_drift_refreshes_header =
       [ "import a"
       , ""
       , "actor main(env: Env):"
-      , "    print(a.aaa)"
-      , "    env.exit(0)"
+      , "    proc def __startup__():"
+      , "        print(a.aaa)"
+      , "        env.exit(0)"
       ]
     _ <- buildOutIn proj
     metaBefore <- readTySourceMeta tyA
@@ -2540,8 +2577,9 @@ p43_equal_act_ty_mtime_hashes_source =
       [ "import b"
       , ""
       , "actor main(env: Env):"
-      , "    print(b.bar())"
-      , "    env.exit(0)"
+      , "    proc def __startup__():"
+      , "        print(b.bar())"
+      , "        env.exit(0)"
       ]
     _ <- buildOutIn proj
     writeFileUtf8 actB $ T.unlines
@@ -2589,7 +2627,8 @@ p44_provider_import_rename_reruns_dependent_front =
       , "    pass"
       , ""
       , "actor main(env: Env):"
-      , "    env.exit(0)"
+      , "    proc def __startup__():"
+      , "        env.exit(0)"
       ]
     writeFileUtf8 actBase $ T.unlines
       [ "import oldpkg.ttt as ttt"
@@ -2667,8 +2706,9 @@ p45_tydb_records_local_name_dependencies =
       [ "import a"
       , ""
       , "actor main(env: Env):"
-      , "    print(a.make_box().get())"
-      , "    env.exit(0)"
+      , "    proc def __startup__():"
+      , "        print(a.make_box().get())"
+      , "        env.exit(0)"
       ]
     _ <- buildOutIn proj
     (topPub, topImpl) <- readTyLocalDeps tyA "top"
@@ -2810,8 +2850,9 @@ writeHashTraceMain =
     [ "import small"
     , ""
     , "actor main(env: Env):"
-    , "    print(small.value())"
-    , "    env.exit(0)"
+    , "    proc def __startup__():"
+    , "        print(small.value())"
+    , "        env.exit(0)"
     ]
 
 buildHashTraceRoot :: IO ()
@@ -2867,8 +2908,9 @@ p50_big_dep_added_name_keeps_small_fresh =
       , "    return big_dep.big.Node000A(1).score_node000a(2)"
       , ""
       , "actor main(env: Env):"
-      , "    print(use_one())"
-      , "    env.exit(0)"
+      , "    proc def __startup__():"
+      , "        print(use_one())"
+      , "        env.exit(0)"
       ]
     buildHashTraceRoot
     (pubDeps, implDeps) <- readTyDeps tySmall "use_one"
@@ -2909,8 +2951,9 @@ p51_imported_lookup_stays_selective =
           , T.pack ("    return big_dep.big.used_value() + " ++ show (offset :: Int))
           , ""
           , "actor main(env: Env):"
-          , "    print(use_one())"
-          , "    env.exit(0)"
+          , "    proc def __startup__():"
+          , "        print(use_one())"
+          , "        env.exit(0)"
           ]
     depDir <- ensureHeavyDep 20
     let bigSrc = depDir </> "src" </> "big.act"
@@ -2946,16 +2989,17 @@ p52_imported_witness_lookup_stays_selective =
           [ "import big_dep.big"
           , ""
           , "actor main(env: Env):"
-          , "    box = big_dep.big.Box(1)"
-          , "    other = big_dep.big.Box(1)"
-          , "    ordered = big_dep.big.OrderedBox(1)"
-          , T.pack ("    ordered2 = big_dep.big.OrderedBox(" ++ show (offset :: Int) ++ ")")
-          , "    worker = big_dep.big.Worker()"
-          , "    direct = big_dep.big.Box(1).value"
-          , "    if box == other and ordered == ordered and ordered < ordered2 and direct == 1:"
-          , "        env.exit(0)"
-          , "    else:"
-          , "        env.exit(1)"
+          , "    proc def __startup__():"
+          , "        box = big_dep.big.Box(1)"
+          , "        other = big_dep.big.Box(1)"
+          , "        ordered = big_dep.big.OrderedBox(1)"
+          , T.pack ("        ordered2 = big_dep.big.OrderedBox(" ++ show (offset :: Int) ++ ")")
+          , "        worker = big_dep.big.Worker()"
+          , "        direct = big_dep.big.Box(1).value"
+          , "        if box == other and ordered == ordered and ordered < ordered2 and direct == 1:"
+          , "            env.exit(0)"
+          , "        else:"
+          , "            env.exit(1)"
           ]
     depDir <- ensureHeavyDep 20
     let bigSrc = depDir </> "src" </> "big.act"
@@ -3026,10 +3070,11 @@ p53_imported_attr_inference_stays_selective =
           , "    return args.get_bool(\"flag\")"
           , ""
           , "actor main(env: Env):"
-          , T.pack ("    if read_flag(big_dep.big.Args()) and " ++ show (offset :: Int) ++ " > 0:")
-          , "        env.exit(0)"
-          , "    else:"
-          , "        env.exit(1)"
+          , "    proc def __startup__():"
+          , T.pack ("        if read_flag(big_dep.big.Args()) and " ++ show (offset :: Int) ++ " > 0:")
+          , "            env.exit(0)"
+          , "        else:"
+          , "            env.exit(1)"
           ]
     depDir <- ensureHeavyDep 20
     let bigSrc = depDir </> "src" </> "big.act"
@@ -3080,8 +3125,9 @@ p55_dbp_reads_selected_statements =
       , "    return big.Node000A(1).score_node000a(2)"
       , ""
       , "actor main(env: Env):"
-      , "    print(use_one())"
-      , "    env.exit(0)"
+      , "    proc def __startup__():"
+      , "        print(use_one())"
+      , "        env.exit(0)"
       ]
     res@(_ec, out) <- runActonInEnv [("ACTON_TYDB_TRACE_READS", "1")] proj ["build", "--color", "never", "--verbose", "--skip-build"]
     assertExitSuccess "selective DBP .tydb trace build" res
@@ -3146,7 +3192,8 @@ p56_changed_path_prunes_removed_module =
         supportMain = typesDir </> casesProjName </> "main.closures.inc"
         rootActor = T.unlines
           [ "actor main(env: Env):"
-          , "    env.exit(0)"
+          , "    proc def __startup__():"
+          , "        env.exit(0)"
           ]
         opts = C.defaultCompileOptions
     ensureCasesProject
@@ -3159,9 +3206,9 @@ p56_changed_path_prunes_removed_module =
     sched <- Compile.newCompileScheduler quietGlobalOptions
     -- The first plan records the build spec, so the next plan follows the
     -- changed paths, as in watch mode and the LSP server.
-    _ <- planBuild quietGlobalOptions sched opts (Compile.PlanRequest [actMainAbs] Compile.SelectedFiles (Just []))
+    _ <- planBuild Source.diskSourceProvider quietGlobalOptions sched opts (Compile.PlanRequest [actMainAbs] Compile.SelectedFiles (Just []))
     removeFile actA
-    plan <- planBuild quietGlobalOptions sched opts (Compile.PlanRequest [actMainAbs] Compile.SelectedFiles (Just [actAAbs]))
+    plan <- planBuild Source.diskSourceProvider quietGlobalOptions sched opts (Compile.PlanRequest [actMainAbs] Compile.SelectedFiles (Just [actAAbs]))
     assertBool "expected a changed-path plan" (isJust (Compile.requestChanged (Compile.cpRequest plan)))
     assertArtifactsGone outsA
     assertArtifactsExist [rootMain, supportMain]
@@ -3203,7 +3250,8 @@ p58_full_build_drops_undeclared_root_stub =
         rootMain = typesDir </> "main.root.c"
         rootActor = T.unlines
           [ "actor main(env: Env):"
-          , "    env.exit(0)"
+          , "    proc def __startup__():"
+          , "        env.exit(0)"
           ]
     ensureCasesProject
     writeFileUtf8 (src </> "a.act") rootActor
@@ -3225,7 +3273,8 @@ p59_full_build_keeps_nested_module_binary =
         stamp p = (\st -> (fileID st, modificationTimeHiRes st)) <$> getFileStatus p
         rootActor = T.unlines
           [ "actor main(env: Env):"
-          , "    env.exit(0)"
+          , "    proc def __startup__():"
+          , "        env.exit(0)"
           ]
     ensureCasesProject
     createDirectoryIfMissing True (src </> "sub")
@@ -3264,7 +3313,7 @@ p60_plan_after_failed_fetch_fetches_again =
     -- Build.act is the same for both plans, so the second plan fetches
     -- only because the first fetch did not complete.
     forM_ ["first", "second" :: String] $ \which -> do
-      res <- E.try (planBuild quietGlobalOptions sched C.defaultCompileOptions
+      res <- E.try (planBuild Source.diskSourceProvider quietGlobalOptions sched C.defaultCompileOptions
                       (Compile.PlanRequest [actMain] Compile.SelectedFiles (Just [actMain])))
       case res of
         Left (Project.ProjectError msg) ->
@@ -3272,9 +3321,9 @@ p60_plan_after_failed_fetch_fetches_again =
             (fetchError `isInfixOf` msg)
         Right _ -> assertFailure ("expected the " ++ which ++ " plan to fetch and fail")
 
-p61_ext_c_edit_rebuilds_module :: TestTree
-p61_ext_c_edit_rebuilds_module =
-  testCase "61-edit of only an .ext.c rebuilds its module and the binary" $ do
+p64_ext_c_edit_rebuilds_module :: TestTree
+p64_ext_c_edit_rebuilds_module =
+  testCase "64-edit of only an .ext.c rebuilds its module and the binary" $ do
     let proj = casesProjDir
         src = casesSrcDir
         modNative = modLabel proj "native"
@@ -3294,8 +3343,9 @@ p61_ext_c_edit_rebuilds_module =
           [ "import native"
           , ""
           , "actor main(env: Env):"
-          , "    print(\"" <> label <> "\", native.answer())"
-          , "    env.exit(0)"
+          , "    proc def __startup__():"
+          , "        print(\"" <> label <> "\", native.answer())"
+          , "        env.exit(0)"
           ]
     ensureCasesProject
     writeFileUtf8 (src </> "native.act") $ T.unlines
@@ -3324,6 +3374,112 @@ p61_ext_c_edit_rebuilds_module =
     out4 <- buildOutIn proj
     assertBool "did not expect native.act to type check again" (not (typechecked out4 modNative))
     assertBool "did not expect native.act to compile again" (not (compiled out4 modNative))
+
+-- Source written during a read ------------------------------------------------
+
+-- | A disk source provider that writes new text to a source file right after
+-- its first read of that file has completed, as an editor that saves the
+-- file while a build reads it. The new version gets an mtime in the past, so
+-- it is older than any .tydb the build writes. The returned reference tells
+-- whether the write happened.
+writeAfterFirstRead :: FilePath -> T.Text -> IO (Source.SourceProvider, IORef Bool)
+writeAfterFirstRead act text = do
+  actAbs <- canonicalizePath act
+  written <- newIORef False
+  let disk = Source.diskSourceProvider
+      readFile' path = do
+        snap <- Source.spReadFile disk path
+        _ <- E.evaluate (length (Source.ssText snap))
+        pathAbs <- canonicalizePath path
+        first <- atomicModifyIORef' written (\done -> (done || pathAbs == actAbs, not done && pathAbs == actAbs))
+        when first $ do
+          writeFileUtf8 act text
+          now <- getCurrentTime
+          setModificationTime act (addUTCTime (-10) now)
+        return snap
+  return (disk { Source.spReadFile = readFile' }, written)
+
+-- | Build every module of the cases project in process, reading sources
+-- through the given provider, and assert that the build ends ok.
+buildCasesWith :: Source.SourceProvider -> C.CompileOptions -> IO ()
+buildCasesWith sp opts = do
+  proj <- canonicalizePath casesProjDir
+  sched <- Compile.newCompileScheduler quietGlobalOptions
+  result <- buildOnScheduler sp quietGlobalOptions (\_ -> return ()) sched proj opts
+  assertEqual "build" "result ok" result
+
+-- | Assert that the provider wrote its new version during the build, and
+-- that the next plan reads that version from the source: the .tydb that the
+-- build wrote from the version it read must not be trusted.
+assertNextPlanReadsWrittenSource :: C.CompileOptions -> FilePath -> T.Text -> IORef Bool -> IO ()
+assertNextPlanReadsWrittenSource opts act text written = do
+  wrote <- readIORef written
+  assertBool ("expected the build to read " ++ act) wrote
+  actAbs <- canonicalizePath act
+  (paths, mn) <- Project.findPaths actAbs opts
+  task <- Compile.readModuleTask Source.diskSourceProvider quietGlobalOptions opts paths mn actAbs
+  case task of
+    Compile.ParseTask source _ _ -> Compile.sourceText source @?= T.unpack text
+    Compile.TyTask _ -> assertFailure ("the next plan trusts the .tydb of " ++ act ++ " although the file was written after the build read it")
+    _ -> assertFailure ("expected the next plan to read " ++ act ++ " from its source")
+
+p61_source_written_during_first_read :: TestTree
+p61_source_written_during_first_read =
+  testCase "61-source written during its first read is compiled next" $ do
+    let actA = casesSrcDir </> "a.act"
+    ensureCasesProject
+    writeFileUtf8 actA "aaa = 1\n"
+    opts <- inProcessCompileOptions
+    (sp, written) <- writeAfterFirstRead actA "aaa = 22\n"
+    buildCasesWith sp opts
+    assertNextPlanReadsWrittenSource opts actA "aaa = 22\n" written
+
+p62_source_written_during_changed_read :: TestTree
+p62_source_written_during_changed_read =
+  testCase "62-source written during the read of its change is compiled next" $ do
+    let actA = casesSrcDir </> "a.act"
+    ensureCasesProject
+    writeFileUtf8 actA "aaa = 1\n"
+    opts <- inProcessCompileOptions
+    buildCasesWith Source.diskSourceProvider opts
+    writeFileUtf8 actA "aaa = 2\n"
+    (sp, written) <- writeAfterFirstRead actA "aaa = 33\n"
+    buildCasesWith sp opts
+    assertNextPlanReadsWrittenSource opts actA "aaa = 33\n" written
+
+p63_source_written_during_front_reread :: TestTree
+p63_source_written_during_front_reread =
+  testCase "63-source written during the reread for its front passes is compiled next" $ do
+    let actA = casesSrcDir </> "a.act"
+        actB = casesSrcDir </> "b.act"
+        newB = T.unlines
+          [ "import a"
+          , ""
+          , "def g() -> int:"
+          , "    return a.f(1, 2)"
+          ]
+    ensureCasesProject
+    writeFileUtf8 actA $ T.unlines
+      [ "def f(x: int) -> int:"
+      , "    return x"
+      ]
+    writeFileUtf8 actB $ T.unlines
+      [ "import a"
+      , ""
+      , "def g() -> int:"
+      , "    return a.f(1)"
+      ]
+    opts <- inProcessCompileOptions
+    buildCasesWith Source.diskSourceProvider opts
+    -- A changed signature of a.f reruns the front passes of b, whose source
+    -- and .tydb are unchanged, so b's source is read again only for them.
+    writeFileUtf8 actA $ T.unlines
+      [ "def f(x: int, y: int = 0) -> int:"
+      , "    return x + y"
+      ]
+    (sp, written) <- writeAfterFirstRead actB newB
+    buildCasesWith sp opts
+    assertNextPlanReadsWrittenSource opts actB newB written
 
 -- Compile events -------------------------------------------------------------
 
@@ -3368,7 +3524,7 @@ recordCompileEvents = do
     eventLog <- EventLog <$> newIORef [] <*> newIORef [] <*> newIORef []
     let runScenario (title, edit, adjust) = do
           edit proj
-          result <- buildOnScheduler eventsGlobalOptions (recordEvent eventLog) sched proj (adjust options)
+          result <- buildOnScheduler Source.diskSourceProvider eventsGlobalOptions (recordEvent eventLog) sched proj (adjust options)
           stage <- takeLines (stageLines eventLog)
           outputs <- takeLines (outputLines eventLog)
           back <- takeLines (backLines eventLog)
@@ -3623,7 +3779,7 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
       , p38_project_lock_blocks_build
       , p39_background_lock_does_not_block_build
       , p40_background_lock_blocks_watch
-      , p61_ext_c_edit_rebuilds_module
+      , p64_ext_c_edit_rebuilds_module
       ]
   , sequentialTestGroup "incremental-cache-cases" AllSucceed
       [ p41_stale_header_missing_import_reparses_source
@@ -3641,6 +3797,12 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
       , p53_imported_attr_inference_stays_selective
       , p54_unused_import_reads_no_names
       , p55_dbp_reads_selected_statements
+      ]
+  , -- Every test of this group writes a fresh fixture project first.
+    sequentialTestGroup "incremental-source-read-cases" AllFinish
+      [ p61_source_written_during_first_read
+      , p62_source_written_during_changed_read
+      , p63_source_written_during_front_reread
       ]
   , sequentialTestGroup "incremental-prune-cases" AllSucceed
       [ p56_changed_path_prunes_removed_module

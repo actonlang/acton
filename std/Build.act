@@ -5,9 +5,6 @@ zig_dependencies = {
     "libpcre2": (
         path="../deps/pcre2/"
     ),
-    "libsnappy": (
-        path="../deps/libsnappy_c/"
-    ),
     "libxml2": (
         path="../deps/libxml2/"
     ),

@@ -80,6 +80,12 @@ the recorded stat is then refreshed in place.  An editor overlay is
 compared by content hash only.  A module whose header is not trusted is
 read from its source.
 
+The stat that a .tydb records is taken before the source is read, and one
+read gives both the text that is compiled and the bytes that are hashed.
+A write that lands during the read then leaves the source with a stat
+other than the recorded one, so the next plan compares content hashes and
+compiles the new version.
+
 Run
 ---
 
@@ -301,6 +307,7 @@ import qualified Acton.CommandLineParser as C
 import Acton.Printer (prettyFunRow)
 import qualified Acton.Env
 import qualified Acton.EscapeAnalysis
+import qualified Acton.InitializationAnalysis as InitAnalysis
 import qualified Acton.TypeEnv
 import Acton.Env (simp, define, setMod)
 import qualified Acton.Hashing as Hashing
@@ -400,8 +407,8 @@ importsOf (ParseTask _ imps _)          = imps
 importsOf (ActonTask _ m)               = A.importsOf m
 importsOf (ParseErrorTask _)            = []
 
--- | The text and bytes of one read of a module's source (two handles for a
--- disk read): the text is parsed, the bytes are hashed, and the stat is
+-- | The text and bytes of one read of a module's source: the text is
+-- parsed, the bytes are hashed, and the stat, taken before the read, is
 -- recorded in its .tydb.  The content hash of the module's .ext.c, read
 -- with it, goes into the recorded source hash and into the impl hashes of
 -- its NotImplemented names.
@@ -1308,34 +1315,32 @@ readModuleTask :: Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -
 readModuleTask sp gopts opts paths mn file = do
     reusable <- reusableHeader opts tydb
     case reusable of
-      Nothing               -> fromSource =<< Source.readSource sp file
+      Nothing               -> fromSource =<< readModuleSource sp file
       Just (header, tydbNs) -> do
         extHash <- readExtSourceHash file
         overlay <- Source.spReadOverlay sp file
         case overlay of
-          Just snap -> verify header snap extHash Nothing
+          Just snap -> verify header (snapshotSource Nothing extHash snap)
           Nothing   -> do
             meta <- readSourceFileMeta file
             if isNothing extHash && InterfaceFiles.summarySourceMeta header == Just meta && InterfaceFiles.sfmMTimeNs meta < tydbNs
               then return (TyTask header)
-              else Source.spReadFile sp file >>= \snap -> verify header snap extHash (Just meta)
+              else verify header =<< readSourceFile sp file extHash meta
   where
     tydb = tyDbPath paths mn
 
-    fromSource snap = do
-      parsed <- parseSourceHeader mn file snap
-      case parsed of
-        Left diags        -> return (ParseErrorTask diags)
-        Right (imps, doc) -> (\source -> ParseTask source imps doc) <$> moduleSource file snap
+    fromSource source = either ParseErrorTask (\(imps, doc) -> ParseTask source imps doc)
+                          <$> parseSourceHeader mn file (sourceText source)
 
     -- The stat refresh updates one row, failures ignored.  Rewriting the
     -- whole .tydb would re-derive its dependency rows from the stored
     -- per-name hashes, whose external dependencies are stripped, and so lose
     -- their users and hashes.
-    verify header snap extHash meta = do
-      let hash = moduleSourceHash (Source.ssBytes snap) extHash
+    verify header source = do
+      let hash = moduleSourceHash (sourceBytes source) (sourceExtHash source)
           same = hash == InterfaceFiles.summarySourceHash header
-      when (C.verbose gopts && Source.ssIsOverlay snap) $ do
+          meta = sourceMeta source
+      when (C.verbose gopts && isNothing meta) $ do
         actTime <- Source.spGetModTime sp file
         tyTime  <- InterfaceFiles.interfaceModifiedTime tydb
         putStrLn ("[debug] readModuleTask " ++ modNameToString mn
@@ -1343,9 +1348,9 @@ readModuleTask sp gopts opts paths mn file = do
                   ++ " ty=" ++ show tyTime
                   ++ " hash=" ++ Hashing.shortHash hash
                   ++ " header=" ++ Hashing.shortHash (InterfaceFiles.summarySourceHash header)
-                  ++ " len=" ++ show (B.length (Source.ssBytes snap))
+                  ++ " len=" ++ show (B.length (sourceBytes source))
                   ++ if same then " (match)" else " (diff)")
-      if not same then fromSource snap else do
+      if not same then fromSource source else do
         when (isJust meta && meta /= InterfaceFiles.summarySourceMeta header) $
           void (trySync (InterfaceFiles.updateSourceMeta tydb meta))
         return (TyTask header)
@@ -1373,11 +1378,29 @@ compilerNewerThan opts ns
       status <- trySync (getExecutablePath >>= getFileStatus)
       return (either (const False) (\st -> InterfaceFiles.posixNanoseconds (modificationTimeHiRes st) > ns) status)
 
--- | A module source from a snapshot: an overlay records no stat.
-moduleSource :: FilePath -> Source.SourceSnapshot -> IO ModuleSource
-moduleSource file snap = ModuleSource (Source.ssText snap) (Source.ssBytes snap) <$> meta <*> readExtSourceHash file
-  where meta | Source.ssIsOverlay snap  = return Nothing
-             | otherwise                = Just <$> readSourceFileMeta file
+-- | Read a module's source once (overlay-aware), with the content hash of
+-- its .ext.c.  An editor overlay records no stat.  A file on disk is read
+-- after its stat is taken (readSourceFile).
+readModuleSource :: Source.SourceProvider -> FilePath -> IO ModuleSource
+readModuleSource sp file = do
+    extHash <- readExtSourceHash file
+    overlay <- Source.spReadOverlay sp file
+    case overlay of
+      Just snap -> return (snapshotSource Nothing extHash snap)
+      Nothing   -> readSourceFile sp file extHash =<< readSourceFileMeta file
+
+-- | Read a module's source file from disk, given the content hash of its
+-- .ext.c and the stat taken just before the read.  The stat must not be
+-- taken after the read: a write landing in between would pair the stat of
+-- the new version with the content of the version that was read, and a
+-- later plan would trust that stat.
+readSourceFile :: Source.SourceProvider -> FilePath -> Maybe B.ByteString -> InterfaceFiles.SourceFileMeta -> IO ModuleSource
+readSourceFile sp file extHash meta = snapshotSource (Just meta) extHash <$> Source.spReadFile sp file
+
+-- | A module source from a snapshot, the stat taken before it was read
+-- (Nothing for an editor overlay) and the content hash of its .ext.c.
+snapshotSource :: Maybe InterfaceFiles.SourceFileMeta -> Maybe B.ByteString -> Source.SourceSnapshot -> ModuleSource
+snapshotSource meta extHash snap = ModuleSource (Source.ssText snap) (Source.ssBytes snap) meta extHash
 
 -- | The .ext.c next to a module's source, whose C code implements the
 -- module's NotImplemented bodies.  The generated .c includes it.
@@ -1426,16 +1449,17 @@ docIndexEntry _ _ _ _                   = Nothing
 
 -- | The parsed source of a module.  A ParseTask parses the text read at
 -- discovery, whose hash decided it; a TyTask reads its source again
--- (overlay-aware).  Imports stay as written: the front stage adjusts them.
+-- (readModuleSource).  Imports stay as written: the front stage adjusts them.
 materialize :: Source.SourceProvider -> C.CompileOptions -> A.ModName -> FilePath -> Maybe (ParseProgress -> IO ())
             -> CompileTask -> IO (Either [Diagnostic String] (ModuleSource, A.Module))
 materialize sp opts mn file progress task = case task of
     ActonTask source m   -> return (Right (source, m))
     ParseErrorTask diags -> return (Left diags)
-    ParseTask source _ _ -> do display <- displayPath file
-                               fmap ((,) source) <$> parseActSource opts mn display (sourceText source) progress
-    TyTask _             -> do parsed <- parseActFile opts sp mn file progress
-                               forM parsed $ \(snap, m) -> (\source -> (source, m)) <$> moduleSource file snap
+    ParseTask source _ _ -> parse source
+    TyTask _             -> parse =<< readModuleSource sp file
+  where
+    parse source         = do display <- displayPath file
+                              fmap ((,) source) <$> parseActSource opts mn display (sourceText source) progress
 
 -- | A parsed module whose imports name the modules of their in-graph
 -- providers.  A plain import keeps its written name as its alias.
@@ -1489,12 +1513,11 @@ parseActSource opts mn actFile srcContent mOnProgress =
 
 -- | Parse only the header of a module's source: the modules it imports and
 -- its docstring.
-parseSourceHeader :: A.ModName -> FilePath -> Source.SourceSnapshot -> IO (Either [Diagnostic String] ([A.ModName], Maybe String))
-parseSourceHeader mn actFile snap = do
+parseSourceHeader :: A.ModName -> FilePath -> String -> IO (Either [Diagnostic String] ([A.ModName], Maybe String))
+parseSourceHeader mn actFile src = do
     display <- displayPath actFile
     tryDiagnostics (parserHandlers mn display src) (header display)
   where
-    src = Source.ssText snap
     header display = do
       (imps, mdoc) <- Acton.Parser.parseModuleHeader display src
       return (A.importedModules imps, mdoc)
@@ -2367,10 +2390,15 @@ loadBackJob build base key paths opts typed codegenHash = do
 -- imports resolve through the module cache, and it is checked in the given
 -- environment.
 checkModule :: BuildEnv -> GlobalTask -> C.CompileOptions -> Acton.Env.Env0 -> ModuleSource -> A.Module -> IO (Either [Diagnostic String] FrontResult)
-checkModule build t opts base = runFrontPasses ModuleEnv
+checkModule = checkModuleWithDump False
+
+-- Builtin compilation also runs outside the stage graph, but may itself be
+-- the module explicitly requested for alternative output.
+checkModuleWithDump :: Bool -> BuildEnv -> GlobalTask -> C.CompileOptions -> Acton.Env.Env0 -> ModuleSource -> A.Module -> IO (Either [Diagnostic String] FrontResult)
+checkModuleWithDump requested build t opts base = runFrontPasses ModuleEnv
     { moduleBuild = build, moduleTask = t, moduleCurrent = gtTask t, moduleOptions = opts
     , moduleResolver = cacheResolver (buildCache build) (gtPaths t), moduleBase = base
-    , moduleBlocked = False, moduleDump = False }
+    , moduleBlocked = False, moduleDump = requested }
 
 -- | A module after its kinds, types and escape analysis.
 data Checked = Checked
@@ -2429,6 +2457,7 @@ runFrontPasses env source parsed = do
       forceTypeResult interface typed typeEnv tests
       forceDone       <- now
       escapes         <- escapePass env scope typed
+      initializationPass env scope typed
       escapeDone      <- now
       let checked = Checked { checkedScope = scope, checkedInterface = interface, checkedModule = typed
                             , checkedTypeEnv = typeEnv, checkedTests = tests, checkedEscapes = escapes }
@@ -2540,6 +2569,47 @@ escapePass env scope typed = do
   where
     report    = Acton.EscapeAnalysis.analyzeModuleWithImports (importedEscapeSummary scope) typed
     summaries = Acton.EscapeAnalysis.interfaceSummaries report
+
+initializationPass :: ModuleEnv -> Acton.Env.Env0 -> A.Module -> IO ()
+initializationPass env scope typed = do
+    -- Missing constructor contracts are conservative. If the local analysis
+    -- already certifies every actor, imported bodies cannot invalidate it.
+    let local = InitAnalysis.analyzeModules [(typed, Acton.Env.unalias scope)]
+        requested = C.initialization_analysis (moduleOptions env) && moduleDump env
+        actors = [d | A.Decl _ ds <- A.mbody typed, d@A.Actor{} <- ds]
+        unsafeActors report = [d | d <- actors, M.lookup (A.GName (A.modname typed) $ A.dname d)
+                                    (InitAnalysis.selfSafety report) == Just False]
+        needsImports = requested || not (null $ unsafeActors local)
+    imported <- if needsImports then catMaybes <$> mapM load modules else return []
+    let safety = if needsImports
+                   then InitAnalysis.analyzeModules ((typed, Acton.Env.unalias scope) : imported)
+                   else local
+    -- Class initializers may use their completed self in an operational tail.
+    -- Their parameter contracts still cover the entire initializer.
+    forM_ (unsafeActors safety) $ \d ->
+        throwIO $ Acton.Env.OtherError (A.dloc d)
+          ("Actor " ++ A.nstr (A.dname d) ++ " uses self unsafely during declarative initialization")
+    when requested $ dumpWhen (moduleOptions env) (nameOf env) C.initialization_analysis "initialization-analysis" $ unlines
+      [ prstr q ++ ": " ++ Data.List.intercalate ", "
+          (["self=" ++ show safe | Just safe <- [M.lookup q $ InitAnalysis.selfSafety safety]] ++
+           [A.nstr n ++ "=" ++ show safe | (n,safe) <- ps])
+      | (q,ps) <- M.toList (InitAnalysis.parameterSafety safety), A.mname q == nameOf env]
+
+  where
+    paths = searchPath (pathsOf env)
+    modules = filter (/= nameOf env) (Acton.Env.transitiveImports scope)
+    load m = do
+      file <- Acton.Env.findTyFile paths m
+      case file of
+        Nothing -> return Nothing
+        Just path -> do
+          cached <- InterfaceFiles.readFileMaybe path
+          case cached of
+            Nothing -> return Nothing
+            Just stored -> do
+              let ast = InterfaceFiles.storedTyped stored
+              importedScope <- Acton.Env.mkEnv paths (moduleBase env) ast
+              return (Just (ast, Acton.Env.unalias importedScope))
 
 -- | The escape summary that a module checked in this environment reads for
 -- an imported function, following import aliases.
@@ -3106,7 +3176,7 @@ compileBuiltin build ctx t
         Right (source, m) -> do
           emit build (FrontStarted t)
           base   <- Acton.Env.initEnv (projTypes (gtPaths t)) True
-          result <- checkModule build t opts base source m
+          result <- checkModuleWithDump (altOutputFor ctx k) build t opts base source m
           case result of
             Left diags -> Left BuiltinFailed <$ reportFrontFailure build t diags
             Right fr   -> do

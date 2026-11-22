@@ -41,11 +41,12 @@ def check_other_conversions():
     assert "%d%%" % 50 == "50%"
 
 actor main(env):
-    try:
-        check_nul()
-        check_width()
-        check_other_conversions()
-        env.exit(0)
-    except AssertionError:
-        print("formatting with NUL produced the wrong value")
-        env.exit(1)
+    proc def __startup__():
+        try:
+            check_nul()
+            check_width()
+            check_other_conversions()
+            env.exit(0)
+        except AssertionError:
+            print("formatting with NUL produced the wrong value")
+            env.exit(1)

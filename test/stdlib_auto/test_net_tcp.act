@@ -3,7 +3,7 @@
 # a message and expects a reply. This exercices both ends of the TCP connection.
 
 import net
-import random
+import std.random
 
 
 def get_tcp_handles(m):
@@ -45,7 +45,7 @@ actor Client(name, rts_monitor, env: Env, port: int, on_success):
     var connection = 0
     def on_connect(c):
         connection += 1
-        print("Client %s connected to %s:%d, TCP handles: %s" % (name, c.remote_address(), port, str(get_tcp_handles(rts_monitor))))
+        print("Client %s connected to %s:%d, TCP handles: %s" % (name, c.endpoints().remote_address, port, str(get_tcp_handles(rts_monitor))))
         await async c.write(b"PING")
 
     def on_close(c):
@@ -86,21 +86,12 @@ actor main(env):
         # Park main so queued connection callbacks cannot report success.
         await async env.exit(1)
 
-    after 2: timeout_error()
-
     rts_monitor = env.rts
 
-    port4 = random.randint(10000, 20000)
+    port4 = std.random.randint(10000, 20000)
     port6 = port4+1
-    print("Using ports, IPv4: %d  IPv6: %d" % (port4, port6))
-
     require_v4 = True
     require_v6 = False
-
-    if require_v4:
-        l4 = Listener(env, "127.0.0.1", port4)
-    if require_v6:
-        l6 = Listener(env, "::1", port6)
 
     var v4_connected = False
     var v6_connected = False
@@ -133,7 +124,17 @@ actor main(env):
             print("TCP client not properly cleaned from IO loop, waiting...")
             after 0.8: check_io()
 
-    if require_v4:
-        c4 = Client("c4", rts_monitor, env, port4, _on_v4_connect)
-    if require_v6:
-        c6 = Client("c6", rts_monitor, env, port6, _on_v6_connect)
+    proc def __startup__():
+        after 2: timeout_error()
+
+        print("Using ports, IPv4: %d  IPv6: %d" % (port4, port6))
+
+        if require_v4:
+            l4 = Listener(env, "127.0.0.1", port4)
+        if require_v6:
+            l6 = Listener(env, "::1", port6)
+
+        if require_v4:
+            c4 = Client("c4", rts_monitor, env, port4, _on_v4_connect)
+        if require_v6:
+            c6 = Client("c6", rts_monitor, env, port6, _on_v6_connect)

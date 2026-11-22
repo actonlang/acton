@@ -1,5 +1,5 @@
 import numpy
-import math
+import std.math
 
 # run as follows:
 
@@ -27,7 +27,7 @@ actor sampler(sample_size, report):
         t1           = t0+float(sample_size)/52.0
         time         = numpy.linspace(t0,t1,sample_size)
         trend        = 2.0 + 0.1 * time
-        periodic     = 0.5 * math.sin (6.2832 * time)
+        periodic     = 0.5 * std.math.sin (6.2832 * time)
         noise        = numpy.unirandfloat(-0.5, 0.5, sample_size);
         observation  = trend + periodic + noise
         report(time, observation)

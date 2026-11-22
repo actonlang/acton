@@ -4,7 +4,8 @@ actor Foo():
         return "pong"
 
 actor main(env):
-    print(Foo().ping())
-    var a = Foo().ping()
-    print(a)
-    env.exit(0)
+    proc def __startup__():
+        print(Foo().ping())
+        a = Foo().ping()
+        print(a)
+        env.exit(0)

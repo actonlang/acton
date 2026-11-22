@@ -9,6 +9,7 @@ def _test_allocator(t: testing.SyncT):
     assert check() == 0
 
 actor main(env):
-    assert shared.marker() == 1
-    assert check() == 0
-    env.exit(0)
+    proc def __startup__():
+        assert shared.marker() == 1
+        assert check() == 0
+        env.exit(0)

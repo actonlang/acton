@@ -1,4 +1,4 @@
-import json
+import std.json
 proc def capture () -> None:
     value: ?__builtin__.str = None
     proc def callback () -> None:
@@ -7,7 +7,7 @@ proc def capture () -> None:
         print@[(?__builtin__.str,)]((value,), "\" \"", "\"\\n\"", False, False)
         print@[(__builtin__.bool,)](($ISNONE@[__builtin__.str](value),), "\" \"", "\"\\n\"", False, False)
         print@[(__builtin__.bool,)](($ISNOTNONE@[__builtin__.str](value),), "\" \"", "\"\\n\"", False, False)
-        print@[(__builtin__.str,)]((json.encode($mkDict@[__builtin__.str, ?__builtin__.str](W_capture_27, {"\"value\"": value}), False, False),), "\" \"", "\"\\n\"", False, False)
+        print@[(__builtin__.str,)]((std.json.encode($mkDict@[__builtin__.str, ?__builtin__.str](W_capture_27, {"\"value\"": value}), False, False),), "\" \"", "\"\\n\"", False, False)
         return None
     if $PUSH():
         value = "\"world\""
@@ -17,6 +17,6 @@ proc def capture () -> None:
         if True:
             return None
         else:
-            $RAISE(N_x)
+            $RAISE@[None](N_x)
     callback()
     return None

@@ -11,21 +11,24 @@ def _test_foo() -> None:
 
 # Synchronous actor test
 actor _test_SimpleSyncTester():
-    m = MathTester()
-    print("SimpleSyncTester.test()")
-    testing.assertEqual(m.add(1, 2), 3, "1 + 2 = 3")
+    proc def __startup__():
+        m = MathTester()
+        print("SimpleSyncTester.test()")
+        testing.assertEqual(m.add(1, 2), 3, "1 + 2 = 3")
 
 actor _SyncTester(t: testing.SyncT):
-    log = logging.Logger(t.log_handler)
-    m = MathTester()
-    log.info("SyncTester.test()")
-    print("SyncTester.test()")
-    testing.assertEqual(m.add(1, 2), 3, "1 + 2 = 3")
+    proc def __startup__():
+        log = logging.Logger(t.log_handler)
+        m = MathTester()
+        log.info("SyncTester.test()")
+        print("SyncTester.test()")
+        testing.assertEqual(m.add(1, 2), 3, "1 + 2 = 3")
 
 actor _SyncTesterCore():
-    m = MathTester()
-    print("SimpleSyncTester.test()")
-    testing.assertEqual(m.add(1, 2), 3, "1 + 2 = 3")
+    proc def __startup__():
+        m = MathTester()
+        print("SimpleSyncTester.test()")
+        testing.assertEqual(m.add(1, 2), 3, "1 + 2 = 3")
 
 def _test_simple_sync():
     s = _SyncTesterCore()
@@ -35,16 +38,18 @@ def _test_sync(t: testing.SyncT):
     return str(m.add(1, 2))  # Should return "3"
 
 actor AsyncTester(t: testing.AsyncT):
-    log = logging.Logger(t.log_handler)
-    def test():
-        log.info("AsyncTester.test()", {"data": "test"})
-        t.success()
-    after 0: test()
+    proc def __startup__():
+        log = logging.Logger(t.log_handler)
+        def test():
+            log.info("AsyncTester.test()", {"data": "test"})
+            t.success()
+        after 0: test()
 
 actor EnvTester(t: testing.EnvT):
-    log = logging.Logger(t.log_handler)
-    def test():
-        log.info("EnvTester.test() wthreads:", {"nr_wthreads": t.env.nr_wthreads})
-        print("EnvTester.test() wthreads:", t.env.nr_wthreads)
-        t.success()
-    after 0: test()
+    proc def __startup__():
+        log = logging.Logger(t.log_handler)
+        def test():
+            log.info("EnvTester.test() wthreads:", {"nr_wthreads": t.env.nr_wthreads})
+            print("EnvTester.test() wthreads:", t.env.nr_wthreads)
+            t.success()
+        after 0: test()

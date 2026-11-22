@@ -3,5 +3,6 @@ def read(filename):
     return a
 
 actor main(env):
-    fc = read("foo")
-    env.exit(0)
+    proc def __startup__():
+        fc = read("foo")
+        env.exit(0)

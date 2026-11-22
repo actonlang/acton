@@ -14,7 +14,9 @@ actor Foo(on_done):
     def poll():
         _head_cb()()
 
-    _push_cb(_do_stuff_cb)
+    proc def __startup__():
+        _push_cb(_do_stuff_cb)
 
 actor main(env):
-    env.exit(0)
+    proc def __startup__():
+        env.exit(0)

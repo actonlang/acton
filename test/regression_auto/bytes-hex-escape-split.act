@@ -14,8 +14,9 @@ def check() -> bool:
             b"\xff\xfe\xfd\x80\x7f\x00\x11\x22" == bytes([255, 254, 253, 128, 127, 0, 17, 34]))
 
 actor main(env):
-    if check():
-        env.exit(0)
-    else:
-        print("bytes hex-escape split produced wrong value")
-        env.exit(1)
+    proc def __startup__():
+        if check():
+            env.exit(0)
+        else:
+            print("bytes hex-escape split produced wrong value")
+            env.exit(1)

@@ -54,7 +54,8 @@ def check() -> bool:
     return True
 
 actor main(env):
-    if check():
-        env.exit(0)
-    else:
-        env.exit(1)
+    proc def __startup__():
+        if check():
+            env.exit(0)
+        else:
+            env.exit(1)
