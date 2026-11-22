@@ -37,13 +37,34 @@ CPUs.
 A module with `NotImplemented` bodies has their C code in a hand-written
 `.ext.c` next to its source, which its generated `.c` includes. When a module
 has an `.ext.c`, the recorded hash combines the source-bytes hash with the
-SHA-256 of the `.ext.c`, so an edit of only the `.ext.c` also invalidates the
-header. The `.ext.c` hash is also part of the `implHash` of each
-`NotImplemented` name, so the module's generated code and the tests that use
-those names are redone. A `.tydb` written while the module had an `.ext.c`
-records no source stat, so it is checked by content hash, never by the stat of
-the `.act` file alone, and a deleted `.ext.c` is noticed even when the `.act`
-file is unchanged.
+`.ext.c` hash, so an edit of only the `.ext.c` also invalidates the header. The
+`.ext.c` hash is also part of the `implHash` of each `NotImplemented` name, so
+the module's generated code and the tests that use those names are redone. A
+`.tydb` written while the module had an `.ext.c` records no source stat, so it
+is checked by content hash, never by the stat of the `.act` file alone, and a
+deleted `.ext.c` is noticed even when the `.act` file is unchanged.
+
+The `.ext.c` hash covers the project files that the `.ext.c` includes, directly
+or not (`Acton.ExtSource`). Zig's cache of a whole library cannot stand in for
+this: it learns the files a C file includes only when it compiles that file, and
+forgets them when a build reuses the file's object, so an edit of only an
+included file would reuse the old library. The included files are found by text,
+in lines read as the preprocessor reads them (continued lines joined, comments
+removed): the operands of every `#include`, `#include_next`, `#import` and
+`#embed` directive and every `__has_include`, whatever `#if` encloses them. Each
+is resolved as clang resolves it for the include path that `builder/build.zig`
+sets up: a quoted name next to the including file, then any name in the project
+root, the first `-I`. A file is in the project when the path clang reads it by,
+or the file that path leads to, lies in it, so a file reached through a linked
+directory counts. A file found elsewhere, in a dependency's or the compiler's
+include tree, changes only with them, and a file under `out/` is generated: a
+module's own header carries the tag that this hash decides. When a directive
+names its file through a macro, every other file under `src/` counts. Two kinds
+of project file stay out of reach: one that only a header outside the project
+includes, through the project root on the include path, and, in a scratch build,
+one that a directive names through a macro. An `.ext.c` that includes no project file keeps the plain
+SHA-256 of its content. For `__builtin__`, whose generated `.c` also includes
+`builtin/builtin.c`, that file counts as if its `.ext.c` included it.
 
 The public hash (**modulePubHash**) is derived from the module's public-name
 `pubHash` values (which already include any external signature dependencies).

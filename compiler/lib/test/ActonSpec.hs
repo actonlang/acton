@@ -31,6 +31,7 @@ import qualified Acton.QuickType as QuickType
 import qualified Acton.CodeGen
 import qualified Acton.Diagnostics as Diag
 import qualified Acton.Compile as Compile
+import qualified Acton.ExtSource as ExtSource
 import qualified Acton.Graph as Graph
 import qualified Acton.Project as Project
 import qualified Acton.Zon as Zon
@@ -1848,6 +1849,69 @@ main = do
           (putMVar releaseOldCleanup ())
         _ <- wait nextCompile
         timeout 1000000 (takeMVar newStarted) `shouldReturn` Just ()
+
+    describe "ExtSource" $ do
+      it "finds the file references of C code by text" $ do
+        let code = B8.pack $ unlines
+              [ "#include \"a.h\""
+              , "  #  include <b/c.h>"
+              , "#include_next \"d.h\""
+              , "#import \"e.h\""
+              , "#embed \"data.bin\""
+              , "#if __has_include(\"f.h\") && __has_include_next(<g.h>)"
+              , "#endif"
+              , "// #include \"commented.h\""
+              , "#define X \"x.h\""
+              ]
+        ExtSource.cFileRefs code `shouldBe`
+          ( [ ExtSource.CRef True "a.h" True, ExtSource.CRef False "b/c.h" True, ExtSource.CRef True "d.h" True
+            , ExtSource.CRef True "e.h" True, ExtSource.CRef True "data.bin" False
+            , ExtSource.CRef True "f.h" True, ExtSource.CRef False "g.h" True ]
+          , False )
+      it "flags a directive that names its file through a macro" $ do
+        snd (ExtSource.cFileRefs (B8.pack "#include HEADER\n")) `shouldBe` True
+        snd (ExtSource.cFileRefs (B8.pack "#define HAS(h) __has_include(h)\n")) `shouldBe` True
+      it "reads lines as the preprocessor does" $ do
+        let code = B8.pack $ unlines
+              [ "/* glue */ #include \"glue.h\""
+              , "/*"
+              , "#include \"hidden.h\""
+              , "*/"
+              , "#include \\"
+              , "  \"continued.h\""
+              , "static const char *s = \"/*\"; // don't"
+              , "#include \"after.h\"\r"
+              ]
+        ExtSource.cFileRefs code `shouldBe`
+          ( [ ExtSource.CRef True "glue.h" True, ExtSource.CRef True "continued.h" True, ExtSource.CRef True "after.h" True ]
+          , False )
+      it "resolves a reference the way clang does for the builder's include path" $
+        withSystemTempDirectory "acton-ext-source" $ \root -> do
+          createDirectoryIfMissing True (root </> "src")
+          forM_ ["src/near.h", "src/both.h", "both.h", "top.h"] $ \f -> writeFile (root </> f) ""
+          let ext = root </> "src" </> "native.ext.c"
+              ref quoted name = ExtSource.CRef quoted name True
+          ExtSource.resolveCRef root ext (ref True "near.h") >>= (`shouldBe` Just (root </> "src" </> "near.h"))
+          ExtSource.resolveCRef root ext (ref True "both.h") >>= (`shouldBe` Just (root </> "src" </> "both.h"))
+          ExtSource.resolveCRef root ext (ref True "top.h") >>= (`shouldBe` Just (root </> "top.h"))
+          ExtSource.resolveCRef root ext (ref False "near.h") >>= (`shouldBe` Nothing)
+          ExtSource.resolveCRef root ext (ref False "both.h") >>= (`shouldBe` Just (root </> "both.h"))
+          ExtSource.resolveCRef root ext (ref True "stdio.h") >>= (`shouldBe` Nothing)
+      it "names the module source of an .ext.c" $ do
+        ExtSource.extSourceOwner "/p/src/a/native.ext.c" `shouldBe` Just "/p/src/a/native.act"
+        ExtSource.extSourceOwner "/p/src/.ext.c" `shouldBe` Nothing
+        ExtSource.extSourceOwner "/p/src/native.c" `shouldBe` Nothing
+      it "keeps the hash of an .ext.c that includes no project file" $
+        ExtSource.extClosureHash (B8.pack "own") [] `shouldBe` B8.pack "own"
+      it "tells the files that editors leave next to the files they save" $ do
+        forM_ [".x.swp", "x~", "#x#", "4913", ".DS_Store", ".#x.c", "x.c___jb_tmp___"] $ \f ->
+          Project.isScratchFile ("/p/src" </> f) `shouldBe` True
+        forM_ ["x.h", "native.ext.c", "a.act", "v2.h"] $ \f ->
+          Project.isScratchFile ("/p/src" </> f) `shouldBe` False
+      it "tells --tydb copies" $ do
+        Project.isInterfaceCopy "/p/src/a.tydb/" `shouldBe` True
+        Project.isInterfaceCopy "/p/src/a.tydb/data.mdb" `shouldBe` True
+        Project.isInterfaceCopy "/p/src/a.act" `shouldBe` False
 
     describe "Graph" $ do
       -- 1 imports 2 and 3, which both import 4.  9 is outside the graph.

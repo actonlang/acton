@@ -34,15 +34,16 @@ directives follow.  The test result cache keys each test on its
 name's impl hash.
 
 The code of a module's NotImplemented bodies is the hand-written .ext.c
-next to its source, which its generated .c includes.  The recorded source
-hash covers the .ext.c, and the .ext.c's content hash is part of the own
-impl hash of each NotImplemented name.  An edit of the .ext.c alone thus
-changes the impl hash of the module, the tag of its generated .c and the
-key of every test that uses those names.  The C compiler's cache cannot
-stand in for this: Zig learns the files a C file includes only when it
-compiles that file, and the cache of a whole library forgets them when a
-build reuses the object, so a later edit of only the .ext.c would reuse
-the old library.
+next to its source, which its generated .c includes, and the project files
+that it includes in turn (Acton.ExtSource).  The recorded source hash covers
+them all, and so does the .ext.c's content hash, which is part of the own
+impl hash of each NotImplemented name.  An edit of the .ext.c or of a file
+it includes thus changes the impl hash of the module, the tag of its
+generated .c and the key of every test that uses those names.  The C
+compiler's cache cannot stand in for this: Zig learns the files a C file
+includes only when it compiles that file, and the cache of a whole library
+forgets them when a build reuses the object, so a later edit of only the
+.ext.c would reuse the old library.
 
 Plan
 ----
@@ -339,6 +340,7 @@ import qualified Acton.DocPrinter as DocP
 import Acton.Fetch
 import Acton.Graph
 import Acton.Project
+import Acton.ExtSource (readExtSourceHash)
 import qualified Acton.Diagnostics as Diag
 import qualified Acton.SourceProvider as Source
 import Utils
@@ -1308,7 +1310,7 @@ buildGlobalTasks sp gopts opts projects pathsByProject seedFiles = do
         -- the local module and its interface is rebuilt.
         task       <- case discovered of
                         TyTask _ | any (overlapsLocal index paths) (importsOf discovered)
-                          -> either ParseErrorTask (uncurry ActonTask) <$> materialize sp opts (tkMod key) file Nothing discovered
+                          -> either ParseErrorTask (uncurry ActonTask) <$> materialize sp opts paths (tkMod key) file Nothing discovered
                         _ -> return discovered
         let imports = restoredImportsOf paths task
         either throwProjectError return (checkImportPrefixes index paths imports >> checkImportDependencies index paths (tkMod key) imports)
@@ -1328,9 +1330,9 @@ readModuleTask :: Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -
 readModuleTask sp gopts opts paths mn file = do
     reusable <- reusableHeader opts tydb
     case reusable of
-      Nothing               -> fromSource =<< readModuleSource sp file
+      Nothing               -> fromSource =<< readModuleSource sp paths mn file
       Just (header, tydbNs) -> do
-        extHash <- readExtSourceHash file
+        extHash <- readExtSourceHash paths mn file
         overlay <- Source.spReadOverlay sp file
         case overlay of
           Just snap -> verify header (snapshotSource Nothing extHash snap)
@@ -1396,11 +1398,12 @@ compilerNewerThan opts ns
       return (either (const False) (\st -> InterfaceFiles.posixNanoseconds (modificationTimeHiRes st) > ns) status)
 
 -- | Read a module's source once (overlay-aware), with the content hash of
--- its .ext.c.  An editor overlay records no stat.  A file on disk is read
--- after its stat is taken (readSourceFile).
-readModuleSource :: Source.SourceProvider -> FilePath -> IO ModuleSource
-readModuleSource sp file = do
-    extHash <- readExtSourceHash file
+-- its .ext.c and the project files it includes (readExtSourceHash).  An
+-- editor overlay records no stat.  A file on disk is read after its stat is
+-- taken (readSourceFile).
+readModuleSource :: Source.SourceProvider -> Paths -> A.ModName -> FilePath -> IO ModuleSource
+readModuleSource sp paths mn file = do
+    extHash <- readExtSourceHash paths mn file
     overlay <- Source.spReadOverlay sp file
     case overlay of
       Just snap -> return (snapshotSource Nothing extHash snap)
@@ -1428,25 +1431,11 @@ recordedSourceMeta source
   | isJust (sourceExtHash source) = Nothing
   | otherwise                     = sourceMeta source
 
--- | The .ext.c next to a module's source, whose C code implements the
--- module's NotImplemented bodies.  The generated .c includes it.
-extSourceFile :: FilePath -> FilePath
-extSourceFile file = dropExtension file <.> "ext.c"
-
--- | The content hash of a module's .ext.c, Nothing when it has none.
-readExtSourceHash :: FilePath -> IO (Maybe B.ByteString)
-readExtSourceHash file = do
-    res <- try (B.readFile (extSourceFile file))
-    case res of
-      Right bytes -> return (Just (SHA256.hash bytes))
-      Left err
-        | isDoesNotExistError err -> return Nothing
-        | otherwise               -> throwIO err
-
 -- | The source hash a module's .tydb records: of the source bytes, combined
--- with the content hash of the module's .ext.c when it has one.  The C
--- compiler sees an .ext.c only through the generated .c, so an edit of the
--- .ext.c alone must count as a change of the module.
+-- with the content hash of the module's .ext.c, which covers the project
+-- files it includes, when it has one.  The C compiler sees an .ext.c only
+-- through the generated .c, so an edit of the .ext.c or of a file it
+-- includes must count as a change of the module.
 moduleSourceHash :: B.ByteString -> Maybe B.ByteString -> B.ByteString
 moduleSourceHash bytes Nothing        = SHA256.hash bytes
 moduleSourceHash bytes (Just extHash) = SHA256.hash (B.concat [SHA256.hash bytes, B.pack "ext.c:", extHash])
@@ -1476,13 +1465,13 @@ docIndexEntry _ _ _ _                   = Nothing
 -- | The parsed source of a module.  A ParseTask parses the text read at
 -- discovery, whose hash decided it; a TyTask reads its source again
 -- (readModuleSource).  Imports stay as written: the front stage adjusts them.
-materialize :: Source.SourceProvider -> C.CompileOptions -> A.ModName -> FilePath -> Maybe (ParseProgress -> IO ())
+materialize :: Source.SourceProvider -> C.CompileOptions -> Paths -> A.ModName -> FilePath -> Maybe (ParseProgress -> IO ())
             -> CompileTask -> IO (Either [Diagnostic String] (ModuleSource, A.Module))
-materialize sp opts mn file progress task = case task of
+materialize sp opts paths mn file progress task = case task of
     ActonTask source m   -> return (Right (source, m))
     ParseErrorTask diags -> return (Left diags)
     ParseTask source _ _ -> parse source
-    TyTask _             -> parse =<< readModuleSource sp file
+    TyTask _             -> parse =<< readModuleSource sp paths mn file
   where
     parse source         = do display <- displayPath file
                               fmap ((,) source) <$> parseActSource opts mn display (sourceText source) progress
@@ -2158,7 +2147,7 @@ perform env (Reuse header deferred)           = Right <$> reuse env header defer
 compileModule :: ModuleEnv -> IO (Either [Diagnostic String] FrontResult)
 compileModule env = do
     previous <- if C.verbose (buildOptions build) then lookupNameMap (buildCache build) (searchPath (pathsOf env)) (nameOf env) else return Nothing
-    parsed   <- materialize (buildSources build) (moduleOptions env) (nameOf env) (taskSourceFile (moduleTask env)) Nothing (moduleCurrent env)
+    parsed   <- materialize (buildSources build) (moduleOptions env) (pathsOf env) (nameOf env) (taskSourceFile (moduleTask env)) Nothing (moduleCurrent env)
     case parsed of
       Left diags        -> return (Left diags)
       Right (source, m) -> do
@@ -3270,7 +3259,7 @@ compileBuiltin build ctx t
   | C.only_build opts                              = return (Right ())
   | TyTask _ <- gtTask t, not (altOutputFor ctx k) = return (Right ())
   | otherwise                                      = do
-      parsed <- materialize (buildSources build) opts (tkMod k) (taskSourceFile t) Nothing (gtTask t)
+      parsed <- materialize (buildSources build) opts (gtPaths t) (tkMod k) (taskSourceFile t) Nothing (gtTask t)
       case parsed of
         Left diags        -> Left BuiltinFailed <$ emit build (Diagnostics t diags)
         Right (source, m) -> do
@@ -3470,7 +3459,7 @@ moduleEnv run state k = ModuleEnv
 parseStage :: BuildEnv -> C.CompileOptions -> GlobalTask -> IO (CompileTask, Maybe TimeSpec)
 parseStage build opts t = do
     (parsed, elapsed) <- timed $ do
-      result <- materialize (buildSources build) opts (tkMod (gtKey t)) (taskSourceFile t) (Just (emit build . ParseProgressed t)) (gtTask t)
+      result <- materialize (buildSources build) opts (gtPaths t) (tkMod (gtKey t)) (taskSourceFile t) (Just (emit build . ParseProgressed t)) (gtTask t)
       mapM_ (evaluate . rnf . snd) result
       return result
     return $ case parsed of

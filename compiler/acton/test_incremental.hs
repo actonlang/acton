@@ -3588,6 +3588,153 @@ p69_code_older_than_compiler_regenerates =
     assertBool ("expected util's generated code to be up to date\n" ++ T.unpack out2)
       (maybe False ("generated code up to date" `T.isInfixOf`) (dbpLineFor out2 "util"))
 
+-- | An .ext.c for native whose answer is NATIVE_VALUE, from the files it
+-- includes.
+writeIncludingExtC :: [T.Text] -> IO ()
+writeIncludingExtC includes = do
+  let prefix = T.pack casesProjName <> "Q_nativeQ_"
+  writeFileUtf8 (casesSrcDir </> "native.ext.c") $ T.unlines $
+    [ "#include \"" <> file <> "\"" | file <- includes ] ++
+    [ ""
+    , "void " <> prefix <> "__ext_init__() {"
+    , "}"
+    , ""
+    , "int64_t " <> prefix <> "answer() {"
+    , "    return NATIVE_VALUE;"
+    , "}"
+    ]
+
+p70_ext_c_include_edit_rebuilds_module :: TestTree
+p70_ext_c_include_edit_rebuilds_module =
+  testCase "70-edit of only a file that an .ext.c includes rebuilds its module" $ do
+    let proj = casesProjDir
+        src = casesSrcDir
+        modNative = modLabel proj "native"
+        modMain = modLabel proj "main"
+        valueH :: Int -> T.Text
+        valueH n = "#define NATIVE_VALUE " <> T.pack (show n) <> "\n"
+        mainAct :: T.Text -> T.Text
+        mainAct label = T.unlines
+          [ "import native"
+          , ""
+          , "actor main(env: Env):"
+          , "    proc def __startup__():"
+          , "        print(\"" <> label <> "\", native.answer())"
+          , "        env.exit(0)"
+          ]
+    ensureCasesProject
+    writeFileUtf8 (src </> "native.act") $ T.unlines
+      [ "def answer() -> int:"
+      , "    NotImplemented"
+      ]
+    -- native.ext.c includes native_impl.h next to it, which includes
+    -- values/answer.h next to itself.
+    writeIncludingExtC ["native_impl.h"]
+    createDirectoryIfMissing True (src </> "values")
+    writeFileUtf8 (src </> "native_impl.h") "#include \"values/answer.h\"\n"
+    writeFileUtf8 (src </> "values" </> "answer.h") (valueH 1)
+    writeFileUtf8 (src </> "main.act") (mainAct "a")
+    _ <- buildOutIn proj
+    out1 <- runBinaryIn proj "main"
+    out1 @?= "a 1\n"
+    -- As in case 64, this build reuses native's object, so afterwards the
+    -- library's cache no longer knows the files native.ext.c includes.
+    writeFileUtf8 (src </> "main.act") (mainAct "b")
+    _ <- buildOutIn proj
+    out2 <- runBinaryIn proj "main"
+    out2 @?= "b 1\n"
+    writeFileUtf8 (src </> "values" </> "answer.h") (valueH 2)
+    out3 <- buildOutIn proj
+    assertBool ("expected native.act to type check after an edit of a file its .ext.c includes\n" ++ T.unpack out3)
+      (typechecked out3 modNative)
+    assertBool "did not expect main.act to type check" (not (typechecked out3 modMain))
+    out3run <- runBinaryIn proj "main"
+    out3run @?= "b 2\n"
+    out4 <- buildOutIn proj
+    assertBool ("did not expect native.act to compile again\n" ++ T.unpack out4) (not (compiled out4 modNative))
+    -- A deleted included file is a change too: the build checks native
+    -- again and fails in the C compiler.
+    removeIfExists (src </> "values" </> "answer.h")
+    (ec, out5) <- runActonIn proj ["build", "--color", "never", "--verbose"]
+    assertBool ("expected native.act to type check after values/answer.h was deleted\n" ++ T.unpack out5) (typechecked out5 modNative)
+    assertBool ("expected the build to fail without values/answer.h\n" ++ T.unpack out5) (ec /= ExitSuccess)
+
+p71_ext_c_including_own_header_settles :: TestTree
+p71_ext_c_including_own_header_settles =
+  testCase "71-an .ext.c that includes its own generated header settles" $ do
+    let proj = casesProjDir
+        src = casesSrcDir
+        modNative = modLabel proj "native"
+    ensureCasesProject
+    writeFileUtf8 (src </> "native.act") $ T.unlines
+      [ "def answer() -> int:"
+      , "    NotImplemented"
+      ]
+    -- The header carries the tag that the module's hash decides, so it must
+    -- not count as an included file.
+    writeIncludingExtC ["../out/types/" <> T.pack casesProjName <> "/native.h", "native_value.h"]
+    writeFileUtf8 (src </> "native_value.h") "#define NATIVE_VALUE 3\n"
+    writeFileUtf8 (src </> "main.act") $ T.unlines
+      [ "import native"
+      , ""
+      , "actor main(env: Env):"
+      , "    proc def __startup__():"
+      , "        print(native.answer())"
+      , "        env.exit(0)"
+      ]
+    _ <- buildOutIn proj
+    run <- runBinaryIn proj "main"
+    run @?= "3\n"
+    out2 <- buildOutIn proj
+    assertBool ("expected native to be fresh\n" ++ T.unpack out2) (fresh out2 modNative)
+    assertBool ("did not expect native.act to compile again\n" ++ T.unpack out2) (not (compiled out2 modNative))
+
+p72_ext_c_include_through_linked_directory :: TestTree
+p72_ext_c_include_through_linked_directory =
+  testCase "72-a file that an .ext.c includes through a linked directory counts" $ do
+    let proj = casesProjDir
+        src = casesSrcDir
+        modNative = modLabel proj "native"
+        vendor = "test" </> "incremental_vendor"
+        valueH :: Int -> T.Text
+        valueH n = "#define NATIVE_VALUE " <> T.pack (show n) <> "\n"
+        mainAct :: T.Text -> T.Text
+        mainAct label = T.unlines
+          [ "import native"
+          , ""
+          , "actor main(env: Env):"
+          , "    proc def __startup__():"
+          , "        print(\"" <> label <> "\", native.answer())"
+          , "        env.exit(0)"
+          ]
+    ensureCasesProject
+    -- src/vendor links to a directory outside the project, as a vendored
+    -- library often does.  Clang reads the header through the link.
+    removePathForcibly vendor
+    createDirectoryIfMissing True vendor
+    vendorAbs <- canonicalizePath vendor
+    writeFileUtf8 (vendor </> "value.h") (valueH 1)
+    createDirectoryLink vendorAbs (src </> "vendor")
+    writeFileUtf8 (src </> "native.act") $ T.unlines
+      [ "def answer() -> int:"
+      , "    NotImplemented"
+      ]
+    writeIncludingExtC ["vendor/value.h"]
+    writeFileUtf8 (src </> "main.act") (mainAct "a")
+    _ <- buildOutIn proj
+    out1 <- runBinaryIn proj "main"
+    out1 @?= "a 1\n"
+    writeFileUtf8 (src </> "main.act") (mainAct "b")
+    _ <- buildOutIn proj
+    writeFileUtf8 (vendor </> "value.h") (valueH 2)
+    out3 <- buildOutIn proj
+    assertBool ("expected native.act to type check after an edit of a header in a linked directory\n" ++ T.unpack out3)
+      (typechecked out3 modNative)
+    out3run <- runBinaryIn proj "main"
+    out3run @?= "b 2\n"
+    removeDirectoryLink (src </> "vendor")
+    removePathForcibly vendor
+
 -- Source written during a read ------------------------------------------------
 
 -- | A disk source provider that writes new text to a source file right after
@@ -3998,6 +4145,9 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
       , p67_dbp_line_edit_moves_line_directives
       , p68_dbg_no_lines_regenerates_code
       , p69_code_older_than_compiler_regenerates
+      , p70_ext_c_include_edit_rebuilds_module
+      , p71_ext_c_including_own_header_settles
+      , p72_ext_c_include_through_linked_directory
       ]
   , sequentialTestGroup "incremental-cache-cases" AllSucceed
       [ p41_stale_header_missing_import_reparses_source

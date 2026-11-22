@@ -2540,6 +2540,66 @@ parseFlagTests =
           (ExitFailure 1) code3
         assertBool "the cached result should not be reused after an edit of native.ext.c"
           (not ("Using cached results for 1 tests" `isInfixOf` out3))
+  , testCase "acton test reruns a cached test when a file its .ext.c includes changes" $ do
+      withSystemTempDirectory "acton-test-ext-c-include-cache" $ \proj -> do
+        acton <- canonicalizePath "../../dist/bin/acton"
+        let name = "ext_c_include_cache"
+            fp = Fingerprint.formatFingerprint
+              (Fingerprint.updateFingerprintPrefix
+                (Fingerprint.fingerprintPrefixForName name) 1)
+            srcDir = proj </> "src"
+            prefix = name ++ "Q_nativeQ_"
+            writeValue :: Int -> IO ()
+            writeValue n = writeFile (srcDir </> "native_value.h") ("#define NATIVE_VALUE " ++ show n ++ "\n")
+            runTest args = readCreateProcessWithExitCode (proc acton ("test" : args)) { cwd = Just proj } ""
+
+        createDirectoryIfMissing True srcDir
+        writeFile (proj </> "Build.act") $ unlines
+          [ "name = \"" ++ name ++ "\""
+          , "fingerprint = " ++ fp
+          , ""
+          ]
+        writeFile (srcDir </> "native.act") $ unlines
+          [ "def answer() -> int:"
+          , "    NotImplemented"
+          ]
+        writeFile (srcDir </> "native.ext.c") $ unlines
+          [ "#include \"native_value.h\""
+          , ""
+          , "void " ++ prefix ++ "__ext_init__() {"
+          , "}"
+          , ""
+          , "int64_t " ++ prefix ++ "answer() {"
+          , "    return NATIVE_VALUE;"
+          , "}"
+          ]
+        writeValue 42
+        writeFile (srcDir </> "test_native.act") $ unlines
+          [ "import testing"
+          , "import native"
+          , ""
+          , "def _test_answer():"
+          , "    testing.assertEqual(native.answer(), 42)"
+          ]
+
+        (code1, out1, err1) <- runTest ["--iter", "1"]
+        when (code1 /= ExitSuccess) $
+          assertFailure ("initial acton test failed:\nstdout:\n" ++ out1 ++ "\nstderr:\n" ++ err1)
+
+        (code2, out2, err2) <- runTest ["--iter", "1", "--show-cached"]
+        when (code2 /= ExitSuccess) $
+          assertFailure ("cached acton test failed:\nstdout:\n" ++ out2 ++ "\nstderr:\n" ++ err2)
+        assertBool "second run should reuse the cached result"
+          ("Using cached results for 1 tests" `isInfixOf` out2)
+
+        -- Only the header changes, neither native.act nor native.ext.c.
+        writeValue 41
+
+        (code3, out3, err3) <- runTest ["--iter", "1", "--show-cached"]
+        assertEqual ("an edit of native_value.h should invalidate the cached success:\nstdout:\n" ++ out3 ++ "\nstderr:\n" ++ err3)
+          (ExitFailure 1) code3
+        assertBool "the cached result should not be reused after an edit of native_value.h"
+          (not ("Using cached results for 1 tests" `isInfixOf` out3))
   , testCase "acton test keys cached results on the RTS environment" $ do
       withSystemTempDirectory "acton-test-env-cache" $ \proj -> do
         actonBinDir <- Paths_acton.getBinDir
@@ -2636,7 +2696,16 @@ parseFlagTests =
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc acton (flags ++ [sample])) ""
         assertEqual ("acton " ++ unwords flags ++ " should succeed") ExitSuccess returnCode
         assertEqual ("acton " ++ unwords flags ++ " stderr") "" cmdErr
-        return (LBS.pack cmdOut)
+        return (LBS.pack (maskCodegenTag cmdOut))
+
+    -- The tag of generated code changes with every input of the back
+    -- passes, the C code of the runtime and the builtins included, so the
+    -- goldens keep the tag's line but not its hash.
+    maskCodegenTag = intercalate "\n" . map maskLine . splitOn "\n"
+    maskLine line
+      | tag `isPrefixOf` line = tag ++ " <hash> */"
+      | otherwise             = line
+      where tag = "/* Acton impl hash:"
 
 actonProjTests =
   testGroup "compiler project tests"

@@ -45,8 +45,16 @@ In practice, Acton decides reuse like this:
 
 A module with a hand-written `.ext.c` file next to it, which holds the C code
 of its `NotImplemented` functions, is always checked by content. Its stored hash
-covers both the `.act` and the `.ext.c` file, and no source metadata is stored
-for it. So an edit of only the `.ext.c`, or its removal, recompiles the module.
+covers the `.act` file, the `.ext.c` file and the files of the project that the
+`.ext.c` includes, directly or through other included files, and no source
+metadata is stored for it. So an edit of only the `.ext.c` or of a file it
+includes, or the removal of one, recompiles the module. Acton finds the included
+files by reading the `#include` lines and looking each file up the way the C
+compiler does: next to the including file, then in the project root. Files
+outside the project, such as the headers of a Zig dependency, and the generated
+files under `out/` do not count, but a file reached through a linked directory
+in the project does. When an `#include` names its file through a
+macro, every other file under `src/` counts for that module.
 
 This means harmless metadata drift, like a `touch`, checkout, restore, copy,
 or cross-machine sync, does not by itself force a front-end rebuild. It also

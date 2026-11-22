@@ -60,7 +60,7 @@ The Acton test runner caches test results which means that repeated invokations 
 
 This means that the developer experience for test driven development is great even for project with a very large amount of tests as the content hash driven test runner only recompiles and reruns tests that are actually affected by a change.
 
-Note that test input need to be contained within .act source code files in order for the compiler to consider them part of the content hash. You cannot use external .txt files or similar as input to test functions, since the compiler won't consider those parts of the implementation. Also see [incremental compilation](compilation/incremental.md) for more details on content hashing and how it applies to testing.
+Note that test input need to be contained within .act source code files in order for the compiler to consider them part of the content hash. You cannot use external .txt files or similar as input to test functions, since the compiler won't consider those parts of the implementation. The C code of a module's `NotImplemented` functions counts as well: its `.ext.c` file and the project files that the `.ext.c` includes. Also see [incremental compilation](compilation/incremental.md) for more details on content hashing and how it applies to testing.
 
 Snapshot tests are the main exception: even when the test code hash matches the cache, `acton test` still checks the expected snapshot file on disk against the cached `snapshots/output/...` metadata. If the output snapshot is missing, the expected file changed, or Acton cannot cheaply prove the expected file is older than the last produced output, the test is rerun instead of trusting the cached result.
 
