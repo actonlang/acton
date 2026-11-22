@@ -526,6 +526,27 @@ $ShowTuple $ShowTupleG_new(B_tuple witness) {
     return $NEW($ShowTuple, witness);
 }
 
+// Compose structural evidence for an open tuple from its known prefix and
+// supplied tail. Both inputs are compiler-generated $ShowTuple witnesses;
+// their captured component witnesses retain any generic Show policies.
+B_Show $ShowTupleJoin(B_Show prefix, B_Show tail) {
+    B_tuple a = (($ShowTuple)prefix)->W_Show;
+    B_tuple b = (($ShowTuple)tail)->W_Show;
+    if (a->size == 0)
+        return tail;
+    if (b->size == 0)
+        return prefix;
+    int n = a->size + b->size;
+    B_tuple witnesses = acton_malloc(sizeof(struct B_tuple) + n * sizeof($WORD));
+    witnesses->$class = &B_tupleG_methods;
+    witnesses->size = n;
+    for (int i = 0; i < a->size; i++)
+        ACTON_STORE(witnesses, witnesses->components[i], a->components[i]);
+    for (int i = 0; i < b->size; i++)
+        ACTON_STORE(witnesses, witnesses->components[a->size + i], b->components[i]);
+    return (B_Show)$ShowTupleG_new(witnesses);
+}
+
 // Stateless witnesses deserialize to their singleton, recording the row so
 // subsequent references in the same serialized graph retain sharing.
 static void $statelessWitness_serialize($WORD self, $Serial$state state) {

@@ -116,6 +116,7 @@ primEqTuple         = gPrim "EqTuple"
 primOrdTuple        = gPrim "OrdTuple"
 primHashableTuple   = gPrim "HashableTuple"
 primShowTuple       = gPrim "ShowTuple"
+primShowTupleJoin   = gPrim "ShowTupleJoin"
 primBoolTuple       = gPrim "BoolTuple"
 
 primIdentityActor   = gPrim "IdentityActor"
@@ -246,6 +247,7 @@ primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec Nothing)
                             (noq primOrdTuple,      clOrdTuple),
                             (noq primHashableTuple, clHashableTuple),
                             (noq primShowTuple,     clTupleWit qnShow),
+                            (noq primShowTupleJoin, NDef scShowTupleJoin NoDec Nothing),
                             (noq primBoolTuple,     clBoolTuple),
                             (noq primIdentityActor, clIdentityActor),
 
@@ -545,6 +547,16 @@ clOptWit qn         = NClass [qbind a] (leftpath [TC qn [tOpt $ tVar a]]) clTEnv
 clEqTuple           = clTupleWit qnEq
 clOrdTuple          = clTupleWit qnOrd
 clHashableTuple     = clTupleWit qnHashable
+
+-- Internal composition of structural tuple evidence. Solver supplies the
+-- concatenated result type; all three types are tuples, with no new class or
+-- serialization representation required by this operation.
+scShowTupleJoin     = tSchema (map qbind [a,b,c]) $ tFun fxPure
+                        (foldr posRow posNil [showOf a, showOf b]) kwdNil (showOf c)
+  where a = TV KType (name "A")
+        b = TV KType (name "B")
+        c = TV KType (name "C")
+        showOf v = tCon $ TC qnShow [tVar v]
 
 clTupleWit qn       = NClass [qbind w, qbind p, qbind k] (leftpath [TC qn [tTuple (tVar p) (tVar k)]]) clTEnv Nothing
   where clTEnv      = [ (initKW, NDef scInit NoDec Nothing) ]

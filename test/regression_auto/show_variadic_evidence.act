@@ -1,0 +1,76 @@
+class Item:
+    def __init__(self, n: int):
+        self.n = n
+
+extension Item(Show):
+    def __str__(self) -> str:
+        return "item " + str(self.n)
+    def __repr__(self) -> str:
+        return "Item(" + str(self.n) + ")"
+
+def render(*args) -> str:
+    return str(args)
+
+render_end: [P(Show)] => (*P, end: str) -> str
+def render_end(*args, end: str="done") -> str:
+    return str(args) + end
+
+def indirect(*args) -> str:
+    f = render
+    return f(*args)
+
+def recursive(n: int, *args) -> str:
+    if n == 0:
+        return render(*args)
+    return recursive(n - 1, *args)
+
+def forward(*args) -> str:
+    return render(*args)
+
+def keyword(**kwargs) -> str:
+    return repr(kwargs)
+
+def positional[P(Show)](xs: (*P)) -> str:
+    return str(xs)
+
+def open_keyword[K(Show)](xs: (**K)) -> str:
+    return str(xs)
+
+def supplied[A(Show)](x: A) -> str:
+    return forward(x, [x], (x, 7), None)
+
+class Saved[A(Show)]:
+    def __init__(self, value: A):
+        self.value = value
+    def render(self) -> str:
+        return str(self.value)
+
+def save(*args):
+    return Saved(args)
+
+def check(actual: str, expected: str):
+    assert actual == expected, actual
+
+actor main(env):
+    try:
+        check(render(), "()")
+        check(forward(1, "two", None), "(1, 'two', None)")
+        check(forward(Item(3)), "(Item(3))")
+        check(indirect(Item(3), 4), "(Item(3), 4)")
+        check(recursive(3, Item(3), 4), "(Item(3), 4)")
+        check(render_end(Item(3)), "(Item(3))done")
+        check(render_end(Item(3), end="!"), "(Item(3))!")
+        check(supplied(Item(4)), "(Item(4), [Item(4)], (Item(4), 7), None)")
+        check(positional((Item(5), 6)), "((Item(5), 6))")
+        check(keyword(a=Item(7), b=8), "(Item(7), 8)")
+        check(open_keyword((a=Item(9), b=10)), "((Item(9), 10))")
+        saved = save(Item(11), 12)
+        restored = deserialize(serialize(saved))
+        if isinstance(restored, Saved):
+            check(restored.render(), "(Item(11), 12)")
+        else:
+            assert False, "saved tuple did not deserialize"
+    except Exception as e:
+        print("FAIL: " + str(e))
+        env.exit(1)
+    env.exit(0)

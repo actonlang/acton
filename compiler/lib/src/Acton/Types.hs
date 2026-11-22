@@ -1040,7 +1040,8 @@ genEnv env cs te ds
                                              (cs,eq) <- newSimplify env te cs
                                              te <- usubst te
                                              (gen_us, gen_cs, te, eq) <- refine env cs te eq
-                                             let gen_vs = take (length gen_us) tvarSupply
+                                             -- Instantiation must distinguish row parameters from ordinary types.
+                                             let gen_vs = zipWith (\u v -> v{ tvkind = uvkind u }) gen_us tvarSupply
                                              sequence [ usubstitute uv (tVar tv) | (uv,tv) <- gen_us `zip` gen_vs ]
                                              te <- usubst te
                                              gen_cs <- usubst gen_cs
@@ -1538,7 +1539,12 @@ instance InfEnv Decl where
                                              NSig sc dec _ | t@TFun{} <- sctype sc, matchingDec n sc dec dec' -> do
                                                  --traceM ("\n## infEnv (sig) def " ++ prstr (n, NDef sc dec Nothing))
                                                  when (inClass env) $ lockSelf env l p k dec
-                                                 return ([], [(n, NDef (fxUnwrapSc env sc) dec ddoc)], d{deco = dec})
+                                                 -- A function-type signature has no default expressions.
+                                                 -- Publish the declaration's defaults as we do for an
+                                                 -- unsigned definition, before checking later callers.
+                                                 let [(_, NDef sc0 _ _)] = refreshDefaults [(n, NDef sc dec ddoc)] (sDecl [d])
+                                                 t0 <- deferDefaultExpansions (sctype sc0)
+                                                 return ([], [(n, NDef (fxUnwrapSc env sc0{ sctype = t0 }) dec ddoc)], d{deco = dec})
                                              NReserved -> do
                                                  when (inClass env) $ lockSelf env l p k dec'
                                                  t0 <- tFun (fxUnwrap env fx) (prowOf p) (krowOf k) <$> maybe (newUnivar env) return a

@@ -6199,6 +6199,70 @@ testShowBoolInheritance env0 = describe "Inherited Show and Bool witnesses" $ do
     listing `shouldSatisfy` isInfixOf "W_ShowD_A"
     listing `shouldSatisfy` isInfixOf "ShowD_str()"
 
+  it "typechecks the native variadic evidence regression" $ do
+    src <- liftIO $ readFile "../../test/regression_auto/show_variadic_evidence.act"
+    typed <- typecheckSource env0 "show_variadic_evidence" src
+    Pretty.print typed `shouldSatisfy` isInfixOf "W_ShowD_"
+
+  it "carries Show evidence through inferred variadic wrappers" $ do
+    typed <- typecheckSource env0 "show_variadic_forward" $ unlines
+      [ "def render(*args) -> str:", "    return str(args)"
+      , "def forward(*args) -> str:", "    return render(*args)"
+      , "def supplied[A(Show)](x: A) -> str:", "    return forward(x, [x])" ]
+    let listing = Pretty.print typed
+    listing `shouldSatisfy` isInfixOf "W_ShowD_A"
+    listing `shouldSatisfy` (not . isInfixOf "ShowD_value()")
+    case findTypedDef "render" typed of
+      Just d -> S.qbinds d `shouldSatisfy` any (\(S.QBind v _) -> S.tvkind v == S.PRow)
+      Nothing -> expectationFailure "missing inferred variadic function"
+
+  it "preserves inferred row evidence in an imported interface" $ do
+    (iface, _, _, _) <- check "show_row_provider"
+      [ "def render(*args) -> str:", "    return str(args)" ]
+    let I.NModule imports stored doc = iface
+        entries = Data.Binary.decode (Data.Binary.encode stored)
+        env1 = Acton.Env.addMod (S.modName ["show_row_provider"]) imports entries doc env0
+    typed <- typecheckSource env1 "show_row_consumer" $ unlines
+      [ "import show_row_provider"
+      , "def forward(*args) -> str:", "    return show_row_provider.render(*args)"
+      , "def supplied[A(Show)](x: A) -> str:", "    return forward(x, [x])" ]
+    let listing = Pretty.print typed
+    listing `shouldSatisfy` isInfixOf "W_ShowD_A"
+    listing `shouldSatisfy` (not . isInfixOf "ShowD_value()")
+
+  it "matches a variadic Show signature and preserves keyword defaults" $ do
+    typed <- typecheckSource env0 "show_variadic_signature" $ unlines
+      [ "render: [P(Show)] => (*P, end: str) -> str"
+      , "def render(*args, end: str=\"done\") -> str:", "    return str(args) + end"
+      , "def forward(*args) -> str:", "    return render(*args)" ]
+    let listing = Pretty.print typed
+    listing `shouldSatisfy` isInfixOf "W_ShowD_P"
+    listing `shouldSatisfy` isInfixOf "end = \"done\""
+    listing `shouldSatisfy` (not . isInfixOf "ShowD_value()")
+
+  it "accepts supplied Show bounds on positional and keyword rows" $ do
+    typed <- typecheckSource env0 "show_open_rows" $ unlines
+      [ "def positional[P(Show)](xs: (*P)) -> str:", "    return str(xs)"
+      , "def keyword[K(Show)](xs: (**K)) -> str:", "    return repr(xs)"
+      , "def extend[P(Show)](xs: (int, *P)) -> str:", "    return str(xs)" ]
+    let listing = Pretty.print typed
+    listing `shouldSatisfy` isInfixOf "W_ShowD_P"
+    listing `shouldSatisfy` isInfixOf "W_ShowD_K"
+    listing `shouldSatisfy` (not . isInfixOf "ShowD_value()")
+
+  it "rejects a rigid row without its required Show evidence" $ do
+    result <- liftIO $ E.try $ do
+      let mn = S.modName ["show_missing_row_bound"]
+          src = "def render[P](xs: (*P)) -> str:\n    return str(xs)\n"
+      parsed <- P.parseModule mn "<show_missing_row_bound>" src Nothing
+      env <- Acton.Env.mkEnv systemTypes env0 parsed
+      kinded <- Acton.Kinds.check env parsed
+      (_, typed, _, _) <- Acton.Types.reconstruct Nothing Nothing env kinded Nothing
+      E.evaluate (rnf typed)
+    case result of
+      Left (_ :: TypeError) -> pure ()
+      Right _ -> expectationFailure "An unconstrained row must not use value's default Show witness"
+
   it "does not require element evidence for tuple truth" $ do
     typed <- typecheckSource env0 "bool_tuple" $ unlines
       [ "def truth(x: ((int)->str,)) -> bool:"

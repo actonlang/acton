@@ -1166,7 +1166,27 @@ spliteqns eqns                          = partition isTop eqns
 
 -- Misc. ---------------------------------------------------------------------------------------------------------------------------
 
-proto2type t (TC n ts)                   = tCon $ TC n (t:ts)
+-- A Show bound on a row means Show evidence for its tuple representation.
+-- This lets the ordinary quantified-witness machinery carry evidence through
+-- variadic functions. It is not a Show implementation for a new runtime type:
+-- the evidence is the existing structural $ShowTuple witness.
+showRowTuple :: Type -> Maybe Type
+showRowTuple t                          = case rowKind t of
+                                            PRow -> Just $ tTupleP t
+                                            KRow -> Just $ tTupleK t
+                                            _ -> Nothing
+  where rowKind (TVar _ v)             = tvkind v
+        rowKind (TUni _ v)             = uvkind v
+        rowKind r@TRow{}              = rkind r
+        rowKind r@TStar{}             = rkind r
+        rowKind r@TNil{}              = rkind r
+        rowKind _                     = KType
+
+isShowRow :: Type -> PCon -> Bool
+isShowRow t p                          = tcname p == qnShow && isJust (showRowTuple t)
+
+proto2type t (TC n ts)                   = tCon $ TC n (receiver:ts)
+  where receiver                        = if n == qnShow then fromMaybe t (showRowTuple t) else t
 
 wit2row ws                              = \p -> foldr f p ws
   where f (w,t)                         = TRow NoLoc PRow nWild t Nothing

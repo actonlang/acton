@@ -193,6 +193,7 @@ struct $ShowTuple {
 
 extern struct $ShowTupleG_class $ShowTupleG_methods;
 $ShowTuple $ShowTupleG_new(B_tuple);
+B_Show $ShowTupleJoin(B_Show, B_Show);
 
 struct $BoolTuple;
 typedef struct $BoolTuple *$BoolTuple;
