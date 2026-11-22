@@ -52,6 +52,7 @@ import  Pretty
 import qualified InterfaceFiles
 import qualified PkgCommands
 import qualified Repl
+import Watch
 import FileUtil (readFile, writeFile, writeFileIfChanged)
 
 import Control.Concurrent.MVar
@@ -809,7 +810,7 @@ runTestsWatch gopts opts topts mode paths = do
                       void $ runProjectTests useColorOut gopts opts paths topts mode modulesToTest testParallel
                       logTiming gopts opts (progressLogLine progressUI) "test execution and cache" testStart
                 return (not hadErrors)
-        runWatchProject gopts projDir srcRoot sched runOnce
+        runWatchProject gopts projDir srcRoot (localDependencyDirs gopts opts paths) sched runOnce
 
 selectTestModules :: Paths -> [FilePath] -> Maybe [FilePath] -> [String] -> IO [String]
 selectTestModules paths srcFiles mChanged testModules =
@@ -875,7 +876,7 @@ watchProjectAt gopts opts projDir = do
                             when (not hadErrors && isNothing mChanged) $
                               generateProjectDocIndex sp gopts opts paths srcFiles
                             return (not hadErrors)
-                    runWatchProject gopts (projPath paths) (srcDir paths) sched runOnce
+                    runWatchProject gopts (projPath paths) (srcDir paths) (localDependencyDirs gopts opts paths) sched runOnce
 
 -- | Exit with an error unless a source file named on the command line exists.
 requireSourceFile :: FilePath -> IO ()
@@ -939,85 +940,46 @@ watchFile gopts opts file = do
                   void $ compileFilesChanged sp gopts opts' [absFile] SelectedFiles mChanged (Just (watchCtx, gen))
             runWatchFile gopts absFile sched runOnce
 
-data WatchTrigger = WatchFull | WatchIncremental FilePath deriving (Eq, Show)
+-- | The local projects that a project depends on, as their roots and src
+-- directories: those a path dependency or a --dep override names, which a
+-- watch must look at too.  A dependency fetched by hash lives in the
+-- dependency cache, whose entries never change, and std and base belong to
+-- the compiler.  While its dependencies cannot be discovered, for example
+-- before the first build fetches one, a project has none: the watch asks
+-- again after every build.
+localDependencyDirs :: C.GlobalOptions -> C.CompileOptions -> Paths -> IO [(FilePath, FilePath)]
+localDependencyDirs gopts opts paths = do
+    root     <- normalizePathSafe (projPath paths)
+    cache    <- normalizePathSafe . depCacheDir =<< getHomeDirectory
+    -- The system directory and std and base inside it, each with its links
+    -- resolved, as the discovered roots are.
+    system   <- mapM normalizePathSafe [sysPath paths, sysPath paths </> "std", sysPath paths </> "base"]
+    projects <- discoverBuildProjects gopts opts paths
+    let compilers dir = any (\sys -> dir == sys || dir `isUnder` sys) system
+    return [ (dir, projSrcDir ctx)
+           | Just found <- [projects]
+           , (dir, ctx) <- M.toList found
+           , dir /= root, not (dir `isUnder` cache), not (compilers dir) ]
 
-data FileStamp = FileStamp UTCTime Integer deriving (Eq, Show)
-
-readFileStamp :: FilePath -> IO (Maybe FileStamp)
-readFileStamp path = do
-    res <- try (do
-      exists <- doesFileExist path
-      if not exists
-        then return Nothing
-        else do
-          stampTime <- getModificationTime path
-          stampSize <- getFileSize path
-          return (Just (FileStamp stampTime stampSize))
-      ) :: IO (Either IOException (Maybe FileStamp))
-    case res of
-      Left _ -> return Nothing
-      Right stamp -> return stamp
-
-shouldTriggerFile :: IORef (M.Map FilePath FileStamp) -> FilePath -> IO Bool
-shouldTriggerFile stampsRef path = do
-    mstamp <- readFileStamp path
-    atomicModifyIORef' stampsRef $ \stamps ->
-      case mstamp of
-        Nothing -> (M.delete path stamps, True)
-        Just stamp ->
-          case M.lookup path stamps of
-            Just old | old == stamp -> (stamps, False)
-            _ -> (M.insert path stamp stamps, True)
-
--- | Translate watch triggers into optional path notifications.
-dispatchWatchTrigger :: (Maybe FilePath -> IO ()) -> WatchTrigger -> IO ()
-dispatchWatchTrigger notify trigger =
-    case trigger of
-      WatchFull -> notify Nothing
-      WatchIncremental path -> notify (Just path)
-
--- | Classify project FS events into full or incremental rebuild triggers.
-actWatchTrigger :: FS.Event -> Maybe WatchTrigger
-actWatchTrigger ev =
-    case FS.eventIsDirectory ev of
-      FS.IsDirectory ->
-        case ev of
-          FS.Added{} -> Just WatchFull
-          FS.Removed{} -> Just WatchFull
-          FS.WatchedDirectoryRemoved{} -> Just WatchFull
-          FS.Unknown{} -> Just WatchFull
-          _ -> Nothing
-      FS.IsFile ->
-        if not (isActFile (FS.eventPath ev))
-          then Nothing
-          else case ev of
-                 FS.ModifiedAttributes{} -> Nothing
-                 FS.Added{} -> Just WatchFull
-                 FS.Removed{} -> Just WatchFull
-                 FS.WatchedDirectoryRemoved{} -> Just WatchFull
-                 FS.Unknown{} -> Just WatchFull
-                 _ -> Just (WatchIncremental (FS.eventPath ev))
-
--- | Classify FS events for a specific file path.
-fileWatchTrigger :: FilePath -> FS.Event -> Maybe WatchTrigger
-fileWatchTrigger target ev =
-    let evPath = normalise (FS.eventPath ev)
-    in if evPath /= target
-         then Nothing
-         else case ev of
-                FS.ModifiedAttributes{} -> Nothing
-                _ -> Just (WatchIncremental (FS.eventPath ev))
-
--- | Run the project watch loop and schedule compiles on events.
+-- | Run the project watch loop and schedule compiles on events: in the
+-- project's src directory and Build.act, and in the src directories and
+-- Build.act files of its local dependencies ('dependencyDirs', asked again
+-- after every build that completes, since a build may have fetched the
+-- dependencies that the question needs, and whenever a Build.act changes).
+-- An event in a dependency asks for a full build, since the changed paths
+-- that an incremental build takes name the project's own modules.
 runWatchProject :: C.GlobalOptions
                 -> FilePath
                 -> FilePath
+                -> IO [(FilePath, FilePath)]
                 -> CompileScheduler
                 -> (Generation -> Maybe [FilePath] -> IO Bool)
                 -> IO ()
-runWatchProject gopts projDir srcRoot sched runOnce = do
+runWatchProject gopts projDir srcRoot dependencyDirs sched runOnce = do
     stampsRef <- newIORef M.empty
     pendingRef <- newIORef (0 :: Int, Just [])
+    dependencyWatches <- newMVar M.empty
+    afterBuild <- newIORef (return ())
     let schedule mpath = do
           atomicModifyIORef' pendingRef $ \(version, pending) ->
             let changed = nub <$> ((++) <$> pending <*> fmap (:[]) mpath)
@@ -1029,24 +991,37 @@ runWatchProject gopts projDir srcRoot sched runOnce = do
             -- later save must still run tests affected by those earlier edits.
             when completed $ atomicModifyIORef' pendingRef $ \current@(latest, _) ->
               (if latest == version then (latest, Just []) else current, ())
-        scheduleMaybe mpath =
-          case mpath of
-            Nothing -> schedule Nothing
-            Just path -> do
-              should <- shouldTriggerFile stampsRef path
-              when should (schedule (Just path))
-        onAct ev = forM_ (actWatchTrigger ev) $ \trigger -> do
+            when completed (join (readIORef afterBuild))
+        onSource toTrigger ev = forM_ (toTrigger ev) $ \trigger -> do
           when (C.verbose gopts) $
             putStrLn ("[debug] watch event: " ++ show ev ++ " -> " ++ show trigger)
-          dispatchWatchTrigger scheduleMaybe trigger
-        onRoot _ = schedule Nothing
-        isActEvent ev = isJust (actWatchTrigger ev)
-        isRootEvent ev =
-          let name = takeFileName (FS.eventPath ev)
-          in name == "Build.act"
+          dispatchWatchTrigger (shouldTriggerFile stampsRef) schedule trigger
+        dependencyTrigger ev = case srcWatchTrigger ev of
+          Just (WatchSave saved _) -> Just (WatchSave saved Nothing)
+          other                    -> other
+        isBuildSpec ev = takeFileName (FS.eventPath ev) == "Build.act"
+        onBuildSpec mgr _ = do
+          watchDependencies mgr
+          schedule Nothing
+        -- Each local dependency is watched once, and no longer once no
+        -- Build.act names it.
+        watchDependencies mgr = modifyMVar_ dependencyWatches $ \watches -> do
+          dirs <- M.fromList <$> dependencyDirs
+          sequence_ (M.elems (M.difference watches dirs))
+          added <- forM (M.toList (M.difference dirs watches)) $ \(root, src) -> do
+            hasSrc   <- doesDirectoryExist src
+            when hasSrc (recordStamps stampsRef src)
+            stopSrc  <- if hasSrc then FS.watchTree mgr src (isJust . dependencyTrigger) (onSource dependencyTrigger)
+                                  else return (return ())
+            stopSpec <- FS.watchDir mgr root isBuildSpec (onBuildSpec mgr)
+            return (root, stopSrc >> stopSpec)
+          return (M.union (M.intersection watches dirs) (M.fromList added))
     FS.withManager $ \mgr -> do
-      _ <- FS.watchTree mgr srcRoot isActEvent onAct
-      _ <- FS.watchDir mgr projDir isRootEvent onRoot
+      recordStamps stampsRef srcRoot
+      _ <- FS.watchTree mgr srcRoot (isJust . srcWatchTrigger) (onSource srcWatchTrigger)
+      _ <- FS.watchDir mgr projDir isBuildSpec (onBuildSpec mgr)
+      watchDependencies mgr
+      writeIORef afterBuild (watchDependencies mgr)
       schedule Nothing
       unless (C.quiet gopts) $
         putStrLn ("Watching for changes in " ++ projDir)
@@ -1062,14 +1037,9 @@ runWatchFile gopts absFile sched runOnce = do
     stampsRef <- newIORef M.empty
     let watchDir = takeDirectory absFile
         watchPath = normalise absFile
-        isTarget ev = normalise (FS.eventPath ev) == watchPath
-        onEvent ev = do
-          forM_ (fileWatchTrigger watchPath ev) $ \trigger ->
-            case trigger of
-              WatchFull -> dispatchWatchTrigger schedule trigger
-              WatchIncremental path -> do
-                should <- shouldTriggerFile stampsRef path
-                when should (dispatchWatchTrigger schedule trigger)
+        isTarget ev = isJust (fileWatchTrigger watchPath ev)
+        onEvent ev =
+          forM_ (fileWatchTrigger watchPath ev) (dispatchWatchTrigger (shouldTriggerFile stampsRef) schedule)
         schedule mpath = void $ startCompile sched 0 $ \gen ->
           runOnce gen (fmap (:[]) mpath)
     FS.withManager $ \mgr -> do

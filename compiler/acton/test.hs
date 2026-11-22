@@ -97,6 +97,7 @@ main = do
       , typeErrorAutoTests
       , rootErrorAutoTests
       , parseFlagTests
+      , WatchTests.watchTriggerTests
       , WatchTests.watchProcessTests
       , PerfTests.perfTests
       , TestOutputTests.testOutputTests

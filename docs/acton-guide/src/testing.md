@@ -93,6 +93,8 @@ Test builds follow the selected source files and their imports, and ignore the p
 
 `acton test --watch` waits for successful compilation and linking before running tests. If another edit interrupts a build or test run, the next run includes tests affected by both edits. Stopping watch mode also stops its compiler and test subprocesses.
 
+Watch mode, in `acton test --watch` as in `acton build --watch`, reacts to more than `.act` files. Saving an `.ext.c` file rebuilds its module, and runs the tests of that module and of the modules that import it. Saving any other file under `src/`, such as a header that an `.ext.c` includes, rebuilds the project and runs every selected test whose cached result no longer applies. The files that editors leave next to the files they save, such as swap and backup files, are ignored, and so are files outside `src/`, even one that an `.ext.c` includes: save the `.ext.c` or build to pick up a change there. The `src/` directories and `Build.act` files of the project's local dependencies, which a path dependency or `--dep` names, are watched as well.
+
 ## Runtime worker threads
 
 Test processes use the runtime's default number of worker threads: one per CPU

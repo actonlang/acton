@@ -65,6 +65,7 @@ module Acton.Project
   , zigLocalCacheDir
   , existingDependencyDir
   , discoverProjects
+  , discoverBuildProjects
   , BackgroundCompilerLock
   , tryBackgroundCompilerLock
   , releaseBackgroundCompilerLock
@@ -85,7 +86,7 @@ import Acton.Graph (preorder)
 import qualified Acton.Syntax as A
 import Acton.Syntax (modNameToString)
 import qualified InterfaceFiles
-import Utils (readFileUtf8)
+import Utils (readFileUtf8, trySync)
 
 import Control.Exception (Exception, IOException, catch, finally, throwIO, try)
 import Control.Monad
@@ -824,6 +825,17 @@ existingDependencyDir base name dep = do
 -- returns a map from project root to ProjCtx while skipping duplicates.
 -- The --dep overrides are absolute and normalised as
 -- normalizeDepOverrides gives them.
+-- | The projects that a build of the project at 'paths' discovers, keyed by
+-- their roots: the project and its dependencies, with the --dep overrides
+-- of 'opts' made absolute as a build makes them.  Nothing when they cannot
+-- be discovered, for example while a dependency is not fetched yet.
+discoverBuildProjects :: C.GlobalOptions -> C.CompileOptions -> Paths -> IO (Maybe (M.Map FilePath ProjCtx))
+discoverBuildProjects gopts opts paths = do
+    root      <- normalizePathSafe (projPath paths)
+    sys       <- normalizePathSafe (sysPath paths)
+    overrides <- normalizeDepOverrides root (C.dep_overrides opts)
+    either (const Nothing) Just <$> trySync (discoverProjects gopts sys root overrides)
+
 discoverProjects :: C.GlobalOptions -> FilePath -> FilePath -> [(String, FilePath)] -> IO (M.Map FilePath ProjCtx)
 discoverProjects gopts sysAbs rootProj depOverrides = do
     rootAbs <- normalizePathSafe rootProj
