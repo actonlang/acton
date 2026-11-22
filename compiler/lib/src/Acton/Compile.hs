@@ -253,7 +253,8 @@ a time each.  waitBackJobs waits for a generation's jobs, or returns its
 first failure.  The CLI waits before its Zig build.  The LSP server
 reports completion first and waits after.  A run outside any scheduler
 (runStandalonePlan for acton sig, standaloneBuild for the benchmarks) has
-no back queue: its BackReady events reach only its handler.
+no back queue: its BackReady events reach only its handler, and it
+prepares no deferred back job.
 
 Module cache
 ------------
@@ -749,6 +750,7 @@ data BuildEnv = BuildEnv
   , buildOptions    :: C.GlobalOptions
   , buildGeneration :: Generation                       -- front outputs are written only while it is current
   , emit            :: BuildEvent -> IO ()
+  , buildBackQueue  :: Bool                             -- whether the job of a BackReady event is queued
   , buildCache      :: ModuleCache
   , buildOutputs    :: OutputJobs                       -- the background outputs started so far
   }
@@ -942,18 +944,18 @@ runCompilePlan sp gopts sched gen plan onEvent = withAnalytics $ \analytics -> d
           _             -> return ()
         whenCurrent gen (onEvent event)
   outputs <- OutputJobs <$> newIORef []
-  compileModules (BuildEnv sp gopts gen events (schedulerCache sched) outputs) plan
+  compileModules (BuildEnv sp gopts gen events True (schedulerCache sched) outputs) plan
 
 -- | The services of a run outside any scheduler: a generation that stays
 -- current, a module cache of its own, no back queue, so BackReady reaches
--- only the handler, and a record of its own background outputs, which
--- awaitOutputs waits for.
+-- only the handler and no deferred back job is prepared, and a record of
+-- its own background outputs, which awaitOutputs waits for.
 standaloneBuild :: Source.SourceProvider -> C.GlobalOptions -> (BuildEvent -> IO ()) -> IO BuildEnv
 standaloneBuild sp gopts onEvent = do
   counter <- newIORef 0
   cache <- newModuleCache
   outputs <- OutputJobs <$> newIORef []
-  return (BuildEnv sp gopts (Generation 0 counter) onEvent cache outputs)
+  return (BuildEnv sp gopts (Generation 0 counter) onEvent False cache outputs)
 
 -- | Compile a plan outside any scheduler, as acton sig does. Analytics do
 -- not sample it.
@@ -3884,7 +3886,9 @@ parseDone run k task state              = (stageCompleted run (ParseStage k) sta
 
 -- | A module's front stage succeeded: later stages see its hashes, its
 -- interface and the names it uses, and its deferred back job waits for
--- every module depending on it.
+-- every module depending on it.  A run without a back queue drops the job:
+-- preparing it selects names and reads statements for a job that nothing
+-- runs.
 frontSucceeded :: Run -> TaskKey -> FrontResult -> BuildState -> BuildState
 frontSucceeded run k fr state = (stageCompleted run (FrontStage k) state)
     { finishedModules = M.insert k (frHashes fr) (finishedModules state)
@@ -3892,7 +3896,8 @@ frontSucceeded run k fr state = (stageCompleted run (FrontStage k) state)
     , accumulatedEnv  = Acton.Env.addModuleInfo (tkMod k) (frModuleInfo fr) (accumulatedEnv state)
     , interest        = addInterestDeps (frInterest fr) (interest state)
     , deferredBacks   = case frBack fr of
-                          DeferredBack job -> M.insert k (job, strictDependents (runModuleGraph run) k) (deferredBacks state)
+                          DeferredBack job | buildBackQueue (runBuild run)
+                                           -> M.insert k (job, strictDependents (runModuleGraph run) k) (deferredBacks state)
                           _                -> deferredBacks state
     }
 

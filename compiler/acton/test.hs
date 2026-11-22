@@ -2007,6 +2007,36 @@ parseFlagTests =
             { cwd = Just rootProj, env = Just envWithHome } ""
         assertBool ("cached private import should fail, stderr:\n" ++ cachedImportErr)
           (cachedImportCode /= ExitSuccess)
+  , testCase "sig prepares no back job" $ do
+      withSystemTempDirectory "acton-sig-no-back-job" $ \tmp -> do
+        actonExe <- canonicalizePath "../../dist/bin/acton"
+        sysPath <- canonicalizePath "../../dist"
+        env0 <- getEnvironment
+        let proj = tmp </> "proj"
+            envWithHome = ("HOME", tmp </> "home") : filter ((/= "HOME") . fst) env0
+            fp = Fingerprint.formatFingerprint
+              (Fingerprint.updateFingerprintPrefix
+                (Fingerprint.fingerprintPrefixForName "sig_back") 1)
+        createDirectoryIfMissing True (tmp </> "home")
+        createDirectoryIfMissing True (proj </> "src")
+        writeFile (proj </> "Build.act") $ unlines
+          [ "name = \"sig_back\""
+          , "fingerprint = " ++ fp
+          ]
+        writeFile (proj </> "src" </> "provider.act") "def one() -> int:\n    return 1\n"
+        writeFile (proj </> "src" </> "user.act") "import provider\n\ndef two() -> int:\n    return provider.one() + 1\n"
+        -- The first run checks both modules and the second finds them
+        -- cached.  Under --verbose a module that is checked prints a Stale
+        -- line and a cached module a Fresh line.  A DBP line reports a back
+        -- job that was prepared.
+        forM_ [("first", "  Stale user: "), ("second", "  Fresh user: ")] $ \(run, line) -> do
+          (code, out, err) <- readCreateProcessWithExitCode
+            (proc actonExe ["sig", "--syspath", sysPath, "--verbose", "user"])
+              { cwd = Just proj, env = Just envWithHome } ""
+          assertEqual (run ++ " acton sig failed:\n" ++ out ++ err) ExitSuccess code
+          assertBool (run ++ " acton sig prints the signature:\n" ++ out) ("two : () -> int" `isInfixOf` out)
+          assertBool (run ++ " acton sig prints the --verbose line of the module:\n" ++ out) (line `isInfixOf` out)
+          assertBool (run ++ " acton sig prepares no back job:\n" ++ out) (not ("  DBP " `isInfixOf` out))
   , testCase "acton test --help includes --no-cache and --tag" $ do
       acton <- canonicalizePath "../../dist/bin/acton"
       (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc acton ["test", "--help"]) ""
