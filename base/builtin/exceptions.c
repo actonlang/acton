@@ -18,7 +18,8 @@ B_str B_valueD___str__ (B_value);
 B_str B_valueD___repr__ (B_value);
 
 
-// Native exception formatting needs no per-witness or per-exception evidence.
+// Native exception Show witnesses are stateless. KeyError retains its key's
+// rendering policy in the exception, rather than in the Show witness.
 // STATIC_EXCEPTION values and the Show witnesses both bypass constructors.
 B_str B_BaseException_str(B_BaseException self) {
     return $FORMAT_len("%s: %s", 6, self->$class->_name(self), self->error_message);
@@ -36,17 +37,17 @@ B_str B_IndexError_repr(B_IndexError self) {
     return $FORMAT_len("%s(%lld, %s)", 12, self->$class->_name(self), self->index, B_str_repr(self->error_message));
 }
 
-// KeyError's key is type-erased. Retain its legacy dynamic formatting in
-// this checkpoint, along with variadic printing and the legacy class slots.
+// The captured renderer owns the original typed key and its Show evidence.
+// These calls remain lazy and never consult the key's legacy class slots.
 B_str B_KeyError_str(B_KeyError self) {
-    B_value key = self->key;
-    B_str text = key ? key->$class->__str__(key) : B_None_str;
+    B_str text = self->key == B_None ? B_None_str :
+        (B_str)self->_key_render->$class->__eval__(self->_key_render, toB_bool(false));
     return $FORMAT_len("%s: %s, key: %s", 15, self->$class->_name(self), self->error_message, text);
 }
 
 B_str B_KeyError_repr(B_KeyError self) {
-    B_value key = self->key;
-    B_str text = key ? key->$class->__repr__(key) : B_None_str;
+    B_str text = self->key == B_None ? B_None_str :
+        (B_str)self->_key_render->$class->__eval__(self->_key_render, toB_bool(true));
     return $FORMAT_len("%s(%s, %s)", 10, self->$class->_name(self), text, B_str_repr(self->error_message));
 }
 

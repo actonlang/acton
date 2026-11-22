@@ -137,7 +137,7 @@ B_Iterator $dictD_U_items_init(B_IteratorD_dict_items iter, $WORD src);
 
 // Shared operations used directly by generated code and by protocol wrappers.
 bool B_dict_base_contains(B_dict_base, $WORD);
-$WORD B_dict_base_getitem(B_dict_base, $WORD);
+$WORD B_dict_base_getitem(B_dict_base, $WORD, B_Show);
 $WORD B_dict_base_get(B_dict_base, $WORD, $WORD);
 $WORD B_dict_base_pop(B_dict_base, $WORD, $WORD);
 B_NoneType B_dict_base_setitem(B_dict_base, $WORD, $WORD);

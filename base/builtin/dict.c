@@ -688,16 +688,16 @@ $WORD B_dict_base_get(B_dict_base dict, $WORD key, $WORD deflt) {
     return res;
 }
 
-$WORD B_dict_base_getitem(B_dict_base dict, $WORD key) {
+$WORD B_dict_base_getitem(B_dict_base dict, $WORD key, B_Show show_key) {
     if (dict->numelements == 0)
-        RAISE(B_KeyError, key, actStrFromCString("getitem: empty dictionary"));
+        RAISE(B_KeyError, show_key, key, actStrFromCString("getitem: empty dictionary"));
     uint64_t hash = 0;
     if (dict->table->tb_size > INIT_SIZE)
         hash = B_hash(dict->hashwit, key);
     $WORD res;
     int ix = B_dict_lookup(dict, hash, key, &res);
     if (ix < 0)
-        RAISE(B_KeyError, key, actStrFromCString("getitem: key not in dictionary"));
+        RAISE(B_KeyError, show_key, key, actStrFromCString("getitem: key not in dictionary"));
     return res;
 }
 
@@ -1019,12 +1019,12 @@ $WORD B_MappingD_dictD_setdefault (B_MappingD_dict wit, B_dict dict, $WORD key, 
 // B_IndexedD_MappingD_dict ///////////////////////////////////////////////////////////////////////
 
 $WORD B_IndexedD_MappingD_dictD___getitem__(B_IndexedD_MappingD_dict wit, B_dict dict, $WORD key) {
-    return B_dict_base_getitem((B_dict_base)dict, key);
+    return B_dict_base_getitem((B_dict_base)dict, key, wit->W_ShowD_AD_IIndexed);
 }
 
 $WORD B_IIndexedD_MappingD_dictD___getitem__(B_IIndexedD_MappingD_dict wit,
                                              B_dict dict, $WORD key) {
-    return B_dict_base_getitem((B_dict_base)dict, key);
+    return B_dict_base_getitem((B_dict_base)dict, key, wit->W_ShowD_AD_IIndexed);
 }
 
 B_NoneType B_IndexedD_MappingD_dictD___setitem__ (B_IndexedD_MappingD_dict wit, B_dict dict, $WORD key, $WORD value) {
@@ -1045,7 +1045,7 @@ B_NoneType B_IndexedD_MappingD_dictD___delitem__(B_IndexedD_MappingD_dict wit,
 
 $WORD B_IIndexedD_IMappingD_idictD___getitem__(B_IIndexedD_IMappingD_idict wit,
                                                B_idict dict, $WORD key) {
-    return B_dict_base_getitem((B_dict_base)dict, key);
+    return B_dict_base_getitem((B_dict_base)dict, key, wit->W_ShowD_AD_IIndexed);
 }
 
 B_NoneType B_dict_base_setitem(B_dict_base dict, $WORD key, $WORD value) {

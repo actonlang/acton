@@ -439,7 +439,7 @@ hashContainerWorkers = dictWorkers qnDict tDict True ++ dictWorkers qnIDict tIDi
           let self = cons at bt
               make attr fx args result native def = worker q self [qbind a,qbind b]
                   attr fx args result native DictBase False False def
-          in [ make "__getitem__" fxPure [self,at] bt "B_dict_base_getitem" False
+          in [ (make "__getitem__" fxPure [self,at,tCon (TC qnShow [at])] bt "B_dict_base_getitem" False){bwArity=2}
              , make "__contains__" fxPure [self,at] tBool "B_dict_base_contains" False
              , (make "__containsnot__" fxPure [self,at] tBool "B_dict_base_contains" False){bwNegate=True}
              , make "get" fxPure [self,at] (tOpt bt) "B_dict_base_get" True

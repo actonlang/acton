@@ -209,7 +209,7 @@ static $WORD B_list_base_pop(B_list_base lst, B_int i) {
     return res;
 }
 
-static int64_t B_list_base_index(B_list_base self, B_Eq eqwit, $WORD val, int64_t start, B_int stop) {
+static int64_t B_list_base_index(B_list_base self, B_Eq eqwit, B_Show showwit, $WORD val, int64_t start, B_int stop) {
     int64_t strt = start;
     if (strt < 0)
         RAISE_EXC(&B_list_negative_start_error);
@@ -227,7 +227,7 @@ static int64_t B_list_base_index(B_list_base self, B_Eq eqwit, $WORD val, int64_
         if (eqwit->$class->__eq__(eqwit, val, self->data[i]))
             return i;
     }
-    RAISE(B_KeyError, val, actStrFromCString("element is not in list"));
+    RAISE(B_KeyError, showwit, val, actStrFromCString("element is not in list"));
     return 0;
 }
 
@@ -502,8 +502,8 @@ $WORD B_listD_pop(B_list self, B_int i) {
     return B_list_base_pop((B_list_base)self, i);
 }
 
-int64_t B_listD_index(B_list self, B_Eq eqwit, $WORD val, int64_t start, B_int stop) {
-    return B_list_base_index((B_list_base)self, eqwit, val, start, stop);
+int64_t B_listD_index(B_list self, B_Eq eqwit, B_Show showwit, $WORD val, int64_t start, B_int stop) {
+    return B_list_base_index((B_list_base)self, eqwit, showwit, val, start, stop);
 }
 
 int64_t B_listD_count(B_list self, B_Eq eqwit, $WORD val) {

@@ -55,6 +55,7 @@ data BoxX                          = BoxX { inClassX :: Maybe (TCon, TEnv)
                                           , returnTypeX :: Maybe Type
                                           , staticWitnessesX :: M.HashMap Name StaticWitness
                                           , hashWitnessesX :: M.HashMap Name QName
+                                          , keyShowWitnessesX :: M.HashMap Name Expr
                                           , showBoolWitnessesX :: M.HashMap Name QName
                                           , boxedParamsX :: HashSet.HashSet Name
                                           }
@@ -66,6 +67,7 @@ boxEnv env0                        = setX env0 BoxX{ inClassX = Nothing
                                                    , returnTypeX = Nothing
                                                    , staticWitnessesX = M.empty
                                                    , hashWitnessesX = M.empty
+                                                   , keyShowWitnessesX = M.empty
                                                    , showBoolWitnessesX = M.empty
                                                    , boxedParamsX = HashSet.empty
                                                    }
@@ -115,6 +117,32 @@ setHashWitness n q env              = modX env $ \x -> x{ hashWitnessesX =
 
 setShowBoolWitness n q env          = modX env $ \x -> x{ showBoolWitnessesX =
                                         maybe (M.delete n) (M.insert n) q (showBoolWitnessesX x) }
+
+setKeyShowWitness n e env           = modX env $ \x -> x{ keyShowWitnessesX =
+                                        maybe (M.delete n) (M.insert n) e (keyShowWitnessesX x) }
+
+-- Recover the key policy from the selected builtin witness, before discarding
+-- its receiver. Follow constructors and aliases so a concrete lookup does not
+-- allocate a Mapping merely to read its Show field. A retained witness can
+-- supply the field directly; a genuinely generic implementation still dispatches.
+keyShowOf env (Var _ (NoQ n))
+  | Just e <- M.lookup n (keyShowWitnessesX $ envX env) = Just e
+keyShowOf env (Paren _ e)           = keyShowOf env e
+keyShowOf env (Dot _ e (Internal Witness _ _)) = keyShowOf env e
+keyShowOf env (Call _ f p KwdNil)
+  | Var _ q <- stripHashTApp f, q == primCAST,
+    [e] <- posargs p               = keyShowOf env e
+  | Var _ q <- stripHashTApp f,
+    q `elem` [gBuiltin (Derived nMapping nDict),gBuiltin (Derived (name "IMapping") nIDict)],
+    TFun _ _ row _ _ <- typeOf env f = listToMaybe [ e | (e,t) <- zip (posargs p) (fields row), isShow t ]
+  where fields (TRow _ _ _ t _ r)  = t : fields r
+        fields _                  = []
+        isShow (TCon _ (TC q _))   = q == qnShow
+        isShow _                  = False
+keyShowOf env e
+  | TCon _ tc <- typeOf env e      = listToMaybe [ eDot e n | (n,NSig sc Property _) <- snd (findCon env tc),
+                                                           TCon _ (TC q _) <- [sctype sc], q == qnShow ]
+keyShowOf _ _                      = Nothing
 
 -- These constructors fix their implementation even when they take unused
 -- class-constraint witnesses (for example Bool for dict). Never infer this
@@ -330,7 +358,8 @@ rawBuiltinMethod env attr es        = rawHashContainerMethod env attr es <|> raw
 -- even when its key/element witness is a function parameter. Only the Iterable of
 -- update survives; Hashable is already owned by the destination container.
 rawHashContainerMethod env attr (recv:es)
-  | attr `elem` map bwMethod hashContainerWorkers,
+  | attr /= getitemKW,
+    attr `elem` map bwMethod hashContainerWorkers,
     TCon _ (TC q ts) <- unalias env (typeOf env recv),
     Just w <- hashContainerWorker q attr (1 + length es)
                                     = Just $ tApp (eQVar $ bwName w)
@@ -1041,7 +1070,8 @@ instance {-# OVERLAPS #-} Boxing ([Stmt]) where
                                            (ws2,xs') <- boxing env1 xs
                                            return $ if HashSet.member w  ws2 then (HashSet.union ws1 (HashSet.delete w ws2),x':xs') else (ws2,xs')
       where te                        = envOf x
-            env1                      = setShowBoolWitness w (showBoolWitnessOf env rhs) $
+            env1                      = setKeyShowWitness w (keyShowOf env rhs) $
+                                        setShowBoolWitness w (showBoolWitnessOf env rhs) $
                                         setHashWitness w (hashWitnessOf env rhs) $
                                         setStaticWitness w (staticWitnessOf env rhs) (define te env)
 
@@ -1069,6 +1099,20 @@ instance Boxing Expr where
     -- generic keys work too, and ordinary dead-witness cleanup sees the use
     -- disappear. Receiver-less factories and dict value comparisons do not
     -- match: their independent witnesses are still necessary.
+    boxing env (Call _ f p KwdNil)
+      | Just attr <- hashWitnessMethod env f, attr == getitemKW,
+        Just wit <- methodWitness f,
+        Just showKey <- keyShowOf env wit,
+        [recv,key] <- posargs p,
+        TCon _ (TC q ts) <- unalias env (typeOf env recv),
+        Just w <- hashContainerWorker q attr 2
+                                    = do (ws,args) <- boxing env [recv,key,showKey]
+                                         let target = tApp (eQVar $ bwName w) ts
+                                             TFun _ _ row _ result = rtypeOfFun env target
+                                         return (ws, tryBox result $ eCallP target (fixargs env (foldr PosArg PosNil args) row))
+      where methodWitness (TApp _ f _) = methodWitness f
+            methodWitness (Dot _ w _) = Just w
+            methodWitness _           = Nothing
     boxing env (Call _ f p KwdNil)
       | Just attr <- hashWitnessMethod env f,
         Just _ <- rawHashContainerMethod env attr (posargs p)

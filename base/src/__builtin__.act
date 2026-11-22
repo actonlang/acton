@@ -107,7 +107,7 @@ class list[A] (object):
     # generic type B should really just be A(Eq), but I don't think we can say
     # that A is a generic type without constraints in one place and then adds
     # constraints in another, so using B is a bit of a workaround.
-    def index[B(Eq)](self, val: B, start: int=0, stop: ?int=None) -> int:
+    def index[B(Eq,Show)](self, val: B, start: int=0, stop: ?int=None) -> int:
         """Return the index of the first occurrence of val in the list
 
         The optional arguments start and stop are interpreted as in slice
@@ -430,9 +430,16 @@ class IndexError (LookupError):
         NotImplemented
 
 class KeyError(LookupError):
-    def __init__(self, key: value, msg: ?str=None):
+    @property
+    key: value
+    @property
+    _key_render: (bool) -> str
+    def __init__[A(Show)](self, key: A, msg: ?str=None):
         self.key = key
         self.error_message = msg if msg is not None else "Key not found"
+        # Keep the original key and its Show policy together. Rendering stays
+        # lazy, including after serialization, and sees changes to that object.
+        self._key_render = lambda representation: Show.__repr__(key) if representation else Show.__str__(key)
 
     def __str__(self) -> str:
         NotImplemented
@@ -1035,13 +1042,13 @@ extension complex (Hashable):
 
 ## Collection protocols ############################################################################
 
-protocol IIndexed[A (Eq),B]:
+protocol IIndexed[A (Eq,Show),B]:
     __getitem__  : (A) -> B
 
-protocol MutIndexed[A (Eq),B] (IIndexed[A,B]):
+protocol MutIndexed[A (Eq,Show),B] (IIndexed[A,B]):
     __setitem__  : mut(A,B) -> None
 
-protocol Indexed[A (Eq),B] (MutIndexed[A,B]):
+protocol Indexed[A (Eq,Show),B] (MutIndexed[A,B]):
     __delitem__  : mut(A) -> None
 
 protocol ISliceable[A] (IIndexed[int,A]):
@@ -1100,14 +1107,14 @@ protocol Sequence[A] (ISequence[A], Sliceable[A]):
 #    |                         |
 #   Mapping <-------------------
 
-protocol IMapping[A(Eq),B] (Container[A], IIndexed[A,B]):
+protocol IMapping[A(Eq,Show),B] (Container[A], IIndexed[A,B]):
     get         : (A) -> ?B
     get_def     : (A,B) -> B
     keys        : () -> Iterator[A]
     values      : () -> Iterator[B]
     items       : () -> Iterator[(A,B)]
 
-protocol Mapping[A(Eq), B] (IMapping[A,B], Indexed[A,B]):
+protocol Mapping[A(Eq,Show), B] (IMapping[A,B], Indexed[A,B]):
     pop         : mut(A) -> ?B
     pop_def     : mut(A,B) -> B
     update      : mut(Iterable[(A,B)]) -> None
@@ -1258,14 +1265,14 @@ extension ilist[A(Eq)] (Eq):
 extension ilist[A(Ord)] (Ord):
     NotImplemented
 
-extension dict[A(Hashable),B] (Mapping[A,B]):
+extension dict[A(Hashable,Show),B] (Mapping[A,B]):
     NotImplemented
 extension dict[A(Hashable),B(Eq)] (Ord):
     NotImplemented
 extension dict[A(Hashable),B] (Freeze[idict[A,B]]):
     NotImplemented
 
-extension idict[A(Hashable),B] (IMapping[A,B]):
+extension idict[A(Hashable,Show),B] (IMapping[A,B]):
     NotImplemented
 extension idict[A(Hashable),B(Eq)] (Ord):
     NotImplemented

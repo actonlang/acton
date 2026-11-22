@@ -4162,14 +4162,9 @@ main = do
       testNorm env0 ["deact"]
       testNorm env0 ["norm_comprehension_condition"]
       testCodeGenContains env0 "normalizer_static_witnesses"
-        [ "B_SequenceD_listG_witness"
-        , "B_MappingD_dictD_strG_witness"
-        , "B_MappingD_dictD_intG_witness"
-        , "B_MappingD_dictD_u64G_witness"
-        , "B_MappingD_dictD_bytesG_witness"
-        ]
+        [ "B_SequenceD_listG_witness", "B_dict_base_setitem(" ]
       testCodeGenDoesNotContain env0 "normalizer_static_witnesses"
-        [ "B_SequenceD_listG_new(", "B_MappingD_dictG_new(" ]
+        [ "B_SequenceD_listG_new(", "B_MappingD_dict" ]
 
     describe "Pass 5: Deactorizer" $ do
       testDeact env0 ["deact", "deact_from_import"]
@@ -6109,6 +6104,25 @@ testShowBoolInheritance env0 = describe "Inherited Show and Bool witnesses" $ do
     let listing = Pretty.print typed
     listing `shouldSatisfy` isInfixOf "ShowD_value()"
     listing `shouldSatisfy` isInfixOf "BoolD_value()"
+
+  it "keeps existing generic dict signatures valid with default key formatting" $ do
+    (_, typed, _, _) <- check "keyerror_default_key"
+      [ "def lookup[K(Hashable),V](d: dict[K,V], key: K) -> V:"
+      , "    return d[key]" ]
+    let listing = Pretty.print typed
+    listing `shouldSatisfy` isInfixOf "MappingD_dict@[K, V](W_HashableD_K,"
+    listing `shouldSatisfy` isInfixOf "ShowD_value()"
+
+  it "forwards explicit key Show evidence into builtin Mapping witnesses" $ do
+    (_, typed, _, _) <- check "keyerror_supplied_key"
+      [ "def lookup[K(Hashable,Show),V](d: dict[K,V], key: K) -> V:"
+      , "    return d[key]"
+      , "def frozen[K(Hashable,Show),V](d: idict[K,V], key: K) -> V:"
+      , "    return d[key]" ]
+    let listing = Pretty.print typed
+    listing `shouldSatisfy` isInfixOf "MappingD_dict@[K, V](W_HashableD_K, W_ShowD_K)"
+    listing `shouldSatisfy` isInfixOf "IMappingD_idict@[K, V](W_HashableD_K, W_ShowD_K)"
+    listing `shouldSatisfy` (not . isInfixOf "ShowD_value()")
 
   it "instantiates captured witnesses in an inherited generic extension" $ do
     (_, typed, _, _) <- check "show_bool_parent_capture"

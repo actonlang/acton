@@ -175,7 +175,8 @@ struct B_TimesD_bytes B_TimesD_bytesG_instance = {&B_TimesD_bytesG_methods};
 struct B_ContainerD_bytes B_ContainerD_bytesG_instance = {&B_ContainerD_bytesG_methods, (B_Eq)&B_OrdD_intG_instance};
 struct B_ISliceableD_bytes B_ISliceableD_bytesG_instance = {
     &B_ISliceableD_bytesG_methods,
-    (B_Eq)&B_OrdD_intG_instance
+    (B_Eq)&B_OrdD_intG_instance,
+    (B_Show)&B_ShowD_intG_instance
 };
 struct B_OrdD_bytes B_OrdD_bytesG_instance = {&B_OrdD_bytesG_methods};
 // The last two fields both hold the Collection witness of bytearray
@@ -199,20 +200,25 @@ struct B_CollectionD_SequenceD_bytearray B_CollectionD_SequenceD_bytearrayG_inst
 struct B_IndexedD_SliceableD_SequenceD_bytearray B_IndexedD_SliceableD_SequenceD_bytearrayG_instance = {
     &B_IndexedD_SliceableD_SequenceD_bytearrayG_methods,
     (B_Eq)&B_OrdD_intG_instance,
+    (B_Show)&B_ShowD_intG_instance,
     (B_Eq)&B_OrdD_intG_instance,
+    (B_Show)&B_ShowD_intG_instance,
     (B_Eq)&B_OrdD_intG_instance,
+    (B_Show)&B_ShowD_intG_instance,
     (B_Sliceable)&B_SliceableD_SequenceD_bytearrayG_instance,
     (B_Sequence)&B_SequenceD_bytearrayG_instance
 };
 struct B_SliceableD_SequenceD_bytearray B_SliceableD_SequenceD_bytearrayG_instance = {
     &B_SliceableD_SequenceD_bytearrayG_methods,
     (B_Eq)&B_OrdD_intG_instance,
+    (B_Show)&B_ShowD_intG_instance,
     (B_Indexed)&B_IndexedD_SliceableD_SequenceD_bytearrayG_instance,
     (B_Sequence)&B_SequenceD_bytearrayG_instance
 };
 struct B_SequenceD_bytearray B_SequenceD_bytearrayG_instance = {
     &B_SequenceD_bytearrayG_methods,
     (B_Eq)&B_OrdD_intG_instance,
+    (B_Show)&B_ShowD_intG_instance,
     (B_Collection)&B_CollectionD_SequenceD_bytearrayG_instance,
     (B_Times)&B_TimesD_SequenceD_bytearrayG_instance,
     (B_Sliceable)&B_SliceableD_SequenceD_bytearrayG_instance
@@ -222,7 +228,8 @@ struct B_HashableD_str B_HashableD_strG_instance = {&B_HashableD_strG_methods};
 struct B_TimesD_str B_TimesD_strG_instance = {&B_TimesD_strG_methods};
 struct B_ISliceableD_str B_ISliceableD_strG_instance = {
     &B_ISliceableD_strG_methods,
-    (B_Eq)&B_OrdD_intG_instance
+    (B_Eq)&B_OrdD_intG_instance,
+    (B_Show)&B_ShowD_intG_instance
 };
 struct B_ContainerD_str B_ContainerD_strG_instance = {&B_ContainerD_strG_methods, (B_Eq)&B_OrdD_strG_instance};
 struct B_OrdD_str B_OrdD_strG_instance = {&B_OrdD_strG_methods};
@@ -241,20 +248,25 @@ struct B_CollectionD_SequenceD_list B_CollectionD_SequenceD_listG_instance = {
 struct B_IndexedD_SliceableD_SequenceD_list B_IndexedD_SliceableD_SequenceD_listG_instance = {
     &B_IndexedD_SliceableD_SequenceD_listG_methods,
     (B_Eq)&B_OrdD_intG_instance,
+    (B_Show)&B_ShowD_intG_instance,
     (B_Eq)&B_OrdD_intG_instance,
+    (B_Show)&B_ShowD_intG_instance,
     (B_Eq)&B_OrdD_intG_instance,
+    (B_Show)&B_ShowD_intG_instance,
     (B_Sliceable)&B_SliceableD_SequenceD_listG_instance,
     (B_Sequence)&B_SequenceD_listG_instance
 };
 struct B_SliceableD_SequenceD_list B_SliceableD_SequenceD_listG_instance = {
     &B_SliceableD_SequenceD_listG_methods,
     (B_Eq)&B_OrdD_intG_instance,
+    (B_Show)&B_ShowD_intG_instance,
     (B_Indexed)&B_IndexedD_SliceableD_SequenceD_listG_instance,
     (B_Sequence)&B_SequenceD_listG_instance
 };
 struct B_SequenceD_list B_SequenceD_listG_instance = {
     &B_SequenceD_listG_methods,
     (B_Eq)&B_OrdD_intG_instance,
+    (B_Show)&B_ShowD_intG_instance,
     (B_Collection)&B_CollectionD_SequenceD_listG_instance,
     (B_Times)&B_TimesD_SequenceD_listG_instance,
     (B_Sliceable)&B_SliceableD_SequenceD_listG_instance
@@ -271,6 +283,7 @@ struct B_CollectionD_ISequenceD_ilist B_CollectionD_ISequenceD_ilistG_instance =
 struct B_ISequenceD_ilist B_ISequenceD_ilistG_instance = {
     &B_ISequenceD_ilistG_methods,
     (B_Eq)&B_OrdD_intG_instance,
+    (B_Show)&B_ShowD_intG_instance,
     (B_Collection)&B_CollectionD_ISequenceD_ilistG_instance,
     (B_Times)&B_TimesD_ISequenceD_ilistG_instance
 };
@@ -394,13 +407,17 @@ struct B_OrdD_int B_OrdD_intG_instance = {&B_OrdD_intG_methods};
 struct B_MutIndexedD_array B_MutIndexedD_arrayD_intG_instance = {
     &B_MutIndexedD_arrayG_methods,
     (B_Eq)&B_OrdD_intG_instance,
+    (B_Show)&B_ShowD_intG_instance,
     (B_Eq)&B_OrdD_intG_instance,
+    (B_Show)&B_ShowD_intG_instance,
     (B_ArrayElement)&B_ArrayElementD_intG_instance
 };
 struct B_MutIndexedD_array B_MutIndexedD_arrayD_floatG_instance = {
     &B_MutIndexedD_arrayG_methods,
     (B_Eq)&B_OrdD_intG_instance,
+    (B_Show)&B_ShowD_intG_instance,
     (B_Eq)&B_OrdD_intG_instance,
+    (B_Show)&B_ShowD_intG_instance,
     (B_ArrayElement)&B_ArrayElementD_floatG_instance
 };
 struct B_ContainerD_array B_ContainerD_arrayD_intG_instance = {
@@ -418,7 +435,9 @@ struct B_ContainerD_array B_ContainerD_arrayD_floatG_instance = {
 struct B_MutIndexedD_bitarray B_MutIndexedD_bitarrayG_instance = {
     &B_MutIndexedD_bitarrayG_methods,
     (B_Eq)&B_OrdD_intG_instance,
-    (B_Eq)&B_OrdD_intG_instance
+    (B_Show)&B_ShowD_intG_instance,
+    (B_Eq)&B_OrdD_intG_instance,
+    (B_Show)&B_ShowD_intG_instance
 };
 struct B_ContainerD_bitarray B_ContainerD_bitarrayG_instance = {
     &B_ContainerD_bitarrayG_methods,
@@ -653,22 +672,43 @@ extern struct B_IndexedD_MappingD_dict B_IndexedD_MappingD_dictD_strG_instance;
 extern struct B_IIndexedD_MappingD_dict B_IIndexedD_MappingD_dictD_strG_instance;
 struct B_MappingD_dict B_MappingD_dictD_strG_instance = {
     &B_MappingD_dictG_methods,
-    (B_Eq)&B_HashableD_strG_instance, (B_Eq)&B_HashableD_strG_instance,
+    (B_Eq)&B_HashableD_strG_instance,
+    (B_Eq)&B_HashableD_strG_instance,
+    (B_Show)&B_ShowD_strG_instance,
     (B_IIndexed)&B_IIndexedD_MappingD_dictD_strG_instance,
     (B_Eq)&B_HashableD_strG_instance,
+    (B_Show)&B_ShowD_strG_instance,
     (B_Indexed)&B_IndexedD_MappingD_dictD_strG_instance,
-    (B_Hashable)&B_HashableD_strG_instance
+    (B_Hashable)&B_HashableD_strG_instance,
+    (B_Show)&B_ShowD_strG_instance
 };
 
-struct B_IndexedD_MappingD_dict B_IndexedD_MappingD_dictD_strG_instance =  {&B_IndexedD_MappingD_dictG_methods, (B_Eq)&B_HashableD_strG_instance, (B_Eq)&B_HashableD_strG_instance, (B_Eq)&B_HashableD_strG_instance, (B_Eq)&B_HashableD_strG_instance,
-                                                         (B_Mapping)&B_MappingD_dictD_strG_instance, (B_Hashable)&B_HashableD_strG_instance};
+struct B_IndexedD_MappingD_dict B_IndexedD_MappingD_dictD_strG_instance = {
+    &B_IndexedD_MappingD_dictG_methods,
+    (B_Eq)&B_HashableD_strG_instance,
+    (B_Show)&B_ShowD_strG_instance,
+    (B_Eq)&B_HashableD_strG_instance,
+    (B_Show)&B_ShowD_strG_instance,
+    (B_Eq)&B_HashableD_strG_instance,
+    (B_Show)&B_ShowD_strG_instance,
+    (B_Eq)&B_HashableD_strG_instance,
+    (B_Show)&B_ShowD_strG_instance,
+    (B_Mapping)&B_MappingD_dictD_strG_instance,
+    (B_Hashable)&B_HashableD_strG_instance,
+    (B_Show)&B_ShowD_strG_instance
+};
 struct B_IIndexedD_MappingD_dict B_IIndexedD_MappingD_dictD_strG_instance = {
     &B_IIndexedD_MappingD_dictG_methods,
-    (B_Eq)&B_HashableD_strG_instance, (B_Eq)&B_HashableD_strG_instance,
+    (B_Eq)&B_HashableD_strG_instance,
+    (B_Show)&B_ShowD_strG_instance,
+    (B_Eq)&B_HashableD_strG_instance,
+    (B_Show)&B_ShowD_strG_instance,
     (B_IMapping)&B_MappingD_dictD_strG_instance,
     (B_Eq)&B_HashableD_strG_instance,
+    (B_Show)&B_ShowD_strG_instance,
     (B_Mapping)&B_MappingD_dictD_strG_instance,
-    (B_Hashable)&B_HashableD_strG_instance
+    (B_Hashable)&B_HashableD_strG_instance,
+    (B_Show)&B_ShowD_strG_instance
 };
 
 B_MappingD_dict B_MappingD_dictD_strG_witness = &B_MappingD_dictD_strG_instance;
@@ -678,22 +718,43 @@ extern struct B_IndexedD_MappingD_dict B_IndexedD_MappingD_dictD_intG_instance;
 extern struct B_IIndexedD_MappingD_dict B_IIndexedD_MappingD_dictD_intG_instance;
 struct B_MappingD_dict B_MappingD_dictD_intG_instance = {
     &B_MappingD_dictG_methods,
-    (B_Eq)&B_HashableD_intG_instance, (B_Eq)&B_HashableD_intG_instance,
+    (B_Eq)&B_HashableD_intG_instance,
+    (B_Eq)&B_HashableD_intG_instance,
+    (B_Show)&B_ShowD_intG_instance,
     (B_IIndexed)&B_IIndexedD_MappingD_dictD_intG_instance,
     (B_Eq)&B_HashableD_intG_instance,
+    (B_Show)&B_ShowD_intG_instance,
     (B_Indexed)&B_IndexedD_MappingD_dictD_intG_instance,
-    (B_Hashable)&B_HashableD_intG_instance
+    (B_Hashable)&B_HashableD_intG_instance,
+    (B_Show)&B_ShowD_intG_instance
 };
 
-struct B_IndexedD_MappingD_dict B_IndexedD_MappingD_dictD_intG_instance =  {&B_IndexedD_MappingD_dictG_methods, (B_Eq)&B_HashableD_intG_instance, (B_Eq)&B_HashableD_intG_instance, (B_Eq)&B_HashableD_intG_instance, (B_Eq)&B_HashableD_intG_instance,
-                                                         (B_Mapping)&B_MappingD_dictD_intG_instance, (B_Hashable)&B_HashableD_intG_instance};
+struct B_IndexedD_MappingD_dict B_IndexedD_MappingD_dictD_intG_instance = {
+    &B_IndexedD_MappingD_dictG_methods,
+    (B_Eq)&B_HashableD_intG_instance,
+    (B_Show)&B_ShowD_intG_instance,
+    (B_Eq)&B_HashableD_intG_instance,
+    (B_Show)&B_ShowD_intG_instance,
+    (B_Eq)&B_HashableD_intG_instance,
+    (B_Show)&B_ShowD_intG_instance,
+    (B_Eq)&B_HashableD_intG_instance,
+    (B_Show)&B_ShowD_intG_instance,
+    (B_Mapping)&B_MappingD_dictD_intG_instance,
+    (B_Hashable)&B_HashableD_intG_instance,
+    (B_Show)&B_ShowD_intG_instance
+};
 struct B_IIndexedD_MappingD_dict B_IIndexedD_MappingD_dictD_intG_instance = {
     &B_IIndexedD_MappingD_dictG_methods,
-    (B_Eq)&B_HashableD_intG_instance, (B_Eq)&B_HashableD_intG_instance,
+    (B_Eq)&B_HashableD_intG_instance,
+    (B_Show)&B_ShowD_intG_instance,
+    (B_Eq)&B_HashableD_intG_instance,
+    (B_Show)&B_ShowD_intG_instance,
     (B_IMapping)&B_MappingD_dictD_intG_instance,
     (B_Eq)&B_HashableD_intG_instance,
+    (B_Show)&B_ShowD_intG_instance,
     (B_Mapping)&B_MappingD_dictD_intG_instance,
-    (B_Hashable)&B_HashableD_intG_instance
+    (B_Hashable)&B_HashableD_intG_instance,
+    (B_Show)&B_ShowD_intG_instance
 };
 
 B_MappingD_dict B_MappingD_dictD_intG_witness = &B_MappingD_dictD_intG_instance;
@@ -703,22 +764,43 @@ extern struct B_IndexedD_MappingD_dict B_IndexedD_MappingD_dictD_u64G_instance;
 extern struct B_IIndexedD_MappingD_dict B_IIndexedD_MappingD_dictD_u64G_instance;
 struct B_MappingD_dict B_MappingD_dictD_u64G_instance = {
     &B_MappingD_dictG_methods,
-    (B_Eq)&B_HashableD_u64G_instance, (B_Eq)&B_HashableD_u64G_instance,
+    (B_Eq)&B_HashableD_u64G_instance,
+    (B_Eq)&B_HashableD_u64G_instance,
+    (B_Show)&B_ShowD_u64G_instance,
     (B_IIndexed)&B_IIndexedD_MappingD_dictD_u64G_instance,
     (B_Eq)&B_HashableD_u64G_instance,
+    (B_Show)&B_ShowD_u64G_instance,
     (B_Indexed)&B_IndexedD_MappingD_dictD_u64G_instance,
-    (B_Hashable)&B_HashableD_u64G_instance
+    (B_Hashable)&B_HashableD_u64G_instance,
+    (B_Show)&B_ShowD_u64G_instance
 };
 
-struct B_IndexedD_MappingD_dict B_IndexedD_MappingD_dictD_u64G_instance =  {&B_IndexedD_MappingD_dictG_methods, (B_Eq)&B_HashableD_u64G_instance, (B_Eq)&B_HashableD_u64G_instance, (B_Eq)&B_HashableD_u64G_instance, (B_Eq)&B_HashableD_u64G_instance,
-                                                         (B_Mapping)&B_MappingD_dictD_u64G_instance, (B_Hashable)&B_HashableD_u64G_instance};
+struct B_IndexedD_MappingD_dict B_IndexedD_MappingD_dictD_u64G_instance = {
+    &B_IndexedD_MappingD_dictG_methods,
+    (B_Eq)&B_HashableD_u64G_instance,
+    (B_Show)&B_ShowD_u64G_instance,
+    (B_Eq)&B_HashableD_u64G_instance,
+    (B_Show)&B_ShowD_u64G_instance,
+    (B_Eq)&B_HashableD_u64G_instance,
+    (B_Show)&B_ShowD_u64G_instance,
+    (B_Eq)&B_HashableD_u64G_instance,
+    (B_Show)&B_ShowD_u64G_instance,
+    (B_Mapping)&B_MappingD_dictD_u64G_instance,
+    (B_Hashable)&B_HashableD_u64G_instance,
+    (B_Show)&B_ShowD_u64G_instance
+};
 struct B_IIndexedD_MappingD_dict B_IIndexedD_MappingD_dictD_u64G_instance = {
     &B_IIndexedD_MappingD_dictG_methods,
-    (B_Eq)&B_HashableD_u64G_instance, (B_Eq)&B_HashableD_u64G_instance,
+    (B_Eq)&B_HashableD_u64G_instance,
+    (B_Show)&B_ShowD_u64G_instance,
+    (B_Eq)&B_HashableD_u64G_instance,
+    (B_Show)&B_ShowD_u64G_instance,
     (B_IMapping)&B_MappingD_dictD_u64G_instance,
     (B_Eq)&B_HashableD_u64G_instance,
+    (B_Show)&B_ShowD_u64G_instance,
     (B_Mapping)&B_MappingD_dictD_u64G_instance,
-    (B_Hashable)&B_HashableD_u64G_instance
+    (B_Hashable)&B_HashableD_u64G_instance,
+    (B_Show)&B_ShowD_u64G_instance
 };
 
 B_MappingD_dict B_MappingD_dictD_u64G_witness = &B_MappingD_dictD_u64G_instance;
@@ -728,22 +810,43 @@ extern struct B_IndexedD_MappingD_dict B_IndexedD_MappingD_dictD_bytesG_instance
 extern struct B_IIndexedD_MappingD_dict B_IIndexedD_MappingD_dictD_bytesG_instance;
 struct B_MappingD_dict B_MappingD_dictD_bytesG_instance = {
     &B_MappingD_dictG_methods,
-    (B_Eq)&B_HashableD_bytesG_instance, (B_Eq)&B_HashableD_bytesG_instance,
+    (B_Eq)&B_HashableD_bytesG_instance,
+    (B_Eq)&B_HashableD_bytesG_instance,
+    (B_Show)&B_ShowD_bytesG_instance,
     (B_IIndexed)&B_IIndexedD_MappingD_dictD_bytesG_instance,
     (B_Eq)&B_HashableD_bytesG_instance,
+    (B_Show)&B_ShowD_bytesG_instance,
     (B_Indexed)&B_IndexedD_MappingD_dictD_bytesG_instance,
-    (B_Hashable)&B_HashableD_bytesG_instance
+    (B_Hashable)&B_HashableD_bytesG_instance,
+    (B_Show)&B_ShowD_bytesG_instance
 };
 
-struct B_IndexedD_MappingD_dict B_IndexedD_MappingD_dictD_bytesG_instance =  {&B_IndexedD_MappingD_dictG_methods, (B_Eq)&B_HashableD_bytesG_instance, (B_Eq)&B_HashableD_bytesG_instance, (B_Eq)&B_HashableD_bytesG_instance, (B_Eq)&B_HashableD_bytesG_instance,
-                                                         (B_Mapping)&B_MappingD_dictD_bytesG_instance, (B_Hashable)&B_HashableD_bytesG_instance};
+struct B_IndexedD_MappingD_dict B_IndexedD_MappingD_dictD_bytesG_instance = {
+    &B_IndexedD_MappingD_dictG_methods,
+    (B_Eq)&B_HashableD_bytesG_instance,
+    (B_Show)&B_ShowD_bytesG_instance,
+    (B_Eq)&B_HashableD_bytesG_instance,
+    (B_Show)&B_ShowD_bytesG_instance,
+    (B_Eq)&B_HashableD_bytesG_instance,
+    (B_Show)&B_ShowD_bytesG_instance,
+    (B_Eq)&B_HashableD_bytesG_instance,
+    (B_Show)&B_ShowD_bytesG_instance,
+    (B_Mapping)&B_MappingD_dictD_bytesG_instance,
+    (B_Hashable)&B_HashableD_bytesG_instance,
+    (B_Show)&B_ShowD_bytesG_instance
+};
 struct B_IIndexedD_MappingD_dict B_IIndexedD_MappingD_dictD_bytesG_instance = {
     &B_IIndexedD_MappingD_dictG_methods,
-    (B_Eq)&B_HashableD_bytesG_instance, (B_Eq)&B_HashableD_bytesG_instance,
+    (B_Eq)&B_HashableD_bytesG_instance,
+    (B_Show)&B_ShowD_bytesG_instance,
+    (B_Eq)&B_HashableD_bytesG_instance,
+    (B_Show)&B_ShowD_bytesG_instance,
     (B_IMapping)&B_MappingD_dictD_bytesG_instance,
     (B_Eq)&B_HashableD_bytesG_instance,
+    (B_Show)&B_ShowD_bytesG_instance,
     (B_Mapping)&B_MappingD_dictD_bytesG_instance,
-    (B_Hashable)&B_HashableD_bytesG_instance
+    (B_Hashable)&B_HashableD_bytesG_instance,
+    (B_Show)&B_ShowD_bytesG_instance
 };
 
 B_MappingD_dict B_MappingD_dictD_bytesG_witness = &B_MappingD_dictD_bytesG_instance;

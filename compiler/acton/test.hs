@@ -243,6 +243,26 @@ compilerTests =
             , "star item 9\n", "one\0two\n", "True|True|True\n", "item 12\n"
             , "tick1|tick2\n", "item 1 item 2\n" ]) out
           assertEqual "stderr uses the same Show policies" "error item 10\n" err
+  , testCase "KeyError retains key Show evidence through native lookup and serialization" $ do
+        withSystemTempDirectory "acton-keyerror-show" $ \tmp -> do
+          let src = tmp </> "keyerror_show.act"
+          copyFile "../../test/regression_auto/keyerror_show.act" src
+          copyFile "../../test/regression_auto/keyerror_show.ext.c" (tmp </> "keyerror_show.ext.c")
+          (code, generated, err) <- buildThing "--quiet --dbg-no-lines --cgen" src
+          assertEqual ("C generation should succeed:\n" ++ generated ++ err) ExitSuccess code
+          let body name = unlines $ takeWhile (/= "}") $ dropWhile
+                (not . isInfixOf ("keyerror_showQ_" ++ name ++ " (")) (lines generated)
+          forM_ ["direct_lookup", "frozen_lookup"] $ \name -> do
+            let c = body name
+            assertBool (name ++ " passes key Show to the shared helper")
+              ("B_dict_base_getitem(" `isInfixOf` c && "W_ShowD_K" `isInfixOf` c)
+            assertBool (name ++ " avoids allocating or dispatching on Mapping")
+              (not $ any (`isInfixOf` c) ["G_new", "$class->", "B_Mapping", "B_IMapping"])
+          assertBool "generic indexing keeps protocol dispatch"
+            ("$class->__getitem__" `isInfixOf` body "generic_lookup")
+          testBuild "--jobs 2" ExitSuccess False src
+          (runCode, out, runErr) <- runThing "" src
+          assertEqual ("KeyError tests should succeed: " ++ out ++ runErr) ExitSuccess runCode
   , testCase "typed Show/Bool conversions preserve native and generic paths" $ do
         withSystemTempDirectory "acton-show-bool-conversions" $ \tmp -> do
           let src = tmp </> "show_bool_conversions.act"
@@ -504,8 +524,10 @@ compilerTests =
           forM_ direct $ \(name, native) -> do
             let c = body name
             assertBool (name ++ " should call the shared native implementation") (native `isInfixOf` c)
+            let unused = ["G_new", "$class->", "B_Mapping", "B_IMapping", "B_SetD", "B_ISetD"] ++
+                  ["G_witness" | name `notElem` ["dict_lookup", "idict_lookup"]]
             assertBool (name ++ " should discard its receiver witness")
-              (not (any (`isInfixOf` c) ["G_new", "G_witness", "$class->", "B_Mapping", "B_IMapping", "B_SetD", "B_ISetD"]))
+              (not (any (`isInfixOf` c) unused))
           forM_ [("dict_update", "B_dict_base_update"), ("set_update", "B_set_base_update")] $ \(name,native) -> do
             let c = body name
             assertBool (name ++ " keeps its source Iterable witness")

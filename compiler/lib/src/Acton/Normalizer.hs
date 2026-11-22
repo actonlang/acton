@@ -402,15 +402,13 @@ normSuite' env (s : ss)             = do s' <- norm' env s
                                          r <- newName "res"
                                          let env0 = define (envOf lambound) env
                                              fx = fxOf env0 comp
-                                             (tw,w1,tr,e0,stmt) = transComp env0 w r comp
-                                             body = sAssign (pVar w tw) w1 :
-                                                    sAssign (pVar r tr) e0 :
-                                                    stmt :
-                                                    sReturn (eVar r) : []
+                                             (bindings,tr,e0,stmt) = transComp env0 w r comp
+                                             body = bindings ++
+                                                    [sAssign (pVar r tr) e0,stmt,sReturn (eVar r)]
                                          norm' env (sDef f lambound tr body fx)
 
         transComp env w r (ListComp _ (Elem e) co)
-                                    = (tw, w1, tr, e0, compStmt co e1)
+                                    = ([sAssign (pVar w tw) w1], tr, e0, compStmt co e1)
           where env1                = define (envOf co) env
                 te                  = typeOf env1 e
                 tr                  = tList te
@@ -419,7 +417,7 @@ normSuite' env (s : ss)             = do s' <- norm' env s
                 e1                  = eCall (eDot (eVar w) appendKW) [eVar r, e]
                 w1                  = eCall (tApp (eQVar witSequenceList) [te]) []
         transComp env w r (SetComp _ (Elem annot_e) co)
-                                    = (tw, w1, tr, e0, compStmt co e1)
+                                    = ([sAssign (pVar w tw) w1], tr, e0, compStmt co e1)
           where env1                = define (envOf co) env
                 te                  = typeOf env1 annot_e
                 tr                  = tSet te
@@ -429,16 +427,18 @@ normSuite' env (s : ss)             = do s' <- norm' env s
                 e1                  = eCall (eDot (eVar w) (name "add")) [eVar r, e]
                 w1                  = eCall (tApp (eQVar witSetSet) [te]) [w0]
         transComp env w r (DictComp _ (Assoc annot_k v) co)
-                                    = (tw, w1, tr, e0, compStmt co e1)
+                                    = ([], tr, e0, compStmt co e1)
           where env1                = define (envOf co) env
                 tk                  = typeOf env1 annot_k
                 tv                  = typeOf env1 v
                 tr                  = tDict tk tv
-                tw                  = tMappingW tr tk tv
                 (w0, k)             = unAnnot (tHashableW tk) annot_k
                 e0                  = eCall (tApp (eQVar primMkDict) [tv,tk]) [w0, Dict NoLoc []]
-                e1                  = eCall (eDot (eDot (eVar w) (Internal Witness (packText "Indexed") 0)) setitemKW) [eVar r, k, v]
-                w1                  = eCall (tApp (eQVar witMappingDict) [tk,tv]) [w0]
+                -- The comprehension constructs a builtin dict and only inserts.
+                -- Its stored Hashable is sufficient; no Mapping or key Show
+                -- evidence is needed for this operation.
+                Just worker         = hashContainerWorker qnDict setitemKW 3
+                e1                  = eCall (tApp (eQVar $ bwName worker) [tk,tv]) [eVar r,k,v]
 
         compStmt (CompFor l p e c) x = For l p e [compStmt c x] []
         compStmt (CompIf l e c) x   = If l [Branch e [compStmt c x]] []
