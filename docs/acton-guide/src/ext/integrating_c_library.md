@@ -170,11 +170,11 @@ def _test_compress():
     for x in range(100):
         i = "hello".encode()
         c = zlib.compress(i)
-        testing.assertEqual(c, b'x\x9c\xcbH\xcd\xc9\xc9\x07')
+        testing.assertEqual(c, b'x\x9c\xcbH\xcd\xc9\xc9\x07\x00\x06,\x02\x15')
 
 def _test_decompress():
     for x in range(1000):
-        c = b'x\x9c\xcbH\xcd\xc9\xc9\x07'
+        c = b'x\x9c\xcbH\xcd\xc9\xc9\x07\x00\x06,\x02\x15'
         d = zlib.decompress(c)
         testing.assertEqual(d, b'hello')
 ```
@@ -186,9 +186,9 @@ user@host:~/acton-zlib$ acton test
 
 Tests - module test_zlib:
   decompress:            FAIL:  195 runs in 50.728ms
-    testing.NotEqualError: Expected equal values but they are non-equal. A: b'x\x9c\xcbH\xcd\xc9\xc9\x07' B: b'hello'
+    testing.NotEqualError: Expected equal values but they are non-equal. A: b'x\x9c\xcbH\xcd\xc9\xc9\x07\x00\x06,\x02\x15' B: b'hello'
   compress:              FAIL:  197 runs in 50.886ms
-    testing.NotEqualError: Expected equal values but they are non-equal. A: b'hello' B: b'x\x9c\xcbH\xcd\xc9\xc9\x07'
+    testing.NotEqualError: Expected equal values but they are non-equal. A: b'hello' B: b'x\x9c\xcbH\xcd\xc9\xc9\x07\x00\x06,\x02\x15'
   roundtrip:             OK:  226 runs in 50.890ms
 
 2 out of 3 tests failed (26.354s)
@@ -203,40 +203,76 @@ As expected, the roundtrip test goes through, since we just return the input dat
 Now let's fill in the rest of the owl. Below is the body of the `zlibQ_compress` function. The bulk of this code is not particularly interesting to this guide as it has more to do with standard C usage of zlib, but a few things are worth noting.
 
 ```c
+#include <zlib.h>
+#include <limits.h>
+#include <stdlib.h>
+#include <string.h>
+
+static struct B_ValueError zlibQ_output_too_long_error =
+    STATIC_EXCEPTION(B_ValueError, "Zlib output is too long");
+static struct B_MemoryError zlibQ_allocation_failed_error =
+    STATIC_EXCEPTION(B_MemoryError, "Unable to allocate zlib output");
+
 B_bytes zlibQ_compress(B_bytes data) {
     if (data->nbytes == 0) {
         return data;
     }
 
     // Prepare the zlib stream
-    int ret;
     z_stream stream;
     memset(&stream, 0, sizeof(stream));
-    ret = deflateInit(&stream, Z_DEFAULT_COMPRESSION);
+    int ret = deflateInit(&stream, Z_DEFAULT_COMPRESSION);
     if (ret != Z_OK) {
-        $RAISE((B_BaseException)$NEW(B_ValueError, $FORMAT("Unable to compress data, init error: %d", ret)));
+        RAISE(B_ValueError, $FORMAT("Unable to compress data, init error: %d", ret));
     }
 
-    // Set the input data
-    stream.avail_in = data->nbytes;
-    stream.next_in = (Bytef*)data->str;
-
-    // Allocate the output buffer using Acton's malloc
-    size_t output_size = deflateBound(&stream, data->nbytes);
-    Bytef* output_buffer = (Bytef*)acton_malloc_atomic(output_size);
-    stream.avail_out = output_size;
-    stream.next_out = output_buffer;
-
-    // Perform the deflate operation
-    ret = deflate(&stream, Z_FINISH);
-    if (ret != Z_STREAM_END) {
-        $RAISE((B_BaseException)$NEW(B_ValueError, $FORMAT("Unable to compress data, error: %d", ret)));
+    stream.next_in = (Bytef *)data->str;
+    int64_t input_left = data->nbytes;
+    int64_t output_size = 64 * 1024;
+    int64_t output_len = 0;
+    Bytef *output_buffer = acton_malloc_atomic(output_size);
+    if (output_buffer == NULL) {
+        deflateEnd(&stream);
+        RAISE_EXC(&zlibQ_allocation_failed_error);
     }
 
-    // Clean up
+    // zlib's per-call counts are uInt, and total_out can wrap on Windows.
+    // Feed bounded chunks and keep the full output length ourselves.
+    while (1) {
+        if (stream.avail_in == 0) {
+            stream.avail_in = input_left > UINT_MAX ? UINT_MAX : (uInt)input_left;
+            input_left -= stream.avail_in;
+        }
+        if (output_len == output_size) {
+            if (output_size == MAX_STR_LEN) {
+                deflateEnd(&stream);
+                RAISE_EXC(&zlibQ_output_too_long_error);
+            }
+            output_size = output_size > MAX_STR_LEN / 2 ? MAX_STR_LEN : output_size * 2;
+            output_buffer = acton_realloc(output_buffer, output_size);
+            if (output_buffer == NULL) {
+                deflateEnd(&stream);
+                RAISE_EXC(&zlibQ_allocation_failed_error);
+            }
+        }
+        int64_t output_left = output_size - output_len;
+        uInt output_chunk = output_left > UINT_MAX ? UINT_MAX : (uInt)output_left;
+        stream.avail_out = output_chunk;
+        stream.next_out = output_buffer + output_len;
+
+        ret = deflate(&stream, input_left == 0 ? Z_FINISH : Z_NO_FLUSH);
+        output_len += output_chunk - stream.avail_out;
+        if (ret == Z_STREAM_END) {
+            break;
+        }
+        if (ret != Z_OK) {
+            deflateEnd(&stream);
+            RAISE(B_ValueError, $FORMAT("Unable to compress data, error: %d", ret));
+        }
+    }
+
     deflateEnd(&stream);
-
-    return actBytesFromCStringNoCopy(output_buffer);
+    return actBytesFromCStringLength((char *)output_buffer, output_len);
 }
 ```
 
@@ -244,7 +280,7 @@ Memory management is always top of mind when writing C, as it the case here. We 
 
 Acton's own boxed scalars (`int`, `float`, `complex` and the fixed-width integer types) are allocated pointer-free in the same way, as are ranges and the digits of `bigint` values. So a pointer converted to an integer and stored in a boxed `int` does not keep the object it points to alive. Keep such a pointer in a field of a struct allocated with `acton_malloc()` instead.
 
-`actBytesFromCStringNoCopy(output_buffer)` takes the `buffer` (already allocated via `acton_malloc_atomic()`) and wraps it up as a boxed value of the type `B_bytes` that we return.
+`actBytesFromCStringLength((char *)output_buffer, output_len)` returns exactly the bytes zlib wrote, including any embedded NUL bytes.
 
 Also note how we convert Zlib errors to Acton exceptions where necessary.
 
@@ -254,10 +290,10 @@ Running the test, the `compress` test now passes while roundtrip has stopped wor
 user@host:~/acton-zlib$ acton test
 Tests - module test_zlib:
   decompress:            FAIL:  158 runs in 50.175ms
-    testing.NotEqualError: Expected equal values but they are non-equal. A: b'x\x9c\xcbH\xcd\xc9\xc9\x07' B: b'hello'
+    testing.NotEqualError: Expected equal values but they are non-equal. A: b'x\x9c\xcbH\xcd\xc9\xc9\x07\x00\x06,\x02\x15' B: b'hello'
   compress:              OK:  167 runs in 50.225ms
   roundtrip:             FAIL:  147 runs in 50.266ms
-    testing.NotEqualError: Expected equal values but they are non-equal. A: b'hello' B: b'x\x9c\xcbH\xcd\xc9\xc9\x07'
+    testing.NotEqualError: Expected equal values but they are non-equal. A: b'hello' B: b'x\x9c\xcbH\xcd\xc9\xc9\x07\x00\x06,\x02\x15'
 
 2 out of 3 tests failed (0.941s)
 
@@ -275,44 +311,59 @@ B_bytes zlibQ_decompress(B_bytes data) {
     }
 
     // Prepare the zlib stream
-    int ret;
     z_stream stream;
     memset(&stream, 0, sizeof(stream));
-
-    ret = inflateInit(&stream);
+    int ret = inflateInit(&stream);
     if (ret != Z_OK) {
-        $RAISE((B_BaseException)$NEW(B_ValueError, $FORMAT("Unable to decompress data, init error: %d", ret)));
+        RAISE(B_ValueError, $FORMAT("Unable to decompress data, init error: %d", ret));
     }
 
-    // Set the input data
-    stream.avail_in = data->nbytes;
-    stream.next_in = (Bytef*)data->str;
+    stream.next_in = (Bytef *)data->str;
+    int64_t input_left = data->nbytes;
+    int64_t output_size = 64 * 1024;
+    int64_t output_len = 0;
+    Bytef *output_buffer = acton_malloc_atomic(output_size);
+    if (output_buffer == NULL) {
+        inflateEnd(&stream);
+        RAISE_EXC(&zlibQ_allocation_failed_error);
+    }
 
-    // Allocate the output buffer using Acton's malloc
-    size_t output_size = 2 * data->nbytes; // Initial output buffer size
-    Bytef* output_buffer = (Bytef*)acton_malloc_atomic(output_size);
-    memset(output_buffer, 0, output_size);
-    stream.avail_out = output_size;
-    stream.next_out = output_buffer;
-
-    // Perform the inflate operation, increasing the output buffer size if needed
-    do {
-        ret = inflate(&stream, Z_NO_FLUSH);
-        if (ret == Z_BUF_ERROR) {
-            // Increase the output buffer size and continue decompressing
-            size_t new_output_size = output_size * 2;
-            output_buffer = (Bytef*)acton_realloc(output_buffer, new_output_size);
-            stream.avail_out = new_output_size - stream.total_out;
-            stream.next_out = output_buffer + stream.total_out;
-        } else if (ret != Z_OK) {
-            $RAISE((B_BaseException)$NEW(B_ValueError, $FORMAT("Unable to decompress data, error: %d", ret)));
+    // Keep the full output length independently of zlib's per-call counts.
+    while (1) {
+        if (stream.avail_in == 0) {
+            stream.avail_in = input_left > UINT_MAX ? UINT_MAX : (uInt)input_left;
+            input_left -= stream.avail_in;
         }
-    } while (ret == Z_BUF_ERROR);
+        if (output_len == output_size) {
+            if (output_size == MAX_STR_LEN) {
+                inflateEnd(&stream);
+                RAISE_EXC(&zlibQ_output_too_long_error);
+            }
+            output_size = output_size > MAX_STR_LEN / 2 ? MAX_STR_LEN : output_size * 2;
+            output_buffer = acton_realloc(output_buffer, output_size);
+            if (output_buffer == NULL) {
+                inflateEnd(&stream);
+                RAISE_EXC(&zlibQ_allocation_failed_error);
+            }
+        }
+        int64_t output_left = output_size - output_len;
+        uInt output_chunk = output_left > UINT_MAX ? UINT_MAX : (uInt)output_left;
+        stream.avail_out = output_chunk;
+        stream.next_out = output_buffer + output_len;
 
-    // Clean up
+        ret = inflate(&stream, Z_NO_FLUSH);
+        output_len += output_chunk - stream.avail_out;
+        if (ret == Z_STREAM_END) {
+            break;
+        }
+        if (ret != Z_OK) {
+            inflateEnd(&stream);
+            RAISE(B_ValueError, $FORMAT("Unable to decompress data, error: %d", ret));
+        }
+    }
+
     inflateEnd(&stream);
-
-    return actBytesFromCStringNoCopy(output_buffer);
+    return actBytesFromCStringLength((char *)output_buffer, output_len);
 }
 ```
 
@@ -396,11 +447,11 @@ The length excludes the final terminator; NUL bytes within that length remain
 part of the Acton string. Empty strings and one-byte ASCII strings may reuse
 immutable singleton values.
 
-For bytes, `actBytesFromCStringCopy(s)` and
-`actBytesFromCStringLengthCopy(s, n)` explicitly copy the input. Existing
-`actBytesFromCString` and `actBytesFromCStringLength` still copy during the API
-migration; their `NoCopy` variants share the input. The old string names
-`to$str`, `to_str_len`, and `to_str_noc` also retain their original behaviour.
-Use the explicit `Copy` names wherever independent storage is required, so a
-future change to the bytes defaults does not change the caller's ownership
-contract.
+For bytes, use `actBytesFromCStringCopy(s)` or `actBytesFromCStringLengthCopy(s, n)`
+when the input can change or be freed. For binary data, pass the byte count to
+a `Length` variant so it preserves embedded NUL bytes. The count is an `int64_t`.
+
+The unadorned bytes constructors currently copy. Use them with immutable input
+that will live as long as the result, so the caller also works when they switch
+to sharing. Use `actBytesFromCStringLengthNoCopy(s, n)` when sharing is required
+today.
