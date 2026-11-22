@@ -736,9 +736,10 @@ jobs:
       - name: "Compile acton program"
         run: |
           echo '#!/usr/bin/env runacton'   > acton-test.act
-          echo 'actor main(env):'          >> acton-test.act
-          echo '    print("Hello, world")' >> acton-test.act
-          echo '    env.exit(0)'           >> acton-test.act
+          echo 'actor main(env):'              >> acton-test.act
+          echo '    def __startup__():'          >> acton-test.act
+          echo '        print("Hello, world")' >> acton-test.act
+          echo '        env.exit(0)'           >> acton-test.act
           chmod a+x acton-test.act
           ./acton-test.act
           ./acton-test.act | grep "Hello, world"
@@ -808,9 +809,10 @@ jobs:
           export PATH=$(pwd)/acton/bin:$PATH
           acton version
           echo '#!/usr/bin/env runacton'   > acton-test.act
-          echo 'actor main(env):'          >> acton-test.act
-          echo '    print("Hello, world")' >> acton-test.act
-          echo '    env.exit(0)'           >> acton-test.act
+          echo 'actor main(env):'              >> acton-test.act
+          echo '    def __startup__():'          >> acton-test.act
+          echo '        print("Hello, world")' >> acton-test.act
+          echo '        env.exit(0)'           >> acton-test.act
           chmod a+x acton-test.act
           ./acton-test.act
           ./acton-test.act | grep "Hello, world"
@@ -882,9 +884,10 @@ jobs:
       - name: "Compile acton program"
         run: |
           echo '#!/usr/bin/env runacton'   > acton-test.act
-          echo 'actor main(env):'          >> acton-test.act
-          echo '    print("Hello, world")' >> acton-test.act
-          echo '    env.exit(0)'           >> acton-test.act
+          echo 'actor main(env):'              >> acton-test.act
+          echo '    def __startup__():'          >> acton-test.act
+          echo '        print("Hello, world")' >> acton-test.act
+          echo '        env.exit(0)'           >> acton-test.act
           chmod a+x acton-test.act
           ./acton-test.act
           ./acton-test.act | grep "Hello, world"
