@@ -43,21 +43,22 @@ import qualified Data.IntMap.Strict as IM
 
 generate                            :: Acton.Env.Env0 -> FilePath -> String -> Bool -> Module -> String -> IO (String,String,String)
 generate env srcbase srcText emitLines m hash = do
-    (n,h,c,_) <- generateCode Nothing env srcbase srcText emitLines m hash
+    (n,h,c,_) <- generateCode Nothing env srcbase srcText emitLines m hash hash
     return (n,h,c)
 
 -- File builds keep mechanical support in a fragment of its own, which the .c
 -- includes by the name 'supportInclude' gives.  Diagnostics and golden tests
--- request a complete listing with Nothing.
-generateCode                        :: Maybe FilePath -> Acton.Env.Env0 -> FilePath -> String -> Bool -> Module -> String -> IO (String,String,String,String)
-generateCode supportInclude env srcbase srcText emitLines m hash = return (n,h,c,support)
+-- request a complete listing with Nothing.  The header is tagged with
+-- 'headerHash', and the .c and the support fragment with 'codeHash'.
+generateCode                        :: Maybe FilePath -> Acton.Env.Env0 -> FilePath -> String -> Bool -> Module -> String -> String -> IO (String,String,String,String)
+generateCode supportInclude env srcbase srcText emitLines m headerHash codeHash = return (n,h,c,support)
 
   where n                           = modNameToString (modname m)
-        hashComment                 = text implHashTag <+> text hash <+> text "*/"
-        h                           = render $ hashComment $+$ hModule env0 m
+        hashComment hash            = text implHashTag <+> text hash <+> text "*/"
+        h                           = render $ hashComment headerHash $+$ hModule env0 m
         (cDoc,supportDoc)            = cModuleParts supportInclude env0 srcbase srcText emitLines m
-        c                           = render $ hashComment $+$ cDoc
-        support                     = render $ hashComment $+$ supportDoc
+        c                           = render $ hashComment codeHash $+$ cDoc
+        support                     = render $ hashComment codeHash $+$ supportDoc
         Module _ _ _ stmts          = m
         env0                        = shareClosureLayouts (classdefine stmts $ genEnv $ setMod (modname m) env) stmts
 

@@ -105,7 +105,7 @@ If no name actually uses the import, per-name deps do not change, so nothing pro
 
 ## Code generation staleness
 
-Generated C/H files embed the module impl hash. If the embedded hash differs from the current module impl hash, the compiler treats the generated code as out of date and regenerates it.
+Generated C/H files embed a hash of everything their code is generated from: the module impl hash, the module's imports, and, unless `--dbg-no-lines` is given, its source, which the `#line` directives point into. If the embedded hash differs from the current one, or the files are older than the compiler, the compiler treats the generated code as out of date and regenerates it.
 
 ## Tests and hashes
 
