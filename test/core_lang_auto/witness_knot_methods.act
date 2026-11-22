@@ -41,10 +41,11 @@ def same[T(Sub[Bar])](a: T, b: T) -> bool:
     return a == b
 
 actor main(env):
-    if Foo(1).tag() != 7:
-        print("FAIL: knot witness built in a method")
-        env.exit(1)
-    if not same(Foo(1), Foo(1)) or same(Foo(1), Foo(2)):
-        print("FAIL: knot witness built in a forwarded slot")
-        env.exit(1)
-    env.exit(0)
+    proc def __startup__():
+        if Foo(1).tag() != 7:
+            print("FAIL: knot witness built in a method")
+            env.exit(1)
+        if not same(Foo(1), Foo(1)) or same(Foo(1), Foo(2)):
+            print("FAIL: knot witness built in a forwarded slot")
+            env.exit(1)
+        env.exit(0)

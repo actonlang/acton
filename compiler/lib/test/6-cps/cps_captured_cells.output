@@ -23,6 +23,6 @@ proc def capture (C_cont : proc(None) -> $R) -> $R:
             if True:
                 return $R_CONTc@[None](C_cont, None)
             else:
-                $RAISE(N_x)
+                $RAISE@[None](N_x)
                 return $R_CONTc@[None](C_1cont, None)
     return $PUSH_Cc(C_5try)

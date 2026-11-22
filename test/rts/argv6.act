@@ -12,12 +12,13 @@ def test_argv(exp, argv):
         i += 1
 
 actor main(env):
-    exp = ["--", "foo", "--bar", "--rts-verbose"]
-    print("Expected:", exp)
-    print("env.argv:", env.argv[1:])
+    proc def __startup__():
+        exp = ["--", "foo", "--bar", "--rts-verbose"]
+        print("Expected:", exp)
+        print("env.argv:", env.argv[1:])
 
-    try:
-        test_argv(exp, env.argv)
-        env.exit(0)
-    except:
-        env.exit(1)
+        try:
+            test_argv(exp, env.argv)
+            env.exit(0)
+        except:
+            env.exit(1)

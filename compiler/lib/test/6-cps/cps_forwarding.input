@@ -94,7 +94,7 @@ proc def cleanup (limit : __builtin__.int, out : __builtin__.list[__builtin__.in
             else:
                 break
             value = step(value)
-        $RAISE($RET(value))
+        $RAISE@[None]($RET(value))
     else:
         N_2xx: __builtin__.BaseException = $POP()
         W_cleanup_24.append(out, W_cleanup_4.__fromatom__(99))
@@ -102,4 +102,4 @@ proc def cleanup (limit : __builtin__.int, out : __builtin__.list[__builtin__.in
             N_2xxG_RET: $RET = $CAST@[__builtin__.BaseException, $RET](N_2xx)
             return $CAST@[__builtin__.value, __builtin__.int](N_2xxG_RET.val)
         else:
-            $RAISE(N_2xx)
+            $RAISE@[None](N_2xx)

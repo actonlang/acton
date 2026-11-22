@@ -9,5 +9,6 @@ proc def show(v):
     print(v.getenv("HOME"))
 
 actor main(env):
-    show(env.vars)
-    env.exit(0)
+    proc def __startup__():
+        show(env.vars)
+        env.exit(0)

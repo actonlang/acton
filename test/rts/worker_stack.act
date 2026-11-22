@@ -8,14 +8,15 @@ def stack_sizes(rts: EnvRTS, workers: int) -> list[?u64]:
 
 
 actor main(env):
-    var sizes = stack_sizes(env.rts, env.nr_wthreads)
-    if "pending" in env.argv:
-        assert any(size is None for size in sizes)
-        print("pending")
-    # Stack-size checks can wait in the test; introspection itself never waits.
-    while any(size is None for size in sizes):
-        await async env.stdio.out("")
+    proc def __startup__():
         sizes = stack_sizes(env.rts, env.nr_wthreads)
-    for size in sizes:
-        print(int(size!))
-    env.exit(0)
+        if "pending" in env.argv:
+            assert any(size is None for size in sizes)
+            print("pending")
+        # Stack-size checks can wait in the test; introspection itself never waits.
+        while any(size is None for size in sizes):
+            await async env.stdio.out("")
+            sizes = stack_sizes(env.rts, env.nr_wthreads)
+        for size in sizes:
+            print(int(size!))
+        env.exit(0)

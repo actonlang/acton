@@ -41,10 +41,11 @@ def check_bytes():
     assert b"\x00".decode() == chr(0)
 
 actor main(env):
-    try:
-        check_str()
-        check_bytes()
-        env.exit(0)
-    except AssertionError:
-        print("literal with NUL produced the wrong value")
-        env.exit(1)
+    proc def __startup__():
+        try:
+            check_str()
+            check_bytes()
+            env.exit(0)
+        except AssertionError:
+            print("literal with NUL produced the wrong value")
+            env.exit(1)

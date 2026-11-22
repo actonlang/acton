@@ -15,5 +15,7 @@ actor main(env):
         s = i
     proc def absent(i: int) -> int:
         NotImplemented
-    after 2: absent(7)
-    env.exit(0)
+
+    proc def __startup__():
+        after 2: absent(7)
+        env.exit(0)

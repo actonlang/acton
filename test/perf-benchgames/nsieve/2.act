@@ -15,7 +15,8 @@ def nsieve(n: int):
 
 
 actor main(env):
-    n = 4 if len(env.argv) < 2 else int(env.argv[1])
-    for i in range(3):
-        nsieve(10000 << (n - i))
-    env.exit(0)
+    proc def __startup__():
+        n = 4 if len(env.argv) < 2 else int(env.argv[1])
+        for i in range(3):
+            nsieve(10000 << (n - i))
+        env.exit(0)

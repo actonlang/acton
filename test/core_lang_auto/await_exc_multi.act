@@ -20,7 +20,10 @@
 #    bounds the run.
 
 actor Watchdog(env):
-    after 10.0: env.exit(1)
+
+
+    proc def __startup__():
+        after 10.0: env.exit(1)
 
 actor Prod():
     var i = 0
@@ -69,4 +72,5 @@ actor main(env):
         async w1.go()
         async w2.go()
 
-    go()
+    proc def __startup__():
+        go()

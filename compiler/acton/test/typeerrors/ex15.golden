@@ -9,6 +9,6 @@ Building file test/typeerrors/ex15.act using temporary scratch directory
      :         `- The type of the indicated expression (which we call t1) must be a subtype of t0
    3 |     raise y
      :           ^
-     :           `- The type of the indicated expression (which we call t0) must be a subclass of __builtin__.Exception
+     :           `- The type of the indicated expression (which we call t0) must be a subtype of __builtin__.Exception
      :              
 -----+

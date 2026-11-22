@@ -127,7 +127,7 @@ proc def cleanup (C_cont : proc(__builtin__.int) -> $R, limit : __builtin__.int,
     proc def C_31try (C_32res : __builtin__.bool) -> $R:
         if C_32res:
             proc def C_33cont (C_34res : None) -> $R:
-                $RAISE($RET(value.cell))
+                $RAISE@[None]($RET(value.cell))
                 return $R_CONTc@[None](C_cont, None)
             proc def C_35loop (C_36res : None) -> $R:
                 if True:
@@ -151,6 +151,6 @@ proc def cleanup (C_cont : proc(__builtin__.int) -> $R, limit : __builtin__.int,
                 N_2xxG_RET: $RET = $CAST@[__builtin__.BaseException, $RET](N_2xx)
                 return $R_CONTc@[__builtin__.int](C_cont, $CAST@[__builtin__.value, __builtin__.int](N_2xxG_RET.val))
             else:
-                $RAISE(N_2xx)
+                $RAISE@[None](N_2xx)
                 return $R_CONTc@[None](C_cont, None)
     return $PUSHF_Cc(C_31try)

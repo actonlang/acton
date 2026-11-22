@@ -20,20 +20,27 @@ proc def maybe_log (C_cont : proc(None) -> $R, c : ?Cls) -> $R:
 
 # recursive group:
 class Logger ($Actor, __builtin__.value):
-    proc def __init__ (self : Self, C_cont : proc(None) -> $R) -> $R:
-        pass
-        return $R_CONTc@[None](C_cont, None)
+    com def __init__ (self : Self) -> None:
+        return None
     proc def logG_local (self : Self, C_cont : proc(None) -> $R, msg : __builtin__.str) -> $R:
         pass
         return $R_CONTc@[None](C_cont, None)
     action def log (self : Self, msg : __builtin__.str) -> None:
         return $ASYNCc@[None](self, proc lambda (C_cont : proc(None) -> $R): self.logG_local(C_cont, msg))
-proc def LoggerG_newact (C_cont : proc(Logger) -> $R) -> $R:
-    G_act: Logger = $NEWACTOR@[Logger]()
-    $InstallFinalizer@[Logger](G_act)
-    proc def C_3cont (C_4res : None) -> $R:
-        return $R_CONTc@[Logger](C_cont, G_act)
-    return $AWAITc@[None]($SKIPRESc@[None](C_3cont), $ASYNCc@[None](G_act, proc lambda (C_cont : proc(None) -> $R): G_act.__init__(C_cont)))
+com def LoggerG_newact () -> Logger:
+    N_construction_parent: $Actor = $ConstructionBegin()
+    if $PUSH():
+        G_act: Logger = $NEWACTOR@[Logger]()
+        $ConstructionEnter(G_act)
+        $InstallFinalizer@[Logger](G_act)
+        G_act.__init__()
+        $DROP()
+    else:
+        N_construction_exception: __builtin__.BaseException = $POP()
+        $ConstructionAbort(N_construction_parent, N_construction_exception)
+        $RAISE@[None](N_construction_exception)
+    $ConstructionEnd(N_construction_parent)
+    return G_act
 # (recursive group)
 
 action def must_log (a : ?Logger) -> None:

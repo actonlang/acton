@@ -1466,11 +1466,10 @@ actor StringDecoder(cb_out: action(str) -> None, encoding: ?str="utf-8", on_erro
     byte characters.
     """
     MAX_UNICODE_CHAR_SIZE: int = 4
-    var buf: bytes = b""
-
-    if encoding is not None:
-        if encoding.lower() != "utf-8":
-            raise _unsupported_encoding_error
+    var buf: bytes = (
+        (b"" if encoding.lower() == "utf-8" else raise _unsupported_encoding_error)
+        if encoding is not None else b""
+    )
 
     def decode(input: bytes) -> None:
         buf += input
@@ -1707,7 +1706,8 @@ actor _RTSWorkerMonitor(wthread_id: int):
 
     proc def _init():
         NotImplemented
-    _init()
+    proc def __startup__():
+        _init()
 
 def _rts_io_handles() -> dict[u64, (typ: str, act: u64)]:
     NotImplemented
@@ -2055,20 +2055,22 @@ actor Process(envcap: _EnvCap,
         terminate()
         after 1.0: kill()
 
-    # Handle PATH inheritance for custom environments
-    # When PATH is not explicitly set in the provided environment, inherit it
-    # from the current environment (if set in the current environment).
-    if env is not None and "PATH" not in env:
-        parent_path = vars.getenv("PATH")
-        if parent_path is not None:
-            new = dict(env.items())
-            new["PATH"] = parent_path
-            new_env = new
+    proc def __startup__():
+        # Handle PATH inheritance for custom environments
+        # When PATH is not explicitly set in the provided environment, inherit it
+        # from the current environment (if set in the current environment).
+        if env is not None and "PATH" not in env:
+            parent_path = vars.getenv("PATH")
+            if parent_path is not None:
+                new = dict(env.items())
+                new["PATH"] = parent_path
+                new_env = new
 
-    _create_process()
+        _create_process()
 
-    if timeout is not None:
-        after timeout: stop()
+        if timeout is not None:
+            after timeout: stop()
+
 
 actor RunProcess(envcap: _EnvCap,
                  vars: EnvVar,
@@ -2116,7 +2118,6 @@ actor RunProcess(envcap: _EnvCap,
                 on_exit(_process, _exit_code, _signal, out_buf, err_buf)
 
     _p = Process(envcap, vars, cmd, _on_stdout, _on_stderr, _on_exit, on_error, workdir, env, timeout)
-    _process = _p
 
     def signal(sig: int):
         """Send signal to process"""
@@ -2140,6 +2141,10 @@ actor RunProcess(envcap: _EnvCap,
         stopped.
         """
         _p.stop()
+
+    proc def __startup__():
+        _process = _p
+
 
 actor EnvProcess(envcap: _EnvCap, vars: EnvVar):
     """Spawning of child processes, reached as env.process"""

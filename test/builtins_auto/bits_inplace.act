@@ -204,18 +204,19 @@ def check_bitarray_self(fail: list[str]):
         fail.append("bitarray generic |=")
 
 actor main(env):
-    fail: list[str] = []
-    try:
-        check_bitset_ops(fail)
-        check_bitset_capacity(fail)
-        check_bitset_self(fail)
-        check_bitset_pop(fail)
-        check_bitarray(fail)
-        check_bitarray_length(fail)
-        check_bitarray_self(fail)
-    except Exception as e:
-        fail.append("unexpected exception: " + str(e))
-    if fail:
-        print("Failed:", fail)
-        env.exit(1)
-    env.exit(0)
+    proc def __startup__():
+        fail: list[str] = []
+        try:
+            check_bitset_ops(fail)
+            check_bitset_capacity(fail)
+            check_bitset_self(fail)
+            check_bitset_pop(fail)
+            check_bitarray(fail)
+            check_bitarray_length(fail)
+            check_bitarray_self(fail)
+        except Exception as e:
+            fail.append("unexpected exception: " + str(e))
+        if fail:
+            print("Failed:", fail)
+            env.exit(1)
+        env.exit(0)

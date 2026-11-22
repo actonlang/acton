@@ -4,5 +4,6 @@ class TestClass(object):
         self.x = 1 if cond else 0
 
 actor main(env):
-    t = TestClass()
-    env.exit(0)
+    proc def __startup__():
+        t = TestClass()
+        env.exit(0)

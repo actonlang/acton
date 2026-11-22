@@ -223,10 +223,6 @@ replaceLocalGeneratorConsumer env n gen (Return l (Just e))
   | localGeneratorConsumer env n gen e
                                     = Just $ Return l (Just e')
   where e'                         = termsubst [(n,gen)] e
-replaceLocalGeneratorConsumer env n gen (Raise l e)
-  | localGeneratorConsumer env n gen e
-                                    = Just $ Raise l e'
-  where e'                         = termsubst [(n,gen)] e
 replaceLocalGeneratorConsumer env n gen (VarAssign l ps e)
   | localGeneratorConsumer env n gen e
                                     = Just $ VarAssign l ps e'
@@ -255,6 +251,8 @@ localGeneratorConsumer env n gen (Call _ f p k)
                                     = localGeneratorConsumer env n gen f ||
                                       localGeneratorConsumerPos env n gen p ||
                                       localGeneratorConsumerKwd env n gen k
+localGeneratorConsumer env n gen (Raise _ e _)
+                                    = localGeneratorConsumer env n gen e
 localGeneratorConsumer env n gen (TApp _ e _)
                                     = localGeneratorConsumer env n gen e
 localGeneratorConsumer env n gen (Index _ e i)
@@ -480,7 +478,7 @@ instance Norm Module where
     norm env (Module m imps mdoc ss) = Module m imps mdoc <$> normSuite env ss
 
 handle env x hs                     = do bs <- sequence [ branch e b | Handler e b <- hs ]
-                                         return $ [sIf bs [sExpr $ eCall (eQVar primRAISE) [eVar x]]]
+                                         return $ [sIf bs [sExpr $ eCall (tApp (eQVar primRAISE) [tNone]) [eVar x]]]
   where branch (ExceptAll _) b      = Branch (eBool True) <$> normSuite env b
         branch (Except _ y) b       = Branch (eIsInstance x y) <$> normSuite env b
         branch (ExceptAs _ y z) b   = Branch (eIsInstance x y) <$> (bind:) <$> normSuite env' b
@@ -501,8 +499,8 @@ sDROP                               = sExpr (eCall (eQVar primDROP) [])
 sPOP x                              = sAssign (pVar x tBaseException) (eCall (eQVar primPOP) [])
 ePUSH                               = eCall (eQVar primPUSH) []
 ePUSHF                              = eCall (eQVar primPUSHF) []
-sSEQ                                = sExpr (eCall (eQVar primRAISE) [eCall (eQVar primSEQ) []])
-sRAISE e                            = sExpr (eCall (eQVar primRAISE) [e])
+sSEQ                                = sExpr (eCall (tApp (eQVar primRAISE) [tNone]) [eCall (eQVar primSEQ) []])
+sRAISE e                            = sExpr (eCall (tApp (eQVar primRAISE) [tNone]) [e])
 
 -- TODO: maybe less approximation?
 isVal Var{}                         = True
@@ -529,8 +527,6 @@ instance Norm Stmt where
                                          mbe' <- norm env mbe
                                          return $ Expr l $ eCall (eQVar primASSERT) [e', maybe eNone id mbe']
     norm env (Pass l)               = return $ Pass l
-    norm env (Raise l e)            = do e' <- norm env e
-                                         return $ Expr l $ eCall (eQVar primRAISE) [e']
     norm env (If l bs els)          = If l <$> norm env bs <*> normSuite env els
     norm env (While l e b els)      = While l (eBool True) <$> normSuite (pushMark LOOP env) (sIf1 e [sPass] (els++[sBreak]) : b) <*> return []
     norm env (Data l mbp ss)        = Data l <$> norm env mbp <*> normSuite env ss
@@ -831,6 +827,8 @@ normBool env e
   where t                           = expTypeOf env e
 
 instance Norm Expr where
+    norm env (Raise l e t)          = do e' <- norm env e
+                                         return $ eCall (tApp (eQVar primRAISE) [conv env t]) [e']
     norm env (Var l (NoQ n))
       | n `elem` classattrs env,
         Just self <- selfparam env  = return $ eDot (eVar self) n

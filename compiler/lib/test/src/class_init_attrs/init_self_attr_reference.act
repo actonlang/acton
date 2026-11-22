@@ -23,9 +23,10 @@ class TestClass(object):
         self.w = compute(self.x) + compute(self.y) + self.z
 
 actor main(env):
-    t = TestClass()
-    print(t.x)  # 5
-    print(t.y)  # 20
-    print(t.z)  # 25
-    print(t.w)  # 65
-    env.exit(0)
+    proc def __startup__():
+        t = TestClass()
+        print(t.x)  # 5
+        print(t.y)  # 20
+        print(t.z)  # 25
+        print(t.w)  # 65
+        env.exit(0)

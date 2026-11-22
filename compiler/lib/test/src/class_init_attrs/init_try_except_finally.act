@@ -34,6 +34,7 @@ def risky_op(x: int) -> int:
     return x * 2
 
 actor main(env):
-    t1 = TestClass(5)
-    print("Normal:", t1.a, t1.b, t1.c, t1.d, t1.e)
-    env.exit(0)
+    proc def __startup__():
+        t1 = TestClass(5)
+        print("Normal:", t1.a, t1.b, t1.c, t1.d, t1.e)
+        env.exit(0)

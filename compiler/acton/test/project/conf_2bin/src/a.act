@@ -1,3 +1,4 @@
 actor main(env):
-    print("a")
-    env.exit(0)
+    proc def __startup__():
+        print("a")
+        env.exit(0)

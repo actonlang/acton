@@ -165,5 +165,6 @@ actor main(env):
             _on_accept
         )
 
-    _start_listener()
-    after 10: _timeout()
+    proc def __startup__():
+        _start_listener()
+        after 10: _timeout()

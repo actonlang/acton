@@ -35,6 +35,9 @@ import Acton.Subst
 import Acton.TypeEnv
 
 
+-- Candidates for effects of functions exposed through an actor interface.
+sealedEffects = [fxAction, fxPure, fxCom]
+
 run_new_solver = False
 
 newSimplify env te cs                       = simplifyNew env cs
@@ -174,7 +177,7 @@ newrank pol (Sel _ env _ (TUni _ v) n _)                                        
 newrank pol (Mut _ env (TUni _ v) n _)      = R_amb v alts                                      -- Mut behaves as an upper type bound
   where alts                                = allClassAttr (limitQuant v env) n
 newrank pol (Seal _ env (TUni _ v))
-  | uvkind v == KFX                         = R_amb v [fxAction, fxPure]
+  | uvkind v == KFX                         = R_amb v sealedEffects
 newrank pol c                               = R_red
 
 
@@ -300,8 +303,8 @@ solve' env select hist te eq cs
                                                         --traceM ("### reduce " ++ prstr c)
                                                         proceed hist eq cs
                                                     RSealed v -> do
-                                                        --traceM ("### try goal " ++ prstr v ++ ", candidates: " ++ prstrs [fxAction, fxPure])
-                                                        tryAlts st v [fxAction, fxPure]
+                                                        --traceM ("### try goal " ++ prstr v ++ ", candidates: " ++ prstrs sealedEffects)
+                                                        tryAlts st v sealedEffects
                                                     RTry v alts r -> do
                                                         --traceM ("### try goal " ++ prstr v ++ ", candidates: " ++ prstrs alts ++ if r then " (rev)" else "")
                                                         tryAlts st v alts
@@ -499,6 +502,7 @@ typeKey _ (TFX _ fx)                        = Just $ case fx of
                                                     FXMut -> -6
                                                     FXPure -> -7
                                                     FXAction -> -8
+                                                    FXCom -> -11
 typeKey _ _                                 = Nothing
 
 isWild :: Type -> Bool
@@ -566,10 +570,7 @@ allAbove env (TOpt _ t)             = [tOpt tWild]
 allAbove env (TNone _)              = [tOpt tWild, tNone]
 allAbove env (TFun _ _ _ _ _)       = [tOpt tWild, tFun tWild tWild tWild tWild]
 allAbove env (TTuple _ _ _)         = [tOpt tWild, tTuple tWild tWild]
-allAbove env (TFX _ FXProc)         = [fxProc]
-allAbove env (TFX _ FXMut)          = [fxProc, fxMut]
-allAbove env (TFX _ FXPure)         = [fxProc, fxMut, fxPure]
-allAbove env (TFX _ FXAction)       = [fxProc, fxAction]
+allAbove env (TFX _ fx)             = [tTFX candidate | candidate <- effectsInProgramOrder, subeffect fx candidate]
 
 allBelow env (TCon _ tc)
   | Just tids <- tyconBelowTids env tc
@@ -583,10 +584,7 @@ allBelow env (TOpt _ t)             = tOpt tWild : allBelow env t ++ [tNone]
 allBelow env (TNone _)              = [tNone]
 allBelow env (TFun _ _ _ _ _)       = [tFun tWild tWild tWild tWild]
 allBelow env (TTuple _ _ _)         = [tTuple tWild tWild]
-allBelow env (TFX _ FXProc)         = [fxProc, fxMut, fxPure, fxAction]
-allBelow env (TFX _ FXMut)          = [fxMut, fxPure]
-allBelow env (TFX _ FXPure)         = [fxPure]
-allBelow env (TFX _ FXAction)       = [fxAction]
+allBelow env (TFX _ fx)             = [tTFX candidate | candidate <- effectsInProgramOrder, subeffect candidate fx]
 
 allBelowProto env (TC n [t@TFX{},_])
   | n == primWrappedP               = [ schematic (wtype w) | w <- witsByPName env n, t == (head $ tcargs $ proto w) ]
@@ -889,20 +887,8 @@ cast' env info t1 (TOpt _ t2)
 cast' env _ (TNone _) (TOpt _ t)            = return ()
 cast' env _ (TNone _) (TNone _)             = return ()
 
-cast' env info t1@(TFX _ fx1) t2@(TFX _ fx2)
-  | castFX fx1 fx2                          = return ()
-  where castFX FXPure   FXPure              = True
-        castFX FXPure   FXMut               = True
-        castFX FXPure   FXProc              = True
-        castFX FXMut    FXMut               = True
-        castFX FXMut    FXProc              = True
-        castFX FXProc   FXProc              = True
-        castFX FXAction FXAction            = True
-        castFX FXAction FXProc              = True
-
-        castFX FXMut    FXPure              = True      -- Hideous lie! But a temporarily justifiable deception.
-
-        castFX _        _                   = False
+cast' env info (TFX _ fx1) (TFX _ fx2)
+  | castEffect fx1 fx2                      = return ()
 
 cast' env info (TUni _ tv) t2@TFun{}
   | uvkind tv == KType                      = do t1 <- instwild env KType $ tFun tWild tWild tWild tWild

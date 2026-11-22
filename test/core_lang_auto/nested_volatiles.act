@@ -7,9 +7,10 @@ def sum_iter(b: list[int], size):
     return v
 
 actor main(env):
-    x = sum_iter([1000,200,30,4], 4)
-    if x != 1234:
-        print('Excpected 1234, got', x)
-        env.exit(1)
-    else:
-        env.exit(0)
+    proc def __startup__():
+        x = sum_iter([1000,200,30,4], 4)
+        if x != 1234:
+            print('Excpected 1234, got', x)
+            env.exit(1)
+        else:
+            env.exit(0)

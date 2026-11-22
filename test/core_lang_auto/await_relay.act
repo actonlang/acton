@@ -28,7 +28,10 @@
 #    in-main timer cannot guard main's own park.
 
 actor Watchdog(env):
-    after 10.0: env.exit(1)
+
+
+    proc def __startup__():
+        after 10.0: env.exit(1)
 
 actor Prod():
     var i = 0
@@ -45,17 +48,18 @@ actor Rel():
         return await fut
 
 actor main(env):
-    wd = Watchdog(env)
-    b = Prod()
-    c = Rel()
+    proc def __startup__():
+        wd = Watchdog(env)
+        b = Prod()
+        c = Rel()
 
-    def go():
-        async b.spin()
-        x = async b.produce()
-        v = c.consume(x)
-        if v == 42:
-            print("relay ok")
-            env.exit(0)
-        env.exit(1)
+        def go():
+            async b.spin()
+            x = async b.produce()
+            v = c.consume(x)
+            if v == 42:
+                print("relay ok")
+                env.exit(0)
+            env.exit(1)
 
-    go()
+        go()

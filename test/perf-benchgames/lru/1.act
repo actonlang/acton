@@ -50,20 +50,21 @@ class LRU(object):
         self.touch(slot)
 
 actor main(env):
-    capacity = int(env.argv[1]) if len(env.argv) > 1 else 100
-    n = int(env.argv[2]) if len(env.argv) > 2 else 1000
-    cache = LRU(capacity)
-    seed0 = 0
-    seed1 = 1
-    hits = 0
-    modulus = capacity * 10
-    for _ in range(n):
-        seed0 = (1103515245 * seed0 + 12345) & 0x7fffffff
-        seed1 = (1103515245 * seed1 + 12345) & 0x7fffffff
-        key = seed0 % modulus
-        cache.put(key, key)
-        if cache.get(seed1 % modulus) is not None:
-            hits += 1
-    print(hits)
-    print(n - hits)
-    env.exit(0)
+    proc def __startup__():
+        capacity = int(env.argv[1]) if len(env.argv) > 1 else 100
+        n = int(env.argv[2]) if len(env.argv) > 2 else 1000
+        cache = LRU(capacity)
+        seed0 = 0
+        seed1 = 1
+        hits = 0
+        modulus = capacity * 10
+        for _ in range(n):
+            seed0 = (1103515245 * seed0 + 12345) & 0x7fffffff
+            seed1 = (1103515245 * seed1 + 12345) & 0x7fffffff
+            key = seed0 % modulus
+            cache.put(key, key)
+            if cache.get(seed1 % modulus) is not None:
+                hits += 1
+        print(hits)
+        print(n - hits)
+        env.exit(0)

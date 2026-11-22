@@ -9,10 +9,11 @@ actor Local():
         return x + 1
 
 actor main(env):
-    counter = shared.Counter()
-    local = Local()
-    total = 0
-    for i in range(100):
-        total = counter.add(local.next(i))
-    print(env.nr_wthreads, total)
-    env.exit(0)
+    proc def __startup__():
+        counter = shared.Counter()
+        local = Local()
+        total = 0
+        for i in range(100):
+            total = counter.add(local.next(i))
+        print(env.nr_wthreads, total)
+        env.exit(0)

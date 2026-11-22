@@ -5,10 +5,10 @@
 # annotation embeds a continuation-less proc row and closure conversion of
 # that type fails with "### BAD contArg".
 
-def h(s: str) -> None:
+proc def h(s: str) -> None:
     pass
 
-def g() -> proc(str) -> None:
+proc def g() -> proc(str) -> None:
     return h
 
 def f(m: proc() -> proc(str) -> None) -> str:
@@ -29,6 +29,7 @@ def f2(m: proc() -> proc(str) -> None, flag: bool) -> str:
     return "ok2"
 
 actor main(env: Env):
-    print(f(g))
-    print(f2(g, True))
-    env.exit(0)
+    proc def __startup__():
+        print(f(g))
+        print(f2(g, True))
+        env.exit(0)

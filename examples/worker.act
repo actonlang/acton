@@ -1,10 +1,14 @@
 actor worker(report):
-    report()
-   
-actor main(env):
-    def report():
-        print('Done!')
-        env.exit(0)
 
-    worker(report)
-    env.exit(0)
+
+    proc def __startup__():
+        report()
+
+actor main(env):
+    proc def __startup__():
+        def report():
+            print('Done!')
+            env.exit(0)
+
+        worker(report)
+        env.exit(0)

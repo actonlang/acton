@@ -33,5 +33,6 @@ class TestClass(object):
             self.z = 0
 
 actor main(env):
-    t = TestClass(1, 5)
-    env.exit(0)
+    proc def __startup__():
+        t = TestClass(1, 5)
+        env.exit(0)

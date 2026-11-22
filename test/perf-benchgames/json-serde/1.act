@@ -9,15 +9,16 @@ def checksum(data: bytes) -> str:
     return "".join([hex(b)[2:].zfill(2) for b in std.crypto.hash.md5.hash(data)])
 
 actor main(env):
-    name = env.argv[1] if len(env.argv) > 1 else "sample"
-    n = int(env.argv[2]) if len(env.argv) > 2 else 3
-    source = file.ReadFile(file.ReadFileCap(file.FileCap(env.cap)), name + ".json")
-    text = source.read().decode().lstrip("\ufeff")
-    source.close()
-    obj = std.json.decode(text)
-    print(checksum(std.json.encode(obj).encode()))
-    objects: list[?value] = []
-    for _ in range(n):
-        objects.append(std.json.decode(text))
-    print(checksum(std.json.encode_list(objects).encode()))
-    env.exit(0)
+    proc def __startup__():
+        name = env.argv[1] if len(env.argv) > 1 else "sample"
+        n = int(env.argv[2]) if len(env.argv) > 2 else 3
+        source = file.ReadFile(file.ReadFileCap(file.FileCap(env.cap)), name + ".json")
+        text = source.read().decode().lstrip("\ufeff")
+        source.close()
+        obj = std.json.decode(text)
+        print(checksum(std.json.encode(obj).encode()))
+        objects: list[?value] = []
+        for _ in range(n):
+            objects.append(std.json.decode(text))
+        print(checksum(std.json.encode_list(objects).encode()))
+        env.exit(0)

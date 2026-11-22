@@ -13,7 +13,8 @@ actor Manager():
         pass
 
 actor main(env):
-    mgr = Manager()
-    decoder = mgr.create_decoder()
-    apa = mgr.create_apa()
-    env.exit(0)
+    proc def __startup__():
+        mgr = Manager()
+        decoder = mgr.create_decoder()
+        apa = mgr.create_apa()
+        env.exit(0)

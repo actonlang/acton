@@ -19,8 +19,9 @@ class TestClass(object):
         self.z = compute_value(self.x) + compute_value(self.y)
 
 actor main(env):
-    t = TestClass(10)
-    print(t.x)  # Should be 30
-    print(t.y)  # Should be 20
-    print(t.z)  # Should be 80
-    env.exit(0)
+    proc def __startup__():
+        t = TestClass(10)
+        print(t.x)  # Should be 30
+        print(t.y)  # Should be 20
+        print(t.z)  # Should be 80
+        env.exit(0)

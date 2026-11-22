@@ -25,8 +25,9 @@ def run() -> bool:
     return Foo() == Foo() and Bar() == Bar()
 
 actor main(env):
-    if run():
-        env.exit(0)
-    else:
-        print("Mutually dependent witnesses compared equal values as different")
-        env.exit(1)
+    proc def __startup__():
+        if run():
+            env.exit(0)
+        else:
+            print("Mutually dependent witnesses compared equal values as different")
+            env.exit(1)

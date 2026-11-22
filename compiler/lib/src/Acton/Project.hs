@@ -268,7 +268,7 @@ findPaths actFile opts  = do execDir <- takeDirectory <$> getExecutablePath
                                                , isTmp      = isTmp
                                                , projName   = projName
                                                }
-                                 mn    = A.modName $ (if isTmp then dirInSrc else projName:dirInSrc) ++ [takeBaseName actFile]
+                                 mn    = projectModName projName (dirInSrc ++ [takeBaseName actFile])
                              createModuleDirectories paths mn
                              return (paths, mn)
   where analyze "/" ds  = do tmp <- canonicalizePath (C.tempdir opts)

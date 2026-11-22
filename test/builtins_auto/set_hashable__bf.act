@@ -1,3 +1,6 @@
 actor main(env):
-    print(hash({1, 2, 3}))
-    env.exit(0)
+
+
+    proc def __startup__():
+        print(hash({1, 2, 3}))
+        env.exit(0)

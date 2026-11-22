@@ -76,11 +76,12 @@ def check_scalar_conversions():
             raise ValueError("int accepted base " + str(base))
 
 actor main(env):
-    try:
-        check_int_strings()
-        check_out_of_range()
-        check_scalar_conversions()
-        env.exit(0)
-    except Exception as e:
-        print(e)
-        env.exit(1)
+    proc def __startup__():
+        try:
+            check_int_strings()
+            check_out_of_range()
+            check_scalar_conversions()
+            env.exit(0)
+        except Exception as e:
+            print(e)
+            env.exit(1)

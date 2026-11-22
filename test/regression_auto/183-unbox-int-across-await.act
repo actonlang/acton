@@ -19,36 +19,37 @@ actor Counter():
         return 1.5
 
 actor main(env):
-    c = Counter()
+    proc def __startup__():
+        c = Counter()
 
-    def run():
-        # accumulate an int across an awaited actor call, in a loop
-        n = 0
-        for _i in range(3):
-            n += c.get()
+        def run():
+            # accumulate an int across an awaited actor call, in a loop
+            n = 0
+            for _i in range(3):
+                n += c.get()
 
-        # single await (no loop) is enough to exercise the same path
-        s = 0
-        s += c.get()
+            # single await (no loop) is enough to exercise the same path
+            s = 0
+            s += c.get()
 
-        # a different augmented operator across the await
-        m = 100
-        for _i in range(3):
-            m -= c.get()
+            # a different augmented operator across the await
+            m = 100
+            for _i in range(3):
+                m -= c.get()
 
-        # float accumulator across the await
-        x = 0.0
-        for _i in range(4):
-            x += c.getf()
+            # float accumulator across the await
+            x = 0.0
+            for _i in range(4):
+                x += c.getf()
 
-        # Force a dereference of each accumulator's boxed slot. Under the bug the
-        # slot holds a misaligned pointer and this traps ("misaligned address ...
-        # struct B_int"); under the fix it prints the values below.
-        print("n=", n, " s=", s, " m=", m, " x=", x)
+            # Force a dereference of each accumulator's boxed slot. Under the bug the
+            # slot holds a misaligned pointer and this traps ("misaligned address ...
+            # struct B_int"); under the fix it prints the values below.
+            print("n=", n, " s=", s, " m=", m, " x=", x)
 
-        if n == 3 and s == 1 and m == 97 and x == 6.0:
-            env.exit(0)
-        else:
-            env.exit(1)
+            if n == 3 and s == 1 and m == 97 and x == 6.0:
+                env.exit(0)
+            else:
+                env.exit(1)
 
-    run()
+        run()

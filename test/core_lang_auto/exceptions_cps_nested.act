@@ -165,17 +165,18 @@ actor Runner():
 
 
 actor main(env):
-    r = Runner()
-    ok = r.run()
+    proc def __startup__():
+        r = Runner()
+        ok = r.run()
 
-    # A catcher that run() left behind on r would take the exception that
-    # probe() leaves unhandled, instead of letting it reach us. The result is
-    # used, so that the call waits for it rather than being sent async.
-    try:
-        v = r.probe()
-        print("Bad: probe() returned", v)
-        ok = False
-    except ValueError:
-        pass
+        # A catcher that run() left behind on r would take the exception that
+        # probe() leaves unhandled, instead of letting it reach us. The result is
+        # used, so that the call waits for it rather than being sent async.
+        try:
+            v = r.probe()
+            print("Bad: probe() returned", v)
+            ok = False
+        except ValueError:
+            pass
 
-    env.exit(0 if ok else 1)
+        env.exit(0 if ok else 1)

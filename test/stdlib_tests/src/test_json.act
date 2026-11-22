@@ -126,27 +126,30 @@ def _test_json_encode_fixed_size_int():
     )
 
 actor _test_json_actor(t: testing.AsyncT):
-    j = std.json.Json()
 
-    obj = r"""{"a":1,"b":[2,3]}"""
-    decoded = await async j.decode(obj)
-    testing.assertNotNone(decoded, "Json actor decode() returned None")
-    encoded = await async j.encode(decoded)
-    testing.assertEqual(obj, encoded, "Json actor dict round-trip mismatch")
 
-    arr = r"""[1,2,3]"""
-    decoded_list = await async j.decode_list(arr)
-    testing.assertNotNone(decoded_list, "Json actor decode_list() returned None")
-    encoded_list = await async j.encode_list(decoded_list)
-    testing.assertEqual(arr, encoded_list, "Json actor list round-trip mismatch")
+    proc def __startup__():
+        j = std.json.Json()
 
-    bigint_obj = {"value": bigint("18446744073709551616")}
-    encoded_bigint = await async j.encode(bigint_obj)
-    testing.assertEqual(r"""{"value":18446744073709551616}""", encoded_bigint, "Json actor bigint encoding mismatch")
-    encoded_bigint_string = await async j.encode(bigint_obj, False, True)
-    testing.assertEqual(r"""{"value":"18446744073709551616"}""", encoded_bigint_string, "Json actor bigint string encoding mismatch")
+        obj = r"""{"a":1,"b":[2,3]}"""
+        decoded = await async j.decode(obj)
+        testing.assertNotNone(decoded, "Json actor decode() returned None")
+        encoded = await async j.encode(decoded)
+        testing.assertEqual(obj, encoded, "Json actor dict round-trip mismatch")
 
-    t.success()
+        arr = r"""[1,2,3]"""
+        decoded_list = await async j.decode_list(arr)
+        testing.assertNotNone(decoded_list, "Json actor decode_list() returned None")
+        encoded_list = await async j.encode_list(decoded_list)
+        testing.assertEqual(arr, encoded_list, "Json actor list round-trip mismatch")
+
+        bigint_obj = {"value": bigint("18446744073709551616")}
+        encoded_bigint = await async j.encode(bigint_obj)
+        testing.assertEqual(r"""{"value":18446744073709551616}""", encoded_bigint, "Json actor bigint encoding mismatch")
+        encoded_bigint_string = await async j.encode(bigint_obj, False, True)
+        testing.assertEqual(r"""{"value":"18446744073709551616"}""", encoded_bigint_string, "Json actor bigint string encoding mismatch")
+
+        t.success()
 
 
 def _test_json_rejects_truncated_input():

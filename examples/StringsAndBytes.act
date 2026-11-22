@@ -1,7 +1,7 @@
 actor main(env):
+    proc def __startup__():
 
-   s = "\x48ello, world"
-   print(s)
+       s = "\x48ello, world"
+       print(s)
 
-   env.exit(0)
-
+       env.exit(0)

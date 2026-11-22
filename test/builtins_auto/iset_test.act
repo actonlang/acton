@@ -73,8 +73,9 @@ def test_union(env):
         env.exit(1)
 
 actor main(env):
-    test_operations(env)
-    test_independent_storage(env)
-    test_serialization(env)
-    test_union(env)
-    env.exit(0)
+    proc def __startup__():
+        test_operations(env)
+        test_independent_storage(env)
+        test_serialization(env)
+        test_union(env)
+        env.exit(0)

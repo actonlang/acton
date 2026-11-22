@@ -1,0 +1,130 @@
+# A raise expression takes its result type from its context and adds no effect.
+pure def checked(x: int) -> int:
+    return x if x >= 0 else raise ValueError("negative")
+
+pure def checked_string(x: ?str) -> str:
+    return x if x is not None else raise ValueError("missing")
+
+pure def required[T](x: ?T) -> T:
+    return x if x is not None else raise ValueError("required")
+
+pure def invoke(f: pure() -> int) -> int:
+    return f()
+
+pure def checked_raw(x: bool) -> u64:
+    return u64(42) if x else raise ValueError("raw")
+
+pure def return_raise() -> str:
+    return raise ValueError("return")
+
+proc def make_error(events: list[int]) -> ValueError:
+    events.append(1)
+    return ValueError("once")
+
+pure def always_raises() -> int:
+    value = raise ValueError("assignment")
+
+class Checked(object):
+    value: int
+
+    def __init__(self, valid: bool):
+        if valid:
+            self.value = 42
+        else:
+            value = raise ValueError("constructor")
+
+actor Declarative(valid: bool):
+    value = 42 if valid else raise ValueError("actor")
+    var state: int = 7 if valid else raise ValueError("state")
+
+    def read() -> int:
+        return value + state
+
+    def error() -> ValueError:
+        return ValueError("awaited exception")
+
+proc def run_checks(env):
+    assert checked(42) == 42
+    assert checked_string("ok") == "ok"
+    assert checked_raw(True) == u64(42)
+    assert required("generic") == "generic"
+    empty: list[int] = [(raise ValueError("empty")) for item in []]
+    assert empty == []
+    lazy = ((raise ValueError("deferred")) for item in [1])
+    assert Checked(True).value == 42
+    actor_value = Declarative(True)
+    assert actor_value.read() == 49
+    assert (False and (raise ValueError("and"))) == False
+    assert (True or (raise ValueError("or"))) == True
+    fail = pure lambda: raise ValueError("lambda")
+    events: list[int] = []
+    caught = 0
+    try:
+        checked(-1)
+    except ValueError:
+        caught += 1
+    try:
+        checked_string(None)
+    except ValueError:
+        caught += 1
+    try:
+        checked_raw(False)
+    except ValueError:
+        caught += 1
+    try:
+        always_raises()
+    except ValueError:
+        caught += 1
+    try:
+        Checked(False)
+    except ValueError:
+        caught += 1
+    try:
+        fail()
+    except ValueError:
+        caught += 1
+    try:
+        value = [1, raise ValueError("list")]
+    except ValueError:
+        caught += 1
+    try:
+        value = checked(raise ValueError("argument"))
+    except ValueError:
+        caught += 1
+    try:
+        invoke(pure lambda: raise ValueError("typed lambda"))
+    except ValueError:
+        caught += 1
+    try:
+        list(lazy)
+    except ValueError:
+        caught += 1
+    try:
+        return_raise()
+    except ValueError:
+        caught += 1
+    try:
+        value = raise make_error(events)
+    except ValueError:
+        caught += 1
+    assert events == [1]
+    try:
+        value: int = raise actor_value.error()
+    except ValueError:
+        caught += 1
+    try:
+        value = actor_value.read() if False else raise ValueError("CPS branch")
+    except ValueError:
+        caught += 1
+    try:
+        raise ValueError("selected") if True else Exception("unselected")
+    except ValueError:
+        caught += 1
+    finally:
+        caught += 10
+    assert caught == 25
+    env.exit(0)
+
+actor main(env):
+    proc def __startup__():
+        run_checks(env)

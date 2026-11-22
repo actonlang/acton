@@ -1,6 +1,7 @@
 actor main(env):
+    proc def __startup__():
 
-    def exit():
-        env.exit(0)
+        def exit():
+            env.exit(0)
 
-    after 10: exit()
+        after 10: exit()

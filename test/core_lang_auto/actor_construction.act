@@ -1,0 +1,137 @@
+actor Journal():
+    var entries: list[str] = []
+
+    def record(entry: str):
+        entries.append(entry)
+
+    def read() -> list[str]:
+        return list(entries)
+
+actor Leaf(journal: Journal, label: str):
+    own_id = actorid()
+    initial_message = async journal.record("init-" + label)
+    var started = False
+
+    def ping() -> int:
+        assert started
+        journal.record("ping-" + label)
+        return 1
+
+    proc def __startup__():
+        started = True
+        journal.record("startup-" + label)
+
+    # The migration-era call must not cause startup to execute twice.
+    __startup__()
+
+actor Family(journal: Journal, valid: bool):
+    child = Leaf(journal, "child")
+    early_ping = async child.ping()
+    checked = 1 if valid else raise ValueError("construction failed")
+    var started = False
+
+    def ready() -> bool:
+        return started
+
+    proc def __startup__():
+        started = True
+        journal.record("startup-family")
+
+com def make_family(journal: Journal, valid: bool) -> Family:
+    return Family(journal, valid)
+
+# A helper can catch a nested constructor's failure. It must not turn the
+# containing construction into a partially successful transaction.
+com def catch_failure(journal: Journal) -> int:
+    try:
+        failed = Family(journal, False)
+    except ValueError:
+        return 1
+    return 0
+
+actor CaughtFailure(journal: Journal):
+    caught = catch_failure(journal)
+
+    proc def __startup__():
+        journal.record("must-not-run")
+
+actor Collected(journal: Journal, rts: EnvRTS, valid: bool):
+    child = Leaf(journal, "collected")
+    collected = rts.gc()
+    checked = 1 if valid else raise ValueError("collected failure")
+
+actor EmptyStartup():
+    def __startup__():
+        pass
+
+actor ExplicitStartup():
+    __startup__: action() -> None
+
+    action def __startup__() -> None:
+        return None
+
+actor GenericStartup():
+    def __startup__[T]() -> None:
+        pass
+
+actor PureImplementation():
+    pure def __startup__() -> None:
+        pass
+
+pure def accepts_startup(f: action() -> None) -> None:
+    pass
+
+proc def run_checks(env):
+    journal = Journal()
+    parent_id = actorid()
+    async journal.record("before")
+    try:
+        failed = make_family(journal, False)
+        assert False
+    except ValueError:
+        pass
+    assert actorid() == parent_id
+    async journal.record("caught")
+    assert journal.read() == ["before", "caught"]
+
+    try:
+        failed = CaughtFailure(journal)
+        assert False
+    except ValueError:
+        pass
+    assert actorid() == parent_id
+    assert journal.read() == ["before", "caught"]
+
+    try:
+        failed = Collected(journal, env.rts, False)
+        assert False
+    except ValueError:
+        pass
+    assert journal.read() == ["before", "caught"]
+    collected = Collected(journal, env.rts, True)
+    assert collected.child.ping() == 1
+
+    family = make_family(journal, True)
+    assert actorid() == parent_id
+    assert family.child.own_id != parent_id
+    assert family.ready()
+    assert family.child.ping() == 1
+    entries = journal.read()
+    assert entries.count("init-child") == 1
+    assert entries.count("startup-child") == 1
+    assert entries.count("startup-family") == 1
+    assert entries.count("ping-child") == 2
+    assert entries.index("startup-child") < entries.index("ping-child")
+    empty = EmptyStartup()
+    accepts_startup(empty.__startup__)
+    explicit = ExplicitStartup()
+    accepts_startup(explicit.__startup__)
+    generic = GenericStartup()
+    accepts_startup(generic.__startup__)
+    pure_body = PureImplementation()
+    accepts_startup(pure_body.__startup__)
+    env.exit(0)
+
+actor main(env):
+    proc def __startup__():
+        run_checks(env)

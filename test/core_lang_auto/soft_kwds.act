@@ -72,4 +72,5 @@ actor Eepa():
 #actor: str = ""
 
 actor main(env):
-    env.exit(0)
+    proc def __startup__():
+        env.exit(0)

@@ -23,7 +23,10 @@
 #    its handle_timeout delivery DOES ENQ_ready it) bounds the run.
 
 actor Watchdog(env):
-    after 10.0: env.exit(1)
+
+
+    proc def __startup__():
+        after 10.0: env.exit(1)
 
 actor Leaf():
     def leaf() -> int:
@@ -38,16 +41,17 @@ actor Top(nxt):
         return nxt.mid() + 1
 
 actor main(env):
-    wd = Watchdog(env)
-    l = Leaf()
-    m = Mid(l)
-    t = Top(m)
+    proc def __startup__():
+        wd = Watchdog(env)
+        l = Leaf()
+        m = Mid(l)
+        t = Top(m)
 
-    def go():
-        v = t.top()
-        if v == 3:
-            print("chain ok")
-            env.exit(0)
-        env.exit(1)
+        def go():
+            v = t.top()
+            if v == 3:
+                print("chain ok")
+                env.exit(0)
+            env.exit(1)
 
-    go()
+        go()

@@ -26,29 +26,30 @@ def decompress(key: int, k: int) -> str:
     return "".join(chars)
 
 actor main(env):
-    path = env.argv[1] if len(env.argv) > 1 else "25000_in"
-    source = file.ReadFile(file.ReadFileCap(file.FileCap(env.cap)), path)
-    data = source.read()
-    source.close()
-    parts = []
-    reading = False
-    for line in data.splitlines():
-        if line.startswith(b">"):
-            if reading:
-                break
-            reading = line.startswith(b">THREE")
-        elif reading:
-            parts.append(line.strip())
-    # ASCII upper- and lowercase bases have the same two-bit encoding.
-    sequence = b"".join(parts)
-    for k in [1, 2]:
-        counts = frequencies(sequence, k)
-        rows = [(-count, decompress(key, k)) for key, count in counts.items()]
-        for negative_count, text in sorted(rows):
-            print("%s %.3f" % (text, -100.0 * float(negative_count) / float(len(sequence) - k + 1)))
-        print("")
-    for text in ["GGT", "GGTA", "GGTATT", "GGTATTTTAATT", "GGTATTTTAATTTATAGT"]:
-        counts = frequencies(sequence, len(text))
-        key = compress(text)
-        print("%d\t%s" % (counts[key] if key in counts else 0, text))
-    env.exit(0)
+    proc def __startup__():
+        path = env.argv[1] if len(env.argv) > 1 else "25000_in"
+        source = file.ReadFile(file.ReadFileCap(file.FileCap(env.cap)), path)
+        data = source.read()
+        source.close()
+        parts = []
+        reading = False
+        for line in data.splitlines():
+            if line.startswith(b">"):
+                if reading:
+                    break
+                reading = line.startswith(b">THREE")
+            elif reading:
+                parts.append(line.strip())
+        # ASCII upper- and lowercase bases have the same two-bit encoding.
+        sequence = b"".join(parts)
+        for k in [1, 2]:
+            counts = frequencies(sequence, k)
+            rows = [(-count, decompress(key, k)) for key, count in counts.items()]
+            for negative_count, text in sorted(rows):
+                print("%s %.3f" % (text, -100.0 * float(negative_count) / float(len(sequence) - k + 1)))
+            print("")
+        for text in ["GGT", "GGTA", "GGTATT", "GGTATTTTAATT", "GGTATTTTAATTTATAGT"]:
+            counts = frequencies(sequence, len(text))
+            key = compress(text)
+            print("%d\t%s" % (counts[key] if key in counts else 0, text))
+        env.exit(0)

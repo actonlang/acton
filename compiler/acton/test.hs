@@ -579,7 +579,8 @@ compilerTests =
             ]
           writeFile (proj </> "src" </> "main.act") $ unlines
             [ "actor main(env):"
-            , "    env.exit(0)"
+            , "    proc def __startup__():"
+            , "        env.exit(0)"
             ]
           assertMissing "acton FILE outside a project" tmp [missing] missing
           assertMissing "acton build FILE outside a project" tmp ["build", missing] missing
@@ -617,9 +618,10 @@ compilerTests =
             , "import c"
             , ""
             , "actor main(env: Env):"
-            , "    print(a.foo())"
-            , "    print(c.bar())"
-            , "    env.exit(0)"
+            , "    proc def __startup__():"
+            , "        print(a.foo())"
+            , "        print(c.bar())"
+            , "        env.exit(0)"
             ]
           (returnCode, _cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc actonExe ["build", "--color", "never", "src/b.act"]){ cwd = Just proj } ""
           assertEqual ("acton should build executable with dynamic module library: " ++ cmdErr) ExitSuccess returnCode
@@ -690,8 +692,9 @@ compilerTests =
             [ "import a"
             , ""
             , "actor main(env: Env):"
-            , "    print(a.total(100))"
-            , "    env.exit(0)"
+            , "    proc def __startup__():"
+            , "        print(a.total(100))"
+            , "        env.exit(0)"
             ]
           (returnCode, _cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc actonExe ["build", "--release", "--color", "never"]){ cwd = Just proj } ""
           assertEqual ("acton should build release executable with dynamic module library: " ++ cmdErr) ExitSuccess returnCode
@@ -735,8 +738,9 @@ compilerTests =
             [ "import a"
             , ""
             , "actor main(env: Env):"
-            , "    print(a.greeting())"
-            , "    env.exit(0)"
+            , "    proc def __startup__():"
+            , "        print(a.greeting())"
+            , "        env.exit(0)"
             ]
           (returnCode, _cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc actonExe ["build", "--color", "never"]){ cwd = Just proj } ""
           assertEqual ("acton should build executable with dynamic module library: " ++ cmdErr) ExitSuccess returnCode
@@ -747,9 +751,10 @@ compilerTests =
             [ "import a"
             , ""
             , "actor main(env: Env):"
-            , "    print(a.greeting())"
-            , "    print(a.greeting())"
-            , "    env.exit(0)"
+            , "    proc def __startup__():"
+            , "        print(a.greeting())"
+            , "        print(a.greeting())"
+            , "        env.exit(0)"
             ]
           (rebuildCode, _rebuildOut, rebuildErr) <- readCreateProcessWithExitCode (proc actonExe ["build", "--color", "never"]){ cwd = Just proj } ""
           assertEqual ("acton should rebuild executable with dynamic module library: " ++ rebuildErr) ExitSuccess rebuildCode
@@ -764,8 +769,8 @@ compilerTests =
               , "answer = 42"
               , "import std.math"
               , "class Box(object):\n    def __init__(self, name: str):\n        self.name = name\n    def describe(self) -> str:\n        return \"class \" + self.name"
-              , "actor Foo():\n    print(\"old Foo\")"
-              , "actor Foo():\n    print(\"hello from Foo\")"
+              , "actor Foo():\n    proc def __startup__():\n        print(\"old Foo\")\n    __startup__()"
+              , "actor Foo():\n    proc def __startup__():\n        print(\"hello from Foo\")\n    __startup__()"
               ]
         st <- foldM Repl.addReplInput Repl.emptyReplState inputs
         let sessionSrc = Repl.renderReplSessionSource st
@@ -839,12 +844,20 @@ compilerTests =
               , ""
               , "Other().say()"
               , "actor Foo():"
-              , "    print(\"old Foo\")"
+              , "    proc def __startup__():"
+              , "        print(\"old Foo\")"
+              , "    action def ready():"
+              , "        pass"
               , ""
               , "actor Foo():"
-              , "    print(\"hello from Foo\")"
+              , "    proc def __startup__():"
+              , "        print(\"hello from Foo\")"
+              , "    action def ready():"
+              , "        pass"
               , ""
               , "f = Foo()"
+              -- Construction does not wait for startup; a subsequent message does.
+              , "f.ready()"
               , "def gone() -> str:"
               , "    return \"reset leak\""
               , ""
@@ -1037,8 +1050,9 @@ compilerTests =
             [ "import provider"
             , ""
             , "actor main(env):"
-            , "    print(provider.make_box().get())"
-            , "    env.exit(0)"
+            , "    proc def __startup__():"
+            , "        print(provider.make_box().get())"
+            , "        env.exit(0)"
             ]
           firstLog <- assertOk "initial dbp build" =<<
             runBuild ["build", "--skip-build", "--verbose", "--color", "never"]
@@ -1051,8 +1065,9 @@ compilerTests =
             [ "import provider"
             , ""
             , "actor main(env):"
-            , "    print(provider.unused_0())"
-            , "    env.exit(0)"
+            , "    proc def __startup__():"
+            , "        print(provider.unused_0())"
+            , "        env.exit(0)"
             ]
           changedConsumerLog <- assertOk "changed consumer updates dbp selection" =<<
             runBuild ["build", "--skip-build", "--verbose", "--color", "never"]
@@ -1083,9 +1098,10 @@ compilerTests =
             [ "import provider"
             , ""
             , "actor main(env):"
-            , "    f = provider.local_container_name"
-            , "    print(\"ok\")"
-            , "    env.exit(0)"
+            , "    proc def __startup__():"
+            , "        f = provider.local_container_name"
+            , "        print(\"ok\")"
+            , "        env.exit(0)"
             ]
           _thirdLog <- assertOk "dbp local name shadows builtin" =<<
             runBuild ["build", "--skip-build", "--verbose", "--color", "never"]
@@ -1095,8 +1111,9 @@ compilerTests =
             [ "import provider"
             , ""
             , "actor main(env):"
-            , "    print(provider.render_box())"
-            , "    env.exit(0)"
+            , "    proc def __startup__():"
+            , "        print(provider.render_box())"
+            , "        env.exit(0)"
             ]
           fourthLog <- assertOk "dbp keeps extension" =<<
             runBuild ["build", "--skip-build", "--verbose", "--color", "never"]
@@ -1107,7 +1124,8 @@ compilerTests =
             [ "import provider"
             , ""
             , "actor main(env):"
-            , "    env.exit(0)"
+            , "    proc def __startup__():"
+            , "        env.exit(0)"
             ]
           fifthLog <- assertOk "dbp empty interest" =<<
             runBuild ["build", "--skip-build", "--verbose", "--color", "never"]
@@ -1174,8 +1192,9 @@ compilerTests =
             [ "import b"
             , ""
             , "actor main(env):"
-            , "    print(b.exposed())"
-            , "    env.exit(0)"
+            , "    proc def __startup__():"
+            , "        print(b.exposed())"
+            , "        env.exit(0)"
             ]
           logTxt <- assertOk "dbp skips library boundary" =<<
             runBuild ["build", "--skip-build", "--verbose", "--color", "never", "src/c.act"]
@@ -1215,7 +1234,8 @@ compilerTests =
             ]
           writeFile (rootProj </> "src" </> "main.act") $ unlines
             [ "actor main(env):"
-            , "    env.exit(0)"
+            , "    proc def __startup__():"
+            , "        env.exit(0)"
             ]
           writeFile (specProj </> "Build.act") $ unlines
             [ "name = \"spec_proj\""
@@ -1288,7 +1308,8 @@ compilerTests =
             ]
           writeFile (rootProj </> "src" </> "main.act") $ unlines
             [ "actor main(env):"
-            , "    env.exit(0)"
+            , "    proc def __startup__():"
+            , "        env.exit(0)"
             ]
           (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode
             (proc actonExe ["fetch"]) { cwd = Just rootProj, env = Just envWithHome } ""
@@ -1396,7 +1417,8 @@ compilerTests =
             [ "import mid"
             , ""
             , "actor main(env):"
-            , "    env.exit(mid.marker())"
+            , "    proc def __startup__():"
+            , "        env.exit(mid.marker())"
             ]
 
           (returnCode, cmdOut, cmdErr) <- runBuild rootProj
@@ -1487,8 +1509,9 @@ compilerTests =
               [ "import mid.used"
               , ""
               , "actor main(env: Env):"
-              , "    print(mid.used.value())"
-              , "    env.exit(0)"
+              , "    proc def __startup__():"
+              , "        print(mid.used.value())"
+              , "        env.exit(0)"
               ]
 
             assertBuildOk "initial build of mid dependency" =<< runBuild midProj
@@ -1513,8 +1536,9 @@ compilerTests =
               ]
             writeFile actFile $ unlines
               [ "actor main(env):"
-              , "    print(\"Hello, world\")"
-              , "    env.exit(0)"
+              , "    proc def __startup__():"
+              , "        print(\"Hello, world\")"
+              , "        env.exit(0)"
               ]
             runActon "build" ExitSuccess False proj
             zon <- readFile (proj </> "out/zig/build.zig.zon")
@@ -1535,8 +1559,9 @@ compilerTests =
             writeFile actFile $ unlines
               [ "#!/usr/bin/env runacton"
               , "actor main(env):"
-              , "    print(\"Hello, world\")"
-              , "    env.exit(0)"
+              , "    proc def __startup__():"
+              , "        print(\"Hello, world\")"
+              , "        env.exit(0)"
               ]
             perms <- getPermissions actFile
             setPermissions actFile perms{ executable = True }
@@ -1552,8 +1577,9 @@ compilerTests =
             writeFile script $ unlines
               [ "#!/usr/bin/env runacton"
               , "actor main(env):"
-              , "    print(\"Hello from runacton\")"
-              , "    env.exit(0)"
+              , "    proc def __startup__():"
+              , "        print(\"Hello from runacton\")"
+              , "        env.exit(0)"
               ]
             perms <- getPermissions script
             setPermissions script perms{ executable = True }
@@ -1579,14 +1605,16 @@ compilerTests =
               ]
             writeFile mainFile $ unlines
               [ "actor main(env):"
-              , "    print(\"Project main\")"
-              , "    env.exit(0)"
+              , "    proc def __startup__():"
+              , "        print(\"Project main\")"
+              , "        env.exit(0)"
               ]
             writeFile script $ unlines
               [ "#!/usr/bin/env runacton"
               , "actor main(env):"
-              , "    print(\"Script main\")"
-              , "    env.exit(0)"
+              , "    proc def __startup__():"
+              , "        print(\"Script main\")"
+              , "        env.exit(0)"
               ]
             perms <- getPermissions script
             setPermissions script perms{ executable = True }
@@ -1769,7 +1797,8 @@ parseFlagTests =
         writeBuildActAt rootProj "sig_root" [("sig_dep", depProj)]
         writeFile (rootProj </> "src" </> "main.act") $ unlines
           [ "actor main(env):"
-          , "    env.exit(0)"
+          , "    proc def __startup__():"
+          , "        env.exit(0)"
           ]
 
         (sigCode, sigOut, sigErr) <- readCreateProcessWithExitCode
@@ -1841,7 +1870,8 @@ parseFlagTests =
           [ "from lib import _private"
           , ""
           , "actor main(env):"
-          , "    env.exit(0)"
+          , "    proc def __startup__():"
+          , "        env.exit(0)"
           ]
         (importCode, _importOut, importErr) <- readCreateProcessWithExitCode
           (proc actonExe ["build", "--syspath", sysPath, "--skip-build", "src/main.act"])
@@ -1863,7 +1893,8 @@ parseFlagTests =
           [ "from lib import _private"
           , ""
           , "actor main(env):"
-          , "    env.exit(0)"
+          , "    proc def __startup__():"
+          , "        env.exit(0)"
           ]
         (cachedImportCode, _cachedImportOut, cachedImportErr) <- readCreateProcessWithExitCode
           (proc actonExe ["build", "--syspath", sysPath, "--skip-build", "src/main.act"])
@@ -1990,8 +2021,9 @@ parseFlagTests =
           , "import provider"
           , ""
           , "actor _test_foo(t: testing.EnvT):"
-          , "    assert provider.ready()"
-          , "    t.success()"
+          , "    proc def __startup__():"
+          , "        assert provider.ready()"
+          , "        t.success()"
           , ""
           , "def _test_foobar() -> None:"
           , "    assert std.math.sqrt(9.0) == 3.0"
@@ -2015,7 +2047,8 @@ parseFlagTests =
           [ "import testing"
           , ""
           , "actor Foo(t: testing.EnvT):"
-          , "    t.success()"
+          , "    proc def __startup__():"
+          , "        t.success()"
           ]
         writeFile (srcDir </> "broken.act") $ unlines
           [ "import testing"
@@ -2025,8 +2058,9 @@ parseFlagTests =
           ]
         writeFile (srcDir </> "app.act") $ unlines
           [ "actor main(env):"
-          , "    print(\"standalone app\")"
-          , "    env.exit(0)"
+          , "    proc def __startup__():"
+          , "        print(\"standalone app\")"
+          , "        env.exit(0)"
           ]
 
         checkTests ["--name", "oo"] []
@@ -2167,8 +2201,9 @@ parseFlagTests =
           [ "import header_helper.api"
           , ""
           , "actor main(env):"
-          , "    assert header_helper.api.value() == 42"
-          , "    env.exit(0)"
+          , "    proc def __startup__():"
+          , "        assert header_helper.api.value() == 42"
+          , "        env.exit(0)"
           ]
         writeSource app "chosen"
           [ "import testing"
@@ -2246,10 +2281,12 @@ parseFlagTests =
         writeFile (proj </> "Build.act") ("name = " ++ show name ++ "\nfingerprint = " ++ fp ++ "\n")
         writeFile (proj </> "src/main.act") $ unlines
           [ "actor first(env: Env):"
-          , "    env.exit(11)"
+          , "    proc def __startup__():"
+          , "        env.exit(11)"
           , ""
           , "actor second(env: Env):"
-          , "    env.exit(12)"
+          , "    proc def __startup__():"
+          , "        env.exit(12)"
           ]
         build "first"
         forM_ ["build.zig", "build.zig.zon"] $ \file ->
@@ -2296,7 +2333,8 @@ parseFlagTests =
           , "    testing.assertEqual(1, 1)"
           , ""
           , "actor main(env):"
-          , "    env.exit(0)"
+          , "    proc def __startup__():"
+          , "        env.exit(0)"
           ]
         buildOut <- run ["build", "--timing", "--color", "always"]
         forM_ [ "compile planning", "Acton compilation", "dependency build preparation"
@@ -2462,8 +2500,9 @@ actonProjTests =
             [ "import std.json"
             , ""
             , "actor main(env):"
-            , "    print(std.json.encode({\"answer\": 42}))"
-            , "    env.exit(0)"
+            , "    proc def __startup__():"
+            , "        print(std.json.encode({\"answer\": 42}))"
+            , "        env.exit(0)"
             ]
           (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode
             (proc actonExe ["build", "--color", "never"]) { cwd = Just proj } ""
@@ -2507,8 +2546,9 @@ actonProjTests =
             , "    def hash(self, h):"
             , "        retained = lambda: h"
             , "actor main(env):"
-            , "    print(hash(Bad(1)))"
-            , "    env.exit(0)"
+            , "    proc def __startup__():"
+            , "        print(hash(Bad(1)))"
+            , "        env.exit(0)"
             ]
           (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode
             (proc actonExe ["build", "--skip-build", "--color", "never"])
@@ -2611,10 +2651,11 @@ actonProjTests =
             [ "from acton_lmdb.lmdb import ready"
             , ""
             , "actor main(env):"
-            , "    if ready():"
-            , "        env.exit(0)"
-            , "    else:"
-            , "        env.exit(1)"
+            , "    proc def __startup__():"
+            , "        if ready():"
+            , "            env.exit(0)"
+            , "        else:"
+            , "            env.exit(1)"
             ]
           writeFile (wrapperProj </> "Build.act") $ unlines
             [ "name = \"acton_lmdb\""
@@ -2700,8 +2741,9 @@ actonProjTests =
             [ "import lib1.greet"
             , ""
             , "actor main(env):"
-            , "    print(lib1.greet.hello())"
-            , "    env.exit(0)"
+            , "    proc def __startup__():"
+            , "        print(lib1.greet.hello())"
+            , "        env.exit(0)"
             ]
           writeFile (lib </> "Build.act") $ unlines
             [ "name = \"lib1\""
@@ -2796,10 +2838,11 @@ actonProjTests =
             , "import dep_c"
             , ""
             , "actor main(env):"
-            , "    if dep_a.ready() and dep_b.ready() and dep_c.ready():"
-            , "        env.exit(0)"
-            , "    else:"
-            , "        env.exit(1)"
+            , "    proc def __startup__():"
+            , "        if dep_a.ready() and dep_b.ready() and dep_c.ready():"
+            , "            env.exit(0)"
+            , "        else:"
+            , "            env.exit(1)"
             ]
           writeWrapper depAProj "dep_a" "../zig_common" "lib"
           writeWrapper depBProj "dep_b" "../zig_common" "lib"
@@ -2838,8 +2881,9 @@ actonProjTests =
             ]
           writeFile mainAct $ unlines
             [ "actor main(env):"
-            , "    print(\"hello\")"
-            , "    env.exit(0)"
+            , "    proc def __startup__():"
+            , "        print(\"hello\")"
+            , "        env.exit(0)"
             ]
           actonExe <- canonicalizePath "../../dist/bin/acton"
           (returnCode, _cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc actonExe ["build", "--dep", "dep_a=deps"]){ cwd = Just proj } ""
@@ -2873,8 +2917,8 @@ actonProjTests =
             srcDir = proj </> "src"
             fooAct = srcDir </> "foo.act"
             barAct = srcDir </> "bar.act"
-            fooContent = "actor main(env):\n    print(\"foo\")\n    env.exit(0)\n"
-            barContent = "actor main(env):\n    print(\"bar\")\n    env.exit(0)\n"
+            fooContent = "actor main(env):\n    proc def __startup__():\n        print(\"foo\")\n        env.exit(0)\n"
+            barContent = "actor main(env):\n    proc def __startup__():\n        print(\"bar\")\n        env.exit(0)\n"
             barC    = proj </> "out/types/prune_partials/bar.c"
             barH    = proj </> "out/types/prune_partials/bar.h"
             barTydb = proj </> "out/types/prune_partials/bar.tydb"
@@ -2902,7 +2946,7 @@ actonProjTests =
               flatTydb = proj </> "src" </> "pkg.nested.tydb"
           createDirectoryIfMissing True srcDir
           writeFile (proj </> "Build.act") "name = \"ty_nested\"\nfingerprint = 0x36cff6d86d8575b6\n"
-          writeFile nestedAct "actor main(env):\n    env.exit(0)\n"
+          writeFile nestedAct "actor main(env):\n    proc def __startup__():\n        env.exit(0)\n"
           acton <- canonicalizePath "../../dist/bin/acton"
           (returnCode, cmdOut, cmdErr) <-
             readCreateProcessWithExitCode (proc acton ["--skip-build", "--tydb", "src/pkg/nested.act"]){ cwd = Just proj } ""
@@ -2914,7 +2958,7 @@ actonProjTests =
   , testCase "full build prunes stale roots and bins" $ do
         let proj = "test/project/prune_roots"
             barAct = proj </> "src/bar.act"
-            barContent = "#\n# removed in test to trigger pruning\n\nactor main(env):\n    print(\"bar\")\n    env.exit(0)\n"
+            barContent = "#\n# removed in test to trigger pruning\n\nactor main(env):\n    proc def __startup__():\n        print(\"bar\")\n        env.exit(0)\n"
             barRoot = proj </> "out/types/bar.root.c"
             barBin  = proj </> "out/bin/bar"
         -- Start from a clean slate and write bar.act to ensure it exists
@@ -3057,14 +3101,15 @@ gcBuildOptionTests = testGroup "GC metadata build options"
             , "import std.json"
             , ""
             , "actor main(env):"
-            , "    records = bridge.make()"
-            , "    large = \"x\" * 16384"
-            , "    env.rts.gc()"
-            , "    assert bridge.churn() == 8128"
-            , "    env.rts.gc()"
-            , "    assert large == \"x\" * 16384"
-            , "    print(std.json.encode({\"count\": bridge.verify(records)}))"
-            , "    env.exit(0)"
+            , "    proc def __startup__():"
+            , "        records = bridge.make()"
+            , "        large = \"x\" * 16384"
+            , "        env.rts.gc()"
+            , "        assert bridge.churn() == 8128"
+            , "        env.rts.gc()"
+            , "        assert large == \"x\" * 16384"
+            , "        print(std.json.encode({\"count\": bridge.verify(records)}))"
+            , "        env.exit(0)"
             ]
         let sharedFiles = [dir </> file | dir <- [bridge, shared], file <- ["Build.act", "src/lib.act"]]
         originalShared <- mapM BS.readFile sharedFiles
@@ -3682,8 +3727,9 @@ dependencyDeclarationTests =
         , "import yang.api"
         , ""
         , "actor main(env):"
-        , "    print(platform.answer() + yang.api.first_only())"
-        , "    env.exit(0)"
+        , "    proc def __startup__():"
+        , "        print(platform.answer() + yang.api.first_only())"
+        , "        env.exit(0)"
         ]
       expectSuccess "full build with the selected following dependency" =<<
         readCreateProcessWithExitCode (proc acton ["build", "--color", "never"]){ cwd = Just app } ""
@@ -4197,7 +4243,7 @@ archiveDependencyTests =
         case BuildSpec.updateBuildActFromJSON source patch of
           Left err -> assertFailure err
           Right updated -> length updated `seq` writeFile (app </> "Build.act") updated
-        writeFile (app </> "src/main.act") "import widgets\n\nactor main(env):\n    print(widgets.value())\n    env.exit(0)\n"
+        writeFile (app </> "src/main.act") "import widgets\n\nactor main(env):\n    proc def __startup__():\n        print(widgets.value())\n        env.exit(0)\n"
         expectSuccess "persistent local override" =<< run app ["build", "--skip-build"]
 
   , testCase "rejects missing and non-project archive subdirectories" $
@@ -4264,7 +4310,7 @@ archiveDependencyTests =
         (proc "tar" ["-C", tmp, "-czf", archive, "monorepo-snapshot"])
           { env = Just (("COPYFILE_DISABLE", "1") : filter ((/= "COPYFILE_DISABLE") . fst) env0) } ""
       writeProject app "app" []
-      writeFile (app </> "src/main.act") "import widgets\nimport tools\n\nactor main(env):\n    print(widgets.value() + tools.value())\n    env.exit(0)\n"
+      writeFile (app </> "src/main.act") "import widgets\nimport tools\n\nactor main(env):\n    proc def __startup__():\n        print(widgets.value() + tools.value())\n        env.exit(0)\n"
       action tmp app archive run
 
     add run app archive name dir = expectSuccess "add archive project" =<< run app

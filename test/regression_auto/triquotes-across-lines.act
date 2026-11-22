@@ -1,5 +1,6 @@
 actor main(env):
-    a = """blargh
+    proc def __startup__():
+        a = """blargh
 """
-    print(a)
-    env.exit(0)
+        print(a)
+        env.exit(0)

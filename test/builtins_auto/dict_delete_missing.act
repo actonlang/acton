@@ -35,7 +35,8 @@ def test_none_value():
     assert list(d.items()) == [("value", 1)]
 
 actor main(env):
-    for n in [0, 1, 2, 3, 8, 33, 1000]:
-        test_missing_delete(n)
-    test_none_value()
-    env.exit(0)
+    proc def __startup__():
+        for n in [0, 1, 2, 3, 8, 33, 1000]:
+            test_missing_delete(n)
+        test_none_value()
+        env.exit(0)

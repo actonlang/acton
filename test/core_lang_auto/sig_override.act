@@ -8,9 +8,9 @@ class Bepa (Apa):
 class Parent ():
     def __init__(self):
         pass
-    
+
     meth : (int) -> Apa
-    
+
     def meth(self, i):
         return Apa()
 
@@ -25,4 +25,5 @@ p = Parent()
 #c = Child()     # Must fail!
 
 actor main(env):
-    env.exit(0)
+    proc def __startup__():
+        env.exit(0)

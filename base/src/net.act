@@ -126,7 +126,6 @@ actor UDPConnection(cap: UDPConnectCap, address: str, port: int, on_connect: act
 
     proc def _pin_affinity() -> None:
         NotImplemented
-    _pin_affinity()
 
     def _on_dns_resolve(ip_version: int, result: list[str]):
         if _state != STATE_RESOLVING:
@@ -239,7 +238,10 @@ actor UDPConnection(cap: UDPConnectCap, address: str, port: int, on_connect: act
                 datagrams_in=_datagrams_in,
                 datagrams_out=_datagrams_out)
 
-    _connect(self)
+    proc def __startup__():
+        _pin_affinity()
+
+        _connect(self)
 
 
 actor UDPListener(cap: UDPListenCap, address: str, port: int, on_listen: action(UDPListener, ?str) -> None, on_receive: action(UDPListener, bytes, str, int) -> None, on_error: action(UDPListener, str) -> None, recv_buffer_size: int=0):
@@ -315,7 +317,9 @@ actor UDPListener(cap: UDPListenCap, address: str, port: int, on_listen: action(
     proc def _init() -> None:
         """Implementation internal"""
         NotImplemented
-    _init()
+
+    proc def __startup__():
+        _init()
 
 
 actor TCPConnection(cap: TCPConnectCap, address: str, port: int, on_connect: action(TCPConnection) -> None, on_receive: action(TCPConnection, bytes) -> None, on_error: action(TCPConnection, str) -> None, on_remote_close: ?action(TCPConnection) -> None=None, connect_timeout: float=10.0):
@@ -369,7 +373,6 @@ actor TCPConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
 
     proc def _pin_affinity() -> None:
         NotImplemented
-    _pin_affinity()
 
     # TODO: we should not just connect to the first IPv4 and first IPv6 result
     # but rather arrange them in order of preference and try them in that order,
@@ -615,7 +618,10 @@ actor TCPConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
                 bytes_in=_bytes_in,
                 bytes_out=_bytes_out)
 
-    _connect(self)
+    proc def __startup__():
+        _pin_affinity()
+
+        _connect(self)
 
 
 actor TCPListenConnection(cap: _TCPListenConnectCap, server_client: int, worker_id: int):
@@ -685,7 +691,10 @@ actor TCPListenConnection(cap: _TCPListenConnectCap, server_client: int, worker_
     proc def _init() -> None:
         """Implementation internal"""
         NotImplemented
-    _init()
+
+    proc def __startup__():
+        _init()
+
 
 actor TCPListener(cap: TCPListenCap, address: str, port: int, on_listen: action(TCPListener, ?str) -> None, on_accept: action(TCPListenConnection) -> None):
     """TCP Listener
@@ -736,7 +745,10 @@ actor TCPListener(cap: TCPListenCap, address: str, port: int, on_listen: action(
     proc def _init():
         """Implementation internal"""
         NotImplemented
-    _init()
+
+    proc def __startup__():
+        _init()
+
 
 def _addr_port(address: str, port: int) -> str:
     if ":" in address:
@@ -829,7 +841,10 @@ actor TLSListenConnection(cap: _TCPListenConnectCap, server_stream: int, tls_own
     proc def _init() -> None:
         """Implementation internal"""
         NotImplemented
-    _init()
+
+    proc def __startup__():
+        _init()
+
 
 actor TLSListener(cap: TCPListenCap, address: str, port: int, cert_pem: bytes, key_pem: bytes, on_listen: action(TLSListener, ?str) -> None, on_accept: action(TLSListenConnection) -> None, client_auth: bool=False, verify_tls: bool=True, ca_pem: ?bytes=None, verify_peer: ?action(list[bytes], int) -> bool=None, protocols: list[str]=[], handshake_timeout: float=60.0):
     """TLS Listener
@@ -925,12 +940,14 @@ actor TLSListener(cap: TCPListenCap, address: str, port: int, cert_pem: bytes, k
         """Implementation internal"""
         NotImplemented
 
-    if verify_peer is not None and not client_auth:
-        async on_listen(self, "TLSListener: verify_peer needs client_auth=True")
-    elif client_auth and not verify_tls and verify_peer is None:
-        async on_listen(self, "TLSListener: client_auth=True with verify_tls=False needs verify_peer")
-    else:
-        _init()
+    proc def __startup__():
+        if verify_peer is not None and not client_auth:
+            async on_listen(self, "TLSListener: verify_peer needs client_auth=True")
+        elif client_auth and not verify_tls and verify_peer is None:
+            async on_listen(self, "TLSListener: client_auth=True with verify_tls=False needs verify_peer")
+        else:
+            _init()
+
 
 actor TLSConnection(cap: TCPConnectCap, address: str, port: int, on_connect: action(TLSConnection) -> None, on_receive: action(TLSConnection, bytes) -> None, on_error: action(TLSConnection, str) -> None, on_remote_close: ?action(TLSConnection) -> None=None, verify_tls: bool=True, protocols: list[str]=[], ca_pem: ?bytes=None, cert_pem: ?bytes=None, key_pem: ?bytes=None, server_name: ?str=None, verify_peer: ?action(list[bytes], int) -> bool=None, connect_timeout: float=10.0):
     """TLS connection
@@ -991,7 +1008,6 @@ actor TLSConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
 
     proc def _pin_affinity() -> None:
         NotImplemented
-    _pin_affinity()
 
     action def _on_tls_connect(attempt: int):
         if attempt != _attempt or _state != STATE_CONNECTING:
@@ -1112,4 +1128,8 @@ actor TLSConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
         _state = STATE_CONNECTING
         after connect_timeout: _connect_timeout(attempt)
         _connect_tls()
-    _connect(self)
+
+    proc def __startup__():
+        _pin_affinity()
+
+        _connect(self)

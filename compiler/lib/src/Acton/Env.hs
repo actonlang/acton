@@ -1168,19 +1168,7 @@ castable env (TOpt _ t1) (TOpt _ t2)        = castable env t1 t2
 castable env (TNone _) (TOpt _ t)           = True
 castable env (TNone _) (TNone _)            = True
 
-castable env (TFX _ fx1) (TFX _ fx2)        = castable' fx1 fx2
-  where castable' FXPure   FXPure           = True
-        castable' FXPure   FXMut            = True
-        castable' FXPure   FXProc           = True
-        castable' FXMut    FXMut            = True
-        castable' FXMut    FXProc           = True
-        castable' FXProc   FXProc           = True
-        castable' FXAction FXAction         = True
-        castable' FXAction FXProc           = True
-
-        castable' FXMut    FXPure           = True      -- Hideous lie! But a temporarily justifiable deception.
-
-        castable' fx1      fx2              = False
+castable env (TFX _ fx1) (TFX _ fx2)        = castEffect fx1 fx2
 
 castable env (TNil _ k1) (TNil _ k2)
   | k1 == k2                                = True
@@ -1202,6 +1190,22 @@ castable env t1 (TOpt _ t2)                 = castable env t1 t2
 
 castable env t1 t2                          = False
 
+
+-- Built-in program order: parents precede their subeffects, just as class
+-- declarations precede subclasses. The solver decides when to reverse it.
+effectsInProgramOrder :: [FX]
+effectsInProgramOrder = [FXProc, FXMut, FXCom, FXPure, FXAction]
+
+-- Semantic inclusion, excluding the temporary mut-to-pure cast.
+subeffect :: FX -> FX -> Bool
+subeffect a b | a == b = True
+subeffect _ FXProc = True
+subeffect FXPure b = b `elem` [FXMut, FXCom]
+subeffect _ _ = False
+
+-- Keep the temporary mut-to-pure cast out of semantic bounds and preference.
+castEffect :: FX -> FX -> Bool
+castEffect fx1 fx2 = subeffect fx1 fx2 || (fx1 == FXMut && fx2 == FXPure)
 
 headcast env t1 t2                          = castable env (schematic t1) (schematic t2)
 
@@ -1247,22 +1251,11 @@ glb env t1 (TOpt _ t2)                  = glb env t1 t2
 
 glb env t1@(TFX _ fx1) t2@(TFX _ fx2)
   | Just fx <- glfx fx1 fx2             = pure $ tTFX fx
-  where glfx FXPure   FXPure            = Just FXPure
-        glfx FXPure   FXMut             = Just FXPure
-        glfx FXPure   FXProc            = Just FXPure
-        glfx FXPure   FXAction          = Nothing
-        glfx FXMut    FXPure            = Just FXPure
-        glfx FXMut    FXMut             = Just FXMut
-        glfx FXMut    FXProc            = Just FXMut
-        glfx FXMut    FXAction          = Nothing
-        glfx FXProc   FXPure            = Just FXPure
-        glfx FXProc   FXMut             = Just FXMut
-        glfx FXProc   FXProc            = Just FXProc
-        glfx FXProc   FXAction          = Just FXAction
-        glfx FXAction FXPure            = Nothing
-        glfx FXAction FXMut             = Nothing
-        glfx FXAction FXProc            = Just FXAction
-        glfx FXAction FXAction          = Just FXAction
+  where glfx a b
+          | subeffect a b              = Just a
+          | subeffect b a              = Just b
+          | FXAction `elem` [a,b]      = Nothing
+          | otherwise                  = Just FXPure
 
 glb env (TNil _ k1) (TNil _ k2)
   | k1 == k2                            = pure $ tNil k1
@@ -1343,22 +1336,10 @@ lub env (TOpt _ t1) t2                  = tOpt <$> lub env t1 t2
 lub env t1 (TOpt _ t2)                  = tOpt <$> lub env t1 t2
 
 lub env t1@(TFX _ fx1) t2@(TFX _ fx2)   = pure $ tTFX (lufx fx1 fx2)
-  where lufx FXPure   FXPure            = FXPure
-        lufx FXPure   FXMut             = FXMut
-        lufx FXPure   FXProc            = FXProc
-        lufx FXPure   FXAction          = FXProc
-        lufx FXMut    FXPure            = FXMut
-        lufx FXMut    FXMut             = FXMut
-        lufx FXMut    FXProc            = FXProc
-        lufx FXMut    FXAction          = FXProc
-        lufx FXProc   FXPure            = FXProc
-        lufx FXProc   FXMut             = FXProc
-        lufx FXProc   FXProc            = FXProc
-        lufx FXProc   FXAction          = FXProc
-        lufx FXAction FXPure            = FXProc
-        lufx FXAction FXMut             = FXProc
-        lufx FXAction FXProc            = FXProc
-        lufx FXAction FXAction          = FXAction
+  where lufx a b
+          | subeffect a b              = b
+          | subeffect b a              = a
+          | otherwise                  = FXProc
 
 lub env (TNil _ k1) (TNil _ k2)
   | k1 == k2                            = pure $ tNil k1
@@ -1408,16 +1389,89 @@ instance Flows a => Flows [a] where
     flows (s : ss)                  = flows s `seq` flows ss
       where f1 `seq` f2             = if SEQ `elem` f1 then (f1\\[SEQ])++f2 else f1
 
+-- True only when evaluating the expression must raise. Deferred and
+-- conditionally evaluated operands cannot make their enclosing expression raise.
+exprRaises :: Expr -> Bool
+exprRaises e = case e of
+    Raise{}                    -> True
+    _ | isRAISE e              -> True
+    Call _ f ps ks             -> exprRaises f || (not (optional f) && any exprRaises (pos ps ++ kwd ks))
+    Let _ ss x                 -> any stmtRaises ss || exprRaises x
+    Cond _ x c y               -> exprRaises c || (exprRaises x && exprRaises y)
+    BinOp _ x op y             -> exprRaises x || (op `notElem` [And,Or] && exprRaises y)
+    CompOp _ x ops             -> exprRaises x || case ops of OpArg _ y : _ -> exprRaises y; _ -> False
+    TApp _ x _                 -> exprRaises x
+    Async _ x                  -> exprRaises x
+    Await _ x                  -> exprRaises x
+    Index _ x y                -> exprRaises x || (not (optional x) && exprRaises y)
+    Slice _ x (Sliz _ a b c)    -> exprRaises x || (not (optional x) && any exprRaises (catMaybes [a,b,c]))
+    IsInstance _ x _           -> exprRaises x
+    UnOp _ _ x                 -> exprRaises x
+    Dot _ x _                  -> exprRaises x
+    Rest _ x _                 -> exprRaises x
+    DotI _ x _                 -> exprRaises x
+    RestI _ x _                -> exprRaises x
+    Opt _ x _                  -> exprRaises x
+    OptChain _ x               -> exprRaises x
+    Paren _ x                  -> exprRaises x
+    Box _ x                    -> exprRaises x
+    UnBox _ x                  -> exprRaises x
+    Tuple _ ps ks              -> any exprRaises (pos ps ++ kwd ks)
+    List _ es                  -> any (exprRaises . element) es
+    Set _ es                   -> any (exprRaises . element) es
+    Dict _ as                  -> any (any exprRaises . assoc) as
+    _                          -> False
+  where
+    pos (PosArg x xs) = x : pos xs
+    pos (PosStar x) = [x]
+    pos PosNil = []
+    kwd (KwdArg _ x xs) = x : kwd xs
+    kwd (KwdStar x) = [x]
+    kwd KwdNil = []
+    element (Elem x) = x
+    element (Star x) = x
+    assoc (Assoc x y) = [x,y]
+    assoc (StarStar x) = [x]
+    optional OptChain{} = True
+    optional (Opt _ _ True) = True
+    optional (Opt _ x False) = optional x
+    optional (Dot _ x _) = optional x
+    optional (DotI _ x _) = optional x
+    optional (Rest _ x _) = optional x
+    optional (RestI _ x _) = optional x
+    optional (Slice _ x _) = optional x
+    optional (Index _ x _) = optional x
+    optional (Call _ x _ _) = optional x
+    optional (TApp _ x _) = optional x
+    optional _ = False
+
+stmtRaises :: Stmt -> Bool
+stmtRaises s = case s of
+    Expr _ e                   -> exprRaises e
+    Assign _ _ e               -> exprRaises e
+    VarAssign _ _ e            -> exprRaises e
+    MutAssign _ t e            -> exprRaises t || exprRaises e
+    AugAssign _ t _ e          -> exprRaises t || exprRaises e
+    Return _ e                 -> maybe False exprRaises e
+    Assert _ e _               -> exprRaises e
+    Delete _ e                 -> exprRaises e
+    While _ e _ _              -> exprRaises e
+    For _ _ e _ _              -> exprRaises e
+    With _ is _                -> any (\(WithItem e _) -> exprRaises e) is
+    _                          -> False
+
 instance Flows Stmt where
+    flows s | stmtRaises s          = []
     flows (Expr _ e)
       | e == eNotImpl               = []                -- Not tracked
-      | Call _ (Var _ n) _ _ <- e,
-        n == primRAISE              = []                -- Not tracked
-    flows Raise{}                   = []                -- Not tracked
     flows Return{}                  = [RET]
     flows Break{}                   = [BRK]
     flows Continue{}                = [CNT]
-    flows (If _ bs els)             = concatMap flows bs ++ flows els
+    flows (If _ bs els)             = branches bs
+      where branches []            = flows els
+            branches (Branch e ss : rest)
+              | exprRaises e        = []
+              | otherwise           = flows ss ++ branches rest
     flows (While _ _ b els)         = brkseq (flows b) ++ flows els
     flows (For _ _ _ b els)         = brkseq (flows b) ++ flows els
     flows (With _ _ b)              = flows b

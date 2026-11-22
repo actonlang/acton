@@ -18,7 +18,8 @@ actor CleanupCounter(t: testing.EnvT, expected: int):
             return
         t.env.rts.gc()
         after 0.1: _collect()
-    after 0: _collect()
+    proc def __startup__():
+        after 0: _collect()
 
 
 actor Foo(cb):
@@ -30,7 +31,8 @@ actor TimerNow(cb):
     def tick():
         pass
 
-    after 0: tick()
+    proc def __startup__():
+        after 0: tick()
 
     action def __cleanup__():
         cb()
@@ -40,7 +42,8 @@ actor TimerLater(cb):
     def tick():
         pass
 
-    after 0.01: tick()
+    proc def __startup__():
+        after 0.01: tick()
 
     action def __cleanup__():
         cb()
@@ -50,7 +53,8 @@ actor TimerRaises(cb):
     def tick():
         raise ValueError("tick")
 
-    after 0.01: tick()
+    proc def __startup__():
+        after 0.01: tick()
 
     action def __cleanup__():
         cb()
@@ -60,24 +64,27 @@ actor Raises():
     def tick():
         raise ValueError("tick")
 
-    after 0.01: tick()
+    proc def __startup__():
+        after 0.01: tick()
 
 
 actor _test_Cleanup(t: testing.EnvT):
     """Unreachable actors get their __cleanup__ called when the GC collects them
     """
     c = CleanupCounter(t, 100)
-    for i in range(100):
-        Foo(c.cleaned)
+    proc def __startup__():
+        for i in range(100):
+            Foo(c.cleaned)
 
 
 actor _test_cleanup_after_timer(t: testing.EnvT):
     """Unreachable actors whose timer has run get their __cleanup__ called
     """
     c = CleanupCounter(t, 200)
-    for i in range(100):
-        TimerNow(c.cleaned)
-        TimerLater(c.cleaned)
+    proc def __startup__():
+        for i in range(100):
+            TimerNow(c.cleaned)
+            TimerLater(c.cleaned)
 
 
 actor _test_cleanup_after_raise(t: testing.EnvT):
@@ -85,8 +92,9 @@ actor _test_cleanup_after_raise(t: testing.EnvT):
     get their __cleanup__ called
     """
     c = CleanupCounter(t, 20)
-    for i in range(20):
-        TimerRaises(c.cleaned)
+    proc def __startup__():
+        for i in range(20):
+            TimerRaises(c.cleaned)
 
 
 actor _test_cleanup_beside_raise(t: testing.EnvT):
@@ -94,6 +102,7 @@ actor _test_cleanup_beside_raise(t: testing.EnvT):
     raise exceptions that nothing catches
     """
     c = CleanupCounter(t, 100)
-    for i in range(100):
-        Foo(c.cleaned)
-        Raises()
+    proc def __startup__():
+        for i in range(100):
+            Foo(c.cleaned)
+            Raises()

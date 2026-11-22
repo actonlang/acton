@@ -22,5 +22,6 @@ def len(x: list[int]) -> int:
     NotImplemented
 
 actor main(env):
-    t = TestClass()
-    env.exit(0)
+    proc def __startup__():
+        t = TestClass()
+        env.exit(0)

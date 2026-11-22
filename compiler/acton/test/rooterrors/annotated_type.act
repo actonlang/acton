@@ -1,2 +1,3 @@
 actor main(env: int):
-    print(env)
+    proc def __startup__():
+        print(env)

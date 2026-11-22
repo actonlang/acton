@@ -9,9 +9,10 @@ def f() -> list[bool]:
     return [defaults.f(1), [1] == [1], defaults.f(1.0), defaults.f(2)]
 
 actor main(env):
-    r = f()
-    if r != [True, True, True, False]:
-        print("FAIL: copied default witnesses", r)
-        env.exit(1)
-    else:
-        env.exit(0)
+    proc def __startup__():
+        r = f()
+        if r != [True, True, True, False]:
+            print("FAIL: copied default witnesses", r)
+            env.exit(1)
+        else:
+            env.exit(0)

@@ -82,12 +82,13 @@ def test_regrow(n: int):
         check_dict(d, expected, "popitem while emptying")
 
 actor main(env):
-    try:
-        for n in [8, 10, 20, 33, 100, 1000]:
-            test_del_then_pop(n)
-            test_pop_then_popitem(n)
-            test_regrow(n)
-    except ValueError as e:
-        print("FAIL:", e)
-        env.exit(1)
-    env.exit(0)
+    proc def __startup__():
+        try:
+            for n in [8, 10, 20, 33, 100, 1000]:
+                test_del_then_pop(n)
+                test_pop_then_popitem(n)
+                test_regrow(n)
+        except ValueError as e:
+            print("FAIL:", e)
+            env.exit(1)
+        env.exit(0)

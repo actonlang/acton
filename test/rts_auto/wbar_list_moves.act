@@ -99,7 +99,9 @@ def work(seed: int, n: int, rounds: int) -> int:
 actor Worker(seed: int, n: int, rounds: int, done: action(int, int) -> None):
     def run():
         done(seed, work(seed, n, rounds))
-    after 0: run()
+
+    proc def __startup__():
+        after 0: run()
 
 actor main(env):
     n = int(env.argv[1]) if len(env.argv) > 1 else 20000
@@ -119,5 +121,6 @@ actor main(env):
             else:
                 env.exit(0)
 
-    for w in range(workers):
-        Worker(w + 1, n, rounds, done)
+    proc def __startup__():
+        for w in range(workers):
+            Worker(w + 1, n, rounds, done)

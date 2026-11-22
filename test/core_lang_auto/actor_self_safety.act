@@ -1,0 +1,18 @@
+class Failure(Exception):
+    def __init__(self, value: Safe):
+        self.error_message = "failure"
+        self.value = value
+
+actor Safe():
+    # Retaining self in an exception value is cycle-safe until it is observed.
+    error = Failure(self)
+
+    def intact() -> bool:
+        return error.value is self
+
+actor main(env):
+    safe = Safe()
+
+    proc def __startup__():
+        assert safe.intact()
+        env.exit(0)

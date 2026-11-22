@@ -3,5 +3,6 @@ def check_spawn_gc() -> bool:
 
 
 actor main(env):
-    assert check_spawn_gc()
-    env.exit(0)
+    proc def __startup__():
+        assert check_spawn_gc()
+        env.exit(0)

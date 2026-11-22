@@ -217,6 +217,7 @@ struct $Actor {
     $Lock B_Msg_lock;
     $int64 $affinity;
     B_Msg $outgoing;
+    B_list $newborns;                 // Initial states pending the parent's DB commit
     B_Msg $waitsfor;
     $int64 $consume_hd;
     $Catcher $catcher;
@@ -281,11 +282,16 @@ void register_actor(int64_t key);
                                $t->$class = &$T ## G_methods; \
                                $ActorG_methods.__init__(($Actor)$t); \
                                $t->$affinity = SHARED_RQ; \
-                               INIT_DB_QUEUE($t->$globkey); \
-                               REGISTER_ACTOR($t->$globkey); \
+                               $ConstructionRegister(($Actor)$t); \
                                $t; })
 
-#define $InstallFinalizer(act, fn) GC_register_finalizer(act, fn, NULL, NULL, NULL)
+void $ConstructionRegister($Actor actor);
+void $InstallFinalizer(void *actor, GC_finalization_proc fn);
+$Actor $ConstructionBegin(void);
+B_NoneType $ConstructionEnter($Actor actor);
+B_NoneType $ConstructionEnd($Actor parent);
+B_NoneType $ConstructionAbort($Actor parent, B_BaseException exception);
+B_NoneType $MarkStartup(B_Msg message);
 
 #ifdef ACTON_THREADS
 // A thread that is not a worker runs no continuation
@@ -316,6 +322,7 @@ struct WorkerCtx {
     // thread-locals of each thread in a small heap block, and the blocks of
     // several threads can share a cache line.
     $Actor actor;
+    struct ConstructionContext *construction;
     // The next key this worker hands out, and the distance to the one after
     // it (see get_next_key())
     int64_t key_next;

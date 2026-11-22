@@ -163,18 +163,19 @@ tests = {
 }
 
 actor main(env):
-    failed = []
-    for name, t in tests.items():
-        print("== test: " + name)
-        if not t():
-            print("-- FAILED test: " + name)
-            failed.append(name)
-        print()
-    if len(failed) == 0:
-        print("All {len(tests)} tests OK!")
-        env.exit(0)
-    else:
-        print("\n{len(failed)} of {len(tests)} tests failed:")
-        for name in failed:
-            print(" - {name}")
-        env.exit(1)
+    proc def __startup__():
+        failed = []
+        for name, t in tests.items():
+            print("== test: " + name)
+            if not t():
+                print("-- FAILED test: " + name)
+                failed.append(name)
+            print()
+        if len(failed) == 0:
+            print("All {len(tests)} tests OK!")
+            env.exit(0)
+        else:
+            print("\n{len(failed)} of {len(tests)} tests failed:")
+            for name in failed:
+                print(" - {name}")
+            env.exit(1)

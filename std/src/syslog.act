@@ -474,13 +474,12 @@ actor Client(cap: net.UDPConnectCap, address: str, port: int,
     no delivery acknowledgement. close() discards pending messages and prevents
     further sends; it does not wait for delivery. There is no automatic retry.
     """
-    if port < 1 or port > 65535:
-        raise invalid_destination_port_error
-    if max_size < 480 or max_size > 65507:
-        raise invalid_udp_max_size_error
-    if max_pending < 0:
-        raise invalid_max_pending_error
-    var _connection: ?net.UDPConnection = None
+    var _connection: ?net.UDPConnection = (
+        (raise invalid_destination_port_error) if port < 1 or port > 65535 else
+        (raise invalid_udp_max_size_error) if max_size < 480 or max_size > 65507 else
+        (raise invalid_max_pending_error) if max_pending < 0 else
+        None
+    )
     var _pending: list[bytes] = []
     var _ready = False
     var _closed = False
@@ -550,7 +549,9 @@ actor Client(cap: net.UDPConnectCap, address: str, port: int,
         if c is not None:
             c.close()
 
-    after 0: start()
+    proc def __startup__():
+        after 0: start()
+
 
 
 actor Server(cap: net.UDPListenCap, address: str, port: int,
@@ -566,11 +567,11 @@ actor Server(cap: net.UDPListenCap, address: str, port: int,
     Bind errors go to on_listen. Port 0 selects an ephemeral port; port 514 is
     the standard syslog port and may require privileges.
     """
-    if port < 0 or port > 65535:
-        raise invalid_listen_port_error
-    if max_size < 480 or max_size > 65507:
-        raise invalid_udp_max_size_error
-    var _listener: ?net.UDPListener = None
+    var _listener: ?net.UDPListener = (
+        (raise invalid_listen_port_error) if port < 0 or port > 65535 else
+        (raise invalid_udp_max_size_error) if max_size < 480 or max_size > 65507 else
+        None
+    )
     var _closed = False
 
     def bound(listener: net.UDPListener, error: ?str):
@@ -624,7 +625,9 @@ actor Server(cap: net.UDPListenCap, address: str, port: int,
         if listener is not None:
             listener.close()
 
-    after 0: start()
+    proc def __startup__():
+        after 0: start()
+
 
 
 invalid_frame_max_size_error = ValueError("Syslog frame size limit must be positive")
@@ -750,15 +753,13 @@ actor StreamClient(cap: net.TCPConnectCap, address: str, port: int,
     ca_pem, cert_pem, key_pem, server_name and verify_peer follow net.TLSConnection.
     connect_timeout includes the handshake and peer verification.
     """
-    if port < 1 or port > 65535:
-        raise invalid_destination_port_error
-    if max_size < 480 or max_pending < 0 or not (0.0 < connect_timeout and connect_timeout < float("inf")):
-        raise invalid_stream_limits_error
-    if (cert_pem is None) != (key_pem is None):
-        raise invalid_tls_credentials_error
-    if not tls and (not verify_tls or ca_pem is not None or cert_pem is not None or server_name is not None or verify_peer is not None):
-        raise tls_required_error
-    var _write: ?action(bytes) -> None = None
+    var _write: ?action(bytes) -> None = (
+        (raise invalid_destination_port_error) if port < 1 or port > 65535 else
+        (raise invalid_stream_limits_error) if max_size < 480 or max_pending < 0 or not (0.0 < connect_timeout and connect_timeout < float("inf")) else
+        (raise invalid_tls_credentials_error) if (cert_pem is None) != (key_pem is None) else
+        (raise tls_required_error) if not tls and (not verify_tls or ca_pem is not None or cert_pem is not None or server_name is not None or verify_peer is not None) else
+        None
+    )
     var _close_transport: ?action() -> None = None
     var _pending: list[bytes] = []
     var _ready = False
@@ -870,7 +871,9 @@ actor StreamClient(cap: net.TCPConnectCap, address: str, port: int,
         """Close the connection and discard startup messages. Idempotent."""
         close_connection()
 
-    after 0: start()
+    proc def __startup__():
+        after 0: start()
+
 
 
 actor StreamServer(cap: net.TCPListenCap, address: str, port: int,
@@ -895,17 +898,14 @@ actor StreamServer(cap: net.TCPListenCap, address: str, port: int,
     binding succeeds. max_connections counts accepted sessions;
     handshake_timeout bounds incomplete TLS handshakes, 0 for no deadline.
     """
-    if port < 0 or port > 65535:
-        raise invalid_listen_port_error
-    if max_size < 480 or max_connections < 1:
-        raise invalid_stream_limits_error
-    if (cert_pem is None) != (key_pem is None):
-        raise invalid_tls_credentials_error
-    if cert_pem is None and (client_auth or not verify_tls or ca_pem is not None or verify_peer is not None):
-        raise tls_required_error
-    if not (0.0 <= handshake_timeout and handshake_timeout < float("inf")):
-        raise invalid_handshake_timeout_error
-    var _stop_listener: ?action() -> None = None
+    var _stop_listener: ?action() -> None = (
+        (raise invalid_listen_port_error) if port < 0 or port > 65535 else
+        (raise invalid_stream_limits_error) if max_size < 480 or max_connections < 1 else
+        (raise invalid_tls_credentials_error) if (cert_pem is None) != (key_pem is None) else
+        (raise tls_required_error) if cert_pem is None and (client_auth or not verify_tls or ca_pem is not None or verify_peer is not None) else
+        (raise invalid_handshake_timeout_error) if not (0.0 <= handshake_timeout and handshake_timeout < float("inf")) else
+        None
+    )
     var _endpoint: ?action() -> (address: str, port: int) = None
     var _connections: dict[int, (decoder: StreamDecoder, peer: str, port: int, close: action() -> None)] = {}
     var _next_connection = 0
@@ -1066,4 +1066,5 @@ actor StreamServer(cap: net.TCPListenCap, address: str, port: int,
             close_connection()
         _connections = {}
 
-    after 0: start()
+    proc def __startup__():
+        after 0: start()

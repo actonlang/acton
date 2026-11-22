@@ -1,7 +1,11 @@
-[error Compilation error]: Cannot use main as the root actor: its parameter env has type (exit: action(int) -> None, vars: project_default_root.lib.Config), but the root actor's parameter must have type Env
-     +--> app.act@3:7-3:11
+[error Parse error]: unexpected '.'
+                     expecting actor binding, signature or method
+
+     +--> src/app.act@4:8-4:9
      |
-   3 | actor main(env):
-     :       ^--- 
-     :       `- Cannot use main as the root actor: its parameter env has type (exit: action(int) -> None, vars: project_default_root.lib.Config), but the root actor's parameter must have type Env
+   4 |     lib.show(env.vars)
+     :        ^ 
+     :        `- unexpected '.'
+     :           expecting actor binding, signature or method
+     :           
 -----+

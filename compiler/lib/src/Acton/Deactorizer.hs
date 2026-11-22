@@ -133,7 +133,7 @@ instance Deact Decl where
     deact env (Actor l n q params KwdNIL body ddoc)
                                     = do inits1 <- deactSuite (define (envOf decls) env1) inits
                                          decls1 <- deactSuite (define (envOf inits) env1) decls
-                                         let _init_ = Def l0 initKW [] (addSelfPar params) KwdNIL (Just tNone) (mkBody $ copies++inits1) NoDec fxProc Nothing
+                                         let _init_ = Def l0 initKW [] (addSelfPar params) KwdNIL (Just tNone) (copies++inits1++[sReturn eNone]) NoDec fxCom Nothing
                                              decls2 = [ Decl l $ map deactMeth ds | Decl l ds <- decls1 ]
                                          return $ Class l n q [TC primActor [], cValue] (propsigs ++ [Decl l0 [_init_]] ++ decls2 ++ wraps) ddoc
       where env1                    = setActor wrapped stvars locals $ define (envOf params) $ define [(selfKW, NVar t0)] $ defineTVars q env
@@ -190,15 +190,26 @@ instance Deact Decl where
 
     deact env d                     = error ("deact unexpected decl: " ++ prstr d)
 
-newact env n q p ddoc               = Def l0 (newactName n) q p KwdNIL (Just t) [newassign, install_gc_finalizer, waitinit, sReturn x] NoDec fxProc ddoc
+-- Every constructor is a direct call. The outermost call owns the shared
+-- construction context; a nested failure invalidates that entire context.
+newact env n q p ddoc               = Def l0 (newactName n) q p KwdNIL (Just t) body NoDec fxCom ddoc
   where t                           = tCon $ TC (NoQ n) (map tVar $ qbound q)
         x                           = eVar g_act
-        newassign                   = sAssign (pVar g_act t) (eCall (tApp (eQVar primNEWACTOR) [t]) [])
-        install_gc_finalizer        = sExpr $ eCall (tApp (eQVar primInstallFinalizer) [t]) [x]
-        waitinit                    = sExpr $ eCall (tApp (eQVar primAWAITf) [tNone]) [asyncmsg]
-        asyncmsg                    = eCall (tApp (eQVar primASYNCf) [tNone]) [x, closure]
-        closure                     = Lambda l0 PosNIL KwdNIL initcall fxProc
-        initcall                    = Call l0 (eDot x initKW) (pArg p) KwdNil
+        parent                      = Internal NormPass (packText "construction_parent") 0
+        exception                   = Internal NormPass (packText "construction_exception") 0
+        body                        = [ sAssign (pVar parent tActor) (call primConstructionBegin []),
+                                        sIf [Branch (call primPUSH []) initialize] failed,
+                                        sExpr $ call primConstructionEnd [eVar parent],
+                                        sReturn x ]
+        initialize                  = [ sAssign (pVar g_act t) (eCall (tApp (eQVar primNEWACTOR) [t]) []),
+                                        sExpr $ call primConstructionEnter [x],
+                                        sExpr $ eCall (tApp (eQVar primInstallFinalizer) [t]) [x],
+                                        sExpr $ Call l0 (eDot x initKW) (pArg p) KwdNil,
+                                        sExpr $ call primDROP [] ]
+        failed                      = [ sAssign (pVar exception tBaseException) (call primPOP []),
+                                        sExpr $ call primConstructionAbort [eVar parent, eVar exception],
+                                        sExpr $ eCall (tApp (eQVar primRAISE) [tNone]) [eVar exception] ]
+        call n es                   = eCall (eQVar n) es
 
 newactQName (QName m n)             = QName m (newactName n)
 newactQName (NoQ n)                 = NoQ (newactName n)
@@ -368,9 +379,9 @@ instance LambdaFree Elem where
 -- Convert types and environments -----------------------------------------------------------------------
 
 conv m (n, NAct q p k te' doc)      = (n, NClass q (leftpath [TC primActor [], cValue]) (convActorEnv q p k te') doc) :
-                                      (newactName n, NDef (tSchema q (tFun fxProc p k t)) NoDec Nothing) :
+                                      (newactName n, NDef (tSchema q (tFun fxCom p k t)) NoDec Nothing) :
                                       []
   where convActorEnv q0 p k te'     = (initKW, NDef t0 NoDec Nothing) : te'
-          where t0                  = tSchema q0 (tFun fxProc p k tNone)
+          where t0                  = tSchema q0 (tFun fxCom p k tNone)
         t                           = tCon $ TC (GName m n) (map tVar $ qbound q)
 conv m ni                           = [ni]

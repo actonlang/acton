@@ -26,7 +26,10 @@
 #    the Watchdog actor.
 
 actor Watchdog(env):
-    after 10.0: env.exit(1)
+
+
+    proc def __startup__():
+        after 10.0: env.exit(1)
 
 actor Prod():
     def boom() -> int:
@@ -43,24 +46,25 @@ actor Rel():
             return -1
 
 actor main(env):
-    wd = Watchdog(env)
-    b = Prod()
-    c = Rel()
-    x = async b.boom()
+    proc def __startup__():
+        wd = Watchdog(env)
+        b = Prod()
+        c = Rel()
+        x = async b.boom()
 
-    def check_self() -> int:
-        try:
-            return await x
-        except ValueError:
-            return -1
+        def check_self() -> int:
+            try:
+                return await x
+            except ValueError:
+                return -1
 
-    def phase2():
-        alive = b.produce()
-        v1 = c.consume(x)
-        v2 = check_self()
-        if alive == 8 and v1 == -1 and v2 == -1:
-            print("already-failed ok")
-            env.exit(0)
-        env.exit(1)
+        def phase2():
+            alive = b.produce()
+            v1 = c.consume(x)
+            v2 = check_self()
+            if alive == 8 and v1 == -1 and v2 == -1:
+                print("already-failed ok")
+                env.exit(0)
+            env.exit(1)
 
-    after 0.3: phase2()
+        after 0.3: phase2()

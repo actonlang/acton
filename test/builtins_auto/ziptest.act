@@ -5,20 +5,20 @@ def _test_zip():
     return zip(sides,reversed(sides))
 
 actor main(env):
-    z = _test_zip()
-    a = next(z)
-    if isinstance(a,just):
-        av = a.val
-        if av.0 != "1" or av.1 != "2":
+    proc def __startup__():
+        z = _test_zip()
+        a = next(z)
+        if isinstance(a,just):
+            av = a.val
+            if av.0 != "1" or av.1 != "2":
+                env.exit(1)
+        else:
             env.exit(1)
-    else:
-        env.exit(1)
-    b = next(z)
-    if isinstance(b,just):
-        bv = b.val
-        if bv.0 != "2" or bv.1 != "1":
+        b = next(z)
+        if isinstance(b,just):
+            bv = b.val
+            if bv.0 != "2" or bv.1 != "1":
+                env.exit(1)
+        else:
             env.exit(1)
-    else:
-        env.exit(1)
-    env.exit(0)
-    
+        env.exit(0)

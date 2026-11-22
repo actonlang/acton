@@ -77,25 +77,26 @@ actor Captured(stdout: bytes, A_stdout: bytes, A_A_stdout: bytes):
         return stdout + A_stdout + A_A_stdout
 
 actor main(env):
-    try:
-        assert ERROR == 17
-        assert arguments(b"i", b"o", b"e", b"E", b"a", b"b", b"c", b"d") == b"ioeEabcd"
-        assert locals(b"x") == b"xixoxexExaxbxcxd"
-        fields = Fields()
-        assert fields.values() == b"ioeEabcd"
-        reflected = fields.__get_attr__("stdout")
-        assert isinstance(reflected, bytes) and reflected == b"o"
-        reflected_prefix = fields.__get_attr__("A_stdout")
-        assert isinstance(reflected_prefix, bytes) and reflected_prefix == b"a"
-        methods: Methods = Derived()
-        assert methods.stdout(b"stdout") == b"stdout"
-        assert methods.A_stdout(b"A_stdout") == b"A_stdout"
-        assert methods.ERROR(b"ERROR") == b"ERROR!"
-        actor_fields = ActorFields()
-        assert actor_fields.values() == b"io!eEabcd"
-        captured = Captured(b"o", b"a", b"b")
-        assert captured.values() == b"oab"
-        env.exit(0)
-    except Exception as exc:
-        print("C header names failed:", exc)
-        env.exit(1)
+    proc def __startup__():
+        try:
+            assert ERROR == 17
+            assert arguments(b"i", b"o", b"e", b"E", b"a", b"b", b"c", b"d") == b"ioeEabcd"
+            assert locals(b"x") == b"xixoxexExaxbxcxd"
+            fields = Fields()
+            assert fields.values() == b"ioeEabcd"
+            reflected = fields.__get_attr__("stdout")
+            assert isinstance(reflected, bytes) and reflected == b"o"
+            reflected_prefix = fields.__get_attr__("A_stdout")
+            assert isinstance(reflected_prefix, bytes) and reflected_prefix == b"a"
+            methods: Methods = Derived()
+            assert methods.stdout(b"stdout") == b"stdout"
+            assert methods.A_stdout(b"A_stdout") == b"A_stdout"
+            assert methods.ERROR(b"ERROR") == b"ERROR!"
+            actor_fields = ActorFields()
+            assert actor_fields.values() == b"io!eEabcd"
+            captured = Captured(b"o", b"a", b"b")
+            assert captured.values() == b"oab"
+            env.exit(0)
+        except Exception as exc:
+            print("C header names failed:", exc)
+            env.exit(1)

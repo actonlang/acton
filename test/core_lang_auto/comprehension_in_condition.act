@@ -30,25 +30,26 @@ def check_for(l: list[int]) -> bool:
     return True
 
 actor main(env):
-    l = sorted([3, 1, 2])
-    if [x for x in l] != [1, 2, 3]:
-        env.exit(1)
-    elif not check_if(l):
-        env.exit(2)
-    elif check_elif(l) != 2:
-        env.exit(3)
-    elif count_while(l) != 3:
-        env.exit(4)
-    else:
-        d: dict[int, str] = {}
-        d[1] = "one"
-        if {k: v for k, v in d.items()} != {1: "one"}:
-            env.exit(5)
-        elif {x for x in l} != {1, 2, 3}:
-            env.exit(6)
-        elif [y + 1 for y in [x * 2 for x in l]] != [3, 5, 7]:
-            env.exit(7)
-        elif not check_for(l):
-            env.exit(8)
+    proc def __startup__():
+        l = sorted([3, 1, 2])
+        if [x for x in l] != [1, 2, 3]:
+            env.exit(1)
+        elif not check_if(l):
+            env.exit(2)
+        elif check_elif(l) != 2:
+            env.exit(3)
+        elif count_while(l) != 3:
+            env.exit(4)
         else:
-            env.exit(0)
+            d: dict[int, str] = {}
+            d[1] = "one"
+            if {k: v for k, v in d.items()} != {1: "one"}:
+                env.exit(5)
+            elif {x for x in l} != {1, 2, 3}:
+                env.exit(6)
+            elif [y + 1 for y in [x * 2 for x in l]] != [3, 5, 7]:
+                env.exit(7)
+            elif not check_for(l):
+                env.exit(8)
+            else:
+                env.exit(0)

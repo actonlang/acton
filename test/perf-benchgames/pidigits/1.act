@@ -31,27 +31,29 @@ actor main(env):
     var i=0
     var k=0
     var res = ""
-    while i<n:
-        k+=1
-        next_Term(k)
 
-        if num > acc:
-            continue
+    proc def __startup__():
+        while i<n:
+            k+=1
+            next_Term(k)
 
-        d=extract_Digit(3)
-        if d!=extract_Digit(4):
-            continue
+            if num > acc:
+                continue
 
-        res += chr(48+int(d))
-        i += 1
-        if i % 10 == 0:
-            print("%s\t:%d" % (res, i))
-            res = ""
-        eliminate_Digit(d)
-    remainder = i % 10
-    if remainder != 0:
-        spaces = ""
-        for j in range(0, (10-(len(res))), 1):
-            spaces += " "
-        print("%s%s\t:%d" % (res, spaces, i))
-    env.exit(0)
+            d=extract_Digit(3)
+            if d!=extract_Digit(4):
+                continue
+
+            res += chr(48+int(d))
+            i += 1
+            if i % 10 == 0:
+                print("%s\t:%d" % (res, i))
+                res = ""
+            eliminate_Digit(d)
+        remainder = i % 10
+        if remainder != 0:
+            spaces = ""
+            for j in range(0, (10-(len(res))), 1):
+                spaces += " "
+            print("%s%s\t:%d" % (res, spaces, i))
+        env.exit(0)

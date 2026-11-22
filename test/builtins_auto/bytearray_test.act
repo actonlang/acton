@@ -1,29 +1,30 @@
 actor main(env):
-    r = range(50,250,50)
-# TODO: fix all this?
-    b = bytearray(bytes(r))
-#    print(b.center(25))
-    b2 = bytearray(bytes(range(65,91)))
-#    print(b2)
-    b3 = bytearray(bytes(range(75, 77)))
-    n = b2.find(b3,0,-1);
-#    print(b3,"occurs in",b2,"at pos",n)
-#    b4 = bytearray(10)
-#    print("bytearray(10) gives",b4)
-    b4 = b.center(20)
-#    print(b4.lstrip())
-    sep = bytearray(bytes(range(70,72)))
-#    print(b2.split(sep))
-    b5 = bytearray(b"line 1\nline 2\r\n\nhej")
-#    print(b5)
-#    print(b5.splitlines())
-#    print(b5.splitlines(True))
-    lst = list(b2)
-#    print(lst[1:20:2])
-    for i in range(1000):
-        b2.append(65+i%26)     #add repeated copies of upper case alphabet
-    for i in range(26,1,-1):
-      del b2[0:10000:i]      # delete everything except the Z's
-    print(b2)
+    proc def __startup__():
+        r = range(50,250,50)
+    # TODO: fix all this?
+        b = bytearray(bytes(r))
+    #    print(b.center(25))
+        b2 = bytearray(bytes(range(65,91)))
+    #    print(b2)
+        b3 = bytearray(bytes(range(75, 77)))
+        n = b2.find(b3,0,-1);
+    #    print(b3,"occurs in",b2,"at pos",n)
+    #    b4 = bytearray(10)
+    #    print("bytearray(10) gives",b4)
+        b4 = b.center(20)
+    #    print(b4.lstrip())
+        sep = bytearray(bytes(range(70,72)))
+    #    print(b2.split(sep))
+        b5 = bytearray(b"line 1\nline 2\r\n\nhej")
+    #    print(b5)
+    #    print(b5.splitlines())
+    #    print(b5.splitlines(True))
+        lst = list(b2)
+    #    print(lst[1:20:2])
+        for i in range(1000):
+            b2.append(65+i%26)     #add repeated copies of upper case alphabet
+        for i in range(26,1,-1):
+          del b2[0:10000:i]      # delete everything except the Z's
+        print(b2)
 
-    env.exit(0)
+        env.exit(0)

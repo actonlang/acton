@@ -4,7 +4,8 @@
 PORT: u64 = u64(2001)
 
 actor main(env):
-    n: u64 = u64(1000)
-    if isinstance(PORT, atom) and isinstance(n, atom):
-        env.exit(0)
-    env.exit(1)
+    proc def __startup__():
+        n: u64 = u64(1000)
+        if isinstance(PORT, atom) and isinstance(n, atom):
+            env.exit(0)
+        env.exit(1)

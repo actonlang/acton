@@ -63,7 +63,6 @@ instance Pretty Stmt where
     pretty (Pass _)                 = text "pass"
     pretty (Delete _ t)             = text "del" <+> pretty t
     pretty (Return _ e)             = text "return" <+> pretty e
-    pretty (Raise _ e)              = text "raise" <+> pretty e
     pretty (Break _)                = text "break"
     pretty (Continue _)             = text "continue"
     pretty (If _ (b:bs) b2)         = prettyBranch "if" b $+$ vmap (prettyBranch "elif") bs $+$ prettyEnd "else" b2
@@ -170,6 +169,7 @@ prettyAtom e
   | otherwise                       = parens (pretty e)
 
 instance Pretty Expr where
+    pretty e@Raise{}               = prettyPrec 0 e
     pretty (Var _ n)                = pretty n
     pretty (Int _ _ str)            = text str
     pretty (Float _ _ str)          = text str
@@ -242,16 +242,17 @@ put in parenthesis (for clarity) in all operator contexts, also where the parser
  0 _ if _ else _
 -}
 
+prettyPrec n (Raise _ e _)         = parensIf (n > 0) $ text "raise" <+> pretty e
 prettyPrec n e@(BinOp _ e1 op e2)   = parensIf (n > prc) ps
      where prc                      = fromJust (lookup op bps)
            bps                      = [(Or,1),(And,2),(Plus,9),(Minus,9),(Mult,10),(Pow,12),(Div,10),(Mod,10),
                                        (EuDiv,10),(BOr,5),(BXor,6),(BAnd,7),(ShiftL,8),(ShiftR,8)]
            ps | op == Pow           = prettyPrec (prc+1) e1 <+> pretty op <+> prettyPrec prc e2
               | otherwise           = prettyPrec prc e1 <+> pretty op <+> prettyPrec (prc+1) e2
-prettyPrec n (CompOp _ e ops)       = parensIf (n > 4) $ pretty e <+> hsep (map pretty ops)
+prettyPrec n (CompOp _ e ops)       = parensIf (n > 4) $ prettyPrec 5 e <+> hsep (map pretty ops)
 prettyPrec n e1@(UnOp _ op e)       = parensIf (n > 0) $ pretty op <> prettyPrec prc e
    where prc                        = if op == Not then 3 else 11
-prettyPrec n (Cond _ e1 e e2)       = parensIf (n > 1) $ pretty e1 <+> text "if" <+> pretty e <+> text "else" <+> pretty e2
+prettyPrec n (Cond _ e1 e e2)       = parensIf (n > 1) $ prettyPrec 1 e1 <+> text "if" <+> prettyPrec 1 e <+> text "else" <+> pretty e2
 prettyPrec _ e                      = pretty e
 
 prettyLambdaPar ps ks
@@ -265,7 +266,7 @@ prettyLambdaPar ps ks
         annotK KwdNIL               = False
 
 instance Pretty OpArg where
-    pretty (OpArg op e)             = pretty op <+> pretty e
+    pretty (OpArg op e)             = pretty op <+> prettyPrec 5 e
 
 
 prettyTuple []                      = text "()"
@@ -533,6 +534,7 @@ instance Pretty FX where
     pretty FXMut                    = text "mut"
     pretty FXPure                   = text "pure"
     pretty FXAction                 = text "action"
+    pretty FXCom                    = text "com"
 
 instance Pretty Kind where
     pretty KType                    = text "type"

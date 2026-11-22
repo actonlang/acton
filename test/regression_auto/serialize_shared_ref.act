@@ -14,16 +14,17 @@ def round_trip(x: list[Node]) -> list[Node]:
     NotImplemented
 
 actor main(env):
-    n = Node(42)
-    r = round_trip([n, n])
-    if len(r) != 2 or r[0].val != 42:
-        print("bad round-trip result")
-        env.exit(1)
-    # Both elements must be the same object, as in the input; prove it by
-    # writing through one reference and reading through the other.
-    r[0].val = 99
-    if r[1].val == 99:
-        env.exit(0)
-    else:
-        print("shared reference lost in serialization round-trip")
-        env.exit(1)
+    proc def __startup__():
+        n = Node(42)
+        r = round_trip([n, n])
+        if len(r) != 2 or r[0].val != 42:
+            print("bad round-trip result")
+            env.exit(1)
+        # Both elements must be the same object, as in the input; prove it by
+        # writing through one reference and reading through the other.
+        r[0].val = 99
+        if r[1].val == 99:
+            env.exit(0)
+        else:
+            print("shared reference lost in serialization round-trip")
+            env.exit(1)

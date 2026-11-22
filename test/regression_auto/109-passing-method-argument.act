@@ -3,9 +3,13 @@ actor Foo():
         print("request", a)
 
 actor Bar(f):
-    await async f("test")
+
+
+    proc def __startup__():
+        await async f("test")
 
 actor main(env):
-    f = Foo()
-    b = Bar(f.func)
-    env.exit(0)
+    proc def __startup__():
+        f = Foo()
+        b = Bar(f.func)
+        env.exit(0)

@@ -9,5 +9,6 @@ class Cls(object):
         return "x"
 
 actor main(env):
-    c = Cls()
-    env.exit(0)
+    proc def __startup__():
+        c = Cls()
+        env.exit(0)

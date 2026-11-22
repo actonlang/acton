@@ -2,6 +2,7 @@ import foo
 import foo as bar
 
 actor main(env):
-    f = foo.Foo.new()
-    g = bar.Foo.new()
-    env.exit(0)
+    proc def __startup__():
+        f = foo.Foo.new()
+        g = bar.Foo.new()
+        env.exit(0)

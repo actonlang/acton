@@ -580,7 +580,8 @@ actor _test_load(t: testing.AsyncT):
         else:
             t.success()
 
-    run()
+    proc def __startup__():
+        run()
 
 
 actor _test_upgrade(t: testing.AsyncT):
@@ -617,5 +618,6 @@ actor _test_upgrade(t: testing.AsyncT):
         else:
             t.success()
 
-    store.subscribe(fleet)
-    fleet.connect(loaded)
+    proc def __startup__():
+        store.subscribe(fleet)
+        fleet.connect(loaded)

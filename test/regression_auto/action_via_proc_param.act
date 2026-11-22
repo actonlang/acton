@@ -41,14 +41,14 @@ def discard_none_last(g: proc(int) -> None, x: int, flag: bool) -> None:
     if flag:
         g(x)
 
-def plain_scale(x: int, y: float) -> float:
+proc def plain_scale(x: int, y: float) -> float:
     return float(x) * y
 
 actor Other():
-    def scale(x: int, y: float) -> float:
+    proc def scale(x: int, y: float) -> float:
         return float(x) * y
 
-    def hello() -> str:
+    proc def hello() -> str:
         return "hello"
 
 actor Poked():
@@ -88,44 +88,49 @@ actor Watchdog(env: Env):
         print("FAIL timeout, a call of an action never completed")
         env.exit(1)
 
-    after 5.0: timeout()
+    proc def __startup__():
+        after 5.0: timeout()
+
+
 
 actor main(env):
     var failed = False
-    w = Watchdog(env)
 
-    def check(what: str, got: value, expected: value, ok: bool):
-        if not ok:
-            print("FAIL", what, "got", got, "expected", expected)
-            failed = True
+    proc def __startup__():
+        w = Watchdog(env)
 
-    o = Other()
+        def check(what: str, got: value, expected: value, ok: bool):
+            if not ok:
+                print("FAIL", what, "got", got, "expected", expected)
+                failed = True
 
-    r = assign(o.scale, 3, 1.5)
-    check("action assign", r, 4.75, r == 4.75)
-    r = tail(o.scale, 3, 1.5)
-    check("action tail", r, 4.5, r == 4.5)
-    b = Box()
-    mutate(o.scale, b, 2, 1.25)
-    check("action mutate", b.v, 2.5, b.v == 2.5)
-    s = tail_str(o.hello)
-    check("action tail str", s, "hello", s == "hello")
+        o = Other()
 
-    r = assign(plain_scale, 3, 1.5)
-    check("proc assign", r, 4.75, r == 4.75)
-    r = tail(plain_scale, 3, 1.5)
-    check("proc tail", r, 4.5, r == 4.5)
+        r = assign(o.scale, 3, 1.5)
+        check("action assign", r, 4.75, r == 4.75)
+        r = tail(o.scale, 3, 1.5)
+        check("action tail", r, 4.5, r == 4.5)
+        b = Box()
+        mutate(o.scale, b, 2, 1.25)
+        check("action mutate", b.v, 2.5, b.v == 2.5)
+        s = tail_str(o.hello)
+        check("action tail str", s, "hello", s == "hello")
 
-    p = Poked()
-    rn = Runner()
-    for mode in range(6):
-        m = p.via(rn, mode)
-        check("statement call", m, mode, m == mode)
-    n = p.get_hits()
-    check("action statement calls", n, 111111, n == 111111)
+        r = assign(plain_scale, 3, 1.5)
+        check("proc assign", r, 4.75, r == 4.75)
+        r = tail(plain_scale, 3, 1.5)
+        check("proc tail", r, 4.5, r == 4.5)
 
-    if failed:
-        env.exit(1)
-    else:
-        print("OK")
-        env.exit(0)
+        p = Poked()
+        rn = Runner()
+        for mode in range(6):
+            m = p.via(rn, mode)
+            check("statement call", m, mode, m == mode)
+        n = p.get_hits()
+        check("action statement calls", n, 111111, n == 111111)
+
+        if failed:
+            env.exit(1)
+        else:
+            print("OK")
+            env.exit(0)

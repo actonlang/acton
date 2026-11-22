@@ -12,4 +12,5 @@ class TestClass(object):
             self.y = 2
 
 actor main(env):
-    env.exit(0)
+    proc def __startup__():
+        env.exit(0)

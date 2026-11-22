@@ -11,7 +11,10 @@ def choose[T(Pick)](x: T) -> int:
     return x.pick()
 
 actor main(env):
-    if choose(Box(Both())) == 2:
-        env.exit(0)
-    else:
-        env.exit(1)
+
+
+    proc def __startup__():
+        if choose(Box(Both())) == 2:
+            env.exit(0)
+        else:
+            env.exit(1)

@@ -35,28 +35,29 @@ def pair(flag: bool) -> Pair:
     return Pair(left, right)
 
 actor main(env):
-    n = int(env.argv[1]) if len(env.argv) > 1 else 20
-    xs = [1, 2, 3]
-    ys = [1, 2, 3]
-    assert compare_generic(xs, ys)
-    assert compare_generic(["x"], ["x"])
-    assert not compare_generic(["x"], ["y"])
-    assert not compare(xs, [9])
-    original = pair(True)
-    second = pair(False)
-    assert second.left.same(xs, ys) and second.right.same(xs, ys)
-    payload = serialize(original)
-    restored = deserialize(payload)
-    assert serialize(restored) == payload
-    assert isinstance(restored, Pair)
-    if isinstance(restored, Pair):
-        assert restored.left.same(xs, ys)
-        assert not restored.right.same(xs, [9])
-        restored.left.marker = 17
-        assert restored.right.marker == 0
-    ok = True
-    for _ in range(n):
-        ok = compare(xs, ys) and ok
-    assert ok
-    print("OK")
-    env.exit(0)
+    proc def __startup__():
+        n = int(env.argv[1]) if len(env.argv) > 1 else 20
+        xs = [1, 2, 3]
+        ys = [1, 2, 3]
+        assert compare_generic(xs, ys)
+        assert compare_generic(["x"], ["x"])
+        assert not compare_generic(["x"], ["y"])
+        assert not compare(xs, [9])
+        original = pair(True)
+        second = pair(False)
+        assert second.left.same(xs, ys) and second.right.same(xs, ys)
+        payload = serialize(original)
+        restored = deserialize(payload)
+        assert serialize(restored) == payload
+        assert isinstance(restored, Pair)
+        if isinstance(restored, Pair):
+            assert restored.left.same(xs, ys)
+            assert not restored.right.same(xs, [9])
+            restored.left.marker = 17
+            assert restored.right.marker == 0
+        ok = True
+        for _ in range(n):
+            ok = compare(xs, ys) and ok
+        assert ok
+        print("OK")
+        env.exit(0)

@@ -12,40 +12,45 @@ T_21w def _test_foo () -> None:
 
 # recursive group:
 actor _test_SimpleSyncTester ():
-    m = MathTester()
-    print("SimpleSyncTester.test()")
-    testing.assertEqual(m.add(1, 2), 3, "1 + 2 = 3")
+    proc def __startup__ () -> T_25w:
+        m = MathTester()
+        print("SimpleSyncTester.test()")
+        testing.assertEqual(m.add(1, 2), 3, "1 + 2 = 3")
 actor _SyncTester (t : testing.SyncT):
-    log = logging.Logger(t.log_handler)
-    m = MathTester()
-    log.info("SyncTester.test()")
-    print("SyncTester.test()")
-    testing.assertEqual(m.add(1, 2), 3, "1 + 2 = 3")
+    proc def __startup__ () -> T_31w:
+        log = logging.Logger(t.log_handler)
+        m = MathTester()
+        log.info("SyncTester.test()")
+        print("SyncTester.test()")
+        testing.assertEqual(m.add(1, 2), 3, "1 + 2 = 3")
 actor _SyncTesterCore ():
-    m = MathTester()
-    print("SimpleSyncTester.test()")
-    testing.assertEqual(m.add(1, 2), 3, "1 + 2 = 3")
+    proc def __startup__ () -> T_39w:
+        m = MathTester()
+        print("SimpleSyncTester.test()")
+        testing.assertEqual(m.add(1, 2), 3, "1 + 2 = 3")
 # (recursive group)
 
-T_37w def _test_simple_sync () -> T_33w:
+T_49w def _test_simple_sync () -> T_45w:
     s = _SyncTesterCore()
 
-T_47w def _test_sync (t : testing.SyncT) -> T_43w:
+T_59w def _test_sync (t : testing.SyncT) -> T_55w:
     m = MathTester()
     return str(m.add(1, 2))
 
 # recursive group:
 actor AsyncTester (t : testing.AsyncT):
-    log = logging.Logger(t.log_handler)
-    T_59w def test () -> T_55w:
-        log.info("AsyncTester.test()", {"data": "test"})
-        t.success()
-    after 0: test()
+    proc def __startup__ () -> T_65w:
+        log = logging.Logger(t.log_handler)
+        T_75w def test () -> T_71w:
+            log.info("AsyncTester.test()", {"data": "test"})
+            t.success()
+        after 0: test()
 actor EnvTester (t : testing.EnvT):
-    log = logging.Logger(t.log_handler)
-    T_69w def test () -> T_65w:
-        log.info("EnvTester.test() wthreads:", {"nr_wthreads": t.env.nr_wthreads})
-        print("EnvTester.test() wthreads:", t.env.nr_wthreads)
-        t.success()
-    after 0: test()
+    proc def __startup__ () -> T_79w:
+        log = logging.Logger(t.log_handler)
+        T_89w def test () -> T_85w:
+            log.info("EnvTester.test() wthreads:", {"nr_wthreads": t.env.nr_wthreads})
+            print("EnvTester.test() wthreads:", t.env.nr_wthreads)
+            t.success()
+        after 0: test()
 # (recursive group)

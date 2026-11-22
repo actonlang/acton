@@ -14,11 +14,12 @@ def total[T(Container[int])](c: T) -> int:
     return s
 
 actor main(env):
-    b = bytearray(b"abc")
-    if size(b) != 3:
-        print("FAIL: len through Container[int] witness for bytearray")
-        await async env.exit(1)
-    if total(b) != 294:
-        print("FAIL: iteration through Container[int] witness for bytearray")
-        await async env.exit(1)
-    await async env.exit(0)
+    proc def __startup__():
+        b = bytearray(b"abc")
+        if size(b) != 3:
+            print("FAIL: len through Container[int] witness for bytearray")
+            await async env.exit(1)
+        if total(b) != 294:
+            print("FAIL: iteration through Container[int] witness for bytearray")
+            await async env.exit(1)
+        await async env.exit(0)

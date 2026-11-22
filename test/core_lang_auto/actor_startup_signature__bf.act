@@ -1,0 +1,6 @@
+actor Invalid():
+    __startup__: action() -> int
+    proc def __startup__():
+        pass
+
+actor main(env): pass

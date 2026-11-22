@@ -650,6 +650,7 @@ void $ActorD___init__($Actor a) {
     a->$next = NULL;
     a->B_Msg = NULL;
     a->$outgoing = NULL;
+    a->$newborns = NULL;
     a->$waitsfor = NULL;
     a->$consume_hd = 0;
     a->$catcher = NULL;
@@ -694,6 +695,7 @@ $Actor $ActorD___deserialize__($Actor res, $Serial$state state) {
     res->$next = NULL;
     res->B_Msg = NULL;
     res->$outgoing = NULL;
+    res->$newborns = NULL;
     ACTON_STORE(res, res->$waitsfor, $step_deserialize(state));
     res->$consume_hd = (long)$val_deserialize(state);
     ACTON_STORE(res, res->$catcher, $step_deserialize(state));
@@ -1037,13 +1039,27 @@ struct $Cont $Fail$instance = {
     &$FailG_methods
 };
 ////////////////////////////////////////////////////////////////////////////////////////
-// Bootstrap sequence: the first message goes to Env and runs $InitEnv, which runs
-// the generated Env.__init__. Once Env is fully initialized, Env.__init__ continues
-// with $StartRoot, which sends the root actor $InitRoot to run its __init__ with Env.
+// Env and root keep their preallocated identities, but initialize directly
+// under a construction context just like an ordinary constructor call.
+#define CONSTRUCT_EXISTING(actor, initialize) do { \
+    $Actor parent = $ConstructionBegin(); \
+    struct JumpBuf frame; \
+    if ($PUSH(&frame)) { \
+        $ConstructionEnter(($Actor)(actor)); \
+        initialize; \
+        $DROP(); \
+    } else { \
+        B_BaseException exception = $POP(); \
+        $ConstructionAbort(parent, exception); \
+        $RAISE(exception); \
+    } \
+    $ConstructionEnd(parent); \
+} while (0)
 
 $R $InitRootD___call__ ($Cont $this, $WORD val) {
-    typedef $R(*ROOT__init__t)($Actor, $Cont, B_Env);    // Assumed type of the ROOT actor's __init__ method
-    return ((ROOT__init__t)root_actor->$class->__init__)(root_actor, ($Cont)val, env_actor);
+    typedef B_NoneType (*ROOT__init__t)($Actor, B_Env);
+    CONSTRUCT_EXISTING(root_actor, ((ROOT__init__t)root_actor->$class->__init__)(root_actor, env_actor));
+    return $R_DONE(B_None);
 }
 
 extern struct $ContG_class $InitRootG_methods;
@@ -1100,7 +1116,8 @@ struct $Cont $StartRoot$cont = {
 };
 
 $R $InitEnvD___call__ ($Cont $this, $WORD args) {
-    return env_actor->$class->__init__(env_actor, &$StartRoot$cont, B_WorldCapG_new(), (B_list)args, num_wthreads, B__EnvCapG_new());
+    CONSTRUCT_EXISTING(env_actor, env_actor->$class->__init__(env_actor, B_WorldCapG_new(), (B_list)args, num_wthreads, B__EnvCapG_new()));
+    return $R_CONT(&$StartRoot$cont, B_None);
 }
 
 extern struct $ContG_class $InitEnvG_methods;
@@ -1161,6 +1178,133 @@ void register_actor(int64_t key) {
 }
 #endif
 
+// One worker owns a construction context until the outermost direct
+// constructor returns. No actor in the context can run before it commits.
+struct ConstructionActor {
+    $Actor actor;
+    GC_finalization_proc finalizer;
+    struct ConstructionActor *next;
+};
+struct ConstructionContext {
+    unsigned depth;
+    time_t baseline;
+    B_Msg messages;
+    B_Msg startups;
+    struct ConstructionActor *actors;
+    B_BaseException failed;
+};
+
+$Actor $ConstructionBegin(void) {
+    WorkerCtx wctx = GET_WCTX();
+    $Actor parent = GET_SELF();
+    struct ConstructionContext *ctx = wctx->construction;
+    if (!ctx) {
+        assert(parent && parent->B_Msg);
+        ctx = GC_malloc(sizeof(*ctx));
+        ctx->baseline = parent->B_Msg->$baseline;
+        ACTON_STORE(wctx, wctx->construction, ctx);
+    }
+    if (ctx->failed)
+        $RAISE(ctx->failed);
+    ctx->depth++;
+    return parent;
+}
+
+void $ConstructionRegister($Actor actor) {
+    struct ConstructionContext *ctx = GET_WCTX()->construction;
+    if (ctx) {
+        struct ConstructionActor *entry = GC_malloc(sizeof(*entry));
+        entry->actor = actor;
+        entry->next = ctx->actors;
+        ACTON_STORE(ctx, ctx->actors, entry);
+    } else {
+        INIT_DB_QUEUE(actor->$globkey);
+        REGISTER_ACTOR(actor->$globkey);
+    }
+}
+
+void $InstallFinalizer(void *actor, GC_finalization_proc fn) {
+    struct ConstructionContext *ctx = GET_WCTX()->construction;
+    if (ctx) {
+        for (struct ConstructionActor *entry = ctx->actors; entry; entry = entry->next) {
+            if (entry->actor == actor) {
+                entry->finalizer = fn;
+                return;
+            }
+        }
+        assert(false); // Only newborn actors install a constructor finalizer.
+    }
+    GC_register_finalizer(actor, fn, NULL, NULL, NULL);
+}
+
+B_NoneType $ConstructionEnter($Actor actor) {
+    SET_SELF(actor);
+    return B_None;
+}
+
+B_NoneType $ConstructionAbort($Actor parent, B_BaseException exception) {
+    WorkerCtx wctx = GET_WCTX();
+    struct ConstructionContext *ctx = wctx->construction;
+    assert(ctx && ctx->depth);
+    SET_SELF(parent);
+    if (!ctx->failed)
+        ACTON_STORE(ctx, ctx->failed, exception);
+    if (--ctx->depth == 0)
+        ACTON_STORE(wctx, wctx->construction, NULL);
+    return B_None;
+}
+
+// Lists are in reverse send order, as with an actor's ordinary outbox.
+static B_Msg construction_append(B_Msg newer, B_Msg older) {
+    if (!newer)
+        return older;
+    B_Msg tail = newer;
+    while (tail->$next)
+        tail = tail->$next;
+    ACTON_STORE(tail, tail->$next, older);
+    return newer;
+}
+
+B_NoneType $ConstructionEnd($Actor parent) {
+    WorkerCtx wctx = GET_WCTX();
+    struct ConstructionContext *ctx = wctx->construction;
+    assert(ctx && ctx->depth);
+    SET_SELF(parent);
+    if (--ctx->depth)
+        return B_None;
+    ACTON_STORE(wctx, wctx->construction, NULL);
+    if (ctx->failed)
+        $RAISE(ctx->failed);
+    for (struct ConstructionActor *entry = ctx->actors; entry; entry = entry->next) {
+        INIT_DB_QUEUE(entry->actor->$globkey);
+        REGISTER_ACTOR(entry->actor->$globkey);
+        if (entry->finalizer)
+            GC_register_finalizer(entry->actor, entry->finalizer, NULL, NULL, NULL);
+#ifdef ACTON_DB
+        if (db) {
+            if (!parent->$newborns)
+                ACTON_STORE(parent, parent->$newborns, B_listG_new(NULL, NULL));
+            B_list_base_append((B_list_base)parent->$newborns, entry->actor);
+        }
+#endif
+    }
+    // Keep earlier parent sends first, then all startup messages, then the
+    // ordinary construction sends. No target is scheduled until parent flushes.
+    B_Msg messages = construction_append(ctx->messages,
+                        construction_append(ctx->startups, parent->$outgoing));
+    ACTON_STORE(parent, parent->$outgoing, messages);
+    return B_None;
+}
+
+B_NoneType $MarkStartup(B_Msg message) {
+    struct ConstructionContext *ctx = GET_WCTX()->construction;
+    assert(ctx && ctx->messages == message);
+    ACTON_STORE(ctx, ctx->messages, message->$next);
+    ACTON_STORE(message, message->$next, ctx->startups);
+    ACTON_STORE(ctx, ctx->startups, message);
+    return B_None;
+}
+
 void PUSH_outgoing($Actor self, B_Msg m) {
     B_Msg next = self->$outgoing;
     m->$next = next;
@@ -1192,7 +1336,13 @@ B_Msg $ASYNC($Actor to, $Cont cont) {
     $Actor self = GET_SELF();
     time_t baseline = 0;
     B_Msg m = B_MsgG_newXX(to, cont, baseline, &$Done$instance);
-    if (self) {                                         // $ASYNC called by actor code
+    WorkerCtx wctx = GET_WCTX();
+    struct ConstructionContext *ctx = wctx ? wctx->construction : NULL;
+    if (ctx) {
+        m->$baseline = ctx->baseline;
+        ACTON_STORE(m, m->$next, ctx->messages);
+        ACTON_STORE(ctx, ctx->messages, m);
+    } else if (self) {                                  // $ASYNC called by actor code
         m->$baseline = self->B_Msg->$baseline;
         PUSH_outgoing(self, m);
     } else {                                            // $ASYNC called by the event loop
@@ -1277,11 +1427,12 @@ void $DROP() {
     wctx->jump_top = current->prev;
 }
 
-void $RAISE(B_BaseException e) {
+_Noreturn B_value $RAISE(B_BaseException e) {
     WorkerCtx wctx = GET_WCTX();
     JumpBuf jump = wctx->jump_top;
     jump->xval = e;
     $LONGJMP(jump->buf, 1);
+    __builtin_unreachable();
 }
 
 #ifdef ACTON_DB
@@ -1795,6 +1946,15 @@ void serialize_actor($Actor a, uuid_t *txnid) {
         out = out->$next;
     }
 }
+
+// A constructor need not send its actor a message. Save its initial state
+// with the parent before any construction output becomes runnable.
+void serialize_newborns($Actor parent, uuid_t *txnid) {
+    B_list actors = parent->$newborns;
+    if (actors)
+        for (int64_t i = 0; i < actors->length; i++)
+            serialize_actor(($Actor)actors->data[i], txnid);
+}
 #endif
 
 void BOOTSTRAP(int argc, char *argv[]) {
@@ -1865,6 +2025,7 @@ void save_actor_state($Actor current, B_Msg m, uint32_t ready_us) {
                         continue;
                     current->$consume_hd++;
                     serialize_actor(current, txnid);
+                    serialize_newborns(current, txnid);
                     FLUSH_outgoing_db(current, txnid);
                     serialize_msg(current->B_Msg, txnid);
 
@@ -1890,6 +2051,8 @@ void save_actor_state($Actor current, B_Msg m, uint32_t ready_us) {
                     if(ret2 == VAL_STATUS_COMMIT)
                         success = 1;
                 }
+                if (success)
+                    ACTON_STORE(current, current->$newborns, NULL);
                 FLUSH_outgoing_local(current, ready_us);
             } else {
 #endif
@@ -2636,6 +2799,7 @@ void wt_work_cb(uv_check_t *ev) {
                     if(txnid == NULL)
                         continue;
                     serialize_actor(current, txnid);
+                    serialize_newborns(current, txnid);
                     FLUSH_outgoing_db(current, txnid);
                     serialize_msg(current->B_Msg, txnid);
                     ret = remote_commit_txn(txnid, &minority_status, db);
@@ -2645,6 +2809,8 @@ void wt_work_cb(uv_check_t *ev) {
                     if(ret == VAL_STATUS_COMMIT)
                         success = 1;
                 }
+                if (success)
+                    ACTON_STORE(current, current->$newborns, NULL);
             } else {
 #endif
                 reverse_outgoing_queue(current);
@@ -2781,6 +2947,7 @@ void *main_loop(void *idx) {
     wctx->uv_loop = uv_loops[wctx->id];
     wctx->jump_top = NULL;
     wctx->actor = NULL;
+    wctx->construction = NULL;
     start_worker_keys(wctx);
     wctx->inject_due = 0;
     wctx->steal_seed = 2654435761u * (uint32_t)(wctx->id + 1);
@@ -4144,6 +4311,7 @@ int main(int argc, char **argv) {
     wctx->uv_loop = uv_loops[wctx->id];
     wctx->jump_top = NULL;
     wctx->actor = NULL;
+    wctx->construction = NULL;
 #ifdef ACTON_THREADS
     thread_wctx = wctx;
 #endif

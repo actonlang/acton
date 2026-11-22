@@ -3,13 +3,14 @@ def sumto(n):
     for i in range(n):
         res += i
     return res
-    
+
 actor main(env):
-    if len(env.argv) >= 2:
-        target = int(env.argv[1])
-    else:
-        target = int(123)
-    print(sumto(int(target)))
-    print("gc time", env.rts.gc_stats().total_ms, "millisecs")
-    print("Total heap memory allocated",env.rts.gc_stats().total_bytes,"bytes")
-    env.exit(0)
+    proc def __startup__():
+        if len(env.argv) >= 2:
+            target = int(env.argv[1])
+        else:
+            target = int(123)
+        print(sumto(int(target)))
+        print("gc time", env.rts.gc_stats().total_ms, "millisecs")
+        print("Total heap memory allocated",env.rts.gc_stats().total_bytes,"bytes")
+        env.exit(0)

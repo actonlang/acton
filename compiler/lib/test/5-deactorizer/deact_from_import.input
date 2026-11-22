@@ -1,5 +1,5 @@
 from deact import Apa
-W_Manager_124: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+W_Manager_122: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
 
 # recursive group:
 actor Manager ():
@@ -13,8 +13,12 @@ actor Manager ():
         pass
         return None
 actor main (env : __builtin__.Env):
-    mgr: Manager = Manager()
-    decoder: __builtin__.StringDecoder = mgr.create_decoder()
-    apa: deact.Apa = mgr.create_apa()
-    env.exit(W_Manager_124.__fromatom__(0))
+    __startup__ : action() -> None
+    proc def __startup__ () -> None:
+        mgr: Manager = Manager()
+        decoder: __builtin__.StringDecoder = mgr.create_decoder()
+        apa: deact.Apa = mgr.create_apa()
+        env.exit(W_Manager_122.__fromatom__(0))
+        return None
+    $MarkStartup((async $WRAP@[(), (), None](self, __startup__))())
 # (recursive group)

@@ -1,7 +1,8 @@
 actor main(env):
-    a, b = divmod(1*3+6, 3)
-    if a != 3 or b != 0:
-        print("ERROR: (a, b) != (3,0), got (%d,%d)" % (a, b))
-        env.exit(1)
-    else:
-        env.exit(0)
+    proc def __startup__():
+        a, b = divmod(1*3+6, 3)
+        if a != 3 or b != 0:
+            print("ERROR: (a, b) != (3,0), got (%d,%d)" % (a, b))
+            env.exit(1)
+        else:
+            env.exit(0)

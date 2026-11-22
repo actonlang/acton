@@ -15,11 +15,12 @@ actor Filter(source: action() -> int, prime: int):
         return value
 
 actor main(env):
-    n = int(env.argv[1]) if len(env.argv) > 1 else 100
-    var source = Generate().next
-    for i in range(n):
-        prime = await async source()
-        print(prime)
-        if i + 1 < n:
-            source = Filter(source, prime).next
-    env.exit(0)
+    proc def __startup__():
+        n = int(env.argv[1]) if len(env.argv) > 1 else 100
+        source = Generate().next
+        for i in range(n):
+            prime = await async source()
+            print(prime)
+            if i + 1 < n:
+                source = Filter(source, prime).next
+        env.exit(0)

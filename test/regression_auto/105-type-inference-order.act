@@ -1,11 +1,15 @@
 actor Bar(f):
-    await async f.func('x')
+
+
+    proc def __startup__():
+        await async f.func('x')
 
 actor Foo():
     def func(a):
         print(a)
 
 actor main(env):
-    f = Foo()
-    b = Bar(f)
-    env.exit(0)
+    proc def __startup__():
+        f = Foo()
+        b = Bar(f)
+        env.exit(0)

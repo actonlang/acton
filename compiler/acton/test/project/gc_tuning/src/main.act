@@ -4,38 +4,39 @@ def check(page_hash_log2: int, generational: bool) -> int:
     NotImplemented
 
 actor main(env):
-    log2 = int(env.argv[1])
-    generational = env.argv[2] == "true"
+    proc def __startup__():
+        log2 = int(env.argv[1])
+        generational = env.argv[2] == "true"
 
-    records = shared.make()
-    assert check(log2, generational) == 0
+        records = shared.make()
+        assert check(log2, generational) == 0
 
-    info = env.rts.gc_info()
-    # The collector is built with the manual dirty-bit mode only, whose bits
-    # the write barrier sets
-    assert info.backend == ("manual" if generational else "none")
-    assert "manual" in info.supported_backends
-    assert "mprotect" not in info.supported_backends
-    assert "soft_dirty" not in info.supported_backends
-    assert "userfaultfd" not in info.supported_backends
-    assert info.page_hash_table_log2 == u64(log2 if log2 else 21)
-    assert info.markers == 2
-    assert info.free_space_divisor == 5
-    assert info.full_frequency == 7
-    stats = env.rts.gc_stats()
-    assert stats.heap_size > 0
-    assert stats.heap_size >= stats.free_bytes
-    assert stats.free_bytes >= stats.unmapped_bytes
+        info = env.rts.gc_info()
+        # The collector is built with the manual dirty-bit mode only, whose bits
+        # the write barrier sets
+        assert info.backend == ("manual" if generational else "none")
+        assert "manual" in info.supported_backends
+        assert "mprotect" not in info.supported_backends
+        assert "soft_dirty" not in info.supported_backends
+        assert "userfaultfd" not in info.supported_backends
+        assert info.page_hash_table_log2 == u64(log2 if log2 else 21)
+        assert info.markers == 2
+        assert info.free_space_divisor == 5
+        assert info.full_frequency == 7
+        stats = env.rts.gc_stats()
+        assert stats.heap_size > 0
+        assert stats.heap_size >= stats.free_bytes
+        assert stats.free_bytes >= stats.unmapped_bytes
 
-    if generational:
-        # Steps of the default 50 ms
-        assert info.mode == "generational"
-        assert info.pause_target_ms is not None
-        assert info.pause_target_ms! == 50.0
-    else:
-        assert info.mode == "ordinary"
-        assert info.pause_target_ms is None
+        if generational:
+            # Steps of the default 50 ms
+            assert info.mode == "generational"
+            assert info.pause_target_ms is not None
+            assert info.pause_target_ms! == 50.0
+        else:
+            assert info.mode == "ordinary"
+            assert info.pause_target_ms is None
 
-    assert shared.verify(records) == 256
-    print("GC tuning OK")
-    env.exit(0)
+        assert shared.verify(records) == 256
+        print("GC tuning OK")
+        env.exit(0)

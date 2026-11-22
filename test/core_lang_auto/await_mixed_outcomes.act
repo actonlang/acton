@@ -23,7 +23,10 @@
 #  - Lost completions park main; the Watchdog actor bounds the run.
 
 actor Watchdog(env):
-    after 10.0: env.exit(1)
+
+
+    proc def __startup__():
+        after 10.0: env.exit(1)
 
 actor Prod():
     def good() -> int:
@@ -33,29 +36,30 @@ actor Prod():
         raise ValueError("bad")
 
 actor main(env):
-    wd = Watchdog(env)
-    b = Prod()
+    proc def __startup__():
+        wd = Watchdog(env)
+        b = Prod()
 
-    def check_bad(fut) -> int:
-        try:
-            return await fut
-        except ValueError:
-            return -1
+        def check_bad(fut) -> int:
+            try:
+                return await fut
+            except ValueError:
+                return -1
 
-    def check_good(fut) -> int:
-        try:
-            return await fut
-        except ValueError:
-            return -2
+        def check_good(fut) -> int:
+            try:
+                return await fut
+            except ValueError:
+                return -2
 
-    def go():
-        h = async b.bad()
-        g = async b.good()
-        hv = check_bad(h)
-        gv = check_good(g)
-        if hv == -1 and gv == 21:
-            print("mixed outcomes ok")
-            env.exit(0)
-        env.exit(1)
+        def go():
+            h = async b.bad()
+            g = async b.good()
+            hv = check_bad(h)
+            gv = check_good(g)
+            if hv == -1 and gv == 21:
+                print("mixed outcomes ok")
+                env.exit(0)
+            env.exit(1)
 
-    go()
+        go()

@@ -91,6 +91,7 @@ data CompileOptions   = CompileOptions {
                          kinds       :: Bool,
                          types       :: Bool,
                          escape_analysis :: Bool,
+                         initialization_analysis :: Bool,
                          witness_stats :: Bool,
                          sigs        :: Bool,
                          norm        :: Bool,
@@ -132,6 +133,7 @@ defaultCompileOptions = CompileOptions
     , kinds                   = False
     , types                   = False
     , escape_analysis         = False
+    , initialization_analysis = False
     , witness_stats           = False
     , sigs                    = False
     , norm                    = False
@@ -165,7 +167,7 @@ defaultCompileOptions = CompileOptions
 -- | Whether a dump flag is set, from --parse through --cgen.  A dump takes
 -- the place of the normal build output.  --ccmd and --tydb are not dumps.
 altOutput :: CompileOptions -> Bool
-altOutput opts = any ($ opts) [parse, parse_ast, kinds, types, escape_analysis, sigs, norm, deact, cps, llift, box, hgen, cgen]
+altOutput opts = any ($ opts) [parse, parse_ast, kinds, types, escape_analysis, initialization_analysis, sigs, norm, deact, cps, llift, box, hgen, cgen]
 
 data BuildOptions = BuildOptions
     { buildCompile :: CompileOptions
@@ -413,6 +415,7 @@ compileOptionsWith optimization = CompileOptions
         <*> switch (long "kinds"        <> help "Show all the result after kind-checking")
         <*> switch (long "types"        <> help "Show all inferred expression types")
         <*> switch (long "escape-analysis" <> help "Show experimental parameter escape analysis")
+        <*> switch (long "initialization-analysis" <> help "Show advisory constructor cycle-safety analysis")
         <*> switch (long "witness-stats" <> help "Print per-module witness constructions after sharing as JSON lines")
         <*> switch (long "sigs"         <> help "Show the inferred type signatures")
         <*> switch (long "norm"         <> help "Show the result after syntactic normalization")

@@ -25,11 +25,12 @@ def check_freeze[A(Hashable)](source: set[A], expected: iset[A]):
             raise ValueError("frozen set lost elements during serialization")
 
 actor main(env):
-    empty: set[int] = set()
-    check_freeze(empty, iset())
-    check_freeze({"one"}, iset(["one"]))
-    source = set(range(100))
-    for i in range(3, 100):
-        source.discard(i)
-    check_freeze(source, iset([0, 1, 2]))
-    env.exit(0)
+    proc def __startup__():
+        empty: set[int] = set()
+        check_freeze(empty, iset())
+        check_freeze({"one"}, iset(["one"]))
+        source = set(range(100))
+        for i in range(3, 100):
+            source.discard(i)
+        check_freeze(source, iset([0, 1, 2]))
+        env.exit(0)

@@ -14,5 +14,6 @@ class TestClass(object):
         self.result = helper(self.value)
 
 actor main(env):
-    t = TestClass(5)
-    env.exit(0)
+    proc def __startup__():
+        t = TestClass(5)
+        env.exit(0)

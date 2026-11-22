@@ -1,3 +1,4 @@
 actor Test():
-    for self in [1, 2, 3]:
-        pass
+    proc def __startup__():
+        for self in [1, 2, 3]:
+            pass

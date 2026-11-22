@@ -8,8 +8,9 @@ def fun2(nt):
     print(nt.c)
 
 actor main(env):
-    x = (a="bar", b=1337, c=True)
-    print(x)
-    fun1(x)
-    fun2(x)
-    env.exit(0)
+    proc def __startup__():
+        x = (a="bar", b=1337, c=True)
+        print(x)
+        fun1(x)
+        fun2(x)
+        env.exit(0)

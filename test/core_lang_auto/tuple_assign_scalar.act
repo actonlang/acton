@@ -8,13 +8,14 @@ def mark(seen: list[int], value: int) -> int:
     return value
 
 actor main(env):
-    seen: list[int] = []
-    a = 10
-    b = 20
+    proc def __startup__():
+        seen: list[int] = []
+        a = 10
+        b = 20
 
-    a, b = mark(seen, b), mark(seen, a)
+        a, b = mark(seen, b), mark(seen, a)
 
-    if a != 20 or b != 10 or seen != [20, 10]:
-        print("Failed:", a, b, seen)
-        env.exit(1)
-    env.exit(0)
+        if a != 20 or b != 10 or seen != [20, 10]:
+            print("Failed:", a, b, seen)
+            env.exit(1)
+        env.exit(0)

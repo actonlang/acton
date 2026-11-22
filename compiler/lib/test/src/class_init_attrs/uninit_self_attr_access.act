@@ -8,5 +8,6 @@ class TestClass(object):
         self.y = 10
 
 actor main(env):
-    t = TestClass()
-    env.exit(0)
+    proc def __startup__():
+        t = TestClass()
+        env.exit(0)

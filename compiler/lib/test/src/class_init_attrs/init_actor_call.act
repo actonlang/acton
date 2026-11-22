@@ -11,6 +11,7 @@ class TestClass(object):
         self.y = a.foo()
 
 actor main(env):
-    a = Act()
-    t = TestClass(a)
-    env.exit(0)
+    proc def __startup__():
+        a = Act()
+        t = TestClass(a)
+        env.exit(0)

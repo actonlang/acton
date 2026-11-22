@@ -32,4 +32,5 @@ actor _test_lookup_aaaa_of_ipv4_address(t: testing.EnvT):
     def on_error(name: str, error: str):
         t.success()
 
-    net.lookup_aaaa(net.DNSCap(net.NetCap(t.env.cap)), "127.0.0.1", on_resolve, on_error)
+    proc def __startup__():
+        net.lookup_aaaa(net.DNSCap(net.NetCap(t.env.cap)), "127.0.0.1", on_resolve, on_error)

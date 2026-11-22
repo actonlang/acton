@@ -522,7 +522,6 @@ scanStmt c stmt = case stmt of
     Pass{} -> return ()
     Delete _ e -> scanExpr c e
     Return l mbe -> forM_ mbe $ \e -> scanExpr c e >> addEscapeExpr c (Returned l) e
-    Raise l e -> scanExpr c e >> addEscapeExpr c (Raised l) e
     Break{} -> return ()
     Continue{} -> return ()
     If _ bs els -> mapM_ (scanBranch c) bs >> scanSuite c els
@@ -571,6 +570,7 @@ scanHandler c (Handler _ b) = scanSuite c b
 
 scanExpr :: Context -> Expr -> State Facts ()
 scanExpr c expression = case expression of
+    Raise l e _ -> scanExpr c e >> addEscapeExpr c (Raised l) e
     Var{} -> return ()
     Int{} -> return ()
     Float{} -> return ()

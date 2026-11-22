@@ -3,6 +3,7 @@
 import dep.a
 
 actor main(env):
-    print("Hello World!")
-    print("Content of foo_a from imported module a: %s" % dep.a.foo_a)
-    env.exit(0)
+    proc def __startup__():
+        print("Hello World!")
+        print("Content of foo_a from imported module a: %s" % dep.a.foo_a)
+        env.exit(0)

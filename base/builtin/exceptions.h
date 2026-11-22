@@ -32,7 +32,7 @@ struct JumpBuf {
     JumpBuf prev;
 };
 
-void $RAISE(B_BaseException e);
+_Noreturn B_value $RAISE(B_BaseException e);
 JumpBuf $PUSH_BUF(JumpBuf frame);
 void $DROP();
 B_BaseException $POP();

@@ -17,6 +17,6 @@ proc def capture () -> None:
         if True:
             return None
         else:
-            $RAISE(N_x)
+            $RAISE@[None](N_x)
     callback()
     return None

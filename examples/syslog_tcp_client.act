@@ -3,23 +3,24 @@ import std.syslog
 
 
 actor main(env):
-    def finish(client: std.syslog.StreamClient):
-        client.close()
-        env.exit(0)
+    proc def __startup__():
+        def finish(client: std.syslog.StreamClient):
+            client.close()
+            env.exit(0)
 
-    def connected(client: std.syslog.StreamClient):
-        client.log("Hello from Acton", severity=std.syslog.INFO,
-                   facility=std.syslog.LOCAL0, hostname="localhost",
-                   app_name="syslog-tcp-client",
-                   structured_data={"event@32473": [("instance", "one")]})
-        # Allow the asynchronous send to run before exiting.
-        # TCP has no syslog application acknowledgement.
-        after 0.2: finish(client)
+        def connected(client: std.syslog.StreamClient):
+            client.log("Hello from Acton", severity=std.syslog.INFO,
+                       facility=std.syslog.LOCAL0, hostname="localhost",
+                       app_name="syslog-tcp-client",
+                       structured_data={"event@32473": [("instance", "one")]})
+            # Allow the asynchronous send to run before exiting.
+            # TCP has no syslog application acknowledgement.
+            after 0.2: finish(client)
 
-    def failed(client: std.syslog.StreamClient, error: str):
-        print("Syslog client error:", error)
-        client.close()
-        env.exit(1)
+        def failed(client: std.syslog.StreamClient, error: str):
+            print("Syslog client error:", error)
+            client.close()
+            env.exit(1)
 
-    cap = net.TCPConnectCap(net.TCPCap(net.NetCap(env.cap)))
-    std.syslog.StreamClient(cap, "127.0.0.1", 5514, connected, failed)
+        cap = net.TCPConnectCap(net.TCPCap(net.NetCap(env.cap)))
+        std.syslog.StreamClient(cap, "127.0.0.1", 5514, connected, failed)

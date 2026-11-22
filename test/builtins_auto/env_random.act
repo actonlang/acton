@@ -20,24 +20,25 @@ def check(ok: bool, what: str) -> bool:
     return ok
 
 actor main(env):
-    ok = True
+    proc def __startup__():
+        ok = True
 
-    f = Fixed(0xff00000000000001)
-    ok = check(f.rand_int() == 9187343239835811840, "rand_int is the top 63 bits") and ok
-    ok = check(f.rand_float() == 0.99609375, "rand_float is the top 53 bits") and ok
-    ok = check(f.rand_bytes(3) == b"\x01\x00\x00", "rand_bytes is least significant first") and ok
-    ok = check(f.below(10) == 1, "below reduces mod n") and ok
-    ok = check(f.between(-5, 5) == -4, "between offsets from lo") and ok
+        f = Fixed(0xff00000000000001)
+        ok = check(f.rand_int() == 9187343239835811840, "rand_int is the top 63 bits") and ok
+        ok = check(f.rand_float() == 0.99609375, "rand_float is the top 53 bits") and ok
+        ok = check(f.rand_bytes(3) == b"\x01\x00\x00", "rand_bytes is least significant first") and ok
+        ok = check(f.below(10) == 1, "below reduces mod n") and ok
+        ok = check(f.between(-5, 5) == -4, "between offsets from lo") and ok
 
-    r = env.random
-    ok = check(r.rand_u64() != r.rand_u64(), "env.random.rand_u64 varies") and ok
-    ok = check(r.rand_int() >= 0, "env.random.rand_int is not negative") and ok
-    x = r.rand_float()
-    ok = check(x >= 0.0 and x < 1.0, "env.random.rand_float is in [0, 1)") and ok
-    ok = check(len(r.rand_bytes(16)) == 16, "env.random.rand_bytes length") and ok
-    n = r.below(6)
-    ok = check(n >= 0 and n < 6, "env.random.below(6) is in range") and ok
-    d = roll(r)
-    ok = check(d >= 1 and d <= 6, "a roll of env.random is in range") and ok
+        r = env.random
+        ok = check(r.rand_u64() != r.rand_u64(), "env.random.rand_u64 varies") and ok
+        ok = check(r.rand_int() >= 0, "env.random.rand_int is not negative") and ok
+        x = r.rand_float()
+        ok = check(x >= 0.0 and x < 1.0, "env.random.rand_float is in [0, 1)") and ok
+        ok = check(len(r.rand_bytes(16)) == 16, "env.random.rand_bytes length") and ok
+        n = r.below(6)
+        ok = check(n >= 0 and n < 6, "env.random.below(6) is in range") and ok
+        d = roll(r)
+        ok = check(d >= 1 and d <= 6, "a roll of env.random is in range") and ok
 
-    env.exit(0 if ok else 1)
+        env.exit(0 if ok else 1)

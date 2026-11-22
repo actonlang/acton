@@ -1,6 +1,7 @@
 _absolute_paths_error = ValueError("Both paths must be absolute (start with '/')")
 _absolute_cwd_error = ValueError("Working directory must be absolute (start with '/')")
 _above_root_error = ValueError("Relative path goes above root directory")
+_path_nul_error = ValueError("path contains a NUL byte")
 
 
 class FileCap():
@@ -215,7 +216,6 @@ actor FS(cap: FileCap):
 
     proc def _pin_affinity() -> None:
         NotImplemented
-    _pin_affinity()
 
     action def copyfile(src: str, dst: str) -> None:
         """Copy a file"""
@@ -327,11 +327,14 @@ actor FS(cap: FileCap):
             pass
         return res
 
+    proc def __startup__():
+        _pin_affinity()
+
 
 actor ReadFile(cap: ReadFileCap, filename: str, lock=False):
     """Read a file
     """
-    var _fd = -1
+    var _fd = -1 if "\x00" not in filename else raise _path_nul_error
 
     proc def _open_file():
         """C magic"""
@@ -339,10 +342,6 @@ actor ReadFile(cap: ReadFileCap, filename: str, lock=False):
 
     proc def _lock_file():
         NotImplemented
-
-    _open_file()
-    if lock:
-        _lock_file()
 
     action def read() -> bytes:
         """Read content of file"""
@@ -352,6 +351,11 @@ actor ReadFile(cap: ReadFileCap, filename: str, lock=False):
         """Close file"""
         NotImplemented
 
+    proc def __startup__():
+        _open_file()
+        if lock:
+            _lock_file()
+
 
 actor WriteFile(cap: WriteFileCap, filename: str, lock=False, append=False):
     """Write a file
@@ -360,7 +364,7 @@ actor WriteFile(cap: WriteFileCap, filename: str, lock=False, append=False):
     unless append is set: then the content is kept and every write goes to
     the end of the file.
     """
-    var _fd = -1
+    var _fd = -1 if "\x00" not in filename else raise _path_nul_error
 
     proc def _open_file():
         """C magic"""
@@ -369,9 +373,6 @@ actor WriteFile(cap: WriteFileCap, filename: str, lock=False, append=False):
     proc def _lock_file():
         NotImplemented
 
-    _open_file()
-    if lock:
-        _lock_file()
 
     action def write(data: bytes) -> None:
         """Write data to file"""
@@ -380,3 +381,8 @@ actor WriteFile(cap: WriteFileCap, filename: str, lock=False, append=False):
     action def close() -> None:
         """Close file"""
         NotImplemented
+
+    proc def __startup__():
+        _open_file()
+        if lock:
+            _lock_file()

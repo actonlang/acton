@@ -304,7 +304,8 @@ withProcessProject action =
         , "def _test_ready():"
         , "    testing.assertEqual(1, 1)"
         , "actor main(env):"
-        , "    env.exit(0)"
+        , "    proc def __startup__():"
+        , "        env.exit(0)"
         ]
       action acton proj system `finally`
         forM_ ["child.pid", "leader.pid"] (\name -> do

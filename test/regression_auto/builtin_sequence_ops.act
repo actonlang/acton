@@ -102,69 +102,70 @@ extension Wrapped(Iterable[int]):
         return iter(self.values)
 
 actor main(env):
-    xs = [0, 1, 2, 3, 4]
-    list_insert(xs, -100, -1)
-    list_insert(xs, 100, 5)
-    assert xs == [-1, 0, 1, 2, 3, 4, 5]
-    list_reverse(xs)
-    assert xs == [5, 4, 3, 2, 1, 0, -1]
-    assert list_slice(xs) == [4, 2, 0]
-    list_set_slice(xs, Wrapped([8, 9, 10]))
-    assert xs == [5, 8, 9, 10, 2, 1, 0, -1]
-    list_del_slice(xs)
-    assert xs == [5, 9, 2, 0]
-    assert list_total(xs) == 16
-    assert list(list_iterator(xs)) == xs
-    # reversed() copies before returning its iterator; mutating xs is independent.
-    rev = list_reversed(xs)
-    list_insert(xs, 0, 7)
-    assert list(rev) == [0, 2, 9, 5]
-    assert list_add([1.5], [2.5]) == [1.5, 2.5]
-    assert list_repeat([1, 2], 3) == [1, 2, 1, 2, 1, 2]
-    assert list_repeat([1], -2) == []
-    assert list_repeat([], 3) == []
-    orig = [1, 2]
-    result = list_iadd(orig, orig)
-    result.append(3)
-    assert orig == [1, 2, 1, 2, 3]
-    alias = list_irepeat(orig, 2)
-    assert alias == [1, 2, 1, 2, 3, 1, 2, 1, 2, 3]
-    list_irepeat(alias, 0)
-    assert orig == []
-    empty: list[int] = list_zero()
-    assert empty == []
-    assert list_from_iter(Wrapped([4, 5])) == [4, 5]
-    # The element remains boxed for native values and object references alike.
-    fs: list[float] = [1.5]
-    list_insert(fs, 1, 2.5)
-    assert list_slice(fs) == [2.5]
-    obj = Wrapped([7])
-    objects = [obj]
-    list_insert(objects, 1, obj)
-    assert list_slice(objects)[0].values == [7]
-    frozen = ilist([1, 2, 3])
-    assert str(ilist_slice(frozen)) == "ilist([3, 2, 1])"
-    assert list(ilist_iterator(frozen)) == [1, 2, 3]
-    assert list(ilist_reversed(frozen)) == [3, 2, 1]
-    assert list(ilist_add(frozen, ilist([4]))) == [1, 2, 3, 4]
-    assert str(ilist_repeat(frozen, 2)) == "ilist([1, 2, 3, 1, 2, 3])"
-    frozen_empty: ilist[int] = ilist_zero()
-    assert list(frozen_empty) == []
-    assert list(ilist_from_iter(Wrapped([6, 7]))) == [6, 7]
-    assert ilist_total(frozen) == 6
-    generic_reverse(xs)
-    assert xs == [0, 2, 9, 5, 7]
-    assert generic_slice(xs) == [2, 9, 5, 7]
-    assert list(generic_slice(frozen)) == [2, 3]
-    data = bytearray(b"abc")
-    generic_reverse(data)
-    assert data == bytearray(b"cba")
-    # Native indexes stay unboxed; generic elements retain their boxes.
-    numbers = [1.5, 2.5, 3.5]
-    assert list_read(numbers, -1) == 3.5
-    list_write(numbers, -2, 4.5)
-    list_delete(numbers, 0)
-    assert numbers == [4.5, 3.5]
-    assert ilist_read(ilist([1.5, 2.5]), -1) == 2.5
-    assert list_read(objects, 0).values == [7]
-    env.exit(0)
+    proc def __startup__():
+        xs = [0, 1, 2, 3, 4]
+        list_insert(xs, -100, -1)
+        list_insert(xs, 100, 5)
+        assert xs == [-1, 0, 1, 2, 3, 4, 5]
+        list_reverse(xs)
+        assert xs == [5, 4, 3, 2, 1, 0, -1]
+        assert list_slice(xs) == [4, 2, 0]
+        list_set_slice(xs, Wrapped([8, 9, 10]))
+        assert xs == [5, 8, 9, 10, 2, 1, 0, -1]
+        list_del_slice(xs)
+        assert xs == [5, 9, 2, 0]
+        assert list_total(xs) == 16
+        assert list(list_iterator(xs)) == xs
+        # reversed() copies before returning its iterator; mutating xs is independent.
+        rev = list_reversed(xs)
+        list_insert(xs, 0, 7)
+        assert list(rev) == [0, 2, 9, 5]
+        assert list_add([1.5], [2.5]) == [1.5, 2.5]
+        assert list_repeat([1, 2], 3) == [1, 2, 1, 2, 1, 2]
+        assert list_repeat([1], -2) == []
+        assert list_repeat([], 3) == []
+        orig = [1, 2]
+        result = list_iadd(orig, orig)
+        result.append(3)
+        assert orig == [1, 2, 1, 2, 3]
+        alias = list_irepeat(orig, 2)
+        assert alias == [1, 2, 1, 2, 3, 1, 2, 1, 2, 3]
+        list_irepeat(alias, 0)
+        assert orig == []
+        empty: list[int] = list_zero()
+        assert empty == []
+        assert list_from_iter(Wrapped([4, 5])) == [4, 5]
+        # The element remains boxed for native values and object references alike.
+        fs: list[float] = [1.5]
+        list_insert(fs, 1, 2.5)
+        assert list_slice(fs) == [2.5]
+        obj = Wrapped([7])
+        objects = [obj]
+        list_insert(objects, 1, obj)
+        assert list_slice(objects)[0].values == [7]
+        frozen = ilist([1, 2, 3])
+        assert str(ilist_slice(frozen)) == "ilist([3, 2, 1])"
+        assert list(ilist_iterator(frozen)) == [1, 2, 3]
+        assert list(ilist_reversed(frozen)) == [3, 2, 1]
+        assert list(ilist_add(frozen, ilist([4]))) == [1, 2, 3, 4]
+        assert str(ilist_repeat(frozen, 2)) == "ilist([1, 2, 3, 1, 2, 3])"
+        frozen_empty: ilist[int] = ilist_zero()
+        assert list(frozen_empty) == []
+        assert list(ilist_from_iter(Wrapped([6, 7]))) == [6, 7]
+        assert ilist_total(frozen) == 6
+        generic_reverse(xs)
+        assert xs == [0, 2, 9, 5, 7]
+        assert generic_slice(xs) == [2, 9, 5, 7]
+        assert list(generic_slice(frozen)) == [2, 3]
+        data = bytearray(b"abc")
+        generic_reverse(data)
+        assert data == bytearray(b"cba")
+        # Native indexes stay unboxed; generic elements retain their boxes.
+        numbers = [1.5, 2.5, 3.5]
+        assert list_read(numbers, -1) == 3.5
+        list_write(numbers, -2, 4.5)
+        list_delete(numbers, 0)
+        assert numbers == [4.5, 3.5]
+        assert ilist_read(ilist([1.5, 2.5]), -1) == 2.5
+        assert list_read(objects, 0).values == [7]
+        env.exit(0)

@@ -16,5 +16,6 @@ class TestClass(BaseB):
         # Should get a failure since y is not initialized
 
 actor main(env):
-    t = TestClass()
-    env.exit(0)
+    proc def __startup__():
+        t = TestClass()
+        env.exit(0)

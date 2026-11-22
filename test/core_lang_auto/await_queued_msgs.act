@@ -23,7 +23,10 @@
 #    Watchdog actor bounds the run.
 
 actor Watchdog(env):
-    after 10.0: env.exit(1)
+
+
+    proc def __startup__():
+        after 10.0: env.exit(1)
 
 actor Prod():
     def produce() -> int:
@@ -57,4 +60,5 @@ actor main(env):
         awaited = True
         after 0.4: finish()
 
-    go()
+    proc def __startup__():
+        go()

@@ -36,35 +36,36 @@ actor Caller():
 
 
 actor main(env):
-    caller = Caller()
+    proc def __startup__():
+        caller = Caller()
 
-    def run():
-        var1 = None
-        var2 = None
+        def run():
+            var1 = None
+            var2 = None
 
-        def callback():
+            def callback():
+                try:
+                    assert type(var1) == "str"
+                    assert type(var2) == "str"
+                    assert var1 == "hello"
+                    assert var2 == "world"
+                    assert std.json.encode({"var1": var1, "var2": var2}) == std.json.encode({"var1": "hello", "var2": "world"})
+                    check_optional(0, None)
+                    check_optional(1, "world")
+                    check_optional(2, None)
+                    check_optional(3, None)
+                    check_optional(4, "world")
+                    print("Captured cells passed")
+                    env.exit(0)
+                except Exception as exc:
+                    print("Captured cells failed:", exc)
+                    env.exit(1)
+
+            var1 = "hello"
             try:
-                assert type(var1) == "str"
-                assert type(var2) == "str"
-                assert var1 == "hello"
-                assert var2 == "world"
-                assert std.json.encode({"var1": var1, "var2": var2}) == std.json.encode({"var1": "hello", "var2": "world"})
-                check_optional(0, None)
-                check_optional(1, "world")
-                check_optional(2, None)
-                check_optional(3, None)
-                check_optional(4, "world")
-                print("Captured cells passed")
-                env.exit(0)
-            except Exception as exc:
-                print("Captured cells failed:", exc)
-                env.exit(1)
+                var2 = "world"
+            except:
+                return
+            caller.call(callback)
 
-        var1 = "hello"
-        try:
-            var2 = "world"
-        except:
-            return
-        caller.call(callback)
-
-    run()
+        run()
