@@ -611,38 +611,6 @@ B_NoneType netQ_UDPConnectionD___resume__ (netQ_UDPConnection self) {
     return B_None;
 }
 
-$R netQ_UDPConnectionD_local_addressG_local (netQ_UDPConnection self, $Cont c$cont) {
-    uv_udp_t *udp = (uv_udp_t *)(intptr_t)self->_sock;
-    if ((intptr_t)udp == -1) {
-        return $R_CONT(c$cont, actStrFromCString(""));
-    }
-    struct sockaddr_storage sockname;
-    int namelen = sizeof(sockname);
-    char addr[NET_ADDRSTRLEN] = { '\0' };
-    if (uv_udp_getsockname((const uv_udp_t *)udp, (struct sockaddr *)&sockname, &namelen) == 0) {
-        int port = 0;
-        if (sockaddr_to_addr_port((struct sockaddr *)&sockname, addr, sizeof(addr), &port) != 0) {
-            addr[0] = '\0';
-        }
-    }
-    return $R_CONT(c$cont, actStrFromCStringCopy(addr));
-}
-
-$R netQ_UDPConnectionD_local_portG_local (netQ_UDPConnection self, $Cont c$cont) {
-    uv_udp_t *udp = (uv_udp_t *)(intptr_t)self->_sock;
-    if ((intptr_t)udp == -1) {
-        return $R_CONT(c$cont, toB_int(0));
-    }
-    struct sockaddr_storage sockname;
-    int namelen = sizeof(sockname);
-    char addr[NET_ADDRSTRLEN] = { '\0' };
-    int port = 0;
-    if (uv_udp_getsockname((const uv_udp_t *)udp, (struct sockaddr *)&sockname, &namelen) == 0) {
-        sockaddr_to_addr_port((struct sockaddr *)&sockname, addr, sizeof(addr), &port);
-    }
-    return $R_CONT(c$cont, toB_int(port));
-}
-
 static int udp_set_recv_buffer_size(uv_udp_t *udp, int64_t size) {
     if (size <= 0 || size > INT_MAX) {
         return UV_EINVAL;
@@ -904,38 +872,6 @@ B_NoneType netQ_UDPListenerD___resume__ (netQ_UDPListener self) {
     $action2 f = ($action2)self->on_listen;
     f->$class->__asyn__(f, self, actStrFromCString("resume"));
     return B_None;
-}
-
-$R netQ_UDPListenerD_local_addressG_local (netQ_UDPListener self, $Cont c$cont) {
-    uv_udp_t *udp = (uv_udp_t *)(intptr_t)self->_sock;
-    if ((intptr_t)udp == -1) {
-        return $R_CONT(c$cont, actStrFromCString(""));
-    }
-    struct sockaddr_storage sockname;
-    int namelen = sizeof(sockname);
-    char addr[NET_ADDRSTRLEN] = { '\0' };
-    if (uv_udp_getsockname((const uv_udp_t *)udp, (struct sockaddr *)&sockname, &namelen) == 0) {
-        int port = 0;
-        if (sockaddr_to_addr_port((struct sockaddr *)&sockname, addr, sizeof(addr), &port) != 0) {
-            addr[0] = '\0';
-        }
-    }
-    return $R_CONT(c$cont, actStrFromCStringCopy(addr));
-}
-
-$R netQ_UDPListenerD_local_portG_local (netQ_UDPListener self, $Cont c$cont) {
-    uv_udp_t *udp = (uv_udp_t *)(intptr_t)self->_sock;
-    if ((intptr_t)udp == -1) {
-        return $R_CONT(c$cont, toB_int(0));
-    }
-    struct sockaddr_storage sockname;
-    int namelen = sizeof(sockname);
-    char addr[NET_ADDRSTRLEN] = { '\0' };
-    int port = 0;
-    if (uv_udp_getsockname((const uv_udp_t *)udp, (struct sockaddr *)&sockname, &namelen) == 0) {
-        sockaddr_to_addr_port((struct sockaddr *)&sockname, addr, sizeof(addr), &port);
-    }
-    return $R_CONT(c$cont, toB_int(port));
 }
 
 // Closes a TCP handle. TCP handles are GC memory, so there is nothing to free
@@ -1369,20 +1305,6 @@ $R netQ_TCPListenerD_closeG_local (netQ_TCPListener self, $Cont c$cont) {
 $R netQ_TCPListenerD___cleanup__G_local (netQ_TCPListener self, $Cont c$cont) {
     tcp_listener_close(self);
     return $R_CONT(c$cont, B_None);
-}
-
-$R netQ_TCPListenerD_local_addressG_local (netQ_TCPListener self, $Cont c$cont) {
-    char addr[NET_ADDRSTRLEN];
-    int port;
-    tcp_listener_names(self->_stream, addr, sizeof(addr), &port);
-    return $R_CONT(c$cont, actStrFromCStringCopy(addr));
-}
-
-$R netQ_TCPListenerD_local_portG_local (netQ_TCPListener self, $Cont c$cont) {
-    char addr[NET_ADDRSTRLEN];
-    int port;
-    tcp_listener_names(self->_stream, addr, sizeof(addr), &port);
-    return $R_CONT(c$cont, toB_int(port));
 }
 
 B_NoneType netQ_TCPListenerD___resume__ (netQ_TCPListener self) {
@@ -2627,20 +2549,6 @@ $R netQ_TLSListenerD__initG_local (netQ_TLSListener self, $Cont c$cont) {
     $action2 f = ($action2)self->on_listen;
     f->$class->__asyn__(f, self, B_None);
     return $R_CONT(c$cont, B_None);
-}
-
-$R netQ_TLSListenerD_local_addressG_local (netQ_TLSListener self, $Cont c$cont) {
-    char addr[NET_ADDRSTRLEN];
-    int port;
-    tcp_listener_names(self->_stream, addr, sizeof(addr), &port);
-    return $R_CONT(c$cont, actStrFromCStringCopy(addr));
-}
-
-$R netQ_TLSListenerD_local_portG_local (netQ_TLSListener self, $Cont c$cont) {
-    char addr[NET_ADDRSTRLEN];
-    int port;
-    tcp_listener_names(self->_stream, addr, sizeof(addr), &port);
-    return $R_CONT(c$cont, toB_int(port));
 }
 
 $R netQ_TLSListenerD_closeG_local (netQ_TLSListener self, $Cont c$cont) {

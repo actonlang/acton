@@ -68,7 +68,7 @@ actor main(env):
         if error is not None:
             fail(error)
         else:
-            port = listener.local_port()
+            port = listener.endpoint().port
             for first in range(1, workers + 1):
                 Requests(connect, port, first, workers, n, done, fail)
 

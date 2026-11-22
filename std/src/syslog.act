@@ -612,12 +612,6 @@ actor Server(cap: net.UDPListenCap, address: str, port: int,
             return listener.endpoint()
         return (address="", port=0)
 
-    action def local_address() -> str:
-        return endpoint().address
-
-    action def local_port() -> int:
-        return endpoint().port
-
     action def close() -> None:
         """Close the listener. Safe to call repeatedly."""
         _closed = True
@@ -1046,12 +1040,6 @@ actor StreamServer(cap: net.TCPListenCap, address: str, port: int,
         if get_endpoint is not None and not _closed:
             return get_endpoint()
         return (address="", port=0)
-
-    action def local_address() -> str:
-        return endpoint().address
-
-    action def local_port() -> int:
-        return endpoint().port
 
     action def close() -> None:
         """Close the listener and every accepted connection. Idempotent."""
