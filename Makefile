@@ -620,6 +620,15 @@ test-stdlib: dist/bin/acton dist/std
 	cd compiler && stack test acton --ta '-p "stdlib"'
 	$(MAKE) -C test tls-test-server
 	cd test/stdlib_tests && "$(ACTON)" test
+	# The cleanup tests once more in an optimized build. There the worker
+	# loop keeps the continuation that it runs in registers, which the
+	# setjmp of its exception frame (jump0 in the worker context) saves,
+	# and the tests fail if the frame keeps them, and the actors they
+	# reach, alive. A frame that stays pushed keeps what the first
+	# continuation of its worker reached, so the tests fail only if some
+	# worker ran a continuation of a test's actors first. More workers
+	# make that more likely, so the run uses 16 workers.
+	cd test/stdlib_tests && "$(ACTON)" test --fast --module test_cleanup --rts-wthreads 16
 
 # Small programs in the write barrier's checker mode (ACTON_GC_CHECK=1):
 # generational collection, marked in steps of 1 ms, with an allocation budget
