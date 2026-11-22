@@ -23,16 +23,12 @@ actor main(env):
 
     proc def __startup__():
         after 10.0: timeout()
-        # Timer i is due 1 s + i + 1 ms after the baseline of this message.
-        # The timers are set out of order: 7 and n have no common factor, so
-        # k * 7 % n takes every value below n once. They reach the timer queue
-        # one by one after this message, and one that is already due when it
-        # gets there can fire before the next one is queued. The second before
-        # the first one is due keeps that from happening, also when this
-        # message runs late.
+        # Timer i is due i + 1 ms after the baseline of this message. The
+        # timers are set out of order: 7 and n have no common factor, so
+        # k * 7 % n takes every value below n once.
         for k in range(n):
             i = k * 7 % n
-            after 1.0 + 0.001 * float(i + 1): fire(i)
+            after 0.001 * float(i + 1): fire(i)
         # These are due at the same time, after all of the above
         for j in range(same):
-            after 1.5: fire(n + j)
+            after 0.5: fire(n + j)
