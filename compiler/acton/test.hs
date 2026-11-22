@@ -2653,6 +2653,73 @@ parseFlagTests =
         assertBool ("ACTON_GC_MODE=bogus should fail the test run:\nstdout:\n" ++ out4 ++ "\nstderr:\n" ++ err4)
           (code4 /= ExitSuccess)
         assertBool "ACTON_GC_MODE=bogus should not reuse a cached result" (not (cached out4))
+  , testCase "acton test keys cached results on the flags that change a test binary" $ do
+      withSystemTempDirectory "acton-test-flags-cache" $ \proj -> do
+        acton <- canonicalizePath "../../dist/bin/acton"
+        let name = "flags_cache"
+            fp = Fingerprint.formatFingerprint
+              (Fingerprint.updateFingerprintPrefix
+                (Fingerprint.fingerprintPrefixForName name) 1)
+            srcDir = proj </> "src"
+            runTest args = readCreateProcessWithExitCode (proc acton ("test" : args)) { cwd = Just proj } ""
+            cached out = "Using cached results for 1 tests" `isInfixOf` out
+            succeed label (code, out, err) =
+              when (code /= ExitSuccess) $
+                assertFailure (label ++ " failed:\nstdout:\n" ++ out ++ "\nstderr:\n" ++ err)
+
+        createDirectoryIfMissing True srcDir
+        writeFile (proj </> "Build.act") $ unlines
+          [ "name = \"" ++ name ++ "\""
+          , "fingerprint = " ++ fp
+          , ""
+          ]
+        writeFile (srcDir </> "test_plain.act") $ unlines
+          [ "import testing"
+          , ""
+          , "def _test_plain():"
+          , "    testing.assertEqual(1 + 1, 2)"
+          ]
+
+        succeed "initial acton test" =<< runTest ["--iter", "1"]
+        r2@(_, out2, _) <- runTest ["--iter", "1", "--show-cached"]
+        succeed "cached acton test" r2
+        assertBool "second run should reuse the cached result" (cached out2)
+        -- --no-threads builds another test binary, which must run.
+        r3@(_, out3, _) <- runTest ["--iter", "1", "--show-cached", "--no-threads"]
+        succeed "acton test --no-threads" r3
+        assertBool "--no-threads should not reuse the result of a threaded run" (not (cached out3))
+  , testCase "acton test --no-cache stores the results it runs" $ do
+      withSystemTempDirectory "acton-test-no-cache-store" $ \proj -> do
+        acton <- canonicalizePath "../../dist/bin/acton"
+        let name = "no_cache_store"
+            fp = Fingerprint.formatFingerprint
+              (Fingerprint.updateFingerprintPrefix
+                (Fingerprint.fingerprintPrefixForName name) 1)
+            srcDir = proj </> "src"
+            runTest args = readCreateProcessWithExitCode (proc acton ("test" : args)) { cwd = Just proj } ""
+
+        createDirectoryIfMissing True srcDir
+        writeFile (proj </> "Build.act") $ unlines
+          [ "name = \"" ++ name ++ "\""
+          , "fingerprint = " ++ fp
+          , ""
+          ]
+        writeFile (srcDir </> "test_plain.act") $ unlines
+          [ "import testing"
+          , ""
+          , "def _test_plain():"
+          , "    testing.assertEqual(1 + 1, 2)"
+          ]
+
+        (code1, out1, err1) <- runTest ["--iter", "1", "--no-cache"]
+        when (code1 /= ExitSuccess) $
+          assertFailure ("acton test --no-cache failed:\nstdout:\n" ++ out1 ++ "\nstderr:\n" ++ err1)
+        -- The result of the --no-cache run is the one a later run reuses.
+        (code2, out2, err2) <- runTest ["--iter", "1", "--show-cached"]
+        when (code2 /= ExitSuccess) $
+          assertFailure ("cached acton test failed:\nstdout:\n" ++ out2 ++ "\nstderr:\n" ++ err2)
+        assertBool ("a run after --no-cache should reuse its result:\n" ++ out2)
+          ("Using cached results for 1 tests" `isInfixOf` out2)
   ]
   where
     parserInfo = OA.info (C.cmdLineParser OA.<**> OA.helper) C.descr

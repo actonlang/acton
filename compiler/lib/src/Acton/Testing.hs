@@ -3,6 +3,7 @@ module Acton.Testing
   , TestRunContext(..)
   , testRunnerVariables
   , testRunEnvironment
+  , zigDependencyStamps
   , TestCachedResult(..)
   , TestCacheEntry(..)
   , TestCache(..)
@@ -33,6 +34,7 @@ module Acton.Testing
   , buildTestHashInfo
   ) where
 
+import qualified Acton.BuildSpec as BuildSpec
 import qualified Acton.Env
 import qualified Acton.Hashing as Hashing
 import qualified Acton.Project as Project
@@ -40,7 +42,7 @@ import qualified Acton.Syntax as A
 import qualified InterfaceFiles
 import Utils (prstr)
 
-import Control.Exception (SomeException, try)
+import Control.Exception (IOException, SomeException, try)
 import Control.Monad (forM)
 import Data.Binary (encode)
 import qualified Crypto.Hash.SHA256 as SHA256
@@ -55,7 +57,8 @@ import Data.List (intercalate, isPrefixOf, isSuffixOf, nub)
 import qualified Data.List
 import Data.Maybe (catMaybes, fromMaybe, listToMaybe)
 import qualified Data.Map as M
-import System.Directory (createDirectoryIfMissing, doesFileExist, renameFile)
+import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
+import System.Directory (createDirectoryIfMissing, doesDirectoryExist, doesFileExist, getFileSize, getModificationTime, getSymbolicLinkTarget, listDirectory, pathIsSymbolicLink, renameFile)
 import System.FilePath ((</>), takeDirectory)
 
 
@@ -92,10 +95,13 @@ data TestRunContext = TestRunContext
   , trcArgs            :: [String]
   , trcBuildOptions    :: M.Map String String
   , trcEnvironment     :: M.Map String String      -- testRunEnvironment
+  , trcBuildFlags      :: M.Map String String      -- the compile options that change a test binary, beyond target and optimize
+  , trcZigDependencies :: M.Map String String      -- zigDependencyStamps
   } deriving (Show, Eq)
 
--- | A context without build options or environment encodes as before either
--- existed, so the results that earlier caches hold for it stay valid.
+-- | A context without build options, environment, build flags or Zig
+-- dependencies encodes as before any of them existed, so the results that
+-- earlier caches hold for it stay valid.
 instance Aeson.ToJSON TestRunContext where
   toJSON ctx = Aeson.object $
     [ AesonKey.fromString "compilerVersion" Aeson..= trcCompilerVersion ctx
@@ -107,6 +113,10 @@ instance Aeson.ToJSON TestRunContext where
          | not (M.null (trcBuildOptions ctx)) ]
       ++ [ AesonKey.fromString "environment" Aeson..= trcEnvironment ctx
          | not (M.null (trcEnvironment ctx)) ]
+      ++ [ AesonKey.fromString "build_flags" Aeson..= trcBuildFlags ctx
+         | not (M.null (trcBuildFlags ctx)) ]
+      ++ [ AesonKey.fromString "zig_dependencies" Aeson..= trcZigDependencies ctx
+         | not (M.null (trcZigDependencies ctx)) ]
 
 instance Aeson.FromJSON TestRunContext where
   parseJSON = Aeson.withObject "TestRunContext" $ \o ->
@@ -118,6 +128,8 @@ instance Aeson.FromJSON TestRunContext where
       <*> o Aeson..: AesonKey.fromString "args"
       <*> o Aeson..:? AesonKey.fromString "build_options" Aeson..!= M.empty
       <*> o Aeson..:? AesonKey.fromString "environment" Aeson..!= M.empty
+      <*> o Aeson..:? AesonKey.fromString "build_flags" Aeson..!= M.empty
+      <*> o Aeson..:? AesonKey.fromString "zig_dependencies" Aeson..!= M.empty
 
 -- | The environment variables that the test runner sets for a test process
 -- from its own options (ACTON_GC_CHECK from --gc-check).  A test process
@@ -138,6 +150,53 @@ testRunEnvironment environment = M.fromList
     , "ACTON_" `isPrefixOf` name || "GC_" `isPrefixOf` name
     , name `notElem` testRunnerVariables
     ]
+
+-- | What a cached test result depends on of the Zig dependencies of a build's
+-- projects, each given by its root and Build.act, whose code Zig links into
+-- every test binary: each dependency's declaration and, for one at a local
+-- path, the paths, sizes and modification times of its files, keyed by the
+-- project's name and the dependency's.  A dependency fetched by URL and hash
+-- changes only with its declaration.  The directories that Zig writes, hidden
+-- entries, and the out, snapshots and src directories of an Acton project
+-- inside the tree are left out: the first two change with every build and
+-- test run, and the impl hashes cover the third.  A linked directory counts
+-- by its target, which is not followed, so a link back up the tree cannot
+-- loop, and a file that cannot be read counts as such.
+zigDependencyStamps :: [(FilePath, BuildSpec.BuildSpec)] -> IO (M.Map String String)
+zigDependencyStamps projects = M.fromList . concat <$> mapM projectStamps projects
+  where
+    projectStamps (root, spec) =
+      forM (M.toList (BuildSpec.zig_dependencies spec)) $ \(name, dep) -> do
+        hash <- stamp root dep
+        return (BuildSpec.specName spec ++ ":" ++ name, hash)
+    stamp root dep = do
+      files <- maybe (return []) (treeStamp . (root </>)) (Project.localZigPath dep)
+      return (Hashing.hashHex (SHA256.hash (BL.toStrict (encode (BL.toStrict (Aeson.encode dep), files)))))
+    treeStamp dir = do
+      exists <- doesDirectoryExist dir
+      if not exists then return [] else walk dir ""
+    walk dir rel = do
+      actonRoot <- doesFileExist (dir </> rel </> "Build.act")
+      let keep name = take 1 name /= "." && name `notElem` ["zig-cache", "zig-out"]
+                      && not (actonRoot && name `elem` ["out", "snapshots", "src"])
+      names <- either (const []) (Data.List.sort . filter keep) <$> ioTry (listDirectory (dir </> rel))
+      concat <$> forM names (\name -> do
+        let path = rel </> name
+            full = dir </> path
+        isLink <- either (const False) id <$> ioTry (pathIsSymbolicLink full)
+        isDir  <- doesDirectoryExist full
+        if isDir && not isLink
+          then walk dir path
+          else if isDir
+            then do target <- either (const "") id <$> ioTry (getSymbolicLinkTarget full)
+                    return [(path, -1, "link to " ++ target)]
+            else do
+              stat <- ioTry ((,) <$> getFileSize full <*> getModificationTime full)
+              return [ case stat of
+                         Right (size, mtime) -> (path, size, show (utcTimeToPOSIXSeconds mtime))
+                         Left _              -> (path, -1, "unreadable") ])
+    ioTry :: IO a -> IO (Either IOException a)
+    ioTry = try
 
 data TestCachedResult = TestCachedResult
   { tcrComplete     :: Bool

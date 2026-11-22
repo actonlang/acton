@@ -56,7 +56,7 @@ See [Performance testing](testing/performance.md) for the lifecycle and examples
 
 ## Cached test results
 
-The Acton test runner caches test results which means that repeated invokations of `acton test` might not actually (re)run tests. Cached failures and errors are still shown by default, so you never miss a failing test. Cached successes are hidden unless you pass `--show-cached`. Pass `--no-cache` to force all selected tests to run, even if cached results exist. A test that draws from [`t.random`](testing/random.md) runs every time, with new seeds.
+The Acton test runner caches test results which means that repeated invokations of `acton test` might not actually (re)run tests. Cached failures and errors are still shown by default, so you never miss a failing test. Cached successes are hidden unless you pass `--show-cached`. Pass `--no-cache` to force all selected tests to run, even if cached results exist; their new results replace the cached ones. A test that draws from [`t.random`](testing/random.md) runs every time, with new seeds.
 
 This means that the developer experience for test driven development is great even for project with a very large amount of tests as the content hash driven test runner only recompiles and reruns tests that are actually affected by a change.
 

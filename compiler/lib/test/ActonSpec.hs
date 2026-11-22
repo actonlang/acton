@@ -69,7 +69,7 @@ import Error.Diagnose.Report (Report(..))
 import Prettyprinter (unAnnotate, layoutPretty, defaultLayoutOptions)
 import Prettyprinter.Render.Text (renderStrict)
 import System.FilePath ((</>), joinPath, takeFileName, takeBaseName, takeDirectory, splitDirectories)
-import System.Directory (createDirectoryIfMissing, getCurrentDirectory, setCurrentDirectory, listDirectory, doesDirectoryExist, doesFileExist, removeFile)
+import System.Directory (createDirectoryIfMissing, createDirectoryLink, getCurrentDirectory, setCurrentDirectory, listDirectory, doesDirectoryExist, doesFileExist, removeFile)
 import System.IO.Temp (withSystemTempDirectory)
 import qualified System.IO.Unsafe
 import System.Timeout (timeout)
@@ -4397,7 +4397,7 @@ main = do
             , "mode" Ae..= ("TestModeRun" :: String)
             , "args" Ae..= ([] :: [String])
             ]
-          defaults = Testing.TestRunContext "test" "native" "ReleaseFast" "TestModeRun" [] M.empty M.empty
+          defaults = Testing.TestRunContext "test" "native" "ReleaseFast" "TestModeRun" [] M.empty M.empty M.empty M.empty
       it "preserves default build identities from earlier test caches" $ do
         Ae.fromJSON legacy `shouldBe` Ae.Success defaults
         Ae.toJSON defaults `shouldBe` legacy
@@ -4413,6 +4413,57 @@ main = do
         Ae.decode (Ae.encode generational) `shouldBe` Just generational
         (Testing.contextHashBytes generational == Testing.contextHashBytes defaults) `shouldBe` False
         (Testing.contextHashBytes generational == Testing.contextHashBytes ordinary) `shouldBe` False
+      it "includes the build flags and Zig dependencies in test cache keys" $ do
+        let noThreads = defaults { Testing.trcBuildFlags = M.singleton "no_threads" "true" }
+            withZigDep = defaults { Testing.trcZigDependencies = M.singleton "zigfoo" "1234" }
+            otherZigDep = defaults { Testing.trcZigDependencies = M.singleton "zigfoo" "5678" }
+        Ae.decode (Ae.encode noThreads) `shouldBe` Just noThreads
+        Ae.decode (Ae.encode withZigDep) `shouldBe` Just withZigDep
+        (Testing.contextHashBytes noThreads == Testing.contextHashBytes defaults) `shouldBe` False
+        (Testing.contextHashBytes withZigDep == Testing.contextHashBytes defaults) `shouldBe` False
+        (Testing.contextHashBytes withZigDep == Testing.contextHashBytes otherZigDep) `shouldBe` False
+      it "stamps a local Zig dependency by its files" $
+        withSystemTempDirectory "acton-zig-dep-stamp" $ \tmp -> do
+          let root = tmp </> "app"
+              elsewhere = tmp </> "elsewhere"
+          createDirectoryIfMissing True (root </> "zigfoo" </> ".zig-cache")
+          createDirectoryIfMissing True elsewhere
+          writeFile (root </> "zigfoo" </> "foo.c") "int foo(void) { return 42; }\n"
+          writeFile (elsewhere </> "x.h") "#define X 1\n"
+          -- Linked directories are not followed: neither a link back up the
+          -- tree nor one that leads outside it.
+          createDirectoryLink (root </> "zigfoo") (root </> "zigfoo" </> "loop")
+          createDirectoryLink elsewhere (root </> "zigfoo" </> "out_of_tree")
+          let dep = BuildSpec.ZigDep Nothing Nothing (Just "zigfoo") M.empty ["zigfoo"]
+              spec = BuildSpec.BuildSpec "app" Nothing "0x0" M.empty (M.singleton "zigfoo" dep) M.empty M.empty
+              stamps = Testing.zigDependencyStamps [(root, spec)]
+          before <- stamps
+          M.keys before `shouldBe` ["app:zigfoo"]
+          writeFile (root </> "zigfoo" </> ".zig-cache" </> "x") "ignored"
+          writeFile (elsewhere </> "x.h") "#define X 2 /* not followed */\n"
+          ignored <- stamps
+          ignored `shouldBe` before
+          writeFile (root </> "zigfoo" </> "foo.c") "int foo(void) { return 43; } /* edited */\n"
+          after <- stamps
+          (after == before) `shouldBe` False
+      it "leaves an enclosed Acton project's own directories out of a Zig dependency's stamp" $
+        withSystemTempDirectory "acton-zig-dep-enclosing" $ \tmp -> do
+          -- The Zig package is the project's parent directory.
+          let lib = tmp </> "lib"
+              root = lib </> "bindings"
+          forM_ ["out/test", "snapshots", "src"] $ \d -> createDirectoryIfMissing True (root </> d)
+          writeFile (root </> "Build.act") "name = \"bindings\"\n"
+          writeFile (lib </> "lib.c") "int lib(void) { return 1; }\n"
+          let dep = BuildSpec.ZigDep Nothing Nothing (Just "..") M.empty ["lib"]
+              spec = BuildSpec.BuildSpec "bindings" Nothing "0x0" M.empty (M.singleton "lib" dep) M.empty M.empty
+              stamps = Testing.zigDependencyStamps [(root, spec)]
+          before <- stamps
+          forM_ ["out/test/cache.json", "snapshots/a.txt", "src/m.act"] $ \f -> writeFile (root </> f) "changed"
+          during <- stamps
+          during `shouldBe` before
+          writeFile (lib </> "lib.c") "int lib(void) { return 2; } /* edited */\n"
+          after <- stamps
+          (after == before) `shouldBe` False
       it "keys test results on the variables of the RTS and its collector" $
         Testing.testRunEnvironment
           [ ("ACTON_GC_MODE", "generational")

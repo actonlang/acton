@@ -117,6 +117,6 @@ Generated C/H files embed a hash of everything their code is generated from: the
 
 ## Tests and hashes
 
-Test results are cached by the per-name implHash (plus impl deps). Cached failures are still shown by default. Use `--show-cached` to include cached successes, or `--no-cache` to force reruns.
+Test results are cached by the per-name implHash (plus impl deps). A cached result is also tied to the compiler version, the target, the optimization mode, `--cpu`, `--db`, `--no-threads` and `--no-dbp`, the build options in `Build.act`, the Zig dependencies of the project and of its dependencies (for one at a local path, its files), and the `ACTON_` and `GC_` environment variables. Cached failures are still shown by default. Use `--show-cached` to include cached successes, or `--no-cache` to force reruns, whose results then replace the cached ones.
 
 For more on tests, see the [Testing](testing.md) section.

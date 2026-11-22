@@ -14,8 +14,22 @@ without changing source code:
 - optimize mode
 - test mode (run/perf)
 - test runner arguments (iteration and timing limits)
+- the `build_options` of `Build.act`
+- the `ACTON_` and `GC_` environment variables, which the RTS and its garbage
+  collector read at startup (`testRunEnvironment`), except `ACTON_GC_CHECK`,
+  which the runner sets from `--gc-check`
+- the compile options besides target and optimize mode that change the test
+  binary: `--cpu`, `--db`, `--no-threads` and `--no-dbp`
+- for each Zig dependency of the project and of its Acton dependencies, a hash
+  of its declaration and, for one at a local path, of the paths, sizes and
+  modification times of its files (`zigDependencyStamps`); the directories that
+  Zig writes, hidden entries, and the `out/`, `snapshots/` and `src/`
+  directories of an Acton project inside the dependency's tree are left out
 
-The context hash is SHA-256 over the JSON-encoded context record.
+The context hash is SHA-256 over the JSON-encoded context record. A context
+without build options, environment, build flags or Zig dependencies encodes as
+before those fields existed, so the results that earlier caches hold for it
+stay valid.
 
 ## Per-test hash
 
@@ -68,7 +82,8 @@ failures/errors, iterations, and duration).
   modification time. If the output file is missing, the expected file changed
   or disappeared, or the metadata does not prove it is older than the last
   produced output, the test is rerun.
-- With `--no-cache`, cached results are ignored and all selected tests are run.
+- With `--no-cache`, cached results are ignored and all selected tests are run;
+  their results are stored and replace the cached ones.
 - Cached failures and errors still contribute to the overall test exit code.
 - By default, cached successes are hidden from output; cached failures/errors
   are still shown. Use `--show-cached` to include cached successes.

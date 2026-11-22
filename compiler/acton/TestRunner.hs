@@ -517,13 +517,21 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
             putStrLn "Nothing to test"
             return 0
       else do
-        buildOptions <- BuildSpec.build_options <$> loadBuildSpec (projPath paths)
+        spec <- loadBuildSpec (projPath paths)
         environment <- getEnvironment
+        projects <- discoverBuildProjects gopts opts paths
+        zigDependencies <- zigDependencyStamps $ case projects of
+          Just found -> [ (root, projBuildSpec ctx) | (root, ctx) <- M.toList found ]
+          Nothing    -> [(projPath paths, spec)]
         let maxNameLen = maximum (0 : map (length . tsDisplay) specs)
             nameWidth = max 20 (maxNameLen + 5)
-            runContext = mkRunContext opts topts mode buildOptions (testRunEnvironment environment)
+            buildOptions = BuildSpec.build_options spec
+            runContext = mkRunContext opts topts mode buildOptions (testRunEnvironment environment) zigDependencies
             ctxHash = contextHashBytes runContext
-            useCache = not (C.testNoCache topts) && not (C.testGcCheck topts) && isNothing (C.testSeed topts) && mode == TestModeRun
+            -- --no-cache runs every test and stores the results, so that a
+            -- later run does not report a result from before.
+            storeCache = not (C.testGcCheck topts) && isNothing (C.testSeed topts) && mode == TestModeRun
+            useCache = storeCache && not (C.testNoCache topts)
         when (mode == TestModePerf) $ forM_ (C.testCompare topts) $ \path -> do
           exists <- doesFileExist path
           unless exists $ printErrorAndExit ("Performance baseline does not exist: " ++ path)
@@ -537,7 +545,7 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
                 then formatTestPerfLines useColorOut (lookupPerfData perfData res) res
                 else []
         cache <-
-          if useCache
+          if storeCache
             then readTestCache (testCachePath paths) runContext
             else return TestCache
               { tcVersion = testCacheVersion
@@ -545,7 +553,7 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
               , tcTests = M.empty
               }
         testHashInfos <-
-          if useCache
+          if storeCache
             then buildTestHashInfos paths ctxHash testsByModule
             else return M.empty
         let cacheEntries =
@@ -574,7 +582,7 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
             TestModeStress -> putStrLn "Skipping test result cache in stress mode; running all selected tests"
             _ | C.testGcCheck topts -> putStrLn "Skipping test result cache (--gc-check); running all selected tests"
               | isJust (C.testSeed topts) -> putStrLn "Skipping test result cache (--seed); running all selected tests"
-              | otherwise -> putStrLn "Skipping test result cache (--no-cache); running all selected tests"
+              | otherwise -> putStrLn "Not using cached test results (--no-cache); running all selected tests and storing their results"
         when (not emitJson && showCached && not (null cachedResults)) $
           putStrLn ("Using cached results for " ++ show (length cachedResults) ++ " tests")
         withTestProgressUI gopts nameWidth useColorOut $ \ui -> do
@@ -713,13 +721,13 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
                   else filter (not . trCached) results
           when (C.testRecord topts) $
             writePerfData paths recorded resultsRun
-          let cacheEntries' = foldl' (updateTestCacheEntry testHashInfos) cacheEntries resultsRun
+          let cacheEntries' = foldl' (updateTestCacheEntry testHashInfos) (tcTests cache) resultsRun
               newCache = TestCache
                 { tcVersion = testCacheVersion
                 , tcContext = runContext
                 , tcTests = cacheEntries'
                 }
-          when useCache $
+          when storeCache $
             writeTestCache (testCachePath paths) newCache
           if emitJson
             then do
@@ -731,7 +739,7 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
               _ <- printTestSummary (tpuUseColor ui) (timeEnd - timeStart) showCached results
               return (testExitCode results)
   where
-    mkRunContext opts' topts' mode' buildOptions runEnvironment = TestRunContext
+    mkRunContext opts' topts' mode' buildOptions runEnvironment zigDependencies = TestRunContext
       { trcCompilerVersion = getVer
       , trcTarget = C.target opts'
       , trcOptimize = show (C.optimize opts')
@@ -739,7 +747,16 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
       , trcArgs = testCmdArgs mode' topts'
       , trcBuildOptions = buildOptions
       , trcEnvironment = runEnvironment
+      , trcBuildFlags = testBuildFlags opts'
+      , trcZigDependencies = zigDependencies
       }
+    -- The compile options besides target and optimize that change the code
+    -- of a test binary: --cpu, --db, --no-threads and --no-dbp.
+    testBuildFlags opts' = M.fromList $
+         [ ("cpu", C.cpu opts') | not (null (C.cpu opts')) ]
+      ++ [ ("db", "true") | C.db opts' ]
+      ++ [ ("no_threads", "true") | C.no_threads opts' ]
+      ++ [ ("no_dbp", "true") | C.no_dbp opts' ]
 
 testExitCode :: [TestResult] -> Int
 testExitCode results =
