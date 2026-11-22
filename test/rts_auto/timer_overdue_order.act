@@ -1,0 +1,50 @@
+# Timers that are already due when they reach the timer queue fire in the
+# order of their due times. In every round, a Setter handles one message that
+# runs late and then sets its timers latest first, so each timer is due when
+# it is queued.
+
+import time
+
+actor Setter(report: action(list[int]) -> None, rounds: int, n: int):
+    var round = 0
+    var fired: list[int] = []
+
+    def set_timers():
+        # Timer i is due 10 us * (i + 1) after the baseline of this message,
+        # and the message ends at least 30 ms after its baseline
+        t0 = time.monotonic_ns()
+        while time.monotonic_ns() - t0 < 30000000:
+            pass
+        for k in range(n):
+            i = n - 1 - k
+            after 0.00001 * float(i + 1): fire(i)
+
+    def fire(i: int):
+        fired.append(i)
+        if len(fired) == n:
+            report(fired)
+            fired = []
+            round += 1
+            if round < rounds:
+                set_timers()
+
+    proc def __startup__():
+        set_timers()
+
+actor main(env):
+    setters = 2
+    rounds = 10
+    n = 2000
+    var reports = 0
+
+    def report(fired: list[int]):
+        if fired != list(range(n)):
+            print("Timers fired out of order:", fired[:20])
+            env.exit(1)
+        reports += 1
+        if reports == setters * rounds:
+            env.exit(0)
+
+    proc def __startup__():
+        for s in range(setters):
+            Setter(report, rounds, n)
