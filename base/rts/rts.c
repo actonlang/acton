@@ -875,11 +875,9 @@ static bool timed_before(struct TimedMsg a, struct TimedMsg b) {
     return a.sequence < b.sequence;
 }
 
-// Atomically enqueue timed message "m" onto the global timer-queue, at position
-// given by "m->baseline".
-bool ENQ_timed(B_Msg m) {
-    spinlock_lock(&timerQ_lock);
-    bool new_head = timerQ_len == 0 || m->$baseline < timerQ[0].msg->$baseline;
+// Add timed message "m" to the timer queue, at the position given by its
+// baseline. The caller holds timerQ_lock.
+static void insert_timed(B_Msg m) {
     if (timerQ_len == timerQ_capacity) {
         size_t capacity = timerQ_capacity ? 2 * timerQ_capacity : 64;
         // Copy the queue to a new array and free the old one, as DEQ_timed
@@ -914,6 +912,19 @@ bool ENQ_timed(B_Msg m) {
     }
     timerQ[pos] = entry;
     ACTON_WBAR(timerQ, &timerQ[pos].msg, m);
+}
+
+// Atomically enqueue the timed messages in list "m", linked by $next, onto the
+// global timer queue. Returns whether the queue has a new first message.
+bool ENQ_timed(B_Msg m) {
+    spinlock_lock(&timerQ_lock);
+    B_Msg head = timerQ_len ? timerQ[0].msg : NULL;
+    while (m) {
+        B_Msg next = m->$next;
+        insert_timed(m);
+        m = next;
+    }
+    bool new_head = timerQ_len && timerQ[0].msg != head;
     spinlock_unlock(&timerQ_lock);
     return new_head;
 }
@@ -1542,23 +1553,30 @@ void FLUSH_outgoing_local($Actor self, uint32_t ready_us) {
     rtsd_printf("#### FLUSH_outgoing messages from %" PRId64 " to RTS-internal queues", self->$globkey);
     B_Msg m = self->$outgoing;
     self->$outgoing = NULL;
+    // The timed messages, in the order they were sent
+    B_Msg timed = NULL, last = NULL;
     while (m) {
         B_Msg next = m->$next;
         m->$next = NULL;
-        int64_t dest;
         if (m->$baseline == self->B_Msg->$baseline) {
             $Actor to = m->$to;
             if (ENQ_msg(m, to)) {
                 ENQ_ready(to, ready_us);
             }
-            dest = to->$globkey;
+        } else if (last) {
+            ACTON_STORE(last, last->$next, m);
+            last = m;
         } else {
-            if (ENQ_timed(m))
-                reset_timeout();
-            dest = 0;
+            timed = last = m;
         }
         m = next;
     }
+    // Queue the timed messages all at once, after the others. Thread 0
+    // delivers a timed message as soon as it is in the timer queue and due,
+    // so timed messages that are already due then go out in the order of
+    // their due times.
+    if (timed && ENQ_timed(timed))
+        reset_timeout();
 }
 
 // Get the due time of the first timed message. Returns false if there is
@@ -1865,6 +1883,7 @@ void deserialize_system(snode_t *actors_start) {
         if (m->$baseline < now)
             m->$baseline = now;
         rtsd_printf("# Adding Msg %" PRId64 " to the timerQ", m->$globkey);
+        m->$next = NULL;
         ENQ_timed(m);
     }
 
