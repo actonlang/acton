@@ -1,0 +1,65 @@
+"""AES-GCM authenticated encryption
+
+AES-GCM encrypts data and authenticates it: decrypt rejects a ciphertext that
+was modified, truncated, or encrypted under another key, instead of returning
+garbage.
+
+    key = aes_gcm.generate_key(env.random)
+    ciphertext = aes_gcm.encrypt(env.random, key, b"secret")
+    plaintext = aes_gcm.decrypt(key, ciphertext)
+
+Keys are 32 bytes for AES-256, which generate_key returns, or 16 bytes for
+AES-128. Keep keys secret and store them apart from the data they protect.
+
+generate_key and encrypt take env.random, the capability to draw secure random
+numbers, for the key and the nonce.
+
+encrypt picks a new random 12-byte nonce for every call and returns
+
+    nonce (12 bytes) | encrypted data | tag (16 bytes)
+
+so the result is 28 bytes longer than the plaintext. Any AES-GCM implementation
+can decrypt it by splitting off the first 12 bytes as the nonce and the last 16
+bytes as the tag.
+
+Encrypt at most 2**32 messages with one key. Beyond that the chance that two
+random nonces collide becomes significant, and a repeated nonce reveals the XOR
+of the two plaintexts and lets an attacker forge messages.
+
+associated_data is authenticated but not encrypted, and it is not included in
+the ciphertext. Use it to bind a ciphertext to its context, such as a record
+ID, so it cannot be moved to another record. decrypt must be given the same
+associated data that encrypt was given.
+"""
+
+KEY_SIZE = 32
+NONCE_SIZE = 12
+TAG_SIZE = 16
+
+class DecryptionError(ValueError):
+    """Raised by decrypt when the ciphertext cannot be authenticated
+
+    The key or associated data differs from what encrypt was given, or the
+    ciphertext was modified or truncated. AES-GCM cannot tell these apart.
+    """
+    pass
+
+mut def generate_key(rand: EnvRandom) -> bytes:
+    """Return a new random 32-byte AES-256 key, drawn from env.random"""
+    NotImplemented
+
+mut def encrypt(rand: EnvRandom, key: bytes, plaintext: bytes, associated_data: bytes=b"") -> bytes:
+    """Encrypt and authenticate plaintext with a nonce drawn from env.random
+
+    Returns the nonce, the encrypted data and the tag. Raises ValueError if the
+    key is not 16 or 32 bytes.
+    """
+    NotImplemented
+
+def decrypt(key: bytes, ciphertext: bytes, associated_data: bytes=b"") -> bytes:
+    """Authenticate and decrypt ciphertext from encrypt
+
+    Raises DecryptionError if the ciphertext does not authenticate, and
+    ValueError if the key is not 16 or 32 bytes.
+    """
+    NotImplemented

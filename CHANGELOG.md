@@ -209,6 +209,14 @@
   `bytes`. `shuffle` reorders a mutable sequence in place; `shuffled` returns
   a reordered copy of the same type. A seed gives the same sequence on every
   platform and from one release to the next.
+- Add `std.crypto.aead.aes_gcm` for authenticated encryption with AES-GCM,
+  backed by Zig's `std.crypto`.
+  `encrypt(env.random, key, plaintext, associated_data)` draws a random nonce
+  for each message and returns nonce, ciphertext and tag together, so callers
+  handle no nonces. `decrypt` raises `DecryptionError` for a modified
+  ciphertext, the wrong key or mismatched associated data.
+  `generate_key(env.random)` returns a 32-byte AES-256 key; 16-byte AES-128
+  keys are accepted too.
 - Use private CAs and client certificates with `net.TLSConnection` and
   `net.TLSListener` through `ca_pem`, `cert_pem`, and `key_pem`.
   Listeners request client certificates with `client_auth=True`. Set
