@@ -2,7 +2,7 @@
 module WatchTests (watchTriggerTests, watchProcessTests) where
 
 import Control.Concurrent (threadDelay)
-import Control.Exception (IOException, catch, finally, mask, onException)
+import Control.Exception (IOException, bracket, catch, finally, mask, onException)
 import Control.Monad
 import qualified Data.ByteString.Char8 as BS
 import Data.IORef
@@ -18,6 +18,7 @@ import System.IO
 import System.IO.Temp (withSystemTempDirectory)
 import System.Info (os)
 import System.Posix.Files (createSymbolicLink)
+import System.Posix.IO (OpenFileFlags(cloexec, creat, trunc), OpenMode(WriteOnly), defaultFileFlags, fdToHandle, openFd)
 import System.Posix.Signals
 import System.Posix.Types (ProcessID)
 import System.Process
@@ -465,10 +466,16 @@ withProcessProject action =
           forM_ (readMaybe text :: Maybe ProcessID) $ \pid ->
             signalProcess sigKILL pid `catch` ignoreIO)
 
+-- | Write a shell script that a test will run.  Tests run in parallel, and a
+-- process another test starts while the script is open for writing inherits
+-- the descriptor.  Running the script fails with ETXTBSY for as long as that
+-- process keeps it open, so the descriptor is close-on-exec.
 writeExecutable :: FilePath -> [String] -> IO ()
 writeExecutable path body = do
     createDirectoryIfMissing True (takeDirectory path)
-    writeFile path (unlines ("#!/bin/sh" : body))
+    bracket (fdToHandle =<< openFd path WriteOnly defaultFileFlags { creat = Just 0o755, trunc = True, cloexec = True })
+            hClose
+            (\handle -> hPutStr handle (unlines ("#!/bin/sh" : body)))
     permissions <- getPermissions path
     setPermissions path permissions { executable = True }
 
