@@ -16,7 +16,8 @@ front stage finishes while its back passes run in the background, and the
 LSP server reports a module as checked before its code is generated.
 
 A build is fast when it does no work twice.  A module's .tydb records what
-its last compilation used: the hash and the stat of its source, its
+its last compilation used: the hash and, unless the module has an .ext.c,
+the stat of its source, its
 public interface hash (pub) and implementation hash (impl), the pub and
 impl hash of each of its names with the names they depend on, and, for
 every module it depends on, that module's hashes and the hashes and users
@@ -77,8 +78,10 @@ changed source and the .tydb written from its previous version can show
 the same time.  Otherwise it is trusted when the content hash of the
 source, with that of its .ext.c, equals the recorded one, and
 the recorded stat is then refreshed in place.  An editor overlay is
-compared by content hash only.  A module whose header is not trusted is
-read from its source.
+compared by content hash only.  So is a module whose .tydb was written
+while it had an .ext.c: such a .tydb records no stat, since the stat of
+the source would not show that the .ext.c was deleted.  A module whose
+header is not trusted is read from its source.
 
 The stat that a .tydb records is taken before the source is read, and one
 read gives both the text that is compiled and the bytes that are hashed.
@@ -409,7 +412,8 @@ importsOf (ParseErrorTask _)            = []
 
 -- | The text and bytes of one read of a module's source: the text is
 -- parsed, the bytes are hashed, and the stat, taken before the read, is
--- recorded in its .tydb.  The content hash of the module's .ext.c, read
+-- recorded in its .tydb unless the module has an .ext.c
+-- (recordedSourceMeta).  The content hash of the module's .ext.c, read
 -- with it, goes into the recorded source hash and into the impl hashes of
 -- its NotImplemented names.
 data ModuleSource = ModuleSource
@@ -1309,8 +1313,9 @@ buildGlobalTasks sp gopts opts projects pathsByProject seedFiles = do
 -- is unchanged: by recorded stat with the source older than the .tydb, else by
 -- content hash (then the recorded stat is refreshed in place).  An editor
 -- overlay is compared by content only, and so is a module with an .ext.c,
--- whose content hash the recorded one covers.  Otherwise only the source
--- header is parsed.  Reading can write: the stat refresh.
+-- whose content hash the recorded one covers, or one that had an .ext.c
+-- when its .tydb was written (recordedSourceMeta).  Otherwise only the
+-- source header is parsed.  Reading can write: the stat refresh.
 readModuleTask :: Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -> Paths -> A.ModName -> FilePath -> IO CompileTask
 readModuleTask sp gopts opts paths mn file = do
     reusable <- reusableHeader opts tydb
@@ -1351,8 +1356,12 @@ readModuleTask sp gopts opts paths mn file = do
                   ++ " len=" ++ show (B.length (sourceBytes source))
                   ++ if same then " (match)" else " (diff)")
       if not same then fromSource source else do
-        when (isJust meta && meta /= InterfaceFiles.summarySourceMeta header) $
-          void (trySync (InterfaceFiles.updateSourceMeta tydb meta))
+        -- An overlay has no stat to record.  A module with an .ext.c must
+        -- not keep one, which a .tydb from an earlier compiler can hold.
+        let recorded = recordedSourceMeta source
+        when (recorded /= InterfaceFiles.summarySourceMeta header
+              && (isJust recorded || isJust (sourceExtHash source))) $
+          void (trySync (InterfaceFiles.updateSourceMeta tydb recorded))
         return (TyTask header)
 
 -- | The .tydb header and the .tydb's modification time, unless the .tydb is
@@ -1401,6 +1410,15 @@ readSourceFile sp file extHash meta = snapshotSource (Just meta) extHash <$> Sou
 -- (Nothing for an editor overlay) and the content hash of its .ext.c.
 snapshotSource :: Maybe InterfaceFiles.SourceFileMeta -> Maybe B.ByteString -> Source.SourceSnapshot -> ModuleSource
 snapshotSource meta extHash snap = ModuleSource (Source.ssText snap) (Source.ssBytes snap) meta extHash
+
+-- | The stat that a module's .tydb records: none for a module with an
+-- .ext.c.  The stat covers only the source, so a recorded one would let a
+-- later plan trust the .tydb after the .ext.c is deleted and the source is
+-- left alone.  Without one, the header is checked by content hash.
+recordedSourceMeta :: ModuleSource -> Maybe InterfaceFiles.SourceFileMeta
+recordedSourceMeta source
+  | isJust (sourceExtHash source) = Nothing
+  | otherwise                     = sourceMeta source
 
 -- | The .ext.c next to a module's source, whose C code implements the
 -- module's NotImplemented bodies.  The generated .c includes it.
@@ -2738,7 +2756,7 @@ rootActorProblem _ _ = Just "it is not an actor"
 writeTydb :: ModuleEnv -> ModuleSource -> Checked -> Hashed -> (InterfaceFiles.TyDbWriteProgress -> IO ()) -> IO ()
 writeTydb env source checked hashed onProgress =
     InterfaceFiles.writeFileWithProgress onProgress A.version (tydbOf env)
-      (hashedSource hashed) (hashedPub hashed) (hashedImpl hashed) (sourceMeta source) (hashedImports hashed)
+      (hashedSource hashed) (hashedPub hashed) (hashedImpl hashed) (recordedSourceMeta source) (hashedImports hashed)
       (hashedDependencies hashed) (hashedNames hashed) (checkedEscapes checked) (hashedRoots hashed) (checkedTests checked)
       doc (checkedInterface checked) (checkedModule checked)
   where I.NModule _ _ doc = checkedInterface checked

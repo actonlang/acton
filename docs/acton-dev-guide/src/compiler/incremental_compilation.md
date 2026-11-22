@@ -34,6 +34,17 @@ front passes for that module. Reading the file is done at GB/s on modern NVMe
 hardware and hashing is typically running at roughly the same speed on modern
 CPUs.
 
+A module with `NotImplemented` bodies has their C code in a hand-written
+`.ext.c` next to its source, which its generated `.c` includes. When a module
+has an `.ext.c`, the recorded hash combines the source-bytes hash with the
+SHA-256 of the `.ext.c`, so an edit of only the `.ext.c` also invalidates the
+header. The `.ext.c` hash is also part of the `implHash` of each
+`NotImplemented` name, so the module's generated code and the tests that use
+those names are redone. A `.tydb` written while the module had an `.ext.c`
+records no source stat, so it is checked by content hash, never by the stat of
+the `.act` file alone, and a deleted `.ext.c` is noticed even when the `.act`
+file is unchanged.
+
 The public hash (**modulePubHash**) is derived from the module's public-name
 `pubHash` values (which already include any external signature dependencies).
 The implementation hash (**moduleImplHash**) is derived from per-name

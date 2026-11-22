@@ -30,8 +30,10 @@
 --
 --   Module-level keys (one each):
 --     "version"        :: [Int]                       -- Acton.Syntax.version
---     "meta"           :: ( Maybe SourceFileMeta      -- cached source stat metadata
---                         , ByteString                -- moduleSrcBytesHash: SHA-256 of raw source
+--     "meta"           :: ( Maybe SourceFileMeta      -- cached source stat metadata (Nothing for an
+--                                                     --   editor overlay or a module with an .ext.c)
+--                         , ByteString                -- moduleSrcBytesHash: SHA-256 of raw source,
+--                                                     --   combined with that of its .ext.c if any
 --                         , ByteString                -- modulePubHash: structural hash of public NameInfo
 --                                                     --   (doc-free) + imports' pub hashes
 --                         , ByteString )              -- moduleImplHash: structural hash of per-name impl hashes

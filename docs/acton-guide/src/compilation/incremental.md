@@ -43,6 +43,11 @@ In practice, Acton decides reuse like this:
 5. If the hash differs, the source really changed, so Acton reparses and
    recompiles that module.
 
+A module with a hand-written `.ext.c` file next to it, which holds the C code
+of its `NotImplemented` functions, is always checked by content. Its stored hash
+covers both the `.act` and the `.ext.c` file, and no source metadata is stored
+for it. So an edit of only the `.ext.c`, or its removal, recompiles the module.
+
 This means harmless metadata drift, like a `touch`, checkout, restore, copy,
 or cross-machine sync, does not by itself force a front-end rebuild. It also
 means misleading timestamps cannot cause stale typed-module reuse, because

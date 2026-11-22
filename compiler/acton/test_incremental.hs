@@ -3375,6 +3375,65 @@ p64_ext_c_edit_rebuilds_module =
     assertBool "did not expect native.act to type check again" (not (typechecked out4 modNative))
     assertBool "did not expect native.act to compile again" (not (compiled out4 modNative))
 
+p65_ext_c_deletion_rereads_module :: TestTree
+p65_ext_c_deletion_rereads_module =
+  testCase "65-deleting an .ext.c checks its module again" $ do
+    let proj = casesProjDir
+        src = casesSrcDir
+        modNative = modLabel proj "native"
+        actNative = src </> "native.act"
+        tyNative = proj </> "out" </> "types" </> "incremental_cases" </> "native.tydb"
+        prefix = T.pack casesProjName <> "Q_nativeQ_"
+        mainAct :: T.Text -> T.Text
+        mainAct label = T.unlines
+          [ "import native"
+          , ""
+          , "actor main(env: Env):"
+          , "    proc def __startup__():"
+          , "        print(\"" <> label <> "\", native.answer())"
+          , "        env.exit(0)"
+          ]
+    ensureCasesProject
+    writeFileUtf8 actNative $ T.unlines
+      [ "def answer() -> int:"
+      , "    NotImplemented"
+      ]
+    -- Older than any .tydb, so that a recorded stat of native.act would be
+    -- trusted however coarse the file system's timestamps are.
+    now <- getCurrentTime
+    setModificationTime actNative (addUTCTime (-10) now)
+    writeFileUtf8 (src </> "native.ext.c") $ T.unlines
+      [ "void " <> prefix <> "__ext_init__() {"
+      , "}"
+      , ""
+      , "int64_t " <> prefix <> "answer() {"
+      , "    return 1;"
+      , "}"
+      ]
+    writeFileUtf8 (src </> "main.act") (mainAct "a")
+    _ <- buildOutIn proj
+    stored1 <- readTySourceMeta tyNative
+    stored1 @?= Nothing
+    -- A .tydb that an earlier compiler wrote holds the stat. A build that
+    -- checks the module by content hash must drop it.
+    meta <- sourceFileMetaForPath actNative
+    InterfaceFiles.updateSourceMeta tyNative (Just meta)
+    -- As in case 64, this build reuses native's object, so afterwards the
+    -- library's cache no longer knows native.ext.c.
+    writeFileUtf8 (src </> "main.act") (mainAct "b")
+    _ <- buildOutIn proj
+    stored2 <- readTySourceMeta tyNative
+    stored2 @?= Nothing
+    out2 <- runBinaryIn proj "main"
+    out2 @?= "b 1\n"
+    -- native.act is left alone and keeps its NotImplemented body, whose C
+    -- the deleted file held, so the build must check native again and fail.
+    removeIfExists (src </> "native.ext.c")
+    (ec, out3) <- runActonIn proj ["build", "--color", "never", "--verbose"]
+    assertBool ("expected native.act to type check after its .ext.c was deleted\n" ++ T.unpack out3) (typechecked out3 modNative)
+    assertBool ("expected the build to fail without native.ext.c\n" ++ T.unpack out3) (ec /= ExitSuccess)
+    assertBool ("expected the failure to name native.ext.c\n" ++ T.unpack out3) ("native.ext.c" `T.isInfixOf` out3)
+
 -- Source written during a read ------------------------------------------------
 
 -- | A disk source provider that writes new text to a source file right after
@@ -3780,6 +3839,7 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
       , p39_background_lock_does_not_block_build
       , p40_background_lock_blocks_watch
       , p64_ext_c_edit_rebuilds_module
+      , p65_ext_c_deletion_rereads_module
       ]
   , sequentialTestGroup "incremental-cache-cases" AllSucceed
       [ p41_stale_header_missing_import_reparses_source
