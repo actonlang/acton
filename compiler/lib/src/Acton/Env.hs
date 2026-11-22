@@ -34,6 +34,7 @@ import qualified Data.Set as S
 import Acton.Syntax
 import Acton.Builtin
 import Acton.Prim
+import Acton.BuiltinCalls (withBuiltinCalls)
 import Acton.Printer
 import Acton.Names
 import Acton.Subst
@@ -475,7 +476,7 @@ initEnvWithEscapeSummaries _ path True
                                             activeTypeVars = [],
                                             imports = [],
                                             qualifiers = [],
-                                            modules = Map.singleton mPrim (mkModuleInfo mPrim [] primEnv Nothing),
+                                            modules = Map.singleton mPrim (mkModuleInfo mPrim [] (withBuiltinCalls primEnv) Nothing),
                                             transModules = [],
                                             importedConAttrs = AttrMemo (const []),
                                             importedProtoAttrs = AttrMemo (const []),
@@ -512,7 +513,7 @@ initEnvWithEscapeSummaries includeEscape path False
                                                  activeTypeVars = [],
                                                  imports = [],
                                                  qualifiers = [],
-                                                 modules = Map.fromList [(mPrim, mkModuleInfo mPrim [] primEnv Nothing), (mBuiltin, builtinInfo)],
+                                                 modules = Map.fromList [(mPrim, mkModuleInfo mPrim [] (withBuiltinCalls primEnv) Nothing), (mBuiltin, builtinInfo)],
                                                  transModules = [],
                                                  importedConAttrs = AttrMemo (const []),
                                                  importedProtoAttrs = AttrMemo (const []),

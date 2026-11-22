@@ -7,6 +7,7 @@ import Acton.NameInfo
 import Acton.Env
 import Acton.QuickType
 import Acton.Prim
+import Acton.BuiltinCalls
 import Acton.Builtin
 import Acton.Subst
 import qualified Acton.WitnessSharing as WitnessSharing

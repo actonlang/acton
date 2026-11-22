@@ -20,6 +20,7 @@ import Acton.NameInfo
 import Acton.Env
 import Acton.QuickType
 import Acton.Prim
+import Acton.BuiltinCalls
 import Acton.Builtin
 import Acton.Transform (termsubst)
 import Data.List
