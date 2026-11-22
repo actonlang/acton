@@ -18,9 +18,6 @@ struct B_IteratorD_bitsetG_class {
     void (*__init__)(B_IteratorD_bitset, B_bitset);
     void (*__serialize__)(B_IteratorD_bitset, $Serial$state);
     B_IteratorD_bitset (*__deserialize__)(B_IteratorD_bitset, $Serial$state);
-    bool (*__bool__)(B_IteratorD_bitset);
-    B_str (*__str__)(B_IteratorD_bitset);
-    B_str (*__repr__)(B_IteratorD_bitset);
     bool (*__next__)(B_IteratorD_bitset, $WORD *);
 };
 

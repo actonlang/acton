@@ -103,7 +103,7 @@ static B_str collect_text_cdata_nodes(xmlNodePtr *cur_ptr) {
             case XML_COMMENT_NODE:
                 break;
             default:
-                RAISE(stdQ_xmlQ_XmlParseError, $FORMAT("Unsupported XML node type %d", cur->type), NULL, NULL);
+                RAISE_SHOW(stdQ_xmlQ_XmlParseError, (B_Show)stdQ_xmlQ_ShowD_XmlParseErrorG_new(), $FORMAT("Unsupported XML node type %d", cur->type), NULL, NULL);
                 return NULL;
         }
         cur = cur->next;
@@ -146,7 +146,7 @@ static B_str collect_text_cdata_nodes(xmlNodePtr *cur_ptr) {
 stdQ_xmlQ_Node stdQ_xmlQ_NodePtr2Node(xmlNodePtr node, xmlChar *volatile *value) {
     B_SequenceD_list wit = B_SequenceD_listG_witness;
     if (node->type != XML_ELEMENT_NODE) {
-        RAISE(stdQ_xmlQ_XmlParseError, $FORMAT("Unexpected nodetype %d, content is %s", node->type, node->content), NULL, NULL);
+        RAISE_SHOW(stdQ_xmlQ_XmlParseError, (B_Show)stdQ_xmlQ_ShowD_XmlParseErrorG_new(), $FORMAT("Unexpected nodetype %d, content is %s", node->type, node->content), NULL, NULL);
         return NULL;
     }
 
@@ -261,7 +261,7 @@ stdQ_xmlQ_Node stdQ_xmlQ_decode(B_str data) {
             while (len > 0 && isspace((unsigned char)err->message[len-1])) {
                 len--;
             }
-            RAISE(stdQ_xmlQ_XmlParseError, actStrFromCStringLengthCopy(err->message, len), line, column);
+            RAISE_SHOW(stdQ_xmlQ_XmlParseError, (B_Show)stdQ_xmlQ_ShowD_XmlParseErrorG_new(), actStrFromCStringLengthCopy(err->message, len), line, column);
         }
         xmlNodePtr root = xmlDocGetRootElement(doc);
         if (!root)

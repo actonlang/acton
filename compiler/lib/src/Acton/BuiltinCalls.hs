@@ -223,6 +223,11 @@ showBoolWorkers = concatMap scalar
      "bigint","float","bool","complex","slice","range","hasher","bitarray","bitset","str","bytes","bytearray"] ++
     [ make (gBuiltin (Derived nBoolProtocol (name n))) (gBuiltin $ name n) boolKW ("B_" ++ n ++ "_bool") ("B_" ++ n)
       | n <- ["list","ilist","array","dict","idict","set","iset"] ] ++
+    [ make (gBuiltin (Derived nShow (name n))) (gBuiltin $ name n) attr native ctype
+      | n <- ["BaseException","Exception","IndexError","KeyError","FileNotFoundError"],
+        let prefix = if n == "Exception" then "B_exception" else "B_" ++ n,
+        let ctype = if n == "Exception" then "B_BaseException" else "B_" ++ n,
+        (attr,native) <- [(strKW,prefix ++ "_str"),(reprKW,prefix ++ "_repr")] ] ++
     [ make primBoolTuple qnValue boolKW "B_tuple_bool" "B_tuple" ]
   where scalar n =
           let q = gBuiltin (name n)

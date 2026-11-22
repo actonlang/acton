@@ -11,7 +11,6 @@
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 
-# During the staged migration, value retains the legacy slots as well.
 protocol Show:
     __str__: () -> str
     __repr__: () -> str
@@ -23,12 +22,6 @@ protocol Bool:
 
 class value:
     __init__ : () -> None
-    def __bool__(self) -> bool:
-        NotImplemented
-    def __str__(self) -> str:
-        NotImplemented
-    def __repr__(self) -> str:
-        NotImplemented
 
 class object (value):
     pass
@@ -388,14 +381,14 @@ class Msg[A] (value):
 # constructor, which can be used to override the default message.
 class BaseException (value):
     error_message: str
+    # Compiler/runtime metadata: retain the first raise's Show evidence through
+    # erased catches, reraises, serialization, and asynchronous propagation.
+    @property
+    _exception_show: ?value
     def __init__(self, msg: ?str=None) -> None:
         self.error_message = msg if msg is not None else ""
+        self._exception_show = None
 
-    def __str__(self) -> str:
-        NotImplemented
-
-    def __repr__(self) -> str:
-        NotImplemented
 
     def _name(self) -> str:
         NotImplemented
@@ -423,11 +416,6 @@ class IndexError (LookupError):
         self.index = index
         self.error_message = msg if msg is not None else "List index out of range"
 
-    def __str__(self) -> str:
-        NotImplemented
-
-    def __repr__(self) -> str:
-        NotImplemented
 
 class KeyError(LookupError):
     @property
@@ -441,11 +429,6 @@ class KeyError(LookupError):
         # lazy, including after serialization, and sees changes to that object.
         self._key_render = lambda representation: Show.__repr__(key) if representation else Show.__str__(key)
 
-    def __str__(self) -> str:
-        NotImplemented
-
-    def __repr__(self) -> str:
-        NotImplemented
 
 class MemoryError (Exception):
     pass
@@ -458,11 +441,6 @@ class FileNotFoundError (OSError):
         self.error_message = ""
         self.filename = filename
 
-    def __str__(self) -> str:
-        NotImplemented
-
-    def __repr__(self) -> str:
-        NotImplemented
 
 class RuntimeError (Exception):
     pass
@@ -913,6 +891,8 @@ extension iset[A(Hashable)] (Bool):
 # In particular, they do not capture compiler-generated formatting evidence.
 extension BaseException (Show):
     NotImplemented
+extension Exception (Show):
+    NotImplemented
 extension IndexError (Show):
     NotImplemented
 extension KeyError (Show):
@@ -1068,7 +1048,6 @@ protocol Container[A(Eq)] (Collection[A]):
     __containsnot__ : (A) -> bool
 
 
-
 #   IIndexed               Iterable       Plus
 #     |      \                |            |
 #     |       MutIndexed      |            |
@@ -1090,7 +1069,6 @@ protocol Sequence[A] (ISequence[A], Sliceable[A]):
     insert      : mut(int,A) -> None
     append      : mut(A) -> None
     reverse     : mut() -> None
-
 
 
 #   Iterable
@@ -1157,7 +1135,6 @@ protocol ISet[A (Eq)] (Container[A], Ord, Logical, Minus):
         return a - b
     def symmetric_difference(a,b):
         return a ^ b
-
 
 
 protocol Set[A (Eq)] (ISet[A]):

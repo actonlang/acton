@@ -72,6 +72,7 @@ primPUSHF           = gPrim "PUSHF"
 primPOP             = gPrim "POP"
 primDROP            = gPrim "DROP"
 primRAISE           = gPrim "RAISE"
+primExceptionShow   = gPrim "exceptionShow"
 
 primSEQ             = gPrim "SEQ"
 primBRK             = gPrim "BRK"
@@ -202,6 +203,7 @@ primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec Nothing)
                             (noq primPOP,           NDef scPOP NoDec Nothing),
                             (noq primDROP,          NDef scDROP NoDec Nothing),
                             (noq primRAISE,         NDef scRAISE NoDec Nothing),
+                            (noq primExceptionShow, NDef scExceptionShow NoDec Nothing),
 
                             (noq primSEQ,           clSEQ),
                             (noq primBRK,           clBRK),
@@ -336,9 +338,6 @@ clActor             = NClass [] (leftpath [cValue]) te Nothing
                         (primKW "consume_hd", NSig (monotype $ tCon $ TC (gPrim "int64") []) Property Nothing),
                         (primKW "catcher",    NSig (monotype $ tCon $ TC (gPrim "Catcher") []) Property Nothing),
                         (primKW "globkey",    NSig (monotype $ tCon $ TC (gPrim "int64") []) Property Nothing),
-                        (boolKW,              NDef (monotype $ tFun fxPure posNil kwdNil tBool) NoDec Nothing),
-                        (strKW,               NDef (monotype $ tFun fxPure posNil kwdNil tStr) NoDec Nothing),
-                        (reprKW,              NDef (monotype $ tFun fxPure posNil kwdNil tStr) NoDec Nothing),
                         (resumeKW,            NDef (monotype $ tFun fxMut posNil kwdNil tNone) NoDec Nothing),
                         (cleanupKW,           NDef (monotype $ tFun fxMut posNil kwdNil tNone) NoDec Nothing)
                       ]
@@ -477,6 +476,11 @@ scDROP              = tSchema [] tDROP
 scRAISE             = tSchema [qbind a] tRAISE
   where tRAISE      = tFun fxPure (posRow tBaseException posNil) kwdNil (tVar a)
         a           = TV KType (name "A")
+
+-- Keep diagnostic evidence on the exception, across erased catches and awaits.
+scExceptionShow     = tSchema [QBind a [cBaseException]] $
+                        tFun fxPure (posRow (tCon $ TC qnShow [tVar a]) $ posRow (tVar a) posNil) kwdNil (tVar a)
+  where a           = TV KType $ name "A"
 
 
 --  $ASSERT         : pure (bool, ?str) -> None

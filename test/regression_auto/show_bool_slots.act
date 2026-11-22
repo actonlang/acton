@@ -1,0 +1,122 @@
+# Values no longer carry rendering/truth slots; protocols retain their evidence.
+def layouts() -> bool:
+    NotImplemented
+
+def control_roundtrip() -> bool:
+    NotImplemented
+
+def diagnostic(error: BaseException) -> str:
+    NotImplemented
+
+class Plain:
+    def __init__(self):
+        pass
+
+class Item:
+    def __init__(self, n: int):
+        self.n = n
+
+extension Item(Show):
+    def __str__(self) -> str:
+        return "item " + str(self.n)
+    def __repr__(self) -> str:
+        return "Item(" + str(self.n) + ")"
+
+extension Item(Bool):
+    def __bool__(self) -> bool:
+        return self.n != 0
+
+class Detail[A](Exception):
+    def __init__(self, payload: A):
+        self.error_message = "fallback"
+        self.payload = payload
+
+extension Detail[A(Show)](Show):
+    def __str__(self) -> str:
+        return "detail " + str(self.payload)
+    def __repr__(self) -> str:
+        return "Detail(" + repr(self.payload) + ")"
+
+def methods[A(Show,Bool)](item: A) -> (str,str,bool):
+    render = item.__str__
+    representation = item.__repr__
+    truth = item.__bool__
+    return render(), representation(), truth()
+
+def default_truth[A](item: A) -> bool:
+    return bool(item)
+
+def capture[A(Show)](payload: A) -> Exception:
+    try:
+        raise Detail(payload)
+    except Exception as error:
+        return error
+
+def conditional_raise[A(Show)](payload: A, fail: bool):
+    if fail:
+        raise Detail(payload)
+
+def reraise(error: Exception):
+    raise error
+
+actor Worker(error: Detail[(str,int)]):
+    def boom() -> int:
+        raise error
+
+actor main(env):
+    try:
+        assert layouts()
+        assert control_roundtrip()
+        assert not default_truth(None)
+        conditional_raise(Item(7), False)
+        assert methods(Item(7)) == ("item 7", "Item(7)", True)
+        assert methods(Item(0)) == ("item 0", "Item(0)", False)
+        assert Plain().__str__().startswith("<")
+        assert Plain().__bool__()
+        assert (7, "x").__str__() == "(7, 'x')"
+        assert not ().__bool__()
+        present: ?int = 7
+        absent: ?int = None
+        assert present.__repr__() == "7"
+        assert absent.__str__() == "None"
+        saved_error = capture(("saved", 7))
+        assert diagnostic(saved_error) == "detail ('saved', 7)"
+        assert str(saved_error) == "detail ('saved', 7)"
+        assert repr(saved_error) == "Detail(('saved', 7))"
+        try:
+            reraise(saved_error)
+        except Exception as repeated:
+            assert diagnostic(repeated) == "detail ('saved', 7)"
+        restored = deserialize(serialize(saved_error))
+        if isinstance(restored, Exception):
+            assert diagnostic(restored) == "detail ('saved', 7)"
+            try:
+                reraise(restored)
+            except Exception as repeated:
+                assert diagnostic(repeated) == "detail ('saved', 7)"
+        else:
+            assert False
+        try:
+            ignored = [1][3]
+        except Exception as native:
+            assert "index: 3" in diagnostic(native)
+        try:
+            d: dict[str,int] = {}
+            ignored = d["missing"]
+        except Exception as native:
+            assert "key: missing" in diagnostic(native)
+        # Actors can concurrently raise the same immutable exception. All see
+        # the original concrete renderer after the runtime erases its type.
+        shared = Detail(("async", 9))
+        workers = [Worker(shared) for i in range(4)]
+        futures = [async worker.boom() for worker in workers]
+        for future in futures:
+            try:
+                ignored = await future
+                assert False
+            except Exception as propagated:
+                assert diagnostic(propagated) == "detail ('async', 9)"
+    except Exception as error:
+        print("FAIL:", diagnostic(error), err=True)
+        env.exit(1)
+    env.exit(0)

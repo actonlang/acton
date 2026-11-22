@@ -5,9 +5,6 @@ struct B_tupleG_class {
     B_NoneType (*__init__)(B_tuple,int,...);
     void (*__serialize__)(B_tuple,$Serial$state); 
     B_tuple (*__deserialize__)(B_tuple,$Serial$state);
-    bool (*__bool__)(B_tuple);
-    B_str (*__str__)(B_tuple);
-    B_str (*__repr__)(B_tuple);
 };
 
 struct B_tuple {
@@ -29,6 +26,6 @@ B_tuple B_tupleG_new(int,...);
             $t->$class->__init__($t,0);                                  \
             $t; })
 
-// With no witnesses, retain the legacy dynamic representation of components.
+// Component formatting uses the Show evidence carried by the tuple witness.
 B_str B_tuple_str(B_tuple self, B_tuple witnesses);
 bool B_tuple_bool(B_tuple self);

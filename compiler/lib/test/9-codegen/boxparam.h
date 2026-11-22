@@ -13,9 +13,6 @@ struct boxparamQ_BaseG_class {
     B_NoneType (*__init__) (boxparamQ_Base);
     void (*__serialize__) (boxparamQ_Base, $Serial$state);
     boxparamQ_Base (*__deserialize__) (boxparamQ_Base, $Serial$state);
-    bool (*__bool__) (boxparamQ_Base);
-    B_str (*__str__) (boxparamQ_Base);
-    B_str (*__repr__) (boxparamQ_Base);
     B_value (*__get_attr__) (boxparamQ_Base, B_str);
     B_NoneType (*G_init) (boxparamQ_Base);
     bool (*cmp) (boxparamQ_Base, $WORD);
@@ -32,9 +29,6 @@ struct boxparamQ_DerivG_class {
     B_NoneType (*__init__) (boxparamQ_Deriv);
     void (*__serialize__) (boxparamQ_Deriv, $Serial$state);
     boxparamQ_Deriv (*__deserialize__) (boxparamQ_Deriv, $Serial$state);
-    bool (*__bool__) (boxparamQ_Deriv);
-    B_str (*__str__) (boxparamQ_Deriv);
-    B_str (*__repr__) (boxparamQ_Deriv);
     B_value (*__get_attr__) (boxparamQ_Deriv, B_str);
     B_NoneType (*G_init) (boxparamQ_Deriv);
     bool (*cmp) (boxparamQ_Deriv, B_int);

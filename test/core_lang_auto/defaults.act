@@ -15,16 +15,14 @@ class Foo(object):
         self.x = x
         self.y = y
 
+# The defaults assertions below exercise constructors independently of
+# protocol selection.
+extension Foo(Show):
     def __str__(self):
         return self.x + ', ' + self.y
-
-# Keep the existing renderer during the class-slot migration. The defaults
-# assertions below exercise constructors independently of protocol selection.
-extension Foo(Show):
-    def __str__(self) -> str:
-        return self.__str__()
     def __repr__(self) -> str:
-        return self.__repr__()
+        base: value = self
+        return repr(base)
 
 class Bar(object):
     def __init__(self):

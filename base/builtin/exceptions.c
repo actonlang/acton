@@ -13,6 +13,7 @@
  */
 
 void B_BaseExceptionD___serialize__ (B_BaseException, $Serial$state);
+B_BaseException B_BaseExceptionD___deserialize__ (B_BaseException, $Serial$state);
 bool B_valueD___bool__ (B_value);
 B_str B_valueD___str__ (B_value);
 B_str B_valueD___repr__ (B_value);
@@ -59,6 +60,40 @@ B_str B_FileNotFoundError_repr(B_FileNotFoundError self) {
     return $FORMAT_len("%s(%s)", 6, self->$class->_name(self), B_str_repr(self->filename));
 }
 
+// Keep the first renderer: a later catch can have erased the concrete type.
+// A shared exception can be raised by several actors, so publish the witness
+// atomically. Static native exceptions already contain their fixed witness.
+B_BaseException $exceptionShow(B_Show show, B_BaseException self) {
+    B_value expected = NULL;
+    if (atomic_compare_exchange_strong_explicit(&self->_exception_show, &expected,
+            (B_value)show, memory_order_release, memory_order_relaxed))
+        ACTON_WBAR(self, &self->_exception_show, show);
+    return self;
+}
+
+B_str B_exception_str(B_BaseException self) {
+    B_Show show = (B_Show)atomic_load_explicit(&self->_exception_show, memory_order_acquire);
+    return show && show->$class != (struct B_ShowG_class *)&B_ShowD_ExceptionG_methods
+        ? show->$class->__str__(show, self) : B_BaseException_str(self);
+}
+
+B_str B_exception_repr(B_BaseException self) {
+    B_Show show = (B_Show)atomic_load_explicit(&self->_exception_show, memory_order_acquire);
+    return show && show->$class != (struct B_ShowG_class *)&B_ShowD_ExceptionG_methods
+        ? show->$class->__repr__(show, self) : B_BaseException_repr(self);
+}
+
+// Catches expose Exception, while its saved evidence can still render the
+// concrete error. A plain Exception stores this policy itself: stop there
+// rather than recursively redispatching to the same policy.
+B_str B_ShowD_ExceptionD___str__(B_ShowD_Exception witness, B_Exception self) {
+    return B_exception_str((B_BaseException)self);
+}
+
+B_str B_ShowD_ExceptionD___repr__(B_ShowD_Exception witness, B_Exception self) {
+    return B_exception_repr((B_BaseException)self);
+}
+
 B_DEFINE_SHOW(BaseException)
 B_DEFINE_SHOW(IndexError)
 B_DEFINE_SHOW(KeyError)
@@ -66,6 +101,7 @@ B_DEFINE_SHOW(FileNotFoundError)
 
 B_NoneType $SEQD___init__ ($SEQ self) {
     self->error_message = NULL;
+    self->_exception_show = NULL;
     return B_None;
 }
 $SEQ $SEQD___deserialize__ ($SEQ self, $Serial$state state) {
@@ -77,7 +113,7 @@ $SEQ $SEQD___deserialize__ ($SEQ self, $Serial$state state) {
         }
         self = $DNEW($SEQ, state);
     }
-    ACTON_STORE(self, self->error_message, $step_deserialize(state));
+    B_BaseExceptionD___deserialize__((B_BaseException)self, state);
     return self;
 }
 static struct $SEQ $SEQ_exception = { .$class = &$SEQG_methods };
@@ -89,9 +125,6 @@ struct $SEQG_class $SEQG_methods = {
     .$GCINFO            = "$SEQ",
     .$superclass        = ($SuperG_class)&B_ExceptionG_methods,
     .__init__           = $SEQD___init__,
-    .__bool__           = (bool (*) ($SEQ))B_valueD___bool__,
-    .__str__            = (B_str (*) ($SEQ))B_valueD___str__,
-    .__repr__           = (B_str (*) ($SEQ))B_valueD___repr__,
     .__serialize__      = (void (*) ($SEQ, $Serial$state))B_BaseExceptionD___serialize__,
     .__deserialize__    = $SEQD___deserialize__
 };
@@ -106,7 +139,7 @@ $BRK $BRKD___deserialize__ ($BRK self, $Serial$state state) {
         }
         self = $DNEW($BRK, state);
     }
-    self->error_message = NULL;
+    B_BaseExceptionD___deserialize__((B_BaseException)self, state);
     return self;
 }
 static struct $BRK $BRK_exception = { .$class = &$BRKG_methods };
@@ -118,9 +151,6 @@ struct $BRKG_class $BRKG_methods = {
     .$GCINFO            = "$BRK",
     .$superclass        = ($SuperG_class)&B_ExceptionG_methods,
     .__init__           = (B_NoneType (*) ($BRK))$SEQD___init__,
-    .__bool__           = (bool (*) ($BRK))B_valueD___bool__,
-    .__str__            = (B_str (*) ($BRK))B_valueD___str__,
-    .__repr__           = (B_str (*) ($BRK))B_valueD___repr__,
     .__serialize__      = (void (*) ($BRK, $Serial$state))B_BaseExceptionD___serialize__,
     .__deserialize__    = $BRKD___deserialize__
 };
@@ -135,7 +165,7 @@ $CNT $CNTD___deserialize__ ($CNT self, $Serial$state state) {
         }
         self = $DNEW($CNT, state);
     }
-    ACTON_STORE(self, self->error_message, $step_deserialize(state));
+    B_BaseExceptionD___deserialize__((B_BaseException)self, state);
     return self;
 }
 static struct $CNT $CNT_exception = { .$class = &$CNTG_methods };
@@ -147,9 +177,6 @@ struct $CNTG_class $CNTG_methods = {
     .$GCINFO            = "$CNT",
     .$superclass        = ($SuperG_class)&B_ExceptionG_methods,
     .__init__           = (B_NoneType (*) ($CNT))$SEQD___init__,
-    .__bool__           = (bool (*) ($CNT))B_valueD___bool__,
-    .__str__            = (B_str (*) ($CNT))B_valueD___str__,
-    .__repr__           = (B_str (*) ($CNT))B_valueD___repr__,
     .__serialize__      = (void (*) ($CNT, $Serial$state))B_BaseExceptionD___serialize__,
     .__deserialize__    = $CNTD___deserialize__
 };
@@ -157,10 +184,12 @@ struct $CNTG_class $CNTG_methods = {
 
 B_NoneType $RETD___init__ ($RET self, B_value val) {
     self->error_message = NULL;
+    self->_exception_show = NULL;
     self->val = val;
     return B_None;
 }
 void $RETD___serialize__ ($RET self, $Serial$state state) {
+    B_BaseExceptionD___serialize__((B_BaseException)self, state);
     $step_serialize(self->val, state);
 }
 $RET $RETD___deserialize__ ($RET self, $Serial$state state) {
@@ -172,7 +201,7 @@ $RET $RETD___deserialize__ ($RET self, $Serial$state state) {
         }
         self = $DNEW($RET, state);
     }
-    ACTON_STORE(self, self->error_message, $step_deserialize(state));
+    B_BaseExceptionD___deserialize__((B_BaseException)self, state);
     ACTON_STORE(self, self->val, $step_deserialize(state));
     return self;
 }
@@ -186,9 +215,6 @@ struct $RETG_class $RETG_methods = {
     .$GCINFO            = "$RET",
     .$superclass        = ($SuperG_class)&B_ExceptionG_methods,
     .__init__           = $RETD___init__,
-    .__bool__           = (bool (*) ($RET))B_valueD___bool__,
-    .__str__            = (B_str (*) ($RET))B_valueD___str__,
-    .__repr__           = (B_str (*) ($RET))B_valueD___repr__,
     .__serialize__      = $RETD___serialize__,
     .__deserialize__    = $RETD___deserialize__
 };

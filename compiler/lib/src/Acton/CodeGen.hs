@@ -613,7 +613,11 @@ decl env (Class _ n q a b ddoc)
                                       inst_struct
   where tc                          = TC (NoQ n) [ tVar v | QBind v _ <- q ]
         initdef : meths             = fields (setInClass env) tc
-        properties                  = [ varsig env n (sctype sc) <> semi | (n, NSig sc Property _) <- fullAttrEnv env tc ]
+        properties                  = [ property n sc <> semi | (n, NSig sc Property _) <- fullAttrEnv env tc ]
+        property n sc
+          | n == name "_exception_show", isExceptionClass env tc
+                                    = text "_Atomic(B_value)" <+> gen env n
+          | otherwise               = varsig env n (sctype sc)
         inst_struct | initNotImpl   = empty
                     | otherwise     = (text "struct" <+> genTopName env n <+> char '{') $+$
                                       nest 4 (classlink env n $+$ vcat properties) $+$
@@ -2397,9 +2401,10 @@ containsGeneratedMethodCallComp _ NoComp
 
 genGeneratedMethodCall env n ts (PosArg w p)
   | Just (tc, _) <- generatedMethodClass env n ts
-                                    = gen env (generatedMethodQName n) <> parens (witness <> comma' (gen env p))
+                                    = gen env (generatedMethodQName n) <> parens (witness <> comma' (genCallPosArgs env row p))
   where witness                     = parens (gen env (tCon tc')) <> staticWitnessValue env w
         Just (tc', _)               = generatedMethodClass env n ts
+        Just (TFun _ _ row _ _)     = generatedMethodType env n ts
 genGeneratedMethodCall env n _ p    = gen env (generatedMethodQName n) <> parens (gen env p)
 
 staticWitnessValue env e            = case staticWitnessName e of
@@ -2661,6 +2666,7 @@ declCon env n q b
   | null abstr || hasNotImpl b      = (gen env tRes <+> newcon env n <> parens (gen env pars) <+> char '{') $+$
                                       nest 4 (gen env tObj <+> gen env tmpV <+> equals <+> acton_malloc env (gname env n) <> semi $+$
                                               gen env tmpV <> text "->" <> gen env1 classKW <+> equals <+> char '&' <> methodtable env1 n <> semi $+$
+                                              exceptionInit $+$
                                               altcall $+$
                                               initcall) $+$
                                       char '}'
@@ -2669,6 +2675,9 @@ declCon env n q b
         tc                          = TC (NoQ n) (map tVar $ qbound q)
         tObj                        = tCon tc
         tRes                        = if t == tR then tR else tObj
+        exceptionInit
+          | isExceptionClass env tc = gen env tmpV <> text "->_exception_show = NULL;"
+          | otherwise               = empty
         pars                        = pPar paramNames r
         args                        = pArg pars
         altcall
@@ -2684,6 +2693,8 @@ declCon env n q b
         retobj (PosArg e p)         = PosArg (eCall (tApp (eQVar primCONSTCONT) [tObj]) [eVar tmpV, e]) p
         env1                        = ldefine ((tmpV, NVar tObj) : envOf pars) env
         abstr                       = abstractAttrs env (NoQ n)
+
+isExceptionClass env tc            = any ((== qnBaseException) . unalias env . tcname . snd) (findAncestry env tc)
 
 acton_malloc env n                  = text "acton_malloc" <> parens (structSize env n)
 
@@ -2941,6 +2952,9 @@ instance Gen Expr where
     gen env c@Call{}
       | Just args <- rawRangeArgs env c
                                     = genRawRangeNew env args
+    gen env (Call _ (TApp _ (Var _ n) _) (PosArg w (PosArg e PosNil)) KwdNil)
+      | n == primExceptionShow      = text "$exceptionShow" <> parens
+                                        (parens (text "B_Show") <> gen env w <> comma <+> parens (text "B_BaseException") <> gen env e)
     gen env c@(Call _ f p KwdNil)
       | Var _ q <- stripTApp f,
         Just w <- builtinCallPrimitive q

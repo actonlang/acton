@@ -292,8 +292,7 @@ B_IteratorD_bitarray B_IteratorD_bitarrayD_deserialize(B_IteratorD_bitarray self
 struct B_IteratorD_bitarrayG_class B_IteratorD_bitarrayG_methods = {
     "B_IteratorD_bitarray", UNASSIGNED, ($SuperG_class)&B_IteratorG_methods,
     B_IteratorD_bitarrayD_init, B_IteratorD_bitarrayD_serialize,
-    B_IteratorD_bitarrayD_deserialize, B_IteratorD_bitarrayD_bool,
-    B_IteratorD_bitarrayD_str, B_IteratorD_bitarrayD_str,
+    B_IteratorD_bitarrayD_deserialize,
     B_IteratorD_bitarrayD_next
 };
 
@@ -375,6 +374,6 @@ B_bitarray B_bitarrayD___deserialize__(B_bitarray self, $Serial$state state) {
     return self;
 }
 
-// Show/Bool protocol entry points and legacy class-method shims.
+// Show/Bool protocol entry points.
 B_DEFINE_SHOW(bitarray)
 B_DEFINE_BOOL(bitarray)

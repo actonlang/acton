@@ -37,10 +37,12 @@ B_NoneType B_objectD___init__ (B_object self) {
 }
 */
 B_str B_valueD___str__(B_value self) {
+    if (!self) return B_None_str;
     return $FORMAT("<%s object at %p>", unmangle_name(self->$class->$GCINFO), self);
 }
 
 B_str B_valueD___repr__(B_value self) {
+    if (!self) return B_None_str;
     return $FORMAT("<%s object at %p>", unmangle_name(self->$class->$GCINFO), self);
 }
 
@@ -49,15 +51,13 @@ B_str B_objectD___str__(B_object self) {
 }
 
 bool B_valueD___bool__(B_value self) {
-    return true;
+    return self != B_None;
 }
 bool B_objectD___bool__(B_object self) {
     return true;
 }
 
-// Root protocol defaults call the default functions themselves. In particular,
-// they do not dispatch through the legacy value slots, which will be removed
-// when str/repr/truth conversion is switched to the protocols.
+// Inherited protocol defaults share these witness-free native workers.
 B_str B_ShowD_valueD___str__(B_ShowD_value witness, B_value self) {
     return B_valueD___str__(self);
 }
@@ -83,7 +83,3 @@ bool B_BoolD_objectD___bool__(B_BoolD_object witness, B_object self) {
 }
 
 struct $SerializableG_class $SerializableG_methods = {"$Serializable",UNASSIGNED,NULL, $SerializableD___init__,NULL,NULL};
-
-//struct B_valueG_class B_valueG_methods = {"B_value",UNASSIGNED,($SuperG_class)&$SerializableG_methods,B_valueD___init__,NULL,NULL, B_valueD___bool__,B_valueD___str__,B_valueD___str__};
-
-//struct B_objectG_class B_objectG_methods = {"B_object",UNASSIGNED,($SuperG_class)&B_valueG_methods,B_objectD___init__,NULL,NULL,B_objectD___bool__,B_objectD___str__,B_objectD___str__};

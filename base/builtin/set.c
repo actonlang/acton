@@ -269,7 +269,7 @@ B_str B_set_table_str(B_set_table *set, B_Show show) {
         B_setentry *entry = &set->table[i];
         if (ACTIVE_ENTRY(entry)) {
             B_value elem = (B_value)entry->key;
-            B_str part = show ? show->$class->__repr__(show, elem) : elem->$class->__repr__(elem);
+            B_str part = show->$class->__repr__(show, elem);
             wit->$class->append(wit, parts, part);
         }
     }
@@ -573,14 +573,6 @@ bool B_set_bool(B_set self) {
     return self->data.numelements > 0;
 }
 
-B_str B_setD___str__(B_set self) {
-    return B_set_table_str(&self->data, NULL);
-}
-
-B_str B_setD___repr__(B_set self) {
-    return B_setD___str__(self);
-}
-
 void B_setD___serialize__(B_set self, $Serial$state state) {
     B_int prevkey = (B_int)B_dictD_get(state->done, self, NULL);
     if (prevkey) {
@@ -629,15 +621,6 @@ B_NoneType B_isetD___init__(B_iset set, B_Hashable hashwit, B_Iterable wit, $WOR
 
 bool B_iset_bool(B_iset self) {
     return self->data.numelements > 0;
-}
-
-B_str B_isetD___str__(B_iset self) {
-    B_str contents = B_set_table_str(&self->data, NULL);
-    return $FORMAT("iset(%s)", contents->str);
-}
-
-B_str B_isetD___repr__(B_iset self) {
-    return B_isetD___str__(self);
 }
 
 void B_isetD___serialize__(B_iset self, $Serial$state state) {
@@ -744,8 +727,8 @@ B_IteratorD_set B_IteratorD_setD__deserialize(B_IteratorD_set res, $Serial$state
 
 struct B_IteratorD_setG_class B_IteratorD_setG_methods = {"B_IteratorD_set", UNASSIGNED, ($SuperG_class)&B_IteratorG_methods,
                                                           B_IteratorD_set_init, B_IteratorD_set_serialize,
-                                                          B_IteratorD_setD__deserialize, B_IteratorD_set_bool,
-                                                          B_IteratorD_set_str, B_IteratorD_set_str, B_IteratorD_set_next};
+                                                          B_IteratorD_setD__deserialize, B_IteratorD_set_next
+};
 
 // Set[set] wrappers ////////////////////////////////////////////////////////////////////////////////
 

@@ -9,9 +9,6 @@ struct B_hasherG_class {
     B_NoneType (*__init__) (B_hasher, u64);
     void (*__serialize__) (B_hasher, $Serial$state);
     B_hasher (*__deserialize__) (B_hasher, $Serial$state);
-    B_bool (*__bool__) (B_hasher);
-    B_str (*__str__) (B_hasher);
-    B_str (*__repr__) (B_hasher);
     B_NoneType (*update) (B_hasher, B_bytes);
     B_u64 (*finalize) (B_hasher);
 };

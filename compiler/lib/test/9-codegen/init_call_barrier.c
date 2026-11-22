@@ -190,9 +190,6 @@ void init_call_barrierQ___init__ () {
     {
         init_call_barrierQ_BaseG_methods.$GCINFO = "init_call_barrierQ_Base";
         init_call_barrierQ_BaseG_methods.$superclass = ($SuperG_class)&B_objectG_methods;
-        init_call_barrierQ_BaseG_methods.__bool__ = (bool (*) (init_call_barrierQ_Base))B_valueG_methods.__bool__;
-        init_call_barrierQ_BaseG_methods.__str__ = (B_str (*) (init_call_barrierQ_Base))B_valueG_methods.__str__;
-        init_call_barrierQ_BaseG_methods.__repr__ = (B_str (*) (init_call_barrierQ_Base))B_valueG_methods.__repr__;
         init_call_barrierQ_BaseG_methods.__get_attr__ = (B_value (*) (init_call_barrierQ_Base, B_str))init_call_barrierQ_BaseD___get_attr__;
         init_call_barrierQ_BaseG_methods.G_init = (B_NoneType (*) (init_call_barrierQ_Base))init_call_barrierQ_BaseG_init;
         init_call_barrierQ_BaseG_methods.__init__ = (B_NoneType (*) (init_call_barrierQ_Base))init_call_barrierQ_BaseD___init__;
@@ -203,9 +200,6 @@ void init_call_barrierQ___init__ () {
     {
         init_call_barrierQ_DerivedG_methods.$GCINFO = "init_call_barrierQ_Derived";
         init_call_barrierQ_DerivedG_methods.$superclass = ($SuperG_class)&init_call_barrierQ_BaseG_methods;
-        init_call_barrierQ_DerivedG_methods.__bool__ = (bool (*) (init_call_barrierQ_Derived))B_valueG_methods.__bool__;
-        init_call_barrierQ_DerivedG_methods.__str__ = (B_str (*) (init_call_barrierQ_Derived))B_valueG_methods.__str__;
-        init_call_barrierQ_DerivedG_methods.__repr__ = (B_str (*) (init_call_barrierQ_Derived))B_valueG_methods.__repr__;
         init_call_barrierQ_DerivedG_methods.__get_attr__ = (B_value (*) (init_call_barrierQ_Derived, B_str))init_call_barrierQ_DerivedD___get_attr__;
         init_call_barrierQ_DerivedG_methods.G_init = (B_NoneType (*) (init_call_barrierQ_Derived))init_call_barrierQ_DerivedG_init;
         init_call_barrierQ_DerivedG_methods.__init__ = (B_NoneType (*) (init_call_barrierQ_Derived))init_call_barrierQ_DerivedD___init__;
@@ -216,9 +210,6 @@ void init_call_barrierQ___init__ () {
     {
         init_call_barrierQ_LaterG_methods.$GCINFO = "init_call_barrierQ_Later";
         init_call_barrierQ_LaterG_methods.$superclass = ($SuperG_class)&init_call_barrierQ_BaseG_methods;
-        init_call_barrierQ_LaterG_methods.__bool__ = (bool (*) (init_call_barrierQ_Later))B_valueG_methods.__bool__;
-        init_call_barrierQ_LaterG_methods.__str__ = (B_str (*) (init_call_barrierQ_Later))B_valueG_methods.__str__;
-        init_call_barrierQ_LaterG_methods.__repr__ = (B_str (*) (init_call_barrierQ_Later))B_valueG_methods.__repr__;
         init_call_barrierQ_LaterG_methods.__get_attr__ = (B_value (*) (init_call_barrierQ_Later, B_str))init_call_barrierQ_LaterD___get_attr__;
         init_call_barrierQ_LaterG_methods.G_init = (B_NoneType (*) (init_call_barrierQ_Later))init_call_barrierQ_LaterG_init;
         init_call_barrierQ_LaterG_methods.__init__ = ($R (*) (init_call_barrierQ_Later, $Cont))init_call_barrierQ_LaterD___init__;
@@ -229,9 +220,6 @@ void init_call_barrierQ___init__ () {
     {
         init_call_barrierQ_RenewG_methods.$GCINFO = "init_call_barrierQ_Renew";
         init_call_barrierQ_RenewG_methods.$superclass = ($SuperG_class)&B_objectG_methods;
-        init_call_barrierQ_RenewG_methods.__bool__ = (bool (*) (init_call_barrierQ_Renew))B_valueG_methods.__bool__;
-        init_call_barrierQ_RenewG_methods.__str__ = (B_str (*) (init_call_barrierQ_Renew))B_valueG_methods.__str__;
-        init_call_barrierQ_RenewG_methods.__repr__ = (B_str (*) (init_call_barrierQ_Renew))B_valueG_methods.__repr__;
         init_call_barrierQ_RenewG_methods.__get_attr__ = (B_value (*) (init_call_barrierQ_Renew, B_str))init_call_barrierQ_RenewD___get_attr__;
         init_call_barrierQ_RenewG_methods.G_init = (B_NoneType (*) (init_call_barrierQ_Renew))init_call_barrierQ_RenewG_init;
         init_call_barrierQ_RenewG_methods.__init__ = (B_NoneType (*) (init_call_barrierQ_Base))init_call_barrierQ_RenewD___init__;

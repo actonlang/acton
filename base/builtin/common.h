@@ -40,12 +40,6 @@ uint64_t $checked_uint_from_u64(uint64_t value, uint64_t max, const char *type_n
                                B_dictD_setitem($state->done, toB_int($state->row_no-1), $t); \
                                $t; })
 
-#define $AND(T, a, b)       ({ T $a = (a); ($a && ((B_value)$a)->$class->__bool__((B_value)$a)) ? (b) : $a; })
-
-#define $OR(T, a, b)        ({ T $a = (a); ($a && ((B_value)$a)->$class->__bool__((B_value)$a)) ? $a : (b); })
-
-#define $NOT(T, a)          ({ T $a = (a); ($a && ((B_value)$a)->$class->__bool__((B_value)$a)) ? B_False : B_True; })
-
 #define $ISINSTANCE($x,$T)  ({ \
                                /* If object is NULL (None), return False */ \
                                ($x) == B_None ? B_False : ({ \
@@ -76,7 +70,19 @@ uint64_t $checked_uint_from_u64(uint64_t value, uint64_t max, const char *type_n
 
 // Raise an existing exception, or construct one with per-call arguments.
 #define RAISE_EXC(exc)      $RAISE((B_BaseException)(exc))
-#define RAISE($T, ...)      RAISE_EXC($NEW($T, ##__VA_ARGS__))
+// Native errors with additional payloads have their own stateless Show policy.
+// A C extension with a custom policy can pass it explicitly with RAISE_SHOW.
+#define NATIVE_EXCEPTION_SHOW(exc) _Generic((exc), \
+    B_IndexError: (B_Show)B_ShowD_IndexErrorG_witness, \
+    B_KeyError: (B_Show)B_ShowD_KeyErrorG_witness, \
+    B_FileNotFoundError: (B_Show)B_ShowD_FileNotFoundErrorG_witness, \
+    default: (B_Show)B_ShowD_BaseExceptionG_witness)
+#define RAISE_SHOW($T, show, ...) do { \
+    $T acton_exception_ = $NEW($T, ##__VA_ARGS__); \
+    ACTON_STORE(acton_exception_, acton_exception_->_exception_show, (B_value)(show)); \
+    RAISE_EXC(acton_exception_); \
+} while (0)
+#define RAISE($T, ...) RAISE_SHOW($T, NATIVE_EXCEPTION_SHOW(($T)0), ##__VA_ARGS__)
 
 // $FORMAT is now a C function in str.c
 

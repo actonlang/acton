@@ -47,10 +47,10 @@ def _test_different_types():
     testing.assertEqual(output, "Types: string, 42, 3.14, [1, 2, 3]")
 
 def _test_complex_objects():
-    d = {"name": "Alice", "age": 30}
+    d = {"name": "Alice", "age": "30"}
     l = ["apple", "banana", "cherry"]
     output = "Dict: {d}, List: {l}"
-    testing.assertEqual(output, r"Dict: {'name':'Alice', 'age':30}, List: ['apple', 'banana', 'cherry']")
+    testing.assertEqual(output, r"Dict: {'name':'Alice', 'age':'30'}, List: ['apple', 'banana', 'cherry']")
 
 def _test_none_value():
     n = None

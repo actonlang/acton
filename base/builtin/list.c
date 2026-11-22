@@ -109,8 +109,7 @@ B_str B_list_base_str(B_list_base self, B_Show show) {
         B_value elem = (B_value)self->data[i];
         // __repr__ allocates, and the array of parts is reached through
         // parts, so each store has a barrier.
-        B_str r = show ? show->$class->__repr__(show, elem)
-                       : elem == B_None ? B_None_str : elem->$class->__repr__(elem);
+        B_str r = show->$class->__repr__(show, elem);
         $WORD *data = parts->data;
         ACTON_STORE_ELEM(data, parts->length, r);
         parts->length++;
@@ -470,14 +469,6 @@ bool B_list_bool(B_list self) {
     return B_list_base_bool((B_list_base)self);
 }
 
-B_str B_listD___str__(B_list self) {
-    return B_list_base_str((B_list_base)self, NULL);
-}
-
-B_str B_listD___repr__(B_list self) {
-    return B_listD___str__(self);
-}
-
 void B_listD___serialize__(B_list self, $Serial$state state) {
     B_list_base_serialize((B_list_base)self, LIST_ID, state);
 }
@@ -528,15 +519,6 @@ B_NoneType B_ilistD___init__(B_ilist self, B_Iterable wit, $WORD iterable) {
 
 bool B_ilist_bool(B_ilist self) {
     return B_list_base_bool((B_list_base)self);
-}
-
-B_str B_ilistD___str__(B_ilist self) {
-    B_str contents = B_list_base_str((B_list_base)self, NULL);
-    return $FORMAT("ilist(%s)", contents->str);
-}
-
-B_str B_ilistD___repr__(B_ilist self) {
-    return B_ilistD___str__(self);
 }
 
 void B_ilistD___serialize__(B_ilist self, $Serial$state state) {
@@ -620,8 +602,7 @@ B_IteratorD_list B_IteratorD_list$_deserialize(B_IteratorD_list self, $Serial$st
 
 struct B_IteratorD_listG_class B_IteratorD_listG_methods = {
     "B_IteratorD_list", UNASSIGNED, ($SuperG_class)&B_IteratorG_methods,
-    B_IteratorD_listD_init, B_IteratorD_listD_serialize, B_IteratorD_list$_deserialize,
-    B_IteratorD_listD_bool, B_IteratorD_listD_str, B_IteratorD_listD_str, B_IteratorD_listD_next
+    B_IteratorD_listD_init, B_IteratorD_listD_serialize, B_IteratorD_list$_deserialize, B_IteratorD_listD_next
 };
 
 // Sequence[list] wrappers /////////////////////////////////////////////////////////////////////////
@@ -798,10 +779,7 @@ struct B_SequenceD_listG_class B_SequenceD_listG_methods = {
     ($SuperG_class)&B_SequenceG_methods,
     NULL, // B_SequenceD_listD___init__
     NULL, // B_SequenceD_listD___serialize__
-    NULL, // B_SequenceD_listD___deserialize__
-    (bool (*)(B_SequenceD_list))$default__bool__,
-    (B_str (*)(B_SequenceD_list))$default__str__,
-    (B_str (*)(B_SequenceD_list))$default__str__,
+    NULL,
     B_SequenceD_listD___getitem__,
     B_SequenceD_listD___getslice__,
     B_SequenceD_listD___reversed__,

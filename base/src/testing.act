@@ -15,7 +15,7 @@ _test_error = AssertionError("Test error")
 
 # -- assert ---------------------------------------------------------------------
 
-def opt_str[T](s: ?T) -> str:
+def opt_str[T(Show)](s: ?T) -> str:
     return str(s) if s is not None else "None"
 
 class NotEqualError[T(Show)](AssertionError):
@@ -30,15 +30,21 @@ class NotEqualError[T(Show)](AssertionError):
         self.print_vals = print_vals
         self.print_diff = print_diff
 
+    def value_text(self) -> (str, str):
+        # Use the evidence stored by this generic class, even after a catch
+        # has hidden T behind the parent AssertionError type.
+        return opt_str(self.a), opt_str(self.b)
+
+extension NotEqualError[T(Show)](Show):
     def __str__(self):
         msg = f"{self._name()}: {self.error_message}"
         if self.print_vals:
             msg += f" A: {self.a}"
             msg += f" B: {self.b}"
         return msg
-
     def __repr__(self):
         return f"{self._name()}({repr(self.a)}, {repr(self.b)}, {repr(self.error_message)}, {repr(self.print_vals)}, {repr(self.print_diff)})"
+
 
 class EqualError[T(Show)](AssertionError):
     a: ?T
@@ -50,15 +56,16 @@ class EqualError[T(Show)](AssertionError):
         self.error_message = msg if msg is not None else "Expected non-equal values but they are equal."
         self.print_vals = print_vals
 
+extension EqualError[T(Show)](Show):
     def __str__(self):
         msg = f"{self._name()}: {self.error_message}"
         if self.print_vals:
             msg += f" A: {self.a}"
             msg += f" B: {self.b}"
         return msg
-
     def __repr__(self):
         return f"{self._name()}({repr(self.a)}, {repr(self.b)}, {repr(self.error_message)}, {repr(self.print_vals)})"
+
 
 class NotTrueError[T(Show)](AssertionError):
     a: ?T
@@ -68,14 +75,15 @@ class NotTrueError[T(Show)](AssertionError):
         self.error_message = msg if msg is not None else "Expected True but got non-True"
         self.print_vals = print_vals
 
+extension NotTrueError[T(Show)](Show):
     def __str__(self):
         msg = f"{self._name()}: {self.error_message}"
         if self.print_vals:
             msg += f", value: {self.a}"
         return msg
-
     def __repr__(self):
         return f"{self._name()}({repr(self.a)}, {repr(self.error_message)}, {repr(self.print_vals)})"
+
 
 class NotFalseError[T(Show)](AssertionError):
     a: ?T
@@ -85,14 +93,15 @@ class NotFalseError[T(Show)](AssertionError):
         self.error_message = msg if msg is not None else "Expected False but got non-False."
         self.print_vals = print_vals
 
+extension NotFalseError[T(Show)](Show):
     def __str__(self):
         msg = f"{self._name()}: {self.error_message}"
         if self.print_vals:
             msg += f", value: {self.a}"
         return msg
-
     def __repr__(self):
         return f"{self._name()}({repr(self.a)}, {repr(self.error_message)}, {repr(self.print_vals)})"
+
 
 class NotNoneError[T(Show)](AssertionError):
     a: ?T
@@ -102,14 +111,15 @@ class NotNoneError[T(Show)](AssertionError):
         self.error_message = msg if msg is not None else "Expected None but got non-None."
         self.print_vals = print_vals
 
+extension NotNoneError[T(Show)](Show):
     def __str__(self):
         msg = f"{self._name()}: {self.error_message}"
         if self.print_vals:
             msg += f", value: {self.a}"
         return msg
-
     def __repr__(self):
         return f"{self._name()}({repr(self.a)}, {repr(self.error_message)}, {repr(self.print_vals)})"
+
 
 class NoneError[T(Show)](AssertionError):
     a: ?T
@@ -119,15 +129,16 @@ class NoneError[T(Show)](AssertionError):
         self.error_message = msg if msg is not None else "Expected non-None but got None."
         self.print_vals = print_vals
 
+extension NoneError[T(Show)](Show):
     def __str__(self):
         msg = f"{self._name()}: {self.error_message}"
         if self.print_vals:
             a = self.a
             msg += f", value: {a}"
         return msg
-
     def __repr__(self):
         return f"{self._name()}({repr(self.a)}, {repr(self.error_message)}, {repr(self.print_vals)})"
+
 
 class NotInError[T(Show),U(Show)](AssertionError):
     a: ?T
@@ -139,15 +150,16 @@ class NotInError[T(Show),U(Show)](AssertionError):
         self.error_message = msg if msg is not None else "Expected element not in container"
         self.print_vals = print_vals
 
+extension NotInError[T(Show),U(Show)](Show):
     def __str__(self):
         msg = f"{self._name()}: {self.error_message}"
         if self.print_vals:
             msg += f", element: {self.a}"
             msg += f", container: {self.b}"
         return msg
-
     def __repr__(self):
         return f"{self._name()}({repr(self.a)}, {repr(self.b)}, {repr(self.error_message)}, {repr(self.print_vals)})"
+
 
 class InError[T(Show),U(Show)](AssertionError):
     a: ?T
@@ -159,15 +171,16 @@ class InError[T(Show),U(Show)](AssertionError):
         self.error_message = msg if msg is not None else "Expected element in container"
         self.print_vals = print_vals
 
+extension InError[T(Show),U(Show)](Show):
     def __str__(self):
         msg = f"{self._name()}: {self.error_message}"
         if self.print_vals:
             msg += f", element: {self.a}"
             msg += f", container: {self.b}"
         return msg
-
     def __repr__(self):
         return f"{self._name()}({repr(self.a)}, {repr(self.b)}, {repr(self.error_message)}, {repr(self.print_vals)})"
+
 
 class NotIsError[T(Show)](AssertionError):
     a: T
@@ -179,15 +192,16 @@ class NotIsError[T(Show)](AssertionError):
         self.error_message = msg if msg is not None else "Expected both objects to be the same identity (is)"
         self.print_vals = print_vals
 
+extension NotIsError[T(Show)](Show):
     def __str__(self):
         msg = f"{self._name()}: {self.error_message}"
         if self.print_vals:
             msg += f" A: {str(self.a)}"
             msg += f" B: {str(self.b)}"
         return msg
-
     def __repr__(self):
         return f"{self._name()}({repr(self.a)}, {repr(self.b)}, {repr(self.error_message)}, {repr(self.print_vals)})"
+
 
 class IsError[T(Show)](AssertionError):
     a: T
@@ -199,23 +213,29 @@ class IsError[T(Show)](AssertionError):
         self.error_message = msg if msg is not None else "Expected both objects to be different identities (is not)"
         self.print_vals = print_vals
 
+extension IsError[T(Show)](Show):
     def __str__(self):
         msg = f"{self._name()}: {self.error_message}"
         if self.print_vals:
             msg += f" A: {str(self.a)}"
             msg += f" B: {str(self.b)}"
         return msg
-
     def __repr__(self):
         return f"{self._name()}({repr(self.a)}, {repr(self.b)}, {repr(self.error_message)}, {repr(self.print_vals)})"
+
 
 class NotRaisesError(AssertionError):
     def __init__(self, msg: ?str=None, print_vals: bool=True):
         self.error_message = msg if msg is not None else "Expected exception not raised"
         self.print_vals = print_vals
 
+extension NotRaisesError(Show):
+    def __str__(self) -> str:
+        base: BaseException = self
+        return str(base)
     def __repr__(self):
         return f"{self._name()}({repr(self.error_message)}, {repr(self.print_vals)})"
+
 
 class IsInstanceError[T(Show)](AssertionError):
     a: ?T
@@ -227,8 +247,13 @@ class IsInstanceError[T(Show)](AssertionError):
         self.error_message = msg if msg is not None else "expected type of specific instance"
         self.print_vals = print_vals
 
+extension IsInstanceError[T(Show)](Show):
+    def __str__(self) -> str:
+        base: BaseException = self
+        return str(base)
     def __repr__(self):
         return f"{self._name()}({repr(self.a)}, {repr(self.t)}, {repr(self.error_message)}, {repr(self.print_vals)})"
+
 
 class NotIsInstanceError[T(Show)](AssertionError):
     a: ?T
@@ -240,6 +265,10 @@ class NotIsInstanceError[T(Show)](AssertionError):
         self.error_message = msg if msg is not None else "expected type of specific instance"
         self.print_vals = print_vals
 
+extension NotIsInstanceError[T(Show)](Show):
+    def __str__(self) -> str:
+        base: BaseException = self
+        return str(base)
     def __repr__(self):
         return f"{self._name()}({repr(self.a)}, {repr(self.t)}, {repr(self.error_message)}, {repr(self.print_vals)})"
 
@@ -756,82 +785,3 @@ class EnvTest(Test):
             self.fn(EnvT(report_result, env, log_handler, tags, random, loop, request_timeout))
         except AbortTest:
             pass
-
-# Protocol adapters retain the existing class renderers during the ABI migration.
-extension NotEqualError[T(Show)](Show):
-    def __str__(self) -> str:
-        return self.__str__()
-    def __repr__(self) -> str:
-        return self.__repr__()
-
-extension EqualError[T(Show)](Show):
-    def __str__(self) -> str:
-        return self.__str__()
-    def __repr__(self) -> str:
-        return self.__repr__()
-
-extension NotTrueError[T(Show)](Show):
-    def __str__(self) -> str:
-        return self.__str__()
-    def __repr__(self) -> str:
-        return self.__repr__()
-
-extension NotFalseError[T(Show)](Show):
-    def __str__(self) -> str:
-        return self.__str__()
-    def __repr__(self) -> str:
-        return self.__repr__()
-
-extension NotNoneError[T(Show)](Show):
-    def __str__(self) -> str:
-        return self.__str__()
-    def __repr__(self) -> str:
-        return self.__repr__()
-
-extension NoneError[T(Show)](Show):
-    def __str__(self) -> str:
-        return self.__str__()
-    def __repr__(self) -> str:
-        return self.__repr__()
-
-extension NotInError[T(Show),U(Show)](Show):
-    def __str__(self) -> str:
-        return self.__str__()
-    def __repr__(self) -> str:
-        return self.__repr__()
-
-extension InError[T(Show),U(Show)](Show):
-    def __str__(self) -> str:
-        return self.__str__()
-    def __repr__(self) -> str:
-        return self.__repr__()
-
-extension NotIsError[T(Show)](Show):
-    def __str__(self) -> str:
-        return self.__str__()
-    def __repr__(self) -> str:
-        return self.__repr__()
-
-extension IsError[T(Show)](Show):
-    def __str__(self) -> str:
-        return self.__str__()
-    def __repr__(self) -> str:
-        return self.__repr__()
-
-extension NotRaisesError(Show):
-    def __str__(self) -> str:
-        return self.__str__()
-    def __repr__(self) -> str:
-        return self.__repr__()
-
-extension IsInstanceError[T(Show)](Show):
-    def __str__(self) -> str:
-        return self.__str__()
-    def __repr__(self) -> str:
-        return self.__repr__()
-
-extension NotIsInstanceError[T(Show)](Show):
-    def __str__(self) -> str:
-        return self.__str__()
-    def __repr__(self) -> str:
-        return self.__repr__()

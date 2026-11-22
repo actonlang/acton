@@ -57,7 +57,7 @@ uint64_t $checked_uint_from_u64(uint64_t value, uint64_t max, const char *type_n
 /*
 void B_printobj(char *mess,$WORD obj) {
     B_value obj1 = (B_value)obj;
-    printf("%s %s\n",mess,obj1->$class->__str__(obj1)->str);
+    printf("%s %s\n",mess,B_valueD___str__(obj1)->str);
 }
 */
 

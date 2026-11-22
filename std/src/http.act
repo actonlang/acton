@@ -171,8 +171,13 @@ class Request(object):
         self.headers = headers
         self.body = body
 
+extension Request(Show):
     def __str__(self):
         return f"<http.Request {self.method} {self.path} {str(self.version)} {self.headers.__str__()} {str(self.body)}>"
+    def __repr__(self) -> str:
+        base: value = self
+        return repr(base)
+
 
 extension Request(Eq):
     def __eq__(self, other):
@@ -195,11 +200,16 @@ class Response(object):
         self.headers = headers
         self.body = body
 
-    def __str__(self) -> str:
-        return f"<http.Response {self.status}>"
-
     def decode_json(self):
         return json.decode(self.body.decode())
+
+extension Response(Show):
+    def __str__(self) -> str:
+        return f"<http.Response {self.status}>"
+    def __repr__(self) -> str:
+        base: value = self
+        return repr(base)
+
 
 extension Response(Eq):
     def __eq__(self, other):

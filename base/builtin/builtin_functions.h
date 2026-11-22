@@ -12,9 +12,6 @@ struct $EqOptG_class {
     void (*__init__)($EqOpt, B_Eq);
     void (*__serialize__)($EqOpt,$Serial$state);
     $EqOpt (*__deserialize__)($EqOpt,$Serial$state);
-    bool (*__bool__)($EqOpt);
-    B_str (*__str__)($EqOpt);
-    B_str (*__repr__)($EqOpt);
     bool (*__eq__)($EqOpt, $WORD, $WORD);
     bool (*__ne__)($EqOpt, $WORD, $WORD);
 };
@@ -40,9 +37,6 @@ struct $EqTupleG_class {
     void (*__init__)($EqTuple, B_tuple);
     void (*__serialize__)($EqTuple,$Serial$state);
     $EqTuple (*__deserialize__)($EqTuple,$Serial$state);
-    bool (*__bool__)($EqTuple);
-    B_str (*__str__)($EqTuple);
-    B_str (*__repr__)($EqTuple);
     bool (*__eq__)($EqTuple, $WORD, $WORD);
     bool (*__ne__)($EqTuple, $WORD, $WORD);
 };
@@ -68,9 +62,6 @@ struct $OrdTupleG_class {
     void (*__init__)($OrdTuple, B_tuple);
     void (*__serialize__)($OrdTuple,$Serial$state);
     $OrdTuple (*__deserialize__)($OrdTuple,$Serial$state);
-    bool (*__bool__)($OrdTuple);
-    B_str (*__str__)($OrdTuple);
-    B_str (*__repr__)($OrdTuple);
     bool (*__eq__)($OrdTuple, $WORD, $WORD);
     bool (*__ne__)($OrdTuple, $WORD, $WORD);
     bool (*__lt__)($OrdTuple, $WORD, $WORD);
@@ -100,9 +91,6 @@ struct $HashableTupleG_class {
     void (*__init__)($HashableTuple, B_tuple);
     void (*__serialize__)($HashableTuple,$Serial$state);
     $HashableTuple (*__deserialize__)($HashableTuple,$Serial$state);
-    bool (*__bool__)($HashableTuple);
-    B_str (*__str__)($HashableTuple);
-    B_str (*__repr__)($HashableTuple);
     bool (*__eq__)($HashableTuple, $WORD, $WORD);
     bool (*__ne__)($HashableTuple, $WORD, $WORD);
     B_NoneType (*hash)($HashableTuple, $WORD, B_hasher);
@@ -135,7 +123,6 @@ struct $ShowOptG_class {
     void (*__init__)($ShowOpt, B_Show);
     void (*__serialize__)($ShowOpt, $Serial$state);
     $ShowOpt (*__deserialize__)($ShowOpt, $Serial$state);
-    bool (*__bool__)($ShowOpt);
     B_str (*__str__)($ShowOpt, $WORD);
     B_str (*__repr__)($ShowOpt, $WORD);
 };
@@ -159,8 +146,6 @@ struct $BoolOptG_class {
     void (*__serialize__)($BoolOpt, $Serial$state);
     $BoolOpt (*__deserialize__)($BoolOpt, $Serial$state);
     bool (*__bool__)($BoolOpt, $WORD);
-    B_str (*__str__)($BoolOpt);
-    B_str (*__repr__)($BoolOpt);
 };
 
 struct $BoolOpt {
@@ -181,7 +166,6 @@ struct $ShowTupleG_class {
     void (*__init__)($ShowTuple, B_tuple);
     void (*__serialize__)($ShowTuple, $Serial$state);
     $ShowTuple (*__deserialize__)($ShowTuple, $Serial$state);
-    bool (*__bool__)($ShowTuple);
     B_str (*__str__)($ShowTuple, $WORD);
     B_str (*__repr__)($ShowTuple, $WORD);
 };
@@ -206,8 +190,6 @@ struct $BoolTupleG_class {
     void (*__serialize__)($BoolTuple, $Serial$state);
     $BoolTuple (*__deserialize__)($BoolTuple, $Serial$state);
     bool (*__bool__)($BoolTuple, $WORD);
-    B_str (*__str__)($BoolTuple);
-    B_str (*__repr__)($BoolTuple);
 };
 
 struct $BoolTuple {
@@ -235,9 +217,6 @@ struct $IdentityActorG_class {
     void (*__init__)($IdentityActor);
     void (*__serialize__)($IdentityActor,$Serial$state);
     $IdentityActor (*__deserialize__)($IdentityActor,$Serial$state);
-    bool (*__bool__)($IdentityActor);
-    B_str (*__str__)($IdentityActor);
-    B_str (*__repr__)($IdentityActor);
     bool (*__is__)($IdentityActor, $WORD, $WORD);
     bool (*__isnot__)($IdentityActor, $WORD, $WORD);
 };

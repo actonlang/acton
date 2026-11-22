@@ -43,6 +43,7 @@ extern B_BoolD_bytearray B_BoolD_bytearrayG_witness;
 extern B_BoolD_list B_BoolD_listG_witness;
 extern B_BoolD_ilist B_BoolD_ilistG_witness;
 extern B_ShowD_BaseException B_ShowD_BaseExceptionG_witness;
+extern B_ShowD_Exception B_ShowD_ExceptionG_witness;
 extern B_ShowD_IndexError B_ShowD_IndexErrorG_witness;
 extern B_ShowD_KeyError B_ShowD_KeyErrorG_witness;
 extern B_ShowD_FileNotFoundError B_ShowD_FileNotFoundErrorG_witness;

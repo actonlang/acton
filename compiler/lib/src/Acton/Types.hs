@@ -1739,7 +1739,11 @@ checkClassAttributesInitialized className classLoc env ancestors b
                                                              calledParentInits = getCalledParentInits env initBody
                                                              -- Get attributes initialized by called parent __init__ methods
                                                              parentInitialized = nub $ concatMap (getInitializedByParent env) calledParentInits
-                                                             uninitialized = expected \\ (initialized ++ parentInitialized)
+                                                             -- The exception allocator initializes this metadata
+                                                             -- before invoking any user constructor.
+                                                             runtimeInitialized = [name "_exception_show" |
+                                                                 any ((== qnBaseException) . unalias env . tcname . snd) ancestors]
+                                                             uninitialized = expected \\ (initialized ++ parentInitialized ++ runtimeInitialized)
 
                                                          forM_ uninitialized $ \prop ->
                                                              let parentInfo = findAttributeParent prop
@@ -2691,9 +2695,13 @@ instance Infer Expr where
                                              w <- newWitness
                                              return (Proto (locinfo2 77 e) env w t (pISliceable t0) :
                                                      cs1++cs2, t, eCall (eDot (eVar w) getsliceKW) [e', sliz2exp sl'])
-    infer env (Raise l e _)             = do (cs,e') <- inferSub env tException e
+    infer env (Raise l e _)             = do (cs,exceptionType,e') <- infer env e
+                                             w <- newWitness
                                              t <- newUnivar env
-                                             return (cs, t, Raise l e' t)
+                                             let rendered = annot (proto2type exceptionType pShow) (eVar w) exceptionType e'
+                                             return (Cast (locinfo2 32 e) env exceptionType tException :
+                                                     Proto (locinfo2 32 e) env w exceptionType pShow : cs,
+                                                     t, Raise l rendered t)
     infer env (Cond l e1 e e2)          = do t0 <- newUnivar env
                                              (cs0,env',s,_,e') <- inferBoolTest env e
                                              (cs1,e1') <- inferSub env' t0 e1

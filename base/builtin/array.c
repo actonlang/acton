@@ -110,14 +110,6 @@ B_str B_array_str(B_array self, B_Show show) {
     return $FORMAT("[|%.*s|]", bracketed->nbytes - 2, bracketed->str + 1);
 }
 
-B_str B_arrayD___str__(B_array self) {
-    return B_array_str(self, NULL);
-}
-
-B_str B_arrayD___repr__(B_array self) {
-    return B_arrayD___str__(self);
-}
-
 int64_t $arrayD_U__getitem_int(B_array self, int64_t index) {
     index = B_array_checked_index(self, index);
     return ((int64_t *)self->data)[index];
@@ -244,8 +236,7 @@ B_IteratorD_array B_IteratorD_arrayD_deserialize(B_IteratorD_array self,
 struct B_IteratorD_arrayG_class B_IteratorD_arrayG_methods = {
     "B_IteratorD_array", UNASSIGNED, ($SuperG_class)&B_IteratorG_methods,
     B_IteratorD_arrayD_init, B_IteratorD_arrayD_serialize,
-    B_IteratorD_arrayD_deserialize, B_IteratorD_arrayD_bool,
-    B_IteratorD_arrayD_str, B_IteratorD_arrayD_str,
+    B_IteratorD_arrayD_deserialize,
     B_IteratorD_arrayD_next
 };
 

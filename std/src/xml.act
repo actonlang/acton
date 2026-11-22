@@ -38,6 +38,7 @@ class XmlParseError(ValueError):
         self.line = line
         self.column = column
 
+extension XmlParseError(Show):
     def __str__(self):
         context = ""
         if self.line is not None:
@@ -45,9 +46,9 @@ class XmlParseError(ValueError):
         if self.column is not None:
             context += ":{self.column}"
         return "{self._name()}{context}: {self.error_message}"
-
     def __repr__(self):
         return "{self._name()}({repr(self.error_message)}, {repr(self.line)}, {repr(self.column)})"
+
 
 def decode(data : str) -> Node:
     NotImplemented

@@ -108,9 +108,6 @@ void boxparamQ___init__ () {
     {
         boxparamQ_BaseG_methods.$GCINFO = "boxparamQ_Base";
         boxparamQ_BaseG_methods.$superclass = ($SuperG_class)&B_objectG_methods;
-        boxparamQ_BaseG_methods.__bool__ = (bool (*) (boxparamQ_Base))B_valueG_methods.__bool__;
-        boxparamQ_BaseG_methods.__str__ = (B_str (*) (boxparamQ_Base))B_valueG_methods.__str__;
-        boxparamQ_BaseG_methods.__repr__ = (B_str (*) (boxparamQ_Base))B_valueG_methods.__repr__;
         boxparamQ_BaseG_methods.__get_attr__ = (B_value (*) (boxparamQ_Base, B_str))boxparamQ_BaseD___get_attr__;
         boxparamQ_BaseG_methods.G_init = (B_NoneType (*) (boxparamQ_Base))boxparamQ_BaseG_init;
         boxparamQ_BaseG_methods.__init__ = (B_NoneType (*) (boxparamQ_Base))boxparamQ_BaseD___init__;
@@ -124,9 +121,6 @@ void boxparamQ___init__ () {
     {
         boxparamQ_DerivG_methods.$GCINFO = "boxparamQ_Deriv";
         boxparamQ_DerivG_methods.$superclass = ($SuperG_class)&boxparamQ_BaseG_methods;
-        boxparamQ_DerivG_methods.__bool__ = (bool (*) (boxparamQ_Deriv))B_valueG_methods.__bool__;
-        boxparamQ_DerivG_methods.__str__ = (B_str (*) (boxparamQ_Deriv))B_valueG_methods.__str__;
-        boxparamQ_DerivG_methods.__repr__ = (B_str (*) (boxparamQ_Deriv))B_valueG_methods.__repr__;
         boxparamQ_DerivG_methods.__init__ = (B_NoneType (*) (boxparamQ_Deriv))boxparamQ_DerivD___init__;
         boxparamQ_DerivG_methods.__get_attr__ = (B_value (*) (boxparamQ_Deriv, B_str))boxparamQ_DerivD___get_attr__;
         boxparamQ_DerivG_methods.G_init = (B_NoneType (*) (boxparamQ_Deriv))boxparamQ_DerivG_init;

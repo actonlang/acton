@@ -243,6 +243,23 @@ compilerTests =
             , "star item 9\n", "one\0two\n", "True|True|True\n", "item 12\n"
             , "tick1|tick2\n", "item 1 item 2\n" ]) out
           assertEqual "stderr uses the same Show policies" "error item 10\n" err
+  , testCase "Show and Bool slots exist only in protocol tables" $ do
+        withSystemTempDirectory "acton-show-bool-slots" $ \tmp -> do
+          let src = tmp </> "show_bool_slots.act"
+          copyFile "../../test/regression_auto/show_bool_slots.act" src
+          copyFile "../../test/regression_auto/show_bool_slots.ext.c" (tmp </> "show_bool_slots.ext.c")
+          (code, generated, err) <- buildThing "--quiet --dbg-no-lines --cgen" src
+          assertEqual ("C generation should succeed:\n" ++ generated ++ err) ExitSuccess code
+          let body = unlines $ takeWhile (/= "}") $ dropWhile
+                (not . isInfixOf "show_bool_slotsQ_conditional_raise (") (lines generated)
+              beforeFailure = takeWhile (not . isInfixOf "if (") (lines body)
+          assertBool "a failed check retains the concrete Show implementation"
+            ("ShowD_DetailG_new" `isInfixOf` body && "$exceptionShow(" `isInfixOf` body)
+          assertBool "successful checks do not construct diagnostic evidence"
+            (not $ any (isInfixOf "G_new(") beforeFailure)
+          testBuild "--jobs 2" ExitSuccess False src
+          (runCode, out, runErr) <- runThing "" src
+          assertEqual ("protocol layout/evidence tests should succeed: " ++ out ++ runErr) ExitSuccess runCode
   , testCase "KeyError retains key Show evidence through native lookup and serialization" $ do
         withSystemTempDirectory "acton-keyerror-show" $ \tmp -> do
           let src = tmp </> "keyerror_show.act"

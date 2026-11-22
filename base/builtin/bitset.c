@@ -332,8 +332,7 @@ B_IteratorD_bitset B_IteratorD_bitsetD_deserialize(B_IteratorD_bitset self,
 struct B_IteratorD_bitsetG_class B_IteratorD_bitsetG_methods = {
     "B_IteratorD_bitset", UNASSIGNED, ($SuperG_class)&B_IteratorG_methods,
     B_IteratorD_bitsetD_init, B_IteratorD_bitsetD_serialize,
-    B_IteratorD_bitsetD_deserialize, B_IteratorD_bitsetD_bool,
-    B_IteratorD_bitsetD_str, B_IteratorD_bitsetD_str,
+    B_IteratorD_bitsetD_deserialize,
     B_IteratorD_bitsetD_next
 };
 
@@ -512,6 +511,6 @@ B_bitset B_bitsetD___deserialize__(B_bitset self, $Serial$state state) {
     return self;
 }
 
-// Show/Bool protocol entry points and legacy class-method shims.
+// Show/Bool protocol entry points.
 B_DEFINE_SHOW(bitset)
 B_DEFINE_BOOL(bitset)

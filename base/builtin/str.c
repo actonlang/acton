@@ -2014,8 +2014,8 @@ static bool B_IteratorD_strD_next(B_IteratorD_str self, $WORD *out) {
 
 struct B_IteratorD_strG_class B_IteratorD_strG_methods = {"B_IteratorD_str",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_IteratorD_strD_init,
                                                     B_IteratorD_strD_serialize, B_IteratorD_str$_deserialize,
-                                                    B_IteratorD_strD_bool, B_IteratorD_strD_str, B_IteratorD_strD_str,
-                                                    B_IteratorD_strD_next};
+                                                    B_IteratorD_strD_next
+};
 
 // now, define __iter__
 
@@ -2977,9 +2977,6 @@ struct B_IteratorD_bytearrayG_class B_IteratorD_bytearrayG_methods = {
     B_IteratorD_bytearrayD_init,
     B_IteratorD_bytearrayD_serialize,
     B_IteratorD_bytearray$_deserialize,
-    B_IteratorD_bytearrayD_bool,
-    B_IteratorD_bytearrayD_str,
-    B_IteratorD_bytearrayD_str,
     B_IteratorD_bytearrayD_next
 };
 
@@ -4212,8 +4209,8 @@ static bool B_IteratorD_bytesD_next(B_IteratorD_bytes self, $WORD *out) {
 
 struct B_IteratorD_bytesG_class B_IteratorD_bytesG_methods = {"B_IteratorD_bytes",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_IteratorD_bytesD_init,
                                                         B_IteratorD_bytesD_serialize, B_IteratorD_bytes$_deserialize,
-                                                        B_IteratorD_bytesD_bool, B_IteratorD_bytesD_str,  B_IteratorD_bytesD_str,
-                                                        B_IteratorD_bytesD_next};
+                                                        B_IteratorD_bytesD_next
+};
 
 B_Iterator B_ContainerD_bytesD___iter__(B_ContainerD_bytes wit, B_bytes str) {
     return B_bytes_iter(str);
@@ -4742,7 +4739,7 @@ B_str $FORMAT_len(const char *format, int64_t nbytes, ...) {
     return str_from_c(b.data, b.len, false, &B_str_invalid_utf8_error);
 }
 
-// Show/Bool protocol entry points and legacy class-method shims.
+// Show/Bool protocol entry points.
 B_DEFINE_SHOW(str)
 B_DEFINE_BOOL(str)
 B_DEFINE_SHOW(bytes)

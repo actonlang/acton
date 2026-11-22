@@ -291,9 +291,8 @@ B_str B_dict_base_str(B_dict_base self, B_Show keys, B_Show values) {
                 continue;
             B_value key = (B_value)entry->key;
             B_value value = (B_value)entry->value;
-            B_str keystr = keys ? keys->$class->__repr__(keys, key) : key->$class->__repr__(key);
-            B_str valuestr = values ? values->$class->__repr__(values, value)
-                                   : value ? value->$class->__repr__(value) : B_None_str;
+            B_str keystr = keys->$class->__repr__(keys, key);
+            B_str valuestr = values->$class->__repr__(values, value);
             B_str elem = acton_malloc(sizeof(struct B_str));
             elem->$class = &B_strG_methods;
             elem->nbytes = keystr->nbytes + valuestr->nbytes + 1;
@@ -413,14 +412,6 @@ bool B_dict_bool(B_dict self) {
     return B_dict_base_bool((B_dict_base)self);
 }
 
-B_str B_dictD___str__(B_dict self) {
-    return B_dict_base_str((B_dict_base)self, NULL, NULL);
-}
-
-B_str B_dictD___repr__(B_dict self) {
-    return B_dictD___str__(self);
-}
-
 void B_dictD___serialize__(B_dict self, $Serial$state state) {
     B_dict_base_serialize((B_dict_base)self, DICT_ID, state);
 }
@@ -450,15 +441,6 @@ B_NoneType B_idictD___init__(B_idict self, B_Hashable hashwit, B_Iterable wit, $
 
 bool B_idict_bool(B_idict self) {
     return B_dict_base_bool((B_dict_base)self);
-}
-
-B_str B_idictD___str__(B_idict self) {
-    B_str contents = B_dict_base_str((B_dict_base)self, NULL, NULL);
-    return $FORMAT("idict(%s)", contents->str);
-}
-
-B_str B_idictD___repr__(B_idict self) {
-    return B_idictD___str__(self);
 }
 
 void B_idictD___serialize__(B_idict self, $Serial$state state) {
@@ -649,8 +631,8 @@ B_IteratorD_dict B_IteratorD_dict__deserialize(B_IteratorD_dict res, $Serial$sta
 
 
 struct B_IteratorD_dictG_class B_IteratorD_dictG_methods = {"B_IteratorD_dict",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_IteratorD_dictD_init,
-                                                      B_IteratorD_dictD_serialize, B_IteratorD_dict__deserialize, B_IteratorD_dictD_bool,B_IteratorD_dictD_str,
-                                                      B_IteratorD_dictD_str, B_IteratorD_dictD_next};
+                                                      B_IteratorD_dictD_serialize, B_IteratorD_dict__deserialize, B_IteratorD_dictD_next
+};
 
 
 B_Iterator B_MappingD_dictD___iter__ (B_MappingD_dict wit, B_dict dict) {
@@ -829,8 +811,8 @@ B_IteratorD_dict_values B_IteratorD_dict_values_deserialize(B_IteratorD_dict_val
 }
 
 struct B_IteratorD_dict_valuesG_class B_IteratorD_dict_valuesG_methods = {"B_IteratorD_dict_values",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_IteratorD_dict_values_init,
-                                                                    B_IteratorD_dict_values_serialize, B_IteratorD_dict_values_deserialize, B_IteratorD_dict_values_bool,
-                                                                          B_IteratorD_dict_values_str,B_IteratorD_dict_values_str, B_IteratorD_dict_values_next};
+                                                                    B_IteratorD_dict_values_serialize, B_IteratorD_dict_values_deserialize, B_IteratorD_dict_values_next
+};
 
 // items iterator
 static bool B_IteratorD_dict_items_next(B_IteratorD_dict_items self, $WORD *out) {
@@ -904,8 +886,8 @@ B_IteratorD_dict_items B_IteratorD_dict_items_deserialize(B_IteratorD_dict_items
 
 
 struct B_IteratorD_dict_itemsG_class B_IteratorD_dict_itemsG_methods = {"B_IteratorD_dict_items",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_IteratorD_dict_items_init,
-                                                                  B_IteratorD_dict_items_serialize, B_IteratorD_dict_items_deserialize,B_IteratorD_dict_items_bool, B_IteratorD_dict_items_str,
-                                                                  B_IteratorD_dict_items_str, B_IteratorD_dict_items_next};
+                                                                  B_IteratorD_dict_items_serialize, B_IteratorD_dict_items_deserialize, B_IteratorD_dict_items_next
+};
 
 
 B_Iterator B_MappingD_dictD_values (B_MappingD_dict wit, B_dict dict) {

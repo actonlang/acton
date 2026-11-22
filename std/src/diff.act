@@ -210,18 +210,29 @@ class Op:
     def __init__(self):
         pass
 
-    def format_with_color(self) -> str:
+    def format(self) -> str:
         return ""
+
+    def format_with_color(self) -> str:
+        return self.format()
+
+extension Op(Show):
+    def __str__(self) -> str:
+        return self.format()
+    def __repr__(self) -> str:
+        base: value = self
+        return repr(base)
 
 class Gap(Op):
     def __init__(self):
         pass
 
-    def __str__(self) -> str:
-        return "..."
-
     def format_with_color(self) -> str:
         return term.grey20 + "..." + term.normal
+
+    def format(self) -> str:
+        return "..."
+
 
 # Keep operation class (for context lines)
 class Keep(Op):
@@ -234,11 +245,12 @@ class Keep(Op):
         self.index_old = index_old
         self.index_new = index_new
 
-    def __str__(self) -> str:
-        return f" {self.content}"
-
     def format_with_color(self) -> str:
         return term.grey20 + str(self) + term.normal
+
+    def format(self) -> str:
+        return f" {self.content}"
+
 
 # Delete operation class
 class Delete(Op):
@@ -249,11 +261,12 @@ class Delete(Op):
         self.content = content
         self.index_old = index_old
 
-    def __str__(self) -> str:
-        return f"-{self.content}"
-
     def format_with_color(self) -> str:
         return term.red + str(self) + term.normal
+
+    def format(self) -> str:
+        return f"-{self.content}"
+
 
 # Insert operation class
 class Insert(Op):
@@ -264,11 +277,12 @@ class Insert(Op):
         self.content = content
         self.index_new = index_new
 
-    def __str__(self) -> str:
-        return f"+{self.content}"
-
     def format_with_color(self) -> str:
         return term.green + str(self) + term.normal
+
+    def format(self) -> str:
+        return f"+{self.content}"
+
 
 def filter_operations_with_context(operations: list[Op], context_lines: int) -> list[Op]:
     """

@@ -7,9 +7,6 @@ struct $ContG_class {
     void (*__init__)($Cont);
     void (*__serialize__)($Cont, $Serial$state);
     $Cont (*__deserialize__)($Cont, $Serial$state);
-    bool (*__bool__)($Cont);
-    B_str (*__str__)($Cont);
-    B_str (*__repr__)($Cont);
     $R (*__call__)($Cont, $WORD);
 };
 struct $Cont {
@@ -18,8 +15,6 @@ struct $Cont {
 extern struct $ContG_class $ContG_methods;
 
 void $ContD___init__($Cont);
-bool $ContD___bool__($Cont);
-B_str $ContD___str__($Cont);
 void $ContD___serialize__($Cont, $Serial$state);
 $Cont $ContD___deserialize__($Cont, $Serial$state);
 
@@ -31,9 +26,6 @@ struct $procG_class {
     void (*__init__)($proc);
     void (*__serialize__)($proc, $Serial$state);
     $proc (*__deserialize__)($proc, $Serial$state);
-    bool (*__bool__)($proc);
-    B_str (*__str__)($proc);
-    B_str (*__repr__)($proc);
     $R (*__call__)($proc, $Cont, $WORD);
     $R (*__exec__)($proc, $Cont, $WORD);
 };
@@ -50,9 +42,6 @@ struct $actionG_class {
     void (*__init__)($action);
     void (*__serialize__)($action, $Serial$state);
     $action (*__deserialize__)($action, $Serial$state);
-    bool (*__bool__)($action);
-    B_str (*__str__)($action);
-    B_str (*__repr__)($action);
     $R (*__call__)($action, $Cont, $WORD);
     $R (*__exec__)($action, $Cont, $WORD);
     B_Msg (*__asyn__)($action, $WORD);
@@ -70,9 +59,6 @@ struct $mutG_class {
     void (*__init__)($mut);
     void (*__serialize__)($mut, $Serial$state);
     $mut (*__deserialize__)($mut, $Serial$state);
-    bool (*__bool__)($mut);
-    B_str (*__str__)($mut);
-    B_str (*__repr__)($mut);
     $R (*__call__)($mut, $Cont, $WORD);
     $R (*__exec__)($mut, $Cont, $WORD);
     $WORD (*__eval__)($mut, $WORD);
@@ -90,9 +76,6 @@ struct $pureG_class {
     void (*__init__)($pure);
     void (*__serialize__)($pure, $Serial$state);
     $pure (*__deserialize__)($pure, $Serial$state);
-    bool (*__bool__)($pure);
-    B_str (*__str__)($pure);
-    B_str (*__repr__)($pure);
     $R (*__call__)($pure, $Cont, $WORD);
     $R (*__exec__)($pure, $Cont, $WORD);
     $WORD (*__eval__)($pure, $WORD);
@@ -113,9 +96,6 @@ struct $action2G_class {
     void (*__init__)($action2);
     void (*__serialize__)($action2, $Serial$state);
     $action2 (*__deserialize__)($action2, $Serial$state);
-    bool (*__bool__)($action2);
-    B_str (*__str__)($action2);
-    B_str (*__repr__)($action2);
     $R (*__call__)($action2, $Cont, $WORD, $WORD);
     $R (*__exec__)($action2, $Cont, $WORD, $WORD);
     B_Msg (*__asyn__)($action2, $WORD, $WORD);
@@ -133,9 +113,6 @@ struct $action3G_class {
     void (*__init__)($action3);
     void (*__serialize__)($action3, $Serial$state);
     $action3 (*__deserialize__)($action3, $Serial$state);
-    bool (*__bool__)($action3);
-    B_str (*__str__)($action3);
-    B_str (*__repr__)($action3);
     $R (*__call__)($action3, $Cont, $WORD, $WORD, $WORD);
     $R (*__exec__)($action3, $WORD, $WORD, $WORD);
     B_Msg (*__asyn__)($action3, $WORD, $WORD, $WORD);
@@ -337,9 +314,6 @@ struct $Proc0G_class {
     void (*__init__)($proc);
     void (*__serialize__)($proc, $Serial$state);
     $proc (*__deserialize__)($proc, $Serial$state);
-    bool (*__bool__)($proc);
-    B_str (*__str__)($proc);
-    B_str (*__repr__)($proc);
     $R (*__call__)($proc, $Cont);
     $R (*__exec__)($proc, $Cont);
 };
@@ -437,9 +411,6 @@ struct $Action0G_class {
     void (*__init__)($action);
     void (*__serialize__)($action, $Serial$state);
     $action (*__deserialize__)($action, $Serial$state);
-    bool (*__bool__)($action);
-    B_str (*__str__)($action);
-    B_str (*__repr__)($action);
     $R (*__call__)($action, $Cont);
     $R (*__exec__)($action, $Cont);
     B_Msg (*__asyn__)($action);
@@ -455,9 +426,6 @@ struct $Action1G_class {
     void (*__init__)($action);
     void (*__serialize__)($action, $Serial$state);
     $action (*__deserialize__)($action, $Serial$state);
-    bool (*__bool__)($action);
-    B_str (*__str__)($action);
-    B_str (*__repr__)($action);
     $R (*__call__)($action, $Cont, $WORD);
     $R (*__exec__)($action, $Cont, $WORD);
     B_Msg (*__asyn__)($action, $WORD);
@@ -473,9 +441,6 @@ struct $Action2G_class {
     void (*__init__)($action);
     void (*__serialize__)($action, $Serial$state);
     $action (*__deserialize__)($action, $Serial$state);
-    bool (*__bool__)($action);
-    B_str (*__str__)($action);
-    B_str (*__repr__)($action);
     $R (*__call__)($action, $Cont, $WORD, $WORD);
     $R (*__exec__)($action, $Cont, $WORD, $WORD);
     B_Msg (*__asyn__)($action, $WORD, $WORD);
@@ -491,9 +456,6 @@ struct $Action3G_class {
     void (*__init__)($action);
     void (*__serialize__)($action, $Serial$state);
     $action (*__deserialize__)($action, $Serial$state);
-    bool (*__bool__)($action);
-    B_str (*__str__)($action);
-    B_str (*__repr__)($action);
     $R (*__call__)($action, $Cont, $WORD, $WORD, $WORD);
     $R (*__exec__)($action, $Cont, $WORD, $WORD, $WORD);
     B_Msg (*__asyn__)($action, $WORD, $WORD, $WORD);

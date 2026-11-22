@@ -70,9 +70,6 @@ struct B_IteratorD_strG_class {
     B_NoneType (*__init__)(B_IteratorD_str, B_str);
     void (*__serialize__)(B_IteratorD_str,$Serial$state);
     B_IteratorD_str (*__deserialize__)(B_IteratorD_str,$Serial$state);
-    bool (*__bool__)(B_IteratorD_str);
-    B_str (*__str__)(B_IteratorD_str);
-    B_str (*__repr__)(B_IteratorD_str);
     bool (*__next__)(B_IteratorD_str, $WORD *);
 };
 
@@ -112,9 +109,6 @@ struct B_IteratorD_bytearrayG_class {
     B_NoneType (*__init__)(B_IteratorD_bytearray, B_bytearray);
     void (*__serialize__)(B_IteratorD_bytearray,$Serial$state);
     B_IteratorD_bytearray (*__deserialize__)(B_IteratorD_bytearray,$Serial$state);
-    bool (*__bool__)(B_IteratorD_bytearray);
-    B_str (*__str__)(B_IteratorD_bytearray);
-    B_str (*__repr__)(B_IteratorD_bytearray);
     bool (*__next__)(B_IteratorD_bytearray, $WORD *);
 };
 
@@ -166,9 +160,6 @@ struct B_IteratorD_bytesG_class {
     B_NoneType (*__init__)(B_IteratorD_bytes, B_bytes);
     void (*__serialize__)(B_IteratorD_bytes,$Serial$state);
     B_IteratorD_bytes (*__deserialize__)(B_IteratorD_bytes,$Serial$state);
-    bool (*__bool__)(B_IteratorD_bytes);
-    B_str (*__str__)(B_IteratorD_bytes);
-    B_str (*__repr__)(B_IteratorD_bytes);
     bool (*__next__)(B_IteratorD_bytes, $WORD *);
 };
 

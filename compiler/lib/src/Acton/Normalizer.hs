@@ -25,6 +25,7 @@ import Acton.Builtin
 import Acton.Transform (termsubst)
 import Data.List
 import qualified Data.Set as Set
+import qualified Data.Map.Strict as Map
 import Pretty
 import Utils
 import Control.Monad.State.Strict
@@ -73,7 +74,8 @@ data NormX                          = NormX {
                                         lambdavarsX :: PosPar,
                                         classattrsX :: [Name],
                                         selfparamX :: Maybe Name,
-                                        builtinBoolWitnessesX :: Set.Set Name
+                                        builtinBoolWitnessesX :: Set.Set Name,
+                                        raiseWitnessesX :: Map.Map Name Expr
                                       }
 
 data ContextMark                    = DROP | LOOP | FINAL deriving (Eq,Show)
@@ -89,15 +91,59 @@ setRet t env                        = modX env $ \x -> x{ rtypeX = t }
 getRet env                          = fromJust $ rtypeX $ envX env
 
 enterFunctionScope ns env          = modX env $ \x -> x{ localScopeX = True,
-                                                          capturedLocalsX = nub (ns ++ capturedLocalsX x) }
+                                                          capturedLocalsX = nub (ns ++ capturedLocalsX x),
+                                                          raiseWitnessesX = shadowRaiseWitnesses ns (raiseWitnessesX x) }
 
 enterActorScope ns env             = modX env $ \x -> x{ localScopeX = True,
-                                                          capturedLocalsX = nub (ns ++ capturedLocalsX x) }
+                                                          capturedLocalsX = nub (ns ++ capturedLocalsX x),
+                                                          raiseWitnessesX = shadowRaiseWitnesses ns (raiseWitnessesX x) }
+
+-- A captured recipe must keep referring to its original evidence when a
+-- nested generic function or actor introduces parameters with the same name.
+shadowRaiseWitnesses ns            = Map.filterWithKey (\n e -> n `notElem` ns && null (free e `intersect` ns))
 
 advanceLocalEnv s env
   | localScopeX (envX env)          = modX env1 $ \x -> x{ capturedLocalsX = nub (bound s ++ capturedLocalsX x) }
   | otherwise                       = env1
-  where env1                        = define (envOf s) env
+  where env1                        = modX (define (envOf s) env) $ \x -> x{
+                                        raiseWitnessesX = case s of
+                                          Assign _ [PVar _ w _] rhs
+                                            | isWitness w, w `notElem` free rhs, witnessRecipe env rhs
+                                              -> Map.insert w (raiseWitness env rhs) cleared
+                                          _ -> cleared }
+        cleared                     = foldr Map.delete (raiseWitnessesX $ envX env) (bound s)
+
+-- Diagnostics are a cold path. Recreate only mechanical witness constructors
+-- at the raise itself, rather than allocating their parameter-dependent state
+-- on every successful call (notably testing.assertEqual). Boxing removes the
+-- original bindings when this was their only use. Ordinary calls stay put.
+raiseWitness env e@(Var _ (NoQ n))  = Map.findWithDefault e n (raiseWitnessesX $ envX env)
+raiseWitness env (Paren l e)        = Paren l $ raiseWitness env e
+raiseWitness env (Dot l e n)        = Dot l (raiseWitness env e) n
+raiseWitness env (Call l f p KwdNil) = Call l f (fmapArgs p) KwdNil
+  where fmapArgs (PosArg e rest)   = PosArg (raiseWitness env e) (fmapArgs rest)
+        fmapArgs p                = p
+raiseWitness _ e                   = e
+
+witnessRecipe env Var{}            = True
+witnessRecipe env (Paren _ e)      = witnessRecipe env e
+witnessRecipe env (Dot _ e _)      = witnessRecipe env e
+witnessRecipe env (Call _ f p KwdNil)
+  | Just q <- headName f,
+    q == primCAST || witnessClass q = all (witnessRecipe env) (posargs p)
+  where headName (Var _ q)         = Just q
+        headName (TApp _ f _)      = headName f
+        headName _                = Nothing
+        witnessClass q            = case tryQName q env of
+                                      Just NExt{} -> True
+                                      Just (NClass _ as _ _) ->
+                                        q `elem` [primShowOpt,primShowTuple,primBoolOpt,primBoolTuple] ||
+                                        any (isProto env . tcname . snd) as ||
+                                        case noq q of
+                                          Derived p _ -> any ((== p) . noq . tcname . snd) as
+                                          _ -> False
+                                      _ -> False
+witnessRecipe _ _                 = False
 
 advanceLocalSuite ss env           = foldl (flip advanceLocalEnv) env ss
 
@@ -119,7 +165,7 @@ setSelfParam n env                  = modX env $ \x -> x{ selfparamX = Just n }
 normEnv env0                        = setX env0 NormX{ marksX = [], rtypeX = Nothing, localScopeX = False,
                                                       capturedLocalsX = [],
                                                       lambdavarsX = PosNIL, classattrsX = [], selfparamX = Nothing,
-                                                      builtinBoolWitnessesX = Set.empty }
+                                                      builtinBoolWitnessesX = Set.empty, raiseWitnessesX = Map.empty }
 
 -- Conditions whose result only becomes known to be bool after solving may
 -- carry the builtin identity witness. Remove that call before CPS/lifting:
@@ -851,8 +897,12 @@ normInst env ts e                   = norm env e
 normBool env e                      = norm env e
 
 instance Norm Expr where
-    norm env (Raise l e t)          = do e' <- norm env e
-                                         return $ eCall (tApp (eQVar primRAISE) [conv env t]) [e']
+    norm env (Raise l e t)          = do let exceptionType = expTypeOf env e
+                                             (w,original) = unAnnot (tCon $ TC qnShow [exceptionType]) e
+                                         e' <- norm env original
+                                         w' <- norm env (raiseWitness env w)
+                                         return $ eCall (tApp (eQVar primRAISE) [conv env t])
+                                             [eCall (tApp (eQVar primExceptionShow) [conv env exceptionType]) [w',e']]
     norm env (Var l (NoQ n))
       | n `elem` classattrs env,
         Just self <- selfparam env  = return $ eDot (eVar self) n

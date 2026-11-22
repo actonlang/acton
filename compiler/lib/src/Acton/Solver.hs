@@ -759,7 +759,7 @@ reduce' eq c@(Sel _ env w (TVar _ tv) n _)
                                                  reduce (eq'++eq) cs
   | otherwise                               = tyerr n "Attribute not found"
   where attrSearch                          = findTVAttr env tv n
-        protoSearch                         = findProtoByAttr env (NoQ $ tvname tv) n
+        protoSearch                         = findProtoByAttr env (NoQ $ tvname tv) n `mplus` showBoolAttr n
 
 reduce' eq c@(Sel _ env w (TCon _ tc) n _)
   | Just wsc <- attrSearch                  = do (eq',cs) <- solveSelAttr wsc c
@@ -769,15 +769,15 @@ reduce' eq c@(Sel _ env w (TCon _ tc) n _)
   | Just t <- tExpand env tc                = reduce' eq c{ type1 = t }
   | otherwise                               = tyerr n "Attribute not found"
   where attrSearch                          = findAttr env tc n
-        protoSearch                         = findProtoByAttr env (tcname tc) n
+        protoSearch                         = findProtoByAttr env (tcname tc) n `mplus` showBoolAttr n
 
 
 reduce' eq c@(Sel info env w t1@(TTuple _ _ TUni{}) n t2)
                                             = do defer [c]; return eq
 
 reduce' eq c@(Sel info env w t1@(TTuple _ _ r) n t2)
-  | n `elem` valueKWs                       = do let e = eLambda [(px0,t1)] (eDot (eVar px0) n)
-                                                 return (mkEqn env w (wFun t1 t2) e : eq)
+  | Just p <- showBoolAttr n                = do (eq',cs) <- solveSelProto p c
+                                                 reduce (eq'++eq) cs
   | otherwise                               = do --traceM ("### Sel " ++ prstr c)
                                                  select r
   where select (TRow _ _ n' t _ r)
@@ -789,6 +789,14 @@ reduce' eq c@(Sel info env w t1@(TTuple _ _ r) n t2)
                                                  let e = eLambda [(px0,t1)] (eCallVar w' [eDot (eVar px0) attrKW])
                                                  reduce (mkEqn env w (wFun t1 t2) e : eq) [Sel info env w' (tTupleK r) n t2]
         select (TNil _ _)                   = kwdNotFound0 env info n
+
+reduce' eq c@(Sel _ _ _ t n _)
+  | isStructural t, Just p <- showBoolAttr n = do (eq',cs) <- solveSelProto p c
+                                                  reduce (eq'++eq) cs
+  where isStructural TOpt{} = True
+        isStructural TNone{} = True
+        isStructural TFun{} = True
+        isStructural _ = False
 
 --  lambda (x:(a:int,b:int,**(c:int))): x.b  ==>  lambda x: (b=x.b, a=x.a, KW=x.KW).b            ==>  lambda x: x.b
 --  lambda (x:(a:int,b:int,**(c:int))): x.c  ==>  lambda x: (c=x.KW.x, a=x.a, b=x.b, KW=x.KW).c  ==>  lambda x: x.KW.c
@@ -923,6 +931,11 @@ inheritedShowBoolWitness env t p
         parents (TVar _ v) | tvkind v == KType = findAncestry env (findTVBound env v)
         parents TFun{}     = [([],cValue)]
         parents _          = []
+
+showBoolAttr n
+  | n `elem` [strKW,reprKW] = Just pShow
+  | n == boolKW            = Just pBoolProtocol
+  | otherwise              = Nothing
 
 findProtoByAttr env cn n    = case filter hasAttr $ witsByTName env cn of
                                 [] -> Nothing

@@ -85,9 +85,6 @@ struct B_HashableD_WORDG_class B_HashableD_WORDG_methods = {
     (void (*)(B_HashableD_WORD))$default__init__,
     B_HashableD_WORDD___serialize__,
     B_HashableD_WORDD___deserialize__,
-    (bool (*)(B_HashableD_WORD))$default__bool__,
-    (B_str (*)(B_HashableD_WORD))$default__str__,
-    (B_str (*)(B_HashableD_WORD))$default__str__,
     B_HashableD_WORD_eq,
     B_HashableD_WORD_ne,
     B_HashableD_WORD_hash
