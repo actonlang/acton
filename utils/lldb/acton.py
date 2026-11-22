@@ -5,6 +5,9 @@ Features:
 - acton.bt: filtered backtrace with basic Acton demangling
 - acton.locals: print locals with Acton demangled names
 - acton.demangle: demangle a single symbol or the selected frame name
+- acton refs: show what keeps GC objects alive
+- acton jump0: show the GC objects that the workers' jump0 frames point to
+- acton outgoing: show the mailbox head and $outgoing messages of actors
 
 Load in LLDB:
   (lldb) command script import /path/to/repo/utils/lldb/acton.py
@@ -17,7 +20,9 @@ import lldb  # type: ignore
 import argparse
 import os
 import re
-from typing import List, Optional
+import struct
+from collections import Counter
+from typing import List, Optional, Tuple
 
 
 # ------------------------------
@@ -430,8 +435,11 @@ def __lldb_init_module(debugger: lldb.SBDebugger, _internal_dict) -> None:
     _add_cmd(debugger, "acton-bt", cmd_bt, "Filtered backtrace with Acton demangling")
     _add_cmd(debugger, "acton-locals", cmd_locals, "Print locals with Acton demangled names")
     _add_cmd(debugger, "acton-demangle", cmd_demangle, "Demangle a symbol or current frame")
-    # Group command with subcommands: `acton bt|locals|demangle`
-    _add_cmd(debugger, "acton", cmd_root, "Acton command group: bt | locals | demangle")
+    _add_cmd(debugger, "acton-refs", cmd_refs, "Show what keeps GC objects alive")
+    _add_cmd(debugger, "acton-jump0", cmd_jump0, "Show the GC objects that jump0 points to")
+    _add_cmd(debugger, "acton-outgoing", cmd_outgoing, "Show the $outgoing messages of actors")
+    # Group command with subcommands: `acton bt|locals|demangle|refs|jump0|outgoing`
+    _add_cmd(debugger, "acton", cmd_root, "Acton command group: bt | locals | demangle | refs | jump0 | outgoing")
     # Breakpoint helper
     _add_cmd(debugger, "acton.break", cmd_break, "Set breakpoint at Acton file:line")
     _add_cmd(debugger, "acton-bp", cmd_break, "Set breakpoint at Acton file:line")
@@ -439,7 +447,7 @@ def __lldb_init_module(debugger: lldb.SBDebugger, _internal_dict) -> None:
     # Environment-driven config (optional)
     _apply_env_overrides()
 
-    print("Acton LLDB plugin loaded. Commands: acton bt|locals|demangle; aliases: acton-bt, acton-locals, acton-demangle, acton.bt, acton.locals, acton.demangle")
+    print("Acton LLDB plugin loaded. Commands: acton bt|locals|demangle|refs|jump0|outgoing; aliases: acton-bt, acton-locals, acton-demangle, acton-refs, acton-jump0, acton-outgoing, acton.bt, acton.locals, acton.demangle")
     try:
         _register_formatters()
     except Exception:
@@ -740,6 +748,9 @@ def cmd_root(debugger: lldb.SBDebugger, command: str, exe_ctx: lldb.SBExecutionC
       acton bt [options]
       acton locals [options]
       acton demangle [name]
+      acton refs [options] ADDRESS...
+      acton jump0
+      acton outgoing ACTOR...
     """
     args = shlex_split(command)
     if not args:
@@ -755,7 +766,13 @@ def cmd_root(debugger: lldb.SBDebugger, command: str, exe_ctx: lldb.SBExecutionC
         return cmd_demangle(debugger, rest, exe_ctx, result)
     if sub in ("bp", "break"):
         return cmd_break(debugger, rest, exe_ctx, result)
-    result.PutCString(f"Unknown subcommand '{sub}'. Try: bt, locals, demangle")
+    if sub in ("refs",):
+        return cmd_refs(debugger, rest, exe_ctx, result)
+    if sub in ("jump0",):
+        return cmd_jump0(debugger, rest, exe_ctx, result)
+    if sub in ("outgoing",):
+        return cmd_outgoing(debugger, rest, exe_ctx, result)
+    result.PutCString(f"Unknown subcommand '{sub}'. Try: bt, locals, demangle, refs, jump0, outgoing")
 
 def shlex_split(s: str) -> List[str]:
     """A minimal shlex split that tolerates LLDB inputs without importing shlex eagerly."""
@@ -1092,3 +1109,500 @@ def cmd_break(debugger: lldb.SBDebugger, command: str, exe_ctx: lldb.SBExecution
 
     result.PutCString(f"No locations resolved for {file}:{line}. Ensure the binary has debug info (acton --debug) and source-map is correct.")
     result.SetStatus(lldb.eReturnStatusFailed)
+
+
+# ------------------------------
+# GC: what keeps an object alive
+# ------------------------------
+#
+# These commands read a stopped process. They take struct layouts and the
+# collector's tables from the debug info, and they ask the collector about
+# heap objects by calling its functions on the selected thread while every
+# other thread stays stopped.
+
+# Acton runs only on 64-bit little-endian machines
+WORD = 8
+
+# The search reads memory in chunks of this many bytes
+CHUNK = 1 << 24
+
+# Object kinds of the collector that need a name: GC_I_PTRFREE (0) from
+# gc_inline.h, and UNCOLLECTABLE (2) and AUNCOLLECTABLE (3) from gc_priv.h.
+# The collector does not scan the words of pointer-free objects. It never
+# collects uncollectable objects and scans those that hold pointers at every
+# collection, which makes them roots.
+GC_KIND_NAMES = {0: "pointer-free", 2: "uncollectable", 3: "uncollectable, pointer-free"}
+GC_POINTER_FREE = (0, 3)
+GC_UNCOLLECTABLE = 2
+
+
+def _is_stopped(target: lldb.SBTarget, result: lldb.SBCommandReturnObject) -> bool:
+    process = target.GetProcess()
+    if process.IsValid() and process.GetState() == lldb.eStateStopped:
+        return True
+    result.PutCString("No stopped process. Run or attach first, and stop it.")
+    result.SetStatus(lldb.eReturnStatusFailed)
+    return False
+
+
+def _stopped_opts() -> lldb.SBExpressionOptions:
+    # Run only the selected thread, so that the memory the commands read does
+    # not change under them
+    opts = _expr_opts()
+    opts.SetStopOthers(True)
+    opts.SetTryAllThreads(False)
+    return opts
+
+
+def _call(target: lldb.SBTarget, expr: str) -> int:
+    """Evaluate expr, a call of a collector function, in the stopped process"""
+    v = target.EvaluateExpression(f"(unsigned long)({expr})", _stopped_opts())
+    if v.GetError().Fail():
+        raise RuntimeError(f"{expr}: {v.GetError().GetCString()}")
+    return v.GetValueAsUnsigned()
+
+
+def _address(target: lldb.SBTarget, text: str) -> int:
+    """The value of text, a number or an expression such as self"""
+    try:
+        return int(text, 0)
+    except ValueError:
+        pass
+    frame = target.GetProcess().GetSelectedThread().GetSelectedFrame()
+    v = frame.EvaluateExpression(text, _stopped_opts())
+    if v.GetError().Fail():
+        raise RuntimeError(f"{text}: {v.GetError().GetCString()}")
+    return v.GetValueAsUnsigned()
+
+
+def _class_of(target: lldb.SBTarget, obj: int) -> str:
+    """The symbol that the first word of obj points to, which for an Acton
+    object is its class, or ? when the word is not the start of a symbol"""
+    err = lldb.SBError()
+    cls = target.GetProcess().ReadPointerFromMemory(obj, err)
+    sym = target.ResolveLoadAddress(cls).GetSymbol()
+    if err.Success() and sym.IsValid() and sym.GetStartAddress().GetLoadAddress(target) == cls:
+        return sym.GetName()
+    return "?"
+
+
+def _thread_name(t: lldb.SBThread) -> str:
+    name = f"thread #{t.GetIndexID()}"
+    return f"{name} ({t.GetName()})" if t.GetName() else name
+
+
+def _field_at(t: lldb.SBType, offset: int) -> str:
+    """The name of the field of struct type t at offset, with the offset into
+    the field when it is not 0"""
+    for f in t.GetCanonicalType().fields:
+        start = f.GetOffsetInBytes()
+        if start <= offset < start + f.GetType().GetByteSize():
+            return f.GetName() if offset == start else f"{f.GetName()}+{offset - start}"
+    return f"+{offset}"
+
+
+def _local_at(frame: lldb.SBFrame, addr: int) -> Tuple[str, str]:
+    """The name of the variable of frame that holds addr and where in it addr
+    is (an array index or an offset), or empty strings"""
+    for v in frame.GetVariables(True, True, False, False):
+        start = v.GetLoadAddress()
+        if start == lldb.LLDB_INVALID_ADDRESS or not start <= addr < start + v.GetByteSize():
+            continue
+        elem = v.GetType().GetArrayElementType().GetByteSize() if v.GetType().IsArrayType() else 0
+        if elem:
+            return v.GetName(), f"[{(addr - start) // elem}]"
+        return v.GetName(), f"+{addr - start}" if addr > start else ""
+    return "", ""
+
+
+class _Memory:
+    """A copy of the memory that the collector scans for pointers in the
+    stopped process (its heap, its static roots and the thread stacks), and
+    what each word in it belongs to"""
+
+    def __init__(self, target: lldb.SBTarget) -> None:
+        self.target = target
+        self.process = target.GetProcess()
+        self.chunks: List[Tuple[int, bytes]] = []
+        # The collector's own tables of heap sections, static roots and
+        # ranges excluded from the static roots (struct _GC_arrays in
+        # bdwgc's gc_priv.h)
+        gc = target.FindFirstGlobalVariable("GC_arrays")
+        self.hdr_type = target.FindFirstType("struct hblkhdr")
+        if not gc.IsValid() or not self.hdr_type.IsValid():
+            raise RuntimeError("No debug info for the collector: is this a debug build of an Acton program?")
+
+        def table(name: str, count: str) -> List[lldb.SBValue]:
+            entries = gc.GetChildMemberWithName(name)
+            n = gc.GetChildMemberWithName(count).GetValueAsUnsigned()
+            return [entries.GetValueForExpressionPath(f"[{i}]") for i in range(n)]
+
+        def field(v: lldb.SBValue, name: str) -> int:
+            return v.GetChildMemberWithName(name).GetValueAsUnsigned()
+
+        self.heap = [(field(s, "hs_start"), field(s, "hs_start") + field(s, "hs_bytes"))
+                     for s in table("_heap_sects", "_n_heap_sects")]
+        self.statics = [(field(r, "r_start"), field(r, "r_end"))
+                        for r in table("_static_roots", "_n_root_sets")]
+        excluded = sorted((field(e, "e_start"), field(e, "e_end"))
+                          for e in table("_excl_table", "_excl_table_entries"))
+        heap = sum(self._read(start, end) for start, end in self.heap)
+        static = 0
+        for start, end in self.statics:
+            for e_start, e_end in excluded:
+                if e_start < end and start < e_end:
+                    static += self._read(start, e_start)
+                    start = max(start, e_end)
+            static += self._read(start, end)
+        # The collector scans the registers of each thread, and its stack
+        # from the stack pointer up
+        self.stacks: List[Tuple[lldb.SBThread, int, int]] = []
+        self.registers: List[Tuple[lldb.SBThread, str, int]] = []
+        stack = 0
+        for t in self.process:
+            frame = t.GetFrameAtIndex(0)
+            info = lldb.SBMemoryRegionInfo()
+            if self.process.GetMemoryRegionInfo(frame.GetSP(), info).Success():
+                self.stacks.append((t, frame.GetSP(), info.GetRegionEnd()))
+                stack += self._read(frame.GetSP(), info.GetRegionEnd())
+            gprs = frame.GetRegisters().GetValueAtIndex(0)
+            for j in range(gprs.GetNumChildren()):
+                r = gprs.GetChildAtIndex(j)
+                # Skip the narrower views of registers, such as w0 of x0
+                if r.GetByteSize() == WORD:
+                    self.registers.append((t, r.GetName(), r.GetValueAsUnsigned()))
+        self.sizes = (heap, static, stack)
+        self.found: dict = {}       # (start, end) -> address and value of the words that point there
+        self.bases: dict = {}       # word address -> start of its GC object, or 0
+        self.objects: dict = {}     # start of a GC object -> (size, kind, marked, class)
+
+    def _read(self, start: int, end: int) -> int:
+        """Copy the readable memory between start and end, and return its size"""
+        size = 0
+        start -= start % WORD
+        while start < end:
+            info = lldb.SBMemoryRegionInfo()
+            if self.process.GetMemoryRegionInfo(start, info).Fail() or info.GetRegionEnd() <= start:
+                break
+            stop = min(end, info.GetRegionEnd())
+            if info.IsReadable():
+                for a in range(start, stop, CHUNK):
+                    err = lldb.SBError()
+                    data = self.process.ReadMemory(a, min(CHUNK, stop - a), err)
+                    if err.Success() and data:
+                        self.chunks.append((a, data))
+                        size += len(data)
+            start = stop
+        return size
+
+    def header(self) -> str:
+        heap, static, stack = (f"{n >> 20} MiB" if n >> 20 else f"{n >> 10} KiB" for n in self.sizes)
+        return (f"searched {heap} of heap, {static} of static roots, "
+                f"and the stacks ({stack}) and registers of {len(self.stacks)} threads")
+
+    def find(self, start: int, end: int) -> List[Tuple[int, int]]:
+        """The address and value of each aligned word whose value is at
+        least start and below end"""
+        if (start, end) not in self.found:
+            hits = []
+            # Search for the upper six bytes of each 64 KiB window of
+            # addresses that the range overlaps, and check the whole word
+            for window in range(start >> 16, ((end - 1) >> 16) + 1):
+                pattern = struct.pack("<Q", window << 16)[2:]
+                for chunk, data in self.chunks:
+                    i = data.find(pattern, 2)
+                    while i != -1:
+                        if i % WORD == 2:
+                            value = int.from_bytes(data[i - 2:i + 6], "little")
+                            if start <= value < end:
+                                hits.append((chunk + i - 2, value))
+                        i = data.find(pattern, i + 1)
+            self.found[(start, end)] = sorted(hits)
+        return self.found[(start, end)]
+
+    def stack_word(self, addr: int) -> Optional[Tuple[str, str]]:
+        """Where addr is on a thread's stack and the root that the word is,
+        or None when addr is on no stack"""
+        for t, sp, end in self.stacks:
+            if not sp <= addr < end:
+                continue
+            thread = _thread_name(t)
+            for f in t:
+                if f.GetSP() <= addr < f.GetCFA():
+                    func = f.GetFunctionName() or "?"
+                    name, at = _local_at(f, addr)
+                    text = f"stack of {thread}, frame #{f.GetFrameID()} {func}"
+                    root = f"stack of {thread}, {func}"
+                    if name:
+                        text += f", {name}{at}"
+                        root += f", {name}"
+                    return text, root
+            return f"stack of {thread}, sp+{addr - sp}", f"stack of {thread}"
+        return None
+
+    def static_word(self, addr: int) -> Optional[Tuple[str, str]]:
+        """Where addr is in the static roots and the root that the word is,
+        or None when addr is in no static root"""
+        for start, end in self.statics:
+            if start <= addr < end:
+                break
+        else:
+            return None
+        a = self.target.ResolveLoadAddress(addr)
+        sym = a.GetSymbol()
+        if a.GetModule().IsValid() and sym.IsValid():
+            root = f"static {a.GetModule().GetFileSpec().GetFilename()}`{sym.GetName()}"
+            return f"{root}+{addr - sym.GetStartAddress().GetLoadAddress(self.target)}", root
+        root = f"static root 0x{start:x}-0x{end:x}"
+        return f"{root}+{addr - start}", root
+
+    def object_of(self, addr: int) -> Optional[Tuple[int, int, int, bool, str]]:
+        """The start, size, kind, mark and class of the GC object that holds
+        addr, or None when addr is in no GC object"""
+        if addr not in self.bases:
+            self.bases[addr] = _call(self.target, f"((void *(*)(void *))GC_base)((void *)0x{addr:x})")
+        base = self.bases[addr]
+        if not base:
+            return None
+        if base not in self.objects:
+            # The header of the object's block (struct hblkhdr in bdwgc's
+            # gc_priv.h) holds the size and kind of its objects
+            hdr = _call(self.target, f"((void *(*)(void *))GC_find_header)((void *)0x{base:x})")
+            hdr = self.target.CreateValueFromAddress("hdr", lldb.SBAddress(hdr, self.target), self.hdr_type)
+            self.objects[base] = (
+                hdr.GetChildMemberWithName("hb_sz").GetValueAsUnsigned(),
+                hdr.GetChildMemberWithName("hb_obj_kind").GetValueAsUnsigned(),
+                _call(self.target, f"((int (*)(void *))GC_is_marked)((void *)0x{base:x})") != 0,
+                _class_of(self.target, base))
+        return (base,) + self.objects[base]
+
+
+def _describe_object(obj: Tuple[int, int, int, bool, str]) -> str:
+    _, size, kind, marked, cls = obj
+    text = f"{cls}, {size} bytes, {'marked' if marked else 'unmarked'}"
+    if kind in GC_KIND_NAMES:
+        text += f", {GC_KIND_NAMES[kind]}"
+    elif kind != 1:
+        text += f", kind {kind}"
+    return text
+
+
+def _referrers(mem: _Memory, start: int, end: int, depth: int, max_depth: int, path: List[str],
+               seen: set, lines: List[str], roots: List[Tuple[List[str], str]]) -> None:
+    """Append to lines the roots and the GC objects that hold words that
+    point between start and end, and below each marked GC object among them,
+    what points into that object, up to max_depth objects deep. Append to
+    roots each root that the walk reaches, with the path of objects to it."""
+    indent = "  " * depth
+    held: dict = {}      # description of a root -> how many words in it point here
+    holders: dict = {}   # GC object (None for free heap memory) -> its words that point here
+    for t, name, v in mem.registers:
+        if start <= v < end:
+            root = f"register {name} of {_thread_name(t)}"
+            held[root] = held.get(root, 0) + 1
+            roots.append((path, root))
+    for w, v in mem.find(start, end):
+        if start <= w < end:
+            continue    # the object points into itself
+        where = mem.stack_word(w) or mem.static_word(w)
+        if where:
+            held[where[0]] = held.get(where[0], 0) + 1
+            roots.append((path, where[1]))
+        else:
+            # The rest of the memory is heap
+            holders.setdefault(mem.object_of(w), []).append(w)
+    if not held and not holders:
+        lines.append(f"{indent}(nothing points to it)")
+    for text, n in held.items():
+        lines.append(f"{indent}<- {text}" + (f" ({n} words)" if n > 1 else ""))
+    for obj, words in holders.items():
+        count = f" ({len(words)} words)" if len(words) > 1 else ""
+        if obj is None:
+            lines.append(f"{indent}<- free heap memory{count}")
+            continue
+        base, size, kind, marked, cls = obj
+        lines.append(f"{indent}<- 0x{base:x}+{words[0] - base}{count}: {_describe_object(obj)}")
+        # The collector does not scan pointer-free objects, and unmarked ones
+        # were garbage at the last collection
+        if kind in GC_POINTER_FREE or not marked:
+            continue
+        name = f"{cls}({size})"
+        if kind == GC_UNCOLLECTABLE:
+            roots.extend([(path, f"uncollectable {name}")] * len(words))
+            continue
+        if base in seen:
+            lines.append(f"{indent}   (seen above)")
+            continue
+        seen.add(base)
+        if depth >= max_depth:
+            lines.append(f"{indent}   (depth limit)")
+            roots.append((path + [name], "depth limit"))
+            continue
+        _referrers(mem, base, base + size, depth + 1, max_depth, path + [name], seen, lines, roots)
+
+
+def cmd_refs(debugger: lldb.SBDebugger, command: str, exe_ctx: lldb.SBExecutionContext, result: lldb.SBCommandReturnObject, _internal_dict=None) -> None:
+    """acton refs: Show what keeps GC objects alive in a stopped program.
+
+    Usage: acton refs [-s|--summary] [-d|--depth N] ADDRESS...
+
+    Searches the memory that the collector scans for pointers (its heap, its
+    static roots and each thread's stack from the stack pointer up) and the
+    registers of the threads for words that point into the GC object at
+    ADDRESS (a number or an expression, such as self). A word counts when it
+    points anywhere into the object, since the collector recognizes interior
+    pointers. Each word is shown with what it is in: a GC object (with its
+    start, class, size, mark bit and kind), a stack frame or register of a
+    thread, or a static root. For each marked GC object among them, the
+    search repeats, up to N objects deep (default 10), so that each branch
+    ends at a root.
+
+    -s/--summary: instead of the tree, one line per root, which counts the
+                  words of the root that lead to ADDRESS and lists the
+                  objects in between
+
+    The mark bits are those of the last collection.
+    """
+    try:
+        parser = argparse.ArgumentParser(prog="acton refs", add_help=False)
+        parser.add_argument("-s", "--summary", action="store_true")
+        parser.add_argument("-d", "--depth", type=int, default=10)
+        parser.add_argument("addresses", nargs="+")
+        opts = parser.parse_args(shlex_split(command))
+    except SystemExit:
+        result.PutCString(cmd_refs.__doc__ or "")
+        result.SetStatus(lldb.eReturnStatusFailed)
+        return
+    target = debugger.GetSelectedTarget()
+    if not _is_stopped(target, result):
+        return
+    out: List[str] = []
+    try:
+        addrs = [_address(target, a) for a in opts.addresses]
+        mem = _Memory(target)
+        out.append(mem.header())
+        for addr in addrs:
+            obj = mem.object_of(addr)
+            if obj is None:
+                out.append(f"0x{addr:x}: not in a GC object")
+                start, end = addr, addr + 1
+            else:
+                start, end = obj[0], obj[0] + obj[1]
+                inside = f" (0x{addr:x} is at +{addr - start} in it)" if addr != start else ""
+                out.append(f"0x{start:x}{inside}: {_describe_object(obj)}")
+            lines: List[str] = []
+            roots: List[Tuple[List[str], str]] = []
+            _referrers(mem, start, end, 1, opts.depth, [], {start}, lines, roots)
+            if not opts.summary:
+                out.extend(lines)
+                continue
+            counts = Counter(" <- ".join(path + [root]) for path, root in roots)
+            if not counts:
+                out.append("   (no path to a root)")
+            for chain, n in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])):
+                out.append(f"   {n}x {chain}")
+    except RuntimeError as e:
+        out.append(str(e))
+        result.SetStatus(lldb.eReturnStatusFailed)
+    result.PutCString("\n".join(out))
+
+
+def cmd_jump0(debugger: lldb.SBDebugger, command: str, exe_ctx: lldb.SBExecutionContext, result: lldb.SBCommandReturnObject, _internal_dict=None) -> None:
+    """acton jump0: Show the GC objects that the workers' jump0 frames point to.
+
+    Usage: acton jump0
+
+    jump0 in struct WorkerCtx is the worker loop's exception frame. The first
+    continuation in each call of wt_work_cb() pushes it with a setjmp, which
+    saves the worker's registers in it, and the collector scans it while it
+    is pushed. For every worker, prints jump_top (jump0 while the frame is
+    pushed, NULL when no frame is, else the address of a try frame) and each
+    word of jump0 that points into a GC object, with the object's start and
+    class.
+    """
+    target = debugger.GetSelectedTarget()
+    if not _is_stopped(target, result):
+        return
+    process = target.GetProcess()
+    wctxs = target.FindFirstGlobalVariable("wctxs")
+    if not wctxs.IsValid() or not wctxs.GetType().IsArrayType():
+        result.PutCString("No debug info for wctxs: is this a debug build of an Acton program?")
+        result.SetStatus(lldb.eReturnStatusFailed)
+        return
+    out = []
+    try:
+        for i in range(wctxs.GetNumChildren()):
+            ctx = wctxs.GetChildAtIndex(i)
+            if not ctx.GetValueAsUnsigned():
+                continue
+            ctx = ctx.Dereference()
+            jump0 = ctx.GetChildMemberWithName("jump0")
+            start = jump0.GetLoadAddress()
+            top = ctx.GetChildMemberWithName("jump_top").GetValueAsUnsigned()
+            state = "jump0" if top == start else "NULL" if top == 0 else f"0x{top:x}"
+            err = lldb.SBError()
+            data = process.ReadMemory(start, jump0.GetByteSize(), err)
+            if not err.Success():
+                out.append(f"worker {i}: cannot read jump0 at 0x{start:x}: {err.GetCString()}")
+                continue
+            words = struct.unpack(f"<{len(data) // WORD}Q", data)
+            out.append(f"worker {i}: jump_top {state}, {sum(1 for w in words if w)} of {len(words)} words of jump0 are not 0")
+            for j, w in enumerate(words):
+                base = w and _call(target, f"((void *(*)(void *))GC_base)((void *)0x{w:x})")
+                if base:
+                    where = f"0x{w:x}" if w == base else f"0x{w:x} in 0x{base:x}+{w - base}"
+                    out.append(f"    {_field_at(jump0.GetType(), j * WORD)}: {where}, {_class_of(target, base)}")
+    except RuntimeError as e:
+        out.append(str(e))
+        result.SetStatus(lldb.eReturnStatusFailed)
+    result.PutCString("\n".join(out))
+
+
+def cmd_outgoing(debugger: lldb.SBDebugger, command: str, exe_ctx: lldb.SBExecutionContext, result: lldb.SBCommandReturnObject, _internal_dict=None) -> None:
+    """acton outgoing: Show the mailbox head and the $outgoing messages of actors.
+
+    Usage: acton outgoing ACTOR...
+
+    $outgoing holds the messages that the actor's running continuation has
+    sent, newest first, until the worker delivers them after the
+    continuation. For each ACTOR (an address or an expression, such as
+    self), prints the head of its mailbox (the field B_Msg) and each message
+    in $outgoing with its recipient ($to) and the recipient's class.
+    """
+    actors = shlex_split(command)
+    if not actors:
+        result.PutCString(cmd_outgoing.__doc__ or "")
+        result.SetStatus(lldb.eReturnStatusFailed)
+        return
+    target = debugger.GetSelectedTarget()
+    if not _is_stopped(target, result):
+        return
+    actor_type = target.FindFirstType("struct $Actor")
+    msg_type = target.FindFirstType("struct B_Msg")
+    if not actor_type.IsValid() or not msg_type.IsValid():
+        result.PutCString("No debug info for struct $Actor and struct B_Msg: is this a debug build of an Acton program?")
+        result.SetStatus(lldb.eReturnStatusFailed)
+        return
+
+    def value_at(name: str, addr: int, t: lldb.SBType) -> lldb.SBValue:
+        return target.CreateValueFromAddress(name, lldb.SBAddress(addr, target), t)
+
+    out = []
+    try:
+        for text in actors:
+            a = _address(target, text)
+            actor = value_at("actor", a, actor_type)
+            mailbox = actor.GetChildMemberWithName("B_Msg").GetValueAsUnsigned()
+            m = actor.GetChildMemberWithName("$outgoing").GetValueAsUnsigned()
+            out.append(f"0x{a:x} {_class_of(target, a)}: mailbox 0x{mailbox:x}, $outgoing 0x{m:x}")
+            seen = set()
+            while m and m not in seen:
+                seen.add(m)
+                msg = value_at("msg", m, msg_type)
+                to = msg.GetChildMemberWithName("$to").GetValueAsUnsigned()
+                out.append(f"    message 0x{m:x} to 0x{to:x} {_class_of(target, to)}")
+                m = msg.GetChildMemberWithName("$next").GetValueAsUnsigned()
+    except RuntimeError as e:
+        out.append(str(e))
+        result.SetStatus(lldb.eReturnStatusFailed)
+    result.PutCString("\n".join(out))
