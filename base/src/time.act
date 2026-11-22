@@ -746,3 +746,22 @@ class PrecisionStopwatch(object):
 
     def reset(self):
         self.start = monotonic()
+
+# Protocol adapters retain the existing class renderers during the ABI migration.
+extension DateTime(Show):
+    def __str__(self) -> str:
+        return self.__str__()
+    def __repr__(self) -> str:
+        return self.__repr__()
+
+extension Instant(Show):
+    def __str__(self) -> str:
+        return self.__str__()
+    def __repr__(self) -> str:
+        return self.__repr__()
+
+extension Duration(Show):
+    def __str__(self) -> str:
+        return self.__str__()
+    def __repr__(self) -> str:
+        return self.__repr__()

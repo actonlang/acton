@@ -261,3 +261,6 @@ B_str B_bytes_repr(B_bytes self);
 bool B_bytearray_bool(B_bytearray self);
 B_str B_bytearray_str(B_bytearray self);
 B_str B_bytearray_repr(B_bytearray self);
+
+// Normalize a formatter result to the base str class.
+B_str B_str_from_str(B_str result);

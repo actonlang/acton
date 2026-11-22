@@ -228,6 +228,29 @@ compilerTests =
           (code, out, err) <- runThing "" src
           assertEqual ("protocol receiver test should run: " ++ err) ExitSuccess code
           assertEqual "point3 should use its own extension" "(4,7)\n(5,6,7)\n" out
+  , testCase "typed Show/Bool conversions preserve native and generic paths" $ do
+        withSystemTempDirectory "acton-show-bool-conversions" $ \tmp -> do
+          let src = tmp </> "show_bool_conversions.act"
+          copyFile "../../test/regression_auto/show_bool_conversions.act" src
+          (code, generated, err) <- buildThing "--quiet --dbg-no-lines --cgen" src
+          assertEqual ("C generation should succeed:\n" ++ generated ++ err) ExitSuccess code
+          let body name = unlines $ takeWhile (/= "}") $ dropWhile
+                (not . isInfixOf ("show_bool_conversionsQ_" ++ name ++ " (")) (lines generated)
+          forM_ ["raw_int", "raw_float", "raw_tuple", "raw_dict"] $ \name -> do
+            let c = body name
+            assertBool (name ++ " should have a generated body") (not $ null c)
+            assertBool (name ++ " must not box its truth result or dispatch on a witness")
+              (not $ any (`isInfixOf` c) ["toB_int(", "toB_float(", "toB_bool(", "$class->", "G_new("])
+          assertBool "tuple truth uses the native size test" ("B_tuple_bool(" `isInfixOf` body "raw_tuple")
+          assertBool "dict truth uses its native worker" ("B_dict_bool(" `isInfixOf` body "raw_dict")
+          assertBool "inherited default rendering calls the shared native default"
+            ("B_valueD___str__(" `isInfixOf` body "inherited_display")
+          assertBool "direct str conversion still normalizes subclass results"
+            ("B_str_from_str(" `isInfixOf` body "raw_str")
+          assertBool "generic truth retains the supplied Bool witness"
+            ("$class->__bool__" `isInfixOf` body "truth")
+          assertBool "source and/or no longer use the legacy class-slot macros"
+            (not $ any (`isInfixOf` generated) ["$AND(", "$OR("])
   , testCase "builtin Show/Bool scalar witnesses remain static" $ do
         withSystemTempDirectory "acton-show-bool-builtins" $ \tmp -> do
           let src = tmp </> "show_bool_builtins.act"

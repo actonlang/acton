@@ -1,5 +1,4 @@
-# Explicit protocol calls exercise the new builtin implementations. Public
-# str/repr/bool still exercise the legacy ABI, sharing the same native workers.
+# Explicit protocol calls and ordinary typed conversions agree for builtins.
 def check[A(Show, Bool)](x: A):
     try:
         assert Show.__str__(x) == str(x)

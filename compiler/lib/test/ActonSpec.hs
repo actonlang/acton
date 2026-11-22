@@ -6231,6 +6231,30 @@ testShowBoolInheritance env0 = describe "Inherited Show and Bool witnesses" $ do
     listing `shouldSatisfy` isInfixOf "keep@[?__builtin__.int]"
     listing `shouldSatisfy` isInfixOf "keep@[(__builtin__.int, __builtin__.str)]"
 
+  it "passes supplied evidence to ordinary str, repr and bool conversion" $ do
+    typed <- typecheckSource env0 "show_bool_typed_conversions" $ unlines
+      [ "def convert[A(Show, Bool)](x: A) -> (str, str, bool):"
+      , "    return (str(x), repr(x), bool(x))" ]
+    let listing = Pretty.print typed
+    forM_ ["str@[A](W_ShowD_A", "repr@[A](W_ShowD_A", "bool@[A](W_BoolD_A"] $ \call ->
+      listing `shouldSatisfy` isInfixOf call
+    listing `shouldSatisfy` (not . isInfixOf "ShowD_value()")
+    listing `shouldSatisfy` (not . isInfixOf "BoolD_value()")
+
+  it "requires the supplied Bool evidence in generic conditions" $ do
+    typed <- typecheckSource env0 "show_bool_typed_conditions" $ unlines
+      [ "def truth[A(Bool)](x: A) -> bool:"
+      , "    if x:", "        return True", "    return False" ]
+    Pretty.print typed `shouldSatisfy` isInfixOf "if W_BoolD_A.__bool__(x):"
+
+  it "preserves the operand type of generic and/or" $ do
+    typed <- typecheckSource env0 "show_bool_typed_andor" $ unlines
+      [ "def either[A(Bool)](x: A, y: A) -> A:", "    return x or y"
+      , "def both[A(Bool)](x: A, y: A) -> A:", "    return x and y" ]
+    let listing = Pretty.print typed
+    listing `shouldSatisfy` isInfixOf "W_BoolD_A.__bool__("
+    listing `shouldSatisfy` (not . isInfixOf "BoolD_value()")
+
 -- Tests for uninitialized class attribute checking
 
 testAttributesInitialization :: Acton.Env.Env0 -> Spec

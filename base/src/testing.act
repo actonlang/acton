@@ -18,7 +18,7 @@ _test_error = AssertionError("Test error")
 def opt_str[T](s: ?T) -> str:
     return str(s) if s is not None else "None"
 
-class NotEqualError[T](AssertionError):
+class NotEqualError[T(Show)](AssertionError):
     a: ?T
     b: ?T
 
@@ -40,7 +40,7 @@ class NotEqualError[T](AssertionError):
     def __repr__(self):
         return f"{self._name()}({repr(self.a)}, {repr(self.b)}, {repr(self.error_message)}, {repr(self.print_vals)}, {repr(self.print_diff)})"
 
-class EqualError[T](AssertionError):
+class EqualError[T(Show)](AssertionError):
     a: ?T
     b: ?T
 
@@ -60,7 +60,7 @@ class EqualError[T](AssertionError):
     def __repr__(self):
         return f"{self._name()}({repr(self.a)}, {repr(self.b)}, {repr(self.error_message)}, {repr(self.print_vals)})"
 
-class NotTrueError[T](AssertionError):
+class NotTrueError[T(Show)](AssertionError):
     a: ?T
 
     def __init__(self, a, msg: ?str=None, print_vals: bool=True):
@@ -77,7 +77,7 @@ class NotTrueError[T](AssertionError):
     def __repr__(self):
         return f"{self._name()}({repr(self.a)}, {repr(self.error_message)}, {repr(self.print_vals)})"
 
-class NotFalseError[T](AssertionError):
+class NotFalseError[T(Show)](AssertionError):
     a: ?T
 
     def __init__(self, a, msg: ?str=None, print_vals: bool=True):
@@ -94,7 +94,7 @@ class NotFalseError[T](AssertionError):
     def __repr__(self):
         return f"{self._name()}({repr(self.a)}, {repr(self.error_message)}, {repr(self.print_vals)})"
 
-class NotNoneError[T](AssertionError):
+class NotNoneError[T(Show)](AssertionError):
     a: ?T
 
     def __init__(self, a, msg: ?str=None, print_vals: bool=True):
@@ -111,7 +111,7 @@ class NotNoneError[T](AssertionError):
     def __repr__(self):
         return f"{self._name()}({repr(self.a)}, {repr(self.error_message)}, {repr(self.print_vals)})"
 
-class NoneError[T](AssertionError):
+class NoneError[T(Show)](AssertionError):
     a: ?T
 
     def __init__(self, a, msg: ?str=None, print_vals: bool=True):
@@ -129,7 +129,7 @@ class NoneError[T](AssertionError):
     def __repr__(self):
         return f"{self._name()}({repr(self.a)}, {repr(self.error_message)}, {repr(self.print_vals)})"
 
-class NotInError[T,U](AssertionError):
+class NotInError[T(Show),U(Show)](AssertionError):
     a: ?T
     b: ?U
 
@@ -149,7 +149,7 @@ class NotInError[T,U](AssertionError):
     def __repr__(self):
         return f"{self._name()}({repr(self.a)}, {repr(self.b)}, {repr(self.error_message)}, {repr(self.print_vals)})"
 
-class InError[T,U](AssertionError):
+class InError[T(Show),U(Show)](AssertionError):
     a: ?T
     b: ?U
 
@@ -169,7 +169,7 @@ class InError[T,U](AssertionError):
     def __repr__(self):
         return f"{self._name()}({repr(self.a)}, {repr(self.b)}, {repr(self.error_message)}, {repr(self.print_vals)})"
 
-class NotIsError[T](AssertionError):
+class NotIsError[T(Show)](AssertionError):
     a: T
     b: T
 
@@ -189,7 +189,7 @@ class NotIsError[T](AssertionError):
     def __repr__(self):
         return f"{self._name()}({repr(self.a)}, {repr(self.b)}, {repr(self.error_message)}, {repr(self.print_vals)})"
 
-class IsError[T](AssertionError):
+class IsError[T(Show)](AssertionError):
     a: T
     b: T
 
@@ -217,7 +217,7 @@ class NotRaisesError(AssertionError):
     def __repr__(self):
         return f"{self._name()}({repr(self.error_message)}, {repr(self.print_vals)})"
 
-class IsInstanceError[T](AssertionError):
+class IsInstanceError[T(Show)](AssertionError):
     a: ?T
     t: str
 
@@ -230,7 +230,7 @@ class IsInstanceError[T](AssertionError):
     def __repr__(self):
         return f"{self._name()}({repr(self.a)}, {repr(self.t)}, {repr(self.error_message)}, {repr(self.print_vals)})"
 
-class NotIsInstanceError[T](AssertionError):
+class NotIsInstanceError[T(Show)](AssertionError):
     a: ?T
     t: str
 
@@ -244,7 +244,7 @@ class NotIsInstanceError[T](AssertionError):
         return f"{self._name()}({repr(self.a)}, {repr(self.t)}, {repr(self.error_message)}, {repr(self.print_vals)})"
 
 
-def assertEqual[T(Eq)](a: ?T, b: ?T, msg: ?str=None, print_vals: bool=True, print_diff: bool=True):
+def assertEqual[T(Eq,Show)](a: ?T, b: ?T, msg: ?str=None, print_vals: bool=True, print_diff: bool=True):
     """Assert that two values are equal
     """
     if ((a is None and b is not None)
@@ -252,44 +252,44 @@ def assertEqual[T(Eq)](a: ?T, b: ?T, msg: ?str=None, print_vals: bool=True, prin
         or (a is not None and b is not None and not (a == b))):
         raise NotEqualError(a, b, msg, print_vals, print_diff)
 
-def assertNotEqual[T(Eq)](a: ?T, b: ?T, msg: ?str=None, print_vals: bool=True):
+def assertNotEqual[T(Eq,Show)](a: ?T, b: ?T, msg: ?str=None, print_vals: bool=True):
     """Assert that two values are not equal
     """
     if ((a is None and b is None)
         or (a is not None and b is not None and a == b)):
         raise EqualError(a, b, msg, print_vals)
 
-def assertTrue(a, msg: ?str=None, print_vals: bool=True):
+def assertTrue[T(Bool,Show)](a: T, msg: ?str=None, print_vals: bool=True):
     """Assert that the boolean evaluation of a value is True
     """
     if not bool(a):
         raise NotTrueError(a, msg, print_vals)
 
-def assertFalse(a, msg: ?str=None, print_vals: bool=True):
+def assertFalse[T(Bool,Show)](a: T, msg: ?str=None, print_vals: bool=True):
     """Assert that the boolean evaluation of a value is False
     """
     if bool(a):
         raise NotFalseError(a, msg, print_vals)
 
-def assertIs[T(Identity)](a: T, b: T, msg: ?str=None, print_vals: bool=True):
+def assertIs[T(Identity,Show)](a: T, b: T, msg: ?str=None, print_vals: bool=True):
     """Assert that two values are the same identity, i.e. the same object
     """
     if not (a is b):
         raise NotIsError(a, b, msg)
 
-def assertIsNot[T(Identity)](a: T, b: T, msg: ?str=None, print_vals: bool=True):
+def assertIsNot[T(Identity,Show)](a: T, b: T, msg: ?str=None, print_vals: bool=True):
     """Assert that two values are not the same identity, i.e. different objects
     """
     if a is b:
         raise IsError(a, b, msg)
 
-def assertNone(a, msg: ?str=None, print_vals: bool=True):
+def assertNone[T(Show)](a: ?T, msg: ?str=None, print_vals: bool=True):
     """Assert that a value equals None
     """
     if not (a is None):
         raise NotNoneError(a, msg, print_vals)
 
-def assertNotNone(a, msg: ?str=None, print_vals: bool=True):
+def assertNotNone[T(Show)](a: ?T, msg: ?str=None, print_vals: bool=True):
     """Assert that a value does not equal None
     """
     if not (a is not None):
@@ -756,3 +756,82 @@ class EnvTest(Test):
             self.fn(EnvT(report_result, env, log_handler, tags, random, loop, request_timeout))
         except AbortTest:
             pass
+
+# Protocol adapters retain the existing class renderers during the ABI migration.
+extension NotEqualError[T(Show)](Show):
+    def __str__(self) -> str:
+        return self.__str__()
+    def __repr__(self) -> str:
+        return self.__repr__()
+
+extension EqualError[T(Show)](Show):
+    def __str__(self) -> str:
+        return self.__str__()
+    def __repr__(self) -> str:
+        return self.__repr__()
+
+extension NotTrueError[T(Show)](Show):
+    def __str__(self) -> str:
+        return self.__str__()
+    def __repr__(self) -> str:
+        return self.__repr__()
+
+extension NotFalseError[T(Show)](Show):
+    def __str__(self) -> str:
+        return self.__str__()
+    def __repr__(self) -> str:
+        return self.__repr__()
+
+extension NotNoneError[T(Show)](Show):
+    def __str__(self) -> str:
+        return self.__str__()
+    def __repr__(self) -> str:
+        return self.__repr__()
+
+extension NoneError[T(Show)](Show):
+    def __str__(self) -> str:
+        return self.__str__()
+    def __repr__(self) -> str:
+        return self.__repr__()
+
+extension NotInError[T(Show),U(Show)](Show):
+    def __str__(self) -> str:
+        return self.__str__()
+    def __repr__(self) -> str:
+        return self.__repr__()
+
+extension InError[T(Show),U(Show)](Show):
+    def __str__(self) -> str:
+        return self.__str__()
+    def __repr__(self) -> str:
+        return self.__repr__()
+
+extension NotIsError[T(Show)](Show):
+    def __str__(self) -> str:
+        return self.__str__()
+    def __repr__(self) -> str:
+        return self.__repr__()
+
+extension IsError[T(Show)](Show):
+    def __str__(self) -> str:
+        return self.__str__()
+    def __repr__(self) -> str:
+        return self.__repr__()
+
+extension NotRaisesError(Show):
+    def __str__(self) -> str:
+        return self.__str__()
+    def __repr__(self) -> str:
+        return self.__repr__()
+
+extension IsInstanceError[T(Show)](Show):
+    def __str__(self) -> str:
+        return self.__str__()
+    def __repr__(self) -> str:
+        return self.__repr__()
+
+extension NotIsInstanceError[T(Show)](Show):
+    def __str__(self) -> str:
+        return self.__str__()
+    def __repr__(self) -> str:
+        return self.__repr__()

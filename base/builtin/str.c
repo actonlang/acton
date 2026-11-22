@@ -1021,8 +1021,7 @@ void escape_str(unsigned char *out, unsigned char *in, int64_t outlen, int64_t i
 
 // General methods //////////////////////////////////////////////////////////////
 
-B_str B_strG_new(B_value s) {
-    B_str res = s == B_None ? B_None_str : s->$class->__str__(s);
+B_str B_str_from_str(B_str res) {
     if (res->$class == &B_strG_methods)
         return res;
     B_str self = acton_malloc(sizeof(struct B_str));
@@ -1031,8 +1030,12 @@ B_str B_strG_new(B_value s) {
     return self;
 }
 
-B_NoneType B_strD___init__(B_str self, B_value s) {
-    B_str res = s == B_None ? B_None_str : s->$class->__str__(s);
+B_str B_strG_new(B_Show witness, $WORD s) {
+    return B_str_from_str(s == B_None ? B_None_str : witness->$class->__str__(witness, s));
+}
+
+B_NoneType B_strD___init__(B_str self, B_Show witness, $WORD s) {
+    B_str res = s == B_None ? B_None_str : witness->$class->__str__(witness, s);
     self->nchars = res->nchars;
     self->nbytes = res->nbytes;
     self->str = res->str;
@@ -4339,8 +4342,8 @@ B_NoneType B_bytes_hash(B_bytes a, B_hasher h) {
 
 // Builtin functions involving strings /////////////////////////////////////////////
 
-B_str B_ascii(B_value v) {
-    B_str s  = v->$class->__str__(v);
+B_str B_ascii(B_Show witness, $WORD v) {
+    B_str s = witness->$class->__str__(witness, v);
     struct byte_counts bs = byte_count(s->str, s->nbytes);
     //    printf("%d %d %d %d %d %d\n",bs.escaped,bs.squotes,bs.dquotes,bs.printable,bs.non_printable,bs.non_ascii);
     bool use_single_quotes = !(bs.dquotes==0 && bs.squotes>0);
@@ -4708,7 +4711,7 @@ B_str $FORMAT_len(const char *format, int64_t nbytes, ...) {
             if (conv == 'r')
                 s = B_str_repr(s);
             else if (conv == 'a')
-                s = B_ascii((B_value)s);
+                s = B_ascii((B_Show)B_ShowD_strG_witness, s);
             format_str(&b, s, left, width, prec);
         } else {
             if (width >= 0)

@@ -1,5 +1,5 @@
-# First migration checkpoint: explicit Show/Bool calls use protocol witnesses;
-# public str/repr and truth operators still use their legacy class methods.
+# Inherited defaults and explicit overrides work through both protocol calls
+# and the ordinary typed conversion functions.
 
 class Plain:
     def __init__(self):
@@ -136,7 +136,7 @@ actor main(env):
     log: list[int] = []
     assert truth(make_plain(log))
     assert log == [1]
-    # Retain representative legacy behavior until the later ABI cutover.
+    # Typed conversion and truth operations preserve builtin behavior.
     assert not 0
     assert not ""
     assert not []

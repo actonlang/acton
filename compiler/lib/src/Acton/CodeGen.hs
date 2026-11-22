@@ -2818,6 +2818,13 @@ genBoxed env t e                    = text ("toB_"++render(pretty (noq (tcname(t
 -- expression appears once, including when comparisons reverse their operands.
 -- Base routines perform the real work. The receiver-returning inplace
 -- adapters are header-inline, so they introduce no out-of-line call layer.
+genBuiltinCall env call w (PosArg e PosNil)
+  | OptionalShow ctype <- bwABI w =
+      let native = text (bwCName w) <> parens (parens (text ctype) <> text "$show_value")
+          -- str's own formatter returns its input, which can be a subclass.
+          result = if bwType w == qnStr then text "B_str_from_str" <> parens native else native
+      in text "({ $WORD $show_value =" <+> gen env e <> semi <+>
+         text "$show_value ?" <+> result <+> text ": B_None_str; })"
 genBuiltinCall env call w p = scope $ result $ negateResult $ text (bwCName w) <> parens (commaSep id args)
   where actuals = zip [0..] (posargs p)
         slices = [ (i,ds,d) | (i,e) <- actuals, Just i == builtinSliceArgument w,
@@ -2840,6 +2847,8 @@ genBuiltinCall env call w p = scope $ result $ negateResult $ text (bwCName w) <
             ListInplace -> cast "B_list_base" e
             NativeArgs -> gen env e
             NativeCompare _ -> gen env e
+            BoxedValue ty -> cast ty e
+            OptionalShow ty -> cast ty e
             DictBase -> cast "B_dict_base" e
             SetTable -> table e
             SetObject -> cast "B_set_base" e

@@ -81,7 +81,7 @@ class float (atom):
         NotImplemented
 
 class bool (atom):
-    def __init__(self, val: value) -> None:
+    def __init__[A(Bool)](self, val: A) -> None:
         NotImplemented
 
 class slice(value):
@@ -155,7 +155,7 @@ class range(Iterator[int]):
         NotImplemented
 
 class str (atom):
-    def __init__     (self, val: ?value=None) -> None:
+    def __init__[A(Show)](self, val: ?A=None) -> None:
         NotImplemented
     def capitalize   (self) -> str:
         NotImplemented
@@ -902,35 +902,16 @@ extension iset[A(Hashable,Show)] (Show):
 extension iset[A(Hashable)] (Bool):
     NotImplemented
 
-# Exception formatters are written in Acton. Their legacy class methods
-# forward here until the class-slot cutover.
+# Native formatters keep these statically allocated witnesses stateless.
+# In particular, they do not capture compiler-generated formatting evidence.
 extension BaseException (Show):
-    def __str__(self):
-        return f"{self._name()}: {self.error_message}"
-
-    def __repr__(self):
-        return "{self._name()}({self.error_message.__repr__()})"
-
+    NotImplemented
 extension IndexError (Show):
-    def __str__(self):
-        return f"{self._name()}: {self.error_message}, index: {self.index}"
-
-    def __repr__(self):
-        return "{self._name()}({self.index}, {self.error_message.__repr__()})"
-
+    NotImplemented
 extension KeyError (Show):
-    def __str__(self):
-        return f"{self._name()}: {self.error_message}, key: {str(self.key)}"
-
-    def __repr__(self):
-        return '{self._name()}({self.key.__repr__()}, {self.error_message.__repr__()})'
-
+    NotImplemented
 extension FileNotFoundError (Show):
-    def __str__(self):
-        return f"{self._name()}: No such file or directory: '{self.filename}'"
-
-    def __repr__(self):
-        return '{self._name()}({self.filename.__repr__()})'
+    NotImplemented
 
 ## Number protocol extensions ######################################################################
 
@@ -1376,19 +1357,19 @@ _stdin_bytes_on_error_error = ValueError("on_error must not be set when on_stdin
 def abs(x : Number) -> Real:
     return x.__abs__()
 
-def all[A(value)](it: Iterable[A]) -> bool:
+def all[A(Bool)](it: Iterable[A]) -> bool:
     for x in it:
         if bool(x) == False:
             return False
     return True
 
-def any[A(value)](it: Iterable[A]) -> bool:
+def any[A(Bool)](it: Iterable[A]) -> bool:
     for x in it:
         if bool(x) == True:
             return True
     return False
 
-def ascii(x : value) -> str:
+def ascii[A(Show)](x: A) -> str:
     NotImplemented
 
 def bin(x: Integral) -> str:
@@ -1575,10 +1556,8 @@ def print(*args, sep: str=" ", end: str="\n", err: bool=False, flush: bool=False
     """
     NotImplemented
 
-def repr(x: ?value):
-    if x is not None:
-        return x.__repr__()
-    return str(None)
+def repr[A(Show)](x: A) -> str:
+    return Show.__repr__(x)
 
 def reversed[A](seq : Sequence[A]) -> Iterator[A]:
     return seq.__reversed__()

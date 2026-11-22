@@ -341,6 +341,7 @@ unAnnot t_ann (Call _ (TApp _ (Var _ n) [t,_]) (PosArg w (PosArg e PosNil)) KwdN
 -- NativeCompare uses the sign of an ordinary C comparison function's result.
 data BuiltinCallABI = DictBase | SetTable | SetObject | SetBuild QName
                     | ListBase | ListBuild QName | ListInplace | NativeArgs | NativeCompare String
+                    | BoxedValue String | OptionalShow String
 
 data BuiltinWorker = BuiltinWorker {
     bwType :: QName, bwMethod :: Name, bwArity :: Int,
@@ -356,7 +357,49 @@ builtinCallPrimitive q = Map.lookup q builtinCallPrimitiveMap
 hashContainerMethodMap = Map.fromList [ ((bwType w,bwMethod w,bwArity w),w) | w <- hashContainerWorkers ]
 builtinCallPrimitiveMap = Map.fromList [ (bwName w,w) | w <- builtinCallWorkers ]
 
-builtinCallWorkers = hashContainerWorkers ++ listBaseWorkers ++ numericNativeWorkers ++ textNativeWorkers
+builtinCallWorkers = hashContainerWorkers ++ listBaseWorkers ++ numericNativeWorkers ++ textNativeWorkers ++
+                     map snd showBoolWorkers ++ map optionalShowWorker (filter ((== strKW) . bwMethod . snd) showBoolWorkers)
+
+-- Key by implementation identity, not the receiver's apparent type. Inherited
+-- root defaults consequently work for any user class, while a supplied generic
+-- witness or a user override cannot be replaced merely because Self is known.
+showBoolWorker impl attr = Map.lookup (impl,attr) showBoolMethodMap
+showBoolMethodMap = Map.fromList [((q,bwMethod w),w) | (q,w) <- showBoolWorkers]
+isShowBoolImplementation q = Map.member q showBoolImplementationMap
+showBoolImplementationMap = Map.fromList [(q,()) | (q,_) <- showBoolWorkers]
+
+showBoolWorkers = concatMap scalar
+    ["value","object","int","i32","i16","i8","u64","u32","u16","u8","u1",
+     "bigint","float","bool","complex","slice","range","hasher","bitarray","bitset","str","bytes","bytearray"] ++
+    [ make (gBuiltin (Derived nBoolProtocol (name n))) (gBuiltin $ name n) boolKW ("B_" ++ n ++ "_bool") ("B_" ++ n)
+      | n <- ["list","ilist","array","dict","idict","set","iset"] ] ++
+    [ make primBoolTuple qnValue boolKW "B_tuple_bool" "B_tuple" ]
+  where scalar n =
+          let q = gBuiltin (name n)
+              root = n `elem` ["value","object"]
+              native attr = "B_" ++ (if n == "object" then "value" else n) ++ (if root then "D_" ++ nstr attr else
+                              if attr == boolKW then "_bool" else if attr == strKW then "_str" else "_repr")
+              showImpl = gBuiltin (Derived nShow (name n))
+              boolImpl = gBuiltin (Derived nBoolProtocol (name n))
+              ctype = "B_" ++ (if n == "object" then "value" else n)
+          in [ make showImpl q strKW (native strKW) ctype,
+               make showImpl q reprKW (if n == "object" then "B_valueD___repr__" else native reprKW)
+                    (if n == "object" then "B_value" else "B_" ++ n),
+               make boolImpl q boolKW (native boolKW) ctype ]
+        make impl q attr native ctype = (impl, BuiltinWorker q attr 1
+            (GName mPrim $ Derived (noq impl) (Derived (name "native") attr)) schema
+            native (BoxedValue ctype) False False [] 1)
+          where a = TV KType (name "A")
+                -- A is deliberately generic: native scalar formatters consume
+                -- a box. Only truth of known unboxable scalars is lowered raw.
+                schema = tSchema [qbind a] $ tFun fxPure (posRow (tVar a) posNil) kwdNil
+                           (if attr == boolKW then TUnboxed NoLoc tBool else tStr)
+
+-- str's optional/default argument must be evaluated once and checked for None
+-- before calling a statically selected native formatter. CodeGen also copies
+-- a subclass result from str's identity formatter to the base str class.
+optionalShowWorker (_,w) = w{ bwName = GName mPrim (Derived (noq $ bwName w) initKW),
+                             bwABI = case bwABI w of BoxedValue t -> OptionalShow t }
 
 -- Reuse the existing boxing schemas. List and ilist differ only in the result
 -- class for allocating operations; input Iterable witnesses remain explicit.

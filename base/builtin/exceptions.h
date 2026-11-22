@@ -215,3 +215,13 @@ $RET $RETG_new(B_value);
 
 $WORD $raiseValueError(B_str str);
  
+
+// Witness-free native exception formatters.
+B_str B_BaseException_str(B_BaseException self);
+B_str B_BaseException_repr(B_BaseException self);
+B_str B_IndexError_str(B_IndexError self);
+B_str B_IndexError_repr(B_IndexError self);
+B_str B_KeyError_str(B_KeyError self);
+B_str B_KeyError_repr(B_KeyError self);
+B_str B_FileNotFoundError_str(B_FileNotFoundError self);
+B_str B_FileNotFoundError_repr(B_FileNotFoundError self);

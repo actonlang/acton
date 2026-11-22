@@ -680,6 +680,11 @@ reduce' eq c@(Proto _ env w t@(TCon _ tc) p)
   | Just t' <- tExpand env tc               = reduce' eq c{ type1 = t' }
   where witSearch                           = findWitness env t p
 
+reduce' eq c@(Proto _ env w t@TFun{} p)
+  | Just (parent,[wit]) <- inheritedShowBoolWitness env t p
+                                            = do (eq',cs) <- solveInheritedShowBool env parent wit w t p
+                                                 reduce (eq'++eq) cs
+
 reduce' eq c@(Proto _ env w t@(TFX _ tc) p)
   | [wit] <- witSearch                      = do (eq',cs) <- solveProto env wit w t p
                                                  reduce (eq'++eq) cs
@@ -862,6 +867,7 @@ inheritedShowBoolWitness env t p
   | otherwise               = Nothing
   where parents (TCon _ c) = drop 1 $ findAncestry env c
         parents (TVar _ v) = findAncestry env (findTVBound env v)
+        parents TFun{}     = [([],cValue)]
         parents _          = []
 
 findProtoByAttr env cn n    = case filter hasAttr $ witsByTName env cn of
@@ -979,10 +985,13 @@ cast' env info (TUni _ tv1) (TUni _ tv2)
 cast' env info t1@(TUni _ tv) t2            = defer [Cast info env t1 t2]
 cast' env info t1 t2@(TUni _ tv)            = defer [Cast info env t1 t2]
 
+-- Promote A to ?A before consulting A's nominal bound. Widening A to value
+-- first loses both the rigid type and any supplied protocol evidence when
+-- inferring an optional argument (notably str's defaultable argument).
+cast' env info t1 (TOpt _ t2)               = cast env info t1 t2                -- Only matches when t1 is NOT a univar
+
 cast' env info t1@(TVar _ tv) t2            = cast' env info (tCon tc) t2
   where tc                                  = findTVBound env tv
-
-cast' env info t1 (TOpt _ t2)               = cast env info t1 t2                -- Only matches when t1 is NOT a univar
 
 cast' env info t1 t2                        = noRed0 env (Cast info env t1 t2)
 

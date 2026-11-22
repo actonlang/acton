@@ -17,8 +17,8 @@ static struct B_str false_str = {&B_strG_methods, 5, 5, (unsigned char *)"False"
 
 // Serialization ///////////////////////////////////////////////////////////////////////
 
-B_NoneType B_boolD___init__(B_bool self, B_value s){
-    self->val = B_boolG_new(s);
+B_NoneType B_boolD___init__(B_bool self, B_Bool witness, $WORD s){
+    self->val = B_boolG_new(witness, s);
     return B_None;
 }
 
@@ -45,8 +45,8 @@ B_bool B_boolD___deserialize__(B_bool self, $Serial$state state) {
     return toB_bool((long)$val_deserialize(state));
 }
 
-bool B_boolG_new(B_value s) {
-    return  s->$class->__bool__(s);
+bool B_boolG_new(B_Bool witness, $WORD s) {
+    return witness->$class->__bool__(witness, s);
 }
 
 B_bool toB_bool(bool b) {
