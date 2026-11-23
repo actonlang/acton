@@ -1288,7 +1288,7 @@ main = do
               tyPath = dir </> "iface_version.tydb"
               nmod = I.NModule [] [] Nothing
               tmod = S.Module mn [] Nothing []
-          InterfaceFiles.writeFileWithVersion (map (+ 1) S.version) tyPath "" "" "" Nothing [] [] [] [] [] [] Nothing nmod tmod
+          InterfaceFiles.writeFileWithVersion (map (+ 1) S.version) "" tyPath "" "" "" Nothing [] [] [] [] [] [] Nothing nmod tmod
           InterfaceFiles.readNameHashesMaybe tyPath `shouldReturn` Nothing
           InterfaceFiles.readFileMaybe tyPath `shouldReturn` Nothing
 
@@ -2058,6 +2058,7 @@ main = do
           stored <- InterfaceFiles.readFile directTy
           InterfaceFiles.writeFileWithVersion
             (map (+ 1) S.version)
+            (InterfaceFiles.storedCompiler stored)
             directTy
             (InterfaceFiles.storedSourceHash stored)
             (InterfaceFiles.storedPubHash stored)

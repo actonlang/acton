@@ -33,6 +33,16 @@ and, unless --dbg-no-lines is given, its source hash, which the #line
 directives follow.  The test result cache keys each test on its
 name's impl hash.
 
+Every .tydb and generated file also records the build of the compiler
+that wrote it (GlobalOptions.compilerIdentity, stamped on the first line of
+a file), and a build trusts only those of its own build
+and not older than its binary (trustsCompiler, compilerNewerThan).  Another
+build may write other outputs from the same inputs, which no hash shows,
+and its binary can be older than what it wrote: a release, or a build that
+the user switches back to.  A build is named by its version, which make
+stamps with the build time of a development build.  acton and
+lsp-server-acton share it, and with it the out/ directory of a project.
+
 The code of a module's NotImplemented bodies is the hand-written .ext.c
 next to its source, which its generated .c includes, and the project files
 that it includes in turn (Acton.ExtSource).  The recorded source hash covers
@@ -72,12 +82,12 @@ them.  A discovered module is a CompileTask:
   ActonTask       its parsed source
   ParseErrorTask  the diagnostics of a source that does not parse
 
-A header can be trusted when the .tydb exists, its header reads and the
-compiler binary is not newer than the .tydb (--ignore-compiler-version
-skips that check).  It is trusted without reading the source when the
-module has no .ext.c, the source's stat (device, inode, size, mtime,
-ctime) equals the recorded one and its mtime is strictly older than the
-.tydb's.  Strictly, because on a file system with coarse timestamps a
+A header can be trusted when the .tydb exists, its header reads, this
+build of the compiler wrote it and the compiler binary is not newer than
+the .tydb (--ignore-compiler-version skips the last two checks).  It is
+trusted without reading the source when the module has no .ext.c, the
+source's stat (device, inode, size, mtime, ctime) equals the recorded one
+and its mtime is strictly older than the .tydb's.  Strictly, because on a file system with coarse timestamps a
 changed source and the .tydb written from its previous version can show
 the same time.  Otherwise it is trusted when the content hash of the
 source, with that of its .ext.c, equals the recorded one, and
@@ -125,12 +135,13 @@ runs the front passes (compileModule).  A TyTask is checked in this order:
   4. A module whose code is generated whole, in a build without
      alternative output, compares the tags of its .c, .h and closure
      support file with its codegen hash, and generates its code again from
-     the stored typed module when they differ or a file is older than the
-     compiler binary (refreshCodegen).  A build that wrote the .tydb but
-     not the code, such as acton build --sigs or an interrupted build,
-     thus leaves no stale code behind.  __builtin__, which only the base
-     library compiles, is the exception: its code is checked only when its
-     front passes run (compileBuiltin).
+     the stored typed module when they differ, another build of the
+     compiler wrote a file or a file is older than the compiler binary
+     (refreshCodegen).  A build that wrote the .tydb but not the code, such
+     as acton build --sigs or an interrupted build, thus leaves no stale
+     code behind.  __builtin__, which only the base library compiles, is
+     the exception: its code is checked only when its front passes run
+     (compileBuiltin).
   5. Otherwise the .tydb is used as it is (reuse).
 
 Under --only-build, every module's stored interface is trusted and no
@@ -1319,16 +1330,17 @@ buildGlobalTasks sp gopts opts projects pathsByProject seedFiles = do
             paths = pathsByProject M.! tkProj key
 
 -- | A module in the cheapest form discovery can use.  Its .tydb header is
--- reused when the compiler binary is not newer than the .tydb and the source
--- is unchanged: by recorded stat with the source older than the .tydb, else by
--- content hash (then the recorded stat is refreshed in place).  An editor
--- overlay is compared by content only, and so is a module with an .ext.c,
+-- reused when this build of the compiler wrote the .tydb and its binary is
+-- not newer than the .tydb (reusableHeader), and the source is unchanged: by
+-- recorded stat with the source older than the .tydb, else by content hash
+-- (then the recorded stat is refreshed in place).  An editor overlay is
+-- compared by content only, and so is a module with an .ext.c,
 -- whose content hash the recorded one covers, or one that had an .ext.c
 -- when its .tydb was written (recordedSourceMeta).  Otherwise only the
 -- source header is parsed.  Reading can write: the stat refresh.
 readModuleTask :: Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -> Paths -> A.ModName -> FilePath -> IO CompileTask
 readModuleTask sp gopts opts paths mn file = do
-    reusable <- reusableHeader opts tydb
+    reusable <- reusableHeader gopts opts tydb
     case reusable of
       Nothing               -> fromSource =<< readModuleSource sp paths mn file
       Just (header, tydbNs) -> do
@@ -1375,21 +1387,33 @@ readModuleTask sp gopts opts paths mn file = do
         return (TyTask header)
 
 -- | The .tydb header and the .tydb's modification time, unless the .tydb is
--- missing, its header unreadable or the compiler binary newer.  A failure to
--- stat the .tydb itself propagates.
-reusableHeader :: C.CompileOptions -> FilePath -> IO (Maybe (InterfaceFiles.HeaderSummary, Integer))
-reusableHeader opts tydb = do
+-- missing, its header unreadable, another build of the compiler wrote it or
+-- the compiler binary is newer.  A failure to stat the .tydb itself
+-- propagates.
+reusableHeader :: C.GlobalOptions -> C.CompileOptions -> FilePath -> IO (Maybe (InterfaceFiles.HeaderSummary, Integer))
+reusableHeader gopts opts tydb = do
     header <- InterfaceFiles.tryReadHeaderSummary tydb
     case header of
-      Nothing -> return Nothing
-      Just h  -> do
+      Just h | trustsCompiler gopts opts (InterfaceFiles.summaryCompiler h) -> do
         tydbNs <- InterfaceFiles.interfaceModifiedTimeNs tydb
         newer  <- compilerNewerThan opts tydbNs
         return (if newer then Nothing else Just (h, tydbNs))
+      _ -> return Nothing
+
+-- | Whether an output that the given build of the compiler wrote (a .tydb
+-- or generated code) can be trusted: when this build
+-- wrote it, or under --ignore-compiler-version.  Another build may write
+-- other outputs from the same inputs, which no hash shows, and its binary
+-- can be older than what it wrote: a release, or a build the user switches
+-- back to.  The build is named by its version (GlobalOptions), which acton
+-- and lsp-server-acton share.
+trustsCompiler :: C.GlobalOptions -> C.CompileOptions -> String -> Bool
+trustsCompiler gopts opts identity = C.ignore_compiler_version opts || identity == C.compilerIdentity gopts
 
 -- | Whether the running compiler binary was modified after a time, in POSIX
 -- nanoseconds.  Checked on every call.  A failure to find or stat the binary
--- counts as not newer.
+-- counts as not newer.  It catches what the compiler's version does not
+-- show: a binary rebuilt without make, which keeps the version.
 compilerNewerThan :: C.CompileOptions -> Integer -> IO Bool
 compilerNewerThan opts ns
   | C.ignore_compiler_version opts      = return False
@@ -1967,7 +1991,7 @@ data Reason = SourceChanged | DependencyChanges [DepChange] | DumpRequested | Im
 data Action
   = RunFront       Reason
   | RefreshImpl    InterfaceFiles.HeaderSummary Bool [DepChange]
-  | RefreshCodegen InterfaceFiles.HeaderSummary CodegenStatus
+  | RefreshCodegen InterfaceFiles.HeaderSummary OutputStatus
   | Reuse          InterfaceFiles.HeaderSummary (Maybe DeferredBackJob)
 
 -- | A module's front stage: its parse errors, what --only-build trusts, or
@@ -1997,9 +2021,9 @@ assess env header = do
         | C.altOutput (moduleOptions env) || isJust deferred -> return (Reuse header deferred)
         | otherwise -> do
             let opts = moduleOptions env
-            status <- codegenStatus opts (pathsOf env) (nameOf env)
+            status <- codegenStatus (buildOptions (moduleBuild env)) opts (pathsOf env) (nameOf env)
                         (headerCodegenTags opts (pathsOf env) (nameOf env) header hasNotImpl (InterfaceFiles.summaryImplHash header) WholeModule)
-            return (if codegenUpToDate status then Reuse header deferred else RefreshCodegen header status)
+            return (if outputsUpToDate status then Reuse header deferred else RefreshCodegen header status)
 
 -- | The action a cached module's dependency changes call for, if any.  A
 -- changed pub hash or a missing hash runs the front passes, and so does a
@@ -2113,7 +2137,7 @@ describe env action = case action of
     RunFront DumpRequested          -> []
     RunFront ImplRefreshFailed      -> [ stale "impl refresh encountered unresolved dep hashes; rerunning front passes" ]
     RefreshImpl _ _ cs              -> [ stale ("impl changes in " ++ deltas Impl cs) ]
-    RefreshCodegen _ status         -> [ stale ("generated code out of date" ++ formatCodegenDelta status) ]
+    RefreshCodegen _ status         -> [ stale ("generated code out of date" ++ formatOutputDelta "codegen" "generated code" status) ]
     Reuse _ _                       -> [ "  Fresh " ++ labelOf env ++ ": using cached .tydb" ]
   where
     stale reason                    = "  Stale " ++ labelOf env ++ ": " ++ reason
@@ -2766,7 +2790,7 @@ rootActorProblem _ _ = Just "it is not an actor"
 -- | Write a checked and hashed module's .tydb, reporting its progress.
 writeTydb :: ModuleEnv -> ModuleSource -> Checked -> Hashed -> (InterfaceFiles.TyDbWriteProgress -> IO ()) -> IO ()
 writeTydb env source checked hashed onProgress =
-    InterfaceFiles.writeFileWithProgress onProgress A.version (tydbOf env)
+    InterfaceFiles.writeFileWithProgress onProgress A.version (C.compilerIdentity (buildOptions (moduleBuild env))) (tydbOf env)
       (hashedSource hashed) (hashedPub hashed) (hashedImpl hashed) (recordedSourceMeta source) (hashedImports hashed)
       (hashedDependencies hashed) (hashedNames hashed) (checkedEscapes checked) (hashedRoots hashed) (checkedTests checked)
       doc (checkedInterface checked) (checkedModule checked)
@@ -2902,8 +2926,8 @@ prepareDeferredBackJob build base interestMap job = do
                             , interestedNames = Data.Set.size interested
                             , rootNames       = Data.Set.size roots
                             , selectedClosure = Data.Set.size names }
-    status   <- codegenStatus (deferredOptions job) paths mn expected
-    if codegenUpToDate status
+    status   <- codegenStatus (buildOptions build) (deferredOptions job) paths mn expected
+    if outputsUpToDate status
       then Nothing <$ info build (describeDbp label stats True)
       else do
         -- Same-version .tydb files always carry statement indices, so a
@@ -3117,7 +3141,7 @@ runBackPasses gopts job shouldWrite onProgress = do
       (converted, env3)   <- transform BackPassCPS        fst (Acton.CPS.convert env2 deactorized)
       (lifted, env4)      <- transform BackPassLLift      fst (Acton.LambdaLifter.liftModule env3 converted)
       boxed               <- transform BackPassBoxing     id  (Acton.Boxing.doBoxing env4 lifted >>= witnessStats env4 lifted)
-      (_, h, c, support)  <- pass BackPassCodeGen             (Acton.CodeGen.generateCode supportInclude env4 relSrcBase (bjSource job) (not (C.dbg_no_lines opts)) boxed (Hashing.hashHex (tagHeader (bjCodegenTags job))) (Hashing.hashHex (tagCode (bjCodegenTags job))))
+      (_, h, c, support)  <- pass BackPassCodeGen             (Acton.CodeGen.generateCode supportInclude env4 relSrcBase (bjSource job) (not (C.dbg_no_lines opts)) boxed (stampedHex gopts (tagHeader (bjCodegenTags job))) (stampedHex gopts (tagCode (bjCodegenTags job))))
       case output of
         PrintHeader -> pass BackPassRender (render h) >> putStrLn h
         PrintCode   -> pass BackPassRender (render c) >> putStrLn c
@@ -3467,65 +3491,96 @@ parseStage build opts t = do
       Right (source, m) -> (ActonTask source m, reportedTime (buildOptions build) opts elapsed)
 
 
--- Codegen status -----------------------------------------------------------------------------------
+-- Output status ------------------------------------------------------------------------------------
 
--- | Each of a module's generated files with the tag it carries, Nothing for
--- a file that cannot be read or is not tagged, and the tag it should carry,
--- both in hex, and whether the compiler binary is newer than one of them.
-data CodegenStatus = CodegenStatus
-  { csFiles         :: [(GeneratedFile, Maybe String, String)]
-  , csCompilerNewer :: Bool
+-- | An output that a module's back passes write, whose first line holds, after a fixed text, its tag and the stamp of the build
+-- of the compiler that wrote it (stampedHex): its label in --verbose lines,
+-- its path, the text before its tag, and the tag it should carry, in hex.
+data TaggedOutput = TaggedOutput
+  { toLabel    :: String
+  , toPath     :: FilePath
+  , toPrefix   :: String
+  , toExpected :: String
   }
 
--- | The hash tagged into a generated file's first line, when the file can
--- be read and its first line is tagged.
-readCodegenHash :: FilePath -> IO (Maybe String)
-readCodegenHash path = either (const Nothing) taggedHash <$> trySync (withFile path ReadMode hGetLine)
-  where taggedHash line = do rest <- Data.List.stripPrefix Acton.CodeGen.implHashTag line
-                             case takeWhile isHexDigit (dropWhile isSpace rest) of
-                               ""  -> Nothing
-                               hex -> Just hex
+-- | Each of a module's tagged outputs with the tag it carries, Nothing for
+-- an output that cannot be read or is not tagged, whether another build of
+-- the compiler wrote one of them, and whether the compiler binary is newer
+-- than one of them.
+data OutputStatus = OutputStatus
+  { osOutputs       :: [(TaggedOutput, Maybe String)]
+  , osOtherCompiler :: Bool
+  , osCompilerNewer :: Bool
+  }
 
--- | The tags a module's generated files carry, read in the order
--- generatedFiles lists them, with the tags they should carry, and whether
--- the compiler binary is newer than one of the files.  A newer compiler may
--- generate other code from the same inputs, which no tag shows, so its
--- files count as out of date, as a .tydb does (compilerNewerThan, which
--- --ignore-compiler-version turns off).
-codegenStatus :: C.CompileOptions -> Paths -> A.ModName -> CodegenTags -> IO CodegenStatus
-codegenStatus opts paths mn expected = do
-    files <- mapM tagOf generatedFiles
-    newer <- or <$> mapM olderThanCompiler generatedFiles
-    return (CodegenStatus files newer)
-  where path file = generatedPath paths mn file
-        tagOf file = do tag <- readCodegenHash (path file)
-                        return (file, tag, Hashing.hashHex (expectedTag expected file))
-        -- A file that cannot be read has no tag, so it is out of date anyway.
-        olderThanCompiler file = do
-          status <- trySync (getFileStatus (path file))
-          either (const (return False))
-                 (compilerNewerThan opts . InterfaceFiles.posixNanoseconds . modificationTimeHiRes)
-                 status
+-- | A tag in hex, followed by the stamp of this build of the compiler: the
+-- text after the fixed text on the first line of a tagged output.
+stampedHex :: C.GlobalOptions -> B.ByteString -> String
+stampedHex gopts tag = Hashing.hashHex tag ++ " " ++ compilerStamp (C.compilerIdentity gopts)
 
--- | Whether every generated file is tagged with the expected hash and none
--- is older than the compiler binary.
-codegenUpToDate :: CodegenStatus -> Bool
-codegenUpToDate status = codegenTagsMatch status && not (csCompilerNewer status)
+-- | The stamp of a build of the compiler on the outputs it writes: the first
+-- 16 hex digits of the hash of its identity.
+compilerStamp :: String -> String
+compilerStamp identity = take 16 (Hashing.hashHex (SHA256.hash (BL.toStrict (encode ("compiler" :: String, identity)))))
 
--- | Whether every generated file is tagged with the tag it should carry.
-codegenTagsMatch :: CodegenStatus -> Bool
-codegenTagsMatch status = and [ tag == Just expected | (_, tag, expected) <- csFiles status ]
+-- | The tag and the compiler stamp on a file's first line after the given
+-- text, when the file can be read and the line holds a tag.  An output
+-- written before outputs were stamped has a tag only.
+readTagLine :: String -> FilePath -> IO (Maybe (String, Maybe String))
+readTagLine prefix path = either (const Nothing) tagged <$> trySync (withFile path ReadMode hGetLine)
+  where tagged line = do rest <- Data.List.stripPrefix prefix line
+                         let (tag, after) = span isHexDigit (dropWhile isSpace rest)
+                             stamp        = takeWhile isHexDigit (dropWhile isSpace after)
+                         if null tag then Nothing else Just (tag, if null stamp then Nothing else Just stamp)
 
--- | The verbose suffix of a module whose generated code is out of date: for
--- each file with another tag than it should carry, its label, the first
--- eight hex digits of its tag, or missing, and of the tag it should carry.
--- Files with the expected tags are out of date because the compiler is
+-- | The status of a module's tagged outputs, in the given order.  Another
+-- build of the compiler, or a newer one, may write other outputs from the
+-- same inputs, which no tag shows, so an output that another build wrote or
+-- that is older than the compiler binary is out of date, as a .tydb is
+-- (trustsCompiler, compilerNewerThan).
+outputStatus :: C.GlobalOptions -> C.CompileOptions -> [TaggedOutput] -> IO OutputStatus
+outputStatus gopts opts outputs = do
+    lines' <- mapM (\output -> readTagLine (toPrefix output) (toPath output)) outputs
+    newer  <- or <$> mapM (olderThanCompiler . toPath) outputs
+    let other = not (C.ignore_compiler_version opts)
+                && any (/= Just (compilerStamp (C.compilerIdentity gopts))) [ stamp | Just (_, stamp) <- lines' ]
+    return (OutputStatus (zip outputs (map (fmap fst) lines')) other newer)
+  where
+    -- A file that cannot be read has no tag, so it is out of date anyway.
+    olderThanCompiler path = do
+      status <- trySync (getFileStatus path)
+      either (const (return False))
+             (compilerNewerThan opts . InterfaceFiles.posixNanoseconds . modificationTimeHiRes)
+             status
+
+-- | The status of a module's generated files, in the order generatedFiles
+-- lists them, against its codegen tags.
+codegenStatus :: C.GlobalOptions -> C.CompileOptions -> Paths -> A.ModName -> CodegenTags -> IO OutputStatus
+codegenStatus gopts opts paths mn expected =
+    outputStatus gopts opts [ TaggedOutput (generatedLabel file) (generatedPath paths mn file) Acton.CodeGen.implHashTag (Hashing.hashHex (expectedTag expected file))
+                            | file <- generatedFiles ]
+
+-- | Whether every output carries the tag it should, this build of the
+-- compiler wrote them all and none is older than the compiler binary.
+outputsUpToDate :: OutputStatus -> Bool
+outputsUpToDate status = outputTagsMatch status && not (osOtherCompiler status) && not (osCompilerNewer status)
+
+-- | Whether every output carries the tag it should.
+outputTagsMatch :: OutputStatus -> Bool
+outputTagsMatch status = and [ tag == Just (toExpected output) | (output, tag) <- osOutputs status ]
+
+-- | The verbose suffix of outputs that are out of date, given what they are
+-- named by: for each output with another tag than it should carry, its
+-- label, the first eight hex digits of its tag, or missing, and of the tag
+-- it should carry.  Outputs with the expected tags are out of date because
+-- another build of the compiler wrote them, or because the compiler is
 -- newer.
-formatCodegenDelta :: CodegenStatus -> String
-formatCodegenDelta status
-  | codegenTagsMatch status = " {compiler newer than generated code}"
-  | otherwise               = " {codegen " ++ intercalate ", " [ generatedLabel file ++ " " ++ delta tag expected | (file, tag, expected) <- stale ] ++ "}"
-  where stale              = [ f | f@(_, tag, expected) <- csFiles status, tag /= Just expected ]
+formatOutputDelta :: String -> String -> OutputStatus -> String
+formatOutputDelta kind noun status
+  | not (outputTagsMatch status) = " {" ++ kind ++ " " ++ intercalate ", " [ toLabel output ++ " " ++ delta tag (toExpected output) | (output, tag) <- stale ] ++ "}"
+  | osOtherCompiler status       = " {" ++ noun ++ " written by another build of the compiler}"
+  | otherwise                    = " {compiler newer than " ++ noun ++ "}"
+  where stale              = [ o | o@(output, tag) <- osOutputs status, tag /= Just (toExpected output) ]
         delta tag expected = maybe "missing" Hashing.shortHex tag ++ " -> " ++ Hashing.shortHex expected
 
 -- One JSON line per module, written by a single strict hPut so that lines

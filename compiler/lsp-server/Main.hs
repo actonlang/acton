@@ -17,6 +17,7 @@ import qualified Data.HashMap.Strict as HM
 import qualified Data.Map.Strict as M
 import Data.Maybe (fromMaybe, listToMaybe)
 import Data.Sequence (Seq, ViewL(..), (|>))
+import Data.Version (showVersion)
 import qualified Data.Sequence as Seq
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
@@ -37,6 +38,7 @@ import qualified Acton.Env as Env
 import qualified Acton.Project as Project
 import qualified Acton.SourceProvider as Source
 import qualified Acton.Syntax as S
+import qualified Paths_lsp_server_acton
 
 import Error.Diagnose (Diagnostic)
 import Error.Diagnose.Diagnostic (reportsOf)
@@ -138,13 +140,16 @@ projectWatchersRef = unsafePerformIO (newIORef HM.empty)
 compileScheduler :: Compile.CompileScheduler
 compileScheduler = unsafePerformIO (Compile.newCompileScheduler lspGlobalOpts)
 
--- | Global compiler options for the LSP server (quiet, no color).
+-- | Global compiler options for the LSP server (quiet, no color), naming
+-- this build of the compiler by its version, which acton of the same build
+-- shares: the two read and write the same out/ directory.
 lspGlobalOpts :: C.GlobalOptions
 lspGlobalOpts =
   C.defaultGlobalOptions
     { C.color = C.Never
     , C.quiet = True
     , C.noProgress = True
+    , C.compilerIdentity = showVersion Paths_lsp_server_acton.version
     }
 
 -- | Compile options for LSP runs (front passes only, no final build).

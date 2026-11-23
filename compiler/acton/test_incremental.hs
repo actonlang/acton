@@ -574,7 +574,7 @@ rewriteTy version tyPath change = do
   nameHashes <- restoreExternalDeps tyPath (InterfaceFiles.storedDepModules stored) (InterfaceFiles.storedNames stored)
   escapeSummaries <- readTyEscapeSummaries tyPath
   let updated = change stored { InterfaceFiles.storedNames = nameHashes }
-  InterfaceFiles.writeFileWithVersion version tyPath
+  InterfaceFiles.writeFileWithVersion version (InterfaceFiles.storedCompiler updated) tyPath
     (InterfaceFiles.storedSourceHash updated) (InterfaceFiles.storedPubHash updated) (InterfaceFiles.storedImplHash updated)
     (InterfaceFiles.storedSourceMeta updated) (InterfaceFiles.storedImports updated) (InterfaceFiles.storedDepModules updated)
     (InterfaceFiles.storedNames updated) escapeSummaries (InterfaceFiles.storedRoots updated) (InterfaceFiles.storedTests updated)
@@ -1704,8 +1704,11 @@ p27_overlay_source_provider = testCase "27-overlay snapshots drive readModuleTas
         }
       disk = Source.diskSourceProvider
       spSame = disk { Source.spReadOverlay = \path -> return (if path == actAAbs then Just snapSame else Nothing) }
+      -- The acton binary wrote the .tydb, a build of the compiler other
+      -- than this test program, which reads it.
+      readOpts = C.defaultCompileOptions { C.ignore_compiler_version = True }
   (paths, moduleA) <- Project.findPaths actAAbs C.defaultCompileOptions
-  taskSame <- Compile.readModuleTask spSame quietGlobalOptions C.defaultCompileOptions paths moduleA actAAbs
+  taskSame <- Compile.readModuleTask spSame quietGlobalOptions readOpts paths moduleA actAAbs
   case taskSame of
     Compile.TyTask _ -> pure ()
     _ -> assertFailure "expected TyTask when overlay matches header"
@@ -1716,7 +1719,7 @@ p27_overlay_source_provider = testCase "27-overlay snapshots drive readModuleTas
         , Source.ssBytes = bytesDiff
         }
       spDiff = disk { Source.spReadOverlay = \path -> return (if path == actAAbs then Just snapDiff else Nothing) }
-  taskDiff <- Compile.readModuleTask spDiff quietGlobalOptions C.defaultCompileOptions paths moduleA actAAbs
+  taskDiff <- Compile.readModuleTask spDiff quietGlobalOptions readOpts paths moduleA actAAbs
   case taskDiff of
     Compile.ParseTask source _ doc -> do
       Compile.sourceText source @?= textDiff
@@ -3772,6 +3775,39 @@ p72_ext_c_include_through_linked_directory =
     removeDirectoryLink (src </> "vendor")
     removePathForcibly vendor
 
+p74_outputs_of_another_compiler_build_are_redone :: TestTree
+p74_outputs_of_another_compiler_build_are_redone =
+  testCase "74-the .tydb files and code that another build of the compiler wrote are redone" $ do
+    let proj = casesProjDir
+        modUtil = modLabel proj "util"
+        modNative = modLabel proj "native"
+        modMain = modLabel proj "main"
+    ensureCasesProject
+    writeUtilNativeProject [] 0
+    -- This test program is another build of the compiler than the acton
+    -- binary, and it writes its outputs after that binary was built, as a
+    -- newer build does that the user then switches away from.
+    projAbs <- canonicalizePath proj
+    opts <- inProcessCompileOptions
+    sched <- Compile.newCompileScheduler quietGlobalOptions
+    result <- buildOnScheduler Source.diskSourceProvider quietGlobalOptions (\_ -> return ()) sched projAbs opts
+    result @?= "result ok"
+    out <- buildOutIn proj
+    forM_ [modUtil, modNative, modMain] $ \m ->
+      assertBool ("did not expect " ++ T.unpack m ++ " to trust the .tydb of another compiler\n" ++ T.unpack out)
+        (typechecked out m)
+    -- util's back passes are deferred, and its code is tagged with the same
+    -- hashes: only the compiler that generated it differs.
+    assertBool ("expected util's generated code to be out of date\n" ++ T.unpack out)
+      (maybe False ("generated code out of date" `T.isInfixOf`) (dbpLineFor out "util"))
+    run <- runBinaryIn proj "main"
+    run @?= "hi 1\n"
+    out2 <- buildOutIn proj
+    forM_ [modUtil, modNative, modMain] $ \m ->
+      assertBool ("expected " ++ T.unpack m ++ " to be fresh\n" ++ T.unpack out2) (fresh out2 m)
+    assertBool ("expected util's generated code to be up to date\n" ++ T.unpack out2)
+      (maybe False ("generated code up to date" `T.isInfixOf`) (dbpLineFor out2 "util"))
+
 -- Source written during a read ------------------------------------------------
 
 -- | A disk source provider that writes new text to a source file right after
@@ -4186,6 +4222,7 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
       , p70_ext_c_include_edit_rebuilds_module
       , p71_ext_c_including_own_header_settles
       , p72_ext_c_include_through_linked_directory
+      , p74_outputs_of_another_compiler_build_are_redone
       ]
   , sequentialTestGroup "incremental-cache-cases" AllSucceed
       [ p41_stale_header_missing_import_reparses_source

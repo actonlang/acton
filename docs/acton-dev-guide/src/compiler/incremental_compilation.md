@@ -93,12 +93,31 @@ comments rewrites the `.c` but leaves the `.h`, and so the objects of every
 module that includes it, alone. All of these are in the `.tydb` header, so a
 cached module's expected tags are computed without reading its statements
 (`codegenTags`). If the tag of any of the three files is missing or
-mismatched, or a file is older than the compiler binary, we rerun back passes
-even if no other hashes changed. The front passes write the
-`.tydb` before the back passes write the code, so this check also catches the
-code that such a build leaves behind: `acton build --sigs` and `acton sig`
-write the `.tydb` but not the code, and so does a build that is interrupted or
-cancelled in between.
+mismatched, another build of the compiler wrote a file, or a file is older than
+the compiler binary, we rerun back passes even if no other hashes changed. The
+front passes write the `.tydb` before the back passes write the code, so this
+check also catches the code that such a build leaves behind: `acton build
+--sigs` and `acton sig` write the `.tydb` but not the code, and so does a build
+that is interrupted or cancelled in between.
+
+Every `.tydb` and generated file records the build of the compiler that wrote
+it: the `.tydb` in its `compiler` key, a file as a stamp
+after its tag on its first line, the first 16 hex digits of a hash of the
+build's identity. A build trusts only the outputs of its own build, and only
+those that are not older than its binary (`trustsCompiler`,
+`compilerNewerThan`); `--ignore-compiler-version` turns both checks off.
+Another build may write other outputs from the same inputs, which no hash shows,
+and the age of the binary alone does not show it: a release, a Homebrew install,
+a build the user switches back to, or a dependency in the shared
+`~/.cache/acton/deps` that another installation built, can be older than the
+outputs of a newer build. The identity is `GlobalOptions.compilerIdentity`,
+which `acton` and `lsp-server-acton` set to their package version. `make`
+gives both the same version, with the build time for a development build
+(`VERSION_INFO`), so the two programs of one build share it, and with it the
+`out/` directory of a project, while every build has its own. A binary rebuilt
+by `stack` alone keeps its version, so the age check stays: such a binary is
+newer than the outputs of the build before it. Programs that use the library
+directly, such as the test suites, leave the identity empty.
 
 Hashing within a module is done per top-level name. A hashable unit is a `Def`,
 `Actor`, `Class`, `Protocol`, `Extension`, or any top-level value introduced by
@@ -223,8 +242,8 @@ the parser rejects them before type checking.
 Before reading any statement, DBP computes the codegen tags from the module's
 `.tydb` header and the sorted selected top-level names. If the existing `.c`,
 `.h` and `.closures.inc` files already carry that hash in their generated
-"Acton impl hash" tag, and none is older than the compiler binary, the
-deferred job is skipped. Otherwise DBP reads only the
+"Acton impl hash" tag, this build of the compiler wrote them, and none is older
+than the compiler binary, the deferred job is skipped. Otherwise DBP reads only the
 statements of the selected names (`readSelectedModule`), prunes them to the
 selected top-level declarations, runs the normal back-pass chain, and writes all
 three files tagged with those codegen tags. A `.tydb` written by the same

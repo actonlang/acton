@@ -54,6 +54,7 @@ Metadata and module-level keys:
 | Key | Value type |
 | --- | --- |
 | `version` | `[Int]` |
+| `compiler` | `String` |
 | `meta` | `(Maybe SourceFileMeta, ByteString, ByteString, ByteString)` |
 | `imports` | `[(ModName, ByteString)]` |
 | `deps` | `[DepModuleInfo]` |
@@ -67,6 +68,12 @@ Metadata and module-level keys:
 | `actors` | `[Name]` |
 | `stmt-count` | `Int` |
 | `stmt-has-not-impl` | `Bool` |
+
+`version` is the layout version (`Acton.Syntax.version`); a reader rejects any
+other. `compiler` names the build of the compiler that wrote the file
+(`GlobalOptions.compilerIdentity`); a build trusts the header of a `.tydb` that
+another build wrote only under `--ignore-compiler-version` (see
+[Incremental compilation](incremental_compilation.md)).
 
 The three `ByteString` hashes in `meta` are the module source-bytes hash, module
 public hash, and module implementation hash. The `ByteString` stored with each

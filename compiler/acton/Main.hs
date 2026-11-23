@@ -140,7 +140,7 @@ raiseOpenFileLimit =
 main = do
     raiseOpenFileLimit
     hSetBuffering stdout LineBuffering
-    arg <- C.parseCmdLine
+    arg <- withCompilerIdentity <$> C.parseCmdLine
     let gopts = case arg of
           C.CmdOpt g _ -> g
           C.CompileOpt _ g _ -> g
@@ -178,6 +178,15 @@ main = do
           C.CmdOpt gopts C.Version            -> printVersion
           C.CompileOpt nms gopts opts         -> runFile gopts opts (head nms)
     run `catch` \(ProjectError msg) -> printErrorAndExit msg
+
+-- | A command line with this build of the compiler named in its global
+-- options by its version, which lsp-server-acton of the same build shares.
+withCompilerIdentity :: C.CmdLineOptions -> C.CmdLineOptions
+withCompilerIdentity (C.CmdOpt gopts cmd)              = C.CmdOpt (identified gopts) cmd
+withCompilerIdentity (C.CompileOpt files gopts opts)   = C.CompileOpt files (identified gopts) opts
+
+identified :: C.GlobalOptions -> C.GlobalOptions
+identified gopts = gopts { C.compilerIdentity = getVer }
 
 -- Apply global options to compile options
 applyGlobalOpts :: C.GlobalOptions -> C.CompileOptions -> C.CompileOptions

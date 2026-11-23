@@ -63,7 +63,8 @@ generateCode supportInclude env srcbase srcText emitLines m headerHash codeHash 
         env0                        = shareClosureLayouts (classdefine stmts $ genEnv $ setMod (modname m) env) stmts
 
 -- | The first line of a generated .c, .h and closure support file starts with
--- this tag, followed by the hash that generateCode is given, in hex.
+-- this tag, followed by the text that generateCode is given: the file's tag
+-- in hex, and in a build the stamp of the compiler that wrote it.
 implHashTag                         :: String
 implHashTag                         = "/* Acton impl hash:"
 
