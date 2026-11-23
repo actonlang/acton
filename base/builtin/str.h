@@ -35,13 +35,6 @@ B_str actStrFromLiteral(const char *str, int64_t nbytes, int64_t nchars);
 // nul_error instead.
 const char *actStrToCString(B_str s, B_ValueError nul_error);
 
-// Compatibility names. Preserve their original copying behaviour until
-// downstream callers have migrated to the explicit APIs above.
-B_str to$str(char *str);                         // Copies.
-B_str to_str_len(const char *str, int64_t nbytes);   // Copies; preserves embedded NUL.
-B_str to_str_noc(char *str);                     // Wraps the input without copying.
-B_str toB_str(char *str);
-
 // Destructor; recover the internal string.
 unsigned char *fromB_str(B_str str);
 
@@ -137,20 +130,14 @@ struct B_bytes {
     unsigned char *str;      // nbytes bytes, not NUL-terminated
 };
 
-// Copy into independent storage. LengthCopy preserves embedded NUL and does
-// not require a terminator; the count excludes any final terminator.
+// The unadorned constructors borrow immutable storage that must live as long
+// as the result. Use Copy for temporary or mutable input. The Length variants
+// take an exact byte count, including embedded NUL bytes, without a terminator.
+B_bytes actBytesFromCString(const char *str);
 B_bytes actBytesFromCStringCopy(const char *str);
+B_bytes actBytesFromCStringLength(const char *str, int64_t len);
 B_bytes actBytesFromCStringLengthCopy(const char *str, int64_t len);
 
-// Existing APIs retain their behaviour during the downstream migration:
-// the unadorned names still copy. NoCopy requires immutable storage that
-// remains alive for the result's lifetime.
-B_bytes actBytesFromCString(char *str);
-B_bytes actBytesFromCStringNoCopy(char *str);
-B_bytes actBytesFromCStringLength(char *str, int64_t len);
-B_bytes actBytesFromCStringLengthNoCopy(char *str, int64_t length);
-B_bytes to$bytes(char *str);
-B_bytes to$bytesD_len(char *str, int64_t len);
 char *fromB_bytes(B_bytes b);
 
 

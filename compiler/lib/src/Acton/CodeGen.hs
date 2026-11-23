@@ -770,7 +770,7 @@ primToFloat                         = name "to$float"
 primToStr                           = name "actStrFromCString"
 primStrLiteral                      = name "actStrFromLiteral"
 primToBytearray                     = name "to$bytearray"
-primToBytes                         = name "actBytesFromCStringLengthNoCopy"
+primToBytes                         = name "actBytesFromCStringLength"
 primFORMATLen                       = gPrim "FORMAT_len"
 
 tmpV                                = primKW "tmp"
