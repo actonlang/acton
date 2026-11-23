@@ -58,95 +58,96 @@ def check_error(error: KeyError, text: str, representation: str):
         assert False
 
 actor main(env):
-    try:
-        key = Key(7)
-        error = KeyError(key)
-        assert render_count() == 0, "KeyError eagerly rendered its key"
-        key.n = 8
-        assert str(error) == "KeyError: Key not found, key: key 8"
-        assert render_count() == 1
-        assert repr(error) == "KeyError(Key(8), 'Key not found')"
-        assert render_count() == 2
-        restored = deserialize(serialize(error))
-        assert render_count() == 2, "serialization rendered the key"
-        if isinstance(restored, KeyError):
-            original = restored.key
-            if isinstance(original, Key):
-                original.n = 9
-                assert str(restored) == "KeyError: Key not found, key: key 9"
-                assert repr(restored) == "KeyError(Key(9), 'Key not found')"
+    proc def __startup__():
+        try:
+            key = Key(7)
+            error = KeyError(key)
+            assert render_count() == 0, "KeyError eagerly rendered its key"
+            key.n = 8
+            assert str(error) == "KeyError: Key not found, key: key 8"
+            assert render_count() == 1
+            assert repr(error) == "KeyError(Key(8), 'Key not found')"
+            assert render_count() == 2
+            restored = deserialize(serialize(error))
+            assert render_count() == 2, "serialization rendered the key"
+            if isinstance(restored, KeyError):
+                original = restored.key
+                if isinstance(original, Key):
+                    original.n = 9
+                    assert str(restored) == "KeyError: Key not found, key: key 9"
+                    assert repr(restored) == "KeyError(Key(9), 'Key not found')"
+                else:
+                    assert False
             else:
                 assert False
-        else:
-            assert False
-        check_error(KeyError("word"), "KeyError: Key not found, key: word", "KeyError('word', 'Key not found')")
-        check_error(KeyError(7), "KeyError: Key not found, key: 7", "KeyError(7, 'Key not found')")
-        check_error(default_error(None), "KeyError: Key not found, key: None", "KeyError(None, 'Key not found')")
-        optional: ?str = None
-        check_error(KeyError(optional), "KeyError: Key not found, key: None", "KeyError(None, 'Key not found')")
-        check_error(KeyError(Wrapped(("x", 7))), "KeyError: Key not found, key: wrapped ('x', 7)", "KeyError(Wrapped(('x', 7)), 'Key not found')")
-        d: dict[Key,int] = {Key(1): 11}
-        assert default_lookup(d, Key(1)) == 11
-        assert direct_lookup(d, Key(1)) == 11
-        assert generic_lookup(d, Key(1)) == 11
-        frozen: idict[Key,int] = idict([(Key(1), 11)])
-        assert frozen_lookup(frozen, Key(1)) == 11
-        before = render_count()
-        try:
-            direct_lookup(d, Key(2))
-            assert False
-        except KeyError as missing:
-            assert render_count() == before
-            check_error(missing, "KeyError: getitem: key not in dictionary, key: key 2", "KeyError(Key(2), 'getitem: key not in dictionary')")
-        try:
-            generic_lookup(d, Key(3))
-            assert False
-        except KeyError as missing:
-            assert "key: key 3" in str(missing)
-        try:
-            frozen_lookup(frozen, Key(4))
-            assert False
-        except KeyError as missing:
-            assert "key: key 4" in str(missing)
-        empty: dict[Key,int] = {}
-        try:
-            direct_lookup(empty, Key(5))
-            assert False
-        except KeyError as missing:
-            assert "empty dictionary, key: key 5" in str(missing)
-        try:
-            default_lookup(d, Key(6))
-            assert False
-        except KeyError as missing:
-            # No Show bound: the inherited default is chosen in the helper.
-            assert "object at" in str(missing)
-        try:
-            [Key(1)].index(Key(7))
-            assert False
-        except KeyError as missing:
-            assert "element is not in list, key: key 7" in str(missing)
-        # Canonical static Mapping witnesses also retain their key policy.
-        strings: dict[str,int] = {}
-        try:
-            ignored = strings["missing"]
-            assert False
-        except KeyError as missing:
-            assert "key: missing" in str(missing)
-            assert "'missing'" in repr(missing)
-        tuples: dict[(str,int),int] = {("ok", 1): 2}
-        try:
-            ignored = tuples[("missing", 3)]
-            assert False
-        except KeyError as missing:
-            assert "key: ('missing', 3)" in str(missing)
-            assert "KeyError(('missing', 3)," in repr(missing)
-        integers: dict[int,int] = {}
-        try:
-            ignored = integers[42]
-            assert False
-        except KeyError as missing:
-            assert "key: 42" in str(missing)
-    except Exception as failure:
-        print("FAIL:", str(failure), err=True)
-        env.exit(1)
-    env.exit(0)
+            check_error(KeyError("word"), "KeyError: Key not found, key: word", "KeyError('word', 'Key not found')")
+            check_error(KeyError(7), "KeyError: Key not found, key: 7", "KeyError(7, 'Key not found')")
+            check_error(default_error(None), "KeyError: Key not found, key: None", "KeyError(None, 'Key not found')")
+            optional: ?str = None
+            check_error(KeyError(optional), "KeyError: Key not found, key: None", "KeyError(None, 'Key not found')")
+            check_error(KeyError(Wrapped(("x", 7))), "KeyError: Key not found, key: wrapped ('x', 7)", "KeyError(Wrapped(('x', 7)), 'Key not found')")
+            d: dict[Key,int] = {Key(1): 11}
+            assert default_lookup(d, Key(1)) == 11
+            assert direct_lookup(d, Key(1)) == 11
+            assert generic_lookup(d, Key(1)) == 11
+            frozen: idict[Key,int] = idict([(Key(1), 11)])
+            assert frozen_lookup(frozen, Key(1)) == 11
+            before = render_count()
+            try:
+                direct_lookup(d, Key(2))
+                assert False
+            except KeyError as missing:
+                assert render_count() == before
+                check_error(missing, "KeyError: getitem: key not in dictionary, key: key 2", "KeyError(Key(2), 'getitem: key not in dictionary')")
+            try:
+                generic_lookup(d, Key(3))
+                assert False
+            except KeyError as missing:
+                assert "key: key 3" in str(missing)
+            try:
+                frozen_lookup(frozen, Key(4))
+                assert False
+            except KeyError as missing:
+                assert "key: key 4" in str(missing)
+            empty: dict[Key,int] = {}
+            try:
+                direct_lookup(empty, Key(5))
+                assert False
+            except KeyError as missing:
+                assert "empty dictionary, key: key 5" in str(missing)
+            try:
+                default_lookup(d, Key(6))
+                assert False
+            except KeyError as missing:
+                # No Show bound: the inherited default is chosen in the helper.
+                assert "object at" in str(missing)
+            try:
+                [Key(1)].index(Key(7))
+                assert False
+            except KeyError as missing:
+                assert "element is not in list, key: key 7" in str(missing)
+            # Canonical static Mapping witnesses also retain their key policy.
+            strings: dict[str,int] = {}
+            try:
+                ignored = strings["missing"]
+                assert False
+            except KeyError as missing:
+                assert "key: missing" in str(missing)
+                assert "'missing'" in repr(missing)
+            tuples: dict[(str,int),int] = {("ok", 1): 2}
+            try:
+                ignored = tuples[("missing", 3)]
+                assert False
+            except KeyError as missing:
+                assert "key: ('missing', 3)" in str(missing)
+                assert "KeyError(('missing', 3)," in repr(missing)
+            integers: dict[int,int] = {}
+            try:
+                ignored = integers[42]
+                assert False
+            except KeyError as missing:
+                assert "key: 42" in str(missing)
+        except Exception as failure:
+            print("FAIL:", str(failure), err=True)
+            env.exit(1)
+        env.exit(0)

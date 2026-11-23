@@ -90,57 +90,58 @@ mut def make_plain(log: list[int]) -> Plain:
     return Plain()
 
 actor main(env):
-    plain = Plain()
-    mutable = Mutable()
-    assert display(keep_plain(plain)) == display(plain)
-    assert display(keep_mutable(mutable)) == display(mutable)
-    assert display(plain) == str(plain)
-    assert Show.__repr__(plain) == repr(plain)
-    assert display(mutable) == str(mutable)
-    assert Show.__repr__(mutable) == repr(mutable)
-    assert truth(plain)
-    assert truth(mutable)
-    custom = Custom()
-    child = InheritedCustom()
-    overridden = Overridden()
-    assert display(custom) == "custom"
-    assert display(child) == "custom"
-    assert Show.__repr__(child) == "Custom()"
-    assert not truth(custom)
-    assert not truth(child)
-    assert display(keep_inherited(child)) == display(child)
-    assert bound_display(child) == "custom"
-    assert display(overridden) == "overridden"
-    assert Show.__repr__(overridden) == "Overridden()"
-    assert truth(overridden)
-    box = ChildBox(plain)
-    assert display(keep_box(box)) == display(box)
-    assert display(box) == "Box(" + display(plain) + ")"
-    assert Show.__repr__(box) == "Box(" + Show.__repr__(plain) + ")"
-    custom_box = ChildBox(custom)
-    assert display(custom_box) == "Box(custom)"
-    view: View[InheritedCustom] = View(child)
-    restored = deserialize(serialize(view))
-    if isinstance(restored, View):
-        assert restored.display() == "custom"
-        assert not restored.truth()
-    else:
-        assert False
-    default_view: View[Plain] = View(plain)
-    default_restored = deserialize(serialize(default_view))
-    if isinstance(default_restored, View):
-        assert default_restored.truth()
-        assert len(default_restored.display()) > 0
-    else:
-        assert False
-    log: list[int] = []
-    assert truth(make_plain(log))
-    assert log == [1]
-    # Typed conversion and truth operations preserve builtin behavior.
-    assert not 0
-    assert not ""
-    assert not []
-    assert str(None) == "None"
-    pair = (1, None)
-    assert pair.__repr__() == "(1, None)"
-    env.exit(0)
+    proc def __startup__():
+        plain = Plain()
+        mutable = Mutable()
+        assert display(keep_plain(plain)) == display(plain)
+        assert display(keep_mutable(mutable)) == display(mutable)
+        assert display(plain) == str(plain)
+        assert Show.__repr__(plain) == repr(plain)
+        assert display(mutable) == str(mutable)
+        assert Show.__repr__(mutable) == repr(mutable)
+        assert truth(plain)
+        assert truth(mutable)
+        custom = Custom()
+        child = InheritedCustom()
+        overridden = Overridden()
+        assert display(custom) == "custom"
+        assert display(child) == "custom"
+        assert Show.__repr__(child) == "Custom()"
+        assert not truth(custom)
+        assert not truth(child)
+        assert display(keep_inherited(child)) == display(child)
+        assert bound_display(child) == "custom"
+        assert display(overridden) == "overridden"
+        assert Show.__repr__(overridden) == "Overridden()"
+        assert truth(overridden)
+        box = ChildBox(plain)
+        assert display(keep_box(box)) == display(box)
+        assert display(box) == "Box(" + display(plain) + ")"
+        assert Show.__repr__(box) == "Box(" + Show.__repr__(plain) + ")"
+        custom_box = ChildBox(custom)
+        assert display(custom_box) == "Box(custom)"
+        view: View[InheritedCustom] = View(child)
+        restored = deserialize(serialize(view))
+        if isinstance(restored, View):
+            assert restored.display() == "custom"
+            assert not restored.truth()
+        else:
+            assert False
+        default_view: View[Plain] = View(plain)
+        default_restored = deserialize(serialize(default_view))
+        if isinstance(default_restored, View):
+            assert default_restored.truth()
+            assert len(default_restored.display()) > 0
+        else:
+            assert False
+        log: list[int] = []
+        assert truth(make_plain(log))
+        assert log == [1]
+        # Typed conversion and truth operations preserve builtin behavior.
+        assert not 0
+        assert not ""
+        assert not []
+        assert str(None) == "None"
+        pair = (1, None)
+        assert pair.__repr__() == "(1, None)"
+        env.exit(0)

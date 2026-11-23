@@ -30,7 +30,7 @@ proc def compute (C_cont : proc(__builtin__.int) -> $R, aa : __builtin__.int) ->
             return $R_CONTc@[None](C_3cont, None)
     return $PUSH_Cc(C_5try)
 
-W_main_74: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+W_main_75: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
 
 W_main_29: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
 
@@ -43,15 +43,18 @@ class main ($Actor, __builtin__.value):
         $MarkStartup((async self.__startup__)())
         return None
     proc def __startup__G_local (self : Self, C_cont : proc(None) -> $R) -> $R:
+        W_main_86: __builtin__.Show[__builtin__.int] = __builtin__.ShowD_int()
+        W_main_85: __builtin__.Show[__builtin__.str] = __builtin__.ShowD_str()
+        W_main_45: __builtin__.Show[(__builtin__.str, __builtin__.int)] = $ShowTuple@[(__builtin__.Show[__builtin__.str], __builtin__.Show[__builtin__.int]), (__builtin__.str, __builtin__.int), ()]((W_main_85, W_main_86))
         proc def C_11cont (C_12res : __builtin__.int) -> $R:
             v: __builtin__.int = C_12res
-            if W_main_29.__eq__(v, W_main_74.__fromatom__(13)):
-                (async self.env.exit)(W_main_74.__fromatom__(0))
+            if W_main_29.__eq__(v, W_main_75.__fromatom__(13)):
+                (async self.env.exit)(W_main_75.__fromatom__(0))
             else:
-                print@[(__builtin__.str, __builtin__.int)](("\"Excpected 13, got\"", v), "\" \"", "\"\\n\"", False, False)
-                (async self.env.exit)(W_main_74.__fromatom__(1))
+                print@[(__builtin__.str, __builtin__.int)](W_main_45, ("\"Excpected 13, got\"", v), "\" \"", "\"\\n\"", False, False)
+                (async self.env.exit)(W_main_75.__fromatom__(1))
             return $R_CONTc@[None](C_cont, None)
-        return compute(C_11cont, W_main_74.__fromatom__(10))
+        return compute(C_11cont, W_main_75.__fromatom__(10))
     action def __startup__ (self : Self) -> None:
         return $ASYNCc@[None](self, proc lambda (C_cont : proc(None) -> $R): self.__startup__G_local(C_cont))
 com def mainG_newact (env : __builtin__.Env) -> main:

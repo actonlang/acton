@@ -6251,7 +6251,8 @@ testShowBoolInheritance env0 = describe "Inherited Show and Bool witnesses" $ do
       , "    def accept(c):"
       , "        s = Server(c)"
       , "        c.cb_install(s.on_receive)"
-      , "    accept(Channel())" ]
+      , "    proc def __startup__():"
+      , "        accept(Channel())" ]
     Pretty.print typed `shouldSatisfy` isInfixOf "ShowD_value()"
 
   it "carries Show evidence through inferred variadic wrappers" $ do

@@ -1,16 +1,18 @@
-W_Apa_34: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+W_Apa_35: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
 
-W_Apa_135: __builtin__.Plus[__builtin__.int] = __builtin__.IntegralD_int()
+W_Apa_140: __builtin__.Plus[__builtin__.int] = __builtin__.IntegralD_int()
 
-W_Apa_100: __builtin__.Times[__builtin__.int, __builtin__.int] = __builtin__.IntegralD_int()
+W_Apa_301: __builtin__.Show[__builtin__.int] = __builtin__.ShowD_int()
 
-W_Apa_390: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
+W_Apa_103: __builtin__.Times[__builtin__.int, __builtin__.int] = __builtin__.IntegralD_int()
+
+W_Apa_404: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
 
 # recursive group:
 proc def L_1C_1cont (cb : $action[(__builtin__.int,), __builtin__.int], C_cont : $Cont[__builtin__.int], C_2res : __builtin__.int) -> $R:
     v: __builtin__.int = C_2res
-    m: __builtin__.Msg[__builtin__.int] = cb.__asyn__(W_Apa_34.__fromatom__(2))
-    N_tmp: __builtin__.int = W_Apa_100.__mul__(v, W_Apa_34.__fromatom__(10))
+    m: __builtin__.Msg[__builtin__.int] = cb.__asyn__(W_Apa_35.__fromatom__(2))
+    N_tmp: __builtin__.int = W_Apa_103.__mul__(v, W_Apa_35.__fromatom__(10))
     return $R_CONT@[__builtin__.int](C_cont, N_tmp)
 class L_2Cont ($Cont[__builtin__.int], __builtin__.value):
     @property
@@ -25,18 +27,22 @@ class L_2Cont ($Cont[__builtin__.int], __builtin__.value):
         cb: $action[(__builtin__.int,), __builtin__.int] = L_self.cb
         C_cont: $Cont[__builtin__.int] = L_self.C_cont
         return L_1C_1cont(cb, C_cont, G_1)
-proc def L_3C_3cont (C_cont : $Cont[None], C_4res : None) -> $R:
-    print@[(__builtin__.str,)](("\"Apa\"",), "\" \"", "\"\\n\"", False, False)
+proc def L_3C_3cont (W_Apa_174 : __builtin__.Show[(__builtin__.str,)], C_cont : $Cont[None], C_4res : None) -> $R:
+    print@[(__builtin__.str,)](W_Apa_174, ("\"Apa\"",), "\" \"", "\"\\n\"", False, False)
     return $R_CONT@[None](C_cont, None)
 class L_4Cont ($Cont[None], __builtin__.value):
     @property
+    W_Apa_174 : __builtin__.Show[(__builtin__.str,)]
+    @property
     C_cont : $Cont[None]
-    pure def __init__ (L_self : Self, C_cont : $Cont[None]) -> None:
+    pure def __init__ (L_self : Self, W_Apa_174 : __builtin__.Show[(__builtin__.str,)], C_cont : $Cont[None]) -> None:
+        L_self.W_Apa_174 = W_Apa_174
         L_self.C_cont = C_cont
         return None
     proc def __call__ (L_self : Self, G_1 : None) -> $R:
+        W_Apa_174: __builtin__.Show[(__builtin__.str,)] = L_self.W_Apa_174
         C_cont: $Cont[None] = L_self.C_cont
-        return L_3C_3cont(C_cont, G_1)
+        return L_3C_3cont(W_Apa_174, C_cont, G_1)
 class L_6action ($action[(__builtin__.int,), __builtin__.int], $proc[(__builtin__.int,), __builtin__.int], __builtin__.value):
     @property
     L_5obj : Apa
@@ -146,10 +152,10 @@ class L_12proc ($proc[(), None], __builtin__.value):
     proc def __exec__ (L_self : Self, C_cont : $Cont[None]) -> $R:
         return L_self.__call__(C_cont)
     # (recursive group)
-proc def L_13myproc (self : main, C_cont : $Cont[__builtin__.int], i : __builtin__.int) -> $R:
-    print@[(__builtin__.str, __builtin__.int)](("\"myproc\"", i), "\" \"", "\"\\n\"", False, False)
-    if W_Apa_390.__eq__(i, W_Apa_34.__fromatom__(2)):
-        (async self.env.exit)(W_Apa_34.__fromatom__(0))
+proc def L_13myproc (W_Apa_512 : __builtin__.Show[(__builtin__.str, __builtin__.int)], self : main, C_cont : $Cont[__builtin__.int], i : __builtin__.int) -> $R:
+    print@[(__builtin__.str, __builtin__.int)](W_Apa_512, ("\"myproc\"", i), "\" \"", "\"\\n\"", False, False)
+    if W_Apa_404.__eq__(i, W_Apa_35.__fromatom__(2)):
+        (async self.env.exit)(W_Apa_35.__fromatom__(0))
     return $R_CONT@[__builtin__.int](C_cont, i)
 class L_15action ($action[(__builtin__.int,), __builtin__.int], $proc[(__builtin__.int,), __builtin__.int], __builtin__.value):
     @property
@@ -185,23 +191,30 @@ class L_19proc ($proc[(), __builtin__.int], __builtin__.value):
     @property
     G_1 : __builtin__.int
     @property
+    W_Apa_512 : __builtin__.Show[(__builtin__.str, __builtin__.int)]
+    @property
     self : main
-    pure def __init__ (L_self : Self, G_1 : __builtin__.int, self : main) -> None:
+    pure def __init__ (L_self : Self, G_1 : __builtin__.int, W_Apa_512 : __builtin__.Show[(__builtin__.str, __builtin__.int)], self : main) -> None:
         L_self.G_1 = G_1
+        L_self.W_Apa_512 = W_Apa_512
         L_self.self = self
         return None
     # recursive group:
     proc def __call__ (L_self : Self, C_cont : $Cont[__builtin__.int]) -> $R:
         G_1: __builtin__.int = L_self.G_1
+        W_Apa_512: __builtin__.Show[(__builtin__.str, __builtin__.int)] = L_self.W_Apa_512
         self: main = L_self.self
-        return L_13myproc(self, C_cont, G_1)
+        return L_13myproc(W_Apa_512, self, C_cont, G_1)
     proc def __exec__ (L_self : Self, C_cont : $Cont[__builtin__.int]) -> $R:
         return L_self.__call__(C_cont)
     # (recursive group)
 class L_20action ($action[(__builtin__.int,), __builtin__.int], $proc[(__builtin__.int,), __builtin__.int], __builtin__.value):
     @property
+    W_Apa_512 : __builtin__.Show[(__builtin__.str, __builtin__.int)]
+    @property
     self : main
-    pure def __init__ (L_self : Self, self : main) -> None:
+    pure def __init__ (L_self : Self, W_Apa_512 : __builtin__.Show[(__builtin__.str, __builtin__.int)], self : main) -> None:
+        L_self.W_Apa_512 = W_Apa_512
         L_self.self = self
         return None
     # recursive group:
@@ -210,32 +223,41 @@ class L_20action ($action[(__builtin__.int,), __builtin__.int], $proc[(__builtin
     proc def __exec__ (L_self : Self, L_cont : $Cont[__builtin__.value], G_1 : __builtin__.int) -> $R:
         return $R_CONT@[__builtin__.value](L_cont, L_self.__asyn__(G_1))
     action def __asyn__ (L_self : Self, G_1 : __builtin__.int) -> __builtin__.int:
+        W_Apa_512: __builtin__.Show[(__builtin__.str, __builtin__.int)] = L_self.W_Apa_512
         self: main = L_self.self
-        return $ASYNC@[__builtin__.int](self, L_19proc(G_1, self))
+        return $ASYNC@[__builtin__.int](self, L_19proc(G_1, W_Apa_512, self))
     # (recursive group)
-proc def L_18C_5cont (a : Apa, self : main, C_cont : $Cont[None], C_6res : __builtin__.int) -> $R:
+proc def L_18C_5cont (W_Apa_512 : __builtin__.Show[(__builtin__.str, __builtin__.int)], a : Apa, self : main, W_Apa_455 : __builtin__.Show[(__builtin__.str,)], C_cont : $Cont[None], C_6res : __builtin__.int) -> $R:
     r: __builtin__.int = C_6res
-    print@[(__builtin__.str, __builtin__.int)](("\"r =\"", r), "\" \"", "\"\\n\"", False, False)
-    (async a.compute)(L_20action(self))
-    print@[(__builtin__.str,)](("\"main\"",), "\" \"", "\"\\n\"", False, False)
+    print@[(__builtin__.str, __builtin__.int)](W_Apa_512, ("\"r =\"", r), "\" \"", "\"\\n\"", False, False)
+    (async a.compute)(L_20action(W_Apa_512, self))
+    print@[(__builtin__.str,)](W_Apa_455, ("\"main\"",), "\" \"", "\"\\n\"", False, False)
     return $R_CONT@[None](C_cont, None)
 class L_21Cont ($Cont[__builtin__.int], __builtin__.value):
+    @property
+    W_Apa_512 : __builtin__.Show[(__builtin__.str, __builtin__.int)]
     @property
     a : Apa
     @property
     self : main
     @property
+    W_Apa_455 : __builtin__.Show[(__builtin__.str,)]
+    @property
     C_cont : $Cont[None]
-    pure def __init__ (L_self : Self, a : Apa, self : main, C_cont : $Cont[None]) -> None:
+    pure def __init__ (L_self : Self, W_Apa_512 : __builtin__.Show[(__builtin__.str, __builtin__.int)], a : Apa, self : main, W_Apa_455 : __builtin__.Show[(__builtin__.str,)], C_cont : $Cont[None]) -> None:
+        L_self.W_Apa_512 = W_Apa_512
         L_self.a = a
         L_self.self = self
+        L_self.W_Apa_455 = W_Apa_455
         L_self.C_cont = C_cont
         return None
     proc def __call__ (L_self : Self, G_1 : __builtin__.int) -> $R:
+        W_Apa_512: __builtin__.Show[(__builtin__.str, __builtin__.int)] = L_self.W_Apa_512
         a: Apa = L_self.a
         self: main = L_self.self
+        W_Apa_455: __builtin__.Show[(__builtin__.str,)] = L_self.W_Apa_455
         C_cont: $Cont[None] = L_self.C_cont
-        return L_18C_5cont(a, self, C_cont, G_1)
+        return L_18C_5cont(W_Apa_512, a, self, W_Apa_455, C_cont, G_1)
 class L_22proc ($proc[(), None], __builtin__.value):
     @property
     self : main
@@ -254,18 +276,26 @@ class Apa ($Actor, __builtin__.value):
         $MarkStartup((async self.__startup__)())
         return None
     proc def setupG_local (self : Self, C_cont : $Cont[None], cb : $action[(__builtin__.int,), __builtin__.int]) -> $R:
-        print@[(__builtin__.str,)](("\"setup\"",), "\" \"", "\"\\n\"", False, False)
-        cb.__asyn__(W_Apa_34.__fromatom__(0))
+        W_Apa_44: __builtin__.Show[__builtin__.str] = __builtin__.ShowD_str()
+        W_Apa_7: __builtin__.Show[(__builtin__.str,)] = $ShowTuple@[(__builtin__.Show[__builtin__.str],), (__builtin__.str,), ()]((W_Apa_44,))
+        print@[(__builtin__.str,)](W_Apa_7, ("\"setup\"",), "\" \"", "\"\\n\"", False, False)
+        cb.__asyn__(W_Apa_35.__fromatom__(0))
         return $R_CONT@[None](C_cont, None)
     proc def computeG_local (self : Self, C_cont : $Cont[__builtin__.int], cb : $action[(__builtin__.int,), __builtin__.int]) -> $R:
-        print@[(__builtin__.str,)](("\"compute\"",), "\" \"", "\"\\n\"", False, False)
-        return $AWAIT@[__builtin__.int](L_2Cont(cb, C_cont), cb.__asyn__(W_Apa_34.__fromatom__(1)))
+        W_Apa_113: __builtin__.Show[__builtin__.str] = __builtin__.ShowD_str()
+        W_Apa_47: __builtin__.Show[(__builtin__.str,)] = $ShowTuple@[(__builtin__.Show[__builtin__.str],), (__builtin__.str,), ()]((W_Apa_113,))
+        print@[(__builtin__.str,)](W_Apa_47, ("\"compute\"",), "\" \"", "\"\\n\"", False, False)
+        return $AWAIT@[__builtin__.int](L_2Cont(cb, C_cont), cb.__asyn__(W_Apa_35.__fromatom__(1)))
     proc def noticeG_local (self : Self, C_cont : $Cont[__builtin__.int], i : __builtin__.int) -> $R:
-        print@[(__builtin__.str,)](("\"notice\"",), "\" \"", "\"\\n\"", False, False)
-        N_1tmp: __builtin__.int = W_Apa_135.__add__(i, W_Apa_34.__fromatom__(1))
+        W_Apa_145: __builtin__.Show[__builtin__.str] = __builtin__.ShowD_str()
+        W_Apa_116: __builtin__.Show[(__builtin__.str,)] = $ShowTuple@[(__builtin__.Show[__builtin__.str],), (__builtin__.str,), ()]((W_Apa_145,))
+        print@[(__builtin__.str,)](W_Apa_116, ("\"notice\"",), "\" \"", "\"\\n\"", False, False)
+        N_1tmp: __builtin__.int = W_Apa_140.__add__(i, W_Apa_35.__fromatom__(1))
         return $R_CONT@[__builtin__.int](C_cont, N_1tmp)
     proc def __startup__G_local (self : Self, C_cont : $Cont[None]) -> $R:
-        return self.setupG_local($SKIPRES@[None](L_4Cont(C_cont)), L_6action(self))
+        W_Apa_200: __builtin__.Show[__builtin__.str] = __builtin__.ShowD_str()
+        W_Apa_174: __builtin__.Show[(__builtin__.str,)] = $ShowTuple@[(__builtin__.Show[__builtin__.str],), (__builtin__.str,), ()]((W_Apa_200,))
+        return self.setupG_local($SKIPRES@[None](L_4Cont(W_Apa_174, C_cont)), L_6action(self))
     action def setup (self : Self, cb : $action[(__builtin__.int,), __builtin__.int]) -> None:
         return $ASYNC@[None](self, L_7proc(self, cb))
     action def compute (self : Self, cb : $action[(__builtin__.int,), __builtin__.int]) -> __builtin__.int:
@@ -279,11 +309,15 @@ class Bepa ($Actor, __builtin__.value):
         $MarkStartup((async self.__startup__)())
         return None
     proc def callbackG_local (self : Self, C_cont : $Cont[__builtin__.int], i : __builtin__.int) -> $R:
-        print@[(__builtin__.str, __builtin__.int)](("\"callback\"", i), "\" \"", "\"\\n\"", False, False)
-        N_2tmp: __builtin__.int = W_Apa_135.__add__(i, W_Apa_34.__fromatom__(1))
+        W_Apa_300: __builtin__.Show[__builtin__.str] = __builtin__.ShowD_str()
+        W_Apa_269: __builtin__.Show[(__builtin__.str, __builtin__.int)] = $ShowTuple@[(__builtin__.Show[__builtin__.str], __builtin__.Show[__builtin__.int]), (__builtin__.str, __builtin__.int), ()]((W_Apa_300, W_Apa_301))
+        print@[(__builtin__.str, __builtin__.int)](W_Apa_269, ("\"callback\"", i), "\" \"", "\"\\n\"", False, False)
+        N_2tmp: __builtin__.int = W_Apa_140.__add__(i, W_Apa_35.__fromatom__(1))
         return $R_CONT@[__builtin__.int](C_cont, N_2tmp)
     proc def __startup__G_local (self : Self, C_cont : $Cont[None]) -> $R:
-        print@[(__builtin__.str,)](("\"Bepa\"",), "\" \"", "\"\\n\"", False, False)
+        W_Apa_326: __builtin__.Show[__builtin__.str] = __builtin__.ShowD_str()
+        W_Apa_304: __builtin__.Show[(__builtin__.str,)] = $ShowTuple@[(__builtin__.Show[__builtin__.str],), (__builtin__.str,), ()]((W_Apa_326,))
+        print@[(__builtin__.str,)](W_Apa_304, ("\"Bepa\"",), "\" \"", "\"\\n\"", False, False)
         return $R_CONT@[None](C_cont, None)
     action def callback (self : Self, i : __builtin__.int) -> __builtin__.int:
         return $ASYNC@[__builtin__.int](self, L_11proc(self, i))
@@ -297,12 +331,15 @@ class main ($Actor, __builtin__.value):
         $MarkStartup((async self.__startup__)())
         return None
     proc def __startup__G_local (self : Self, C_cont : $Cont[None]) -> $R:
+        W_Apa_574: __builtin__.Show[__builtin__.str] = __builtin__.ShowD_str()
+        W_Apa_455: __builtin__.Show[(__builtin__.str,)] = $ShowTuple@[(__builtin__.Show[__builtin__.str],), (__builtin__.str,), ()]((W_Apa_574,))
+        W_Apa_512: __builtin__.Show[(__builtin__.str, __builtin__.int)] = $ShowTuple@[(__builtin__.Show[__builtin__.str], __builtin__.Show[__builtin__.int]), (__builtin__.str, __builtin__.int), ()]((W_Apa_574, W_Apa_301))
         a: Apa = ApaG_newact()
         b: Bepa = BepaG_newact()
-        print@[(__builtin__.str,)](("\"-----\"",), "\" \"", "\"\\n\"", False, False)
+        print@[(__builtin__.str,)](W_Apa_455, ("\"-----\"",), "\" \"", "\"\\n\"", False, False)
         (async a.setup)(L_15action(a))
         x: __builtin__.Msg[__builtin__.int] = (async a.compute)(L_17action(b))
-        return $AWAIT@[__builtin__.int](L_21Cont(a, self, C_cont), x)
+        return $AWAIT@[__builtin__.int](L_21Cont(W_Apa_512, a, self, W_Apa_455, C_cont), x)
     action def __startup__ (self : Self) -> None:
         return $ASYNC@[None](self, L_22proc(self))
 com def ApaG_newact () -> Apa:

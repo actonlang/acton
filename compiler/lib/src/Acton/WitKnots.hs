@@ -95,6 +95,10 @@ witDeps ws d                    = (w, WAbs tvs ps as)
         tvs                     = qbound $ qbinds d
 
 witCall ws t e@Call{}
+  | TApp _ (Var _ q) _ <- fun e,
+    q == primCAST,
+    PosArg inner PosNil <- pargs e
+                                = witCall ws t inner
   | Var _ (NoQ n) <- fun e,
     n `elem` ws                 = Just (WApp n [] $ arglist (pargs e))
   | TApp _ f tvs <- fun e,
@@ -179,6 +183,11 @@ tieknots cycledeps dec
             ap (PosNIL)         = foldr depParam PosNIL mydeps
     tieI d                      = d
 
+    -- Inherited Show/Bool evidence can wrap a constructor in a receiver cast.
+    -- The cast changes no object: still recognize and tie the constructor's
+    -- knot, preserving the cast around the reused witness.
+    tieE e@Call{fun=TApp _ (Var _ q) _, pargs=PosArg inner PosNil}
+      | q == primCAST           = e{ pargs = PosArg (tieE inner) PosNil }
     tieE e@Call{fun=Var _ (NoQ n)}
                                 = tieCall n e
     tieE e@Call{fun=TApp _ (Var _ (NoQ n)) _}

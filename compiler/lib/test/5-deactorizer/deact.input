@@ -1,60 +1,77 @@
-W_Apa_34: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+W_Apa_35: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
 
-W_Apa_135: __builtin__.Plus[__builtin__.int] = __builtin__.IntegralD_int()
+W_Apa_140: __builtin__.Plus[__builtin__.int] = __builtin__.IntegralD_int()
 
-W_Apa_100: __builtin__.Times[__builtin__.int, __builtin__.int] = __builtin__.IntegralD_int()
+W_Apa_301: __builtin__.Show[__builtin__.int] = __builtin__.ShowD_int()
 
-W_Apa_390: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
+W_Apa_103: __builtin__.Times[__builtin__.int, __builtin__.int] = __builtin__.IntegralD_int()
+
+W_Apa_404: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
 
 # recursive group:
 actor Apa ():
     __startup__ : action() -> None
     proc def setup (cb : action(__builtin__.int) -> __builtin__.int) -> None:
-        print@[(__builtin__.str,)](("\"setup\"",), "\" \"", "\"\\n\"", False, False)
-        cb(W_Apa_34.__fromatom__(0))
+        W_Apa_44: __builtin__.Show[__builtin__.str] = __builtin__.ShowD_str()
+        W_Apa_7: __builtin__.Show[(__builtin__.str,)] = $ShowTuple@[(__builtin__.Show[__builtin__.str],), (__builtin__.str,), ()]((W_Apa_44,))
+        print@[(__builtin__.str,)](W_Apa_7, ("\"setup\"",), "\" \"", "\"\\n\"", False, False)
+        cb(W_Apa_35.__fromatom__(0))
         return None
     proc def compute (cb : action(__builtin__.int) -> __builtin__.int) -> __builtin__.int:
-        print@[(__builtin__.str,)](("\"compute\"",), "\" \"", "\"\\n\"", False, False)
-        v: __builtin__.int = cb(W_Apa_34.__fromatom__(1))
-        m: __builtin__.Msg[__builtin__.int] = (async cb)(W_Apa_34.__fromatom__(2))
-        N_tmp: __builtin__.int = W_Apa_100.__mul__(v, W_Apa_34.__fromatom__(10))
+        W_Apa_113: __builtin__.Show[__builtin__.str] = __builtin__.ShowD_str()
+        W_Apa_47: __builtin__.Show[(__builtin__.str,)] = $ShowTuple@[(__builtin__.Show[__builtin__.str],), (__builtin__.str,), ()]((W_Apa_113,))
+        print@[(__builtin__.str,)](W_Apa_47, ("\"compute\"",), "\" \"", "\"\\n\"", False, False)
+        v: __builtin__.int = cb(W_Apa_35.__fromatom__(1))
+        m: __builtin__.Msg[__builtin__.int] = (async cb)(W_Apa_35.__fromatom__(2))
+        N_tmp: __builtin__.int = W_Apa_103.__mul__(v, W_Apa_35.__fromatom__(10))
         return N_tmp
     proc def notice (i : __builtin__.int) -> __builtin__.int:
-        print@[(__builtin__.str,)](("\"notice\"",), "\" \"", "\"\\n\"", False, False)
-        N_1tmp: __builtin__.int = W_Apa_135.__add__(i, W_Apa_34.__fromatom__(1))
+        W_Apa_145: __builtin__.Show[__builtin__.str] = __builtin__.ShowD_str()
+        W_Apa_116: __builtin__.Show[(__builtin__.str,)] = $ShowTuple@[(__builtin__.Show[__builtin__.str],), (__builtin__.str,), ()]((W_Apa_145,))
+        print@[(__builtin__.str,)](W_Apa_116, ("\"notice\"",), "\" \"", "\"\\n\"", False, False)
+        N_1tmp: __builtin__.int = W_Apa_140.__add__(i, W_Apa_35.__fromatom__(1))
         return N_1tmp
     proc def __startup__ () -> None:
+        W_Apa_200: __builtin__.Show[__builtin__.str] = __builtin__.ShowD_str()
+        W_Apa_174: __builtin__.Show[(__builtin__.str,)] = $ShowTuple@[(__builtin__.Show[__builtin__.str],), (__builtin__.str,), ()]((W_Apa_200,))
         setup($WRAP@[(), (__builtin__.int,), __builtin__.int](self, notice))
-        print@[(__builtin__.str,)](("\"Apa\"",), "\" \"", "\"\\n\"", False, False)
+        print@[(__builtin__.str,)](W_Apa_174, ("\"Apa\"",), "\" \"", "\"\\n\"", False, False)
         return None
     $MarkStartup((async $WRAP@[(), (), None](self, __startup__))())
 actor Bepa ():
     __startup__ : action() -> None
     proc def callback (i : __builtin__.int) -> __builtin__.int:
-        print@[(__builtin__.str, __builtin__.int)](("\"callback\"", i), "\" \"", "\"\\n\"", False, False)
-        N_2tmp: __builtin__.int = W_Apa_135.__add__(i, W_Apa_34.__fromatom__(1))
+        W_Apa_300: __builtin__.Show[__builtin__.str] = __builtin__.ShowD_str()
+        W_Apa_269: __builtin__.Show[(__builtin__.str, __builtin__.int)] = $ShowTuple@[(__builtin__.Show[__builtin__.str], __builtin__.Show[__builtin__.int]), (__builtin__.str, __builtin__.int), ()]((W_Apa_300, W_Apa_301))
+        print@[(__builtin__.str, __builtin__.int)](W_Apa_269, ("\"callback\"", i), "\" \"", "\"\\n\"", False, False)
+        N_2tmp: __builtin__.int = W_Apa_140.__add__(i, W_Apa_35.__fromatom__(1))
         return N_2tmp
     proc def __startup__ () -> None:
-        print@[(__builtin__.str,)](("\"Bepa\"",), "\" \"", "\"\\n\"", False, False)
+        W_Apa_326: __builtin__.Show[__builtin__.str] = __builtin__.ShowD_str()
+        W_Apa_304: __builtin__.Show[(__builtin__.str,)] = $ShowTuple@[(__builtin__.Show[__builtin__.str],), (__builtin__.str,), ()]((W_Apa_326,))
+        print@[(__builtin__.str,)](W_Apa_304, ("\"Bepa\"",), "\" \"", "\"\\n\"", False, False)
         return None
     $MarkStartup((async $WRAP@[(), (), None](self, __startup__))())
 actor main (env : __builtin__.Env):
     __startup__ : action() -> None
     proc def __startup__ () -> None:
+        W_Apa_574: __builtin__.Show[__builtin__.str] = __builtin__.ShowD_str()
+        W_Apa_455: __builtin__.Show[(__builtin__.str,)] = $ShowTuple@[(__builtin__.Show[__builtin__.str],), (__builtin__.str,), ()]((W_Apa_574,))
+        W_Apa_512: __builtin__.Show[(__builtin__.str, __builtin__.int)] = $ShowTuple@[(__builtin__.Show[__builtin__.str], __builtin__.Show[__builtin__.int]), (__builtin__.str, __builtin__.int), ()]((W_Apa_574, W_Apa_301))
         proc def myproc (i : __builtin__.int) -> __builtin__.int:
-            print@[(__builtin__.str, __builtin__.int)](("\"myproc\"", i), "\" \"", "\"\\n\"", False, False)
-            if W_Apa_390.__eq__(i, W_Apa_34.__fromatom__(2)):
-                env.exit(W_Apa_34.__fromatom__(0))
+            print@[(__builtin__.str, __builtin__.int)](W_Apa_512, ("\"myproc\"", i), "\" \"", "\"\\n\"", False, False)
+            if W_Apa_404.__eq__(i, W_Apa_35.__fromatom__(2)):
+                env.exit(W_Apa_35.__fromatom__(0))
             return i
         a: Apa = Apa()
         b: Bepa = Bepa()
-        print@[(__builtin__.str,)](("\"-----\"",), "\" \"", "\"\\n\"", False, False)
+        print@[(__builtin__.str,)](W_Apa_455, ("\"-----\"",), "\" \"", "\"\\n\"", False, False)
         a.setup(a.notice)
         x: __builtin__.Msg[__builtin__.int] = (async a.compute)(b.callback)
         r: __builtin__.int = await x
-        print@[(__builtin__.str, __builtin__.int)](("\"r =\"", r), "\" \"", "\"\\n\"", False, False)
+        print@[(__builtin__.str, __builtin__.int)](W_Apa_512, ("\"r =\"", r), "\" \"", "\"\\n\"", False, False)
         a.compute($WRAP@[(), (__builtin__.int,), __builtin__.int](self, myproc))
-        print@[(__builtin__.str,)](("\"main\"",), "\" \"", "\"\\n\"", False, False)
+        print@[(__builtin__.str,)](W_Apa_455, ("\"main\"",), "\" \"", "\"\\n\"", False, False)
         return None
     $MarkStartup((async $WRAP@[(), (), None](self, __startup__))())
 # (recursive group)

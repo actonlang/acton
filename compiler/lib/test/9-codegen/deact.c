@@ -1,6 +1,17 @@
 /* Acton impl hash: test-hash */
 #include "rts/common.h"
 #include "out/types/deact.h"
+static $R deactQ_V_1closure_adapter ($action V_adapter, $Cont V_1adapter, $WORD V_2adapter) {
+    return $AWAIT(V_1adapter, ((B_Msg)((B_Msg (*) ($WORD, $WORD))(($action)(V_adapter))->$class->__asyn__)(V_adapter, V_2adapter)));
+}
+static $R deactQ_V_2closure_adapter ($action V_adapter, $Cont V_1adapter, $WORD V_2adapter) {
+    return $R_CONT(V_1adapter, ((B_value)((B_Msg (*) ($WORD, $WORD))(($action)(V_adapter))->$class->__asyn__)(V_adapter, V_2adapter)));
+}
+B_ShowD_str deactQ_W_448module;
+$ShowTuple deactQ_W_449module;
+B_ShowD_int deactQ_W_1module;
+B_Show deactQ_W_Apa_301;
+$ShowTuple deactQ_W_542module;
 $R deactQ_L_1C_1cont ($action cb, $Cont C_cont, int64_t C_2res) {
     #line 7 "test/src/deact.act"
     int64_t v = C_2res;
@@ -20,16 +31,17 @@ $Cont deactQ_L_2ContD___deserialize__($Cont self, $Serial$state state) {
     return $cont_restore(&deactQ_L_2ContG_methods, self, state);
 }
 struct $ContClass deactQ_L_2ContG_methods;
-$R deactQ_L_3C_3cont ($Cont C_cont, B_NoneType C_4res) {
+$R deactQ_L_3C_3cont (B_Show W_Apa_174, $Cont C_cont, B_NoneType C_4res) {
     #line 16 "test/src/deact.act"
-    ((B_NoneType (*) (B_tuple, B_str, B_str, bool, bool))B_print)($NEWTUPLE(1, actStrFromLiteral("Apa", 3, 3)), actStrFromLiteral(" ", 1, 1), actStrFromLiteral("\n", 1, 1), false, false);
+    ((B_NoneType (*) (B_Show, B_tuple, B_str, B_str, bool, bool))B_print)(W_Apa_174, $NEWTUPLE(1, actStrFromLiteral("Apa", 3, 3)), actStrFromLiteral(" ", 1, 1), actStrFromLiteral("\n", 1, 1), false, false);
     return $R_CONT(C_cont, B_None);
 }
 $R deactQ_L_4ContD___call__($Cont $closure, $WORD $result) {
     deactQ_L_4Cont L_self = (deactQ_L_4Cont)$closure;
     B_NoneType G_1 = (B_NoneType)$result;
-    $Cont C_cont = ($Cont)(((deactQ_L_4Cont)(L_self))->ref0);
-    return deactQ_L_3C_3cont(C_cont, G_1);
+    B_Show W_Apa_174 = (B_Show)(((deactQ_L_4Cont)(L_self))->ref0);
+    $Cont C_cont = ($Cont)(((deactQ_L_4Cont)(L_self))->ref1);
+    return deactQ_L_3C_3cont(W_Apa_174, C_cont, G_1);
 }
 $Cont deactQ_L_4ContD___deserialize__($Cont self, $Serial$state state) {
     return $cont_restore(&deactQ_L_4ContG_methods, self, state);
@@ -137,9 +149,9 @@ $proc deactQ_L_12procD___deserialize__($proc self, $Serial$state state) {
 }
 struct $Proc0Class deactQ_L_12procG_methods;
 #line 28 "test/src/deact.act"
-$R deactQ_L_13myproc (deactQ_main self, $Cont C_cont, int64_t i) {
+$R deactQ_L_13myproc (B_Show W_Apa_512, deactQ_main self, $Cont C_cont, int64_t i) {
     #line 29 "test/src/deact.act"
-    ((B_NoneType (*) (B_tuple, B_str, B_str, bool, bool))B_print)($NEWTUPLE(2, actStrFromLiteral("myproc", 6, 6), toB_int(i)), actStrFromLiteral(" ", 1, 1), actStrFromLiteral("\n", 1, 1), false, false);
+    ((B_NoneType (*) (B_Show, B_tuple, B_str, B_str, bool, bool))B_print)(W_Apa_512, $NEWTUPLE(2, actStrFromLiteral("myproc", 6, 6), toB_int(i)), actStrFromLiteral(" ", 1, 1), actStrFromLiteral("\n", 1, 1), false, false);
     #line 30 "test/src/deact.act"
     if (i == 2LL) {
         #line 31 "test/src/deact.act"
@@ -169,15 +181,17 @@ $action deactQ_L_17actionD___deserialize__($action self, $Serial$state state) {
 struct $Action1G_class deactQ_L_17actionG_methods;
 $R deactQ_L_19procD___call__ (deactQ_L_19proc L_self, $Cont C_cont) {
     int64_t G_1 = ((int64_t)((deactQ_L_19proc)(L_self))->G_1);
+    B_Show W_Apa_512 = ((deactQ_L_19proc)(L_self))->W_Apa_512;
     deactQ_main self = ((deactQ_L_19proc)(L_self))->self;
-    return deactQ_L_13myproc(self, C_cont, G_1);
+    return deactQ_L_13myproc(W_Apa_512, self, C_cont, G_1);
 }
 static const struct $ClosureField deactQ_L_19procD_fields[] = {
     {offsetof(struct deactQ_L_19proc, G_1), sizeof(((deactQ_L_19proc)0)->G_1), I64_ID},
+    {offsetof(struct deactQ_L_19proc, W_Apa_512), sizeof(((deactQ_L_19proc)0)->W_Apa_512), $CLOSURE_REF},
     {offsetof(struct deactQ_L_19proc, self), sizeof(((deactQ_L_19proc)0)->self), $CLOSURE_REF},
 };
 static const struct $ClosureLayout deactQ_L_19procD_layout = {
-    sizeof(struct deactQ_L_19proc), ($SerializableG_class)&deactQ_L_19procG_methods, 2, deactQ_L_19procD_fields
+    sizeof(struct deactQ_L_19proc), ($SerializableG_class)&deactQ_L_19procG_methods, 3, deactQ_L_19procD_fields
 };
 void deactQ_L_19procD___serialize__(deactQ_L_19proc self, $Serial$state state) {
     $closure_serialize(self, &deactQ_L_19procD_layout, state);
@@ -185,42 +199,62 @@ void deactQ_L_19procD___serialize__(deactQ_L_19proc self, $Serial$state state) {
 deactQ_L_19proc deactQ_L_19procD___deserialize__(deactQ_L_19proc self, $Serial$state state) {
     return $closure_deserialize(self, &deactQ_L_19procD_layout, state);
 }
-deactQ_L_19proc deactQ_L_19procG_new(int64_t G_1, deactQ_main G_2) {
+deactQ_L_19proc deactQ_L_19procG_new(int64_t G_1, B_Show G_2, deactQ_main G_3) {
     deactQ_L_19proc $tmp = acton_malloc(sizeof(struct deactQ_L_19proc));
     $tmp->$class = &deactQ_L_19procG_methods;
     $tmp->G_1 = G_1;
-    $tmp->self = G_2;
+    $tmp->W_Apa_512 = G_2;
+    $tmp->self = G_3;
     return $tmp;
 }
 struct deactQ_L_19procG_class deactQ_L_19procG_methods;
-B_Msg deactQ_L_20actionD___asyn__($action $closure, $WORD $arg1) {
-    deactQ_L_20action L_self = (deactQ_L_20action)$closure;
-    B_int G_1 = (B_int)$arg1;
-    deactQ_main self = (deactQ_main)(((deactQ_L_20action)(L_self))->ref0);
-    return ((B_Msg)$ASYNC((($Actor)self), (($Cont)deactQ_L_19procG_new(((B_int)G_1)->val, self))));
+B_Msg deactQ_L_20actionD___asyn__ (deactQ_L_20action L_self, B_int G_1) {
+    B_Show W_Apa_512 = ((deactQ_L_20action)(L_self))->W_Apa_512;
+    deactQ_main self = ((deactQ_L_20action)(L_self))->self;
+    return ((B_Msg)$ASYNC((($Actor)self), (($Cont)deactQ_L_19procG_new(((B_int)G_1)->val, W_Apa_512, self))));
 }
-$action deactQ_L_20actionD___deserialize__($action self, $Serial$state state) {
-    return $action_r1_restore(&deactQ_L_20actionG_methods, self, state);
+_Static_assert(offsetof(struct deactQ_L_20actionG_class, __asyn__) == offsetof(struct $actionG_class, __asyn__) && sizeof(((deactQ_L_20action)0)->$class->__asyn__) == sizeof((($action)0)->$class->__asyn__), "Closure adapter slot mismatch");
+static const struct $ClosureField deactQ_L_20actionD_fields[] = {
+    {offsetof(struct deactQ_L_20action, W_Apa_512), sizeof(((deactQ_L_20action)0)->W_Apa_512), $CLOSURE_REF},
+    {offsetof(struct deactQ_L_20action, self), sizeof(((deactQ_L_20action)0)->self), $CLOSURE_REF},
+};
+static const struct $ClosureLayout deactQ_L_20actionD_layout = {
+    sizeof(struct deactQ_L_20action), ($SerializableG_class)&deactQ_L_20actionG_methods, 2, deactQ_L_20actionD_fields
+};
+void deactQ_L_20actionD___serialize__(deactQ_L_20action self, $Serial$state state) {
+    $closure_serialize(self, &deactQ_L_20actionD_layout, state);
 }
-struct $Action1G_class deactQ_L_20actionG_methods;
-$R deactQ_L_18C_5cont (deactQ_Apa a, deactQ_main self, $Cont C_cont, int64_t C_6res) {
+deactQ_L_20action deactQ_L_20actionD___deserialize__(deactQ_L_20action self, $Serial$state state) {
+    return $closure_deserialize(self, &deactQ_L_20actionD_layout, state);
+}
+deactQ_L_20action deactQ_L_20actionG_new(B_Show G_1, deactQ_main G_2) {
+    deactQ_L_20action $tmp = acton_malloc(sizeof(struct deactQ_L_20action));
+    $tmp->$class = &deactQ_L_20actionG_methods;
+    $tmp->W_Apa_512 = G_1;
+    $tmp->self = G_2;
+    return $tmp;
+}
+struct deactQ_L_20actionG_class deactQ_L_20actionG_methods;
+$R deactQ_L_18C_5cont (B_Show W_Apa_512, deactQ_Apa a, deactQ_main self, B_Show W_Apa_455, $Cont C_cont, int64_t C_6res) {
     #line 38 "test/src/deact.act"
     int64_t r = C_6res;
     #line 39 "test/src/deact.act"
-    ((B_NoneType (*) (B_tuple, B_str, B_str, bool, bool))B_print)($NEWTUPLE(2, actStrFromLiteral("r =", 3, 3), toB_int(r)), actStrFromLiteral(" ", 1, 1), actStrFromLiteral("\n", 1, 1), false, false);
+    ((B_NoneType (*) (B_Show, B_tuple, B_str, B_str, bool, bool))B_print)(W_Apa_512, $NEWTUPLE(2, actStrFromLiteral("r =", 3, 3), toB_int(r)), actStrFromLiteral(" ", 1, 1), actStrFromLiteral("\n", 1, 1), false, false);
     #line 40 "test/src/deact.act"
-    ((B_Msg (*) ($WORD, $action))((deactQ_Apa)(a))->$class->compute)(a, (($action)((deactQ_L_20action)$Action_R1_new(&deactQ_L_20actionG_methods, self))));
+    ((B_Msg (*) ($WORD, $action))((deactQ_Apa)(a))->$class->compute)(a, (($action)deactQ_L_20actionG_new(W_Apa_512, self)));
     #line 41 "test/src/deact.act"
-    ((B_NoneType (*) (B_tuple, B_str, B_str, bool, bool))B_print)($NEWTUPLE(1, actStrFromLiteral("main", 4, 4)), actStrFromLiteral(" ", 1, 1), actStrFromLiteral("\n", 1, 1), false, false);
+    ((B_NoneType (*) (B_Show, B_tuple, B_str, B_str, bool, bool))B_print)(W_Apa_455, $NEWTUPLE(1, actStrFromLiteral("main", 4, 4)), actStrFromLiteral(" ", 1, 1), actStrFromLiteral("\n", 1, 1), false, false);
     return $R_CONT(C_cont, B_None);
 }
 $R deactQ_L_21ContD___call__($Cont $closure, $WORD $result) {
     deactQ_L_21Cont L_self = (deactQ_L_21Cont)$closure;
     B_int G_1 = (B_int)$result;
-    deactQ_Apa a = (deactQ_Apa)(((deactQ_L_21Cont)(L_self))->ref0);
-    deactQ_main self = (deactQ_main)(((deactQ_L_21Cont)(L_self))->ref1);
-    $Cont C_cont = ($Cont)(((deactQ_L_21Cont)(L_self))->ref2);
-    return deactQ_L_18C_5cont(a, self, C_cont, ((B_int)G_1)->val);
+    B_Show W_Apa_512 = (B_Show)(((deactQ_L_21Cont)(L_self))->ref0);
+    deactQ_Apa a = (deactQ_Apa)(((deactQ_L_21Cont)(L_self))->ref1);
+    deactQ_main self = (deactQ_main)(((deactQ_L_21Cont)(L_self))->ref2);
+    B_Show W_Apa_455 = (B_Show)(((deactQ_L_21Cont)(L_self))->ref3);
+    $Cont C_cont = ($Cont)(((deactQ_L_21Cont)(L_self))->ref4);
+    return deactQ_L_18C_5cont(W_Apa_512, a, self, W_Apa_455, C_cont, ((B_int)G_1)->val);
 }
 $Cont deactQ_L_21ContD___deserialize__($Cont self, $Serial$state state) {
     return $cont_restore(&deactQ_L_21ContG_methods, self, state);
@@ -242,28 +276,36 @@ B_NoneType deactQ_ApaD___init__ (deactQ_Apa self) {
 }
 #line 2 "test/src/deact.act"
 $R deactQ_ApaD_setupG_local (deactQ_Apa self, $Cont C_cont, $action cb) {
+    B_Show W_Apa_44 = (B_Show)B_ShowD_strG_witness;
+    B_Show W_Apa_7 = ((B_Show)deactQ_W_449module);
     #line 3 "test/src/deact.act"
-    ((B_NoneType (*) (B_tuple, B_str, B_str, bool, bool))B_print)($NEWTUPLE(1, actStrFromLiteral("setup", 5, 5)), actStrFromLiteral(" ", 1, 1), actStrFromLiteral("\n", 1, 1), false, false);
+    ((B_NoneType (*) (B_Show, B_tuple, B_str, B_str, bool, bool))B_print)(W_Apa_7, $NEWTUPLE(1, actStrFromLiteral("setup", 5, 5)), actStrFromLiteral(" ", 1, 1), actStrFromLiteral("\n", 1, 1), false, false);
     #line 4 "test/src/deact.act"
     ((B_Msg (*) ($WORD, B_int))(($action)(cb))->$class->__asyn__)(cb, toB_int(0LL));
     return $R_CONT(C_cont, B_None);
 }
 #line 5 "test/src/deact.act"
 $R deactQ_ApaD_computeG_local (deactQ_Apa self, $Cont C_cont, $action cb) {
+    B_Show W_Apa_113 = (B_Show)B_ShowD_strG_witness;
+    B_Show W_Apa_47 = ((B_Show)deactQ_W_449module);
     #line 6 "test/src/deact.act"
-    ((B_NoneType (*) (B_tuple, B_str, B_str, bool, bool))B_print)($NEWTUPLE(1, actStrFromLiteral("compute", 7, 7)), actStrFromLiteral(" ", 1, 1), actStrFromLiteral("\n", 1, 1), false, false);
+    ((B_NoneType (*) (B_Show, B_tuple, B_str, B_str, bool, bool))B_print)(W_Apa_47, $NEWTUPLE(1, actStrFromLiteral("compute", 7, 7)), actStrFromLiteral(" ", 1, 1), actStrFromLiteral("\n", 1, 1), false, false);
     return $AWAIT((($Cont)((deactQ_L_2Cont)$Cont_R2_new(&deactQ_L_2ContG_methods, cb, C_cont))), ((B_Msg)((B_Msg (*) ($WORD, B_int))(($action)(cb))->$class->__asyn__)(cb, toB_int(1LL))));
 }
 #line 10 "test/src/deact.act"
 $R deactQ_ApaD_noticeG_local (deactQ_Apa self, $Cont C_cont, int64_t i) {
+    B_Show W_Apa_145 = (B_Show)B_ShowD_strG_witness;
+    B_Show W_Apa_116 = ((B_Show)deactQ_W_449module);
     #line 11 "test/src/deact.act"
-    ((B_NoneType (*) (B_tuple, B_str, B_str, bool, bool))B_print)($NEWTUPLE(1, actStrFromLiteral("notice", 6, 6)), actStrFromLiteral(" ", 1, 1), actStrFromLiteral("\n", 1, 1), false, false);
+    ((B_NoneType (*) (B_Show, B_tuple, B_str, B_str, bool, bool))B_print)(W_Apa_116, $NEWTUPLE(1, actStrFromLiteral("notice", 6, 6)), actStrFromLiteral(" ", 1, 1), actStrFromLiteral("\n", 1, 1), false, false);
     int64_t N_1tmp = (((int64_t)(i + 1LL)));
     return $R_CONT(C_cont, toB_int(N_1tmp));
 }
 #line 14 "test/src/deact.act"
 $R deactQ_ApaD___startup__G_local (deactQ_Apa self, $Cont C_cont) {
-    return (($R (*) ($WORD, $Cont, $action))((deactQ_Apa)(self))->$class->setupG_local)(self, $SKIPRES((($Cont)((deactQ_L_4Cont)$Cont_R1_new(&deactQ_L_4ContG_methods, C_cont)))), (($action)((deactQ_L_6action)$Action_R1_new(&deactQ_L_6actionG_methods, self))));
+    B_Show W_Apa_200 = (B_Show)B_ShowD_strG_witness;
+    B_Show W_Apa_174 = ((B_Show)deactQ_W_449module);
+    return (($R (*) ($WORD, $Cont, $action))((deactQ_Apa)(self))->$class->setupG_local)(self, $SKIPRES((($Cont)((deactQ_L_4Cont)$Cont_R2_new(&deactQ_L_4ContG_methods, W_Apa_174, C_cont)))), (($action)((deactQ_L_6action)$Action_R1_new(&deactQ_L_6actionG_methods, self))));
 }
 B_Msg deactQ_ApaD_setup (deactQ_Apa self, $action cb) {
     return $ASYNC((($Actor)self), (($Cont)((deactQ_L_7proc)$Proc0_R2_new(&deactQ_L_7procG_methods, self, cb))));
@@ -310,15 +352,19 @@ B_NoneType deactQ_BepaD___init__ (deactQ_Bepa self) {
 }
 #line 19 "test/src/deact.act"
 $R deactQ_BepaD_callbackG_local (deactQ_Bepa self, $Cont C_cont, int64_t i) {
+    B_Show W_Apa_300 = (B_Show)B_ShowD_strG_witness;
+    B_Show W_Apa_269 = ((B_Show)deactQ_W_542module);
     #line 20 "test/src/deact.act"
-    ((B_NoneType (*) (B_tuple, B_str, B_str, bool, bool))B_print)($NEWTUPLE(2, actStrFromLiteral("callback", 8, 8), toB_int(i)), actStrFromLiteral(" ", 1, 1), actStrFromLiteral("\n", 1, 1), false, false);
+    ((B_NoneType (*) (B_Show, B_tuple, B_str, B_str, bool, bool))B_print)(W_Apa_269, $NEWTUPLE(2, actStrFromLiteral("callback", 8, 8), toB_int(i)), actStrFromLiteral(" ", 1, 1), actStrFromLiteral("\n", 1, 1), false, false);
     int64_t N_2tmp = (((int64_t)(i + 1LL)));
     return $R_CONT(C_cont, toB_int(N_2tmp));
 }
 #line 23 "test/src/deact.act"
 $R deactQ_BepaD___startup__G_local (deactQ_Bepa self, $Cont C_cont) {
+    B_Show W_Apa_326 = (B_Show)B_ShowD_strG_witness;
+    B_Show W_Apa_304 = ((B_Show)deactQ_W_449module);
     #line 24 "test/src/deact.act"
-    ((B_NoneType (*) (B_tuple, B_str, B_str, bool, bool))B_print)($NEWTUPLE(1, actStrFromLiteral("Bepa", 4, 4)), actStrFromLiteral(" ", 1, 1), actStrFromLiteral("\n", 1, 1), false, false);
+    ((B_NoneType (*) (B_Show, B_tuple, B_str, B_str, bool, bool))B_print)(W_Apa_304, $NEWTUPLE(1, actStrFromLiteral("Bepa", 4, 4)), actStrFromLiteral(" ", 1, 1), actStrFromLiteral("\n", 1, 1), false, false);
     return $R_CONT(C_cont, B_None);
 }
 B_Msg deactQ_BepaD_callback (deactQ_Bepa self, int64_t i) {
@@ -361,17 +407,20 @@ B_NoneType deactQ_mainD___init__ (deactQ_main self, B_Env env) {
 }
 #line 27 "test/src/deact.act"
 $R deactQ_mainD___startup__G_local (deactQ_main self, $Cont C_cont) {
+    B_Show W_Apa_574 = (B_Show)B_ShowD_strG_witness;
+    B_Show W_Apa_455 = ((B_Show)deactQ_W_449module);
+    B_Show W_Apa_512 = ((B_Show)deactQ_W_542module);
     #line 33 "test/src/deact.act"
     deactQ_Apa a = deactQ_ApaG_newact();
     #line 34 "test/src/deact.act"
     deactQ_Bepa b = deactQ_BepaG_newact();
     #line 35 "test/src/deact.act"
-    ((B_NoneType (*) (B_tuple, B_str, B_str, bool, bool))B_print)($NEWTUPLE(1, actStrFromLiteral("-----", 5, 5)), actStrFromLiteral(" ", 1, 1), actStrFromLiteral("\n", 1, 1), false, false);
+    ((B_NoneType (*) (B_Show, B_tuple, B_str, B_str, bool, bool))B_print)(W_Apa_455, $NEWTUPLE(1, actStrFromLiteral("-----", 5, 5)), actStrFromLiteral(" ", 1, 1), actStrFromLiteral("\n", 1, 1), false, false);
     #line 36 "test/src/deact.act"
     ((B_Msg (*) ($WORD, $action))((deactQ_Apa)(a))->$class->setup)(a, (($action)((deactQ_L_15action)$Action_R1_new(&deactQ_L_15actionG_methods, a))));
     #line 37 "test/src/deact.act"
     B_Msg x = ((B_Msg (*) ($WORD, $action))((deactQ_Apa)(a))->$class->compute)(a, (($action)((deactQ_L_17action)$Action_R1_new(&deactQ_L_17actionG_methods, b))));
-    return $AWAIT((($Cont)((deactQ_L_21Cont)$Cont_R3_new(&deactQ_L_21ContG_methods, a, self, C_cont))), x);
+    return $AWAIT((($Cont)((deactQ_L_21Cont)$Cont_R5_new(&deactQ_L_21ContG_methods, W_Apa_512, a, self, W_Apa_455, C_cont))), x);
 }
 B_Msg deactQ_mainD___startup__ (deactQ_main self) {
     return $ASYNC((($Actor)self), (($Cont)((deactQ_L_22proc)$Proc0_R1_new(&deactQ_L_22procG_methods, self))));
@@ -471,21 +520,25 @@ deactQ_main deactQ_mainG_newact (B_Env env) {
     $ConstructionEnd(N_construction_parent);
     return G_act;
 }
+static void deactQ___init__$g0 () {
+    deactQ_W_448module = (B_ShowD_str)B_ShowD_strG_witness;
+    deactQ_W_449module = $ShowTupleG_new(((B_tuple)((B_tuple)$NEWTUPLE(1, deactQ_W_448module))));
+    deactQ_W_1module = (B_ShowD_int)B_ShowD_intG_witness;
+    deactQ_W_Apa_301 = ((B_Show)deactQ_W_1module);
+    deactQ_W_542module = $ShowTupleG_new(((B_tuple)((B_tuple)$NEWTUPLE(2, deactQ_W_448module, deactQ_W_1module))));
+}
 int deactQ_done$ = 0;
 void deactQ___init__ () {
     if (deactQ_done$) return;
     deactQ_done$ = 1;
     $cont_class_init(&deactQ_L_2ContG_methods, "deactQ_L_2Cont", &$Cont_R2_shape, deactQ_L_2ContD___call__, deactQ_L_2ContD___deserialize__);
-    $cont_class_init(&deactQ_L_4ContG_methods, "deactQ_L_4Cont", &$Cont_R1_shape, deactQ_L_4ContD___call__, deactQ_L_4ContD___deserialize__);
+    $cont_class_init(&deactQ_L_4ContG_methods, "deactQ_L_4Cont", &$Cont_R2_shape, deactQ_L_4ContD___call__, deactQ_L_4ContD___deserialize__);
     $action1_class_init(&deactQ_L_6actionG_methods, "deactQ_L_6action", deactQ_L_6actionD___asyn__, deactQ_L_6actionD___deserialize__);
     $proc0_class_init(&deactQ_L_7procG_methods, "deactQ_L_7proc", &$Proc0_R2_shape, deactQ_L_7procD___call__, deactQ_L_7procD___deserialize__);
     $proc0_class_init(&deactQ_L_8procG_methods, "deactQ_L_8proc", &$Proc0_R2_shape, deactQ_L_8procD___call__, deactQ_L_8procD___deserialize__);
     {
         deactQ_L_9procG_methods.$GCINFO = "deactQ_L_9proc";
         deactQ_L_9procG_methods.$superclass = ($SuperG_class)&$procG_methods;
-        deactQ_L_9procG_methods.__bool__ = (bool (*) (deactQ_L_9proc))B_valueG_methods.__bool__;
-        deactQ_L_9procG_methods.__str__ = (B_str (*) (deactQ_L_9proc))B_valueG_methods.__str__;
-        deactQ_L_9procG_methods.__repr__ = (B_str (*) (deactQ_L_9proc))B_valueG_methods.__repr__;
         deactQ_L_9procG_methods.__init__ = NULL;
         deactQ_L_9procG_methods.__call__ = ($R (*) (deactQ_L_9proc, $Cont))deactQ_L_9procD___call__;
         deactQ_L_9procG_methods.__exec__ = ($R (*) (deactQ_L_9proc, $Cont))deactQ_L_9procD___call__;
@@ -497,9 +550,6 @@ void deactQ___init__ () {
     {
         deactQ_L_11procG_methods.$GCINFO = "deactQ_L_11proc";
         deactQ_L_11procG_methods.$superclass = ($SuperG_class)&$procG_methods;
-        deactQ_L_11procG_methods.__bool__ = (bool (*) (deactQ_L_11proc))B_valueG_methods.__bool__;
-        deactQ_L_11procG_methods.__str__ = (B_str (*) (deactQ_L_11proc))B_valueG_methods.__str__;
-        deactQ_L_11procG_methods.__repr__ = (B_str (*) (deactQ_L_11proc))B_valueG_methods.__repr__;
         deactQ_L_11procG_methods.__init__ = NULL;
         deactQ_L_11procG_methods.__call__ = ($R (*) (deactQ_L_11proc, $Cont))deactQ_L_11procD___call__;
         deactQ_L_11procG_methods.__exec__ = ($R (*) (deactQ_L_11proc, $Cont))deactQ_L_11procD___call__;
@@ -513,9 +563,6 @@ void deactQ___init__ () {
     {
         deactQ_L_19procG_methods.$GCINFO = "deactQ_L_19proc";
         deactQ_L_19procG_methods.$superclass = ($SuperG_class)&$procG_methods;
-        deactQ_L_19procG_methods.__bool__ = (bool (*) (deactQ_L_19proc))B_valueG_methods.__bool__;
-        deactQ_L_19procG_methods.__str__ = (B_str (*) (deactQ_L_19proc))B_valueG_methods.__str__;
-        deactQ_L_19procG_methods.__repr__ = (B_str (*) (deactQ_L_19proc))B_valueG_methods.__repr__;
         deactQ_L_19procG_methods.__init__ = NULL;
         deactQ_L_19procG_methods.__call__ = ($R (*) (deactQ_L_19proc, $Cont))deactQ_L_19procD___call__;
         deactQ_L_19procG_methods.__exec__ = ($R (*) (deactQ_L_19proc, $Cont))deactQ_L_19procD___call__;
@@ -523,15 +570,22 @@ void deactQ___init__ () {
         deactQ_L_19procG_methods.__deserialize__ = deactQ_L_19procD___deserialize__;
         $register(&deactQ_L_19procG_methods);
     }
-    $action1_class_init(&deactQ_L_20actionG_methods, "deactQ_L_20action", deactQ_L_20actionD___asyn__, deactQ_L_20actionD___deserialize__);
-    $cont_class_init(&deactQ_L_21ContG_methods, "deactQ_L_21Cont", &$Cont_R3_shape, deactQ_L_21ContD___call__, deactQ_L_21ContD___deserialize__);
+    {
+        deactQ_L_20actionG_methods.$GCINFO = "deactQ_L_20action";
+        deactQ_L_20actionG_methods.$superclass = ($SuperG_class)&$actionG_methods;
+        deactQ_L_20actionG_methods.__init__ = NULL;
+        deactQ_L_20actionG_methods.__call__ = ($R (*) (deactQ_L_20action, $Cont, B_int))deactQ_V_1closure_adapter;
+        deactQ_L_20actionG_methods.__exec__ = ($R (*) (deactQ_L_20action, $Cont, B_int))deactQ_V_2closure_adapter;
+        deactQ_L_20actionG_methods.__asyn__ = (B_Msg (*) (deactQ_L_20action, B_int))deactQ_L_20actionD___asyn__;
+        deactQ_L_20actionG_methods.__serialize__ = deactQ_L_20actionD___serialize__;
+        deactQ_L_20actionG_methods.__deserialize__ = deactQ_L_20actionD___deserialize__;
+        $register(&deactQ_L_20actionG_methods);
+    }
+    $cont_class_init(&deactQ_L_21ContG_methods, "deactQ_L_21Cont", &$Cont_R5_shape, deactQ_L_21ContD___call__, deactQ_L_21ContD___deserialize__);
     $proc0_class_init(&deactQ_L_22procG_methods, "deactQ_L_22proc", &$Proc0_R1_shape, deactQ_L_22procD___call__, deactQ_L_22procD___deserialize__);
     {
         deactQ_ApaG_methods.$GCINFO = "deactQ_Apa";
         deactQ_ApaG_methods.$superclass = ($SuperG_class)&$ActorG_methods;
-        deactQ_ApaG_methods.__bool__ = (bool (*) (deactQ_Apa))$ActorG_methods.__bool__;
-        deactQ_ApaG_methods.__str__ = (B_str (*) (deactQ_Apa))$ActorG_methods.__str__;
-        deactQ_ApaG_methods.__repr__ = (B_str (*) (deactQ_Apa))$ActorG_methods.__repr__;
         deactQ_ApaG_methods.__resume__ = (B_NoneType (*) (deactQ_Apa))$ActorG_methods.__resume__;
         deactQ_ApaG_methods.__cleanup__ = (B_NoneType (*) (deactQ_Apa))$ActorG_methods.__cleanup__;
         deactQ_ApaG_methods.__init__ = (B_NoneType (*) (deactQ_Apa))deactQ_ApaD___init__;
@@ -550,9 +604,6 @@ void deactQ___init__ () {
     {
         deactQ_BepaG_methods.$GCINFO = "deactQ_Bepa";
         deactQ_BepaG_methods.$superclass = ($SuperG_class)&$ActorG_methods;
-        deactQ_BepaG_methods.__bool__ = (bool (*) (deactQ_Bepa))$ActorG_methods.__bool__;
-        deactQ_BepaG_methods.__str__ = (B_str (*) (deactQ_Bepa))$ActorG_methods.__str__;
-        deactQ_BepaG_methods.__repr__ = (B_str (*) (deactQ_Bepa))$ActorG_methods.__repr__;
         deactQ_BepaG_methods.__resume__ = (B_NoneType (*) (deactQ_Bepa))$ActorG_methods.__resume__;
         deactQ_BepaG_methods.__cleanup__ = (B_NoneType (*) (deactQ_Bepa))$ActorG_methods.__cleanup__;
         deactQ_BepaG_methods.__init__ = (B_NoneType (*) (deactQ_Bepa))deactQ_BepaD___init__;
@@ -567,9 +618,6 @@ void deactQ___init__ () {
     {
         deactQ_mainG_methods.$GCINFO = "deactQ_main";
         deactQ_mainG_methods.$superclass = ($SuperG_class)&$ActorG_methods;
-        deactQ_mainG_methods.__bool__ = (bool (*) (deactQ_main))$ActorG_methods.__bool__;
-        deactQ_mainG_methods.__str__ = (B_str (*) (deactQ_main))$ActorG_methods.__str__;
-        deactQ_mainG_methods.__repr__ = (B_str (*) (deactQ_main))$ActorG_methods.__repr__;
         deactQ_mainG_methods.__resume__ = (B_NoneType (*) (deactQ_main))$ActorG_methods.__resume__;
         deactQ_mainG_methods.__cleanup__ = (B_NoneType (*) (deactQ_main))$ActorG_methods.__cleanup__;
         deactQ_mainG_methods.__init__ = (B_NoneType (*) (deactQ_main, B_Env))deactQ_mainD___init__;
@@ -579,4 +627,5 @@ void deactQ___init__ () {
         deactQ_mainG_methods.__deserialize__ = deactQ_mainD___deserialize__;
         $register(&deactQ_mainG_methods);
     }
+    deactQ___init__$g0();
 }

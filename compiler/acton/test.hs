@@ -364,9 +364,10 @@ compilerTests =
             , "def truth(x: provider.Example) -> bool:", "    return Bool.__bool__(x)" ]
           writeFile (tmp </> "src/main.act") $ unlines
             [ "import consumer", "import provider", "actor main(env):"
-            , "    item = provider.Example()", "    consumer.retain(item)"
-            , "    print(consumer.display(item))", "    print(consumer.truth(item))"
-            , "    env.exit(0)" ]
+            , "    proc def __startup__():"
+            , "        item = provider.Example()", "        consumer.retain(item)"
+            , "        print(consumer.display(item))", "        print(consumer.truth(item))"
+            , "        env.exit(0)" ]
           _ <- build "inherited defaults"
           cached <- build "cached interfaces"
           assertBool "the consumer should reuse its cached interface"

@@ -89,101 +89,102 @@ def increment(x: int) -> int:
     return x + 1
 
 actor main(env):
-    try:
-        assert str() == "None"
-        assert str(None) == "None"
-        assert str(7) == "7"
-        assert repr((7, None)) == "(7, None)"
-        assert render(Item(7)) == ("item 7", "Item(7)")
-        assert not truth(Item(0))
-        assert truth(Item(7))
-        assert not bool(Item(0))
-        assert bool(Item(7))
-        assert not Item(0)
-        assert Item(7)
-        assert not (Item(0) and Item(7))
-        assert (Item(0) or Item(7)).n == 7
-        assert (Item(7) and Item(2)).n == 2
-        assert (Item(7) or Item(2)).n == 7
-        assert all(Item(x) for x in [1, 2])
-        assert not all(Item(x) for x in [1, 0])
-        assert any(Item(x) for x in [0, 1])
-        assert not any(Item(x) for x in [0, 0])
-        derived = derived_string()
-        assert not base_string(derived)
-        assert base_string(raw_str(derived))
-        assert raw_str(derived) == "derived"
-        assert base_string(str(DerivedShow()))
-        assert str(DerivedShow()) == "derived"
-        assert not base_string(repr(DerivedShow()))
-        assert str((Item(7), None)) == "(Item(7), None)"
-        assert repr([Item(7)]) == "[Item(7)]"
-        assert ascii(Item(7)) == "'item 7'"
-        assert format_with_callable(Item(7)) == "item 7"
-        assert not truth_with_callable(Item(0))
-        assert truth_with_callable(Item(7))
-        assert disjunction(Item(0), Item(7)).n == 7
-        assert conjunction(Item(0), Item(7)).n == 0
-        assert conjunction(Item(7), Item(2)).n == 2
-        assert not raw_int(0)
-        assert raw_int(-1)
-        assert raw_float(0.0)
-        assert not raw_float(1.5)
-        assert raw_tuple((0, ""))
-        assert not raw_dict({})
-        assert raw_dict({"x": 0})
-        assert inherited_display(Plain()).startswith("<")
-        assert bool(increment)
-        assert str(increment).startswith("<")
-        absent: ?int = None
-        zero: ?int = 0
-        nonzero: ?int = 7
-        assert not bool(absent)
-        assert not zero
-        assert nonzero
-        assert str(absent) == "None"
-        assert str(zero) == "0"
-        assert (absent or 7) == 7
-        assert (zero or 7) == 7
-        assert (nonzero or 2) == 7
-        assert not (absent and 7)
-        assert not (zero and 7)
-        log: list[int] = []
-        assert str(produce_int(log)) == "7"
-        assert log == [9]
-        log.clear()
-        chosen = produce(log, 0) and fail()
-        assert chosen.n == 0
-        assert log == [0]
-        log.clear()
-        chosen = produce(log, 1) or fail()
-        assert chosen.n == 1
-        assert log == [1]
-        log.clear()
-        chosen = produce(log, 0) or produce(log, 2)
-        assert chosen.n == 2
-        assert log == [0, 2]
-        log.clear()
-        chosen = produce(log, 1) and produce(log, 2)
-        assert chosen.n == 2
-        assert log == [1, 2]
-        log.clear()
-        if produce(log, 0) and fail():
-            assert False
-        assert log == [0]
-        # Optional narrowing is retained through a boolean conjunction.
-        optional_item: ?Item = Item(7)
-        assert optional_item is not None and optional_item.n == 7
-        assert all([Item(1), Item(2)])
-        assert not any([Item(0), Item(0)])
-        assert all(Item(x) for x in [1, 2] if Item(x))
-        # Native conversion failures use static exception instances.
+    proc def __startup__():
         try:
-            int("invalid")
-            assert False
-        except ValueError as error:
-            assert "ValueError" in str(error)
-        env.exit(0)
-    except Exception as error:
-        print(error)
-        env.exit(1)
+            assert str() == "None"
+            assert str(None) == "None"
+            assert str(7) == "7"
+            assert repr((7, None)) == "(7, None)"
+            assert render(Item(7)) == ("item 7", "Item(7)")
+            assert not truth(Item(0))
+            assert truth(Item(7))
+            assert not bool(Item(0))
+            assert bool(Item(7))
+            assert not Item(0)
+            assert Item(7)
+            assert not (Item(0) and Item(7))
+            assert (Item(0) or Item(7)).n == 7
+            assert (Item(7) and Item(2)).n == 2
+            assert (Item(7) or Item(2)).n == 7
+            assert all(Item(x) for x in [1, 2])
+            assert not all(Item(x) for x in [1, 0])
+            assert any(Item(x) for x in [0, 1])
+            assert not any(Item(x) for x in [0, 0])
+            derived = derived_string()
+            assert not base_string(derived)
+            assert base_string(raw_str(derived))
+            assert raw_str(derived) == "derived"
+            assert base_string(str(DerivedShow()))
+            assert str(DerivedShow()) == "derived"
+            assert not base_string(repr(DerivedShow()))
+            assert str((Item(7), None)) == "(Item(7), None)"
+            assert repr([Item(7)]) == "[Item(7)]"
+            assert ascii(Item(7)) == "'item 7'"
+            assert format_with_callable(Item(7)) == "item 7"
+            assert not truth_with_callable(Item(0))
+            assert truth_with_callable(Item(7))
+            assert disjunction(Item(0), Item(7)).n == 7
+            assert conjunction(Item(0), Item(7)).n == 0
+            assert conjunction(Item(7), Item(2)).n == 2
+            assert not raw_int(0)
+            assert raw_int(-1)
+            assert raw_float(0.0)
+            assert not raw_float(1.5)
+            assert raw_tuple((0, ""))
+            assert not raw_dict({})
+            assert raw_dict({"x": 0})
+            assert inherited_display(Plain()).startswith("<")
+            assert bool(increment)
+            assert str(increment).startswith("<")
+            absent: ?int = None
+            zero: ?int = 0
+            nonzero: ?int = 7
+            assert not bool(absent)
+            assert not zero
+            assert nonzero
+            assert str(absent) == "None"
+            assert str(zero) == "0"
+            assert (absent or 7) == 7
+            assert (zero or 7) == 7
+            assert (nonzero or 2) == 7
+            assert not (absent and 7)
+            assert not (zero and 7)
+            log: list[int] = []
+            assert str(produce_int(log)) == "7"
+            assert log == [9]
+            log.clear()
+            chosen = produce(log, 0) and fail()
+            assert chosen.n == 0
+            assert log == [0]
+            log.clear()
+            chosen = produce(log, 1) or fail()
+            assert chosen.n == 1
+            assert log == [1]
+            log.clear()
+            chosen = produce(log, 0) or produce(log, 2)
+            assert chosen.n == 2
+            assert log == [0, 2]
+            log.clear()
+            chosen = produce(log, 1) and produce(log, 2)
+            assert chosen.n == 2
+            assert log == [1, 2]
+            log.clear()
+            if produce(log, 0) and fail():
+                assert False
+            assert log == [0]
+            # Optional narrowing is retained through a boolean conjunction.
+            optional_item: ?Item = Item(7)
+            assert optional_item is not None and optional_item.n == 7
+            assert all([Item(1), Item(2)])
+            assert not any([Item(0), Item(0)])
+            assert all(Item(x) for x in [1, 2] if Item(x))
+            # Native conversion failures use static exception instances.
+            try:
+                int("invalid")
+                assert False
+            except ValueError as error:
+                assert "ValueError" in str(error)
+            env.exit(0)
+        except Exception as error:
+            print(error)
+            env.exit(1)

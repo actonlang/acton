@@ -52,25 +52,26 @@ def check(actual: str, expected: str):
     assert actual == expected, actual
 
 actor main(env):
-    try:
-        check(render(), "()")
-        check(forward(1, "two", None), "(1, 'two', None)")
-        check(forward(Item(3)), "(Item(3))")
-        check(indirect(Item(3), 4), "(Item(3), 4)")
-        check(recursive(3, Item(3), 4), "(Item(3), 4)")
-        check(render_end(Item(3)), "(Item(3))done")
-        check(render_end(Item(3), end="!"), "(Item(3))!")
-        check(supplied(Item(4)), "(Item(4), [Item(4)], (Item(4), 7), None)")
-        check(positional((Item(5), 6)), "((Item(5), 6))")
-        check(keyword(a=Item(7), b=8), "(Item(7), 8)")
-        check(open_keyword((a=Item(9), b=10)), "((Item(9), 10))")
-        saved = save(Item(11), 12)
-        restored = deserialize(serialize(saved))
-        if isinstance(restored, Saved):
-            check(restored.render(), "(Item(11), 12)")
-        else:
-            assert False, "saved tuple did not deserialize"
-    except Exception as e:
-        print("FAIL: " + str(e))
-        env.exit(1)
-    env.exit(0)
+    proc def __startup__():
+        try:
+            check(render(), "()")
+            check(forward(1, "two", None), "(1, 'two', None)")
+            check(forward(Item(3)), "(Item(3))")
+            check(indirect(Item(3), 4), "(Item(3), 4)")
+            check(recursive(3, Item(3), 4), "(Item(3), 4)")
+            check(render_end(Item(3)), "(Item(3))done")
+            check(render_end(Item(3), end="!"), "(Item(3))!")
+            check(supplied(Item(4)), "(Item(4), [Item(4)], (Item(4), 7), None)")
+            check(positional((Item(5), 6)), "((Item(5), 6))")
+            check(keyword(a=Item(7), b=8), "(Item(7), 8)")
+            check(open_keyword((a=Item(9), b=10)), "((Item(9), 10))")
+            saved = save(Item(11), 12)
+            restored = deserialize(serialize(saved))
+            if isinstance(restored, Saved):
+                check(restored.render(), "(Item(11), 12)")
+            else:
+                assert False, "saved tuple did not deserialize"
+        except Exception as e:
+            print("FAIL: " + str(e))
+            env.exit(1)
+        env.exit(0)

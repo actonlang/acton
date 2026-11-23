@@ -860,7 +860,10 @@ poolModule constructors staticValue m
     component (AcyclicSCC n) = [n]
     component (CyclicSCC ns)
       | null [i | RecipeNode i <- ns] = ns
-      | otherwise = error ("witness pool: cyclic witness construction in " ++ prstr (modname m))
+      | otherwise = error ("witness pool: cyclic witness construction in " ++ prstr (modname m) ++
+                           "\n" ++ unlines (map describe ns))
+    describe (RecipeNode i) = "  witness " ++ show i ++ ": " ++ prstr (recipeExpression $ at i)
+    describe (Initializer c) = "  initializer " ++ prstr c
     -- Static dependencies also need named witness bindings: C generation turns
     -- their RHS into an existing builtin object. Inlining Ctor() as an argument
     -- would instead call its allocator, even for a builtin static witness.
