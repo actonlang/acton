@@ -1,0 +1,46 @@
+"""Start a child that reports SIGTERM on a FIFO, then exit.
+
+Usage: spawn_exit_terminates_child FIFO MODE FLAG
+
+The child is sh. It opens FIFO for writing, starts sleep and prints "ready".
+When sh gets SIGTERM, it writes "TERM" to FIFO, stops sleep and exits. With
+FLAG "terminate", this program starts sh with terminate_on_exit.
+
+With MODE "exit", this program prints "ready" when sh is ready and then calls
+env.exit(0). With MODE "busy", it starts an actor that prints "ready" and then
+never ends its message, so a graceful shutdown never ends and only a second
+SIGINT or SIGTERM ends the program.
+"""
+
+actor Busy():
+    proc def __startup__():
+        print("ready", flush=True)
+        while True:
+            pass
+
+
+actor main(env):
+    def on_stdout(p: Process, data: ?bytes) -> None:
+        if data is not None:
+            if env.argv[2] == "busy":
+                Busy()
+            else:
+                print(data.decode(), end="", flush=True)
+                env.exit(0)
+
+    def on_stderr(p: Process, data: ?bytes) -> None:
+        if data is not None:
+            print(data.decode(), end="", err=True)
+
+    def on_exit(p: Process, exit_code: int, signal: int) -> None:
+        print("sh exited with code {exit_code} and signal {signal}", err=True)
+        env.exit(1)
+
+    def on_error(p: Process, error: str) -> None:
+        print(error, err=True)
+        env.exit(1)
+
+    proc def __startup__():
+        script = 'trap \'echo TERM >&3; kill $!; exit\' TERM; exec 3>"$0"; sleep 60 & echo ready; wait'
+        env.process.spawn(["sh", "-c", script, env.argv[1]], on_stdout, on_stderr, on_exit, on_error,
+                          terminate_on_exit=env.argv[3] == "terminate")
