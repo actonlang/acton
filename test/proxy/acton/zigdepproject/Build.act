@@ -13,8 +13,8 @@ fingerprint = 0x0f2654ba77f95769
 # that the prefetched transitive dependency is available during compilation.
 dependencies = {
     "zlib": (
-        url="https://github.com/actonlang/acton-zlib/archive/ef6fa1c75631b92ebee3cf01e9b6ace326a2db47.tar.gz",
-        hash="N-V-__8AANAWAADerAg0qsvk6lkPK5j6I59zQv_vbZ2WAOvy",
+        url="https://github.com/actonlang/acton-zlib/archive/159519d79c7ade4e5d24cd36d5ebeab865cc2a0a.tar.gz",
+        hash="N-V-__8AAEUaAAAhFEBtEPU3htMOXqCHTK2WfRgJ7EMUmPWN",
         repo_url="https://github.com/actonlang/acton-zlib"
     )
 }
