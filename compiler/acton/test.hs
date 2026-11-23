@@ -301,8 +301,8 @@ compilerTests =
             ("B_str_from_str(" `isInfixOf` body "raw_str")
           assertBool "generic truth retains the supplied Bool witness"
             ("$class->__bool__" `isInfixOf` body "truth")
-          assertBool "source and/or no longer use the legacy class-slot macros"
-            (not $ any (`isInfixOf` generated) ["$AND(", "$OR("])
+          assertBool "source logical operators no longer use the legacy class-slot macros"
+            (not $ any (`isInfixOf` generated) ["$AND(", "$OR(", "$NOT("])
   , testCase "builtin Show/Bool scalar witnesses remain static" $ do
         withSystemTempDirectory "acton-show-bool-builtins" $ \tmp -> do
           let src = tmp </> "show_bool_builtins.act"

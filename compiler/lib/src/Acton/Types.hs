@@ -3132,6 +3132,9 @@ inferBoolTest env e                     = do (cs,env',s,t,e') <- inferTest env e
                                              (cs1,test) <- truthEvidence env e t e'
                                              return (cs++cs1, env', s, tBool, test)
 
+-- Evidence is selected for the static operand type before converting operands
+-- to a common result type for and/or. An operand already widened to
+-- value uses Bool[value]'s default; it does not redispatch on its runtime class.
 truthEvidence env original t e
   | t == tBool                         = return ([],e)
   | otherwise                           = do w <- newWitness

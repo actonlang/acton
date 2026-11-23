@@ -764,9 +764,6 @@ classidKW                           = primKW "class_id"
 superclassKW                        = primKW "superclass"
 componentsKW                        = name "components"
 
-primAND                             = gPrim "AND"
-primOR                              = gPrim "OR"
-primNOT                             = gPrim "NOT"
 primROOT                            = gPrim "ROOT"
 primROOTINIT                        = gPrim "ROOTINIT"
 primRegister                        = gPrim "register"
@@ -2983,16 +2980,10 @@ instance Gen Expr where
        | otherwise                  = gen env primNEWTUPLE <> parens (text (show n) <> comma' (gen env p))
        where n                      = nargs p
     gen env (List _ es)             = text "B_mk_list" <> parens (pretty (length es) <> hsep [comma <+> gen env e | e <- es])
-    gen env (BinOp _ e1 And e2)
-         | boxedRepType t == tBool  = parens (genRawExprAs env tBool e1 <> binPretty And <> genRawExprAs env tBool e2)
-         | otherwise                = gen env primAND <> parens (gen env t <> comma <+> gen env e1 <> comma <+> gen env e2)
-      where t                       = typeOf env e1
-    gen env (BinOp _ e1 Or e2)
-         | boxedRepType t == tBool  = parens (genRawExprAs env tBool e1 <> binPretty Or <> genRawExprAs env tBool e2)
-         | otherwise                = gen env primOR <> parens (gen env t <> comma <+> gen env e1 <> comma <+> gen env e2)
-      where t                       = typeOf env e1
---    gen env (BinOp _ e1 Or e2)      = gen env primOR <> parens (gen env t <> comma <+> gen env e1 <> comma <+> gen env e2)
---      where t                       = typeOf env e1
+    -- Types lowers operand-valued and/or to conditionals and supplies Bool
+    -- evidence for truth tests. Remaining logical operators act on bools.
+    gen env (BinOp _ e1 op e2)
+         | op `elem` [And, Or]       = parens (genRawExprAs env tBool e1 <> binPretty op <> genRawExprAs env tBool e2)
     gen env (BinOp _ e1 op e2)
             | boxedRepType t == tU1,
               Just d <- genU1RawBinOp env op e1 e2
@@ -3010,13 +3001,7 @@ instance Gen Expr where
             opstr Mod               = "MOD"
             opstr EuDiv             = "FLOORDIV"
     gen env (CompOp _ e [a])        = gen env e <+> gen env a
-    gen env (UnOp _ Not e)
-        | boxedRepType t == tBool   = parens (text "!" <> genRawExprAs env tBool e)
-        | otherwise                 = gen env primNOT <> parens (gen env t <> comma <+> gen env e)
---      | B.isUnboxable (boxedRepType t)
---                                    = genBoxed env tBool (parens (text "!" <> parens (genRawExpr env e)))
---      | otherwise                   = gen env primNOT <> parens (gen env t <> comma <+> gen env e)
-      where t                       = typeOf env e
+    gen env (UnOp _ Not e)          = parens (text "!" <> genRawExprAs env tBool e)
     gen env (UnOp _ op e)
       | t == tU1
                                     = genU1RawUnOp env op e

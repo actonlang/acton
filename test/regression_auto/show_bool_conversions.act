@@ -41,12 +41,21 @@ class Plain:
         pass
 
 # Supplied generic evidence must survive ordinary conversion and all truth
-# contexts, even while the old class slots are present for legacy printing.
+# contexts. Widening to value instead selects the root default policy.
 def disjunction[A(Bool)](x: A, y: A) -> A:
     return x or y
 
 def conjunction[A(Bool)](x: A, y: A) -> A:
     return x and y
+
+def value_truth(x: value) -> bool:
+    return bool(x)
+
+def value_conjunction(x: value, y: value) -> value:
+    return x and y
+
+def value_disjunction(x: value, y: value) -> value:
+    return x or y
 
 def format_with_callable[A(Show)](x: A) -> str:
     f: (A)->str = str
@@ -126,6 +135,22 @@ actor main(env):
             assert disjunction(Item(0), Item(7)).n == 7
             assert conjunction(Item(0), Item(7)).n == 0
             assert conjunction(Item(7), Item(2)).n == 2
+            # value has its own default Bool policy; concrete evidence is lost.
+            assert value_truth(0)
+            assert value_truth("")
+            erased_left = Item(0)
+            erased_right = Item(7)
+            assert value_truth(erased_left)
+            chosen_value = value_conjunction(erased_left, erased_right)
+            if isinstance(chosen_value, Item):
+                assert chosen_value.n == 7
+            else:
+                assert False
+            chosen_value = value_disjunction(erased_left, erased_right)
+            if isinstance(chosen_value, Item):
+                assert chosen_value.n == 0
+            else:
+                assert False
             assert not raw_int(0)
             assert raw_int(-1)
             assert raw_float(0.0)

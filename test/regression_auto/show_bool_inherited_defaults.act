@@ -89,8 +89,36 @@ mut def make_plain(log: list[int]) -> Plain:
     log.append(1)
     return Plain()
 
+# The class and helper form a recursive declaration group. Its calls use
+# inherited defaults; extensions in a later group do not change those calls.
+class Ordered(object):
+    def __init__(self):
+        pass
+    def before_extensions(self) -> (str, bool):
+        return early_policy(self)
+
+def early_policy(item: Ordered) -> (str, bool):
+    return str(item), bool(item)
+
+extension Ordered(Show):
+    def __str__(self) -> str:
+        return "ordered"
+    def __repr__(self) -> str:
+        return "Ordered()"
+
+extension Ordered(Bool):
+    def __bool__(self) -> bool:
+        return False
+
 actor main(env):
     proc def __startup__():
+        ordered = Ordered()
+        early_text, early_truth = ordered.before_extensions()
+        assert early_text.startswith("<")
+        assert early_truth
+        assert str(ordered) == "ordered"
+        assert repr(ordered) == "Ordered()"
+        assert not ordered
         plain = Plain()
         mutable = Mutable()
         assert display(keep_plain(plain)) == display(plain)
