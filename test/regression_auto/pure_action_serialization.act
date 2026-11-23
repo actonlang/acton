@@ -6,12 +6,13 @@ class Holder(object):
         self.callback = callback
 
 actor main(env):
-    holder = Holder(make_adder(7))
-    payload = serialize(holder)
-    restored = deserialize(payload)
-    assert isinstance(restored, Holder)
-    if isinstance(restored, Holder):
-        assert serialize(restored) == payload
-        assert restored.callback(5) == 12
-        assert await async restored.callback(6) == 13
-    env.exit(0)
+    proc def __startup__():
+        holder = Holder(make_adder(7))
+        payload = serialize(holder)
+        restored = deserialize(payload)
+        assert isinstance(restored, Holder)
+        if isinstance(restored, Holder):
+            assert serialize(restored) == payload
+            assert restored.callback(5) == 12
+            assert await async restored.callback(6) == 13
+        env.exit(0)

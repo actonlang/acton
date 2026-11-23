@@ -23,14 +23,15 @@ class Slot(object):
         return self.item
 
 actor main(env):
-    assert choose(True, 7) is None
-    assert choose(False, 7) == 7
-    assert last([]) is None
-    assert last([1, 2, 3]) == 3
-    assert apply_optional(pure lambda x: x + 1, None) is None
-    assert apply_optional(pure lambda x: x + 1, 4) == 5
-    slot = Slot()
-    assert slot.get() is None
-    slot.set(9)
-    assert slot.get() == 9
-    env.exit(0)
+    proc def __startup__():
+        assert choose(True, 7) is None
+        assert choose(False, 7) == 7
+        assert last([]) is None
+        assert last([1, 2, 3]) == 3
+        assert apply_optional(pure lambda x: x + 1, None) is None
+        assert apply_optional(pure lambda x: x + 1, 4) == 5
+        slot = Slot()
+        assert slot.get() is None
+        slot.set(9)
+        assert slot.get() == 9
+        env.exit(0)

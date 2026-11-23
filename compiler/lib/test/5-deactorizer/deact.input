@@ -1,27 +1,27 @@
-W_Apa_34: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+W_Apa_32: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
 
-W_Apa_135: __builtin__.Plus[__builtin__.int] = __builtin__.IntegralD_int()
+W_Apa_138: __builtin__.Plus[__builtin__.int] = __builtin__.IntegralD_int()
 
-W_Apa_100: __builtin__.Times[__builtin__.int, __builtin__.int] = __builtin__.IntegralD_int()
+W_Apa_101: __builtin__.Times[__builtin__.int, __builtin__.int] = __builtin__.IntegralD_int()
 
-W_Apa_390: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
+W_Apa_395: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
 
 # recursive group:
 actor Apa ():
     __startup__ : action() -> None
     proc def setup (cb : action(__builtin__.int) -> __builtin__.int) -> None:
         print@[(__builtin__.str,)](("\"setup\"",), "\" \"", "\"\\n\"", False, False)
-        cb(W_Apa_34.__fromatom__(0))
+        cb(W_Apa_32.__fromatom__(0))
         return None
     proc def compute (cb : action(__builtin__.int) -> __builtin__.int) -> __builtin__.int:
         print@[(__builtin__.str,)](("\"compute\"",), "\" \"", "\"\\n\"", False, False)
-        v: __builtin__.int = cb(W_Apa_34.__fromatom__(1))
-        m: __builtin__.Msg[__builtin__.int] = (async cb)(W_Apa_34.__fromatom__(2))
-        N_tmp: __builtin__.int = W_Apa_100.__mul__(v, W_Apa_34.__fromatom__(10))
+        v: __builtin__.int = cb(W_Apa_32.__fromatom__(1))
+        m: __builtin__.Msg[__builtin__.int] = (async cb)(W_Apa_32.__fromatom__(2))
+        N_tmp: __builtin__.int = W_Apa_101.__mul__(v, W_Apa_32.__fromatom__(10))
         return N_tmp
     proc def notice (i : __builtin__.int) -> __builtin__.int:
         print@[(__builtin__.str,)](("\"notice\"",), "\" \"", "\"\\n\"", False, False)
-        N_1tmp: __builtin__.int = W_Apa_135.__add__(i, W_Apa_34.__fromatom__(1))
+        N_1tmp: __builtin__.int = W_Apa_138.__add__(i, W_Apa_32.__fromatom__(1))
         return N_1tmp
     proc def __startup__ () -> None:
         setup($WRAP@[(), (__builtin__.int,), __builtin__.int](self, notice))
@@ -32,8 +32,8 @@ actor Bepa ():
     __startup__ : action() -> None
     proc def callback (i : __builtin__.int) -> __builtin__.int:
         print@[(__builtin__.str, __builtin__.int)](("\"callback\"", i), "\" \"", "\"\\n\"", False, False)
-        N_2tmp: __builtin__.int = W_Apa_135.__add__(i, W_Apa_34.__fromatom__(1))
-        return N_2tmp
+        N_3tmp: __builtin__.int = W_Apa_138.__add__(i, W_Apa_32.__fromatom__(1))
+        return N_3tmp
     proc def __startup__ () -> None:
         print@[(__builtin__.str,)](("\"Bepa\"",), "\" \"", "\"\\n\"", False, False)
         return None
@@ -43,8 +43,8 @@ actor main (env : __builtin__.Env):
     proc def __startup__ () -> None:
         proc def myproc (i : __builtin__.int) -> __builtin__.int:
             print@[(__builtin__.str, __builtin__.int)](("\"myproc\"", i), "\" \"", "\"\\n\"", False, False)
-            if W_Apa_390.__eq__(i, W_Apa_34.__fromatom__(2)):
-                env.exit(W_Apa_34.__fromatom__(0))
+            if W_Apa_395.__eq__(i, W_Apa_32.__fromatom__(2)):
+                env.exit(W_Apa_32.__fromatom__(0))
             return i
         a: Apa = Apa()
         b: Bepa = Bepa()

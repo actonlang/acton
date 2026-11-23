@@ -18,9 +18,10 @@ class Child(Base):
         return Base.add(self, n) + 1
 
 actor main(env):
-    child = Child()
-    assert child.value == 3
-    assert child.add(4) == 8
-    assert Base.add(child, 4) == 7
-    assert Base.twice(4) == 8
-    env.exit(0)
+    proc def __startup__():
+        child = Child()
+        assert child.value == 3
+        assert child.add(4) == 8
+        assert Base.add(child, 4) == 7
+        assert Base.twice(4) == 8
+        env.exit(0)

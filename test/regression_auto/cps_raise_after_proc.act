@@ -11,15 +11,16 @@ proc def parse_float(text: str) -> float:
     return parsed_value
 
 actor main(env):
-    assert parse_float("1.25") == 1.25
-    try:
-        parse_float("invalid")
-        assert False
-    except ValueError:
-        pass
-    try:
-        parse_float("nan")
-        assert False
-    except ValueError:
-        pass
-    env.exit(0)
+    proc def __startup__():
+        assert parse_float("1.25") == 1.25
+        try:
+            parse_float("invalid")
+            assert False
+        except ValueError:
+            pass
+        try:
+            parse_float("nan")
+            assert False
+        except ValueError:
+            pass
+        env.exit(0)

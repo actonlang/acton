@@ -1,16 +1,16 @@
-W_Apa_34: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+W_Apa_32: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
 
-W_Apa_135: __builtin__.Plus[__builtin__.int] = __builtin__.IntegralD_int()
+W_Apa_138: __builtin__.Plus[__builtin__.int] = __builtin__.IntegralD_int()
 
-W_Apa_100: __builtin__.Times[__builtin__.int, __builtin__.int] = __builtin__.IntegralD_int()
+W_Apa_101: __builtin__.Times[__builtin__.int, __builtin__.int] = __builtin__.IntegralD_int()
 
-W_Apa_390: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
+W_Apa_395: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
 
 # recursive group:
 proc def L_1C_1cont (cb : $action[(__builtin__.int,), __builtin__.int], C_cont : $Cont[__builtin__.int], C_2res : __builtin__.int) -> $R:
     v: __builtin__.int = C_2res
-    m: __builtin__.Msg[__builtin__.int] = cb.__asyn__(W_Apa_34.__fromatom__(2))
-    N_tmp: __builtin__.int = W_Apa_100.__mul__(v, W_Apa_34.__fromatom__(10))
+    m: __builtin__.Msg[__builtin__.int] = cb.__asyn__(W_Apa_32.__fromatom__(2))
+    N_tmp: __builtin__.int = W_Apa_101.__mul__(v, W_Apa_32.__fromatom__(10))
     return $R_CONT@[__builtin__.int](C_cont, N_tmp)
 class L_2Cont ($Cont[__builtin__.int], __builtin__.value):
     @property
@@ -148,8 +148,8 @@ class L_12proc ($proc[(), None], __builtin__.value):
     # (recursive group)
 proc def L_13myproc (self : main, C_cont : $Cont[__builtin__.int], i : __builtin__.int) -> $R:
     print@[(__builtin__.str, __builtin__.int)](("\"myproc\"", i), "\" \"", "\"\\n\"", False, False)
-    if W_Apa_390.__eq__(i, W_Apa_34.__fromatom__(2)):
-        (async self.env.exit)(W_Apa_34.__fromatom__(0))
+    if W_Apa_395.__eq__(i, W_Apa_32.__fromatom__(2)):
+        (async self.env.exit)(W_Apa_32.__fromatom__(0))
     return $R_CONT@[__builtin__.int](C_cont, i)
 class L_15action ($action[(__builtin__.int,), __builtin__.int], $proc[(__builtin__.int,), __builtin__.int], __builtin__.value):
     @property
@@ -255,14 +255,14 @@ class Apa ($Actor, __builtin__.value):
         return None
     proc def setupG_local (self : Self, C_cont : $Cont[None], cb : $action[(__builtin__.int,), __builtin__.int]) -> $R:
         print@[(__builtin__.str,)](("\"setup\"",), "\" \"", "\"\\n\"", False, False)
-        cb.__asyn__(W_Apa_34.__fromatom__(0))
+        cb.__asyn__(W_Apa_32.__fromatom__(0))
         return $R_CONT@[None](C_cont, None)
     proc def computeG_local (self : Self, C_cont : $Cont[__builtin__.int], cb : $action[(__builtin__.int,), __builtin__.int]) -> $R:
         print@[(__builtin__.str,)](("\"compute\"",), "\" \"", "\"\\n\"", False, False)
-        return $AWAIT@[__builtin__.int](L_2Cont(cb, C_cont), cb.__asyn__(W_Apa_34.__fromatom__(1)))
+        return $AWAIT@[__builtin__.int](L_2Cont(cb, C_cont), cb.__asyn__(W_Apa_32.__fromatom__(1)))
     proc def noticeG_local (self : Self, C_cont : $Cont[__builtin__.int], i : __builtin__.int) -> $R:
         print@[(__builtin__.str,)](("\"notice\"",), "\" \"", "\"\\n\"", False, False)
-        N_1tmp: __builtin__.int = W_Apa_135.__add__(i, W_Apa_34.__fromatom__(1))
+        N_1tmp: __builtin__.int = W_Apa_138.__add__(i, W_Apa_32.__fromatom__(1))
         return $R_CONT@[__builtin__.int](C_cont, N_1tmp)
     proc def __startup__G_local (self : Self, C_cont : $Cont[None]) -> $R:
         return self.setupG_local($SKIPRES@[None](L_4Cont(C_cont)), L_6action(self))
@@ -280,8 +280,8 @@ class Bepa ($Actor, __builtin__.value):
         return None
     proc def callbackG_local (self : Self, C_cont : $Cont[__builtin__.int], i : __builtin__.int) -> $R:
         print@[(__builtin__.str, __builtin__.int)](("\"callback\"", i), "\" \"", "\"\\n\"", False, False)
-        N_2tmp: __builtin__.int = W_Apa_135.__add__(i, W_Apa_34.__fromatom__(1))
-        return $R_CONT@[__builtin__.int](C_cont, N_2tmp)
+        N_3tmp: __builtin__.int = W_Apa_138.__add__(i, W_Apa_32.__fromatom__(1))
+        return $R_CONT@[__builtin__.int](C_cont, N_3tmp)
     proc def __startup__G_local (self : Self, C_cont : $Cont[None]) -> $R:
         print@[(__builtin__.str,)](("\"Bepa\"",), "\" \"", "\"\\n\"", False, False)
         return $R_CONT@[None](C_cont, None)
