@@ -3894,6 +3894,47 @@ p74_outputs_of_another_compiler_build_are_redone =
     assertBool ("expected util's generated code to be up to date\n" ++ T.unpack out2)
       (maybe False ("generated code up to date" `T.isInfixOf`) (dbpLineFor out2 "util"))
 
+-- | A copy of the base library of the dist tree in a new directory under
+-- 'tmp', laid out as in the dist tree, so that its dependencies are found
+-- at the same relative paths.  Returns the copy's project directory.
+copyDistBase :: FilePath -> IO FilePath
+copyDistBase tmp = do
+  dist <- distPath
+  let proj = tmp </> "base"
+  createDirectoryIfMissing True proj
+  forM_ ["Build.act", "build.zig", "build.zig.zon", "__root.zig", "acton.zig", "builtin", "rts", "src"] $ \entry ->
+    callProcess "cp" ["-R", dist </> "base" </> entry, proj </> entry]
+  createDirectoryLink (dist </> "backend") (tmp </> "backend")
+  createDirectoryLink (dist </> "deps") (tmp </> "deps")
+  return proj
+
+p75_cached_builtin_regenerates_stale_code :: TestTree
+p75_cached_builtin_regenerates_stale_code =
+  testCase "75-a cached __builtin__ generates its out of date code again" $
+    withSystemTempDirectory "builtin-codegen" $ \tmp -> do
+      proj <- copyDistBase tmp
+      let builtinC = proj </> "out" </> "types" </> "__builtin__.c"
+          staleTag = "/* Acton impl hash: deadbeef */"
+          firstLine file = T.takeWhile (/= '\n') <$> T.readFile file
+          -- As make builds the base library of the dist tree.
+          build = do
+            res <- runActonIn proj ["build", "--skip-build", "--no-dbp", "--color", "never", "--verbose"]
+            assertExitSuccess ("build in " ++ proj) res
+            return (snd res)
+      _ <- build
+      generated <- firstLine builtinC
+      -- What an interrupted build leaves behind: the .tydb of the current
+      -- source next to code that an earlier build generated.
+      rewriteFirstLine builtinC staleTag
+      out <- build
+      regenerated <- firstLine builtinC
+      assertBool ("expected __builtin__'s code to be generated again\n" ++ T.unpack out)
+        (regenerated /= T.pack staleTag)
+      regenerated @?= generated
+      out2 <- build
+      assertBool ("did not expect __builtin__ to be checked again\n" ++ T.unpack out2)
+        (not (typechecked out2 "__builtin__"))
+
 -- Source written during a read ------------------------------------------------
 
 -- | A disk source provider that writes new text to a source file right after
@@ -4310,6 +4351,7 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
       , p72_ext_c_include_through_linked_directory
       , p73_doc_page_written_after_builds_without_docs
       , p74_outputs_of_another_compiler_build_are_redone
+      , p75_cached_builtin_regenerates_stale_code
       ]
   , sequentialTestGroup "incremental-cache-cases" AllSucceed
       [ p41_stale_header_missing_import_reparses_source

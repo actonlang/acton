@@ -98,7 +98,9 @@ the compiler binary, we rerun back passes even if no other hashes changed. The
 front passes write the `.tydb` before the back passes write the code, so this
 check also catches the code that such a build leaves behind: `acton build
 --sigs` and `acton sig` write the `.tydb` but not the code, and so does a build
-that is interrupted or cancelled in between.
+that is interrupted or cancelled in between. `__builtin__`, which only the base
+library compiles, and before every other module (`compileBuiltin`), makes the
+same check and runs its front passes again when its code is out of date.
 
 Every `.tydb`, generated file and documentation page records the build of the
 compiler that wrote it: the `.tydb` in its `compiler` key, a file as a stamp

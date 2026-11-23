@@ -140,9 +140,9 @@ runs the front passes (compileModule).  A TyTask is checked in this order:
      compiler wrote a file or a file is older than the compiler binary
      (refreshCodegen).  A build that wrote the .tydb but not the code, such
      as acton build --sigs or an interrupted build, thus leaves no stale
-     code behind.  __builtin__, which only the base library compiles, is
-     the exception: its code is checked only when its front passes run
-     (compileBuiltin).
+     code behind.  __builtin__, which only the base library compiles,
+     compares the same before its cached interface serves, and runs its
+     front passes again when its code is out of date (compileBuiltin).
   5. Otherwise the .tydb is used as it is (reuse).
 
 A module that steps 3 to 5 bring up to date without its front passes also
@@ -3375,14 +3375,21 @@ compileModules build plan = do
 -- | __builtin__ defines the environment every other module is checked in,
 -- so it compiles first, in its own environment, with its imports read
 -- through the module cache.  Its cached interface serves as it is unless
--- alternative output asks for it, and --only-build compiles nothing.  A
--- failure fails the run.  Its outputs finish and its hashes become visible
--- before it reports success.
+-- alternative output asks for it or its outputs are out of date
+-- (staleBuiltinOutputs), and --only-build compiles nothing.  A failure
+-- fails the run.  Its outputs finish and its hashes become visible before
+-- it reports success.
 compileBuiltin :: BuildEnv -> CompileContext -> GlobalTask -> IO (Either CompileFailure ())
 compileBuiltin build ctx t
-  | C.only_build opts                              = return (Right ())
-  | TyTask _ <- gtTask t, not (altOutputFor ctx k) = return (Right ())
-  | otherwise                                      = do
+  | C.only_build opts                                   = return (Right ())
+  | TyTask header <- gtTask t, not (altOutputFor ctx k) = do
+      stale <- staleBuiltinOutputs build opts t header
+      if stale then compile else return (Right ())
+  | otherwise                                           = compile
+  where
+    k    = gtKey t
+    opts = optionsFor ctx k
+    compile = do
       parsed <- materialize (buildSources build) opts (gtPaths t) (tkMod k) (taskSourceFile t) Nothing (gtTask t)
       case parsed of
         Left diags        -> Left BuiltinFailed <$ emit build (Diagnostics t diags)
@@ -3398,8 +3405,30 @@ compileBuiltin build ctx t
                 Just f  -> return (Left f)
                 Nothing -> do rememberFront (buildCache build) (tkMod k) fr
                               Right () <$ reportFrontSuccess build t fr
-  where k    = gtKey t
-        opts = optionsFor ctx k
+
+-- | Whether the outputs of a cached __builtin__ are out of date: its
+-- generated code, or its documentation page when it gets one.  Its front
+-- passes then run again and write them all, its code through its eager
+-- back job.  A build of the base library that is stopped after the .tydb
+-- of __builtin__ is written leaves code of an earlier build behind, which
+-- would otherwise never be written again.  A .tydb that cannot be read
+-- for the check counts as out of date.
+staleBuiltinOutputs :: BuildEnv -> C.CompileOptions -> GlobalTask -> InterfaceFiles.HeaderSummary -> IO Bool
+staleBuiltinOutputs build opts t header = do
+    checked <- trySync $ do
+      hasNotImpl <- InterfaceFiles.readStmtHasNotImpl (tyDbPath paths mn)
+      code       <- codegenStatus gopts opts paths mn (headerCodegenTags opts paths mn header hasNotImpl (InterfaceFiles.summaryImplHash header) WholeModule)
+      page       <- docPageStatus gopts opts paths mn header
+      return ([ "generated code out of date" ++ formatOutputDelta "codegen" "generated code" code | not (outputsUpToDate code) ]
+              ++ [ "doc page out of date" ++ formatOutputDelta "doc" "doc page" status | Just status <- [page], not (outputsUpToDate status) ])
+    case checked of
+      Left e        -> True <$ info build ("  Stale " ++ label ++ ": outputs unreadable: " ++ displayException e)
+      Right []      -> return False
+      Right reasons -> True <$ mapM_ (\reason -> info build ("  Stale " ++ label ++ ": " ++ reason)) reasons
+  where gopts = buildOptions build
+        paths = gtPaths t
+        mn    = tkMod (gtKey t)
+        label = moduleLabel paths mn
 
 -- | A front stage per module, after its providers' front stages and, when
 -- its source is parsed in a stage of its own, after its parse stage.
