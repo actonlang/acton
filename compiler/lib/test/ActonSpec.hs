@@ -2211,6 +2211,15 @@ main = do
             err <- expectModuleParseFailure "[_, _] = [1, 2]\n"
             err `shouldContain` "Module top-level assignments must bind at least one name"
 
+        describe "Parser warm-up" $ do
+          -- A parse error in the sample would leave parser CAFs cold; see
+          -- Note [Parser warm-up] in Acton.Parser.
+          it "runs every entry point over its sample without a parse error" $
+            P.runParserWarmUp
+
+          it "parses its sample the same chunked and serially" $
+            expectChunkedParseMatchesSerial P.parserWarmUpSample
+
         describe "Chunked module parser" $ do
           it "matches the serial parser for mixed top-level forms" $ do
             expectChunkedParseMatchesSerial $ unlines
