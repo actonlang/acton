@@ -103,9 +103,10 @@ pub fn build(b: *std.Build) void {
         }, .flags = flags.items });
     }
 
-    if (t.os.tag.isDarwin() or
-        t.os.tag.isBSD())
-    {
+    if (t.os.tag.isDarwin() or switch (t.os.tag) {
+        .freebsd, .openbsd, .netbsd, .dragonfly => true,
+        else => false,
+    }) {
         lib.root_module.addCSourceFiles(.{ .files = &.{
             "src/unix/bsd-ifaddrs.c",
             "src/unix/kqueue.c",

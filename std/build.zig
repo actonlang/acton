@@ -112,7 +112,7 @@ pub fn build(b: *std.Build) void {
         std.log.err("Error walking dir: {}", .{err});
         std.process.exit(1);
     };
-    defer walker.deinit();
+    defer walker.deinit(io);
 
     while (true) {
         const next_result = walker.next(io) catch |err| {
@@ -242,7 +242,7 @@ pub fn build(b: *std.Build) void {
 
     var hiter_dir = b.root.openDir(io, "out/types/", .{ .iterate = true }) catch unreachable;
     var hwalker = hiter_dir.walk(b.allocator) catch unreachable;
-    defer hwalker.deinit();
+    defer hwalker.deinit(io);
 
     while (true) {
         const next_result = hwalker.next(io) catch unreachable;
