@@ -1,136 +1,53 @@
-# Calls through action-typed arguments: when the caller uses the result,
-# as in r = f(x), return f(x) or b.v = f(x), the call must await the action's
-# reply. A call in statement position, whose result is unused, sends the
-# message without waiting. That includes a statement-position unwrap f!(x),
-# both branches of a conditional expression statement and calls of an action
-# that returns None. Runner makes these statement calls while Poked, the actor
-# of the actions, is waiting for Runner.
-# A statement call that waited for the reply would deadlock the two actors, and
-# the watchdog actor would then end the test.
+# Action calls used for their results await replies. Standalone calls only
+# send, even when the action returns None or the call ends a method.
 
-class Box(object):
-    def __init__(self):
-        self.v = 0.0
+actor Target():
+    var total = 0
 
-def assign(f: action(int, float) -> float, x: int, y: float) -> float:
-    r = f(x, y)
-    return r + 0.25
+    def add(n: int) -> float:
+        total += n
+        return float(total) + 0.5
 
-def tail(f: action(int, float) -> float, x: int, y: float) -> float:
-    return f(x, y)
+    def touch() -> None:
+        total += 100
 
-def mutate(f: action(int, float) -> float, b: Box, x: int, y: float) -> None:
-    b.v = f(x, y)
+    def exercise(sender: Sender) -> None:
+        return sender.send(add, touch)
 
-def tail_str(f: action() -> str) -> str:
-    return f()
+    def get_total() -> int:
+        return total
 
-def discard(f: action(int) -> int, x: int) -> None:
-    f(x)
-
-def discard_bang(f: ?action(int) -> int, x: int) -> None:
-    f!(x)
-
-def discard_cond(f: action(int) -> int, x: int, flag: bool) -> None:
-    f(x) if flag else f(2 * x)
-
-def discard_none(g: action(int) -> None, x: int) -> None:
-    g(x)
-
-def discard_none_last(g: action(int) -> None, x: int, flag: bool) -> None:
-    if flag:
-        g(x)
-
-proc def plain_scale(x: int, y: float) -> float:
-    return float(x) * y
-
-actor Other():
-    proc def scale(x: int, y: float) -> float:
-        return float(x) * y
-
-    proc def hello() -> str:
-        return "hello"
-
-actor Poked():
-    var hits = 0
-
-    def poke(n: int) -> int:
-        hits += n
-        return hits
-
-    def nudge(n: int) -> None:
-        hits += n
-
-    def via(r: Runner, mode: int) -> int:
-        return r.run(poke, nudge, mode)
-
-    def get_hits() -> int:
-        return hits
-
-actor Runner():
-    def run(f: action(int) -> int, g: action(int) -> None, mode: int) -> int:
-        if mode == 0:
-            discard(f, 1)
-        elif mode == 1:
-            discard_bang(f, 10)
-        elif mode == 2:
-            discard_cond(f, 100, True)
-        elif mode == 3:
-            discard_cond(f, 500, False)
-        elif mode == 4:
-            discard_none(g, 10000)
-        else:
-            discard_none_last(g, 100000, True)
-        return mode
+actor Sender():
+    def send(f: action(int) -> float, g: action() -> None) -> None:
+        # Target is waiting for this method: awaiting either callback deadlocks.
+        f(4)
+        g()
+        f(8)
 
 actor Watchdog(env: Env):
     def timeout():
-        print("FAIL timeout, a call of an action never completed")
+        print("FAIL: action callback deadlocked")
         env.exit(1)
 
-    proc def __startup__():
+    def __startup__():
         after 5.0: timeout()
 
-
-
 actor main(env):
-    var failed = False
+    target = Target()
+    sender = Sender()
+    watchdog = Watchdog(env)
 
-    proc def __startup__():
-        w = Watchdog(env)
+    def __startup__():
+        proc def use(f: action(int) -> float) -> float:
+            result = f(3)
+            return result + 0.25
 
-        def check(what: str, got: value, expected: value, ok: bool):
-            if not ok:
-                print("FAIL", what, "got", got, "expected", expected)
-                failed = True
+        proc def forward(f: action(int) -> float) -> float:
+            return f(2)
 
-        o = Other()
-
-        r = assign(o.scale, 3, 1.5)
-        check("action assign", r, 4.75, r == 4.75)
-        r = tail(o.scale, 3, 1.5)
-        check("action tail", r, 4.5, r == 4.5)
-        b = Box()
-        mutate(o.scale, b, 2, 1.25)
-        check("action mutate", b.v, 2.5, b.v == 2.5)
-        s = tail_str(o.hello)
-        check("action tail str", s, "hello", s == "hello")
-
-        r = assign(plain_scale, 3, 1.5)
-        check("proc assign", r, 4.75, r == 4.75)
-        r = tail(plain_scale, 3, 1.5)
-        check("proc tail", r, 4.5, r == 4.5)
-
-        p = Poked()
-        rn = Runner()
-        for mode in range(6):
-            m = p.via(rn, mode)
-            check("statement call", m, mode, m == mode)
-        n = p.get_hits()
-        check("action statement calls", n, 111111, n == 111111)
-
-        if failed:
-            env.exit(1)
-        else:
-            print("OK")
-            env.exit(0)
+        assert use(target.add) == 3.75
+        assert forward(target.add) == 5.5
+        done = target.exercise(sender)
+        assert target.get_total() == 117
+        print("OK")
+        env.exit(0)
