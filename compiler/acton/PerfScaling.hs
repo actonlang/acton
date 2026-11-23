@@ -43,9 +43,11 @@ import System.Environment (getEnvironment)
 import System.Directory
 import System.FilePath
 import System.IO
+import System.IO.Error (isDoesNotExistError)
 import System.Exit (ExitCode(..))
 import System.Process
 import qualified System.Posix.IO as PIO
+import System.Posix.Signals (nullSignal, signalProcess)
 import Text.Printf
 
 data ScaleLimits = ScaleLimits
@@ -132,14 +134,21 @@ watchScaleProcess limits pid process =
             status <- readMemoryStatus (Just child)
             case status of
               Left err -> do
-                -- The child can exit between checking its status and sampling it.
-                done <- getProcessExitCode process
-                if isJust done then threadDelay 20000 >> loop child
+                -- The child can exit between checking its status and sampling
+                -- it. While another thread waits for the child, waitForProcess
+                -- holds the handle's waitpid lock and getProcessExitCode
+                -- returns Nothing, also after the child was reaped. A reaped
+                -- child no longer exists.
+                gone <- processGone child
+                if gone then threadDelay 20000 >> loop child
                 else return ("memory monitoring unavailable: " ++ err)
               Right memory
                 | memoryProcess memory >= scaleMemory limits -> return "memory limit reached"
                 | memoryAvailable memory <= scaleReserve limits -> return "available memory reserve reached"
                 | otherwise -> threadDelay 50000 >> loop child
+    -- Signal 0 only checks that the process exists.
+    processGone child = (signalProcess nullSignal (fromIntegral child) >> return False)
+                          `catch` (return . isDoesNotExistError)
 
 -- Sampling statistics ---------------------------------------------------------
 

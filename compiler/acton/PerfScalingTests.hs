@@ -32,7 +32,9 @@ import System.Exit
 import System.FilePath
 import System.FileLock (SharedExclusive(Exclusive), tryLockFile, unlockFile)
 import System.IO.Temp (withSystemTempDirectory)
+import System.Posix.Process (getProcessStatus)
 import System.Process
+import System.Process.Internals (ProcessHandle(..))
 import System.Random (mkStdGen, randoms)
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -416,6 +418,16 @@ scaleTests = testGroup "performance scaling studies"
         now <- getTime Monotonic
         reason <- watchScaleProcess (ScaleLimits (now + fromNanoSecs 40000000) 1 0) pid process
         assertEqual "an exited child must not report a monitoring failure" "time limit reached" reason
+  , testCase "samples reaped by a waiting thread leave time for output capture" $ do
+      (_, _, _, process) <- createProcess (proc "sh" ["-c", "exit 0"])
+      pid <- getPid process >>= maybe (assertFailure "the child has no process ID") return
+      -- waitForProcess holds the waitpid lock while it reaps the child.
+      takeMVar (waitpidLock process)
+      _ <- getProcessStatus True False pid
+      now <- getTime Monotonic
+      reason <- watchScaleProcess (ScaleLimits (now + fromNanoSecs 40000000) 1 0) (Just (fromIntegral pid)) process
+      putMVar (waitpidLock process) ()
+      assertEqual "a reaped child must not report a monitoring failure" "time limit reached" reason
   , testCase "unavailable monitoring stops the study unsuccessfully" $
       withSystemTempDirectory "acton-scaling-monitor" $ \directory -> do
         (gopts, opts) <- parseScale ["--max-memory", "1B", "--max-time", "2s"]
