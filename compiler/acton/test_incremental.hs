@@ -17,7 +17,7 @@ import           Data.Function (on)
 import           Data.IORef (IORef, atomicModifyIORef', newIORef, readIORef)
 import           Data.List (elemIndex, find, groupBy, intercalate, isInfixOf, isPrefixOf, partition, sort, sortOn)
 import qualified Data.Map.Strict as M
-import           Data.Maybe (isJust)
+import           Data.Maybe (isJust, isNothing)
 import           System.Directory
 import           System.Environment (getEnvironment)
 import           System.Exit
@@ -3775,6 +3775,92 @@ p72_ext_c_include_through_linked_directory =
     removeDirectoryLink (src </> "vendor")
     removePathForcibly vendor
 
+-- | The documentation page of a cases module.
+docPageOf :: String -> FilePath
+docPageOf name = casesProjDir </> "out" </> "doc" </> casesProjName </> name <.> "html"
+
+-- | The verbose line of a cached module whose documentation page is written
+-- again.
+docLineFor :: T.Text -> T.Text -> Maybe T.Text
+docLineFor out name = find (T.isInfixOf ("Doc " <> name <> ":")) (T.lines out)
+
+-- | A module boxes with the given module docstring title, whose page shows
+-- what the doc printer renders: a generic class with docstrings, a
+-- protocol, and functions whose signatures use a class of the module
+-- shapes, which boxes imports.
+writeBoxesModule :: T.Text -> IO ()
+writeBoxesModule title = do
+  writeFileUtf8 (casesSrcDir </> "shapes.act") $ T.unlines
+    [ "class Point:"
+    , "    x: int"
+    , ""
+    , "    def __init__(self, x: int):"
+    , "        self.x = x"
+    ]
+  writeFileUtf8 (casesSrcDir </> "boxes.act") $ T.unlines
+    [ "\"\"\"" <> title
+    , ""
+    , "The module of the doc page tests."
+    , "\"\"\""
+    , "import shapes"
+    , ""
+    , "class Box[T]:"
+    , "    \"\"\"A box around one value.\"\"\""
+    , "    value: T"
+    , ""
+    , "    def __init__(self, value: T):"
+    , "        self.value = value"
+    , ""
+    , "    def get(self) -> T:"
+    , "        \"\"\"The value in the box.\"\"\""
+    , "        return self.value"
+    , ""
+    , "protocol Named:"
+    , "    name : () -> str"
+    , ""
+    , "def origin() -> shapes.Point:"
+    , "    \"\"\"The point at zero.\"\"\""
+    , "    return shapes.Point(0)"
+    , ""
+    , "def boxed(p: shapes.Point) -> Box[shapes.Point]:"
+    , "    return Box(p)"
+    ]
+
+p73_doc_page_written_after_builds_without_docs :: TestTree
+p73_doc_page_written_after_builds_without_docs =
+  testCase "73-a doc page that is missing or that a build without doc output left out of date is written" $ do
+    let proj = casesProjDir
+        page = docPageOf "boxes"
+        index = proj </> "out" </> "doc" </> "index.html"
+    ensureCasesProject
+    writeBoxesModule "First title"
+    _ <- buildOutIn proj
+    written <- T.readFile page
+    assertBool "expected the page to show the first title" ("First title" `T.isInfixOf` written)
+    -- A deleted page is written again, as the front passes wrote it, while
+    -- the index still links to it.
+    removeFile page
+    out1 <- buildOutIn proj
+    exists <- doesFileExist page
+    assertBool ("expected the deleted page to be written again\n" ++ T.unpack out1) exists
+    rewritten <- T.readFile page
+    assertBool "expected the page that the front passes wrote" (rewritten == written)
+    assertBool ("expected the page to be reported out of date\n" ++ T.unpack out1) (isJust (docLineFor out1 "boxes"))
+    linked <- T.readFile index
+    assertBool "expected the index to link the page" ("href=\"incremental_cases/boxes.html\"" `T.isInfixOf` linked)
+    -- --skip-build checks the edited module and writes its .tydb but no doc
+    -- page, so the next build finds the module fresh and its page out of
+    -- date.
+    writeBoxesModule "Second title"
+    _ <- buildOutInArgs proj ["--skip-build"]
+    out2 <- buildOutIn proj
+    updated <- T.readFile page
+    assertBool ("expected the page to show the second title\n" ++ T.unpack out2) ("Second title" `T.isInfixOf` updated)
+    assertBool ("expected boxes to be fresh\n" ++ T.unpack out2) (fresh out2 (modLabel proj "boxes"))
+    -- The page is up to date now.
+    out3 <- buildOutIn proj
+    assertBool ("did not expect the page to be written again\n" ++ T.unpack out3) (isNothing (docLineFor out3 "boxes"))
+
 p74_outputs_of_another_compiler_build_are_redone :: TestTree
 p74_outputs_of_another_compiler_build_are_redone =
   testCase "74-the .tydb files and code that another build of the compiler wrote are redone" $ do
@@ -4222,6 +4308,7 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
       , p70_ext_c_include_edit_rebuilds_module
       , p71_ext_c_including_own_header_settles
       , p72_ext_c_include_through_linked_directory
+      , p73_doc_page_written_after_builds_without_docs
       , p74_outputs_of_another_compiler_build_are_redone
       ]
   , sequentialTestGroup "incremental-cache-cases" AllSucceed

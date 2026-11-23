@@ -100,8 +100,8 @@ check also catches the code that such a build leaves behind: `acton build
 --sigs` and `acton sig` write the `.tydb` but not the code, and so does a build
 that is interrupted or cancelled in between.
 
-Every `.tydb` and generated file records the build of the compiler that wrote
-it: the `.tydb` in its `compiler` key, a file as a stamp
+Every `.tydb`, generated file and documentation page records the build of the
+compiler that wrote it: the `.tydb` in its `compiler` key, a file as a stamp
 after its tag on its first line, the first 16 hex digits of a hash of the
 build's identity. A build trusts only the outputs of its own build, and only
 those that are not older than its binary (`trustsCompiler`,
@@ -180,6 +180,25 @@ module records more than 10000 top-level names; `.tydb` and compilation still
 proceed. The documentation index leaves those oversized modules visible without
 linking to missing module pages. The explicit `acton doc FILE.act` command still
 prints docs for the requested file.
+
+A front pass without doc output still writes the `.tydb`: `acton build
+--skip-build`, `acton test list`, the LSP server and the build of a dependency
+project all skip the pages. The next build then finds the module cached while
+its page shows an earlier version, or is missing. So the first line of a page is
+an HTML comment with a tag, the hash of the module's source hash, which covers
+the docstrings, and its pub hash, which covers the signatures, followed by the
+compiler stamp. A module that the front stage brings up to date without its
+front passes (an impl refresh, a codegen refresh or plain reuse) compares the
+tag of its page with the one its `.tydb` header gives (`docRefresh`). When the
+page is missing, carries another tag, or another or newer build of the compiler
+wrote it, the page is written again in the background, from the interface the
+`.tydb` stores and the source parsed again, in the scope the front passes check
+the module in, without checking the module again. `--verbose` reports it:
+
+```text
+  Fresh a: using cached .tydb
+  Doc a: page out of date {doc page fad55488 -> c13e1d47}
+```
 
 ## Deferred Back Passes
 

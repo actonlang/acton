@@ -33,8 +33,8 @@ data ColorWhen = Auto | Always | Never deriving (Show, Eq)
 data OptimizeMode = Debug | ReleaseSafe | ReleaseSmall | ReleaseFast deriving (Show, Eq)
 
 -- | compilerIdentity names the build of the compiler that runs.  The .tydb
--- files and generated code that it writes record it, and a build trusts
--- only those of its own build (Acton.Compile).  No flag
+-- files, generated code and documentation pages that it writes record it,
+-- and a build trusts only those of its own build (Acton.Compile).  No flag
 -- sets it: acton and lsp-server-acton set it to their version, which make
 -- stamps with the build time of a development build, so the two programs
 -- of one build share it, and with it the out/ directory of a project.  It
@@ -397,7 +397,7 @@ sigOptions = SigOptions
 
 sigCompileOptions :: Parser CompileOptions
 sigCompileOptions = mkSigCompileOptions
-        <$> switch (long "ignore-compiler-version" <> help "Trust .tydb files and generated code that another build of the compiler wrote or that are older than the compiler binary")
+        <$> switch (long "ignore-compiler-version" <> help "Trust .tydb files, generated code and doc pages that another build of the compiler wrote or that are older than the compiler binary")
         <*> strOption (long "syspath"   <> metavar "TARGETDIR" <> value "" <> help "Set syspath")
         <*> many (strOption (long "searchpath" <> metavar "DIR" <> help "Add search path"))
         <*> many (option depOverrideReader
@@ -418,7 +418,7 @@ compileOptions = compileOptionsWith optimizeOption
 
 compileOptionsWith :: Parser OptimizeMode -> Parser CompileOptions
 compileOptionsWith optimization = CompileOptions
-        <$> switch (long "ignore-compiler-version" <> help "Trust .tydb files and generated code that another build of the compiler wrote or that are older than the compiler binary")
+        <$> switch (long "ignore-compiler-version" <> help "Trust .tydb files, generated code and doc pages that another build of the compiler wrote or that are older than the compiler binary")
         <*> switch (long "db"           <> help "Enable DB backend")
         <*> switch (long "parse"        <> help "Show the result of parsing")
         <*> switch (long "parse-ast"    <> help "Show the raw AST (Haskell Show)")

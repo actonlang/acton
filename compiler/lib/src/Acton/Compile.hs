@@ -30,12 +30,13 @@ codegen tags (codegenTags): its impl hash with everything else the back
 passes read, namely its imports and a deferred back job's selected names,
 and for the .c and the support file also its source path where they name it
 and, unless --dbg-no-lines is given, its source hash, which the #line
-directives follow.  The test result cache keys each test on its
-name's impl hash.
+directives follow.  The first line of its documentation page is tagged with
+its source hash, which covers the docstrings, and its pub hash (docTag).
+The test result cache keys each test on its name's impl hash.
 
-Every .tydb and generated file also records the build of the compiler
-that wrote it (GlobalOptions.compilerIdentity, stamped on the first line of
-a file), and a build trusts only those of its own build
+Every .tydb, generated file and documentation page also records the build
+of the compiler that wrote it (GlobalOptions.compilerIdentity, stamped on
+the first line of a file), and a build trusts only those of its own build
 and not older than its binary (trustsCompiler, compilerNewerThan).  Another
 build may write other outputs from the same inputs, which no hash shows,
 and its binary can be older than what it wrote: a release, or a build that
@@ -144,6 +145,16 @@ runs the front passes (compileModule).  A TyTask is checked in this order:
      (compileBuiltin).
   5. Otherwise the .tydb is used as it is (reuse).
 
+A module that steps 3 to 5 bring up to date without its front passes also
+compares the tag of its documentation page, when it gets one, with the one
+its .tydb header gives, and writes the page again when it is missing,
+carries another tag, or another or newer build of the compiler wrote it
+(docRefresh).  A build without doc output, such as acton build
+--skip-build, acton test list, the LSP server or a build of a dependent
+project, writes the .tydb and leaves the page behind.  The page is written
+from the stored interface and the source parsed again, without checking
+the module again.
+
 Under --only-build, every module's stored interface is trusted and no
 front pass runs.
 
@@ -184,7 +195,8 @@ Outputs
 
 A module's .tydb is written in its front stage (commitTydb).  Its
 documentation page and its --tydb copy are written in the background
-(startOutputs), and the run waits for them (awaitOutputs).
+(startOutputs), and the run waits for them (awaitOutputs).  So is the page
+that a module used from its .tydb writes again.
 
 Back queue
 ----------
@@ -1400,8 +1412,8 @@ reusableHeader gopts opts tydb = do
         return (if newer then Nothing else Just (h, tydbNs))
       _ -> return Nothing
 
--- | Whether an output that the given build of the compiler wrote (a .tydb
--- or generated code) can be trusted: when this build
+-- | Whether an output that the given build of the compiler wrote (a .tydb,
+-- generated code or a documentation page) can be trusted: when this build
 -- wrote it, or under --ignore-compiler-version.  Another build may write
 -- other outputs from the same inputs, which no hash shows, and its binary
 -- can be older than what it wrote: a release, or a build the user switches
@@ -2217,7 +2229,7 @@ refreshImpl env header hasNotImpl = do
     case attempt of
       Right (Recomputed dependencies names fr) -> do
         commitTydb env (\_ -> InterfaceFiles.updateImplRefresh (tydbOf env) (mhImpl (frHashes fr)) dependencies names)
-        Right <$> finishStored env fr
+        Right <$> finishStored env (Just header) fr
       Right InterfaceGone -> missingOwnInterface env
       _                   -> act env (RunFront ImplRefreshFailed)
 
@@ -2308,7 +2320,7 @@ refreshCodegen env header = do
     job        <- storedBackJob env module' (storedCodegenTags env module' (InterfaceFiles.storedImplHash module'))
     interest   <- storedInterest tydb (InterfaceFiles.summaryDepModules header)
     moduleInfo <- storedModuleInfo tydb (nameOf env) module'
-    finishStored env (storedResult moduleInfo
+    finishStored env (Just header) (storedResult moduleInfo
                         ModuleHashes { mhPub   = InterfaceFiles.storedPubHash module'
                                      , mhImpl  = InterfaceFiles.storedImplHash module'
                                      , mhNames = Just (publicNameMap (InterfaceFiles.storedNames module')) }
@@ -2320,33 +2332,37 @@ reuse :: ModuleEnv -> InterfaceFiles.HeaderSummary -> Maybe DeferredBackJob -> I
 reuse env header deferred = do
     shell <- readInterfaceShell env (Just (InterfaceFiles.summaryPubHash header))
                >>= maybe (missingOwnInterface env) return
-    shellResult env (InterfaceFiles.summaryDepModules header) (maybe NoBack DeferredBack deferred) shell
+    shellResult env (Just header) (InterfaceFiles.summaryDepModules header) (maybe NoBack DeferredBack deferred) shell
 
 -- | --only-build trusts the stored interfaces.  A module without a readable
 -- .tydb gets an empty interface and publishes nothing.
 onlyBuild :: ModuleEnv -> CompileTask -> IO FrontResult
 onlyBuild env task = do
     shell <- readInterfaceShell env (InterfaceFiles.summaryPubHash <$> header)
-    maybe (return (emptyResult env)) (shellResult env (maybe [] InterfaceFiles.summaryDepModules header) NoBack) shell
+    maybe (return (emptyResult env)) (shellResult env Nothing (maybe [] InterfaceFiles.summaryDepModules header) NoBack) shell
   where header = case task of
                    TyTask h -> Just h
                    _        -> Nothing
 
 -- | A result from a module's interface shell.  Its interest comes from the
 -- given dependency rows: the per-name rows on disk carry no external
--- dependencies.
-shellResult :: ModuleEnv -> [InterfaceFiles.DepModuleInfo] -> BackPlan -> InterfaceShell -> IO FrontResult
-shellResult env dependencies back shell = do
+-- dependencies.  Its documentation page is checked against the given .tydb
+-- header; --only-build gives none.
+shellResult :: ModuleEnv -> Maybe InterfaceFiles.HeaderSummary -> [InterfaceFiles.DepModuleInfo] -> BackPlan -> InterfaceShell -> IO FrontResult
+shellResult env header dependencies back shell = do
     interest <- storedInterest (tydbOf env) dependencies
-    finishStored env (storedResult (shellModuleInfo shell)
+    finishStored env header (storedResult (shellModuleInfo shell)
                         ModuleHashes { mhPub = shellPubHash shell, mhImpl = shellImplHash shell, mhNames = Nothing }
                         interest back)
 
 -- | The last steps of a result rebuilt from the .tydb, in the stage's
--- thread: the --tydb copy starts, then the hashes become visible to reads.
-finishStored :: ModuleEnv -> FrontResult -> IO FrontResult
-finishStored env fr = do
-    startOutputs (moduleBuild env) (keyOf env) (tydbCopy env)
+-- thread: given the module's .tydb header, its documentation page is
+-- written again when it is out of date (docRefresh), the --tydb copy
+-- starts, then the hashes become visible to reads.
+finishStored :: ModuleEnv -> Maybe InterfaceFiles.HeaderSummary -> FrontResult -> IO FrontResult
+finishStored env header fr = do
+    pages <- maybe (return []) (docRefresh env) header
+    startOutputs (moduleBuild env) (keyOf env) (pages ++ tydbCopy env)
     rememberFront (buildCache (moduleBuild env)) (nameOf env) fr
     return fr
 
@@ -2801,32 +2817,116 @@ docNameCountThreshold :: Int
 docNameCountThreshold = 10000
 
 -- | Whether a module gets a documentation page: not under --skip-build,
--- not in a scratch build, and with at most docNameCountThreshold names.
+-- not in a scratch build, and with at most docNameCountThreshold names, as
+-- its interface counts them (the name count of its .tydb header).
 shouldGenerateDocOutput :: C.CompileOptions -> Bool -> Int -> Bool
 shouldGenerateDocOutput opts temporary nameCount =
   not (C.skip_build opts) && not temporary && nameCount <= docNameCountThreshold
 
 -- | The module's HTML documentation page, unless the module has too many
--- names, --skip-build is given or the build is temporary.  The page shows
--- the public names as --sigs simplifies them, with the docstrings of the
--- parsed module.
+-- names, --skip-build is given or the build is temporary.  A build that
+-- writes no page can still write the module's .tydb, so the page is tagged
+-- with what it is made from (docTag), and a later build that uses the
+-- .tydb as it is writes the page again when it is out of date
+-- (docRefresh).
 docOutputs :: ModuleEnv -> A.Module -> Checked -> Hashed -> [(FrontOutputKind, IO ())]
 docOutputs env parsed checked hashed =
-    [ (FrontOutputDoc, writeDoc) | shouldGenerateDocOutput (moduleOptions env) (isTmp paths) (length (hashedNames hashed)) ]
+    [ (FrontOutputDoc, writeDoc) | shouldGenerateDocOutput (moduleOptions env) (isTmp (pathsOf env)) (length iface) ]
   where
-    paths       = pathsOf env
-    mn          = nameOf env
-    I.NModule imports iface doc = checkedInterface checked
-    publicIface = Acton.Env.publicTEnv iface
-    docDir      = projectDocDir (projPath paths)
-    docFile     = case A.modPath mn of
-                    []   -> docDir </> "unnamed" <.> "html"
-                    path -> joinPath (docDir : init path) </> last path <.> "html"
-    moduleTypes = maybe publicIface Acton.Env.modulePublicTEnv (Acton.Env.lookupModuleInfo mn (checkedTypeEnv checked))
-    simplified  = simp (define publicIface (setMod mn (checkedScope checked))) moduleTypes
-    writeDoc    = do
-      createDirectoryIfMissing True (takeDirectory docFile)
-      writeFileUtf8Atomic docFile (DocP.printHtmlDoc (I.NModule imports simplified doc) parsed)
+    I.NModule _ iface _ = checkedInterface checked
+    writeDoc            = writeDocPage (buildOptions (moduleBuild env)) (pathsOf env) (nameOf env) (docTag (hashedSource hashed) (hashedPub hashed))
+                            (renderDocPage (nameOf env) (checkedInterface checked) (checkedScope checked) (checkedTypeEnv checked) parsed)
+
+-- | A module's documentation page: its public names as --sigs simplifies
+-- them, in the scope the module is checked in, with the docstrings of its
+-- parsed source.  The module's entry in the type environment, which only
+-- __builtin__ has, gives the names when there is one.
+renderDocPage :: A.ModName -> I.NModule -> Acton.Env.Env0 -> Acton.Env.Env0 -> A.Module -> String
+renderDocPage mn (I.NModule imports iface doc) scope typeEnv parsed =
+    DocP.printHtmlDoc (I.NModule imports simplified doc) parsed
+  where publicIface = Acton.Env.publicTEnv iface
+        moduleTypes = maybe publicIface Acton.Env.modulePublicTEnv (Acton.Env.lookupModuleInfo mn typeEnv)
+        simplified  = simp (define publicIface (setMod mn scope)) moduleTypes
+
+-- | Write a module's documentation page, its first line tagged with the
+-- given tag and stamped by this build of the compiler.
+writeDocPage :: C.GlobalOptions -> Paths -> A.ModName -> B.ByteString -> String -> IO ()
+writeDocPage gopts paths mn tag page = do
+    createDirectoryIfMissing True (takeDirectory file)
+    writeFileUtf8Atomic file (docHashTag ++ " " ++ stampedHex gopts tag ++ " -->\n" ++ page)
+  where file = docPagePath paths mn
+
+-- | Where a module's documentation page is: under its project's doc
+-- directory, at the module's path.
+docPagePath :: Paths -> A.ModName -> FilePath
+docPagePath paths mn = case A.modPath mn of
+    []   -> docDir </> "unnamed" <.> "html"
+    path -> joinPath (docDir : init path) </> last path <.> "html"
+  where docDir = projectDocDir (projPath paths)
+
+-- | The text before the tag on the first line of a documentation page, an
+-- HTML comment, which may precede the doctype.
+docHashTag :: String
+docHashTag = "<!-- Acton doc hash:"
+
+-- | The tag of a module's documentation page, from the hashes that its .tydb
+-- records: of its source, which holds the docstrings the page shows, and of
+-- its public interface, which holds the signatures, so that a page is out of
+-- date when a provider's change changes them.
+docTag :: B.ByteString -> B.ByteString -> B.ByteString
+docTag sourceHash pubHash = SHA256.hash (BL.toStrict (encode ("doc" :: String, sourceHash, pubHash)))
+
+-- | The documentation page of a cached module, as one tagged output.
+docPageOutput :: Paths -> A.ModName -> B.ByteString -> TaggedOutput
+docPageOutput paths mn tag = TaggedOutput "page" (docPagePath paths mn) docHashTag (Hashing.hashHex tag)
+
+-- | The status of a cached module's documentation page, when the module gets
+-- one.  A build that writes no page, such as acton build --skip-build,
+-- acton test list, the LSP server or a build of a project that depends on
+-- the module's project, can still write the module's .tydb, after which
+-- the module is cached and its page out of date.  So can a build stopped
+-- between the two writes, and a deleted page is missing.
+docPageStatus :: C.GlobalOptions -> C.CompileOptions -> Paths -> A.ModName -> InterfaceFiles.HeaderSummary -> IO (Maybe OutputStatus)
+docPageStatus gopts opts paths mn header
+  | shouldGenerateDocOutput opts (isTmp paths) (InterfaceFiles.summaryNameCount header)
+              = Just <$> outputStatus gopts opts [docPageOutput paths mn (headerDocTag header)]
+  | otherwise = return Nothing
+
+-- | The tag of a cached module's documentation page.
+headerDocTag :: InterfaceFiles.HeaderSummary -> B.ByteString
+headerDocTag header = docTag (InterfaceFiles.summarySourceHash header) (InterfaceFiles.summaryPubHash header)
+
+-- | The documentation page of a module used from its .tydb, written again
+-- in the background when it is out of date (docPageStatus).
+docRefresh :: ModuleEnv -> InterfaceFiles.HeaderSummary -> IO [(FrontOutputKind, IO ())]
+docRefresh env header = do
+    status <- docPageStatus (buildOptions build) (moduleOptions env) (pathsOf env) (nameOf env) header
+    case status of
+      Just page | not (outputsUpToDate page) -> do
+        info build ("  Doc " ++ labelOf env ++ ": page out of date" ++ formatOutputDelta "doc" "doc page" page)
+        return [(FrontOutputDoc, refreshDocPage env (headerDocTag header))]
+      _ -> return []
+  where build = moduleBuild env
+
+-- | Write a cached module's documentation page again, from the interface its
+-- .tydb stores and its source parsed again, in the scope its front passes
+-- check it in.  The source is the one the .tydb was written from, so the
+-- page is the one its front passes write, without checking the module
+-- again.  A source that no longer parses changed after the plan read it,
+-- and the next build checks it.
+refreshDocPage :: ModuleEnv -> B.ByteString -> IO ()
+refreshDocPage env tag = do
+    parsed <- materialize (buildSources build) (moduleOptions env) paths mn (taskSourceFile (moduleTask env)) Nothing (moduleCurrent env)
+    case parsed of
+      Left _       -> return ()
+      Right (_, m) -> do
+        let adjusted = adjustImports (gtImportProviders (moduleTask env)) m
+        interface <- InterfaceFiles.readModuleIface (tydbOf env)
+        scope     <- Acton.Env.mkEnv (searchPath paths) (moduleBase env) adjusted
+        writeDocPage (buildOptions build) paths mn tag (renderDocPage mn interface scope (Converter.convEnvProtos scope) adjusted)
+  where build = moduleBuild env
+        paths = pathsOf env
+        mn    = nameOf env
 
 -- | When the last event of one progress stream passed.
 newtype Pacer = Pacer (IORef (Maybe TimeSpec))
@@ -3493,7 +3593,8 @@ parseStage build opts t = do
 
 -- Output status ------------------------------------------------------------------------------------
 
--- | An output that a module's back passes write, whose first line holds, after a fixed text, its tag and the stamp of the build
+-- | An output that a module's back passes or documentation write, whose
+-- first line holds, after a fixed text, its tag and the stamp of the build
 -- of the compiler that wrote it (stampedHex): its label in --verbose lines,
 -- its path, the text before its tag, and the tag it should carry, in hex.
 data TaggedOutput = TaggedOutput

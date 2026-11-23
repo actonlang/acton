@@ -128,6 +128,10 @@ If no name actually uses the import, per-name deps do not change, so nothing pro
 
 Generated C/H files embed a hash of everything their code is generated from: the module impl hash, the module's imports, and, unless `--dbg-no-lines` is given, its source, which the `#line` directives point into, followed by a stamp of the build of the compiler that generated them. If the embedded hash differs from the current one, another build of the compiler generated the files, or the files are older than the compiler, the compiler treats the generated code as out of date and regenerates it.
 
+## Documentation pages
+
+`acton build` writes an HTML page for each module of the project to `out/doc/`, with an index in `out/doc/index.html`. A page embeds a hash of the module's source, which holds the docstrings, and of its public interface, which holds the signatures, again with a stamp of the build of the compiler. Some commands check modules without writing their pages, such as `acton build --skip-build`, `acton test list` and the language server, and so does a build of a project that depends on the module's project. When the next build finds such a module unchanged, it compares the page with the module's cached interface and writes the page again if it is missing or out of date, without checking the module again.
+
 ## Tests and hashes
 
 Test results are cached by the per-name implHash (plus impl deps). A cached result is also tied to the compiler version, the target, the optimization mode, `--cpu`, `--db`, `--no-threads` and `--no-dbp`, the build options in `Build.act`, the Zig dependencies of the project and of its dependencies (for one at a local path, its files), and the `ACTON_` and `GC_` environment variables. Cached failures are still shown by default. Use `--show-cached` to include cached successes, or `--no-cache` to force reruns, whose results then replace the cached ones.
