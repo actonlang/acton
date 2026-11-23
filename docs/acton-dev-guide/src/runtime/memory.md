@@ -159,7 +159,10 @@ pointers its earlier calls left there do not keep actors alive, and their
 `__cleanup__` from running, for as long as the worker waits. It also drops and
 zeroes the exception frame of the worker loop (`jump0` in the worker context),
 whose setjmp saved registers that can point to a continuation that the worker
-ran.
+ran. The collector scans the registers of a waiting thread as well, and in an
+optimized build a caller-saved register can still point into a message that
+the worker handled, so `clear_before_poll` zeroes the caller-saved registers
+when it returns.
 
 ## IO and native libraries
 

@@ -2932,8 +2932,17 @@ void wt_work_cb(uv_check_t *ev) {
 // an optimized build these can include the continuation that the worker was
 // about to run and its argument. So clear_before_poll also drops jump0 and
 // zeroes it, and the first continuation after the poll pushes it again.
+//
+// The collector also scans the registers of a waiting thread. A
+// caller-saved register keeps what the worker's code last put in it until
+// other code overwrites it, and the code on the way into the poll overwrites
+// only some of them. In an optimized build one of them can point into a
+// message that the worker handled, which keeps the message and its actor
+// alive. So clear_before_poll zeroes the caller-saved registers when it
+// returns.
 #define POLL_STACK_CLEAR (64 * 1024)
 
+__attribute__((zero_call_used_regs("all-gpr")))
 static void clear_before_poll(uv_prepare_t *ev) {
     WorkerCtx wctx = GET_WCTX();
     assert(wctx->jump_top == NULL || wctx->jump_top == &wctx->jump0);   // no try is open
