@@ -427,7 +427,7 @@ B_NoneType fooQ_ThingD_set_name(fooQ_Thing self, B_str name) {
 }
 ```
 
-## Converting C strings to Acton strings
+## Converting C buffers to Acton strings and bytes
 
 The string constructors validate UTF-8 and count Unicode characters. Use an
 explicit byte length when the input can contain NUL characters:
@@ -447,11 +447,10 @@ The length excludes the final terminator; NUL bytes within that length remain
 part of the Acton string. Empty strings and one-byte ASCII strings may reuse
 immutable singleton values.
 
-For bytes, use `actBytesFromCStringCopy(s)` or `actBytesFromCStringLengthCopy(s, n)`
-when the input can change or be freed. For binary data, pass the byte count to
-a `Length` variant so it preserves embedded NUL bytes. The count is an `int64_t`.
+For bytes, `actBytesFromCString(s)` borrows a NUL-terminated buffer up to its
+first NUL. Use `actBytesFromCStringLength(s, n)` for binary data. It borrows
+exactly `n` bytes, including embedded NUL bytes, and accepts an unterminated
+buffer. Both require immutable storage that lives as long as the result.
 
-The unadorned bytes constructors currently copy. Use them with immutable input
-that will live as long as the result, so the caller also works when they switch
-to sharing. Use `actBytesFromCStringLengthNoCopy(s, n)` when sharing is required
-today.
+Use `actBytesFromCStringCopy(s)` or `actBytesFromCStringLengthCopy(s, n)` when
+the input can change or be freed. Both length variants take an `int64_t`.

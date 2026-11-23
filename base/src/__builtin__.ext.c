@@ -100,7 +100,7 @@ B_bytes B_EnvRandomD_rand_bytes (B_EnvRandom self, int64_t len) {
     if (buf == NULL)
         RAISE(B_MemoryError, actStrFromCString("Out of memory in rand_bytes"));
     B_EnvRandom_fill(buf, (size_t)len);
-    return actBytesFromCStringLengthNoCopy(buf, len);
+    return actBytesFromCStringLength(buf, len);
 }
 
 // action def stdin_is_tty() -> bool:

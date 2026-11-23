@@ -26,10 +26,6 @@
 
 #include "utf8proc.h"
 
-static struct B_ValueError B_str_invalid_utf8_copy_error =
-    STATIC_EXCEPTION(B_ValueError, "to$str: Unicode decode error");
-static struct B_ValueError B_str_invalid_utf8_nocopy_error =
-    STATIC_EXCEPTION(B_ValueError, "to_str_noc: Unicode decode error");
 static struct B_ValueError B_str_invalid_utf8_error =
     STATIC_EXCEPTION(B_ValueError, "Unicode decode error");
 static struct B_ValueError B_str_invalid_center_fill_error =
@@ -499,7 +495,7 @@ static struct bytes_buffer bytes_from_iter(B_Iterable wit, $WORD iterable) {
 // Conversion to and from C strings
 
 // Count Unicode characters within the supplied byte range, including NUL.
-static int64_t str_count_chars(const char *str, int64_t nbytes, B_ValueError error) {
+static int64_t str_count_chars(const char *str, int64_t nbytes) {
     const unsigned char *p = (const unsigned char *)str;
     const unsigned char *end = p + nbytes;
     int64_t nchars = nbytes;
@@ -510,7 +506,7 @@ static int64_t str_count_chars(const char *str, int64_t nbytes, B_ValueError err
             int cp;
             int size = utf8proc_iterate(p, end - p, &cp);
             if (size < 0) {
-                RAISE_EXC(error);
+                RAISE_EXC(&B_str_invalid_utf8_error);
                 return 0;
             }
             p += size;
@@ -520,13 +516,13 @@ static int64_t str_count_chars(const char *str, int64_t nbytes, B_ValueError err
     return nchars;
 }
 
-static B_str str_from_c(const char *str, int64_t nbytes, bool copy, B_ValueError error) {
+static B_str str_from_c(const char *str, int64_t nbytes, bool copy) {
     if (nbytes == 0)
         return null_str;
     if (nbytes == 1 && (unsigned char)str[0] < ASCII_CHAR_TABLE_SIZE)
         return &ascii_char_strs[(unsigned char)str[0]];
 
-    int64_t nchars = str_count_chars(str, nbytes, error);
+    int64_t nchars = str_count_chars(str, nbytes);
     B_str res;
     if (copy) {
         NEW_UNFILLED_STR(res, nchars, nbytes);
@@ -542,19 +538,19 @@ static B_str str_from_c(const char *str, int64_t nbytes, bool copy, B_ValueError
 }
 
 B_str actStrFromCString(const char *str) {
-    return str_from_c(str, strlen(str), false, &B_str_invalid_utf8_error);
+    return actStrFromCStringLength(str, strlen(str));
 }
 
 B_str actStrFromCStringCopy(const char *str) {
-    return str_from_c(str, strlen(str), true, &B_str_invalid_utf8_error);
+    return actStrFromCStringLengthCopy(str, strlen(str));
 }
 
 B_str actStrFromCStringLength(const char *str, int64_t nbytes) {
-    return str_from_c(str, nbytes, false, &B_str_invalid_utf8_error);
+    return str_from_c(str, nbytes, false);
 }
 
 B_str actStrFromCStringLengthCopy(const char *str, int64_t nbytes) {
-    return str_from_c(str, nbytes, true, &B_str_invalid_utf8_error);
+    return str_from_c(str, nbytes, true);
 }
 
 B_str actStrFromLiteral(const char *str, int64_t nbytes, int64_t nchars) {
@@ -562,26 +558,6 @@ B_str actStrFromLiteral(const char *str, int64_t nbytes, int64_t nchars) {
         return null_str;
     if (nbytes == 1 && (unsigned char)str[0] < ASCII_CHAR_TABLE_SIZE)
         return &ascii_char_strs[(unsigned char)str[0]];
-    B_str res = acton_malloc(sizeof(struct B_str));
-    res->$class = &B_strG_methods;
-    res->nbytes = nbytes;
-    res->nchars = nchars;
-    res->str = (unsigned char *)str;
-    return res;
-}
-
-// Keep the old ownership contracts and diagnostics during migration.
-B_str to$str(char *str) {
-    return str_from_c(str, strlen(str), true, &B_str_invalid_utf8_copy_error);
-}
-
-B_str to_str_len(const char *str, int64_t nbytes) {
-    return actStrFromCStringLengthCopy(str, nbytes);
-}
-
-B_str to_str_noc(char *str) {
-    int64_t nbytes = strlen(str);
-    int64_t nchars = str_count_chars(str, nbytes, &B_str_invalid_utf8_nocopy_error);
     B_str res = acton_malloc(sizeof(struct B_str));
     res->$class = &B_strG_methods;
     res->nbytes = nbytes;
@@ -3349,44 +3325,27 @@ B_bytearray B_bytearray_imul(B_bytearray a, int64_t n) {
 
 // Conversion to and from C strings
 
+B_bytes actBytesFromCString(const char *str) {
+    return actBytesFromCStringLength(str, strlen(str));
+}
+
 B_bytes actBytesFromCStringCopy(const char *str) {
     return actBytesFromCStringLengthCopy(str, strlen(str));
 }
 
-B_bytes actBytesFromCStringLengthCopy(const char *str, int64_t len) {
-    B_bytes res;
-    NEW_UNFILLED_BYTES(res,len);
-    memcpy(res->str,str,len);
-    return res;
-}
-
-B_bytes actBytesFromCStringNoCopy(char *str) {
-    return actBytesFromCStringLengthNoCopy(str, strlen(str));
-}
-
-B_bytes actBytesFromCStringLengthNoCopy(char *str, int64_t length) {
+B_bytes actBytesFromCStringLength(const char *str, int64_t len) {
     B_bytes res = acton_malloc(sizeof(struct B_bytes));
     res->$class = &B_bytesG_methods;
-    res->nbytes = length;
+    res->nbytes = len;
     res->str = (unsigned char *)str;
     return res;
 }
 
-// These existing names continue to copy until downstream callers migrate.
-B_bytes actBytesFromCString(char *str) {
-    return actBytesFromCStringCopy(str);
-}
-
-B_bytes actBytesFromCStringLength(char *str, int64_t len) {
-    return actBytesFromCStringLengthCopy(str, len);
-}
-
-B_bytes to$bytes(char *str) {
-    return actBytesFromCStringCopy(str);
-}
-
-B_bytes to$bytesD_len(char *str, int64_t len) {
-    return actBytesFromCStringLengthCopy(str, len);
+B_bytes actBytesFromCStringLengthCopy(const char *str, int64_t len) {
+    B_bytes res;
+    NEW_UNFILLED_BYTES(res, len);
+    memcpy(res->str, str, len);
+    return res;
 }
 
 char *fromB_bytes(B_bytes b) {
@@ -3608,7 +3567,7 @@ B_bytes B_bytesD_from_hex(B_str s) {
         result[i/2] = (high_val << 4) | low_val;
     }
 
-    return actBytesFromCStringLengthNoCopy(result, bytelen);
+    return actBytesFromCStringLength(result, bytelen);
 }
 
 B_str B_bytesD_hex(B_bytes s) {
@@ -4736,5 +4695,5 @@ B_str $FORMAT_len(const char *format, int64_t nbytes, ...) {
     }
     va_end(args);
     b.data[b.len] = 0;
-    return str_from_c(b.data, b.len, false, &B_str_invalid_utf8_error);
+    return actStrFromCStringLength(b.data, b.len);
 }

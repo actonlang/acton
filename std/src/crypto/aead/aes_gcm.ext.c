@@ -42,7 +42,7 @@ static unsigned char *aes_gcm_alloc(int64_t len) {
 B_bytes stdQ_cryptoQ_aeadQ_aes_gcmQ_generate_key(B_EnvRandom rand) {
     unsigned char *key = aes_gcm_alloc(AES_GCM_KEY_SIZE);
     B_EnvRandom_fill(key, AES_GCM_KEY_SIZE);
-    return actBytesFromCStringLengthNoCopy((char *)key, AES_GCM_KEY_SIZE);
+    return actBytesFromCStringLength((const char *)key, AES_GCM_KEY_SIZE);
 }
 
 B_bytes stdQ_cryptoQ_aeadQ_aes_gcmQ_encrypt(B_EnvRandom rand, B_bytes key, B_bytes plaintext, B_bytes associated_data) {
@@ -61,7 +61,7 @@ B_bytes stdQ_cryptoQ_aeadQ_aes_gcmQ_encrypt(B_EnvRandom rand, B_bytes key, B_byt
                                     plaintext->str, (size_t)text_len,
                                     associated_data->str, (size_t)associated_data->nbytes,
                                     nonce, key->str, (size_t)key->nbytes);
-    return actBytesFromCStringLengthNoCopy((char *)out, out_len);
+    return actBytesFromCStringLength((const char *)out, out_len);
 }
 
 B_bytes stdQ_cryptoQ_aeadQ_aes_gcmQ_decrypt(B_bytes key, B_bytes ciphertext, B_bytes associated_data) {
@@ -80,5 +80,5 @@ B_bytes stdQ_cryptoQ_aeadQ_aes_gcmQ_decrypt(B_bytes key, B_bytes ciphertext, B_b
                                          associated_data->str, (size_t)associated_data->nbytes,
                                          nonce, key->str, (size_t)key->nbytes))
         RAISE(stdQ_cryptoQ_aeadQ_aes_gcmQ_DecryptionError, actStrFromCString("AES-GCM authentication failed"));
-    return actBytesFromCStringLengthNoCopy((char *)out, text_len);
+    return actBytesFromCStringLength((const char *)out, text_len);
 }
