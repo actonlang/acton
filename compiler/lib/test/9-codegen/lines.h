@@ -259,8 +259,4 @@ linesQ_main linesQ_mainG_new(B_Env);
 B_NoneType linesQ_mainD___init__(linesQ_main self, B_Env env);
 $R linesQ_mainD___startup__G_local(linesQ_main self, $Cont C_cont);
 B_Msg linesQ_mainD___startup__(linesQ_main self);
-extern B_OrdD_int linesQ_W_1module;
-extern B_Eq linesQ_W_Apa_409;
-extern $EqOpt linesQ_W_2module;
-extern B_Eq linesQ_W_Apa_837;
 void linesQ___init__ ();

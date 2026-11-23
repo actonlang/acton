@@ -32,9 +32,7 @@ proc def compute (C_cont : proc(__builtin__.int) -> $R, aa : __builtin__.int) ->
 
 W_main_74: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
 
-W_main_133: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
-
-W_main_29: __builtin__.Eq[?__builtin__.int] = $EqOpt@[__builtin__.int](W_main_133)
+W_main_29: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
 
 # recursive group:
 class main ($Actor, __builtin__.value):
