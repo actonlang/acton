@@ -30,8 +30,11 @@
 --
 --   Module-level keys (one each):
 --     "version"        :: [Int]                       -- Acton.Syntax.version
---     "meta"           :: ( Maybe SourceFileMeta      -- cached source stat metadata
---                         , ByteString                -- moduleSrcBytesHash: SHA-256 of raw source
+--     "meta"           :: ( Maybe SourceFileMeta      -- cached source stat metadata (Nothing for an
+--                                                     --   editor overlay or a module with an .ext.c)
+--                         , ByteString                -- moduleSrcBytesHash: SHA-256 of raw source,
+--                                                     --   combined with that of its .ext.c, and of the
+--                                                     --   files it includes, if any (Acton.ExtSource)
 --                         , ByteString                -- modulePubHash: structural hash of public NameInfo
 --                                                     --   (doc-free) + imports' pub hashes
 --                         , ByteString )              -- moduleImplHash: structural hash of per-name impl hashes
@@ -120,7 +123,6 @@ module InterfaceFiles
   , readStmtHasNotImpl
   , readHeaderSummary
   , tryReadHeaderSummary
-  , readRoots
   , readExtensionsByClass
   , readExtensionsByProtocol
   , readFileMaybe
@@ -1563,12 +1565,6 @@ readHeaderSummary f =
 -- exception propagates.
 tryReadHeaderSummary :: FilePath -> IO (Maybe HeaderSummary)
 tryReadHeaderSummary f = either (const Nothing) Just <$> trySync (readHeaderSummary f)
-
-readRoots :: FilePath -> IO [A.Name]
-readRoots f =
-    withReadTxn f $ \txn dbi -> do
-      validateVersion txn dbi
-      getValue "roots" txn dbi keyRoots
 
 readDepNames :: FilePath -> A.ModName -> IO [DepNameInfo]
 readDepNames f mn =

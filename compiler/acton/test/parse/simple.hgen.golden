@@ -1,4 +1,4 @@
-/* Acton impl hash: facb8817dbf13d176f877d25b19ed6e2d8b8239cec0db66b43dde224d74b99d4 */
+/* Acton impl hash: <hash> */
 #pragma once
 #include "builtin/builtin.h"
 #include "rts/rts.h"

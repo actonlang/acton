@@ -56,11 +56,11 @@ See [Performance testing](testing/performance.md) for the lifecycle and examples
 
 ## Cached test results
 
-The Acton test runner caches test results which means that repeated invokations of `acton test` might not actually (re)run tests. Cached failures and errors are still shown by default, so you never miss a failing test. Cached successes are hidden unless you pass `--show-cached`. Pass `--no-cache` to force all selected tests to run, even if cached results exist. A test that draws from [`t.random`](testing/random.md) runs every time, with new seeds.
+The Acton test runner caches test results which means that repeated invokations of `acton test` might not actually (re)run tests. Cached failures and errors are still shown by default, so you never miss a failing test. Cached successes are hidden unless you pass `--show-cached`. Pass `--no-cache` to force all selected tests to run, even if cached results exist; their new results replace the cached ones. A test that draws from [`t.random`](testing/random.md) runs every time, with new seeds.
 
 This means that the developer experience for test driven development is great even for project with a very large amount of tests as the content hash driven test runner only recompiles and reruns tests that are actually affected by a change.
 
-Note that test input need to be contained within .act source code files in order for the compiler to consider them part of the content hash. You cannot use external .txt files or similar as input to test functions, since the compiler won't consider those parts of the implementation. Also see [incremental compilation](compilation/incremental.md) for more details on content hashing and how it applies to testing.
+Note that test input need to be contained within .act source code files in order for the compiler to consider them part of the content hash. You cannot use external .txt files or similar as input to test functions, since the compiler won't consider those parts of the implementation. The C code of a module's `NotImplemented` functions counts as well: its `.ext.c` file and the project files that the `.ext.c` includes. Also see [incremental compilation](compilation/incremental.md) for more details on content hashing and how it applies to testing.
 
 Snapshot tests are the main exception: even when the test code hash matches the cache, `acton test` still checks the expected snapshot file on disk against the cached `snapshots/output/...` metadata. If the output snapshot is missing, the expected file changed, or Acton cannot cheaply prove the expected file is older than the last produced output, the test is rerun instead of trusting the cached result.
 
@@ -92,6 +92,8 @@ Name selection also limits compilation to modules that may contain matching test
 Test builds follow the selected source files and their imports, and ignore the project's `libraries` groups in `Build.act`. This also applies when running all tests without selection flags. Application builds continue to honor those groups and their configured linkage.
 
 `acton test --watch` waits for successful compilation and linking before running tests. If another edit interrupts a build or test run, the next run includes tests affected by both edits. Stopping watch mode also stops its compiler and test subprocesses.
+
+Watch mode, in `acton test --watch` as in `acton build --watch`, reacts to more than `.act` files. Saving an `.ext.c` file rebuilds its module, and runs the tests of that module and of the modules that import it. Saving any other file under `src/`, such as a header that an `.ext.c` includes, rebuilds the project and runs every selected test whose cached result no longer applies. The files that editors leave next to the files they save, such as swap and backup files, are ignored, and so are files outside `src/`, even one that an `.ext.c` includes: save the `.ext.c` or build to pick up a change there. The `src/` directories and `Build.act` files of the project's local dependencies, which a path dependency or `--dep` names, are watched as well.
 
 ## Runtime worker threads
 

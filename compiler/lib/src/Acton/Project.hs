@@ -36,6 +36,8 @@ module Acton.Project
   , rootStubPath
   , rootBinaryName
   , isActFile
+  , isScratchFile
+  , isInterfaceCopy
   , modNameToFilename
   , addProjPrefix
   , dropProjPrefix
@@ -63,6 +65,7 @@ module Acton.Project
   , zigLocalCacheDir
   , existingDependencyDir
   , discoverProjects
+  , discoverBuildProjects
   , BackgroundCompilerLock
   , tryBackgroundCompilerLock
   , releaseBackgroundCompilerLock
@@ -83,13 +86,13 @@ import Acton.Graph (preorder)
 import qualified Acton.Syntax as A
 import Acton.Syntax (modNameToString)
 import qualified InterfaceFiles
-import Utils (readFileUtf8)
+import Utils (readFileUtf8, trySync)
 
 import Control.Exception (Exception, IOException, catch, finally, throwIO, try)
 import Control.Monad
 import Data.Bits (shiftL, shiftR, (.|.))
 import Data.Char (isAlpha, isDigit)
-import Data.List (intercalate, isPrefixOf)
+import Data.List (intercalate, isPrefixOf, isSuffixOf)
 import Data.Maybe (isJust)
 import qualified Data.Map as M
 import qualified Data.Set
@@ -385,6 +388,30 @@ moduleOutputs paths mn  = tyDbPath paths mn : map (generatedPath paths mn) gener
 -- | Whether 'file' names an Acton source file.
 isActFile :: FilePath -> Bool
 isActFile file = takeExtension file == ".act"
+
+-- | Whether a file is one that editors and tools leave next to the files
+-- they save, rather than a source: a hidden file (a vim swap file, an emacs
+-- lock, .DS_Store, a temporary file of BSD sed -i), a backup ending in ~, an
+-- emacs auto-save file (#name#), a file named by digits only (vim's write
+-- probe 4913 and its successors) or a JetBrains safe-write file.
+isScratchFile :: FilePath -> Bool
+isScratchFile path = case takeFileName (dropTrailingPathSeparator path) of
+    ""                                        -> False
+    name@(c : _)
+      | c == '.'                              -> True
+      | last name == '~'                      -> True
+      | c == '#' && last name == '#'          -> True
+      | all isDigit name                      -> True
+      | any (`isSuffixOf` name) jetbrains     -> True
+      | otherwise                             -> False
+  where jetbrains = ["___jb_tmp___", "___jb_old___"]
+
+-- | Whether a path is a --tydb copy of a module's interface, which a build
+-- writes next to the module's source, or a file inside one.
+isInterfaceCopy :: FilePath -> Bool
+isInterfaceCopy path = takeExtension p == InterfaceFiles.interfaceExt
+                       || takeExtension (takeDirectory p) == InterfaceFiles.interfaceExt
+  where p = dropTrailingPathSeparator path
 
 -- | Convert a module name to its source filename (path + .act).
 -- This is used for diagnostics and display output.
@@ -798,6 +825,17 @@ existingDependencyDir base name dep = do
 -- returns a map from project root to ProjCtx while skipping duplicates.
 -- The --dep overrides are absolute and normalised as
 -- normalizeDepOverrides gives them.
+-- | The projects that a build of the project at 'paths' discovers, keyed by
+-- their roots: the project and its dependencies, with the --dep overrides
+-- of 'opts' made absolute as a build makes them.  Nothing when they cannot
+-- be discovered, for example while a dependency is not fetched yet.
+discoverBuildProjects :: C.GlobalOptions -> C.CompileOptions -> Paths -> IO (Maybe (M.Map FilePath ProjCtx))
+discoverBuildProjects gopts opts paths = do
+    root      <- normalizePathSafe (projPath paths)
+    sys       <- normalizePathSafe (sysPath paths)
+    overrides <- normalizeDepOverrides root (C.dep_overrides opts)
+    either (const Nothing) Just <$> trySync (discoverProjects gopts sys root overrides)
+
 discoverProjects :: C.GlobalOptions -> FilePath -> FilePath -> [(String, FilePath)] -> IO (M.Map FilePath ProjCtx)
 discoverProjects gopts sysAbs rootProj depOverrides = do
     rootAbs <- normalizePathSafe rootProj

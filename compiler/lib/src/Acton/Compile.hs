@@ -16,7 +16,8 @@ front stage finishes while its back passes run in the background, and the
 LSP server reports a module as checked before its code is generated.
 
 A build is fast when it does no work twice.  A module's .tydb records what
-its last compilation used: the hash and the stat of its source, its
+its last compilation used: the hash and, unless the module has an .ext.c,
+the stat of its source, its
 public interface hash (pub) and implementation hash (impl), the pub and
 impl hash of each of its names with the names they depend on, and, for
 every module it depends on, that module's hashes and the hashes and users
@@ -25,9 +26,24 @@ docstrings, its escape summary and the pub hashes of the names its
 signature uses.  Its impl hash covers its implementation and the impl
 hashes of the names it uses.  Acton.Hashing defines both.  The first line
 of a module's generated .c, .h and closure support file is tagged with its
-impl hash, or, for a deferred back job, with a hash of its impl hash and
-its selected names.  The test result cache keys each test on its name's
-impl hash.
+codegen tags (codegenTags): its impl hash with everything else the back
+passes read, namely its imports and a deferred back job's selected names,
+and for the .c and the support file also its source path where they name it
+and, unless --dbg-no-lines is given, its source hash, which the #line
+directives follow.  The test result cache keys each test on its
+name's impl hash.
+
+The code of a module's NotImplemented bodies is the hand-written .ext.c
+next to its source, which its generated .c includes, and the project files
+that it includes in turn (Acton.ExtSource).  The recorded source hash covers
+them all, and so does the .ext.c's content hash, which is part of the own
+impl hash of each NotImplemented name.  An edit of the .ext.c or of a file
+it includes thus changes the impl hash of the module, the tag of its
+generated .c and the key of every test that uses those names.  The C
+compiler's cache cannot stand in for this: Zig learns the files a C file
+includes only when it compiles that file, and the cache of a whole library
+forgets them when a build reuses the object, so a later edit of only the
+.ext.c would reuse the old library.
 
 Plan
 ----
@@ -59,14 +75,17 @@ them.  A discovered module is a CompileTask:
 A header can be trusted when the .tydb exists, its header reads and the
 compiler binary is not newer than the .tydb (--ignore-compiler-version
 skips that check).  It is trusted without reading the source when the
-source's stat (device, inode, size, mtime, ctime) equals the recorded one
-and its mtime is strictly older than the .tydb's.  Strictly, because on a
-file system with coarse timestamps a changed source and the .tydb written
-from its previous version can show the same time.  Otherwise it is
-trusted when the content hash of the source equals the recorded one, and
+module has no .ext.c, the source's stat (device, inode, size, mtime,
+ctime) equals the recorded one and its mtime is strictly older than the
+.tydb's.  Strictly, because on a file system with coarse timestamps a
+changed source and the .tydb written from its previous version can show
+the same time.  Otherwise it is trusted when the content hash of the
+source, with that of its .ext.c, equals the recorded one, and
 the recorded stat is then refreshed in place.  An editor overlay is
-compared by content hash only.  A module whose header is not trusted is
-read from its source.
+compared by content hash only.  So is a module whose .tydb was written
+while it had an .ext.c: such a .tydb records no stat, since the stat of
+the source would not show that the .ext.c was deleted.  A module whose
+header is not trusted is read from its source.
 
 The stat that a .tydb records is taken before the source is read, and one
 read gives both the text that is compiled and the bytes that are hashed.
@@ -105,8 +124,13 @@ runs the front passes (compileModule).  A TyTask is checked in this order:
      needs is unavailable.
   4. A module whose code is generated whole, in a build without
      alternative output, compares the tags of its .c, .h and closure
-     support file with its impl hash, and generates its code again from
-     the stored typed module when they differ (refreshCodegen).
+     support file with its codegen hash, and generates its code again from
+     the stored typed module when they differ or a file is older than the
+     compiler binary (refreshCodegen).  A build that wrote the .tydb but
+     not the code, such as acton build --sigs or an interrupted build,
+     thus leaves no stale code behind.  __builtin__, which only the base
+     library compiles, is the exception: its code is checked only when its
+     front passes run (compileBuiltin).
   5. Otherwise the .tydb is used as it is (reuse).
 
 Under --only-build, every module's stored interface is trusted and no
@@ -316,6 +340,7 @@ import qualified Acton.DocPrinter as DocP
 import Acton.Fetch
 import Acton.Graph
 import Acton.Project
+import Acton.ExtSource (readExtSourceHash)
 import qualified Acton.Diagnostics as Diag
 import qualified Acton.SourceProvider as Source
 import Utils
@@ -344,6 +369,7 @@ import System.Directory
 import System.Environment (getExecutablePath)
 import System.FilePath.Posix
 import System.IO
+import System.IO.Error (isDoesNotExistError)
 import System.Posix.Files (deviceID, fileID, fileSize, getFileStatus, modificationTimeHiRes, statusChangeTimeHiRes)
 import Text.Show.Pretty (ppDoc)
 
@@ -396,11 +422,15 @@ importsOf (ParseErrorTask _)            = []
 
 -- | The text and bytes of one read of a module's source: the text is
 -- parsed, the bytes are hashed, and the stat, taken before the read, is
--- recorded in its .tydb.
+-- recorded in its .tydb unless the module has an .ext.c
+-- (recordedSourceMeta).  The content hash of the module's .ext.c, read
+-- with it, goes into the recorded source hash and into the impl hashes of
+-- its NotImplemented names.
 data ModuleSource = ModuleSource
-  { sourceText  :: String
-  , sourceBytes :: B.ByteString
-  , sourceMeta  :: Maybe InterfaceFiles.SourceFileMeta     -- Nothing for an editor overlay
+  { sourceText    :: String
+  , sourceBytes   :: B.ByteString
+  , sourceMeta    :: Maybe InterfaceFiles.SourceFileMeta     -- Nothing for an editor overlay
+  , sourceExtHash :: Maybe B.ByteString                      -- Nothing without an .ext.c
   }
 
 -- | Generating C for one module.
@@ -411,7 +441,7 @@ data BackJob = BackJob
   , bjTypeEnv     :: Acton.Env.Env0     -- protocols converted
   , bjModule      :: A.Module           -- typed; only the selected names for a deferred module
   , bjSource      :: String             -- for #line directives
-  , bjCodegenHash :: B.ByteString       -- tagged into the first line of each generated file
+  , bjCodegenTags :: CodegenTags        -- tagged into the first line of each generated file
   }
 
 -- | Back work that waits for every dependent's interest.  It keeps only
@@ -1280,7 +1310,7 @@ buildGlobalTasks sp gopts opts projects pathsByProject seedFiles = do
         -- the local module and its interface is rebuilt.
         task       <- case discovered of
                         TyTask _ | any (overlapsLocal index paths) (importsOf discovered)
-                          -> either ParseErrorTask (uncurry ActonTask) <$> materialize sp opts (tkMod key) file Nothing discovered
+                          -> either ParseErrorTask (uncurry ActonTask) <$> materialize sp opts paths (tkMod key) file Nothing discovered
                         _ -> return discovered
         let imports = restoredImportsOf paths task
         either throwProjectError return (checkImportPrefixes index paths imports >> checkImportDependencies index paths (tkMod key) imports)
@@ -1292,22 +1322,25 @@ buildGlobalTasks sp gopts opts projects pathsByProject seedFiles = do
 -- reused when the compiler binary is not newer than the .tydb and the source
 -- is unchanged: by recorded stat with the source older than the .tydb, else by
 -- content hash (then the recorded stat is refreshed in place).  An editor
--- overlay is compared by content only.  Otherwise only the source header is
--- parsed.  Reading can write: the stat refresh.
+-- overlay is compared by content only, and so is a module with an .ext.c,
+-- whose content hash the recorded one covers, or one that had an .ext.c
+-- when its .tydb was written (recordedSourceMeta).  Otherwise only the
+-- source header is parsed.  Reading can write: the stat refresh.
 readModuleTask :: Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -> Paths -> A.ModName -> FilePath -> IO CompileTask
 readModuleTask sp gopts opts paths mn file = do
     reusable <- reusableHeader opts tydb
     case reusable of
-      Nothing               -> fromSource =<< readModuleSource sp file
+      Nothing               -> fromSource =<< readModuleSource sp paths mn file
       Just (header, tydbNs) -> do
+        extHash <- readExtSourceHash paths mn file
         overlay <- Source.spReadOverlay sp file
         case overlay of
-          Just snap -> verify header (snapshotSource Nothing snap)
+          Just snap -> verify header (snapshotSource Nothing extHash snap)
           Nothing   -> do
             meta <- readSourceFileMeta file
-            if InterfaceFiles.summarySourceMeta header == Just meta && InterfaceFiles.sfmMTimeNs meta < tydbNs
+            if isNothing extHash && InterfaceFiles.summarySourceMeta header == Just meta && InterfaceFiles.sfmMTimeNs meta < tydbNs
               then return (TyTask header)
-              else verify header =<< readSourceFile sp file meta
+              else verify header =<< readSourceFile sp file extHash meta
   where
     tydb = tyDbPath paths mn
 
@@ -1319,7 +1352,7 @@ readModuleTask sp gopts opts paths mn file = do
     -- per-name hashes, whose external dependencies are stripped, and so lose
     -- their users and hashes.
     verify header source = do
-      let hash = SHA256.hash (sourceBytes source)
+      let hash = moduleSourceHash (sourceBytes source) (sourceExtHash source)
           same = hash == InterfaceFiles.summarySourceHash header
           meta = sourceMeta source
       when (C.verbose gopts && isNothing meta) $ do
@@ -1333,8 +1366,12 @@ readModuleTask sp gopts opts paths mn file = do
                   ++ " len=" ++ show (B.length (sourceBytes source))
                   ++ if same then " (match)" else " (diff)")
       if not same then fromSource source else do
-        when (isJust meta && meta /= InterfaceFiles.summarySourceMeta header) $
-          void (trySync (InterfaceFiles.updateSourceMeta tydb meta))
+        -- An overlay has no stat to record.  A module with an .ext.c must
+        -- not keep one, which a .tydb from an earlier compiler can hold.
+        let recorded = recordedSourceMeta source
+        when (recorded /= InterfaceFiles.summarySourceMeta header
+              && (isJust recorded || isJust (sourceExtHash source))) $
+          void (trySync (InterfaceFiles.updateSourceMeta tydb recorded))
         return (TyTask header)
 
 -- | The .tydb header and the .tydb's modification time, unless the .tydb is
@@ -1360,26 +1397,48 @@ compilerNewerThan opts ns
       status <- trySync (getExecutablePath >>= getFileStatus)
       return (either (const False) (\st -> InterfaceFiles.posixNanoseconds (modificationTimeHiRes st) > ns) status)
 
--- | Read a module's source once (overlay-aware).  An editor overlay records
--- no stat.  A file on disk is read after its stat is taken (readSourceFile).
-readModuleSource :: Source.SourceProvider -> FilePath -> IO ModuleSource
-readModuleSource sp file = do
+-- | Read a module's source once (overlay-aware), with the content hash of
+-- its .ext.c and the project files it includes (readExtSourceHash).  An
+-- editor overlay records no stat.  A file on disk is read after its stat is
+-- taken (readSourceFile).
+readModuleSource :: Source.SourceProvider -> Paths -> A.ModName -> FilePath -> IO ModuleSource
+readModuleSource sp paths mn file = do
+    extHash <- readExtSourceHash paths mn file
     overlay <- Source.spReadOverlay sp file
     case overlay of
-      Just snap -> return (snapshotSource Nothing snap)
-      Nothing   -> readSourceFile sp file =<< readSourceFileMeta file
+      Just snap -> return (snapshotSource Nothing extHash snap)
+      Nothing   -> readSourceFile sp file extHash =<< readSourceFileMeta file
 
--- | Read a module's source file from disk, given the stat taken just before
--- the read.  The stat must not be taken after the read: a write landing in
--- between would pair the stat of the new version with the content of the
--- version that was read, and a later plan would trust that stat.
-readSourceFile :: Source.SourceProvider -> FilePath -> InterfaceFiles.SourceFileMeta -> IO ModuleSource
-readSourceFile sp file meta = snapshotSource (Just meta) <$> Source.spReadFile sp file
+-- | Read a module's source file from disk, given the content hash of its
+-- .ext.c and the stat taken just before the read.  The stat must not be
+-- taken after the read: a write landing in between would pair the stat of
+-- the new version with the content of the version that was read, and a
+-- later plan would trust that stat.
+readSourceFile :: Source.SourceProvider -> FilePath -> Maybe B.ByteString -> InterfaceFiles.SourceFileMeta -> IO ModuleSource
+readSourceFile sp file extHash meta = snapshotSource (Just meta) extHash <$> Source.spReadFile sp file
 
--- | A module source from a snapshot and the stat taken before it was read,
--- Nothing for an editor overlay.
-snapshotSource :: Maybe InterfaceFiles.SourceFileMeta -> Source.SourceSnapshot -> ModuleSource
-snapshotSource meta snap = ModuleSource (Source.ssText snap) (Source.ssBytes snap) meta
+-- | A module source from a snapshot, the stat taken before it was read
+-- (Nothing for an editor overlay) and the content hash of its .ext.c.
+snapshotSource :: Maybe InterfaceFiles.SourceFileMeta -> Maybe B.ByteString -> Source.SourceSnapshot -> ModuleSource
+snapshotSource meta extHash snap = ModuleSource (Source.ssText snap) (Source.ssBytes snap) meta extHash
+
+-- | The stat that a module's .tydb records: none for a module with an
+-- .ext.c.  The stat covers only the source, so a recorded one would let a
+-- later plan trust the .tydb after the .ext.c is deleted and the source is
+-- left alone.  Without one, the header is checked by content hash.
+recordedSourceMeta :: ModuleSource -> Maybe InterfaceFiles.SourceFileMeta
+recordedSourceMeta source
+  | isJust (sourceExtHash source) = Nothing
+  | otherwise                     = sourceMeta source
+
+-- | The source hash a module's .tydb records: of the source bytes, combined
+-- with the content hash of the module's .ext.c, which covers the project
+-- files it includes, when it has one.  The C compiler sees an .ext.c only
+-- through the generated .c, so an edit of the .ext.c or of a file it
+-- includes must count as a change of the module.
+moduleSourceHash :: B.ByteString -> Maybe B.ByteString -> B.ByteString
+moduleSourceHash bytes Nothing        = SHA256.hash bytes
+moduleSourceHash bytes (Just extHash) = SHA256.hash (B.concat [SHA256.hash bytes, B.pack "ext.c:", extHash])
 
 -- | Read stable source metadata used for quick .tydb reuse checks.
 -- Device/inode act as file identity on POSIX so metadata drift from copies or
@@ -1406,13 +1465,13 @@ docIndexEntry _ _ _ _                   = Nothing
 -- | The parsed source of a module.  A ParseTask parses the text read at
 -- discovery, whose hash decided it; a TyTask reads its source again
 -- (readModuleSource).  Imports stay as written: the front stage adjusts them.
-materialize :: Source.SourceProvider -> C.CompileOptions -> A.ModName -> FilePath -> Maybe (ParseProgress -> IO ())
+materialize :: Source.SourceProvider -> C.CompileOptions -> Paths -> A.ModName -> FilePath -> Maybe (ParseProgress -> IO ())
             -> CompileTask -> IO (Either [Diagnostic String] (ModuleSource, A.Module))
-materialize sp opts mn file progress task = case task of
+materialize sp opts paths mn file progress task = case task of
     ActonTask source m   -> return (Right (source, m))
     ParseErrorTask diags -> return (Left diags)
     ParseTask source _ _ -> parse source
-    TyTask _             -> parse =<< readModuleSource sp file
+    TyTask _             -> parse =<< readModuleSource sp paths mn file
   where
     parse source         = do display <- displayPath file
                               fmap ((,) source) <$> parseActSource opts mn display (sourceText source) progress
@@ -1937,7 +1996,9 @@ assess env header = do
       Nothing
         | C.altOutput (moduleOptions env) || isJust deferred -> return (Reuse header deferred)
         | otherwise -> do
-            status <- codegenStatus (pathsOf env) (nameOf env) (InterfaceFiles.summaryImplHash header)
+            let opts = moduleOptions env
+            status <- codegenStatus opts (pathsOf env) (nameOf env)
+                        (headerCodegenTags opts (pathsOf env) (nameOf env) header hasNotImpl (InterfaceFiles.summaryImplHash header) WholeModule)
             return (if codegenUpToDate status then Reuse header deferred else RefreshCodegen header status)
 
 -- | The action a cached module's dependency changes call for, if any.  A
@@ -2086,7 +2147,7 @@ perform env (Reuse header deferred)           = Right <$> reuse env header defer
 compileModule :: ModuleEnv -> IO (Either [Diagnostic String] FrontResult)
 compileModule env = do
     previous <- if C.verbose (buildOptions build) then lookupNameMap (buildCache build) (searchPath (pathsOf env)) (nameOf env) else return Nothing
-    parsed   <- materialize (buildSources build) (moduleOptions env) (nameOf env) (taskSourceFile (moduleTask env)) Nothing (moduleCurrent env)
+    parsed   <- materialize (buildSources build) (moduleOptions env) (pathsOf env) (nameOf env) (taskSourceFile (moduleTask env)) Nothing (moduleCurrent env)
     case parsed of
       Left diags        -> return (Left diags)
       Right (source, m) -> do
@@ -2176,7 +2237,7 @@ recomputeImpl env header hasNotImpl = do
                 case full of
                   Nothing      -> return InterfaceGone
                   Just module' -> do
-                    job <- storedBackJob env module' implHash
+                    job <- storedBackJob env module' (storedCodegenTags env module' implHash)
                     -- Forced here, so a corrupt row fails the attempt before
                     -- anything is written.
                     evaluate (rnf (InterfaceFiles.storedInterface module'))
@@ -2220,7 +2281,7 @@ restoreExternalDeps tydb dependencies names = do
 refreshCodegen :: ModuleEnv -> InterfaceFiles.HeaderSummary -> IO FrontResult
 refreshCodegen env header = do
     module'    <- InterfaceFiles.readFileMaybe tydb >>= maybe (missingOwnInterface env) return
-    job        <- storedBackJob env module' (InterfaceFiles.storedImplHash module')
+    job        <- storedBackJob env module' (storedCodegenTags env module' (InterfaceFiles.storedImplHash module'))
     interest   <- storedInterest tydb (InterfaceFiles.summaryDepModules header)
     moduleInfo <- storedModuleInfo tydb (nameOf env) module'
     finishStored env (storedResult moduleInfo
@@ -2326,18 +2387,26 @@ readInterfaceShell env pubHash = do
 
 -- | The back job of the typed module that a module's own .tydb stores, in
 -- the environment of the modules checked before it, tagged with the given
--- impl hash.
-storedBackJob :: ModuleEnv -> InterfaceFiles.StoredModule -> B.ByteString -> IO BackJob
+-- codegen tags.
+storedBackJob :: ModuleEnv -> InterfaceFiles.StoredModule -> CodegenTags -> IO BackJob
 storedBackJob env module' = loadBackJob (moduleBuild env) (moduleBase env) (keyOf env) (pathsOf env) (moduleOptions env) (InterfaceFiles.storedTyped module')
+
+-- | The codegen tags of a whole module that its own .tydb stores, with the
+-- given impl hash: an impl refresh computes the new one before it writes.
+storedCodegenTags :: ModuleEnv -> InterfaceFiles.StoredModule -> B.ByteString -> CodegenTags
+storedCodegenTags env module' implHash =
+    codegenTags (moduleOptions env) (pathsOf env) (nameOf env) (A.hasNotImpl (A.mbody (InterfaceFiles.storedTyped module')))
+                (InterfaceFiles.storedSourceHash module') implHash
+                (map fst (InterfaceFiles.storedImports module')) WholeModule
 
 -- | A back job for a typed module read back from a .tydb: its source read
 -- again, its environment rebuilt with protocols converted.
-loadBackJob :: BuildEnv -> Acton.Env.Env0 -> TaskKey -> Paths -> C.CompileOptions -> A.Module -> B.ByteString -> IO BackJob
-loadBackJob build base key paths opts typed codegenHash = do
+loadBackJob :: BuildEnv -> Acton.Env.Env0 -> TaskKey -> Paths -> C.CompileOptions -> A.Module -> CodegenTags -> IO BackJob
+loadBackJob build base key paths opts typed tags = do
     snap  <- Source.readSource (buildSources build) (srcFile paths (tkMod key))
     scope <- Acton.Env.mkEnv (searchPath paths) base typed
     return BackJob { bjKey = key, bjPaths = paths, bjOpts = opts, bjTypeEnv = Converter.convEnvProtos scope
-                   , bjModule = typed, bjSource = Source.ssText snap, bjCodegenHash = codegenHash }
+                   , bjModule = typed, bjSource = Source.ssText snap, bjCodegenTags = tags }
 
 
 -- Front passes -------------------------------------------------------------------------------------
@@ -2432,8 +2501,12 @@ runFrontPasses env source parsed = do
       startOutputs (moduleBuild env) (keyOf env) (docOutputs env parsed checked hashed ++ tydbCopy env)
       let names  = hashedNames hashed
           -- reconstruct's typeEnv is already protocol-converted.
+          -- Tagged with the hashes and imports the .tydb records, so that a
+          -- later build computes the same tag from the header.
           job    = BackJob { bjKey = keyOf env, bjPaths = pathsOf env, bjOpts = opts, bjTypeEnv = typeEnv
-                           , bjModule = typed, bjSource = sourceText source, bjCodegenHash = hashedImpl hashed }
+                           , bjModule = typed, bjSource = sourceText source
+                           , bjCodegenTags = codegenTags opts (pathsOf env) mn (A.hasNotImpl (A.mbody typed)) (hashedSource hashed) (hashedImpl hashed)
+                                                         (map fst (hashedImports hashed)) WholeModule }
           timing = FrontTiming
             { ftEnv               = envDone - start
             , ftKinds             = kindsDone - envDone
@@ -2601,11 +2674,14 @@ hashPass env source parsed checked = do
         step base done = when ((base + done) `rem` stride == 0) (report False (base + done))
     _            <- evaluate afterImplDeps
     report True 0
-    -- Of the raw bytes, so any edit of the source counts as a change.
-    sourceHash   <- forced (SHA256.hash (sourceBytes source))
+    -- Of the raw bytes and the .ext.c, so any edit of either counts as a
+    -- change.
+    sourceHash   <- forced (moduleSourceHash (sourceBytes source) (sourceExtHash source))
     imports      <- resolveAll (\m -> fmap ((,) m) <$> resolveModule resolver Pub m) MissingInterface headerImports
     srcHashes    <- forced =<< Hashing.nameHashesFromItemsWithProgress (step 0) srcItems
-    implOwn      <- forced =<< Hashing.nameHashesFromItemsWithProgress (step afterSource) implItems
+    -- The .ext.c is the implementation of the NotImplemented names.
+    implOwn      <- forced . Hashing.withExtImplHash (sourceExtHash source) implItems
+                      =<< Hashing.nameHashesFromItemsWithProgress (step afterSource) implItems
     keys         <- forced (M.keysSet srcHashes `Data.Set.union` M.keysSet implOwn)
     selfPub      <- forced =<< Hashing.nameInfoHashesWithProgress (step afterImpl) infos
     selfPubBits  <- forced (Hashing.withEscapeBits (checkedEscapes checked) selfPub)
@@ -2691,7 +2767,7 @@ rootActorProblem _ _ = Just "it is not an actor"
 writeTydb :: ModuleEnv -> ModuleSource -> Checked -> Hashed -> (InterfaceFiles.TyDbWriteProgress -> IO ()) -> IO ()
 writeTydb env source checked hashed onProgress =
     InterfaceFiles.writeFileWithProgress onProgress A.version (tydbOf env)
-      (hashedSource hashed) (hashedPub hashed) (hashedImpl hashed) (sourceMeta source) (hashedImports hashed)
+      (hashedSource hashed) (hashedPub hashed) (hashedImpl hashed) (recordedSourceMeta source) (hashedImports hashed)
       (hashedDependencies hashed) (hashedNames hashed) (checkedEscapes checked) (hashedRoots hashed) (checkedTests checked)
       doc (checkedInterface checked) (checkedModule checked)
   where I.NModule _ _ doc = checkedInterface checked
@@ -2809,21 +2885,24 @@ addInterestDeps deps im =
 -- | The back job of a deferred module, once every module depending on it has
 -- finished its front passes, so the interest in its names is complete.  The
 -- selected names are the module's roots and every name other modules use,
--- closed over local dependencies and extensions.  Their codegen hash is
--- compared with the tags of the generated files before any statement is
--- read, and the job is Nothing when the generated code is up to date.
+-- closed over local dependencies and extensions.  The roots and the imports
+-- come from the module's .tydb header.  The codegen hash is compared with
+-- the tags of the generated files before any statement is read, and the job
+-- is Nothing when the generated code is up to date.
 prepareDeferredBackJob :: BuildEnv -> Acton.Env.Env0 -> InterestMap -> DeferredBackJob -> IO (Maybe BackJob)
 prepareDeferredBackJob build base interestMap job = do
-    roots    <- Data.Set.fromList <$> InterfaceFiles.readRoots tydb
-    let interested = M.findWithDefault Data.Set.empty mn interestMap
+    header   <- InterfaceFiles.readHeaderSummary tydb
+    let roots      = Data.Set.fromList (InterfaceFiles.summaryRoots header)
+        interested = M.findWithDefault Data.Set.empty mn interestMap
     selected <- selectedRows tydb label (Data.Set.union interested roots)
-    let names       = M.keysSet selected
-        codegenHash = dbpCodegenHash (deferredImplHash job) names
-        stats       = DbpStats { totalNames      = deferredNameCount job
-                               , interestedNames = Data.Set.size interested
-                               , rootNames       = Data.Set.size roots
-                               , selectedClosure = Data.Set.size names }
-    status   <- codegenStatus paths mn codegenHash
+    let names    = M.keysSet selected
+        -- A module with NotImplemented bodies is never deferred.
+        expected = headerCodegenTags (deferredOptions job) paths mn header False (deferredImplHash job) (SelectedNames names)
+        stats    = DbpStats { totalNames      = deferredNameCount job
+                            , interestedNames = Data.Set.size interested
+                            , rootNames       = Data.Set.size roots
+                            , selectedClosure = Data.Set.size names }
+    status   <- codegenStatus (deferredOptions job) paths mn expected
     if codegenUpToDate status
       then Nothing <$ info build (describeDbp label stats True)
       else do
@@ -2832,7 +2911,7 @@ prepareDeferredBackJob build base interestMap job = do
         -- whole-module read would mask that, and read gigabytes doing it.
         typed <- InterfaceFiles.readSelectedModule tydb (M.elems selected) names
                    >>= maybe (error ("Internal error: missing statement rows in " ++ tydb)) return
-        back  <- loadBackJob build base (deferredKey job) paths (deferredOptions job) (pruneModule names typed) codegenHash
+        back  <- loadBackJob build base (deferredKey job) paths (deferredOptions job) (pruneModule names typed) expected
         info build (describeDbp label stats False)
         return (Just back)
   where paths = deferredPaths job
@@ -2856,11 +2935,68 @@ describeDbp label stats upToDate =
     ++ ", root names " ++ show (rootNames stats) ++ ", selected closure " ++ show (selectedClosure stats)
     ++ ", " ++ (if upToDate then "generated code up to date" else "generated code out of date")
 
--- | The hash a deferred module's generated code is tagged with: it changes
--- with the module's impl hash and with the set of selected names.
-dbpCodegenHash :: B.ByteString -> Data.Set.Set A.Name -> B.ByteString
-dbpCodegenHash moduleImplHash selected =
-    SHA256.hash (BL.toStrict (encode ("dbp" :: String, moduleImplHash, map A.nstr (sortedNames selected))))
+-- | What a module's generated code holds: every statement, or the names
+-- that its deferred back job selected.
+data CodegenScope = WholeModule | SelectedNames (Data.Set.Set A.Name)
+
+-- | The tags of a module's generated files: one for its header, and one for
+-- its .c and closure support file.
+data CodegenTags = CodegenTags
+  { tagHeader :: B.ByteString
+  , tagCode   :: B.ByteString
+  } deriving (Eq, Show)
+
+-- | The tag that a generated file should carry.
+expectedTag :: CodegenTags -> GeneratedFile -> B.ByteString
+expectedTag tags file
+  | generatedLabel file == generatedLabel headerFile = tagHeader tags
+  | otherwise                                        = tagCode tags
+
+-- | The hashes that a module's generated files are tagged with.  The impl
+-- hash covers the module's statements, and through the impl hashes of the
+-- names they use, the code of other modules.  Both tags add what else the
+-- back passes read for every file:
+--
+--   * the imports, in the order of the .tydb header: the code calls the
+--     init function of each and includes its header;
+--   * the selected names of a deferred module.
+--
+-- The code's tag also covers what only the .c and the support file hold:
+--
+--   * where they name it, the source path relative to the project, in
+--     #line directives and in the #include of the .ext.c of a module with
+--     NotImplemented bodies, which differs from the module's name only in
+--     a scratch build;
+--   * while #line directives are emitted (no --dbg-no-lines), the source
+--     hash, since an edit that only moves lines moves them.
+--
+-- The header's tag leaves them out, so that an edit of only comments leaves
+-- the header alone, and with it the objects of every module that includes
+-- it.  Every input is in the .tydb header and its NotImplemented flag, so a
+-- cached module's tags are computed without reading its statements, and the
+-- front passes compute the same tags from the values they record.
+codegenTags :: C.CompileOptions -> Paths -> A.ModName -> Bool -> B.ByteString -> B.ByteString -> [A.ModName] -> CodegenScope -> CodegenTags
+codegenTags opts paths mn hasNotImpl sourceHash implHash imports scope =
+    CodegenTags { tagHeader = tag Nothing Nothing, tagCode = tag sourcePath lineSource }
+  where emitLines  = not (C.dbg_no_lines opts)
+        tag :: Maybe FilePath -> Maybe B.ByteString -> B.ByteString
+        tag path lineHash = SHA256.hash (BL.toStrict (encode ("codegen" :: String, implHash, map modNameToString imports, selection, path, lineHash)))
+        selection  = case scope of
+                       WholeModule         -> Nothing
+                       SelectedNames names -> Just (map A.nstr (sortedNames names))
+        sourcePath = if emitLines || hasNotImpl then Just (generatedSrcBase paths mn) else Nothing
+        lineSource = if emitLines then Just sourceHash else Nothing
+
+-- | The codegen tags of a cached module from its .tydb header, given its
+-- NotImplemented flag and its impl hash.
+headerCodegenTags :: C.CompileOptions -> Paths -> A.ModName -> InterfaceFiles.HeaderSummary -> Bool -> B.ByteString -> CodegenScope -> CodegenTags
+headerCodegenTags opts paths mn header hasNotImpl implHash =
+    codegenTags opts paths mn hasNotImpl (InterfaceFiles.summarySourceHash header) implHash (map fst (InterfaceFiles.summaryImports header))
+
+-- | A module's source path relative to its project, without the .act
+-- extension: the generated code names its .ext.c and its #line file by it.
+generatedSrcBase :: Paths -> A.ModName -> FilePath
+generatedSrcBase paths mn = makeRelative (projPath paths) (srcBase paths mn)
 
 -- | A selection of a deferred module's names that found no row for a name,
 -- with the text that names the module and the name.
@@ -2981,7 +3117,7 @@ runBackPasses gopts job shouldWrite onProgress = do
       (converted, env3)   <- transform BackPassCPS        fst (Acton.CPS.convert env2 deactorized)
       (lifted, env4)      <- transform BackPassLLift      fst (Acton.LambdaLifter.liftModule env3 converted)
       boxed               <- transform BackPassBoxing     id  (Acton.Boxing.doBoxing env4 lifted >>= witnessStats env4 lifted)
-      (_, h, c, support)  <- pass BackPassCodeGen             (Acton.CodeGen.generateCode supportInclude env4 relSrcBase (bjSource job) (not (C.dbg_no_lines opts)) boxed (Hashing.hashHex (bjCodegenHash job)))
+      (_, h, c, support)  <- pass BackPassCodeGen             (Acton.CodeGen.generateCode supportInclude env4 relSrcBase (bjSource job) (not (C.dbg_no_lines opts)) boxed (Hashing.hashHex (tagHeader (bjCodegenTags job))) (Hashing.hashHex (tagCode (bjCodegenTags job))))
       case output of
         PrintHeader -> pass BackPassRender (render h) >> putStrLn h
         PrintCode   -> pass BackPassRender (render c) >> putStrLn c
@@ -3003,7 +3139,7 @@ runBackPasses gopts job shouldWrite onProgress = do
     -- A build that writes the generated files puts the closure support in
     -- a file of its own, which the .c next to it includes by file name.
     supportInclude = if output == WriteFiles then Just (takeFileName (generatedPath paths mn closureSupportFile)) else Nothing
-    relSrcBase     = makeRelative (projPath paths) (srcBase paths mn)
+    relSrcBase     = generatedSrcBase paths mn
     total          = fromEnum (maxBound :: BackPass) + (if output == WriteFiles then 1 else 0)
     writeGenerated (file, text) = writeFileUtf8Atomic (generatedPath paths mn file) text
     -- --witness-stats reports the module after sharing inside the boxing
@@ -3123,7 +3259,7 @@ compileBuiltin build ctx t
   | C.only_build opts                              = return (Right ())
   | TyTask _ <- gtTask t, not (altOutputFor ctx k) = return (Right ())
   | otherwise                                      = do
-      parsed <- materialize (buildSources build) opts (tkMod k) (taskSourceFile t) Nothing (gtTask t)
+      parsed <- materialize (buildSources build) opts (gtPaths t) (tkMod k) (taskSourceFile t) Nothing (gtTask t)
       case parsed of
         Left diags        -> Left BuiltinFailed <$ emit build (Diagnostics t diags)
         Right (source, m) -> do
@@ -3323,7 +3459,7 @@ moduleEnv run state k = ModuleEnv
 parseStage :: BuildEnv -> C.CompileOptions -> GlobalTask -> IO (CompileTask, Maybe TimeSpec)
 parseStage build opts t = do
     (parsed, elapsed) <- timed $ do
-      result <- materialize (buildSources build) opts (tkMod (gtKey t)) (taskSourceFile t) (Just (emit build . ParseProgressed t)) (gtTask t)
+      result <- materialize (buildSources build) opts (gtPaths t) (tkMod (gtKey t)) (taskSourceFile t) (Just (emit build . ParseProgressed t)) (gtTask t)
       mapM_ (evaluate . rnf . snd) result
       return result
     return $ case parsed of
@@ -3333,12 +3469,12 @@ parseStage build opts t = do
 
 -- Codegen status -----------------------------------------------------------------------------------
 
--- | The hash a module's generated code should be tagged with, in hex, and
--- the tag each of its generated files carries, Nothing for a file that
--- cannot be read or is not tagged.
+-- | Each of a module's generated files with the tag it carries, Nothing for
+-- a file that cannot be read or is not tagged, and the tag it should carry,
+-- both in hex, and whether the compiler binary is newer than one of them.
 data CodegenStatus = CodegenStatus
-  { csExpected :: String
-  , csTags     :: [(GeneratedFile, Maybe String)]
+  { csFiles         :: [(GeneratedFile, Maybe String, String)]
+  , csCompilerNewer :: Bool
   }
 
 -- | The hash tagged into a generated file's first line, when the file can
@@ -3350,26 +3486,47 @@ readCodegenHash path = either (const Nothing) taggedHash <$> trySync (withFile p
                                ""  -> Nothing
                                hex -> Just hex
 
--- | The hash a module's generated code should be tagged with, and the tags
--- its generated files carry, read in the order generatedFiles lists them.
-codegenStatus :: Paths -> A.ModName -> B.ByteString -> IO CodegenStatus
-codegenStatus paths mn expected = CodegenStatus (Hashing.hashHex expected) <$> mapM tagOf generatedFiles
-  where tagOf file = (,) file <$> readCodegenHash (generatedPath paths mn file)
+-- | The tags a module's generated files carry, read in the order
+-- generatedFiles lists them, with the tags they should carry, and whether
+-- the compiler binary is newer than one of the files.  A newer compiler may
+-- generate other code from the same inputs, which no tag shows, so its
+-- files count as out of date, as a .tydb does (compilerNewerThan, which
+-- --ignore-compiler-version turns off).
+codegenStatus :: C.CompileOptions -> Paths -> A.ModName -> CodegenTags -> IO CodegenStatus
+codegenStatus opts paths mn expected = do
+    files <- mapM tagOf generatedFiles
+    newer <- or <$> mapM olderThanCompiler generatedFiles
+    return (CodegenStatus files newer)
+  where path file = generatedPath paths mn file
+        tagOf file = do tag <- readCodegenHash (path file)
+                        return (file, tag, Hashing.hashHex (expectedTag expected file))
+        -- A file that cannot be read has no tag, so it is out of date anyway.
+        olderThanCompiler file = do
+          status <- trySync (getFileStatus (path file))
+          either (const (return False))
+                 (compilerNewerThan opts . InterfaceFiles.posixNanoseconds . modificationTimeHiRes)
+                 status
 
--- | Whether every generated file is tagged with the expected hash.
+-- | Whether every generated file is tagged with the expected hash and none
+-- is older than the compiler binary.
 codegenUpToDate :: CodegenStatus -> Bool
-codegenUpToDate status = all ((== Just (csExpected status)) . snd) (csTags status)
+codegenUpToDate status = codegenTagsMatch status && not (csCompilerNewer status)
 
--- | The verbose suffix of a module whose generated code is out of date: the
--- first eight hex digits of each file's tag, or missing, and of the expected
--- hash, after the file's label.  The files share one pair, without labels,
--- when they all carry the same tag.
+-- | Whether every generated file is tagged with the tag it should carry.
+codegenTagsMatch :: CodegenStatus -> Bool
+codegenTagsMatch status = and [ tag == Just expected | (_, tag, expected) <- csFiles status ]
+
+-- | The verbose suffix of a module whose generated code is out of date: for
+-- each file with another tag than it should carry, its label, the first
+-- eight hex digits of its tag, or missing, and of the tag it should carry.
+-- Files with the expected tags are out of date because the compiler is
+-- newer.
 formatCodegenDelta :: CodegenStatus -> String
-formatCodegenDelta status = case nub (map snd tags) of
-    [tag@(Just _)] -> " {impl " ++ delta tag ++ "}"
-    _              -> " {impl " ++ intercalate ", " [ generatedLabel file ++ " " ++ delta tag | (file, tag) <- tags ] ++ "}"
-  where tags      = csTags status
-        delta tag = maybe "missing" Hashing.shortHex tag ++ " -> " ++ Hashing.shortHex (csExpected status)
+formatCodegenDelta status
+  | codegenTagsMatch status = " {compiler newer than generated code}"
+  | otherwise               = " {codegen " ++ intercalate ", " [ generatedLabel file ++ " " ++ delta tag expected | (file, tag, expected) <- stale ] ++ "}"
+  where stale              = [ f | f@(_, tag, expected) <- csFiles status, tag /= Just expected ]
+        delta tag expected = maybe "missing" Hashing.shortHex tag ++ " -> " ++ Hashing.shortHex expected
 
 -- One JSON line per module, written by a single strict hPut so that lines
 -- from modules compiled in parallel do not interleave.

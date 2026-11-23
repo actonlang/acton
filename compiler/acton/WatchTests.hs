@@ -1,10 +1,14 @@
 {-# LANGUAGE ScopedTypeVariables #-}
-module WatchTests (watchProcessTests) where
+module WatchTests (watchTriggerTests, watchProcessTests) where
 
 import Control.Concurrent (threadDelay)
 import Control.Exception (IOException, catch, finally, mask, onException)
 import Control.Monad
 import qualified Data.ByteString.Char8 as BS
+import Data.IORef
+import qualified Data.Map as M
+import Data.Time.Calendar (fromGregorian)
+import Data.Time.Clock (UTCTime(..))
 import Data.List (intercalate, isInfixOf, isPrefixOf, isSuffixOf, tails)
 import Data.Maybe (isJust, mapMaybe)
 import System.Directory
@@ -19,12 +23,89 @@ import System.Posix.Types (ProcessID)
 import System.Process
 import qualified System.Timeout as Timeout
 import Text.Read (readMaybe)
+import qualified System.FSNotify as FS
 
 import Acton.Project (withProjectLock)
 import qualified Acton.Fingerprint as Fingerprint
 import ProcessUtil (stopProcessGroup)
+import Watch
 import Test.Tasty
 import Test.Tasty.HUnit
+
+-- | Which events start a build, without a process.
+watchTriggerTests :: TestTree
+watchTriggerTests = testGroup "watch triggers"
+  [ testCase "a saved .act names its module" $
+      srcWatchTrigger (FS.Modified "/p/src/a.act" t0 FS.IsFile) @?= Just (WatchSave "/p/src/a.act" (Just "/p/src/a.act"))
+  , testCase "an added or removed .act asks for a full build once it changed" $ do
+      srcWatchTrigger (FS.Added "/p/src/a.act" t0 FS.IsFile) @?= Just (WatchSave "/p/src/a.act" Nothing)
+      srcWatchTrigger (FS.Removed "/p/src/a.act" t0 FS.IsFile) @?= Just (WatchSave "/p/src/a.act" Nothing)
+  , testCase "a saved, added or removed .ext.c names the module it implements" $
+      forM_ [FS.Modified, FS.Added, FS.Removed] $ \event ->
+        srcWatchTrigger (event "/p/src/x/native.ext.c" t0 FS.IsFile)
+          @?= Just (WatchSave "/p/src/x/native.ext.c" (Just "/p/src/x/native.act"))
+  , testCase "another saved file asks for a full build once it changed" $
+      srcWatchTrigger (FS.Modified "/p/src/inc/value.h" t0 FS.IsFile) @?= Just (WatchSave "/p/src/inc/value.h" Nothing)
+  , testCase "files that editors leave next to the files they save are skipped" $
+      forM_ [ "/p/src/.native.ext.c.swp", "/p/src/native.ext.c~", "/p/src/.#native.ext.c", "/p/src/#native.ext.c#"
+            , "/p/src/4913", "/p/src/.DS_Store", "/p/src/native.ext.c___jb_tmp___", "/p/src/.#main.act" ] $ \path ->
+        forM_ [FS.Added, FS.Modified] $ \event ->
+          srcWatchTrigger (event path t0 FS.IsFile) @?= Nothing
+  , testCase "--tydb copies are skipped" $ do
+      srcWatchTrigger (FS.Added "/p/src/native.tydb/" t0 FS.IsDirectory) @?= Nothing
+      srcWatchTrigger (FS.Modified "/p/src/native.tydb/data.mdb" t0 FS.IsFile) @?= Nothing
+  , testCase "an added directory asks for a full build, a modified one for nothing" $ do
+      srcWatchTrigger (FS.Added "/p/src/sub" t0 FS.IsDirectory) @?= Just WatchFull
+      srcWatchTrigger (FS.Modified "/p/src/sub" t0 FS.IsDirectory) @?= Nothing
+  , testCase "attribute changes are skipped" $
+      srcWatchTrigger (FS.ModifiedAttributes "/p/src/native.ext.c" t0 FS.IsFile) @?= Nothing
+  , testCase "a single-file watch looks at the file and its .ext.c" $ do
+      fileWatchTrigger "/d/a.act" (FS.Modified "/d/a.act" t0 FS.IsFile) @?= Just (WatchSave "/d/a.act" (Just "/d/a.act"))
+      fileWatchTrigger "/d/a.act" (FS.Modified "/d/a.ext.c" t0 FS.IsFile) @?= Just (WatchSave "/d/a.ext.c" (Just "/d/a.act"))
+      fileWatchTrigger "/d/a.act" (FS.Modified "/d/a" t0 FS.IsFile) @?= Nothing
+      fileWatchTrigger "/d/a.act" (FS.Modified "/d/value.h" t0 FS.IsFile) @?= Nothing
+  , testCase "a save builds only when its file changed" $
+      withSystemTempDirectory "acton-watch-stamps" $ \dir -> do
+        stamps   <- newIORef M.empty
+        notified <- newIORef []
+        let path   = dir </> "native.ext.c"
+            owner  = Just (dir </> "native.act")
+            save   = dispatchWatchTrigger (shouldTriggerFile stamps) (\m -> modifyIORef notified (m :)) (WatchSave path owner)
+        writeFile (dir </> "native.act") ""
+        writeFile path "a"
+        save
+        save
+        writeFile path "bb"
+        save
+        removeFile path
+        save
+        (@?= replicate 3 owner) . reverse =<< readIORef notified
+  , testCase "a file that has not changed since the watch started builds nothing" $
+      withSystemTempDirectory "acton-watch-record" $ \dir -> do
+        stamps   <- newIORef M.empty
+        notified <- newIORef []
+        createDirectoryIfMissing True (dir </> "sub")
+        writeFile (dir </> "main.act") "pass"
+        writeFile (dir </> "sub" </> "value.h") "#define X 1"
+        recordStamps stamps dir
+        let save path = dispatchWatchTrigger (shouldTriggerFile stamps) (\m -> modifyIORef notified (m :)) (WatchSave path (Just path))
+        save (dir </> "main.act")
+        save (dir </> "sub" </> "value.h")
+        (@?= []) =<< readIORef notified
+        writeFile (dir </> "sub" </> "value.h") "#define X 22"
+        save (dir </> "sub" </> "value.h")
+        (@?= [Just (dir </> "sub" </> "value.h")]) =<< readIORef notified
+  , testCase "a saved .ext.c without its module source asks for a full build" $
+      withSystemTempDirectory "acton-watch-orphan" $ \dir -> do
+        stamps   <- newIORef M.empty
+        notified <- newIORef []
+        let path = dir </> "common.ext.c"
+        writeFile path "int x;"
+        dispatchWatchTrigger (shouldTriggerFile stamps) (\m -> modifyIORef notified (m :))
+          (WatchSave path (Just (dir </> "common.act")))
+        (@?= [Nothing]) =<< readIORef notified
+  ]
+  where t0 = UTCTime (fromGregorian 2026 1 1) 0
 
 watchProcessTests :: TestTree
 watchProcessTests = testGroup "watch subprocesses"
@@ -140,6 +221,55 @@ watchProcessTests = testGroup "watch subprocesses"
           awaitGeneration proj
           forM_ ["main-ran", "other-ran"] $ \name ->
             assertBool (name ++ " should run after the interrupted generation") =<< doesFileExist (proj </> name)
+          assertEqual "watch should remain running" Nothing =<< getProcessExitCode ph
+  , testCase "build watch rebuilds after a save of an .ext.c or a file it includes" $
+      withProcessProject $ \acton proj system -> do
+        writeNativeModule proj
+        writeExecutable (system </> "zig/zig") ["echo run >> zig-runs"]
+        withActon acton proj ["build", "--watch", "--verbose", "--syspath", system] $ \ph _ output -> do
+          awaitZigRuns proj 1
+          awaitGeneration proj
+          appendFile (proj </> "src/native.ext.c") "\n// First edit\n"
+          awaitZigRuns proj 2
+          awaitGeneration proj
+          logText <- output
+          -- The first build reports it too.
+          assertBool logText (count "Stale native: source changed" logText >= 2)
+          appendFile (proj </> "src/native_value.h") "\n// Second edit\n"
+          awaitZigRuns proj 3
+          assertEqual "watch should remain running" Nothing =<< getProcessExitCode ph
+  , testCase "test watch reruns the tests that use a module whose .ext.c is saved" $
+      withProcessProject $ \acton proj system -> do
+        writeNativeModule proj
+        writeFile (proj </> "src/other.act") $ unlines
+          [ "import testing"
+          , "import native"
+          , "def _test_ready():"
+          , "    testing.assertEqual(native.answer(), 42)"
+          ]
+        writeExecutable (proj </> "out/bin/.test_main") ["touch main-ran", testInfo True]
+        writeExecutable (proj </> "out/bin/.test_other") ["touch other-ran", moduleTestInfo "other" True]
+        withActon acton proj ["test", "--watch", "--no-cache", "--syspath", system] $ \ph _ output -> do
+          awaitReports 1 output
+          awaitGeneration proj
+          forM_ ["main-ran", "other-ran"] $ \name -> removeFile (proj </> name)
+          appendFile (proj </> "src/native.ext.c") "\n// An edit of native's C code\n"
+          awaitReports 2 output
+          awaitGeneration proj
+          assertBool "the tests of other, which imports native, should run" =<< doesFileExist (proj </> "other-ran")
+          assertBool "the tests of main should not run" . not =<< doesFileExist (proj </> "main-ran")
+          assertEqual "watch should remain running" Nothing =<< getProcessExitCode ph
+  , testCase "build watch with --tydb settles" $
+      withProcessProject $ \acton proj system -> do
+        writeExecutable (system </> "zig/zig") ["echo run >> zig-runs"]
+        -- --tydb writes a copy of each module's interface next to its
+        -- source, which the watch must not take for an edit.
+        withActon acton proj ["build", "--watch", "--tydb", "--syspath", system] $ \ph _ _ -> do
+          awaitZigRuns proj 1
+          awaitGeneration proj
+          threadDelay 2000000
+          runs <- zigRuns proj
+          assertEqual "no build should follow the first" 1 runs
           assertEqual "watch should remain running" Nothing =<< getProcessExitCode ph
   , testCase "one-shot stress Ctrl-C reports partial results" $
       withProcessProject $ \acton proj system -> do
@@ -261,7 +391,8 @@ watchProcessTests = testGroup "watch subprocesses"
     waitingParent = ["trap '' TERM", "while :; do sleep 1; done"]
     testInfo = moduleTestInfo "main"
     count needle = length . filter (isPrefixOf needle) . tails
-    testOutput logText = case dropWhile (not . isPrefixOf "Skipping test result cache") (tails logText) of
+    -- The test output starts after the runner says how it uses the cache.
+    testOutput logText = case dropWhile (\t -> not (any (`isPrefixOf` t) ["Skipping test result cache", "Not using cached test results"])) (tails logText) of
       text:_ -> text
       _ -> logText
     assertCursorRestored output = do
@@ -280,6 +411,27 @@ watchProcessTests = testGroup "watch subprocesses"
       logText <- output
       return $ if length (filter ("tests passed" `isInfixOf`) (lines logText)) >= count then Just () else Nothing
     awaitGeneration proj = await "watch generation completion" (Just <$> withProjectLock proj (return ()))
+    zigRuns proj = length . lines <$> readOutput (proj </> "zig-runs")
+    awaitZigRuns proj n = await ("Zig run " ++ show n) $ do
+      runs <- zigRuns proj
+      return $ if runs >= n then Just () else Nothing
+    -- A module whose NotImplemented answer native.ext.c implements, with a
+    -- value from native_value.h.
+    writeNativeModule proj = do
+      let prefix = "watch_processQ_nativeQ_"
+      writeFile (proj </> "src/native.act") $ unlines
+        [ "def answer() -> int:"
+        , "    NotImplemented"
+        ]
+      writeFile (proj </> "src/native_value.h") "#define NATIVE_VALUE 42\n"
+      writeFile (proj </> "src/native.ext.c") $ unlines
+        [ "#include \"native_value.h\""
+        , "void " ++ prefix ++ "__ext_init__() {"
+        , "}"
+        , "int64_t " ++ prefix ++ "answer() {"
+        , "    return NATIVE_VALUE;"
+        , "}"
+        ]
 
 -- Real Acton compilation supplies test metadata; replacing Zig and the test
 -- binary with scripts makes process lifetime and signals deterministic.

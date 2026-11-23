@@ -1514,7 +1514,7 @@ p23_codegen_mismatch = testCase "23-codegen hash mismatch triggers rebuild" $ do
   assertBool "did not expect stale support to type check" (not (typechecked supportOut modB))
 
 p24_codegen_equal_hash :: TestTree
-p24_codegen_equal_hash = testCase "24-codegen equal hash mismatch formats single delta" $ do
+p24_codegen_equal_hash = testCase "24-codegen mismatch names each stale file" $ do
   let proj = casesProjDir
       src = casesSrcDir
       modB = modLabel proj "b"
@@ -1543,12 +1543,19 @@ p24_codegen_equal_hash = testCase "24-codegen equal hash mismatch formats single
   -- The single-delta message is emitted by the EAGER codegen refresh; under
   -- default-on DBP the module would be deferred, so pin this path explicitly.
   _ <- buildOutInArgs proj ["--no-dbp"]
+  -- Only the stale files are named, each with its own delta: the header
+  -- carries a tag of its own.
+  rewriteFirstLine bC "/* Acton impl hash: deadbeef */"
+  out <- buildOutInArgs proj ["--no-dbp"]
+  let staleLine text = filter (T.isInfixOf "generated code out of date") (T.lines text)
+  assertBool ("expected only the .c to be named\n" ++ T.unpack out)
+    (any (\l -> "{codegen c deadbeef ->" `T.isInfixOf` l && not (", h " `T.isInfixOf` l)) (staleLine out))
   rewriteFirstLine bC "/* Acton impl hash: deadbeef */"
   rewriteFirstLine bH "/* Acton impl hash: deadbeef */"
   rewriteFirstLine bSupport "/* Acton impl hash: deadbeef */"
-  out <- buildOutInArgs proj ["--no-dbp"]
-  assertBool "expected single-delta codegen message"
-    (T.isInfixOf "generated code out of date {impl deadbeef ->" out)
+  out2 <- buildOutInArgs proj ["--no-dbp"]
+  assertBool ("expected a delta for each stale file\n" ++ T.unpack out2)
+    (any (\l -> all (`T.isInfixOf` l) ["{codegen c deadbeef ->", ", h deadbeef ->", ", support deadbeef ->"]) (staleLine out2))
   assertBool "expected b.act to compile codegen" (compiled out modB)
   assertBool "did not expect b.act to type check" (not (typechecked out modB))
 
@@ -3321,6 +3328,413 @@ p60_plan_after_failed_fetch_fetches_again =
             (fetchError `isInfixOf` msg)
         Right _ -> assertFailure ("expected the " ++ which ++ " plan to fetch and fail")
 
+p64_ext_c_edit_rebuilds_module :: TestTree
+p64_ext_c_edit_rebuilds_module =
+  testCase "64-edit of only an .ext.c rebuilds its module and the binary" $ do
+    let proj = casesProjDir
+        src = casesSrcDir
+        modNative = modLabel proj "native"
+        modMain = modLabel proj "main"
+        prefix = T.pack casesProjName <> "Q_nativeQ_"
+        extC :: Int -> T.Text
+        extC n = T.unlines
+          [ "void " <> prefix <> "__ext_init__() {"
+          , "}"
+          , ""
+          , "int64_t " <> prefix <> "answer() {"
+          , "    return " <> T.pack (show n) <> ";"
+          , "}"
+          ]
+        mainAct :: T.Text -> T.Text
+        mainAct label = T.unlines
+          [ "import native"
+          , ""
+          , "actor main(env: Env):"
+          , "    proc def __startup__():"
+          , "        print(\"" <> label <> "\", native.answer())"
+          , "        env.exit(0)"
+          ]
+    ensureCasesProject
+    writeFileUtf8 (src </> "native.act") $ T.unlines
+      [ "def answer() -> int:"
+      , "    NotImplemented"
+      ]
+    writeFileUtf8 (src </> "native.ext.c") (extC 1)
+    writeFileUtf8 (src </> "main.act") (mainAct "a")
+    _ <- buildOutIn proj
+    out1 <- runBinaryIn proj "main"
+    out1 @?= "a 1\n"
+    -- Zig's cache of the whole library learns the files a C file includes
+    -- only when it compiles that file. This build compiles only main's C and
+    -- reuses native's object, so afterwards the library's cache no longer
+    -- knows native.ext.c.
+    writeFileUtf8 (src </> "main.act") (mainAct "b")
+    _ <- buildOutIn proj
+    out2 <- runBinaryIn proj "main"
+    out2 @?= "b 1\n"
+    writeFileUtf8 (src </> "native.ext.c") (extC 2)
+    out3 <- buildOutIn proj
+    assertBool "expected native.act to type check after an edit of its .ext.c" (typechecked out3 modNative)
+    assertBool "did not expect main.act to type check after an edit of native.ext.c" (not (typechecked out3 modMain))
+    out3run <- runBinaryIn proj "main"
+    out3run @?= "b 2\n"
+    out4 <- buildOutIn proj
+    assertBool "did not expect native.act to type check again" (not (typechecked out4 modNative))
+    assertBool "did not expect native.act to compile again" (not (compiled out4 modNative))
+
+p65_ext_c_deletion_rereads_module :: TestTree
+p65_ext_c_deletion_rereads_module =
+  testCase "65-deleting an .ext.c checks its module again" $ do
+    let proj = casesProjDir
+        src = casesSrcDir
+        modNative = modLabel proj "native"
+        actNative = src </> "native.act"
+        tyNative = proj </> "out" </> "types" </> "incremental_cases" </> "native.tydb"
+        prefix = T.pack casesProjName <> "Q_nativeQ_"
+        mainAct :: T.Text -> T.Text
+        mainAct label = T.unlines
+          [ "import native"
+          , ""
+          , "actor main(env: Env):"
+          , "    proc def __startup__():"
+          , "        print(\"" <> label <> "\", native.answer())"
+          , "        env.exit(0)"
+          ]
+    ensureCasesProject
+    writeFileUtf8 actNative $ T.unlines
+      [ "def answer() -> int:"
+      , "    NotImplemented"
+      ]
+    -- Older than any .tydb, so that a recorded stat of native.act would be
+    -- trusted however coarse the file system's timestamps are.
+    now <- getCurrentTime
+    setModificationTime actNative (addUTCTime (-10) now)
+    writeFileUtf8 (src </> "native.ext.c") $ T.unlines
+      [ "void " <> prefix <> "__ext_init__() {"
+      , "}"
+      , ""
+      , "int64_t " <> prefix <> "answer() {"
+      , "    return 1;"
+      , "}"
+      ]
+    writeFileUtf8 (src </> "main.act") (mainAct "a")
+    _ <- buildOutIn proj
+    stored1 <- readTySourceMeta tyNative
+    stored1 @?= Nothing
+    -- A .tydb that an earlier compiler wrote holds the stat. A build that
+    -- checks the module by content hash must drop it.
+    meta <- sourceFileMetaForPath actNative
+    InterfaceFiles.updateSourceMeta tyNative (Just meta)
+    -- As in case 64, this build reuses native's object, so afterwards the
+    -- library's cache no longer knows native.ext.c.
+    writeFileUtf8 (src </> "main.act") (mainAct "b")
+    _ <- buildOutIn proj
+    stored2 <- readTySourceMeta tyNative
+    stored2 @?= Nothing
+    out2 <- runBinaryIn proj "main"
+    out2 @?= "b 1\n"
+    -- native.act is left alone and keeps its NotImplemented body, whose C
+    -- the deleted file held, so the build must check native again and fail.
+    removeIfExists (src </> "native.ext.c")
+    (ec, out3) <- runActonIn proj ["build", "--color", "never", "--verbose"]
+    assertBool ("expected native.act to type check after its .ext.c was deleted\n" ++ T.unpack out3) (typechecked out3 modNative)
+    assertBool ("expected the build to fail without native.ext.c\n" ++ T.unpack out3) (ec /= ExitSuccess)
+    assertBool ("expected the failure to name native.ext.c\n" ++ T.unpack out3) ("native.ext.c" `T.isInfixOf` out3)
+
+-- | The verbose line of a deferred module's back job.
+dbpLineFor :: T.Text -> T.Text -> Maybe T.Text
+dbpLineFor out name = find (T.isInfixOf ("DBP " <> name <> ":")) (T.lines out)
+
+-- | A project with a deferred module util and an eager module native, whose
+-- NotImplemented answer an .ext.c provides, both used by main.
+writeUtilNativeProject :: [T.Text] -> Int -> IO ()
+writeUtilNativeProject nativeImports utilComments = do
+  let src = casesSrcDir
+      prefix = T.pack casesProjName <> "Q_nativeQ_"
+  writeFileUtf8 (src </> "util.act") $ T.unlines $ replicate utilComments "# comment" ++
+    [ "def greet() -> str:"
+    , "    return \"hi\""
+    ]
+  writeFileUtf8 (src </> "native.act") $ T.unlines $ nativeImports ++
+    [ ""
+    , "def answer() -> int:"
+    , "    NotImplemented"
+    ]
+  writeFileUtf8 (src </> "native.ext.c") $ T.unlines
+    [ "void " <> prefix <> "__ext_init__() {"
+    , "}"
+    , ""
+    , "int64_t " <> prefix <> "answer() {"
+    , "    return 1;"
+    , "}"
+    ]
+  writeFileUtf8 (src </> "main.act") $ T.unlines
+    [ "import native"
+    , "import util"
+    , ""
+    , "actor main(env: Env):"
+    , "    proc def __startup__():"
+    , "        print(util.greet(), native.answer())"
+    , "        env.exit(0)"
+    ]
+
+-- | The generated .c, .h and closure support file of a cases module.
+generatedFilesOf :: String -> [FilePath]
+generatedFilesOf name =
+  [ casesProjDir </> "out" </> "types" </> casesProjName </> name <.> ext | ext <- ["c", "h", "closures.inc"] ]
+
+p66_eager_import_edit_regenerates_code :: TestTree
+p66_eager_import_edit_regenerates_code =
+  testCase "66-an import dropped by a build that wrote only the .tydb regenerates eager code" $ do
+    let proj = casesProjDir
+        src = casesSrcDir
+        modNative = modLabel proj "native"
+        [nativeC, nativeH, _] = generatedFilesOf "native"
+        helperInit = T.pack casesProjName <> "Q_helperQ___init__"
+    ensureCasesProject
+    writeFileUtf8 (src </> "helper.act") $ T.unlines
+      [ "def seven() -> int:"
+      , "    return 7"
+      ]
+    -- native has an .ext.c, so its code is generated whole (eagerly).
+    writeUtilNativeProject ["import helper"] 0
+    _ <- buildOutIn proj
+    c1 <- T.readFile nativeC
+    assertBool "expected native's C to initialize helper" (helperInit `T.isInfixOf` c1)
+    -- --sigs runs native's front passes, which write its .tydb, and renders
+    -- its code without writing it.  The impl hash ignores imports, so only a
+    -- tag that covers them shows that the code is out of date.
+    writeUtilNativeProject [] 0
+    _ <- buildOutInArgs proj ["--sigs"]
+    removeIfExists (src </> "helper.act")
+    out <- buildOutIn proj
+    assertBool ("expected native's generated code to be out of date\n" ++ T.unpack out)
+      (stale out modNative && "generated code out of date" `T.isInfixOf` out)
+    c2 <- T.readFile nativeC
+    h2 <- T.readFile nativeH
+    assertBool "did not expect native's C to initialize helper" (not (helperInit `T.isInfixOf` c2))
+    assertBool "did not expect native's header to include helper's" (not ("helper.h" `T.isInfixOf` h2))
+    run <- runBinaryIn proj "main"
+    run @?= "hi 1\n"
+    -- The front passes and a later plan compute the same tag.
+    out2 <- buildOutIn proj
+    assertBool ("expected native to be fresh\n" ++ T.unpack out2) (fresh out2 modNative)
+
+p67_dbp_line_edit_moves_line_directives :: TestTree
+p67_dbp_line_edit_moves_line_directives =
+  testCase "67-a line-only edit of a deferred module moves its #line directives" $ do
+    let proj = casesProjDir
+        [utilC, utilH, _] = generatedFilesOf "util"
+        greetAt :: Int -> T.Text
+        greetAt n = "#line " <> T.pack (show n) <> " \"src/util.act\""
+    ensureCasesProject
+    writeUtilNativeProject [] 0
+    out1 <- buildOutIn proj
+    assertBool ("expected util to be a deferred module\n" ++ T.unpack out1) (isJust (dbpLineFor out1 "util"))
+    c1 <- T.readFile utilC
+    h1 <- T.readFile utilH
+    assertBool ("expected greet on line 1\n" ++ T.unpack c1) (greetAt 1 `T.isInfixOf` c1)
+    -- Comments above greet change neither its statements nor the impl hash.
+    writeUtilNativeProject [] 3
+    out2 <- buildOutIn proj
+    assertBool ("expected util's generated code to be out of date\n" ++ T.unpack out2)
+      (maybe False ("generated code out of date" `T.isInfixOf`) (dbpLineFor out2 "util"))
+    c2 <- T.readFile utilC
+    assertBool ("expected greet on line 4\n" ++ T.unpack c2) (greetAt 4 `T.isInfixOf` c2)
+    assertBool ("did not expect greet on line 1\n" ++ T.unpack c2) (not (greetAt 1 `T.isInfixOf` c2))
+    -- The header holds no #line directive, and every module that includes
+    -- it would compile again if its tag changed.
+    h2 <- T.readFile utilH
+    h2 @?= h1
+
+p68_dbg_no_lines_regenerates_code :: TestTree
+p68_dbg_no_lines_regenerates_code =
+  testCase "68-toggling --dbg-no-lines generates cached code again" $ do
+    let proj = casesProjDir
+        [utilC, _, _] = generatedFilesOf "util"
+        [nativeC, _, _] = generatedFilesOf "native"
+        hasLines file = T.isInfixOf "#line " <$> T.readFile file
+    ensureCasesProject
+    writeUtilNativeProject [] 0
+    _ <- buildOutIn proj
+    withLines <- mapM hasLines [utilC, nativeC]
+    withLines @?= [True, True]
+    _ <- buildOutInArgs proj ["--dbg-no-lines"]
+    withoutLines <- mapM hasLines [utilC, nativeC]
+    withoutLines @?= [False, False]
+    _ <- buildOutIn proj
+    again <- mapM hasLines [utilC, nativeC]
+    again @?= [True, True]
+
+p69_code_older_than_compiler_regenerates :: TestTree
+p69_code_older_than_compiler_regenerates =
+  testCase "69-generated code older than the compiler is generated again" $ do
+    let proj = casesProjDir
+        modNative = modLabel proj "native"
+    ensureCasesProject
+    writeUtilNativeProject [] 0
+    _ <- buildOutIn proj
+    -- Older than the compiler binary, as code that an earlier compiler
+    -- generated is.  Its tags still match.
+    forM_ (generatedFilesOf "util" ++ generatedFilesOf "native") $ \file ->
+      setModificationTime file (posixSecondsToUTCTime 946684800)
+    out <- buildOutIn proj
+    assertBool ("expected native's generated code to be out of date\n" ++ T.unpack out)
+      (stale out modNative && "generated code out of date {compiler newer than generated code}" `T.isInfixOf` out)
+    assertBool ("expected util's generated code to be out of date\n" ++ T.unpack out)
+      (maybe False ("generated code out of date" `T.isInfixOf`) (dbpLineFor out "util"))
+    out2 <- buildOutIn proj
+    assertBool ("expected native to be fresh\n" ++ T.unpack out2) (fresh out2 modNative)
+    assertBool ("expected util's generated code to be up to date\n" ++ T.unpack out2)
+      (maybe False ("generated code up to date" `T.isInfixOf`) (dbpLineFor out2 "util"))
+
+-- | An .ext.c for native whose answer is NATIVE_VALUE, from the files it
+-- includes.
+writeIncludingExtC :: [T.Text] -> IO ()
+writeIncludingExtC includes = do
+  let prefix = T.pack casesProjName <> "Q_nativeQ_"
+  writeFileUtf8 (casesSrcDir </> "native.ext.c") $ T.unlines $
+    [ "#include \"" <> file <> "\"" | file <- includes ] ++
+    [ ""
+    , "void " <> prefix <> "__ext_init__() {"
+    , "}"
+    , ""
+    , "int64_t " <> prefix <> "answer() {"
+    , "    return NATIVE_VALUE;"
+    , "}"
+    ]
+
+p70_ext_c_include_edit_rebuilds_module :: TestTree
+p70_ext_c_include_edit_rebuilds_module =
+  testCase "70-edit of only a file that an .ext.c includes rebuilds its module" $ do
+    let proj = casesProjDir
+        src = casesSrcDir
+        modNative = modLabel proj "native"
+        modMain = modLabel proj "main"
+        valueH :: Int -> T.Text
+        valueH n = "#define NATIVE_VALUE " <> T.pack (show n) <> "\n"
+        mainAct :: T.Text -> T.Text
+        mainAct label = T.unlines
+          [ "import native"
+          , ""
+          , "actor main(env: Env):"
+          , "    proc def __startup__():"
+          , "        print(\"" <> label <> "\", native.answer())"
+          , "        env.exit(0)"
+          ]
+    ensureCasesProject
+    writeFileUtf8 (src </> "native.act") $ T.unlines
+      [ "def answer() -> int:"
+      , "    NotImplemented"
+      ]
+    -- native.ext.c includes native_impl.h next to it, which includes
+    -- values/answer.h next to itself.
+    writeIncludingExtC ["native_impl.h"]
+    createDirectoryIfMissing True (src </> "values")
+    writeFileUtf8 (src </> "native_impl.h") "#include \"values/answer.h\"\n"
+    writeFileUtf8 (src </> "values" </> "answer.h") (valueH 1)
+    writeFileUtf8 (src </> "main.act") (mainAct "a")
+    _ <- buildOutIn proj
+    out1 <- runBinaryIn proj "main"
+    out1 @?= "a 1\n"
+    -- As in case 64, this build reuses native's object, so afterwards the
+    -- library's cache no longer knows the files native.ext.c includes.
+    writeFileUtf8 (src </> "main.act") (mainAct "b")
+    _ <- buildOutIn proj
+    out2 <- runBinaryIn proj "main"
+    out2 @?= "b 1\n"
+    writeFileUtf8 (src </> "values" </> "answer.h") (valueH 2)
+    out3 <- buildOutIn proj
+    assertBool ("expected native.act to type check after an edit of a file its .ext.c includes\n" ++ T.unpack out3)
+      (typechecked out3 modNative)
+    assertBool "did not expect main.act to type check" (not (typechecked out3 modMain))
+    out3run <- runBinaryIn proj "main"
+    out3run @?= "b 2\n"
+    out4 <- buildOutIn proj
+    assertBool ("did not expect native.act to compile again\n" ++ T.unpack out4) (not (compiled out4 modNative))
+    -- A deleted included file is a change too: the build checks native
+    -- again and fails in the C compiler.
+    removeIfExists (src </> "values" </> "answer.h")
+    (ec, out5) <- runActonIn proj ["build", "--color", "never", "--verbose"]
+    assertBool ("expected native.act to type check after values/answer.h was deleted\n" ++ T.unpack out5) (typechecked out5 modNative)
+    assertBool ("expected the build to fail without values/answer.h\n" ++ T.unpack out5) (ec /= ExitSuccess)
+
+p71_ext_c_including_own_header_settles :: TestTree
+p71_ext_c_including_own_header_settles =
+  testCase "71-an .ext.c that includes its own generated header settles" $ do
+    let proj = casesProjDir
+        src = casesSrcDir
+        modNative = modLabel proj "native"
+    ensureCasesProject
+    writeFileUtf8 (src </> "native.act") $ T.unlines
+      [ "def answer() -> int:"
+      , "    NotImplemented"
+      ]
+    -- The header carries the tag that the module's hash decides, so it must
+    -- not count as an included file.
+    writeIncludingExtC ["../out/types/" <> T.pack casesProjName <> "/native.h", "native_value.h"]
+    writeFileUtf8 (src </> "native_value.h") "#define NATIVE_VALUE 3\n"
+    writeFileUtf8 (src </> "main.act") $ T.unlines
+      [ "import native"
+      , ""
+      , "actor main(env: Env):"
+      , "    proc def __startup__():"
+      , "        print(native.answer())"
+      , "        env.exit(0)"
+      ]
+    _ <- buildOutIn proj
+    run <- runBinaryIn proj "main"
+    run @?= "3\n"
+    out2 <- buildOutIn proj
+    assertBool ("expected native to be fresh\n" ++ T.unpack out2) (fresh out2 modNative)
+    assertBool ("did not expect native.act to compile again\n" ++ T.unpack out2) (not (compiled out2 modNative))
+
+p72_ext_c_include_through_linked_directory :: TestTree
+p72_ext_c_include_through_linked_directory =
+  testCase "72-a file that an .ext.c includes through a linked directory counts" $ do
+    let proj = casesProjDir
+        src = casesSrcDir
+        modNative = modLabel proj "native"
+        vendor = "test" </> "incremental_vendor"
+        valueH :: Int -> T.Text
+        valueH n = "#define NATIVE_VALUE " <> T.pack (show n) <> "\n"
+        mainAct :: T.Text -> T.Text
+        mainAct label = T.unlines
+          [ "import native"
+          , ""
+          , "actor main(env: Env):"
+          , "    proc def __startup__():"
+          , "        print(\"" <> label <> "\", native.answer())"
+          , "        env.exit(0)"
+          ]
+    ensureCasesProject
+    -- src/vendor links to a directory outside the project, as a vendored
+    -- library often does.  Clang reads the header through the link.
+    removePathForcibly vendor
+    createDirectoryIfMissing True vendor
+    vendorAbs <- canonicalizePath vendor
+    writeFileUtf8 (vendor </> "value.h") (valueH 1)
+    createDirectoryLink vendorAbs (src </> "vendor")
+    writeFileUtf8 (src </> "native.act") $ T.unlines
+      [ "def answer() -> int:"
+      , "    NotImplemented"
+      ]
+    writeIncludingExtC ["vendor/value.h"]
+    writeFileUtf8 (src </> "main.act") (mainAct "a")
+    _ <- buildOutIn proj
+    out1 <- runBinaryIn proj "main"
+    out1 @?= "a 1\n"
+    writeFileUtf8 (src </> "main.act") (mainAct "b")
+    _ <- buildOutIn proj
+    writeFileUtf8 (vendor </> "value.h") (valueH 2)
+    out3 <- buildOutIn proj
+    assertBool ("expected native.act to type check after an edit of a header in a linked directory\n" ++ T.unpack out3)
+      (typechecked out3 modNative)
+    out3run <- runBinaryIn proj "main"
+    out3run @?= "b 2\n"
+    removeDirectoryLink (src </> "vendor")
+    removePathForcibly vendor
+
 -- Source written during a read ------------------------------------------------
 
 -- | A disk source provider that writes new text to a source file right after
@@ -3725,6 +4139,15 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
       , p38_project_lock_blocks_build
       , p39_background_lock_does_not_block_build
       , p40_background_lock_blocks_watch
+      , p64_ext_c_edit_rebuilds_module
+      , p65_ext_c_deletion_rereads_module
+      , p66_eager_import_edit_regenerates_code
+      , p67_dbp_line_edit_moves_line_directives
+      , p68_dbg_no_lines_regenerates_code
+      , p69_code_older_than_compiler_regenerates
+      , p70_ext_c_include_edit_rebuilds_module
+      , p71_ext_c_including_own_header_settles
+      , p72_ext_c_include_through_linked_directory
       ]
   , sequentialTestGroup "incremental-cache-cases" AllSucceed
       [ p41_stale_header_missing_import_reparses_source

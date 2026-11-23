@@ -85,6 +85,7 @@ executables:
       - TestRunner
       - PerfScaling
       - TestUI
+      - Watch
     ghc-options:
       - -threaded
       - -rtsopts

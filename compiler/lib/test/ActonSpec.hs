@@ -31,6 +31,7 @@ import qualified Acton.QuickType as QuickType
 import qualified Acton.CodeGen
 import qualified Acton.Diagnostics as Diag
 import qualified Acton.Compile as Compile
+import qualified Acton.ExtSource as ExtSource
 import qualified Acton.Graph as Graph
 import qualified Acton.Project as Project
 import qualified Acton.Zon as Zon
@@ -68,7 +69,7 @@ import Error.Diagnose.Report (Report(..))
 import Prettyprinter (unAnnotate, layoutPretty, defaultLayoutOptions)
 import Prettyprinter.Render.Text (renderStrict)
 import System.FilePath ((</>), joinPath, takeFileName, takeBaseName, takeDirectory, splitDirectories)
-import System.Directory (createDirectoryIfMissing, getCurrentDirectory, setCurrentDirectory, listDirectory, doesDirectoryExist, doesFileExist, removeFile)
+import System.Directory (createDirectoryIfMissing, createDirectoryLink, getCurrentDirectory, setCurrentDirectory, listDirectory, doesDirectoryExist, doesFileExist, removeFile)
 import System.IO.Temp (withSystemTempDirectory)
 import qualified System.IO.Unsafe
 import System.Timeout (timeout)
@@ -1848,6 +1849,69 @@ main = do
           (putMVar releaseOldCleanup ())
         _ <- wait nextCompile
         timeout 1000000 (takeMVar newStarted) `shouldReturn` Just ()
+
+    describe "ExtSource" $ do
+      it "finds the file references of C code by text" $ do
+        let code = B8.pack $ unlines
+              [ "#include \"a.h\""
+              , "  #  include <b/c.h>"
+              , "#include_next \"d.h\""
+              , "#import \"e.h\""
+              , "#embed \"data.bin\""
+              , "#if __has_include(\"f.h\") && __has_include_next(<g.h>)"
+              , "#endif"
+              , "// #include \"commented.h\""
+              , "#define X \"x.h\""
+              ]
+        ExtSource.cFileRefs code `shouldBe`
+          ( [ ExtSource.CRef True "a.h" True, ExtSource.CRef False "b/c.h" True, ExtSource.CRef True "d.h" True
+            , ExtSource.CRef True "e.h" True, ExtSource.CRef True "data.bin" False
+            , ExtSource.CRef True "f.h" True, ExtSource.CRef False "g.h" True ]
+          , False )
+      it "flags a directive that names its file through a macro" $ do
+        snd (ExtSource.cFileRefs (B8.pack "#include HEADER\n")) `shouldBe` True
+        snd (ExtSource.cFileRefs (B8.pack "#define HAS(h) __has_include(h)\n")) `shouldBe` True
+      it "reads lines as the preprocessor does" $ do
+        let code = B8.pack $ unlines
+              [ "/* glue */ #include \"glue.h\""
+              , "/*"
+              , "#include \"hidden.h\""
+              , "*/"
+              , "#include \\"
+              , "  \"continued.h\""
+              , "static const char *s = \"/*\"; // don't"
+              , "#include \"after.h\"\r"
+              ]
+        ExtSource.cFileRefs code `shouldBe`
+          ( [ ExtSource.CRef True "glue.h" True, ExtSource.CRef True "continued.h" True, ExtSource.CRef True "after.h" True ]
+          , False )
+      it "resolves a reference the way clang does for the builder's include path" $
+        withSystemTempDirectory "acton-ext-source" $ \root -> do
+          createDirectoryIfMissing True (root </> "src")
+          forM_ ["src/near.h", "src/both.h", "both.h", "top.h"] $ \f -> writeFile (root </> f) ""
+          let ext = root </> "src" </> "native.ext.c"
+              ref quoted name = ExtSource.CRef quoted name True
+          ExtSource.resolveCRef root ext (ref True "near.h") >>= (`shouldBe` Just (root </> "src" </> "near.h"))
+          ExtSource.resolveCRef root ext (ref True "both.h") >>= (`shouldBe` Just (root </> "src" </> "both.h"))
+          ExtSource.resolveCRef root ext (ref True "top.h") >>= (`shouldBe` Just (root </> "top.h"))
+          ExtSource.resolveCRef root ext (ref False "near.h") >>= (`shouldBe` Nothing)
+          ExtSource.resolveCRef root ext (ref False "both.h") >>= (`shouldBe` Just (root </> "both.h"))
+          ExtSource.resolveCRef root ext (ref True "stdio.h") >>= (`shouldBe` Nothing)
+      it "names the module source of an .ext.c" $ do
+        ExtSource.extSourceOwner "/p/src/a/native.ext.c" `shouldBe` Just "/p/src/a/native.act"
+        ExtSource.extSourceOwner "/p/src/.ext.c" `shouldBe` Nothing
+        ExtSource.extSourceOwner "/p/src/native.c" `shouldBe` Nothing
+      it "keeps the hash of an .ext.c that includes no project file" $
+        ExtSource.extClosureHash (B8.pack "own") [] `shouldBe` B8.pack "own"
+      it "tells the files that editors leave next to the files they save" $ do
+        forM_ [".x.swp", "x~", "#x#", "4913", ".DS_Store", ".#x.c", "x.c___jb_tmp___"] $ \f ->
+          Project.isScratchFile ("/p/src" </> f) `shouldBe` True
+        forM_ ["x.h", "native.ext.c", "a.act", "v2.h"] $ \f ->
+          Project.isScratchFile ("/p/src" </> f) `shouldBe` False
+      it "tells --tydb copies" $ do
+        Project.isInterfaceCopy "/p/src/a.tydb/" `shouldBe` True
+        Project.isInterfaceCopy "/p/src/a.tydb/data.mdb" `shouldBe` True
+        Project.isInterfaceCopy "/p/src/a.act" `shouldBe` False
 
     describe "Graph" $ do
       -- 1 imports 2 and 3, which both import 4.  9 is outside the graph.
@@ -4389,7 +4453,7 @@ main = do
             , "mode" Ae..= ("TestModeRun" :: String)
             , "args" Ae..= ([] :: [String])
             ]
-          defaults = Testing.TestRunContext "test" "native" "ReleaseFast" "TestModeRun" [] M.empty
+          defaults = Testing.TestRunContext "test" "native" "ReleaseFast" "TestModeRun" [] M.empty M.empty M.empty M.empty
       it "preserves default build identities from earlier test caches" $ do
         Ae.fromJSON legacy `shouldBe` Ae.Success defaults
         Ae.toJSON defaults `shouldBe` legacy
@@ -4399,6 +4463,77 @@ main = do
         Ae.decode (Ae.encode enabled) `shouldBe` Just enabled
         (Testing.contextHashBytes enabled == Testing.contextHashBytes defaults) `shouldBe` False
         (Testing.contextHashBytes enabled == Testing.contextHashBytes disabled) `shouldBe` False
+      it "includes the runtime environment in test cache keys" $ do
+        let generational = defaults { Testing.trcEnvironment = M.singleton "ACTON_GC_MODE" "generational" }
+            ordinary = defaults { Testing.trcEnvironment = M.singleton "ACTON_GC_MODE" "ordinary" }
+        Ae.decode (Ae.encode generational) `shouldBe` Just generational
+        (Testing.contextHashBytes generational == Testing.contextHashBytes defaults) `shouldBe` False
+        (Testing.contextHashBytes generational == Testing.contextHashBytes ordinary) `shouldBe` False
+      it "includes the build flags and Zig dependencies in test cache keys" $ do
+        let noThreads = defaults { Testing.trcBuildFlags = M.singleton "no_threads" "true" }
+            withZigDep = defaults { Testing.trcZigDependencies = M.singleton "zigfoo" "1234" }
+            otherZigDep = defaults { Testing.trcZigDependencies = M.singleton "zigfoo" "5678" }
+        Ae.decode (Ae.encode noThreads) `shouldBe` Just noThreads
+        Ae.decode (Ae.encode withZigDep) `shouldBe` Just withZigDep
+        (Testing.contextHashBytes noThreads == Testing.contextHashBytes defaults) `shouldBe` False
+        (Testing.contextHashBytes withZigDep == Testing.contextHashBytes defaults) `shouldBe` False
+        (Testing.contextHashBytes withZigDep == Testing.contextHashBytes otherZigDep) `shouldBe` False
+      it "stamps a local Zig dependency by its files" $
+        withSystemTempDirectory "acton-zig-dep-stamp" $ \tmp -> do
+          let root = tmp </> "app"
+              elsewhere = tmp </> "elsewhere"
+          createDirectoryIfMissing True (root </> "zigfoo" </> ".zig-cache")
+          createDirectoryIfMissing True elsewhere
+          writeFile (root </> "zigfoo" </> "foo.c") "int foo(void) { return 42; }\n"
+          writeFile (elsewhere </> "x.h") "#define X 1\n"
+          -- Linked directories are not followed: neither a link back up the
+          -- tree nor one that leads outside it.
+          createDirectoryLink (root </> "zigfoo") (root </> "zigfoo" </> "loop")
+          createDirectoryLink elsewhere (root </> "zigfoo" </> "out_of_tree")
+          let dep = BuildSpec.ZigDep Nothing Nothing (Just "zigfoo") M.empty ["zigfoo"]
+              spec = BuildSpec.BuildSpec "app" Nothing "0x0" M.empty (M.singleton "zigfoo" dep) M.empty M.empty
+              stamps = Testing.zigDependencyStamps [(root, spec)]
+          before <- stamps
+          M.keys before `shouldBe` ["app:zigfoo"]
+          writeFile (root </> "zigfoo" </> ".zig-cache" </> "x") "ignored"
+          writeFile (elsewhere </> "x.h") "#define X 2 /* not followed */\n"
+          ignored <- stamps
+          ignored `shouldBe` before
+          writeFile (root </> "zigfoo" </> "foo.c") "int foo(void) { return 43; } /* edited */\n"
+          after <- stamps
+          (after == before) `shouldBe` False
+      it "leaves an enclosed Acton project's own directories out of a Zig dependency's stamp" $
+        withSystemTempDirectory "acton-zig-dep-enclosing" $ \tmp -> do
+          -- The Zig package is the project's parent directory.
+          let lib = tmp </> "lib"
+              root = lib </> "bindings"
+          forM_ ["out/test", "snapshots", "src"] $ \d -> createDirectoryIfMissing True (root </> d)
+          writeFile (root </> "Build.act") "name = \"bindings\"\n"
+          writeFile (lib </> "lib.c") "int lib(void) { return 1; }\n"
+          let dep = BuildSpec.ZigDep Nothing Nothing (Just "..") M.empty ["lib"]
+              spec = BuildSpec.BuildSpec "bindings" Nothing "0x0" M.empty (M.singleton "lib" dep) M.empty M.empty
+              stamps = Testing.zigDependencyStamps [(root, spec)]
+          before <- stamps
+          forM_ ["out/test/cache.json", "snapshots/a.txt", "src/m.act"] $ \f -> writeFile (root </> f) "changed"
+          during <- stamps
+          during `shouldBe` before
+          writeFile (lib </> "lib.c") "int lib(void) { return 2; } /* edited */\n"
+          after <- stamps
+          (after == before) `shouldBe` False
+      it "keys test results on the variables of the RTS and its collector" $
+        Testing.testRunEnvironment
+          [ ("ACTON_GC_MODE", "generational")
+          , ("ACTON_GC_PAUSE_MS", "5")
+          , ("GC_MARKERS", "2")
+          , ("PATH", "/usr/bin")
+          , ("HOME", "/home/user")
+          , ("ACTON_GC_CHECK", "1")
+          ]
+          `shouldBe` M.fromList
+            [ ("ACTON_GC_MODE", "generational")
+            , ("ACTON_GC_PAUSE_MS", "5")
+            , ("GC_MARKERS", "2")
+            ]
 
     -- BuildSpec: parsing and update-in-place of Build.act (canonical layout)
     describe "BuildSpec" $ do

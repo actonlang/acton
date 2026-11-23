@@ -2,19 +2,20 @@
 
 Implementation lives in `compiler/lib/src/Acton/CodeGen.hs`.
 
-`Acton.CodeGen.generateCode` receives the hash string that should be stamped
-into the generated output. It stamps the same hash on the `.c`, `.h` and
-`.closures.inc` output:
+`Acton.CodeGen.generateCode` receives the hash strings that should be stamped
+into the generated output: one for the `.h`, and one for the `.c` and the
+`.closures.inc`:
 
 ```c
 /* Acton impl hash: ... */
 ```
 
-For normal modules, `Acton.Compile` passes the module implementation hash. For
-DBP modules, it passes the DBP codegen hash derived from the module
-implementation hash plus the selected top-level names. The label is therefore
-historical: in DBP output it is a selection-sensitive generated-code hash, not
-just the raw module implementation hash.
+`Acton.Compile` passes the module's codegen tags (`codegenTags`): the module
+implementation hash combined with its imports and, for a DBP module, its
+selected top-level names, and for the `.c` and the `.closures.inc` also its
+source path and, while `#line` directives are emitted, its source hash. The
+label is therefore historical: the hash covers everything the back passes read,
+not just the raw module implementation hash.
 
 File builds put generated closure implementations, global initialization chunks,
 and method-table initialization in `<module>.closures.inc`, next to the module's

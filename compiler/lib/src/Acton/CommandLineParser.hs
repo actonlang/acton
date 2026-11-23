@@ -387,7 +387,7 @@ sigOptions = SigOptions
 
 sigCompileOptions :: Parser CompileOptions
 sigCompileOptions = mkSigCompileOptions
-        <$> switch (long "ignore-compiler-version" <> help "Ignore acton version when checking .tydb freshness")
+        <$> switch (long "ignore-compiler-version" <> help "Ignore the compiler binary's age when checking whether .tydb files and generated code are fresh")
         <*> strOption (long "syspath"   <> metavar "TARGETDIR" <> value "" <> help "Set syspath")
         <*> many (strOption (long "searchpath" <> metavar "DIR" <> help "Add search path"))
         <*> many (option depOverrideReader
@@ -408,7 +408,7 @@ compileOptions = compileOptionsWith optimizeOption
 
 compileOptionsWith :: Parser OptimizeMode -> Parser CompileOptions
 compileOptionsWith optimization = CompileOptions
-        <$> switch (long "ignore-compiler-version" <> help "Ignore acton version when checking .tydb freshness")
+        <$> switch (long "ignore-compiler-version" <> help "Ignore the compiler binary's age when checking whether .tydb files and generated code are fresh")
         <*> switch (long "db"           <> help "Enable DB backend")
         <*> switch (long "parse"        <> help "Show the result of parsing")
         <*> switch (long "parse-ast"    <> help "Show the raw AST (Haskell Show)")

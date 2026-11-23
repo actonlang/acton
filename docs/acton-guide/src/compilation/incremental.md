@@ -43,6 +43,19 @@ In practice, Acton decides reuse like this:
 5. If the hash differs, the source really changed, so Acton reparses and
    recompiles that module.
 
+A module with a hand-written `.ext.c` file next to it, which holds the C code
+of its `NotImplemented` functions, is always checked by content. Its stored hash
+covers the `.act` file, the `.ext.c` file and the files of the project that the
+`.ext.c` includes, directly or through other included files, and no source
+metadata is stored for it. So an edit of only the `.ext.c` or of a file it
+includes, or the removal of one, recompiles the module. Acton finds the included
+files by reading the `#include` lines and looking each file up the way the C
+compiler does: next to the including file, then in the project root. Files
+outside the project, such as the headers of a Zig dependency, and the generated
+files under `out/` do not count, but a file reached through a linked directory
+in the project does. When an `#include` names its file through a
+macro, every other file under `src/` counts for that module.
+
 This means harmless metadata drift, like a `touch`, checkout, restore, copy,
 or cross-machine sync, does not by itself force a front-end rebuild. It also
 means misleading timestamps cannot cause stale typed-module reuse, because
@@ -100,10 +113,10 @@ If no name actually uses the import, per-name deps do not change, so nothing pro
 
 ## Code generation staleness
 
-Generated C/H files embed the module impl hash. If the embedded hash differs from the current module impl hash, the compiler treats the generated code as out of date and regenerates it.
+Generated C/H files embed a hash of everything their code is generated from: the module impl hash, the module's imports, and, unless `--dbg-no-lines` is given, its source, which the `#line` directives point into. If the embedded hash differs from the current one, or the files are older than the compiler, the compiler treats the generated code as out of date and regenerates it.
 
 ## Tests and hashes
 
-Test results are cached by the per-name implHash (plus impl deps). Cached failures are still shown by default. Use `--show-cached` to include cached successes, or `--no-cache` to force reruns.
+Test results are cached by the per-name implHash (plus impl deps). A cached result is also tied to the compiler version, the target, the optimization mode, `--cpu`, `--db`, `--no-threads` and `--no-dbp`, the build options in `Build.act`, the Zig dependencies of the project and of its dependencies (for one at a local path, its files), and the `ACTON_` and `GC_` environment variables. Cached failures are still shown by default. Use `--show-cached` to include cached successes, or `--no-cache` to force reruns, whose results then replace the cached ones.
 
 For more on tests, see the [Testing](testing.md) section.

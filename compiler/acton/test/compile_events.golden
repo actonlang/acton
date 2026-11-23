@@ -153,14 +153,33 @@ front-start events.c
 info   Fresh c: using cached .tydb
 front-done events.c
 front-result events.c deferred
-info   DBP a: total names 2, interested names 1, root names 0, selected closure 1, generated code up to date
-back-skipped events.a
+info   DBP a: total names 2, interested names 1, root names 0, selected closure 1, generated code out of date
 info   DBP b: total names 1, interested names 1, root names 0, selected closure 1, generated code up to date
 back-skipped events.b
 info   DBP c: total names 1, interested names 0, root names 0, selected closure 0, generated code up to date
 back-skipped events.c
+back-queued events.a
 -- background outputs, sorted
 output-done events.a doc ok
+-- back jobs
+back-start events.a
+back-pass events.a normalize started 0/8
+back-pass events.a normalize finished 1/8
+back-pass events.a deactorize started 1/8
+back-pass events.a deactorize finished 2/8
+back-pass events.a cps started 2/8
+back-pass events.a cps finished 3/8
+back-pass events.a llift started 3/8
+back-pass events.a llift finished 4/8
+back-pass events.a boxing started 4/8
+back-pass events.a boxing finished 5/8
+back-pass events.a codegen started 5/8
+back-pass events.a codegen finished 6/8
+back-pass events.a render started 6/8
+back-pass events.a render finished 7/8
+back-pass events.a write started 7/8
+back-pass events.a write finished 8/8
+back-done events.a ok
 result ok
 
 == pub change
@@ -543,17 +562,17 @@ result ok
 
 == no DBP refreshes generated code
 front-start events.a
-info   Stale a: generated code out of date {impl <hash> -> <hash>}
+info   Stale a: generated code out of date {codegen c <hash> -> <hash>, h <hash> -> <hash>, support <hash> -> <hash>}
 front-done events.a
 front-result events.a eager
 back-queued events.a
 front-start events.b
-info   Stale b: generated code out of date {impl <hash> -> <hash>}
+info   Stale b: generated code out of date {codegen c <hash> -> <hash>, h <hash> -> <hash>, support <hash> -> <hash>}
 front-done events.b
 front-result events.b eager
 back-queued events.b
 front-start events.c
-info   Stale c: generated code out of date {impl <hash> -> <hash>}
+info   Stale c: generated code out of date {codegen c <hash> -> <hash>, h <hash> -> <hash>, support <hash> -> <hash>}
 front-done events.c
 front-result events.c eager
 back-queued events.c
@@ -616,7 +635,7 @@ result ok
 
 == codegen tag tampered
 front-start events.a
-info   Stale a: generated code out of date {impl c decade -> <hash>, h <hash> -> <hash>, support <hash> -> <hash>}
+info   Stale a: generated code out of date {codegen c decade -> <hash>}
 front-done events.a
 front-result events.a eager
 back-queued events.a
