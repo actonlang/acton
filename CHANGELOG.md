@@ -217,6 +217,10 @@
   ciphertext, the wrong key or mismatched associated data.
   `generate_key(env.random)` returns a 32-byte AES-256 key; 16-byte AES-128
   keys are accepted too.
+- Add `std.crypto.hash.sha256` for SHA-256 digests, backed by Zig's
+  `std.crypto`. `hash(data)` returns the 32-byte digest of a `bytes` value.
+  A `Hasher` takes data in pieces with `update`; `finalize` returns the
+  digest of the data given so far and does not change the hasher.
 - Use private CAs and client certificates with `net.TLSConnection` and
   `net.TLSListener` through `ca_pem`, `cert_pem`, and `key_pem`.
   Listeners request client certificates with `client_auth=True`. Set

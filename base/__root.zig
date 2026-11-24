@@ -135,6 +135,43 @@ export fn zig_crypto_hash_md5_finalize(hasher: *std.crypto.hash.Md5, output: *ac
     hasher.final(out_slice);
 }
 
+// SHA-256 for std.crypto.hash.sha256. The C side in that module allocates the
+// state of a hasher and the 32 bytes of a digest, and passes data as a pointer
+// and a length. The data of an empty bytes value may be null, so it goes
+// through optionalSlice.
+const Sha256 = std.crypto.hash.sha2.Sha256;
+
+/// Size of the state of a hasher. The C side allocates it with
+/// acton_malloc_atomic, so that it comes from the same allocator as the Hasher
+/// object that points to it: a Hasher made while a module is initialized is
+/// not memory of the collector, and a state on the collector's heap that only
+/// such an object refers to would be freed.
+export fn zig_crypto_hash_sha256_size() callconv(.c) usize {
+    return @sizeOf(Sha256);
+}
+
+/// Start with no data, in storage of zig_crypto_hash_sha256_size() bytes. The
+/// storage must have the alignment of Sha256, 16 bytes, which
+/// acton_malloc_atomic gives.
+export fn zig_crypto_hash_sha256_init(storage: *anyopaque) callconv(.c) void {
+    const hasher: *Sha256 = @ptrCast(@alignCast(storage));
+    hasher.* = Sha256.init(.{});
+}
+
+export fn zig_crypto_hash_sha256_update(hasher: *Sha256, data: ?[*]const u8, len: usize) callconv(.c) void {
+    hasher.update(optionalSlice(data, len));
+}
+
+// Writes the digest of the data given so far. The padding goes into a copy of
+// the state, so the hasher itself can take more data afterwards.
+export fn zig_crypto_hash_sha256_finalize(hasher: *const Sha256, out: *[Sha256.digest_length]u8) callconv(.c) void {
+    out.* = hasher.peek();
+}
+
+export fn zig_crypto_hash_sha256_hash(data: ?[*]const u8, len: usize, out: *[Sha256.digest_length]u8) callconv(.c) void {
+    Sha256.hash(optionalSlice(data, len), out, .{});
+}
+
 // AES-GCM for std.crypto.aead.aes_gcm. The C side in that module checks the
 // key length (16 bytes selects AES-128, 32 bytes AES-256) and that the message
 // fits in GCM's length limit, allocates the output and passes every buffer as

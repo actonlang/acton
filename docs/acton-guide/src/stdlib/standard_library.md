@@ -10,6 +10,7 @@ scope.</p>
 Modules:
 
 - [std.crypto.aead.aes_gcm](crypto_aead_aes_gcm.md)
+- [std.crypto.hash.sha256](crypto_hash_sha256.md)
 - [std.math](math.md)
 - [std.random](random.md)
 - [std.re](re.md)

@@ -1,0 +1,199 @@
+import testing
+
+import std.crypto.hash.sha256 as sha256
+
+# abc, the message of 448 bits and one million times the letter a are the
+# examples for SHA-256 in FIPS 180-2, appendix B. The message of 896 bits is
+# the example for SHA-384 and SHA-512 in the same document. All digests here
+# were cross-checked against OpenSSL.
+_ABC = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+_ABCDEF = "bef57ec7f53a6d40beb640a780a639c83bc29ac8a9816f1fc6c5c6dcd93c4721"
+
+def pattern(n: int) -> bytes:
+    """n bytes that do not repeat with the 64-byte block of SHA-256"""
+    return bytes([i % 251 for i in range(n)])
+
+def started(n: int, data: bytes) -> list[sha256.Hasher]:
+    """n hashers that have each been given data"""
+    hashers = []
+    for i in range(n):
+        h = sha256.Hasher()
+        h.update(data)
+        hashers.append(h)
+    return hashers
+
+# Hashers made while this module is initialized. The memory of an object that
+# is made then is not memory of the collector, so the collector does not see
+# what such a Hasher refers to.
+_MODULE_HASHERS = started(1000, b"abc")
+
+def _test_sha256_empty():
+    """SHA-256 of no data"""
+    testing.assertEqual(sha256.hash(b"").hex(),
+                        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+
+def _test_sha256_abc():
+    """SHA-256 of a message of 24 bits"""
+    testing.assertEqual(sha256.hash(b"abc").hex(), _ABC)
+
+def _test_sha256_448_bits():
+    """SHA-256 of a message of 448 bits, with the length in a second block"""
+    testing.assertEqual(sha256.hash(b"abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq").hex(),
+                        "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1")
+
+def _test_sha256_896_bits():
+    """SHA-256 of a message of 896 bits"""
+    testing.assertEqual(sha256.hash(b"abcdefghbcdefghicdefghijdefghijkefghijklfghijklmghijklmnhijklmnoijklmnopjklmnopqklmnopqrlmnopqrsmnopqrstnopqrstu").hex(),
+                        "cf5b16a778af8380036ce59e7b0492370b249b11e8f07a51afac45037afee9d1")
+
+def _test_sha256_million_a():
+    """SHA-256 of one million times the letter a"""
+    testing.assertEqual(sha256.hash(b"aaaaaaaaaa" * 100000).hex(),
+                        "cdc76e5c9914fb9281a1c7e284d73e67f1809a48a497200e046d39ccc7112cd0")
+
+def _test_sha256_lengths_around_a_block():
+    """SHA-256 of messages that end around a block boundary
+
+    The padding is at least 9 bytes. It needs one more block when the last
+    block of the message holds 56 bytes or more.
+    """
+    digests = {
+        55: "463eb28e72f82e0a96c0a4cc53690c571281131f672aa229e0d45ae59b598b59",
+        56: "da2ae4d6b36748f2a318f23e7ab1dfdf45acdc9d049bd80e59de82a60895f562",
+        57: "2fe741af801cc238602ac0ec6a7b0c3a8a87c7fc7d7f02a3fe03d1c12eac4d8f",
+        63: "29af2686fd53374a36b0846694cc342177e428d1647515f078784d69cdb9e488",
+        64: "fdeab9acf3710362bd2658cdc9a29e8f9c757fcf9811603a8c447cd1d9151108",
+        65: "4bfd2c8b6f1eec7a2afeb48b934ee4b2694182027e6d0fc075074f2fabb31781",
+        119: "da18797ed7c3a777f0847f429724a2d8cd5138e6ed2895c3fa1a6d39d18f7ec6",
+        120: "f52b23db1fbb6ded89ef42a23ce0c8922c45f25c50b568a93bf1c075420bbb7c",
+        128: "471fb943aa23c511f6f72f8d1652d9c880cfa392ad80503120547703e56a2be5",
+    }
+    for n, digest in digests.items():
+        testing.assertEqual(sha256.hash(pattern(n)).hex(), digest, "length " + str(n))
+
+def _test_sha256_digest_size():
+    """A digest is DIGEST_SIZE bytes"""
+    testing.assertEqual(sha256.DIGEST_SIZE, 32)
+    testing.assertEqual(len(sha256.hash(b"")), sha256.DIGEST_SIZE)
+    testing.assertEqual(len(sha256.Hasher().finalize()), sha256.DIGEST_SIZE)
+
+def _test_sha256_hasher_pieces():
+    """A Hasher gives the digest of its pieces joined"""
+    h = sha256.Hasher()
+    h.update(b"a")
+    h.update(b"b")
+    h.update(b"c")
+    testing.assertEqual(h.finalize().hex(), _ABC)
+
+def _test_sha256_hasher_no_data():
+    """A Hasher with no data, or with only empty pieces, gives hash(b"")"""
+    testing.assertEqual(sha256.Hasher().finalize(), sha256.hash(b""))
+    h = sha256.Hasher()
+    h.update(b"")
+    h.update(b"")
+    testing.assertEqual(h.finalize(), sha256.hash(b""))
+
+def _test_sha256_hasher_empty_piece_between():
+    """An empty piece between two pieces changes nothing"""
+    h = sha256.Hasher()
+    h.update(b"abc")
+    h.update(b"")
+    h.update(b"def")
+    testing.assertEqual(h.finalize().hex(), _ABCDEF)
+
+def _test_sha256_hasher_every_split():
+    """Two pieces give the digest of the whole message wherever the split is"""
+    message = pattern(200)
+    expected = sha256.hash(message)
+    for k in range(len(message) + 1):
+        h = sha256.Hasher()
+        h.update(message[:k])
+        h.update(message[k:])
+        testing.assertEqual(h.finalize(), expected, "split at " + str(k))
+
+def _test_sha256_hasher_many_small_pieces():
+    """Pieces of 7 bytes meet the block boundaries at every offset in a piece
+
+    64 = 9 * 7 + 1, so each block boundary lies one byte further into a piece
+    than the one before, and every seventh lies exactly between two pieces:
+    there a piece fills the buffered block exactly to its end.
+    """
+    message = pattern(10000)
+    h = sha256.Hasher()
+    for i in range(0, len(message), 7):
+        h.update(message[i:i+7])
+    testing.assertEqual(h.finalize(), sha256.hash(message))
+
+def _test_sha256_finalize_twice():
+    """finalize does not change the hasher"""
+    h = sha256.Hasher()
+    h.update(b"abc")
+    testing.assertEqual(h.finalize().hex(), _ABC)
+    testing.assertEqual(h.finalize().hex(), _ABC)
+
+def _test_sha256_update_after_finalize():
+    """update after finalize adds to the data given before"""
+    h = sha256.Hasher()
+    h.update(b"abc")
+    testing.assertEqual(h.finalize().hex(), _ABC)
+    h.update(b"def")
+    testing.assertEqual(h.finalize().hex(), _ABCDEF)
+
+def _test_sha256_update_after_finalize_in_a_block():
+    """finalize leaves a partly filled block as it was"""
+    message = pattern(150)
+    for k in [1, 55, 56, 63, 64, 65, 127, 128, 129]:
+        h = sha256.Hasher()
+        h.update(message[:k])
+        testing.assertEqual(h.finalize(), sha256.hash(message[:k]), "first " + str(k))
+        h.update(message[k:])
+        testing.assertEqual(h.finalize(), sha256.hash(message), "all, after " + str(k))
+
+def _test_sha256_hashers_are_independent():
+    """Two hashers do not share state"""
+    h1 = sha256.Hasher()
+    h2 = sha256.Hasher()
+    h1.update(b"abc")
+    h2.update(b"abcdef")
+    testing.assertEqual(h1.finalize().hex(), _ABC)
+    testing.assertEqual(h2.finalize().hex(), _ABCDEF)
+
+def _test_sha256_digest_is_a_new_value():
+    """An earlier digest keeps its value when the hasher gets more data"""
+    h = sha256.Hasher()
+    h.update(b"abc")
+    first = h.finalize()
+    h.update(b"def")
+    second = h.finalize()
+    testing.assertEqual(first.hex(), _ABC)
+    testing.assertEqual(second.hex(), _ABCDEF)
+
+# The state of a Hasher is memory that only the integer attribute _hasher
+# refers to. One hasher that lives through a collection does not show a state
+# that was freed, since nothing takes its memory, so these tests keep many
+# hashers through full collections and then allocate as many again. They need
+# env.rts.gc(), so they are env tests.
+
+def _test_sha256_hashers_live_through_collections(t: testing.EnvT):
+    """A hasher keeps its data through collections, while others come and go"""
+    hashers = started(1000, b"abc")
+    t.env.rts.gc()
+    t.env.rts.gc()
+    # New hashers get the memory of any state that the collections freed
+    others = started(1000, b"xyz")
+    for h in hashers:
+        h.update(b"def")
+    for h in hashers:
+        testing.assertEqual(h.finalize().hex(), _ABCDEF)
+    testing.assertEqual(len(others), 1000)
+    t.success()
+
+def _test_sha256_module_level_hashers(t: testing.EnvT):
+    """A hasher made while the module is initialized keeps its data"""
+    t.env.rts.gc()
+    t.env.rts.gc()
+    others = started(1000, b"xyz")
+    for h in _MODULE_HASHERS:
+        testing.assertEqual(h.finalize().hex(), _ABC)
+    testing.assertEqual(len(others), 1000)
+    t.success()
