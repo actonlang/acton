@@ -1,8 +1,9 @@
 {-|
 The expression embed("path"), whose value is the content of a file: the rule
 for a path as it is written (pathProblem), the name of a path in the generated
-C (pathDigits), the embed expressions of a piece of syntax (Embeds), and the
-file that a path names below a directory (embeddedFileStatus).
+C (pathDigits), the embed expressions of a piece of syntax (Embeds), the
+file that a path names below a directory (embeddedFileStatus), and where a
+watch looks for a change to that file (eventPaths, watchDirectories).
 -}
 module Acton.Embed
   ( pathProblem
@@ -12,11 +13,16 @@ module Acton.Embed
   , listedPath
   , embeddedFileStatus
   , cannotBeRead
+  , eventPaths
+  , watchesTrees
+  , watchDirectories
+  , cannotBeWatched
   ) where
 
 import Acton.Syntax
 
 import Control.Exception (IOException, handle, throwIO, try)
+import Control.Monad (filterM, zipWithM)
 import qualified Crypto.Hash.SHA256 as SHA256
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Char8 as B
@@ -27,7 +33,9 @@ import qualified Data.Set as S
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import GHC.IO.Exception (IOErrorType(InappropriateType), ioe_description)
-import System.FilePath.Posix ((</>))
+import System.Directory (canonicalizePath, doesDirectoryExist, pathIsSymbolicLink)
+import System.FilePath.Posix (takeDirectory, (</>))
+import System.Info (os)
 import System.IO.Error (ioeGetErrorType, isDoesNotExistError)
 import System.Posix.Files (FileStatus, deviceID, fileID, fileSize, getFileStatus, getSymbolicLinkStatus, isDirectory, isRegularFile)
 
@@ -279,3 +287,52 @@ embeddedFileStatus names root path = handle (no . cannotBeRead path) $ do
 -- the operating system gives.
 cannotBeRead :: FilePath -> IOException -> String
 cannotBeRead path e = path ++ " cannot be read: " ++ ioe_description e
+
+
+-- Watching -----------------------------------------------------------------------------------------
+
+-- | The paths at which a file system event tells of a change to the file
+-- that a path names below a directory: those of the directories on the way
+-- to the file, and those of the file, which are the path and, when the path
+-- is a symbolic link, the file that it links to.  Each is named as an event
+-- names it, which is with the links of the directories above it resolved.
+-- The given function resolves the links of a directory, and a caller can let
+-- it remember its answers.  A part of a path that does not exist stays as it
+-- is written.
+eventPaths :: (FilePath -> IO FilePath) -> FilePath -> FilePath -> IO ([FilePath], [FilePath])
+eventPaths resolved root path = do
+    places <- zipWithM (\dir part -> (</> part) <$> resolved dir) (scanl (</>) root parts) parts
+    link   <- either (const False) id <$> (try (pathIsSymbolicLink file) :: IO (Either IOException Bool))
+    target <- if link then (: []) <$> canonicalizePath file else return []
+    let (above, place) = splitAt (length parts - 1) places
+    return (above, place ++ target)
+  where parts = components path
+        file  = root </> path
+
+-- | Whether one watch tells of the events in a whole tree of directories.
+-- On macOS it does, and a process there gets events from about 500 watches:
+-- a watch beyond them starts without an error and tells of nothing.
+-- Elsewhere a watch tells of the events in one directory, and the watch of
+-- a tree is a watch of each directory in it.
+watchesTrees :: Bool
+watchesTrees = os == "darwin"
+
+-- | The directories to watch for an event at one of the given paths: the
+-- directory of each path, where it exists.  Where a directory on the way to
+-- a file is missing, the directory above the first missing one exists, and
+-- a watch of it sees that one appear.  Where one watch tells of a whole
+-- tree (watchesTrees), these are the directories that have none of the
+-- others above them.
+watchDirectories :: S.Set FilePath -> IO (S.Set FilePath)
+watchDirectories paths = tops . S.fromList <$> filterM doesDirectoryExist (S.toList (S.map takeDirectory paths))
+  where
+    tops dirs
+      | watchesTrees = S.filter (not . any (`S.member` dirs) . above) dirs
+      | otherwise    = dirs
+    -- The directories above a directory.
+    above dir = let up = takeDirectory dir in if up == dir then [] else up : above up
+
+-- | What a watch says of a directory that it cannot watch, with the error
+-- that stopped it.
+cannotBeWatched :: FilePath -> IOException -> String
+cannotBeWatched dir e = dir ++ " cannot be watched: " ++ show e

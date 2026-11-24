@@ -1,14 +1,14 @@
 {-# LANGUAGE ScopedTypeVariables #-}
-module WatchTests (watchTriggerTests, watchProcessTests, writeExecutable) where
+module WatchTests (watchTriggerTests, watchProcessTests, buildAct, writeExecutable) where
 
 import Control.Concurrent (threadDelay)
-import Control.Exception (IOException, catch, finally, mask, onException)
+import Control.Exception (IOException, catch, finally, mask, onException, try)
 import Control.Monad
 import qualified Data.ByteString.Char8 as BS
 import Data.IORef
 import qualified Data.Map as M
 import Data.Time.Calendar (fromGregorian)
-import Data.Time.Clock (UTCTime(..))
+import Data.Time.Clock (UTCTime(..), addUTCTime)
 import Data.List (intercalate, isInfixOf, isPrefixOf, isSuffixOf, tails)
 import Data.Maybe (isJust, mapMaybe)
 import System.Directory
@@ -17,7 +17,7 @@ import System.FilePath
 import System.IO
 import System.IO.Temp (withSystemTempDirectory)
 import System.Info (os)
-import System.Posix.Files (createSymbolicLink)
+import System.Posix.Files (createSymbolicLink, fileSize, getFileStatus, modificationTimeHiRes, nullFileMode, ownerModes, setFileMode, statusChangeTimeHiRes)
 import System.Posix.Signals
 import System.Posix.Types (ProcessID)
 import System.Process
@@ -27,6 +27,7 @@ import qualified System.FSNotify as FS
 
 import Acton.Project (withProjectLock)
 import qualified Acton.Fingerprint as Fingerprint
+import qualified InterfaceFiles
 import ProcessUtil (stopProcessGroup)
 import Watch
 import Test.Tasty
@@ -104,8 +105,93 @@ watchTriggerTests = testGroup "watch triggers"
         dispatchWatchTrigger (shouldTriggerFile stamps) (\m -> modifyIORef notified (m :))
           (WatchSave path (Just (dir </> "common.act")))
         (@?= [Nothing]) =<< readIORef notified
+  , testCase "a save at an embedded path asks for a full build once the file changed" $
+      forM_ [FS.Modified, FS.Added, FS.Removed] $ \event ->
+        embedWatchTrigger embedded (event "/p/web/app.js" t0 FS.IsFile) @?= Just (WatchSave "/p/web/app.js" Nothing)
+  , testCase "a file beside an embedded file asks for nothing" $
+      forM_ [FS.Modified, FS.Added, FS.Removed] $ \event ->
+        forM_ ["/p/web/other.js", "/p/web/app.js.new", "/p/data/sub/other.txt"] $ \path ->
+          embedWatchTrigger embedded (event path t0 FS.IsFile) @?= Nothing
+  , testCase "a directory on the way to an embedded path asks for a full build when it appears or goes" $ do
+      forM_ ["/p/data", "/p/data/", "/p/data/sub", "/p/data/sub/"] $ \dir -> do
+        forM_ [FS.Added, FS.Removed, FS.WatchedDirectoryRemoved] $ \event ->
+          embedWatchTrigger embedded (event dir t0 FS.IsDirectory) @?= Just WatchFull
+        embedWatchTrigger embedded (FS.Modified dir t0 FS.IsDirectory) @?= Nothing
+      forM_ ["/p/dat", "/p/data/other", "/p/data/sub/text.txt.d/"] $ \dir ->
+        embedWatchTrigger embedded (FS.Added dir t0 FS.IsDirectory) @?= Nothing
+  , testCase "a directory at the path of an embedded file asks for a full build" $
+      embedWatchTrigger embedded (FS.Added "/p/web/app.js/" t0 FS.IsDirectory) @?= Just WatchFull
+  , testCase "a file or a link at the path of a directory on the way asks for a full build" $
+      embedWatchTrigger embedded (FS.Added "/p/data" t0 FS.IsFile) @?= Just WatchFull
+  , testCase "an event of a file at a path where the build found no file to read asks for a full build" $
+      forM_ [FS.Modified, FS.Added, FS.Removed, FS.ModifiedAttributes] $ \event ->
+        embedWatchTrigger embedded (event "/p/data/sub/text.txt" t0 FS.IsFile) @?= Just WatchFull
+  , testCase "attribute changes of an embedded file are skipped" $
+      embedWatchTrigger embedded (FS.ModifiedAttributes "/p/web/app.js" t0 FS.IsFile) @?= Nothing
+  , testCase "the stamp of a file is the stamp of its stat" $
+      withSystemTempDirectory "acton-watch-stat" $ \dir -> do
+        let path = dir </> "text.txt"
+        writeFile path "one\n"
+        stat <- statOf path
+        (@?= Just (statStamp stat)) =<< readFileStamp path
+  , testCase "a file that is another one than a build saw asks for one build" $
+      withSystemTempDirectory "acton-watch-seen" $ \dir -> do
+        stamps <- newIORef M.empty
+        let path    = dir </> "text.txt"
+            changed = changedSinceBuild stamps path
+        -- No file, which is what the build saw.
+        (@?= False) =<< changed Nothing
+        -- A file that is created after the build looked, and the build that
+        -- then sees it.
+        writeFile path "one\n"
+        one <- readFileStamp path
+        (@?= True) =<< changed Nothing
+        (@?= False) =<< changed one
+        -- New content after a build looked.
+        writeFile path "three\n"
+        three <- readFileStamp path
+        (@?= True) =<< changed one
+        -- A file that embed cannot take is no file to each build.
+        (@?= False) =<< changed Nothing
+        -- New content that an event told of before: that event asked for a
+        -- build.
+        writeFile path "sixteen\n"
+        (@?= True) =<< shouldTriggerFile stamps path
+        (@?= False) =<< changed three
+        -- A file that is removed after a build looked.
+        sixteen <- readFileStamp path
+        removeFile path
+        (@?= True) =<< changed sixteen
+        (@?= False) =<< changed Nothing
+  , testCase "the embedded watch asks for a build when a file is another one than the build saw" $
+      withSystemTempDirectory "acton-watch-embedded" $ \tmp -> do
+        dir    <- canonicalizePath tmp
+        builds <- newIORef (0 :: Int)
+        look   <- embeddedWatch (\_ _ _ -> return ()) (modifyIORef builds (+ 1)) assertFailure
+        let path = dir </> "text.txt"
+        writeFile path "one\n"
+        one <- statOf path
+        -- The build saw the file that is there.
+        look (M.fromList [(path, Just one)])
+        (@?= 0) =<< readIORef builds
+        -- The file has new content since the build looked.
+        writeFile path "three\n"
+        look (M.fromList [(path, Just one)])
+        (@?= 1) =<< readIORef builds
   ]
   where t0 = UTCTime (fromGregorian 2026 1 1) 0
+        -- What a build saw at the paths of two embedded files and of the
+        -- directories on the way to them: it read web/app.js and found no
+        -- file to read at data/sub/text.txt.
+        embedded = M.fromList
+          [ ("/p/web", Nothing), ("/p/web/app.js", Just (InterfaceFiles.SourceFileMeta 0 0 0 Nothing Nothing))
+          , ("/p/data", Nothing), ("/p/data/sub", Nothing), ("/p/data/sub/text.txt", Nothing) ]
+        -- The stat of a file as a plan records it.
+        statOf path = do
+          st <- getFileStatus path
+          let nanoseconds = InterfaceFiles.posixNanoseconds
+          return (InterfaceFiles.SourceFileMeta (nanoseconds (modificationTimeHiRes st)) (nanoseconds (statusChangeTimeHiRes st))
+                    (toInteger (fileSize st)) Nothing Nothing)
 
 watchProcessTests :: TestTree
 watchProcessTests = testGroup "watch subprocesses"
@@ -271,19 +357,283 @@ watchProcessTests = testGroup "watch subprocesses"
           runs <- zigRuns proj
           assertEqual "no build should follow the first" 1 runs
           assertEqual "watch should remain running" Nothing =<< getProcessExitCode ph
-  , testCase "build watch reports an embedded file that changed while Zig ran" $
+  , testCase "build watch builds again when an embedded file has new content" $
+      withProcessProject $ \acton proj system -> do
+        let text = proj </> "data/text.txt"
+        createDirectory (proj </> "data")
+        writeFile text "one\n"
+        writeFile (proj </> "src/page.act") "text = embed(\"data/text.txt\")\n"
+        writeExecutable (system </> "zig/zig") ["echo run >> zig-runs"]
+        withActon acton proj ["build", "--watch", "--verbose", "--syspath", system] $ \ph _ output -> do
+          let compiles = count "Stale page: source changed" <$> output
+          awaitZigRuns proj 1
+          awaitGeneration proj
+          -- A build of one changed module looks at the embedded files of
+          -- the other modules too, so the watch goes on after it.
+          appendFile (proj </> "src/main.act") "\n# An edit of other code\n"
+          awaitZigRuns proj 2
+          awaitGeneration proj
+          first <- compiles
+          replaceFile text "two two\n"
+          awaitEmbeddedSize proj "watch_process" 8
+          awaitGeneration proj
+          second <- compiles
+          assertBool "the module should be compiled again for the new content" (second > first)
+          -- A file beside the embedded one, and then the same content with
+          -- another modification time, which asks for a build that compiles
+          -- nothing.
+          runs <- zigRuns proj
+          writeFile (proj </> "data/other.txt") "no module embeds this file\n"
+          time <- getModificationTime text
+          writeFile (text <.> "new") "two two\n"
+          setModificationTime (text <.> "new") (addUTCTime (-30) time)
+          renameFile (text <.> "new") text
+          awaitZigRuns proj (runs + 1)
+          awaitGeneration proj
+          logText <- output
+          assertEqual ("the module should not be compiled again for the same content\n" ++ logText) second (count "Stale page: source changed" logText)
+          assertBool ("no event of data/other.txt should start a build\n" ++ logText) (not ("other.txt" `isInfixOf` logText))
+          removeFile text
+          await "the message for the removed file" $ do
+            removed <- output
+            return $ if "no file data/text.txt in " `isInfixOf` removed then Just () else Nothing
+          assertEqual "watch should remain running" Nothing =<< getProcessExitCode ph
+  , testCase "build watch builds again when a file that a later build embeds has new content" $
+      withProcessProject $ \acton proj system -> do
+        forM_ ["data", "more"] $ \dir -> createDirectory (proj </> dir)
+        writeFile (proj </> "data/text.txt") "one\n"
+        writeFile (proj </> "more/text.txt") "three\n"
+        writeFile (proj </> "src/page.act") "text = embed(\"data/text.txt\")\n"
+        writeExecutable (system </> "zig/zig") ["echo run >> zig-runs"]
+        withActon acton proj ["build", "--watch", "--syspath", system] $ \ph _ _ -> do
+          awaitZigRuns proj 1
+          awaitGeneration proj
+          -- The second build finds an embed of a file in a directory that
+          -- the first build did not look at.
+          appendFile (proj </> "src/page.act") "more = embed(\"more/text.txt\")\n"
+          awaitEmbeddedSize proj "watch_process" 6
+          awaitZigRuns proj 2
+          awaitGeneration proj
+          replaceFile (proj </> "more/text.txt") "sixteen sixteen\n"
+          awaitEmbeddedSize proj "watch_process" 16
+          assertEqual "watch should remain running" Nothing =<< getProcessExitCode ph
+  , testCase "build watch builds again when a file in the last of 600 directories has new content" $
+      withProcessProject $ \acton proj system -> do
+        -- macOS gives a process events from about 500 watches, and a watch
+        -- beyond them tells of nothing.
+        let dirs = [ "data/d" ++ show n | n <- [100 .. 699 :: Int] ]
+            text = last dirs </> "text.txt"
+        forM_ dirs $ \dir -> do
+          createDirectoryIfMissing True (proj </> dir)
+          writeFile (proj </> dir </> "text.txt") "one\n"
+        writeFile (proj </> "src/page.act") $ unlines
+          [ "text" ++ show n ++ " = embed(\"" ++ dir ++ "/text.txt\")" | (n, dir) <- zip [1 :: Int ..] dirs ]
+        writeExecutable (system </> "zig/zig") ["echo run >> zig-runs"]
+        withActon acton proj ["build", "--watch", "--verbose", "--syspath", system] $ \ph _ output -> do
+          awaitZigRuns proj 1
+          awaitGeneration proj
+          replaceFile (proj </> text) "two two\n"
+          -- The watch is told of the file.  Without that, a build can still
+          -- take the new content, when the file changes before the watch
+          -- compares it with what the first build saw.
+          await "the event for the file" $ do
+            logText <- output
+            return $ if any (\line -> "watch event" `isInfixOf` line && text `isInfixOf` line) (lines logText) then Just () else Nothing
+          awaitEmbeddedSize proj "watch_process" 8
+          assertEqual "watch should remain running" Nothing =<< getProcessExitCode ph
+  , testCase "build watch builds again when a missing embedded file is created" $
+      withProcessProject $ \acton proj system -> do
+        writeFile (proj </> "src/page.act") "text = embed(\"data/sub/text.txt\")\n"
+        writeExecutable (system </> "zig/zig") ["echo run >> zig-runs"]
+        withActon acton proj ["build", "--watch", "--syspath", system] $ \ph _ output -> do
+          await "the message for the missing file" $ do
+            logText <- output
+            return $ if "no file data/sub/text.txt in " `isInfixOf` logText then Just () else Nothing
+          assertEqual "the first build should fail before Zig" 0 =<< zigRuns proj
+          -- The first directory on the way to the file appears and goes.  No
+          -- file appears, so only the event for that directory starts a
+          -- build.
+          await "a build for the directory that appears" $ do
+            createDirectory (proj </> "data")
+            removeDirectory (proj </> "data")
+            logText <- output
+            return $ if count "Building project in" logText >= 2 then Just () else Nothing
+          createDirectoryIfMissing True (proj </> "data/sub")
+          replaceFile (proj </> "data/sub/text.txt") "one\n"
+          awaitEmbeddedSize proj "watch_process" 4
+          awaitZigRuns proj 1
+          awaitGeneration proj
+          -- The directories of the file are watched since the build that
+          -- found them.
+          replaceFile (proj </> "data/sub/text.txt") "two two\n"
+          awaitEmbeddedSize proj "watch_process" 8
+          assertEqual "watch should remain running" Nothing =<< getProcessExitCode ph
+  , testCase "build watch builds again when an embedded file changes before its directory is watched" $
       withProcessProject $ \acton proj system -> do
         createDirectory (proj </> "data")
         writeFile (proj </> "data/text.txt") "one\n"
         writeFile (proj </> "src/page.act") "text = embed(\"data/text.txt\")\n"
-        writeExecutable (system </> "zig/zig") ["echo 'another version' > data/text.txt"]
+        -- The file gets new content while Zig runs in the first build, which
+        -- is after the build looked at the file and before the watch looks
+        -- at its directory.  The first build reports the file, and the watch
+        -- builds again.
+        writeExecutable (system </> "zig/zig")
+          [ "if [ ! -e changed ]; then"
+          , "    touch changed"
+          , "    printf 'two two\\n' > text.new"
+          , "    mv text.new data/text.txt"
+          , "fi"
+          ]
         withActon acton proj ["build", "--watch", "--syspath", system] $ \ph _ output -> do
-          await "the report of the changed file" $ do
+          awaitEmbeddedSize proj "watch_process" 8
+          await "a build with the new content" $ do
             logText <- output
-            return $ if "data/text.txt changed while the build ran. Run the build again" `isInfixOf` logText then Just () else Nothing
+            return $ if "Final compilation done" `isInfixOf` logText then Just () else Nothing
+          logText <- output
+          -- The build that reports the file is not reported as done: the
+          -- next build starts between the report and the first build that
+          -- is done.
+          let reported = from "data/text.txt changed while the build ran. Run the build again" logText
+              done     = from "Final compilation done" logText
+          assertBool ("the first build should report the changed file\n" ++ logText) (not (null reported))
+          assertBool ("the build that reports the changed file should not be reported as done\n" ++ logText)
+            ("Building project in" `isInfixOf` take (length reported - length done) reported)
+          assertEqual "watch should remain running" Nothing =<< getProcessExitCode ph
+  , testCase "build watch builds again when a file that a local dependency embeds has new content" $
+      withProcessProject $ \acton proj system -> do
+        let lib = proj </> "lib"
+        forM_ ["src", "data"] $ \dir -> createDirectoryIfMissing True (lib </> dir)
+        writeFile (lib </> "Build.act") (buildAct "lib" [])
+        writeFile (lib </> "data/text.txt") "one\n"
+        writeFile (lib </> "src/page.act") "text = embed(\"data/text.txt\")\n"
+        writeFile (proj </> "Build.act") (buildAct "watch_process" ["dependencies = {", "    \"lib\": (path=\"lib\")", "}"])
+        writeFile (proj </> "src/main.act") $ unlines
+          [ "import lib.page"
+          , "actor main(env):"
+          , "    proc def __startup__():"
+          , "        print(lib.page.text)"
+          , "        env.exit(0)"
+          ]
+        writeExecutable (system </> "zig/zig") ["echo run >> zig-runs"]
+        withActon acton proj ["build", "--watch", "--syspath", system] $ \ph _ _ -> do
+          awaitZigRuns proj 1
           awaitGeneration proj
-          assertBool "the build should not be reported as done" . not . isInfixOf "Final compilation done" =<< output
-          assertEqual "watch should survive the changed file" Nothing =<< getProcessExitCode ph
+          replaceFile (lib </> "data/text.txt") "two two\n"
+          awaitEmbeddedSize lib "lib" 8
+          awaitZigRuns proj 2
+          assertEqual "watch should remain running" Nothing =<< getProcessExitCode ph
+  , testCase "test watch reruns the tests that use a module whose embedded file has new content" $
+      withProcessProject $ \acton proj system -> do
+        createDirectory (proj </> "data")
+        writeFile (proj </> "data/text.txt") "one\n"
+        writeFile (proj </> "src/page.act") "text = embed(\"data/text.txt\")\n"
+        writeFile (proj </> "src/other.act") $ unlines
+          [ "import testing"
+          , "import page"
+          , "def _test_ready():"
+          , "    testing.assertEqual(page.text[0:1], b\"o\")"
+          ]
+        writeExecutable (proj </> "out/bin/.test_main") ["touch main-ran", testInfo True]
+        writeExecutable (proj </> "out/bin/.test_other") ["touch other-ran", moduleTestInfo "other" True]
+        -- The results are cached, so a test runs again only when a name that
+        -- it uses has another impl hash.
+        withActon acton proj ["test", "--watch", "--syspath", system] $ \ph _ output -> do
+          awaitReports 1 output
+          awaitGeneration proj
+          forM_ ["main-ran", "other-ran"] $ \name ->
+            assertBool (name ++ " should run in the first test run") =<< doesFileExist (proj </> name)
+          forM_ ["main-ran", "other-ran"] $ \name -> removeFile (proj </> name)
+          replaceFile (proj </> "data/text.txt") "two two\n"
+          -- The test of other uses the embedded content.
+          awaitFile (proj </> "other-ran")
+          awaitGeneration proj
+          assertBool "the test of main should not run" . not =<< doesFileExist (proj </> "main-ran")
+          assertEqual "watch should remain running" Nothing =<< getProcessExitCode ph
+  , testCase "build watch builds every module again when a module source that another module embeds is saved" $
+      withProcessProject $ \acton proj system -> do
+        -- No module imports text, and page embeds its source.  The watch of
+        -- src and the watch of the embedded files both see each save, in
+        -- either order.
+        let text = proj </> "src/text.act"
+        writeFile text "value = 1\n"
+        writeFile (proj </> "src/page.act") "text = embed(\"src/text.act\")\n"
+        writeExecutable (system </> "zig/zig") ["echo run >> zig-runs"]
+        withActon acton proj ["build", "--watch", "--syspath", system] $ \ph _ _ -> do
+          awaitZigRuns proj 1
+          awaitGeneration proj
+          forM_ [1 .. 6 :: Int] $ \n -> do
+            let source = "value = 1" ++ replicate n '0' ++ "\n"
+            writeFile text source
+            awaitEmbeddedSize proj "watch_process" (length source)
+            awaitGeneration proj
+          assertEqual "watch should remain running" Nothing =<< getProcessExitCode ph
+  , testCase "build watch builds again when an embedded file is renamed to the spelling of its path" $
+      withProcessProject $ \acton proj system -> do
+        createDirectory (proj </> "data")
+        writeFile (proj </> "data/text.txt") "one\n"
+        writeFile (proj </> "src/page.act") "text = embed(\"data/Text.txt\")\n"
+        writeExecutable (system </> "zig/zig") ["echo run >> zig-runs"]
+        withActon acton proj ["build", "--watch", "--syspath", system] $ \ph _ output -> do
+          -- The message names the path: no file there, or, on a file system
+          -- that takes one spelling of a name for another, a file with
+          -- another name.  The watch then builds once more for the file that
+          -- it finds at the path.
+          await "the messages for the path" $ do
+            logText <- output
+            return $ if count "data/Text.txt" logText >= 4 || "no file data/Text.txt in " `isInfixOf` logText then Just () else Nothing
+          awaitGeneration proj
+          assertEqual "the builds should fail before Zig" 0 =<< zigRuns proj
+          renameFile (proj </> "data/text.txt") (proj </> "data/Text.txt")
+          awaitEmbeddedSize proj "watch_process" 4
+          awaitZigRuns proj 1
+          assertEqual "watch should remain running" Nothing =<< getProcessExitCode ph
+  , testCase "build watch keeps running when the directory of an embedded file cannot be read" $
+      withProcessProject $ \acton proj system -> do
+        let sub = proj </> "data/sub"
+        createDirectoryIfMissing True sub
+        writeFile (sub </> "text.txt") "one\n"
+        writeFile (proj </> "src/page.act") "text = embed(\"data/sub/text.txt\")\n"
+        writeExecutable (system </> "zig/zig") ["echo run >> zig-runs"]
+        -- Linux refuses the watch of a directory without read permission.
+        -- The build fails for a user who cannot list the directory, and
+        -- succeeds for one who can read every file.
+        setFileMode sub nullFileMode
+        flip finally (setFileMode sub ownerModes) $
+          withActon acton proj ["build", "--watch", "--syspath", system] $ \ph _ output -> do
+            let builds = count "Building project in" <$> output
+            await "the first build" $ do
+              started <- builds
+              return $ if started >= 1 then Just () else Nothing
+            awaitGeneration proj
+            first <- builds
+            appendFile (proj </> "src/main.act") "\n# An edit\n"
+            await "a build after the edit" $ do
+              started <- builds
+              return $ if started > first then Just () else Nothing
+            awaitGeneration proj
+            assertEqual "watch should remain running" Nothing =<< getProcessExitCode ph
+  , testCase "the watch of a file without a project builds again for its embedded file" $
+      withSystemTempDirectory "acton-watch-file" $ \tmp -> do
+        acton <- canonicalizePath "../../dist/bin/acton"
+        dir   <- canonicalizePath tmp
+        writeFile (dir </> "prog.act") $ unlines
+          [ "text = embed(\"text.txt\")"
+          , "actor main(env):"
+          , "    proc def __startup__():"
+          , "        print(text)"
+          , "        env.exit(0)"
+          ]
+        -- The log of the compiler is written to the same directory all the
+        -- time, and no module embeds it.
+        withActon acton dir ["prog.act", "--watch", "--color", "never"] $ \ph _ output -> do
+          await "the message for the missing file" $ do
+            logText <- output
+            return $ if "no file text.txt in " `isInfixOf` logText then Just () else Nothing
+          replaceFile (dir </> "text.txt") "one\n"
+          awaitProgramOutput (dir </> "prog") "b'one\\n'\n"
+          replaceFile (dir </> "text.txt") "two two\n"
+          awaitProgramOutput (dir </> "prog") "b'two two\\n'\n"
+          assertEqual "watch should remain running" Nothing =<< getProcessExitCode ph
   , testCase "one-shot stress Ctrl-C reports partial results" $
       withProcessProject $ \acton proj system -> do
         writeExecutable (proj </> "out/bin/.test_main")
@@ -404,6 +754,8 @@ watchProcessTests = testGroup "watch subprocesses"
     waitingParent = ["trap '' TERM", "while :; do sleep 1; done"]
     testInfo = moduleTestInfo "main"
     count needle = length . filter (isPrefixOf needle) . tails
+    -- The text from the first place of a needle on, and no text without one.
+    from needle = concat . take 1 . filter (isPrefixOf needle) . tails
     -- The test output starts after the runner says how it uses the cache.
     testOutput logText = case dropWhile (\t -> not (any (`isPrefixOf` t) ["Skipping test result cache", "Not using cached test results"])) (tails logText) of
       text:_ -> text
@@ -428,6 +780,18 @@ watchProcessTests = testGroup "watch subprocesses"
     awaitZigRuns proj n = await ("Zig run " ++ show n) $ do
       runs <- zigRuns proj
       return $ if runs >= n then Just () else Nothing
+    -- The data C file of the module page of the project with the given root
+    -- and name asserts the size of the file that the module embeds.
+    awaitEmbeddedSize root name size = await ("an embedded file of " ++ show size ++ " bytes") $ do
+      text <- readOutput (root </> "out/types" </> name </> "page.embed.c")
+      return $ if (" == " ++ show size ++ ",") `isInfixOf` text then Just () else Nothing
+    -- A build replaces the program while the watch runs, so a run of it can
+    -- fail.
+    awaitProgramOutput program expected = await (program ++ " to print " ++ show expected) $ do
+      result <- Timeout.timeout 30000000 (try (readProcessWithExitCode program [] "") :: IO (Either IOException (ExitCode, String, String)))
+      return $ case result of
+        Just (Right (ExitSuccess, out, _)) | out == expected -> Just ()
+        _                                                    -> Nothing
     -- A module whose NotImplemented answer native.ext.c implements, with a
     -- value from native_value.h.
     writeNativeModule proj = do
@@ -454,16 +818,13 @@ withProcessProject action =
       acton <- canonicalizePath "../../dist/bin/acton"
       let dist = takeDirectory (takeDirectory acton)
           system = proj </> "system"
-          name = "watch_process"
-          fingerprint = Fingerprint.formatFingerprint
-            (Fingerprint.updateFingerprintPrefix (Fingerprint.fingerprintPrefixForName name) 1)
       createDirectory system
       entries <- listDirectory dist
       forM_ (filter (/= "zig") entries) $ \entry ->
         createSymbolicLink (dist </> entry) (system </> entry)
       writeExecutable (system </> "zig/zig") ["exit 0"]
       createDirectory (proj </> "src")
-      writeFile (proj </> "Build.act") ("name = " ++ show name ++ "\nfingerprint = " ++ fingerprint ++ "\n")
+      writeFile (proj </> "Build.act") (buildAct "watch_process" [])
       writeFile (proj </> "src/main.act") $ unlines
         [ "import testing"
         , "def _test_ready():"
@@ -477,6 +838,21 @@ withProcessProject action =
           text <- readOutput (proj </> name)
           forM_ (readMaybe text :: Maybe ProcessID) $ \pid ->
             signalProcess sigKILL pid `catch` ignoreIO)
+
+-- | The Build.act of the project 'name': its name, its fingerprint and the
+-- given lines.
+buildAct :: String -> [String] -> String
+buildAct name rest = unlines $
+    [ "name = " ++ show name
+    , "fingerprint = " ++ Fingerprint.formatFingerprint (Fingerprint.updateFingerprintPrefix (Fingerprint.fingerprintPrefixForName name) 1)
+    ] ++ rest
+
+-- | Put content at a path in one step, so that no build sees a file that is
+-- written in part.
+replaceFile :: FilePath -> String -> IO ()
+replaceFile path content = do
+    writeFile (path <.> "new") content
+    renameFile (path <.> "new") path
 
 writeExecutable :: FilePath -> [String] -> IO ()
 writeExecutable path body = do

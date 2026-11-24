@@ -99,6 +99,7 @@ main = do
       , typeErrorAutoTests
       , rootErrorAutoTests
       , embedErrorTests
+      , EmbedTests.embedServerTests
       , EmbedTests.embedProgramTests
       , EmbedTests.embedChangedTests
       , parseFlagTests

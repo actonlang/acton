@@ -64,6 +64,20 @@ again the code of each module that uses a name whose value holds the content.
 `acton test` runs a test again when the test uses such a name. A file that is
 written again with the same content is read once and compiles nothing.
 
+`acton build --watch` and `acton test --watch` build again when an embedded
+file is saved or removed, and when a file that was missing is created. This
+holds for the files that the modules of such a build embed: the modules of
+the project that the command builds, and those of its local dependencies.
+The build that follows looks at all these modules and compiles only what the
+new content changes. The watch of a file that is compiled without a project,
+as in `acton greeting.act --watch`, does the same for the files that this
+file embeds.
+
+In an editor, the language server reports an embedded file that is missing
+when it compiles the module. The report goes when the file is there and the
+module is compiled again, which an edit of the module or of a module that it
+imports starts.
+
 A build looks at an embedded file more than once: before it compiles a
 module, and again after the C compiler has read the file. When the file is
 written or removed between two looks, the build stops with a message such as

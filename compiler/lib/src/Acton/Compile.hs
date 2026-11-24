@@ -76,7 +76,9 @@ cover the impl hash, so an edit of other code of the module leaves the file
 as it is and the C compiler does not read the embedded files again.  The C
 compiler reads an embedded file after the plan looked at it, so the CLI asks
 after its Zig build which files are not the ones that the build took them
-for (changedEmbeds), and fails the build for any.
+for (changedEmbeds), and fails the build for any.  The watches of the CLI
+and the LSP server look for file system events at the paths that a plan
+looked at for embed (embeddedPaths).
 
 Plan
 ----
@@ -371,6 +373,7 @@ module Acton.Compile
   , fileFact
   , hashOfFile
   , changedEmbeds
+  , embeddedPaths
   , docIndexEntry
   , parseActSource
   , parseActFile
@@ -422,6 +425,7 @@ import Utils
 import Pretty hiding ((<>))
 import qualified InterfaceFiles
 
+import Control.Applicative ((<|>))
 import Control.Concurrent.Async
 import Control.Concurrent.MVar
 import Control.Concurrent (forkIO, threadDelay)
@@ -1716,6 +1720,34 @@ changedEmbeds plan = Data.List.nub . concat <$> mapM changed (cpNeededTasks plan
       file <- embedFact (ccFiles (cpContext plan)) root records path
       return [ path ++ " changed since its module was compiled. Run the build without --only-build"
              | fmap InterfaceFiles.embeddedSha256 file /= Right (recordedSha256 recorded) ]
+
+-- | What a plan saw at each path that it looked at for embed in the root
+-- project and in its local dependencies (localProjects), whether it found a
+-- file there or not: the stat of the file, or Nothing where it found no file
+-- to read.  A watch looks for file system events at these paths and at the
+-- directories on the way to them from the directory that they count from,
+-- which are here with Nothing.  Each path is named as an event names it, and
+-- a path that is a symbolic link is here also as the file that it links to
+-- (Embed.eventPaths).
+embeddedPaths :: CompilePlan -> IO (M.Map FilePath (Maybe InterfaceFiles.SourceFileMeta))
+embeddedPaths plan = do
+    local <- localProjects (ccSysAbs ctx) (ccRootProj ctx) (cpProjMap plan)
+    cells <- readIORef (seenFiles (ccFiles ctx))
+    known <- newIORef M.empty
+    -- The links of a directory are resolved once, however many paths have
+    -- the directory on their way.
+    let resolved dir = do
+          found <- M.lookup dir <$> readIORef known
+          maybe (do real <- canonicalizePath dir
+                    modifyIORef' known (M.insert dir real)
+                    return real) return found
+    M.fromListWith (<|>) . concat <$> sequence
+      [ do seen           <- readMVar cell
+           (above, files) <- Embed.eventPaths resolved root (makeRelative root path)
+           return ([ (place, Nothing) | place <- above ] ++ [ (place, fst =<< seen) | place <- files ])
+      | root <- map embedRoot (M.elems (M.intersection (buildPaths ctx (cpProjMap plan)) local))
+      , (path, cell) <- M.toList cells, path `isUnder` root ]
+  where ctx = cpContext plan
 
 -- | Read stable source metadata used for quick .tydb reuse checks.
 readSourceFileMeta :: FilePath -> IO InterfaceFiles.SourceFileMeta

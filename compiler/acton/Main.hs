@@ -612,6 +612,7 @@ data CliWatchContext = CliWatchContext
   { cwScheduler :: CompileScheduler
   , cwProgressUI :: ProgressUI
   , cwProgressState :: ProgressState
+  , cwEmbedded :: Chan (M.Map FilePath (Maybe InterfaceFiles.SourceFileMeta))  -- from each build that ended: embeddedPaths of its plan
   }
 
 withCompileWatchContext :: C.GlobalOptions -> (CliWatchContext -> IO a) -> IO a
@@ -621,7 +622,7 @@ withCompileWatchContext gopts action = do
             (\previous -> void (installHandler sigTERM previous Nothing)) $ \_ ->
       bracket create cleanup action
   where
-    create = CliWatchContext <$> newCompileScheduler gopts <*> initProgressUI gopts <*> newProgressState
+    create = CliWatchContext <$> newCompileScheduler gopts <*> initProgressUI gopts <*> newProgressState <*> newChan
     cleanup ctx = do
       stopCompile (cwScheduler ctx)
       progressReset (cwProgressUI ctx) (cwProgressState ctx)
@@ -793,8 +794,7 @@ runTestsWatch gopts opts topts mode paths = do
     withBackgroundCompilerLockOrExit projDir
       "Another long-running Acton compiler is already running; cannot start test watch." $
       withCompileWatchContext gopts $ \watchCtx -> do
-        let sched = cwScheduler watchCtx
-            progressUI = cwProgressUI watchCtx
+        let progressUI = cwProgressUI watchCtx
             progressState = cwProgressState watchCtx
         testParallel0 <- testMaxParallel gopts
         let testParallel = if mode `elem` [TestModePerf, TestModeScale, TestModeStress] then 1 else testParallel0
@@ -819,7 +819,7 @@ runTestsWatch gopts opts topts mode paths = do
                       void $ runProjectTests useColorOut gopts opts paths topts mode modulesToTest testParallel
                       logTiming gopts opts (progressLogLine progressUI) "test execution and cache" testStart
                 return (not hadErrors)
-        runWatchProject gopts projDir srcRoot (localDependencyDirs gopts opts paths) sched runOnce
+        runWatchProject gopts projDir srcRoot (localDependencyDirs gopts opts paths) watchCtx runOnce
 
 selectTestModules :: Paths -> [FilePath] -> Maybe [FilePath] -> [String] -> IO [String]
 selectTestModules paths srcFiles mChanged testModules =
@@ -874,8 +874,7 @@ watchProjectAt gopts opts projDir = do
                 withBackgroundCompilerLockOrExit (projPath paths)
                   "Another long-running Acton compiler is already running; cannot start watch." $
                   withCompileWatchContext gopts $ \watchCtx -> do
-                    let sched = cwScheduler watchCtx
-                        progressUI = cwProgressUI watchCtx
+                    let progressUI = cwProgressUI watchCtx
                         progressState = cwProgressState watchCtx
                     let runOnce gen mChanged =
                           withProjectLockForGen gopts gen (projPath paths) $ do
@@ -885,7 +884,7 @@ watchProjectAt gopts opts projDir = do
                             when (not hadErrors && isNothing mChanged) $
                               generateProjectDocIndex sp gopts opts paths srcFiles
                             return (not hadErrors)
-                    runWatchProject gopts (projPath paths) (srcDir paths) (localDependencyDirs gopts opts paths) sched runOnce
+                    runWatchProject gopts (projPath paths) (srcDir paths) (localDependencyDirs gopts opts paths) watchCtx runOnce
 
 -- | Exit with an error unless a source file named on the command line exists.
 requireSourceFile :: FilePath -> IO ()
@@ -944,31 +943,19 @@ watchFile gopts opts file = do
         let sp = Source.diskSourceProvider
         withTempDirOpts opts $ \opts' _ ->
           withCompileWatchContext gopts $ \watchCtx -> do
-            let sched = cwScheduler watchCtx
-                runOnce gen mChanged =
+            let runOnce gen mChanged =
                   void $ compileFilesChanged sp gopts opts' [absFile] SelectedFiles mChanged (Just (watchCtx, gen))
-            runWatchFile gopts absFile sched runOnce
+            runWatchFile gopts absFile watchCtx runOnce
 
--- | The local projects that a project depends on, as their roots and src
--- directories: those a path dependency or a --dep override names, which a
--- watch must look at too.  A dependency fetched by hash lives in the
--- dependency cache, whose entries never change, and std and base belong to
--- the compiler.  While its dependencies cannot be discovered, for example
--- before the first build fetches one, a project has none: the watch asks
--- again after every build.
+-- | The local projects that a project depends on (localProjects), as their
+-- roots and src directories, which a watch must look at too.  While its
+-- dependencies cannot be discovered, for example before the first build
+-- fetches one, a project has none: the watch asks again after every build.
 localDependencyDirs :: C.GlobalOptions -> C.CompileOptions -> Paths -> IO [(FilePath, FilePath)]
 localDependencyDirs gopts opts paths = do
     root     <- normalizePathSafe (projPath paths)
-    cache    <- normalizePathSafe . depCacheDir =<< getHomeDirectory
-    -- The system directory and std and base inside it, each with its links
-    -- resolved, as the discovered roots are.
-    system   <- mapM normalizePathSafe [sysPath paths, sysPath paths </> "std", sysPath paths </> "base"]
-    projects <- discoverBuildProjects gopts opts paths
-    let compilers dir = any (\sys -> dir == sys || dir `isUnder` sys) system
-    return [ (dir, projSrcDir ctx)
-           | Just found <- [projects]
-           , (dir, ctx) <- M.toList found
-           , dir /= root, not (dir `isUnder` cache), not (compilers dir) ]
+    projects <- maybe (return M.empty) (localProjects (sysPath paths) root) =<< discoverBuildProjects gopts opts paths
+    return [ (dir, projSrcDir ctx) | (dir, ctx) <- M.toList projects, dir /= root ]
 
 -- | Run the project watch loop and schedule compiles on events: in the
 -- project's src directory and Build.act, and in the src directories and
@@ -976,15 +963,17 @@ localDependencyDirs gopts opts paths = do
 -- after every build that completes, since a build may have fetched the
 -- dependencies that the question needs, and whenever a Build.act changes).
 -- An event in a dependency asks for a full build, since the changed paths
--- that an incremental build takes name the project's own modules.
+-- that an incremental build takes name the project's own modules.  The
+-- thread of the watch looks at the embedded files of each build that ended
+-- (embeddedWatch).
 runWatchProject :: C.GlobalOptions
                 -> FilePath
                 -> FilePath
                 -> IO [(FilePath, FilePath)]
-                -> CompileScheduler
+                -> CliWatchContext
                 -> (Generation -> Maybe [FilePath] -> IO Bool)
                 -> IO ()
-runWatchProject gopts projDir srcRoot dependencyDirs sched runOnce = do
+runWatchProject gopts projDir srcRoot dependencyDirs watchCtx runOnce = do
     stampsRef <- newIORef M.empty
     pendingRef <- newIORef (0 :: Int, Just [])
     dependencyWatches <- newMVar M.empty
@@ -993,7 +982,7 @@ runWatchProject gopts projDir srcRoot dependencyDirs sched runOnce = do
           atomicModifyIORef' pendingRef $ \(version, pending) ->
             let changed = nub <$> ((++) <$> pending <*> fmap (:[]) mpath)
             in ((version + 1, changed), ())
-          void $ startCompile sched 0 $ \gen -> do
+          void $ startCompile (cwScheduler watchCtx) 0 $ \gen -> do
             (version, changed) <- readIORef pendingRef
             completed <- runOnce gen changed
             -- Canceled and failed generations leave their paths pending. A
@@ -1001,10 +990,10 @@ runWatchProject gopts projDir srcRoot dependencyDirs sched runOnce = do
             when completed $ atomicModifyIORef' pendingRef $ \current@(latest, _) ->
               (if latest == version then (latest, Just []) else current, ())
             when completed (join (readIORef afterBuild))
-        onSource toTrigger ev = forM_ (toTrigger ev) $ \trigger -> do
+        onSource stamps toTrigger ev = forM_ (toTrigger ev) $ \trigger -> do
           when (C.verbose gopts) $
             putStrLn ("[debug] watch event: " ++ show ev ++ " -> " ++ show trigger)
-          dispatchWatchTrigger (shouldTriggerFile stampsRef) schedule trigger
+          dispatchWatchTrigger (shouldTriggerFile stamps) schedule trigger
         dependencyTrigger ev = case srcWatchTrigger ev of
           Just (WatchSave saved _) -> Just (WatchSave saved Nothing)
           other                    -> other
@@ -1020,43 +1009,47 @@ runWatchProject gopts projDir srcRoot dependencyDirs sched runOnce = do
           added <- forM (M.toList (M.difference dirs watches)) $ \(root, src) -> do
             hasSrc   <- doesDirectoryExist src
             when hasSrc (recordStamps stampsRef src)
-            stopSrc  <- if hasSrc then FS.watchTree mgr src (isJust . dependencyTrigger) (onSource dependencyTrigger)
+            stopSrc  <- if hasSrc then FS.watchTree mgr src (isJust . dependencyTrigger) (onSource stampsRef dependencyTrigger)
                                   else return (return ())
             stopSpec <- FS.watchDir mgr root isBuildSpec (onBuildSpec mgr)
             return (root, stopSrc >> stopSpec)
           return (M.union (M.intersection watches dirs) (M.fromList added))
     FS.withManager $ \mgr -> do
       recordStamps stampsRef srcRoot
-      _ <- FS.watchTree mgr srcRoot (isJust . srcWatchTrigger) (onSource srcWatchTrigger)
+      _ <- FS.watchTree mgr srcRoot (isJust . srcWatchTrigger) (onSource stampsRef srcWatchTrigger)
       _ <- FS.watchDir mgr projDir isBuildSpec (onBuildSpec mgr)
       watchDependencies mgr
       writeIORef afterBuild (watchDependencies mgr)
+      lookAtEmbedded <- embeddedWatch onSource (schedule Nothing) (progressLogLine (cwProgressUI watchCtx))
       schedule Nothing
       unless (C.quiet gopts) $
         putStrLn ("Watching for changes in " ++ projDir)
-      forever $ threadDelay maxBound
+      forever (readChan (cwEmbedded watchCtx) >>= lookAtEmbedded)
 
--- | Run the single-file watch loop and schedule compiles on events.
+-- | Run the single-file watch loop and schedule compiles on events.  The
+-- thread of the watch looks at the embedded files of each build that ended
+-- (embeddedWatch).
 runWatchFile :: C.GlobalOptions
              -> FilePath
-             -> CompileScheduler
+             -> CliWatchContext
              -> (Generation -> Maybe [FilePath] -> IO ())
              -> IO ()
-runWatchFile gopts absFile sched runOnce = do
+runWatchFile gopts absFile watchCtx runOnce = do
     stampsRef <- newIORef M.empty
     let watchDir = takeDirectory absFile
         watchPath = normalise absFile
         isTarget ev = isJust (fileWatchTrigger watchPath ev)
-        onEvent ev =
-          forM_ (fileWatchTrigger watchPath ev) (dispatchWatchTrigger (shouldTriggerFile stampsRef) schedule)
-        schedule mpath = void $ startCompile sched 0 $ \gen ->
+        onEvent stamps toTrigger ev =
+          forM_ (toTrigger ev) (dispatchWatchTrigger (shouldTriggerFile stamps) schedule)
+        schedule mpath = void $ startCompile (cwScheduler watchCtx) 0 $ \gen ->
           runOnce gen (fmap (:[]) mpath)
     FS.withManager $ \mgr -> do
-      _ <- FS.watchDir mgr watchDir isTarget onEvent
+      _ <- FS.watchDir mgr watchDir isTarget (onEvent stampsRef (fileWatchTrigger watchPath))
+      lookAtEmbedded <- embeddedWatch onEvent (schedule Nothing) (progressLogLine (cwProgressUI watchCtx))
       schedule Nothing
       unless (C.quiet gopts) $
         putStrLn ("Watching for changes in " ++ absFile)
-      forever $ threadDelay maxBound
+      forever (readChan (cwEmbedded watchCtx) >>= lookAtEmbedded)
 
 -- | Fetch dependencies for the current project without compiling.
 fetchCommand :: C.GlobalOptions -> IO ()
@@ -1517,7 +1510,11 @@ compileFilesChanged sp gopts opts srcFiles scope mChangedPaths mWatch = do
                           else do
                             cleanupProgress
                             not <$> ifCurrent gen False (runCliPostCompile reporter gopts plan env)
-          either reportPlanError runPlan planRes
+              -- A watch looks at the embedded files of each build that
+              -- ends, also of one that failed.
+              tellWatch plan = forM_ mWatch $ \(ctx, _) ->
+                writeChan (cwEmbedded ctx) =<< embeddedPaths plan
+          either reportPlanError (\plan -> runPlan plan <* tellWatch plan) planRes
     withDependencyLocks runCompile `finally` cleanupProgress
 
 overlayChangedPaths :: Source.SourceProvider -> Maybe [FilePath] -> IO Source.SourceProvider

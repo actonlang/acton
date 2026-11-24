@@ -1,11 +1,15 @@
 {-# LANGUAGE OverloadedStrings, ScopedTypeVariables #-}
 -- | The expression embed("path").  The messages for a path that names no
 -- file as embed takes it: as the command line compiler prints them, and as
--- the language server publishes them for the same project.  Programs that
--- embed files, built through zig and run.  And builds in which an embedded
--- file is not the one that its module was compiled with when zig has run.
-module EmbedTests (embedErrorTests, embedProgramTests, embedChangedTests) where
+-- the language server publishes them for the same project.  What the
+-- language server reports when an embedded file appears or goes while it
+-- runs.  Programs that embed files, built through zig and run.  And builds
+-- in which an embedded file is not the one that its module was compiled with
+-- when zig has run.
+module EmbedTests (embedErrorTests, embedServerTests, embedProgramTests, embedChangedTests) where
 
+import Control.Concurrent (forkIO, killThread)
+import Control.Concurrent.Chan (newChan, readChan, writeChan)
 import Control.Exception (IOException, try)
 import Control.Monad
 import qualified Data.Aeson as Ae
@@ -28,8 +32,7 @@ import System.Posix.Files (createNamedPipe, createSymbolicLink, nullFileMode, ow
 import System.Process
 import qualified System.Timeout as Timeout
 
-import qualified Acton.Fingerprint as Fingerprint
-import WatchTests (writeExecutable)
+import WatchTests (buildAct, writeExecutable)
 import Test.Tasty
 import Test.Tasty.Golden (goldenVsString)
 import Test.Tasty.HUnit
@@ -78,14 +81,6 @@ withProject (Case _ path setup) run = withSystemTempDirectory "acton-embed" $ \t
     setup root
     LBS.pack . T.unpack . T.replace (T.pack root) "/home/user/shop" . T.pack <$> run root
 
--- | The Build.act of the project 'name': its name, its fingerprint and the
--- given lines.
-buildAct :: String -> [String] -> String
-buildAct name rest = unlines $
-    [ "name = \"" ++ name ++ "\""
-    , "fingerprint = " ++ Fingerprint.formatFingerprint (Fingerprint.updateFingerprintPrefix (Fingerprint.fingerprintPrefixForName name) 1)
-    ] ++ rest
-
 -- | What a build of the project prints.
 compilerOutput :: FilePath -> IO String
 compilerOutput root = do
@@ -97,44 +92,16 @@ compilerOutput root = do
 -- | The diagnostics that the language server publishes for src/page.act
 -- after the file is opened, one per line: the range and the message.
 serverDiagnostics :: FilePath -> IO String
-serverDiagnostics root = do
-    server <- canonicalizePath "../../dist/bin/lsp-server-acton"
-    text   <- readFile file
-    withFile "/dev/null" WriteMode $ \devNull ->
-      withCreateProcess (proc server []) { std_in = CreatePipe, std_out = CreatePipe, std_err = UseHandle devNull } $ \(Just hin) (Just hout) _ process -> do
-        let send :: Ae.Value -> IO ()
-            send message = do
-              let body = Ae.encode message
-              LBS.hPut hin (LBS.pack ("Content-Length: " ++ show (LBS.length body) ++ "\r\n\r\n") <> body)
-              hFlush hin
-            message method params = Ae.object ["jsonrpc" Ae..= ("2.0" :: String), "method" Ae..= (method :: String), "params" Ae..= (params :: Ae.Value)]
-        send (Ae.object ["jsonrpc" Ae..= ("2.0" :: String), "id" Ae..= (1 :: Int), "method" Ae..= ("initialize" :: String)
-                        , "params" Ae..= Ae.object ["processId" Ae..= Ae.Null, "rootUri" Ae..= ("file://" ++ root), "capabilities" Ae..= Ae.object []]])
-        send (message "initialized" (Ae.object []))
-        send (message "textDocument/didOpen" (Ae.object ["textDocument" Ae..= Ae.object
-               ["uri" Ae..= ("file://" ++ file), "languageId" Ae..= ("acton" :: String), "version" Ae..= (1 :: Int), "text" Ae..= text]]))
-        published <- Timeout.timeout (120 * 1000000) (diagnosticsOf hout)
-        -- The server is gone before the project is removed.
-        terminateProcess process
-        _ <- waitForProcess process
-        case published of
-          Nothing    -> assertFailure "the language server published no diagnostics for src/page.act within 120 seconds"
-          Just diags -> return (unlines (map line diags))
+serverDiagnostics root = withServer root $ \notify published -> do
+    opened notify root file =<< readFile (root </> file)
+    unlines . map line <$> reported published
   where
-    file = root </> "src" </> "page.act"
+    file = "src" </> "page.act"
 
     -- The first diagnostics that are published for the file and are not empty.
-    diagnosticsOf hout = do
-      message <- received hout
-      case Ae.parseMaybe published message of
-        Just (uri, diags) | "/src/page.act" `isSuffixOf` uri, not (null diags) -> return diags
-        _                                                                    -> diagnosticsOf hout
-
-    published = Ae.withObject "message" $ \o -> do
-      method <- o Ae..: "method"
-      params <- o Ae..: "params"
-      guard (method == ("textDocument/publishDiagnostics" :: String))
-      (,) <$> params Ae..: "uri" <*> params Ae..: "diagnostics"
+    reported published = do
+      diags <- published file
+      if null diags then reported published else return diags
 
     line :: Ae.Value -> String
     line diag = maybe ("unexpected diagnostic: " ++ LBS.unpack (Ae.encode diag)) id (Ae.parseMaybe text diag)
@@ -151,6 +118,48 @@ serverDiagnostics root = do
               c <- p Ae..: "character"
               return (show (l :: Int) ++ ":" ++ show (c :: Int))
 
+-- | Run an action with a language server for the project at a root.  The
+-- action gets a function that sends a notification to the server, and a
+-- function that returns the diagnostics that the server publishes next for
+-- a file of the project, which can be none.  A thread reads the messages of
+-- the server, so the action can give up a wait for diagnostics after some
+-- time and lose no message.  The test fails when the action takes more than
+-- 120 seconds.
+withServer :: FilePath -> ((String -> Ae.Value -> IO ()) -> (FilePath -> IO [Ae.Value]) -> IO a) -> IO a
+withServer root action = do
+    server <- canonicalizePath "../../dist/bin/lsp-server-acton"
+    withFile "/dev/null" WriteMode $ \devNull ->
+      withCreateProcess (proc server []) { std_in = CreatePipe, std_out = CreatePipe, std_err = UseHandle devNull } $ \(Just hin) (Just hout) _ process -> do
+        let send :: Ae.Value -> IO ()
+            send message = do
+              let body = Ae.encode message
+              LBS.hPut hin (LBS.pack ("Content-Length: " ++ show (LBS.length body) ++ "\r\n\r\n") <> body)
+              hFlush hin
+            notify method params = send (Ae.object ["jsonrpc" Ae..= ("2.0" :: String), "method" Ae..= (method :: String), "params" Ae..= (params :: Ae.Value)])
+        send (Ae.object ["jsonrpc" Ae..= ("2.0" :: String), "id" Ae..= (1 :: Int), "method" Ae..= ("initialize" :: String)
+                        , "params" Ae..= Ae.object ["processId" Ae..= Ae.Null, "rootUri" Ae..= ("file://" ++ root), "capabilities" Ae..= Ae.object []]])
+        notify "initialized" (Ae.object [])
+        messages <- newChan
+        reader   <- forkIO (forever (received hout >>= writeChan messages))
+        result <- Timeout.timeout (120 * 1000000) (action notify (publishedFor messages))
+        killThread reader
+        -- The server is gone before the project is removed.
+        terminateProcess process
+        _ <- waitForProcess process
+        maybe (assertFailure "the language server did not publish the expected diagnostics within 120 seconds") return result
+  where
+    publishedFor messages file = do
+      message <- readChan messages
+      case Ae.parseMaybe published message of
+        Just (uri, diags) | ("/" ++ file) `isSuffixOf` uri -> return diags
+        _                                                  -> publishedFor messages file
+
+    published = Ae.withObject "message" $ \o -> do
+      method <- o Ae..: "method"
+      params <- o Ae..: "params"
+      guard (method == ("textDocument/publishDiagnostics" :: String))
+      (,) <$> params Ae..: "uri" <*> params Ae..: "diagnostics"
+
     -- One message of the server: a header with the length of the body, an
     -- empty line and the body.
     received hout = do
@@ -162,6 +171,72 @@ serverDiagnostics root = do
           body <- B.hGet hout (read (B.unpack (B.filter (/= '\r') n)))
           maybe (assertFailure ("the language server sent no JSON: " ++ B.unpack body)) return (Ae.decodeStrict body)
 
+-- | Tell a language server that an editor opened a file of a project with
+-- the given text.
+opened :: (String -> Ae.Value -> IO ()) -> FilePath -> FilePath -> String -> IO ()
+opened notify root file text = notify "textDocument/didOpen" $ Ae.object ["textDocument" Ae..= Ae.object
+    ["uri" Ae..= ("file://" ++ root </> file), "languageId" Ae..= ("acton" :: String), "version" Ae..= (1 :: Int), "text" Ae..= text]]
+
+-- | Tell a language server that the text of an open file is the given one,
+-- as the given version of the file.
+edited :: (String -> Ae.Value -> IO ()) -> FilePath -> FilePath -> Int -> String -> IO ()
+edited notify root file version text = notify "textDocument/didChange" $ Ae.object
+    [ "textDocument" Ae..= Ae.object ["uri" Ae..= ("file://" ++ root </> file), "version" Ae..= version]
+    , "contentChanges" Ae..= [Ae.object ["text" Ae..= text]]
+    ]
+
+-- | The language server and an embedded file that appears and goes while
+-- the server runs.
+embedServerTests :: TestTree
+embedServerTests = testGroup "embedded files in the language server"
+    [ testCase "a file that appears, and a file that is removed" appearsThenGoes
+    ]
+
+-- | The module page of a project embeds web/index.html and uses a name of
+-- the module base.  The file is missing when the server compiles page, and
+-- the server reports that.  The file appears, page is compiled again, and
+-- the report is gone.
+--
+-- Then the file is removed.  The server has a cached plan by then that
+-- takes page from its .tydb: the plan was made when base was opened with
+-- other text than its file has, after a compile of page had written the
+-- .tydb.  An edit of base compiles page too, since page imports base, but
+-- looks at no embedded file of page while that plan is used.  The file
+-- system event for the file drops the cached plan and starts no compile, so
+-- the server publishes nothing for page until the next edit.  Then base is
+-- edited until the server reports the removed file, which it does once the
+-- event has dropped the cached plan.
+appearsThenGoes :: IO ()
+appearsThenGoes = withSystemTempDirectory "acton-embed-server" $ \tmp -> do
+    root <- (</> "shop") <$> canonicalizePath tmp
+    let page       = "src" </> "page.act"
+        base       = "src" </> "base.act"
+        pageText   = unlines ["import base", "", "page: bytes = embed(\"web/index.html\")", "title: str = base.greeting"]
+        baseText n = unlines ["# Edit " ++ show (n :: Int), "greeting: str = \"hello\""]
+        missing    = any (("no file web/index.html in " ++ root) `isInfixOf`) . map (LBS.unpack . Ae.encode)
+    createDirectoryIfMissing True (root </> "src")
+    writeFile (root </> "Build.act") (buildAct "shop" [])
+    writeFile (root </> page) pageText
+    writeFile (root </> base) (baseText 1)
+    withServer root $ \notify published -> do
+      let editBase n = do
+            edited notify root base n (baseText n)
+            diags <- published page
+            unless (missing diags) (editBase (n + 1))
+      opened notify root page pageText
+      first <- published page
+      assertBool ("expected the report of the missing file, got " ++ show first) (missing first)
+      createDirectory (root </> "web")
+      writeFile (root </> "web" </> "index.html") "<html></html>\n"
+      edited notify root page 2 pageText
+      published page >>= (@?= [])
+      edited notify root page 3 pageText
+      published page >>= (@?= [])
+      opened notify root base (baseText 2)
+      published page >>= (@?= [])
+      removeFile (root </> "web" </> "index.html")
+      Timeout.timeout 2000000 (published page) >>= (@?= Nothing)
+      editBase 3
 
 -- Programs -----------------------------------------------------------------------------------------
 

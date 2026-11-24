@@ -71,7 +71,7 @@ import Error.Diagnose.Report (Report(..))
 import Prettyprinter (unAnnotate, layoutPretty, defaultLayoutOptions)
 import Prettyprinter.Render.Text (renderStrict)
 import System.FilePath ((</>), joinPath, takeFileName, takeBaseName, takeDirectory, splitDirectories)
-import System.Directory (createDirectoryIfMissing, createDirectoryLink, createFileLink, getCurrentDirectory, getFileSize, setCurrentDirectory, listDirectory, doesDirectoryExist, doesFileExist, removeFile)
+import System.Directory (canonicalizePath, createDirectoryIfMissing, createDirectoryLink, createFileLink, getCurrentDirectory, getFileSize, setCurrentDirectory, listDirectory, doesDirectoryExist, doesFileExist, removeFile)
 import System.IO (IOMode(ReadWriteMode), hSetFileSize, withFile)
 import System.IO.Temp (withSystemTempDirectory)
 import GHC.IO.Encoding (getFileSystemEncoding)
@@ -2674,6 +2674,47 @@ main = do
             let names d = modifyIORef' listed (d :) >> (Set.fromList <$> listDirectory d)
             forM_ ["web/a", "web/b", "web/c", "web/none"] $ \path -> Embed.embeddedFileStatus names dir path
             sort <$> readIORef listed `shouldReturn` (replicate 4 dir ++ replicate 4 (dir </> "web"))
+
+        it "names a path and the directories on the way to it as file system events name them" $
+          withSystemTempDirectory "acton-embed-events" $ \tmp -> do
+            dir <- canonicalizePath tmp
+            let root  = dir </> "shop"
+                paths = Embed.eventPaths canonicalizePath root
+            createDirectoryIfMissing True (root </> "web" </> "js")
+            createDirectoryIfMissing True (dir </> "shared")
+            B8.writeFile (root </> "web" </> "js" </> "app.js") (B8.pack "let a = 1\n")
+            B8.writeFile (dir </> "shared" </> "logo.png") (B8.pack "png")
+            createDirectoryLink (dir </> "shared") (root </> "linked")
+            createFileLink "app.js" (root </> "web" </> "js" </> "link.js")
+            paths "top.txt" `shouldReturn` ([], [root </> "top.txt"])
+            paths "web/js/app.js" `shouldReturn` ([root </> "web", root </> "web/js"], [root </> "web/js/app.js"])
+            -- A directory that is a link: the link in the project, and the
+            -- file in the directory that the link leads to.
+            paths "linked/logo.png" `shouldReturn` ([root </> "linked"], [dir </> "shared/logo.png"])
+            -- A file that is a link: the link and the file that it leads to.
+            paths "web/js/link.js" `shouldReturn` ([root </> "web", root </> "web/js"], [root </> "web/js/link.js", root </> "web/js/app.js"])
+            -- A file and directories that do not exist stay as they are written.
+            paths "web/js/none.js" `shouldReturn` ([root </> "web", root </> "web/js"], [root </> "web/js/none.js"])
+            paths "linked/none/x.txt" `shouldReturn` ([root </> "linked", dir </> "shared/none"], [dir </> "shared/none/x.txt"])
+
+        it "resolves the links of a directory through the given function" $ do
+          asked <- newIORef []
+          let resolved dir = modifyIORef' asked (dir :) >> return ("/real" ++ dir)
+          Embed.eventPaths resolved "/p" "web/js/app.js"
+            `shouldReturn` (["/real/p/web", "/real/p/web/js"], ["/real/p/web/js/app.js"])
+          reverse <$> readIORef asked `shouldReturn` ["/p", "/p/web", "/p/web/js"]
+
+        it "watches the directories of the paths that exist" $
+          withSystemTempDirectory "acton-embed-watch" $ \dir -> do
+            createDirectoryIfMissing True (dir </> "shop" </> "web")
+            createDirectoryIfMissing True (dir </> "shared")
+            B8.writeFile (dir </> "shop" </> "web" </> "index.html") (B8.pack "hello\n")
+            let paths = Set.fromList (map (dir </>) [ "shop/web", "shop/web/index.html", "shop/web/none.html", "shop/data", "shop/data/sub"
+                                                    , "shop/data/sub/text.txt", "shop/web/index.html/x", "shared/logo.png" ])
+            -- Where one watch tells of a whole tree, the watch of shop
+            -- stands for the watch of shop/web.
+            Embed.watchDirectories paths `shouldReturn`
+              Set.fromList (map (dir </>) (["shop", "shared"] ++ [ "shop/web" | not Embed.watchesTrees ]))
 
         describe "The stat rule" $ do
           let stat mtime    = InterfaceFiles.SourceFileMeta mtime mtime 4 (Just 1) (Just 2)

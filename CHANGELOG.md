@@ -9,6 +9,8 @@
   counts from the project root, or from the directory of a file that is
   compiled without a project. A build compiles the module again when the file
   has new content, and stops when the file changes while the build runs.
+  `acton build --watch` and `acton test --watch` build again when an embedded
+  file is saved or created.
   `embed` is now a reserved word: a variable, a function, a parameter or a
   class with this name needs another name, and an attribute is written
   `x."embed"`. The guide page "Embedding files" has the rules for a path and

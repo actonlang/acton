@@ -67,6 +67,7 @@ module Acton.Project
   , existingDependencyDir
   , discoverProjects
   , discoverBuildProjects
+  , localProjects
   , BackgroundCompilerLock
   , tryBackgroundCompilerLock
   , releaseBackgroundCompilerLock
@@ -859,6 +860,20 @@ discoverBuildProjects gopts opts paths = do
     sys       <- normalizePathSafe (sysPath paths)
     overrides <- normalizeDepOverrides root (C.dep_overrides opts)
     either (const Nothing) Just <$> trySync (discoverProjects gopts sys root overrides)
+
+-- | The projects among those of a build, keyed by their roots, whose files
+-- can change while a watch runs: the root project and its local
+-- dependencies, which a path dependency or a --dep override names.  A
+-- dependency fetched by hash lives in the dependency cache, whose entries
+-- never change, and std and base belong to the compiler.
+localProjects :: FilePath -> FilePath -> M.Map FilePath ProjCtx -> IO (M.Map FilePath ProjCtx)
+localProjects sys root projects = do
+    cache  <- normalizePathSafe . depCacheDir =<< getHomeDirectory
+    -- The system directory and std and base inside it, each with its links
+    -- resolved, as the discovered roots are.
+    system <- mapM normalizePathSafe [sys, sys </> "std", sys </> "base"]
+    let compilers dir = any (\s -> dir == s || dir `isUnder` s) system
+    return (M.filterWithKey (\dir _ -> dir == root || not (dir `isUnder` cache || compilers dir)) projects)
 
 discoverProjects :: C.GlobalOptions -> FilePath -> FilePath -> [(String, FilePath)] -> IO (M.Map FilePath ProjCtx)
 discoverProjects gopts sysAbs rootProj depOverrides = do
