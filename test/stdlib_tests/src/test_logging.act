@@ -99,3 +99,37 @@ actor _test_Logging(t: testing.AsyncT):
         logsome()
 
         my_app = MyApp(loghandler)
+
+
+class LogValue:
+    def __init__(self):
+        pass
+
+extension LogValue(Show):
+    def __str__(self) -> str:
+        return "custom log value"
+    def __repr__(self) -> str:
+        return "custom log value"
+
+
+def _test_format_data():
+    # Every entry (including nested container elements) has been erased to
+    # value. Logging explicitly supplies the builtin rendering policy.
+    data: dict[str, ?value] = {
+        "number": 42,
+        "missing": None,
+        "list": [1, "x", None],
+        "bytes": b"x",
+        "dict": {"x": 2},
+        "set": {3},
+    }
+    testing.assertEqual(logging.format_data(data),
+        r"{'number':42, 'missing':None, 'list':[1, 'x', None], 'bytes':b'x', 'dict':{'x':2}, 'set':{3}}")
+
+
+def _test_format_data_default():
+    # An erased user extension is deliberately unavailable to the formatter.
+    data: dict[str, ?value] = {"item": LogValue()}
+    text = logging.format_data(data)
+    testing.assertTrue("LogValue" in text)
+    testing.assertTrue("custom log value" not in text)

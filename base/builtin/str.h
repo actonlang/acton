@@ -63,9 +63,6 @@ struct B_IteratorD_strG_class {
     B_NoneType (*__init__)(B_IteratorD_str, B_str);
     void (*__serialize__)(B_IteratorD_str,$Serial$state);
     B_IteratorD_str (*__deserialize__)(B_IteratorD_str,$Serial$state);
-    bool (*__bool__)(B_IteratorD_str);
-    B_str (*__str__)(B_IteratorD_str);
-    B_str (*__repr__)(B_IteratorD_str);
     bool (*__next__)(B_IteratorD_str, $WORD *);
 };
 
@@ -105,9 +102,6 @@ struct B_IteratorD_bytearrayG_class {
     B_NoneType (*__init__)(B_IteratorD_bytearray, B_bytearray);
     void (*__serialize__)(B_IteratorD_bytearray,$Serial$state);
     B_IteratorD_bytearray (*__deserialize__)(B_IteratorD_bytearray,$Serial$state);
-    bool (*__bool__)(B_IteratorD_bytearray);
-    B_str (*__str__)(B_IteratorD_bytearray);
-    B_str (*__repr__)(B_IteratorD_bytearray);
     bool (*__next__)(B_IteratorD_bytearray, $WORD *);
 };
 
@@ -153,9 +147,6 @@ struct B_IteratorD_bytesG_class {
     B_NoneType (*__init__)(B_IteratorD_bytes, B_bytes);
     void (*__serialize__)(B_IteratorD_bytes,$Serial$state);
     B_IteratorD_bytes (*__deserialize__)(B_IteratorD_bytes,$Serial$state);
-    bool (*__bool__)(B_IteratorD_bytes);
-    B_str (*__str__)(B_IteratorD_bytes);
-    B_str (*__repr__)(B_IteratorD_bytes);
     bool (*__next__)(B_IteratorD_bytes, $WORD *);
 };
 
@@ -237,3 +228,17 @@ B_bytearray B_bytearray_zero(void);
 B_bytearray B_bytearray_mul(B_bytearray a, int64_t n);
 B_bytearray B_bytearray_iadd(B_bytearray a, B_bytearray b);
 B_bytearray B_bytearray_imul(B_bytearray a, int64_t n);
+
+// Witness-free formatting and truth workers.
+bool B_str_bool(B_str self);
+B_str B_str_str(B_str self);
+B_str B_str_repr(B_str self);
+bool B_bytes_bool(B_bytes self);
+B_str B_bytes_str(B_bytes self);
+B_str B_bytes_repr(B_bytes self);
+bool B_bytearray_bool(B_bytearray self);
+B_str B_bytearray_str(B_bytearray self);
+B_str B_bytearray_repr(B_bytearray self);
+
+// Normalize a formatter result to the base str class.
+B_str B_str_from_str(B_str result);

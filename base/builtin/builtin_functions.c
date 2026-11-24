@@ -16,19 +16,10 @@
 
 // print //////////////////////////////////////////////////////////////////////////////
 
-static $WORD mkstr($WORD w) {
-    B_value w1 = (B_value)w;
-    return w1->$class->__str__(w);
-}
- 
-B_str __str__(B_value x) {
-    if (x == B_None)
-        return B_None_str;
-    else
-        return x->$class->__str__(x);
-}
-
-B_NoneType B_print(B_tuple t, B_str sep_arg, B_str end_arg, bool stderr_arg, bool flush_arg) {
+B_NoneType B_print(B_Show show_args, B_tuple t, B_str sep_arg, B_str end_arg, bool stderr_arg, bool flush_arg) {
+    // The row bound in print's type guarantees structural tuple evidence.
+    // Its component policies are also preserved by generic *args forwarding.
+    B_tuple witnesses = (($ShowTuple)show_args)->W_Show;
     FILE *outfd = stdout;
     if (stderr_arg) {
         outfd = stderr;
@@ -48,7 +39,8 @@ B_NoneType B_print(B_tuple t, B_str sep_arg, B_str end_arg, bool stderr_arg, boo
     B_str *strs = acton_malloc(t->size * sizeof(B_str));
     int64_t tlen = end->nbytes;
     for (int i=0; i<t->size; i++) {
-        strs[i] = __str__((B_value)t->components[i]);
+        B_Show w = (B_Show)witnesses->components[i];
+        strs[i] = w->$class->__str__(w, t->components[i]);
         tlen += strs[i]->nbytes + (i > 0 ? sep->nbytes : 0);
     }
     char *s = acton_malloc_atomic(tlen);
@@ -105,7 +97,8 @@ $WORD B_IteratorD_enumerate_next(B_IteratorD_enumerate it) {
 
 struct B_IteratorD_enumerateG_class B_IteratorD_enumerateG_methods = {"B_IteratorD_enumerate",UNASSIGNED,($SuperG_class)&B_IteratorG_methods,B_IteratorD_enumerate_init,
                                                                 B_IteratorD_enumerate_serialize, B_IteratorD_enumerate$_deserialize, 
-                                                                B_IteratorD_enumerate_bool,B_IteratorD_enumerate_str,B_IteratorD_enumerate_str, B_IteratorD_enumerate_next};
+                                                                B_IteratorD_enumerate_bool,B_IteratorD_enumerate_str,B_IteratorD_enumerate_str, B_IteratorD_enumerate_next
+};
 
 
 B_IteratorD_enumerate B_IteratorD_enumerateG_new(B_Iterator it, B_int n) {
@@ -167,8 +160,7 @@ bool $EqOptD___ne__($EqOpt wit, $WORD a, $WORD b) {
     return (!a && !b) ? false : true;
 }
 
-struct $EqOptG_class $EqOptG_methods = {"$EqOpt", UNASSIGNED, NULL, $EqOptD___init__, $EqOptD_serialize, $EqOptD_deserialize, 
-                                         $EqOptD_bool, $EqOptD_str, $EqOptD_str, $EqOptD___eq__, $EqOptD___ne__};
+struct $EqOptG_class $EqOptG_methods = {"$EqOpt", UNASSIGNED, NULL, $EqOptD___init__, $EqOptD_serialize, $EqOptD_deserialize, $EqOptD___eq__, $EqOptD___ne__};
 
 
 $EqOpt $EqOptG_new(B_Eq W_Eq$A) {
@@ -226,8 +218,7 @@ bool $EqTupleD___ne__($EqTuple wit, $WORD a, $WORD b) {
     return !$tupleWitD___eq__(wit->W_Eq, a, b);
 }
 
-struct $EqTupleG_class $EqTupleG_methods = {"$EqTuple", UNASSIGNED, NULL, $EqTupleD___init__, $EqTupleD_serialize, $EqTupleD_deserialize,
-                                             $EqTupleD_bool, $EqTupleD_str, $EqTupleD_str, $EqTupleD___eq__, $EqTupleD___ne__};
+struct $EqTupleG_class $EqTupleG_methods = {"$EqTuple", UNASSIGNED, NULL, $EqTupleD___init__, $EqTupleD_serialize, $EqTupleD_deserialize, $EqTupleD___eq__, $EqTupleD___ne__};
 
 
 $EqTuple $EqTupleG_new(B_tuple W_Eq) {
@@ -304,9 +295,9 @@ bool $OrdTupleD___ge__($OrdTuple wit, $WORD a, $WORD b) {
     return $OrdTupleD___le__(wit, b, a);
 }
 
-struct $OrdTupleG_class $OrdTupleG_methods = {"$OrdTuple", UNASSIGNED, NULL, $OrdTupleD___init__, $OrdTupleD_serialize, $OrdTupleD_deserialize,
-                                               $OrdTupleD_bool, $OrdTupleD_str, $OrdTupleD_str, $OrdTupleD___eq__, $OrdTupleD___ne__,
-                                               $OrdTupleD___lt__, $OrdTupleD___le__, $OrdTupleD___gt__, $OrdTupleD___ge__};
+struct $OrdTupleG_class $OrdTupleG_methods = {"$OrdTuple", UNASSIGNED, NULL, $OrdTupleD___init__, $OrdTupleD_serialize, $OrdTupleD_deserialize, $OrdTupleD___eq__, $OrdTupleD___ne__,
+                                               $OrdTupleD___lt__, $OrdTupleD___le__, $OrdTupleD___gt__, $OrdTupleD___ge__
+};
 
 
 $OrdTuple $OrdTupleG_new(B_tuple W_Ord) {
@@ -368,8 +359,9 @@ B_NoneType $HashableTupleD_hash($HashableTuple wit, $WORD a, B_hasher h) {
 }
 
 struct $HashableTupleG_class $HashableTupleG_methods = {"$HashableTuple", UNASSIGNED, NULL, $HashableTupleD___init__, $HashableTupleD_serialize,
-                                                         $HashableTupleD_deserialize, $HashableTupleD_bool, $HashableTupleD_str, $HashableTupleD_str,
-                                                         $HashableTupleD___eq__, $HashableTupleD___ne__, $HashableTupleD_hash};
+                                                         $HashableTupleD_deserialize,
+                                                         $HashableTupleD___eq__, $HashableTupleD___ne__, $HashableTupleD_hash
+};
 
 
 $HashableTuple $HashableTupleG_new(B_tuple W_Hashable) {
@@ -404,12 +396,230 @@ static B_Eq $wEqNoneD_deserialize(B_Eq res, $Serial$state state) {
 
 struct B_EqG_class $wEqNoneG_class = {"$wEqNone", UNASSIGNED, NULL,
     (B_NoneType (*)(B_Eq))$default__init__, $wEqNoneD_serialize, $wEqNoneD_deserialize,
-    (bool (*)(B_Eq))$default__bool__, (B_str (*)(B_Eq))$default__str__, (B_str (*)(B_Eq))$default__str__,
-    $wEqNoneD___eq__, $wEqNoneD___ne__};
+    $wEqNoneD___eq__, $wEqNoneD___ne__
+};
 
 static struct B_Eq $wEqNone_instance = {&$wEqNoneG_class};
 
 B_Eq $wEqNone = &$wEqNone_instance;
+
+
+// Show and Bool for optional values and tuples //////////////////////////////
+
+// Optional witnesses preserve the supplied policy for the present value.
+// None is represented by NULL; it must never reach an element witness.
+
+static void $ShowOptD___init__($ShowOpt self, B_Show witness) {
+    self->W_Show = witness;
+}
+
+static void $ShowOptD_serialize($ShowOpt self, $Serial$state state) {
+    $step_serialize(self->W_Show, state);
+}
+
+static $ShowOpt $ShowOptD_deserialize($ShowOpt self, $Serial$state state) {
+    if (!self)
+        self = $DNEW($ShowOpt, state);
+    ACTON_STORE(self, self->W_Show, $step_deserialize(state));
+    return self;
+}
+
+static B_str $ShowOptD___str__($ShowOpt self, $WORD value) {
+    B_Show w = self->W_Show;
+    return value ? w->$class->__str__(w, value) : B_None_str;
+}
+
+static B_str $ShowOptD___repr__($ShowOpt self, $WORD value) {
+    B_Show w = self->W_Show;
+    return value ? w->$class->__repr__(w, value) : B_None_str;
+}
+
+struct $ShowOptG_class $ShowOptG_methods = {
+    .$GCINFO = "$ShowOpt",
+    .$class_id = UNASSIGNED,
+    .__init__ = $ShowOptD___init__,
+    .__serialize__ = $ShowOptD_serialize,
+    .__deserialize__ = $ShowOptD_deserialize,
+    .__str__ = $ShowOptD___str__,
+    .__repr__ = $ShowOptD___repr__
+};
+
+$ShowOpt $ShowOptG_new(B_Show witness) {
+    return $NEW($ShowOpt, witness);
+}
+
+static void $BoolOptD___init__($BoolOpt self, B_Bool witness) {
+    self->W_Bool = witness;
+}
+
+static void $BoolOptD_serialize($BoolOpt self, $Serial$state state) {
+    $step_serialize(self->W_Bool, state);
+}
+
+static $BoolOpt $BoolOptD_deserialize($BoolOpt self, $Serial$state state) {
+    if (!self)
+        self = $DNEW($BoolOpt, state);
+    ACTON_STORE(self, self->W_Bool, $step_deserialize(state));
+    return self;
+}
+
+static bool $BoolOptD___bool__($BoolOpt self, $WORD value) {
+    B_Bool w = self->W_Bool;
+    return value && w->$class->__bool__(w, value);
+}
+
+struct $BoolOptG_class $BoolOptG_methods = {
+    .$GCINFO = "$BoolOpt",
+    .$class_id = UNASSIGNED,
+    .__init__ = $BoolOptD___init__,
+    .__serialize__ = $BoolOptD_serialize,
+    .__deserialize__ = $BoolOptD_deserialize,
+    .__bool__ = $BoolOptD___bool__
+};
+
+$BoolOpt $BoolOptG_new(B_Bool witness) {
+    return $NEW($BoolOpt, witness);
+}
+
+static void $ShowTupleD___init__($ShowTuple self, B_tuple witness) {
+    self->W_Show = witness;
+}
+
+static void $ShowTupleD_serialize($ShowTuple self, $Serial$state state) {
+    $step_serialize(self->W_Show, state);
+}
+
+static $ShowTuple $ShowTupleD_deserialize($ShowTuple self, $Serial$state state) {
+    if (!self)
+        self = $DNEW($ShowTuple, state);
+    ACTON_STORE(self, self->W_Show, $step_deserialize(state));
+    return self;
+}
+
+static B_str $ShowTupleD___str__($ShowTuple self, $WORD value) {
+    return B_tuple_str((B_tuple)value, self->W_Show);
+}
+
+struct $ShowTupleG_class $ShowTupleG_methods = {
+    .$GCINFO = "$ShowTuple",
+    .$class_id = UNASSIGNED,
+    .__init__ = $ShowTupleD___init__,
+    .__serialize__ = $ShowTupleD_serialize,
+    .__deserialize__ = $ShowTupleD_deserialize,
+    .__str__ = $ShowTupleD___str__,
+    .__repr__ = $ShowTupleD___str__
+};
+
+$ShowTuple $ShowTupleG_new(B_tuple witness) {
+    return $NEW($ShowTuple, witness);
+}
+
+// Compose structural evidence for an open tuple from its known prefix and
+// supplied tail. Both inputs are compiler-generated $ShowTuple witnesses;
+// their captured component witnesses retain any generic Show policies.
+B_Show $ShowTupleJoin(B_Show prefix, B_Show tail) {
+    B_tuple a = (($ShowTuple)prefix)->W_Show;
+    B_tuple b = (($ShowTuple)tail)->W_Show;
+    if (a->size == 0)
+        return tail;
+    if (b->size == 0)
+        return prefix;
+    int n = a->size + b->size;
+    B_tuple witnesses = acton_malloc(sizeof(struct B_tuple) + n * sizeof($WORD));
+    witnesses->$class = &B_tupleG_methods;
+    witnesses->size = n;
+    for (int i = 0; i < a->size; i++)
+        ACTON_STORE(witnesses, witnesses->components[i], a->components[i]);
+    for (int i = 0; i < b->size; i++)
+        ACTON_STORE(witnesses, witnesses->components[a->size + i], b->components[i]);
+    return (B_Show)$ShowTupleG_new(witnesses);
+}
+
+// Stateless witnesses deserialize to their singleton, recording the row so
+// subsequent references in the same serialized graph retain sharing.
+static void $statelessWitness_serialize($WORD self, $Serial$state state) {
+}
+
+static $WORD $statelessWitness_deserialize($WORD self, $Serial$state state, $WORD singleton) {
+    if (!self) {
+        self = singleton;
+        B_dictD_setitem(state->done, toB_int(state->row_no-1), self);
+    }
+    return self;
+}
+
+static struct $BoolTuple $BoolTuple_instance;
+
+static void $BoolTupleD___init__($BoolTuple self) {
+}
+
+static bool $BoolTupleD___bool__($BoolTuple self, $WORD value) {
+    return B_tuple_bool((B_tuple)value);
+}
+
+static $BoolTuple $BoolTupleD_deserialize($BoolTuple self, $Serial$state state) {
+    return $statelessWitness_deserialize(self, state, &$BoolTuple_instance);
+}
+
+struct $BoolTupleG_class $BoolTupleG_methods = {
+    .$GCINFO = "$BoolTuple",
+    .$class_id = UNASSIGNED,
+    .__init__ = $BoolTupleD___init__,
+    .__serialize__ = (void (*)($BoolTuple, $Serial$state))$statelessWitness_serialize,
+    .__deserialize__ = $BoolTupleD_deserialize,
+    .__bool__ = $BoolTupleD___bool__
+};
+
+static struct $BoolTuple $BoolTuple_instance = {&$BoolTupleG_methods};
+
+$BoolTuple $BoolTupleG_new(void) {
+    return &$BoolTuple_instance;
+}
+
+static B_str $wShowNoneD___str__(B_Show self, $WORD value) {
+    return B_None_str;
+}
+
+static bool $wBoolNoneD___bool__(B_Bool self, $WORD value) {
+    return false;
+}
+
+static struct B_Show $wShowNone_instance;
+
+static B_Show $wShowNoneD_deserialize(B_Show self, $Serial$state state) {
+    return $statelessWitness_deserialize(self, state, &$wShowNone_instance);
+}
+
+struct B_ShowG_class $wShowNoneG_class = {
+    .$GCINFO = "$wShowNone",
+    .$class_id = UNASSIGNED,
+    .__init__ = (B_NoneType (*)(B_Show))$default__init__,
+    .__serialize__ = (void (*)(B_Show, $Serial$state))$statelessWitness_serialize,
+    .__deserialize__ = $wShowNoneD_deserialize,
+    .__str__ = $wShowNoneD___str__,
+    .__repr__ = $wShowNoneD___str__
+};
+
+static struct B_Show $wShowNone_instance = {&$wShowNoneG_class};
+B_Show $wShowNone = &$wShowNone_instance;
+
+static struct B_Bool $wBoolNone_instance;
+
+static B_Bool $wBoolNoneD_deserialize(B_Bool self, $Serial$state state) {
+    return $statelessWitness_deserialize(self, state, &$wBoolNone_instance);
+}
+
+struct B_BoolG_class $wBoolNoneG_class = {
+    .$GCINFO = "$wBoolNone",
+    .$class_id = UNASSIGNED,
+    .__init__ = (B_NoneType (*)(B_Bool))$default__init__,
+    .__serialize__ = (void (*)(B_Bool, $Serial$state))$statelessWitness_serialize,
+    .__deserialize__ = $wBoolNoneD_deserialize,
+    .__bool__ = $wBoolNoneD___bool__
+};
+
+static struct B_Bool $wBoolNone_instance = {&$wBoolNoneG_class};
+B_Bool $wBoolNone = &$wBoolNone_instance;
 
 
 // IdentityActor //////////////////////////////////////////////////////
@@ -442,8 +652,7 @@ bool $IdentityActorD___isnot__($IdentityActor wit, $WORD a, $WORD b) {
     return (a == b) ? false : true;
 }
 
-struct $IdentityActorG_class $IdentityActorG_methods = {"$IdentityActor", UNASSIGNED, NULL, $IdentityActorD___init__, $IdentityActorD_serialize, $IdentityActorD_deserialize, 
-                                         $IdentityActorD_bool, $IdentityActorD_str, $IdentityActorD_str, $IdentityActorD___is__, $IdentityActorD___isnot__};
+struct $IdentityActorG_class $IdentityActorG_methods = {"$IdentityActor", UNASSIGNED, NULL, $IdentityActorD___init__, $IdentityActorD_serialize, $IdentityActorD_deserialize, $IdentityActorD___is__, $IdentityActorD___isnot__};
 
 
 $IdentityActor $IdentityActorG_new() {
@@ -453,62 +662,6 @@ $IdentityActor $IdentityActorG_new() {
 
 // Various small functions //////////////////////////////////////////////////////////////
 
-// Code generated by actonc
-/*
-$WORD B_abs (B_Number W_149, B_Real W_148, $WORD x) {
-    return W_149->$class->__abs__(W_149, x, W_148);
-}
-
-B_bool B_all (B_Iterable W_164, $WORD it) {
-    B_Iterator nB_iter = W_164->$class->__iter__(W_164, it);
-    $WORD n$1val = nB_iter->$class->__next__(nB_iter);
-    while ($ISNOTNONE(n$1val)) {
-        B_value x = (B_value)n$1val;
-        if (!x->$class->__bool__(x)->val) {
-            return (B_bool)B_False;
-        }
-        n$1val = nB_iter->$class->__next__(nB_iter);
-    }
-    return (B_bool)B_True;
-}
-B_bool B_any (B_Iterable W_179, $WORD it) {
-    B_Iterator n$2iter = W_179->$class->__iter__(W_179, it);
-    $WORD n$3val = n$2iter->$class->__next__(n$2iter);
-    while ($ISNOTNONE(n$3val)) {
-        B_value x = (B_value)n$3val;
-        if (x->$class->__bool__(x)->val) {
-            return (B_bool)B_True;
-        }
-        n$3val = n$2iter->$class->__next__(n$2iter);
-    }
-    return (B_bool)B_False;
-}
-
-B_tuple B_divmod (B_Integral W_225, $WORD a, $WORD b) {
-    return W_225->$class->__divmod__(W_225, a, b);
-}
-B_Iterator B_iter (B_Iterable W_278, $WORD x) {
-    return W_278->$class->__iter__(W_278, x);
-}
-int64_t B_len (B_Collection W_301, $WORD x) {
-    return W_301->$class->__len__(W_301, x);
-}
-
-$WORD B_pow (B_Number W_344, $WORD a, $WORD b) {
-    return W_344->$class->__pow__(W_344, a, b);
-}
-
-B_str B_repr(B_value x) {
-    return x->$class->__repr__(x);
-}
-
-B_Iterator B_reversed (B_Sequence W_369, $WORD seq) {
-    return W_369->$class->__reversed__(W_369, seq);
-}
-$WORD B_round (B_Real W_395, $WORD x, B_int n) {
-    return W_395->$class->__round__(W_395, x, n);
-}
-*/
 
 static struct B_AssertionError B_assert_error =
     STATIC_EXCEPTION(B_AssertionError, "");

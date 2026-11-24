@@ -9,9 +9,6 @@ struct B_hasherG_class {
     B_NoneType (*__init__) (B_hasher, u64);
     void (*__serialize__) (B_hasher, $Serial$state);
     B_hasher (*__deserialize__) (B_hasher, $Serial$state);
-    B_bool (*__bool__) (B_hasher);
-    B_str (*__str__) (B_hasher);
-    B_str (*__repr__) (B_hasher);
     B_NoneType (*update) (B_hasher, B_bytes);
     B_u64 (*finalize) (B_hasher);
 };
@@ -34,3 +31,8 @@ uint64_t zig_hash_wyhash_final(void *hasher);
 uint64_t zig_hash_wyhash_hash_buffer(uint64_t seed, const uint8_t *ptr, size_t len);
 
 uint64_t zig_hash_wyhash_hash(uint64_t seed, B_bytes data);
+
+// Witness-free formatting and truth workers.
+bool B_hasher_bool(B_hasher self);
+B_str B_hasher_str(B_hasher self);
+B_str B_hasher_repr(B_hasher self);

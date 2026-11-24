@@ -31,8 +31,10 @@ proc def mutate (C_cont : proc(None) -> $R, f : proc(proc(__builtin__.float) -> 
     return f(C_3cont, x)
 
 proc def discard (C_cont : proc(None) -> $R, f : proc(proc(__builtin__.float) -> $R, __builtin__.int) -> $R, x : __builtin__.int) -> $R:
+    W_discard_13: __builtin__.Show[__builtin__.str] = __builtin__.ShowD_str()
+    W_discard_5: __builtin__.Show[(__builtin__.str,)] = $ShowTuple@[(__builtin__.Show[__builtin__.str],), (__builtin__.str,), ()]((W_discard_13,))
     proc def C_5cont (C_6res : None) -> $R:
-        print@[(__builtin__.str,)](("\"sent\"",), "\" \"", "\"\\n\"", False, False)
+        print@[(__builtin__.str,)](W_discard_5, ("\"sent\"",), "\" \"", "\"\\n\"", False, False)
         return $R_CONTc@[None](C_cont, None)
     return f($SKIPRESc@[__builtin__.float](C_5cont), x)
 

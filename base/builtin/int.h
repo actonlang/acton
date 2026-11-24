@@ -20,3 +20,8 @@ extern struct B_ZeroDivisionError B_int_mod_zero_error;
 #define int_DIV(a,b)       ( {if (b==0) RAISE_EXC(&B_int_truediv_zero_error); (double)a/(double)b;} )
 #define int_FLOORDIV(a,b)  ( {if (b==0) RAISE_EXC(&B_int_floordiv_zero_error);  a/b;} )
 #define int_MOD(a,b)       ( {if (b==0) RAISE_EXC(&B_int_mod_zero_error); a%b;} )
+
+// Witness-free formatting and truth workers.
+bool B_int_bool(B_int self);
+B_str B_int_str(B_int self);
+B_str B_int_repr(B_int self);

@@ -782,10 +782,7 @@ struct B_MsgG_class B_MsgG_methods = {
     NULL,
     NULL,
     B_MsgD___serialize__,
-    B_MsgD___deserialize__,
-    B_MsgD___bool__,
-    B_MsgD___str__,
-    B_MsgD___str__
+    B_MsgD___deserialize__
 };
 */
 
@@ -796,9 +793,6 @@ struct $ActorG_class $ActorG_methods = {
     $ActorD___init__,
     $ActorD___serialize__,
     $ActorD___deserialize__,
-    $ActorD___bool__,
-    $ActorD___str__,
-    $ActorD___str__,
     $ActorD___resume__,
     $ActorD___cleanup__
 };
@@ -809,10 +803,7 @@ struct $CatcherG_class $CatcherG_methods = {
     NULL,
     $CatcherD___init__,
     $CatcherD___serialize__,
-    $CatcherD___deserialize__,
-    $CatcherD___bool__,
-    $CatcherD___str__,
-    $CatcherD___str__
+    $CatcherD___deserialize__
 };
 
 struct $ConstContG_class $ConstContG_methods = {
@@ -822,9 +813,6 @@ struct $ConstContG_class $ConstContG_methods = {
     $ConstContD___init__,
     $ConstContD___serialize__,
     $ConstContD___deserialize__,
-    $ConstContD___bool__,
-    $ConstContD___str__,
-    $ConstContD___str__,
     $ConstContD___call__
 };
 
@@ -1012,9 +1000,6 @@ struct $ContG_class $DoneG_methods = {
     $ContD___init__,
     $Done__serialize__,
     $Done__deserialize__,
-    $DoneD___bool__,
-    $DoneD___str__,
-    $DoneD___str__,
     $DoneD___call__
 };
 struct $Cont $Done$instance = {
@@ -1050,9 +1035,6 @@ struct $ContG_class $FailG_methods = {
     $ContD___init__,
     $Fail__serialize__,
     $Fail__deserialize__,
-    $FailD___bool__,
-    $FailD___str__,
-    $FailD___str__,
     $FailD___call__
 };
 struct $Cont $Fail$instance = {
@@ -1097,9 +1079,6 @@ struct $ContG_class $InitRootG_methods = {
     $ContD___init__,
     $ContD___serialize__,
     $InitRoot__deserialize__,
-    $ContD___bool__,
-    $ContD___str__,
-    $ContD___str__,
     $InitRootD___call__
 };
 struct $Cont $InitRoot$cont = {
@@ -1126,9 +1105,6 @@ struct $ContG_class $StartRootG_methods = {
     $ContD___init__,
     $ContD___serialize__,
     $StartRoot__deserialize__,
-    $ContD___bool__,
-    $ContD___str__,
-    $ContD___str__,
     $StartRootD___call__
 };
 struct $Cont $StartRoot$cont = {
@@ -1155,9 +1131,6 @@ struct $ContG_class $InitEnvG_methods = {
     $ContD___init__,
     $ContD___serialize__,
     $InitEnv__deserialize__,
-    $ContD___bool__,
-    $ContD___str__,
-    $ContD___str__,
     $InitEnvD___call__
 };
 struct $Cont $InitEnv$cont = {
@@ -2798,7 +2771,7 @@ void wt_work_cb(uv_check_t *ev) {
                 // the waiting actor. Thus we only print Unhandled exception in
                 // the originating actor when there is no one waiting for us.
                 if (!b)
-                    fprintf(stderr, "Unhandled exception in actor: %s[%" PRId64 "]:\n  %s\n", unmangle_name(current->$class->$GCINFO), current->$globkey, fromB_str(ex->$class->__str__(ex)));
+                    fprintf(stderr, "Unhandled exception in actor: %s[%" PRId64 "]:\n  %s\n", unmangle_name(current->$class->$GCINFO), current->$globkey, fromB_str(B_exception_str(ex)));
                 while (b) {
                     B_Msg bm = b->B_Msg;
                     bm->$cont = &$Fail$instance;

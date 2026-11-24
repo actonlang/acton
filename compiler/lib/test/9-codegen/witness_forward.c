@@ -188,9 +188,6 @@ void witness_forwardQ___init__ () {
     {
         witness_forwardQ_PAG_methods.$GCINFO = "witness_forwardQ_PA";
         witness_forwardQ_PAG_methods.$superclass = ($SuperG_class)&B_valueG_methods;
-        witness_forwardQ_PAG_methods.__bool__ = (bool (*) (witness_forwardQ_PA))B_valueG_methods.__bool__;
-        witness_forwardQ_PAG_methods.__str__ = (B_str (*) (witness_forwardQ_PA))B_valueG_methods.__str__;
-        witness_forwardQ_PAG_methods.__repr__ = (B_str (*) (witness_forwardQ_PA))B_valueG_methods.__repr__;
         witness_forwardQ_PAG_methods.__init__ = (B_NoneType (*) (witness_forwardQ_PA))witness_forwardQ_PAD___init__;
         witness_forwardQ_PAG_methods.__serialize__ = witness_forwardQ_PAD___serialize__;
         witness_forwardQ_PAG_methods.__deserialize__ = witness_forwardQ_PAD___deserialize__;
@@ -199,9 +196,6 @@ void witness_forwardQ___init__ () {
     {
         witness_forwardQ_PBG_methods.$GCINFO = "witness_forwardQ_PB";
         witness_forwardQ_PBG_methods.$superclass = ($SuperG_class)&witness_forwardQ_PAG_methods;
-        witness_forwardQ_PBG_methods.__bool__ = (bool (*) (witness_forwardQ_PB))B_valueG_methods.__bool__;
-        witness_forwardQ_PBG_methods.__str__ = (B_str (*) (witness_forwardQ_PB))B_valueG_methods.__str__;
-        witness_forwardQ_PBG_methods.__repr__ = (B_str (*) (witness_forwardQ_PB))B_valueG_methods.__repr__;
         witness_forwardQ_PBG_methods.__init__ = (B_NoneType (*) (witness_forwardQ_PB))witness_forwardQ_PBD___init__;
         witness_forwardQ_PBG_methods.__serialize__ = witness_forwardQ_PBD___serialize__;
         witness_forwardQ_PBG_methods.__deserialize__ = witness_forwardQ_PBD___deserialize__;
@@ -210,9 +204,6 @@ void witness_forwardQ___init__ () {
     {
         witness_forwardQ_PCG_methods.$GCINFO = "witness_forwardQ_PC";
         witness_forwardQ_PCG_methods.$superclass = ($SuperG_class)&witness_forwardQ_PAG_methods;
-        witness_forwardQ_PCG_methods.__bool__ = (bool (*) (witness_forwardQ_PC))B_valueG_methods.__bool__;
-        witness_forwardQ_PCG_methods.__str__ = (B_str (*) (witness_forwardQ_PC))B_valueG_methods.__str__;
-        witness_forwardQ_PCG_methods.__repr__ = (B_str (*) (witness_forwardQ_PC))B_valueG_methods.__repr__;
         witness_forwardQ_PCG_methods.__init__ = (B_NoneType (*) (witness_forwardQ_PC))witness_forwardQ_PCD___init__;
         witness_forwardQ_PCG_methods.__serialize__ = witness_forwardQ_PCD___serialize__;
         witness_forwardQ_PCG_methods.__deserialize__ = witness_forwardQ_PCD___deserialize__;
@@ -221,9 +212,6 @@ void witness_forwardQ___init__ () {
     {
         witness_forwardQ_ThingG_methods.$GCINFO = "witness_forwardQ_Thing";
         witness_forwardQ_ThingG_methods.$superclass = ($SuperG_class)&B_objectG_methods;
-        witness_forwardQ_ThingG_methods.__bool__ = (bool (*) (witness_forwardQ_Thing))B_valueG_methods.__bool__;
-        witness_forwardQ_ThingG_methods.__str__ = (B_str (*) (witness_forwardQ_Thing))B_valueG_methods.__str__;
-        witness_forwardQ_ThingG_methods.__repr__ = (B_str (*) (witness_forwardQ_Thing))B_valueG_methods.__repr__;
         witness_forwardQ_ThingG_methods.__get_attr__ = (B_value (*) (witness_forwardQ_Thing, B_str))witness_forwardQ_ThingD___get_attr__;
         witness_forwardQ_ThingG_methods.G_init = (B_NoneType (*) (witness_forwardQ_Thing))witness_forwardQ_ThingG_init;
         witness_forwardQ_ThingG_methods.__init__ = (B_NoneType (*) (witness_forwardQ_Thing, int64_t))witness_forwardQ_ThingD___init__;
@@ -234,9 +222,6 @@ void witness_forwardQ___init__ () {
     {
         witness_forwardQ_PBD_ThingG_methods.$GCINFO = "witness_forwardQ_PBD_Thing";
         witness_forwardQ_PBD_ThingG_methods.$superclass = ($SuperG_class)&witness_forwardQ_PBG_methods;
-        witness_forwardQ_PBD_ThingG_methods.__bool__ = (bool (*) (witness_forwardQ_PBD_Thing))B_valueG_methods.__bool__;
-        witness_forwardQ_PBD_ThingG_methods.__str__ = (B_str (*) (witness_forwardQ_PBD_Thing))B_valueG_methods.__str__;
-        witness_forwardQ_PBD_ThingG_methods.__repr__ = (B_str (*) (witness_forwardQ_PBD_Thing))B_valueG_methods.__repr__;
         witness_forwardQ_PBD_ThingG_methods.__init__ = (B_NoneType (*) (witness_forwardQ_PBD_Thing))witness_forwardQ_PBD_ThingD___init__;
         witness_forwardQ_PBD_ThingG_methods.same = (bool (*) (witness_forwardQ_PBD_Thing, witness_forwardQ_Thing, witness_forwardQ_Thing))witness_forwardQ_PBD_ThingD_same;
         witness_forwardQ_PBD_ThingG_methods.total = (int64_t (*) (witness_forwardQ_PBD_Thing, witness_forwardQ_Thing))witness_forwardQ_PBD_ThingD_total;
@@ -248,9 +233,6 @@ void witness_forwardQ___init__ () {
     {
         witness_forwardQ_PCD_ThingG_methods.$GCINFO = "witness_forwardQ_PCD_Thing";
         witness_forwardQ_PCD_ThingG_methods.$superclass = ($SuperG_class)&witness_forwardQ_PCG_methods;
-        witness_forwardQ_PCD_ThingG_methods.__bool__ = (bool (*) (witness_forwardQ_PCD_Thing))B_valueG_methods.__bool__;
-        witness_forwardQ_PCD_ThingG_methods.__str__ = (B_str (*) (witness_forwardQ_PCD_Thing))B_valueG_methods.__str__;
-        witness_forwardQ_PCD_ThingG_methods.__repr__ = (B_str (*) (witness_forwardQ_PCD_Thing))B_valueG_methods.__repr__;
         witness_forwardQ_PCD_ThingG_methods.__init__ = (B_NoneType (*) (witness_forwardQ_PCD_Thing))witness_forwardQ_PCD_ThingD___init__;
         witness_forwardQ_PCD_ThingG_methods.gamma = (int64_t (*) (witness_forwardQ_PCD_Thing, witness_forwardQ_Thing))witness_forwardQ_PCD_ThingD_gamma;
         witness_forwardQ_PCD_ThingG_methods.total = (int64_t (*) (witness_forwardQ_PCD_Thing, witness_forwardQ_Thing))witness_forwardQ_PCD_ThingD_total;

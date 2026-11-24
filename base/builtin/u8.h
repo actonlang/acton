@@ -17,3 +17,8 @@ extern struct B_ZeroDivisionError B_u8_mod_zero_error;
 #define u8_MOD(a,b)       ( {if (b==0) RAISE_EXC(&B_u8_mod_zero_error); a%b;} )
 
 uint8_t u8_pow(uint8_t a, uint8_t b);
+
+// Witness-free formatting and truth workers.
+bool B_u8_bool(B_u8 self);
+B_str B_u8_str(B_u8 self);
+B_str B_u8_repr(B_u8 self);

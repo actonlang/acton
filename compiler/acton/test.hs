@@ -228,6 +228,175 @@ compilerTests =
           (code, out, err) <- runThing "" src
           assertEqual ("protocol receiver test should run: " ++ err) ExitSuccess code
           assertEqual "point3 should use its own extension" "(4,7)\n(5,6,7)\n" out
+  , testCase "variadic print uses Show evidence and preserves output" $ do
+        withSystemTempDirectory "acton-show-bool-print" $ \tmp -> do
+          let src = tmp </> "show_bool_print.act"
+          copyFile "../../test/regression_auto/show_bool_print.act" src
+          copyFile "../../test/regression_auto/show_bool_print.ext.c" (tmp </> "show_bool_print.ext.c")
+          testBuild "--jobs 2" ExitSuccess False src
+          (code, out, err) <- runThing "" src
+          assertEqual "printing should succeed" ExitSuccess code
+          assertEqual "stdout uses each argument's Show policy" (concat
+            [ "\n", "7 hello None True 2.5\n"
+            , "item 3 [Item(4)] (Item(5), 6)\n"
+            , "item 7|tail!\n", "item 8 [Item(8)] (Item(8), None)\n"
+            , "star item 9\n", "one\0two\n", "True|True|True\n", "item 12\n"
+            , "tick1|tick2\n", "item 1 item 2\n" ]) out
+          assertEqual "stderr uses the same Show policies" "error item 10\n" err
+  , testCase "Show and Bool slots exist only in protocol tables" $ do
+        withSystemTempDirectory "acton-show-bool-slots" $ \tmp -> do
+          let src = tmp </> "show_bool_slots.act"
+          copyFile "../../test/regression_auto/show_bool_slots.act" src
+          copyFile "../../test/regression_auto/show_bool_slots.ext.c" (tmp </> "show_bool_slots.ext.c")
+          (code, generated, err) <- buildThing "--quiet --dbg-no-lines --cgen" src
+          assertEqual ("C generation should succeed:\n" ++ generated ++ err) ExitSuccess code
+          let body = unlines $ takeWhile (/= "}") $ dropWhile
+                (not . isInfixOf "show_bool_slotsQ_conditional_raise (") (lines generated)
+              beforeFailure = takeWhile (not . isInfixOf "if (") (lines body)
+          assertBool "a failed check retains the concrete Show implementation"
+            ("ShowD_DetailG_new" `isInfixOf` body && "$exceptionShow(" `isInfixOf` body)
+          assertBool "successful checks do not construct diagnostic evidence"
+            (not $ any (isInfixOf "G_new(") beforeFailure)
+          testBuild "--jobs 2" ExitSuccess False src
+          (runCode, out, runErr) <- runThing "" src
+          assertEqual ("protocol layout/evidence tests should succeed: " ++ out ++ runErr) ExitSuccess runCode
+  , testCase "KeyError retains key Show evidence through native lookup and serialization" $ do
+        withSystemTempDirectory "acton-keyerror-show" $ \tmp -> do
+          let src = tmp </> "keyerror_show.act"
+          copyFile "../../test/regression_auto/keyerror_show.act" src
+          copyFile "../../test/regression_auto/keyerror_show.ext.c" (tmp </> "keyerror_show.ext.c")
+          (code, generated, err) <- buildThing "--quiet --dbg-no-lines --cgen" src
+          assertEqual ("C generation should succeed:\n" ++ generated ++ err) ExitSuccess code
+          let body name = unlines $ takeWhile (/= "}") $ dropWhile
+                (not . isInfixOf ("keyerror_showQ_" ++ name ++ " (")) (lines generated)
+          forM_ ["direct_lookup", "frozen_lookup"] $ \name -> do
+            let c = body name
+            assertBool (name ++ " passes key Show to the shared helper")
+              ("B_dict_base_getitem(" `isInfixOf` c && "W_ShowD_K" `isInfixOf` c)
+            assertBool (name ++ " avoids allocating or dispatching on Mapping")
+              (not $ any (`isInfixOf` c) ["G_new", "$class->", "B_Mapping", "B_IMapping"])
+          assertBool "generic indexing keeps protocol dispatch"
+            ("$class->__getitem__" `isInfixOf` body "generic_lookup")
+          testBuild "--jobs 2" ExitSuccess False src
+          (runCode, out, runErr) <- runThing "" src
+          assertEqual ("KeyError tests should succeed: " ++ out ++ runErr) ExitSuccess runCode
+  , testCase "typed Show/Bool conversions preserve native and generic paths" $ do
+        withSystemTempDirectory "acton-show-bool-conversions" $ \tmp -> do
+          let src = tmp </> "show_bool_conversions.act"
+          copyFile "../../test/regression_auto/show_bool_conversions.act" src
+          (code, generated, err) <- buildThing "--quiet --dbg-no-lines --cgen" src
+          assertEqual ("C generation should succeed:\n" ++ generated ++ err) ExitSuccess code
+          let body name = unlines $ takeWhile (/= "}") $ dropWhile
+                (not . isInfixOf ("show_bool_conversionsQ_" ++ name ++ " (")) (lines generated)
+          forM_ ["raw_int", "raw_float", "raw_tuple", "raw_dict"] $ \name -> do
+            let c = body name
+            assertBool (name ++ " should have a generated body") (not $ null c)
+            assertBool (name ++ " must not box its truth result or dispatch on a witness")
+              (not $ any (`isInfixOf` c) ["toB_int(", "toB_float(", "toB_bool(", "$class->", "G_new("])
+          assertBool "tuple truth uses the native size test" ("B_tuple_bool(" `isInfixOf` body "raw_tuple")
+          assertBool "dict truth uses its native worker" ("B_dict_bool(" `isInfixOf` body "raw_dict")
+          assertBool "inherited default rendering calls the shared native default"
+            ("B_valueD___str__(" `isInfixOf` body "inherited_display")
+          assertBool "direct str conversion still normalizes subclass results"
+            ("B_str_from_str(" `isInfixOf` body "raw_str")
+          assertBool "generic truth retains the supplied Bool witness"
+            ("$class->__bool__" `isInfixOf` body "truth")
+          assertBool "source logical operators no longer use the legacy class-slot macros"
+            (not $ any (`isInfixOf` generated) ["$AND(", "$OR(", "$NOT("])
+  , testCase "builtin Show/Bool scalar witnesses remain static" $ do
+        withSystemTempDirectory "acton-show-bool-builtins" $ \tmp -> do
+          let src = tmp </> "show_bool_builtins.act"
+          copyFile "../../test/regression_auto/show_bool_builtins.act" src
+          (code, generated, err) <- buildThing "--quiet --dbg-no-lines --cgen" src
+          assertEqual ("C generation should succeed:\n" ++ generated ++ err) ExitSuccess code
+          forM_ ["int", "i32", "i16", "i8", "u64", "u32", "u16", "u8", "u1"
+                ,"bigint", "float", "bool", "complex", "str", "bytes", "bytearray"
+                ,"slice", "range", "hasher", "bitarray", "bitset"] $ \typ ->
+            forM_ ["Show", "Bool"] $ \protocol -> do
+              let name = "B_" ++ protocol ++ "D_" ++ typ
+              assertBool (name ++ " should use its static witness")
+                ((name ++ "G_witness") `isInfixOf` generated)
+              assertBool (name ++ " should not allocate a scalar witness")
+                (not ((name ++ "G_new(") `isInfixOf` generated))
+  , testCase "inherited Show/Bool defaults use static root witnesses" $ do
+        withSystemTempDirectory "acton-show-bool-inherited" $ \tmp -> do
+          let src = tmp </> "show_bool_inherited_defaults.act"
+          copyFile "../../test/regression_auto/show_bool_inherited_defaults.act" src
+          (code, generated, err) <- buildThing "--quiet --dbg-no-lines --cgen" src
+          assertEqual ("C generation should succeed:\n" ++ generated ++ err) ExitSuccess code
+          forM_ ["ShowD_value", "BoolD_value", "ShowD_object", "BoolD_object"] $ \name -> do
+            assertBool (name ++ " should use the static witness")
+              (("B_" ++ name ++ "G_witness") `isInfixOf` generated)
+            assertBool (name ++ " should not allocate a root witness")
+              (not (("B_" ++ name ++ "G_new(") `isInfixOf` generated))
+  , testCase "inherited Show/Bool overrides load from cached interfaces" $ do
+        withSystemTempDirectory "acton-show-bool-interfaces" $ \tmp -> do
+          let project = "show_bool_interfaces"
+              fp = Fingerprint.formatFingerprint $ Fingerprint.updateFingerprintPrefix
+                     (Fingerprint.fingerprintPrefixForName project) 1
+              provider = tmp </> "src/provider.act"
+              plain = unlines ["class Example:", "    def __init__(self):", "        pass"]
+              custom = plain ++ unlines
+                [ "extension Example(Show):"
+                , "    def __str__(self) -> str:", "        return \"custom\""
+                , "    def __repr__(self) -> str:", "        return \"Example()\""
+                , "extension Example(Bool):"
+                , "    def __bool__(self) -> bool:", "        return False" ]
+              build label = do
+                (code,out,err) <- buildThing "--skip-build --jobs 2 --verbose" tmp
+                assertEqual (label ++ ":\n" ++ out ++ err) ExitSuccess code
+                pure out
+              consumerCode = do
+                c <- BC.unpack <$> BS.readFile (tmp </> "out/types" </> project </> "consumer.c")
+                let inc = tmp </> "out/types" </> project </> "consumer.closures.inc"
+                exists <- doesFileExist inc
+                support <- if exists then BC.unpack <$> BS.readFile inc else pure ""
+                pure (c ++ support)
+          createDirectoryIfMissing True (tmp </> "src")
+          writeFile (tmp </> "Build.act") $ unlines
+            [ "name = \"" ++ project ++ "\"", "fingerprint = " ++ fp ]
+          writeFile provider plain
+          writeFile (tmp </> "src/consumer.act") $ unlines
+            [ "import provider"
+            , "def keep[A(Show, Bool)](x: A) -> A:", "    return x"
+            , "def retain(x: provider.Example) -> provider.Example:", "    return keep(x)"
+            , "def display(x: provider.Example) -> str:", "    return Show.__str__(x)"
+            , "def truth(x: provider.Example) -> bool:", "    return Bool.__bool__(x)" ]
+          writeFile (tmp </> "src/main.act") $ unlines
+            [ "import consumer", "import provider", "actor main(env):"
+            , "    proc def __startup__():"
+            , "        item = provider.Example()", "        consumer.retain(item)"
+            , "        print(consumer.display(item))", "        print(consumer.truth(item))"
+            , "        env.exit(0)" ]
+          _ <- build "inherited defaults"
+          cached <- build "cached interfaces"
+          assertBool "the consumer should reuse its cached interface"
+            ("Fresh consumer: using cached .tydb" `isInfixOf` cached)
+          defaults <- consumerCode
+          assertBool "initially the consumer uses the value default"
+            ("B_ShowD_valueG_witness" `isInfixOf` defaults)
+          writeFile provider custom
+          -- Instance-set invalidation is a separate incremental-build issue.
+          -- Recheck this consumer explicitly; the test here verifies lookup
+          -- from a provider whose changed interface has already been cached.
+          _ <- build "export explicit overrides"
+          appendFile (tmp </> "src/consumer.act") "\n# Recheck cached explicit overrides.\n"
+          changed <- build "import cached explicit overrides"
+          assertBool "the explicit implementations should come from a cached provider"
+            ("Fresh provider: using cached .tydb" `isInfixOf` changed)
+          overrides <- consumerCode
+          assertBool "the consumer should use the explicit implementation"
+            ("providerQ_ShowD_ExampleG_new" `isInfixOf` overrides)
+          writeFile provider plain
+          _ <- build "export restored inherited defaults"
+          appendFile (tmp </> "src/consumer.act") "\n# Recheck cached inherited defaults.\n"
+          restored <- build "import cached inherited defaults"
+          assertBool "the restored defaults should come from a cached provider"
+            ("Fresh provider: using cached .tydb" `isInfixOf` restored)
+          final <- consumerCode
+          assertBool "removing overrides should restore the inherited implementation"
+            ("B_ShowD_valueG_witness" `isInfixOf` final &&
+             not ("providerQ_ShowD_ExampleG_new" `isInfixOf` final))
   , testCase "builtin len and append eliminate concrete witness arguments" $ do
         withSystemTempDirectory "acton-builtin-len-append" $ \tmp -> do
           let src = tmp </> "builtin_len_append.act"
@@ -373,8 +542,10 @@ compilerTests =
           forM_ direct $ \(name, native) -> do
             let c = body name
             assertBool (name ++ " should call the shared native implementation") (native `isInfixOf` c)
+            let unused = ["G_new", "$class->", "B_Mapping", "B_IMapping", "B_SetD", "B_ISetD"] ++
+                  ["G_witness" | name `notElem` ["dict_lookup", "idict_lookup"]]
             assertBool (name ++ " should discard its receiver witness")
-              (not (any (`isInfixOf` c) ["G_new", "G_witness", "$class->", "B_Mapping", "B_IMapping", "B_SetD", "B_ISetD"]))
+              (not (any (`isInfixOf` c) unused))
           forM_ [("dict_update", "B_dict_base_update"), ("set_update", "B_set_base_update")] $ \(name,native) -> do
             let c = body name
             assertBool (name ++ " keeps its source Iterable witness")

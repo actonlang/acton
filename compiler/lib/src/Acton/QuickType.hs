@@ -132,9 +132,7 @@ qSchema env f e@(Dot _ (Var _ x) n)
   where info                        = findQName x env
 qSchema env f e0@(Dot l e n)        = case expanded env t of
                                         TCon _ c -> addE e' $ findAttr' env c n
-                                        TTuple _ p k
-                                          | n `elem` valueKWs -> addE e' $ findAttr' env cValue n
-                                          | otherwise -> addE e' $ (monotype $ pick n k, Nothing)
+                                        TTuple _ p k -> addE e' $ (monotype $ pick n k, Nothing)
                                         TVar _ v  -> addE e' $ findAttr' env tc n
                                            where tc = findTVBound env v
                                         t -> error ("### qSchema Dot unexpected " ++ prstr e0 ++ "  ::  " ++ prstr t)

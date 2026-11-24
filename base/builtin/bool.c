@@ -17,24 +17,24 @@ static struct B_str false_str = {&B_strG_methods, 5, 5, (unsigned char *)"False"
 
 // Serialization ///////////////////////////////////////////////////////////////////////
 
-B_NoneType B_boolD___init__(B_bool self, B_value s){
-    self->val = B_boolG_new(s);
+B_NoneType B_boolD___init__(B_bool self, B_Bool witness, $WORD s){
+    self->val = B_boolG_new(witness, s);
     return B_None;
 }
 
-bool B_boolD___bool__(B_bool self) {
+bool B_bool_bool(B_bool self) {
     return self->val;
 }
 
-B_str B_boolD___str__(B_bool self) {
+B_str B_bool_str(B_bool self) {
     if (self->val)
         return &true_str;
     else
         return &false_str;
 }
 
-B_str B_boolD___repr__(B_bool self) {
-    return B_boolD___str__(self);
+B_str B_bool_repr(B_bool self) {
+    return B_bool_str(self);
 }
 
 void B_boolD___serialize__(B_bool self, $Serial$state state) {
@@ -45,8 +45,8 @@ B_bool B_boolD___deserialize__(B_bool self, $Serial$state state) {
     return toB_bool((long)$val_deserialize(state));
 }
 
-bool B_boolG_new(B_value s) {
-    return  s->$class->__bool__(s);
+bool B_boolG_new(B_Bool witness, $WORD s) {
+    return witness->$class->__bool__(witness, s);
 }
 
 B_bool toB_bool(bool b) {
@@ -82,3 +82,7 @@ B_NoneType B_HashableD_boolD_hash(B_HashableD_bool wit, B_bool a, B_hasher h) {
     zig_hash_wyhash_update(h->_hasher, (const uint8_t *)&a->val, sizeof(a->val));
     return B_None;
 }
+
+// Show/Bool protocol entry points and legacy class-method shims.
+B_DEFINE_SHOW(bool)
+B_DEFINE_BOOL(bool)

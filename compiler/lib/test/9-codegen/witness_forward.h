@@ -21,9 +21,6 @@ struct witness_forwardQ_PAG_class {
     B_NoneType (*__init__) (witness_forwardQ_PA);
     void (*__serialize__) (witness_forwardQ_PA, $Serial$state);
     witness_forwardQ_PA (*__deserialize__) (witness_forwardQ_PA, $Serial$state);
-    bool (*__bool__) (witness_forwardQ_PA);
-    B_str (*__str__) (witness_forwardQ_PA);
-    B_str (*__repr__) (witness_forwardQ_PA);
     bool (*same) (witness_forwardQ_PA, $WORD, $WORD);
     int64_t (*total) (witness_forwardQ_PA, $WORD);
 };
@@ -37,9 +34,6 @@ struct witness_forwardQ_PBG_class {
     B_NoneType (*__init__) (witness_forwardQ_PB);
     void (*__serialize__) (witness_forwardQ_PB, $Serial$state);
     witness_forwardQ_PB (*__deserialize__) (witness_forwardQ_PB, $Serial$state);
-    bool (*__bool__) (witness_forwardQ_PB);
-    B_str (*__str__) (witness_forwardQ_PB);
-    B_str (*__repr__) (witness_forwardQ_PB);
     bool (*same) (witness_forwardQ_PB, $WORD, $WORD);
     int64_t (*total) (witness_forwardQ_PB, $WORD);
     int64_t (*beta) (witness_forwardQ_PB, $WORD);
@@ -54,9 +48,6 @@ struct witness_forwardQ_PCG_class {
     B_NoneType (*__init__) (witness_forwardQ_PC);
     void (*__serialize__) (witness_forwardQ_PC, $Serial$state);
     witness_forwardQ_PC (*__deserialize__) (witness_forwardQ_PC, $Serial$state);
-    bool (*__bool__) (witness_forwardQ_PC);
-    B_str (*__str__) (witness_forwardQ_PC);
-    B_str (*__repr__) (witness_forwardQ_PC);
     bool (*same) (witness_forwardQ_PC, $WORD, $WORD);
     int64_t (*total) (witness_forwardQ_PC, $WORD);
     int64_t (*gamma) (witness_forwardQ_PC, $WORD);
@@ -71,9 +62,6 @@ struct witness_forwardQ_ThingG_class {
     B_NoneType (*__init__) (witness_forwardQ_Thing, int64_t);
     void (*__serialize__) (witness_forwardQ_Thing, $Serial$state);
     witness_forwardQ_Thing (*__deserialize__) (witness_forwardQ_Thing, $Serial$state);
-    bool (*__bool__) (witness_forwardQ_Thing);
-    B_str (*__str__) (witness_forwardQ_Thing);
-    B_str (*__repr__) (witness_forwardQ_Thing);
     B_value (*__get_attr__) (witness_forwardQ_Thing, B_str);
     B_NoneType (*G_init) (witness_forwardQ_Thing);
 };
@@ -88,9 +76,6 @@ struct witness_forwardQ_PBD_ThingG_class {
     B_NoneType (*__init__) (witness_forwardQ_PBD_Thing);
     void (*__serialize__) (witness_forwardQ_PBD_Thing, $Serial$state);
     witness_forwardQ_PBD_Thing (*__deserialize__) (witness_forwardQ_PBD_Thing, $Serial$state);
-    bool (*__bool__) (witness_forwardQ_PBD_Thing);
-    B_str (*__str__) (witness_forwardQ_PBD_Thing);
-    B_str (*__repr__) (witness_forwardQ_PBD_Thing);
     bool (*same) (witness_forwardQ_PBD_Thing, witness_forwardQ_Thing, witness_forwardQ_Thing);
     int64_t (*total) (witness_forwardQ_PBD_Thing, witness_forwardQ_Thing);
     int64_t (*beta) (witness_forwardQ_PBD_Thing, witness_forwardQ_Thing);
@@ -105,9 +90,6 @@ struct witness_forwardQ_PCD_ThingG_class {
     B_NoneType (*__init__) (witness_forwardQ_PCD_Thing);
     void (*__serialize__) (witness_forwardQ_PCD_Thing, $Serial$state);
     witness_forwardQ_PCD_Thing (*__deserialize__) (witness_forwardQ_PCD_Thing, $Serial$state);
-    bool (*__bool__) (witness_forwardQ_PCD_Thing);
-    B_str (*__str__) (witness_forwardQ_PCD_Thing);
-    B_str (*__repr__) (witness_forwardQ_PCD_Thing);
     bool (*same) (witness_forwardQ_PCD_Thing, witness_forwardQ_Thing, witness_forwardQ_Thing);
     int64_t (*total) (witness_forwardQ_PCD_Thing, witness_forwardQ_Thing);
     int64_t (*gamma) (witness_forwardQ_PCD_Thing, witness_forwardQ_Thing);

@@ -61,9 +61,6 @@ struct B_IteratorD_dictG_class {
     void (*__init__)(B_IteratorD_dict, B_dict);
     void (*__serialize__)(B_IteratorD_dict,$Serial$state);
     B_IteratorD_dict (*__deserialize__)(B_IteratorD_dict,$Serial$state);
-    bool (*__bool__)(B_IteratorD_dict);
-    B_str (*__str__)(B_IteratorD_dict);
-    B_str (*__repr__)(B_IteratorD_dict);
     bool (*__next__)(B_IteratorD_dict, $WORD *);
 };
 
@@ -89,9 +86,6 @@ struct B_IteratorD_dict_valuesG_class {
     void (*__init__)(B_IteratorD_dict_values, B_dict);
     void (*__serialize__)(B_IteratorD_dict_values,$Serial$state);
     B_IteratorD_dict_values (*__deserialize__)(B_IteratorD_dict_values,$Serial$state);
-    bool (*__bool__)(B_IteratorD_dict_values);
-    B_str (*__str__)(B_IteratorD_dict_values);
-    B_str (*__repr__)(B_IteratorD_dict_values);
     bool (*__next__)(B_IteratorD_dict_values, $WORD *);
 };
 
@@ -117,9 +111,6 @@ struct B_IteratorD_dict_itemsG_class {
     void (*__init__)(B_IteratorD_dict_items, B_dict);
     void (*__serialize__)(B_IteratorD_dict_items,$Serial$state);
     B_IteratorD_dict_items (*__deserialize__)(B_IteratorD_dict_items,$Serial$state);
-    bool (*__bool__)(B_IteratorD_dict_items);
-    B_str (*__str__)(B_IteratorD_dict_items);
-    B_str (*__repr__)(B_IteratorD_dict_items);
     bool (*__next__)(B_IteratorD_dict_items, $WORD *);
 };
 
@@ -137,7 +128,7 @@ B_Iterator $dictD_U_items_init(B_IteratorD_dict_items iter, $WORD src);
 
 // Shared operations used directly by generated code and by protocol wrappers.
 bool B_dict_base_contains(B_dict_base, $WORD);
-$WORD B_dict_base_getitem(B_dict_base, $WORD);
+$WORD B_dict_base_getitem(B_dict_base, $WORD, B_Show);
 $WORD B_dict_base_get(B_dict_base, $WORD, $WORD);
 $WORD B_dict_base_pop(B_dict_base, $WORD, $WORD);
 B_NoneType B_dict_base_setitem(B_dict_base, $WORD, $WORD);
@@ -162,3 +153,10 @@ static inline int64_t $dictD_U__len(B_dict self) {
 static inline int64_t $idictD_U__len(B_idict self) {
     return (int64_t)self->numelements;
 }
+
+// Formatting uses the element Show witnesses, independently of stored hashing.
+bool B_dict_bool(B_dict self);
+bool B_idict_bool(B_idict self);
+B_str B_idict_str(B_idict self, B_Show keys, B_Show values);
+
+B_str B_dict_base_str(B_dict_base self, B_Show keys, B_Show values);

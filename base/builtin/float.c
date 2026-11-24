@@ -78,15 +78,15 @@ B_float B_floatD___deserialize__(B_float self, $Serial$state state) {
     return to$float(x);
 }
 
-bool B_floatD___bool__(B_float x) {
+bool B_float_bool(B_float x) {
     return x->val != 0.0;
 }
 
-B_str B_floatD___str__(B_float x) {
+B_str B_float_str(B_float x) {
     return $FORMAT("%g", x->val);
 }
 
-B_str B_floatD___repr__(B_float x) {
+B_str B_float_repr(B_float x) {
     return $FORMAT("%g", x->val);
 }
 
@@ -233,3 +233,7 @@ B_NoneType B_HashableD_floatD_hash(B_HashableD_float wit, B_float a, B_hasher h)
     zig_hash_wyhash_update(h->_hasher, (const uint8_t *)&val, sizeof(val));
     return B_None;
 }
+
+// Show/Bool protocol entry points and legacy class-method shims.
+B_DEFINE_SHOW(float)
+B_DEFINE_BOOL(float)

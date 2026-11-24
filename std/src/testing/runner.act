@@ -36,9 +36,11 @@ def eq_opt[T(Eq)](a: ?T, b: ?T) -> bool:
 
 def exception_text(exception: Exception) -> str:
     """The text of a test failure, with a diff of the values of a NotEqualError"""
+    text = str(exception)
     if isinstance(exception, NotEqualError) and exception.print_diff:
-        return f"{exception}\n{term.normal}{diff.diff(str(exception.a), str(exception.b), color=True)}{term.normal}"
-    return str(exception)
+        a, b = exception.value_text()
+        return f"{text}\n{term.normal}{diff.diff(a, b, color=True)}{term.normal}"
+    return text
 
 
 class TestResult(object):

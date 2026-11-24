@@ -24,20 +24,17 @@ B_NoneType B_tupleD___init__(B_tuple self,int size ,...) {
     return B_None;
 }
 
-bool B_tupleD___bool__(B_tuple self) {
+bool B_tuple_bool(B_tuple self) {
     return self->size>0;
 }
 
-B_str B_tupleD___str__(B_tuple self) {
+B_str B_tuple_str(B_tuple self, B_tuple witnesses) {
     B_list s2 = B_listD_new(self->size);
     B_SequenceD_list wit = B_SequenceD_listG_witness;
     for (int i=0; i< self->size; i++) {
         B_value elem = (B_value)self->components[i];
-        if (elem == NULL) {
-            wit->$class->append(wit,s2,B_None_str);
-        } else {
-            wit->$class->append(wit,s2,elem->$class->__repr__(elem));
-        }
+        B_Show w = (B_Show)witnesses->components[i];
+        wit->$class->append(wit, s2, w->$class->__repr__(w, elem));
     }
     return B_strD_join_par('(',s2,')');
 }
@@ -81,8 +78,5 @@ struct B_tupleG_class B_tupleG_methods = {
     ($SuperG_class)&B_valueG_methods,
     B_tupleD___init__,
     B_tupleD___serialize__,
-    B_tupleD___deserialize__,
-    B_tupleD___bool__,
-    B_tupleD___str__,
-    B_tupleD___str__
+    B_tupleD___deserialize__
 };

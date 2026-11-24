@@ -60,9 +60,6 @@ struct B_IteratorD_listG_class {
   void (*__init__)(B_IteratorD_list, B_list);
   void (*__serialize__)(B_IteratorD_list,$Serial$state);
   B_IteratorD_list (*__deserialize__)(B_IteratorD_list,$Serial$state);
-  bool (*__bool__)(B_IteratorD_list);
-  B_str (*__str__)(B_IteratorD_list);
-  B_str (*__repr__)(B_IteratorD_list);
   bool (*__next__)(B_IteratorD_list, $WORD *);
 };
 
@@ -113,3 +110,10 @@ static inline __attribute__((always_inline)) B_list_base B_list_base_irepeat(B_l
     B_list_base_imul(lst, n);
     return lst;
 }
+
+// Formatting uses the element Show witnesses, independently of stored hashing.
+bool B_list_bool(B_list self);
+bool B_ilist_bool(B_ilist self);
+B_str B_ilist_str(B_ilist self, B_Show elements);
+
+B_str B_list_base_str(B_list_base self, B_Show elements);

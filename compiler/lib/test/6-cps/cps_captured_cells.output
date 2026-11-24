@@ -2,12 +2,18 @@ import std.json
 proc def capture (C_cont : proc(None) -> $R) -> $R:
     value: $Cell[?__builtin__.str] = $Cell@[?__builtin__.str](None)
     proc def callback (C_cont : proc(None) -> $R) -> $R:
-        W_capture_27: __builtin__.Hashable[__builtin__.str] = __builtin__.HashableD_str()
-        print@[(__builtin__.str,)]((type(value.cell),), "\" \"", "\"\\n\"", False, False)
-        print@[(?__builtin__.str,)]((value.cell,), "\" \"", "\"\\n\"", False, False)
-        print@[(__builtin__.bool,)](($ISNONE@[__builtin__.str](value.cell),), "\" \"", "\"\\n\"", False, False)
-        print@[(__builtin__.bool,)](($ISNOTNONE@[__builtin__.str](value.cell),), "\" \"", "\"\\n\"", False, False)
-        print@[(__builtin__.str,)]((std.json.encode($mkDict@[__builtin__.str, ?__builtin__.str](W_capture_27, {"\"value\"": value.cell}), False, False),), "\" \"", "\"\\n\"", False, False)
+        W_capture_42: __builtin__.Show[__builtin__.str] = __builtin__.ShowD_str()
+        W_capture_5: __builtin__.Show[(__builtin__.str,)] = $ShowTuple@[(__builtin__.Show[__builtin__.str],), (__builtin__.str,), ()]((W_capture_42,))
+        W_capture_47: __builtin__.Show[?__builtin__.str] = $ShowOpt@[__builtin__.str](W_capture_42)
+        W_capture_11: __builtin__.Show[(?__builtin__.str,)] = $ShowTuple@[(__builtin__.Show[?__builtin__.str],), (?__builtin__.str,), ()]((W_capture_47,))
+        W_capture_52: __builtin__.Show[__builtin__.bool] = __builtin__.ShowD_bool()
+        W_capture_15: __builtin__.Show[(__builtin__.bool,)] = $ShowTuple@[(__builtin__.Show[__builtin__.bool],), (__builtin__.bool,), ()]((W_capture_52,))
+        W_capture_32: __builtin__.Hashable[__builtin__.str] = __builtin__.HashableD_str()
+        print@[(__builtin__.str,)](W_capture_5, (type(value.cell),), "\" \"", "\"\\n\"", False, False)
+        print@[(?__builtin__.str,)](W_capture_11, (value.cell,), "\" \"", "\"\\n\"", False, False)
+        print@[(__builtin__.bool,)](W_capture_15, ($ISNONE@[__builtin__.str](value.cell),), "\" \"", "\"\\n\"", False, False)
+        print@[(__builtin__.bool,)](W_capture_15, ($ISNOTNONE@[__builtin__.str](value.cell),), "\" \"", "\"\\n\"", False, False)
+        print@[(__builtin__.str,)](W_capture_5, (std.json.encode($mkDict@[__builtin__.str, ?__builtin__.str](W_capture_32, {"\"value\"": value.cell}), False, False),), "\" \"", "\"\\n\"", False, False)
         return $R_CONTc@[None](C_cont, None)
     proc def C_1cont (C_2res : None) -> $R:
         proc def C_3cont (C_4res : None) -> $R:

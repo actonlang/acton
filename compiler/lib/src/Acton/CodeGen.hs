@@ -26,6 +26,7 @@ import Acton.Names
 import Acton.Builtin
 import Acton.Printer
 import Acton.Prim
+import Acton.BuiltinCalls
 import Acton.NameInfo
 import Acton.Env
 import Acton.QuickType
@@ -102,6 +103,10 @@ derivedHead (Derived n _)           = n
 
 staticWitnessName (Dot _ c a)       = (nm, NoQ a:as)
    where (nm,as)                    = staticWitnessName c
+-- Inherited Show/Bool evidence changes its receiver type without changing the
+-- witness object. Retain static recognition through that representation cast.
+staticWitnessName (Call _ (TApp _ (Var _ q) _) (PosArg e PosNil) KwdNil)
+    | q == primCAST                 = staticWitnessName e
 staticWitnessName (Call _ (Var _ v@(GName m n)) PosNil KwdNil)
     | m == mBuiltin, not (isInternal n)
                                     = (Just v, [])
@@ -608,7 +613,11 @@ decl env (Class _ n q a b ddoc)
                                       inst_struct
   where tc                          = TC (NoQ n) [ tVar v | QBind v _ <- q ]
         initdef : meths             = fields (setInClass env) tc
-        properties                  = [ varsig env n (sctype sc) <> semi | (n, NSig sc Property _) <- fullAttrEnv env tc ]
+        properties                  = [ property n sc <> semi | (n, NSig sc Property _) <- fullAttrEnv env tc ]
+        property n sc
+          | n == name "_exception_show", isExceptionClass env tc
+                                    = text "_Atomic(B_value)" <+> gen env n
+          | otherwise               = varsig env n (sctype sc)
         inst_struct | initNotImpl   = empty
                     | otherwise     = (text "struct" <+> genTopName env n <+> char '{') $+$
                                       nest 4 (classlink env n $+$ vcat properties) $+$
@@ -755,9 +764,6 @@ classidKW                           = primKW "class_id"
 superclassKW                        = primKW "superclass"
 componentsKW                        = name "components"
 
-primAND                             = gPrim "AND"
-primOR                              = gPrim "OR"
-primNOT                             = gPrim "NOT"
 primROOT                            = gPrim "ROOT"
 primROOTINIT                        = gPrim "ROOTINIT"
 primRegister                        = gPrim "register"
@@ -2392,9 +2398,10 @@ containsGeneratedMethodCallComp _ NoComp
 
 genGeneratedMethodCall env n ts (PosArg w p)
   | Just (tc, _) <- generatedMethodClass env n ts
-                                    = gen env (generatedMethodQName n) <> parens (witness <> comma' (gen env p))
+                                    = gen env (generatedMethodQName n) <> parens (witness <> comma' (genCallPosArgs env row p))
   where witness                     = parens (gen env (tCon tc')) <> staticWitnessValue env w
         Just (tc', _)               = generatedMethodClass env n ts
+        Just (TFun _ _ row _ _)     = generatedMethodType env n ts
 genGeneratedMethodCall env n _ p    = gen env (generatedMethodQName n) <> parens (gen env p)
 
 staticWitnessValue env e            = case staticWitnessName e of
@@ -2656,6 +2663,7 @@ declCon env n q b
   | null abstr || hasNotImpl b      = (gen env tRes <+> newcon env n <> parens (gen env pars) <+> char '{') $+$
                                       nest 4 (gen env tObj <+> gen env tmpV <+> equals <+> acton_malloc env (gname env n) <> semi $+$
                                               gen env tmpV <> text "->" <> gen env1 classKW <+> equals <+> char '&' <> methodtable env1 n <> semi $+$
+                                              exceptionInit $+$
                                               altcall $+$
                                               initcall) $+$
                                       char '}'
@@ -2664,6 +2672,9 @@ declCon env n q b
         tc                          = TC (NoQ n) (map tVar $ qbound q)
         tObj                        = tCon tc
         tRes                        = if t == tR then tR else tObj
+        exceptionInit
+          | isExceptionClass env tc = gen env tmpV <> text "->_exception_show = NULL;"
+          | otherwise               = empty
         pars                        = pPar paramNames r
         args                        = pArg pars
         altcall
@@ -2679,6 +2690,8 @@ declCon env n q b
         retobj (PosArg e p)         = PosArg (eCall (tApp (eQVar primCONSTCONT) [tObj]) [eVar tmpV, e]) p
         env1                        = ldefine ((tmpV, NVar tObj) : envOf pars) env
         abstr                       = abstractAttrs env (NoQ n)
+
+isExceptionClass env tc            = any ((== qnBaseException) . unalias env . tcname . snd) (findAncestry env tc)
 
 acton_malloc env n                  = text "acton_malloc" <> parens (structSize env n)
 
@@ -2814,6 +2827,13 @@ genBoxed env t e                    = text ("toB_"++render(pretty (noq (tcname(t
 -- expression appears once, including when comparisons reverse their operands.
 -- Base routines perform the real work. The receiver-returning inplace
 -- adapters are header-inline, so they introduce no out-of-line call layer.
+genBuiltinCall env call w (PosArg e PosNil)
+  | OptionalShow ctype <- bwABI w =
+      let native = text (bwCName w) <> parens (parens (text ctype) <> text "$show_value")
+          -- str's own formatter returns its input, which can be a subclass.
+          result = if bwType w == qnStr then text "B_str_from_str" <> parens native else native
+      in text "({ $WORD $show_value =" <+> gen env e <> semi <+>
+         text "$show_value ?" <+> result <+> text ": B_None_str; })"
 genBuiltinCall env call w p = scope $ result $ negateResult $ text (bwCName w) <> parens (commaSep id args)
   where actuals = zip [0..] (posargs p)
         slices = [ (i,ds,d) | (i,e) <- actuals, Just i == builtinSliceArgument w,
@@ -2836,6 +2856,8 @@ genBuiltinCall env call w p = scope $ result $ negateResult $ text (bwCName w) <
             ListInplace -> cast "B_list_base" e
             NativeArgs -> gen env e
             NativeCompare _ -> gen env e
+            BoxedValue ty -> cast ty e
+            OptionalShow ty -> cast ty e
             DictBase -> cast "B_dict_base" e
             SetTable -> table e
             SetObject -> cast "B_set_base" e
@@ -2927,6 +2949,9 @@ instance Gen Expr where
     gen env c@Call{}
       | Just args <- rawRangeArgs env c
                                     = genRawRangeNew env args
+    gen env (Call _ (TApp _ (Var _ n) _) (PosArg w (PosArg e PosNil)) KwdNil)
+      | n == primExceptionShow      = text "$exceptionShow" <> parens
+                                        (parens (text "B_Show") <> gen env w <> comma <+> parens (text "B_BaseException") <> gen env e)
     gen env c@(Call _ f p KwdNil)
       | Var _ q <- stripTApp f,
         Just w <- builtinCallPrimitive q
@@ -2955,16 +2980,10 @@ instance Gen Expr where
        | otherwise                  = gen env primNEWTUPLE <> parens (text (show n) <> comma' (gen env p))
        where n                      = nargs p
     gen env (List _ es)             = text "B_mk_list" <> parens (pretty (length es) <> hsep [comma <+> gen env e | e <- es])
-    gen env (BinOp _ e1 And e2)
-         | boxedRepType t == tBool  = parens (genRawExprAs env tBool e1 <> binPretty And <> genRawExprAs env tBool e2)
-         | otherwise                = gen env primAND <> parens (gen env t <> comma <+> gen env e1 <> comma <+> gen env e2)
-      where t                       = typeOf env e1
-    gen env (BinOp _ e1 Or e2)
-         | boxedRepType t == tBool  = parens (genRawExprAs env tBool e1 <> binPretty Or <> genRawExprAs env tBool e2)
-         | otherwise                = gen env primOR <> parens (gen env t <> comma <+> gen env e1 <> comma <+> gen env e2)
-      where t                       = typeOf env e1
---    gen env (BinOp _ e1 Or e2)      = gen env primOR <> parens (gen env t <> comma <+> gen env e1 <> comma <+> gen env e2)
---      where t                       = typeOf env e1
+    -- Types lowers operand-valued and/or to conditionals and supplies Bool
+    -- evidence for truth tests. Remaining logical operators act on bools.
+    gen env (BinOp _ e1 op e2)
+         | op `elem` [And, Or]       = parens (genRawExprAs env tBool e1 <> binPretty op <> genRawExprAs env tBool e2)
     gen env (BinOp _ e1 op e2)
             | boxedRepType t == tU1,
               Just d <- genU1RawBinOp env op e1 e2
@@ -2982,13 +3001,7 @@ instance Gen Expr where
             opstr Mod               = "MOD"
             opstr EuDiv             = "FLOORDIV"
     gen env (CompOp _ e [a])        = gen env e <+> gen env a
-    gen env (UnOp _ Not e)
-        | boxedRepType t == tBool   = parens (text "!" <> genRawExprAs env tBool e)
-        | otherwise                 = gen env primNOT <> parens (gen env t <> comma <+> gen env e)
---      | B.isUnboxable (boxedRepType t)
---                                    = genBoxed env tBool (parens (text "!" <> parens (genRawExpr env e)))
---      | otherwise                   = gen env primNOT <> parens (gen env t <> comma <+> gen env e)
-      where t                       = typeOf env e
+    gen env (UnOp _ Not e)          = parens (text "!" <> genRawExprAs env tBool e)
     gen env (UnOp _ op e)
       | t == tU1
                                     = genU1RawUnOp env op e

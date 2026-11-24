@@ -92,9 +92,6 @@ struct B_IteratorD_setG_class {
     void (*__init__)(B_IteratorD_set, B_set);
     void (*__serialize__)(B_IteratorD_set, $Serial$state);
     B_IteratorD_set (*__deserialize__)(B_IteratorD_set, $Serial$state);
-    bool (*__bool__)(B_IteratorD_set);
-    B_str (*__str__)(B_IteratorD_set);
-    B_str (*__repr__)(B_IteratorD_set);
     bool (*__next__)(B_IteratorD_set, $WORD *);
 };
 
@@ -119,3 +116,10 @@ static inline int64_t $setD_U__len(B_set self) {
 static inline int64_t $isetD_U__len(B_iset self) {
     return (int64_t)self->data.numelements;
 }
+
+// Formatting uses the element Show witnesses, independently of stored hashing.
+bool B_set_bool(B_set self);
+bool B_iset_bool(B_iset self);
+B_str B_iset_str(B_iset self, B_Show elements);
+
+B_str B_set_table_str(B_set_table *self, B_Show elements);

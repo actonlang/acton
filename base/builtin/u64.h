@@ -17,3 +17,8 @@ extern struct B_ZeroDivisionError B_u64_mod_zero_error;
 #define u64_MOD(a,b)       ( {if (b==0) RAISE_EXC(&B_u64_mod_zero_error); a%b;} )
 
 uint64_t u64_pow(uint64_t a, uint64_t b);
+
+// Witness-free formatting and truth workers.
+bool B_u64_bool(B_u64 self);
+B_str B_u64_str(B_u64 self);
+B_str B_u64_repr(B_u64 self);

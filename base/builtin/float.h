@@ -16,3 +16,8 @@ double B_floatG_new(B_atom a);
 
 #define float_DIV(x,y)           (x/y)
 #define float_pow(x,y)           (pow(x,y))
+
+// Witness-free formatting and truth workers.
+bool B_float_bool(B_float self);
+B_str B_float_str(B_float self);
+B_str B_float_repr(B_float self);

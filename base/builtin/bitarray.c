@@ -60,16 +60,16 @@ B_NoneType B_bitarrayD___init__(B_bitarray self, int64_t length, bool initial) {
     return B_None;
 }
 
-bool B_bitarrayD___bool__(B_bitarray self) {
+bool B_bitarray_bool(B_bitarray self) {
     return self->length != 0;
 }
 
-B_str B_bitarrayD___str__(B_bitarray self) {
+B_str B_bitarray_str(B_bitarray self) {
     return B_objectD___str__((B_object)self);
 }
 
-B_str B_bitarrayD___repr__(B_bitarray self) {
-    return B_bitarrayD___str__(self);
+B_str B_bitarray_repr(B_bitarray self) {
+    return B_bitarray_str(self);
 }
 
 bool $bitarrayD_U__getitem__(B_bitarray self, int64_t index) {
@@ -292,8 +292,7 @@ B_IteratorD_bitarray B_IteratorD_bitarrayD_deserialize(B_IteratorD_bitarray self
 struct B_IteratorD_bitarrayG_class B_IteratorD_bitarrayG_methods = {
     "B_IteratorD_bitarray", UNASSIGNED, ($SuperG_class)&B_IteratorG_methods,
     B_IteratorD_bitarrayD_init, B_IteratorD_bitarrayD_serialize,
-    B_IteratorD_bitarrayD_deserialize, B_IteratorD_bitarrayD_bool,
-    B_IteratorD_bitarrayD_str, B_IteratorD_bitarrayD_str,
+    B_IteratorD_bitarrayD_deserialize,
     B_IteratorD_bitarrayD_next
 };
 
@@ -374,3 +373,7 @@ B_bitarray B_bitarrayD___deserialize__(B_bitarray self, $Serial$state state) {
     }
     return self;
 }
+
+// Show/Bool protocol entry points.
+B_DEFINE_SHOW(bitarray)
+B_DEFINE_BOOL(bitarray)

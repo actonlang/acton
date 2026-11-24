@@ -14,9 +14,6 @@ struct $CellG_class {
     B_NoneType (*__init__) ($Cell, $WORD);
     void (*__serialize__) ($Cell, $Serial$state);
     $Cell (*__deserialize__) ($Cell, $Serial$state);
-    bool (*__bool__) ($Cell);
-    B_str (*__str__) ($Cell);
-    B_str (*__repr__) ($Cell);
 };
 
 $Cell $CellG_new($WORD);

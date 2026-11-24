@@ -3170,6 +3170,8 @@ main = do
         (_, _, _, discovered) <- liftIO $ Acton.Types.reconstruct Nothing Nothing env kchecked Nothing
         sort discovered `shouldBe` ["_test_async", "_test_env", "_test_sync"]
 
+      testShowBoolInheritance env0
+
       testAttributesInitialization env0
 
       it "keeps generated names stable within unchanged defs" $ do
@@ -4217,14 +4219,9 @@ main = do
       testNorm env0 ["deact"]
       testNorm env0 ["norm_comprehension_condition"]
       testCodeGenContains env0 "normalizer_static_witnesses"
-        [ "B_SequenceD_listG_witness"
-        , "B_MappingD_dictD_strG_witness"
-        , "B_MappingD_dictD_intG_witness"
-        , "B_MappingD_dictD_u64G_witness"
-        , "B_MappingD_dictD_bytesG_witness"
-        ]
+        [ "B_SequenceD_listG_witness", "B_dict_base_setitem(" ]
       testCodeGenDoesNotContain env0 "normalizer_static_witnesses"
-        [ "B_SequenceD_listG_new(", "B_MappingD_dictG_new(" ]
+        [ "B_SequenceD_listG_new(", "B_MappingD_dict" ]
 
     describe "Pass 5: Deactorizer" $ do
       testDeact env0 ["deact", "deact_from_import"]
@@ -6104,6 +6101,331 @@ testDocstrings env0 testname = do
         Just (Just doc) -> doc `shouldContain` "Just a docstring"
         Just Nothing -> expectationFailure "Function should have docstring"
         Nothing -> expectationFailure "Function not found"
+
+testShowBoolInheritance :: Acton.Env.Env0 -> Spec
+testShowBoolInheritance env0 = describe "Inherited Show and Bool witnesses" $ do
+  let check label source = liftIO $ do
+        let mn = S.modName [label]
+        parsed <- P.parseModule mn ("<" ++ label ++ ">") (unlines source) Nothing
+        env <- Acton.Env.mkEnv systemTypes env0 parsed
+        kinded <- Acton.Kinds.check env parsed
+        result@(iface, typed, _, _) <- Acton.Types.reconstruct Nothing Nothing env kinded Nothing
+        E.evaluate (rnf iface `seq` rnf typed)
+        pure result
+      extensions (I.NModule _ te _) = [n | (n, I.NExt{}) <- te]
+      keep =
+        [ "def keep[A(Show, Bool)](x: A) -> A:"
+        , "    return x"
+        ]
+
+  it "declares both protocols and supplies the four root extensions" $ do
+    Acton.Env.isProto env0 Builtin.qnShow `shouldBe` True
+    Acton.Env.isProto env0 Builtin.qnBoolProtocol `shouldBe` True
+    forM_ [Builtin.tValue, Builtin.tObject] $ \t ->
+      forM_ [Builtin.pShow, Builtin.pBoolProtocol] $ \p ->
+        Solver.hasWitness (TypeEnv.initTypeEnv env0) t p `shouldBe` True
+
+  forM_ [("value", ""), ("object", "(object)")] $ \(label, base) ->
+    it ("preserves a generic result type using inherited " ++ label ++ " defaults") $ do
+      (iface, typed, _, _) <- check ("show_bool_" ++ label)
+        ([ "class Example" ++ base ++ ":", "    pass" ] ++ keep ++
+         [ "def use(x: Example) -> Example:", "    return keep(x)" ])
+      extensions iface `shouldBe` []
+      let listing = Pretty.print typed
+      listing `shouldSatisfy` isInfixOf "keep@[Example]"
+      listing `shouldSatisfy` isInfixOf ("__builtin__.ShowD_" ++ label ++ "()")
+      listing `shouldSatisfy` isInfixOf ("__builtin__.BoolD_" ++ label ++ "()")
+
+  it "does not constrain the fields of a class using default formatting" $ do
+    (iface, _, _, _) <- check "show_bool_fields"
+      ([ "class Box[A]:", "    item: A"
+       , "    def __init__(self, item: A):", "        self.item = item"
+       , "class Plain:", "    pass" ] ++ keep ++
+       [ "def use(x: Box[Plain]) -> Box[Plain]:", "    return keep(x)" ])
+    extensions iface `shouldBe` []
+
+  it "preserves supplied generic evidence ahead of inherited defaults" $ do
+    (_, typed, _, _) <- check "show_bool_evidence"
+      [ "def display[A(Show)](x: A) -> str:", "    return Show.__str__(x)"
+      , "def truth[A(Bool)](x: A) -> bool:", "    return Bool.__bool__(x)" ]
+    let listing = Pretty.print typed
+    listing `shouldSatisfy` isInfixOf "return W_ShowD_A.__str__(x)"
+    listing `shouldSatisfy` isInfixOf "return W_BoolD_A.__bool__(x)"
+    listing `shouldSatisfy` (not . isInfixOf "ShowD_value()")
+    listing `shouldSatisfy` (not . isInfixOf "BoolD_value()")
+
+  it "uses the class bound when an unconstrained generic needs a default" $ do
+    (_, typed, _, _) <- check "show_bool_unconstrained"
+      [ "def display[A](x: A) -> str:", "    return Show.__str__(x)"
+      , "def truth[A](x: A) -> bool:", "    return Bool.__bool__(x)" ]
+    let listing = Pretty.print typed
+    listing `shouldSatisfy` isInfixOf "ShowD_value()"
+    listing `shouldSatisfy` isInfixOf "BoolD_value()"
+
+  it "keeps existing generic dict signatures valid with default key formatting" $ do
+    (_, typed, _, _) <- check "keyerror_default_key"
+      [ "def lookup[K(Hashable),V](d: dict[K,V], key: K) -> V:"
+      , "    return d[key]" ]
+    let listing = Pretty.print typed
+    listing `shouldSatisfy` isInfixOf "MappingD_dict@[K, V](W_HashableD_K,"
+    listing `shouldSatisfy` isInfixOf "ShowD_value()"
+
+  it "forwards explicit key Show evidence into builtin Mapping witnesses" $ do
+    (_, typed, _, _) <- check "keyerror_supplied_key"
+      [ "def lookup[K(Hashable,Show),V](d: dict[K,V], key: K) -> V:"
+      , "    return d[key]"
+      , "def frozen[K(Hashable,Show),V](d: idict[K,V], key: K) -> V:"
+      , "    return d[key]" ]
+    let listing = Pretty.print typed
+    listing `shouldSatisfy` isInfixOf "MappingD_dict@[K, V](W_HashableD_K, W_ShowD_K)"
+    listing `shouldSatisfy` isInfixOf "IMappingD_idict@[K, V](W_HashableD_K, W_ShowD_K)"
+    listing `shouldSatisfy` (not . isInfixOf "ShowD_value()")
+
+  it "instantiates captured witnesses in an inherited generic extension" $ do
+    (_, typed, _, _) <- check "show_bool_parent_capture"
+      [ "class Parent[A]:", "    item: A"
+      , "    def __init__(self, item: A):", "        self.item = item"
+      , "class Child[A](Parent[A]):", "    pass"
+      , "class Plain:", "    pass"
+      , "extension Parent[A(Show)](Show):"
+      , "    def __str__(self) -> str:", "        return Show.__str__(self.item)"
+      , "    def __repr__(self) -> str:", "        return Show.__repr__(self.item)"
+      , "def keep[A(Show)](x: A) -> A:", "    return x"
+      , "def use(x: Child[Plain]) -> Child[Plain]:", "    return keep(x)" ]
+    Pretty.print typed `shouldSatisfy` isInfixOf "ShowD_Parent@[Plain]("
+
+  it "uses the nearest class implementation in a bound type variable" $ do
+    (_, typed, _, _) <- check "show_bool_class_bound"
+      [ "class Parent:", "    pass", "class Child(Parent):", "    pass"
+      , "extension Parent(Show):"
+      , "    def __str__(self) -> str:", "        return \"parent\""
+      , "    def __repr__(self) -> str:", "        return \"Parent()\""
+      , "def display[A(Child)](x: A) -> str:", "    return Show.__str__(x)" ]
+    Pretty.print typed `shouldSatisfy` isInfixOf "ShowD_Parent()"
+
+  it "does not inherit an unrelated Self-producing protocol" $ do
+    let src =
+          [ "protocol Show:", "    clone: () -> Self"
+          , "class Parent:", "    pass", "class Child(Parent):", "    pass"
+          , "extension Parent(Show):"
+          , "    def clone(self) -> Parent:", "        return self"
+          , "def keep[A(Show)](x: A) -> A:", "    return x"
+          , "def use(x: Child) -> Child:", "    return keep(x)" ]
+    result <- liftIO $ E.try $ do
+      let mn = S.modName ["show_bool_unrelated"]
+      parsed <- P.parseModule mn "<show_bool_unrelated>" (unlines src) Nothing
+      env <- Acton.Env.mkEnv systemTypes env0 parsed
+      kinded <- Acton.Kinds.check env parsed
+      (_, typed, _, _) <- Acton.Types.reconstruct Nothing Nothing env kinded Nothing
+      E.evaluate (rnf typed)
+    case result of
+      Left (_ :: TypeError) -> pure ()
+      Right _ -> expectationFailure "A parent clone cannot produce an arbitrary child"
+
+  it "declares direct Show/Bool witnesses for native builtin types" $ do
+    let env = TypeEnv.initTypeEnv env0
+    forM_ ["int", "i32", "i16", "i8", "u64", "u32", "u16", "u8", "u1"
+          ,"bigint", "float", "bool", "complex", "str", "bytes", "bytearray"
+          ,"slice", "range", "hasher", "bitarray", "bitset"] $ \name -> do
+      let t = S.tCon (S.TC (Builtin.gBuiltin (S.name name)) [])
+      forM_ [Builtin.pShow, Builtin.pBoolProtocol] $ \p ->
+        length (Solver.findWitness env t p) `shouldBe` 1
+
+  it "captures the element Show witness for list formatting" $ do
+    typed <- typecheckSource env0 "show_builtin_list" $ unlines
+      [ "def render[A(Show)](xs: list[A]) -> str:"
+      , "    return Show.__repr__(xs)" ]
+    Pretty.print typed `shouldSatisfy` isInfixOf "ShowD_list@[A](W_ShowD_A)"
+
+  it "does not require Show to test the truth of a list" $ do
+    typed <- typecheckSource env0 "bool_builtin_list" $ unlines
+      [ "def truth(xs: list[(int)->str]) -> bool:"
+      , "    return Bool.__bool__(xs)" ]
+    let listing = Pretty.print typed
+    listing `shouldSatisfy` isInfixOf "BoolD_list@"
+    listing `shouldSatisfy` (not . isInfixOf "ShowD_")
+
+  it "keeps array formatting evidence for an opaque generic element" $ do
+    typed <- typecheckSource env0 "show_builtin_array" $ unlines
+      [ "def render[A(ArrayElement)](xs: array[A]) -> str:"
+      , "    return Show.__str__(xs)" ]
+    let listing = Pretty.print typed
+    listing `shouldSatisfy` isInfixOf "ShowD_array@[A]("
+    listing `shouldSatisfy` isInfixOf "ShowD_value()"
+
+  it "derives optional Show and Bool from the supplied present-value evidence" $ do
+    typed <- typecheckSource env0 "show_bool_optional" $ unlines
+      [ "def render[A(Show)](x: ?A) -> str:", "    return Show.__repr__(x)"
+      , "def truth[A(Bool)](x: ?A) -> bool:", "    return Bool.__bool__(x)" ]
+    let listing = Pretty.print typed
+    listing `shouldSatisfy` isInfixOf "$ShowOpt@[A](W_ShowD_A)"
+    listing `shouldSatisfy` isInfixOf "$BoolOpt@[A](W_BoolD_A)"
+
+  it "derives tuple Show from component evidence, including keyword rows" $ do
+    typed <- typecheckSource env0 "show_tuple" $ unlines
+      [ "def render[A(Show)](x: (A, label: str)) -> str:"
+      , "    return Show.__str__(x)" ]
+    let listing = Pretty.print typed
+    listing `shouldSatisfy` isInfixOf "$ShowTuple@"
+    listing `shouldSatisfy` isInfixOf "W_ShowD_A"
+    listing `shouldSatisfy` isInfixOf "ShowD_str()"
+
+  it "typechecks the native variadic evidence regression" $ do
+    src <- liftIO $ readFile "../../test/regression_auto/show_variadic_evidence.act"
+    typed <- typecheckSource env0 "show_variadic_evidence" src
+    Pretty.print typed `shouldSatisfy` isInfixOf "W_ShowD_"
+
+  it "uses root Show and Bool defaults for actor references before deactorization" $ do
+    typed <- typecheckSource env0 "show_bool_actor_defaults" $ unlines
+      [ "actor Worker():", "    pass"
+      , "def convert(x: Worker) -> (str, str, bool):"
+      , "    return (str(x), repr(x), bool(x))" ]
+    let listing = Pretty.print typed
+    listing `shouldSatisfy` isInfixOf "ShowD_value()"
+    listing `shouldSatisfy` isInfixOf "BoolD_value()"
+
+  it "infers callback receivers before selecting inherited Show evidence" $ do
+    typed <- typecheckSource env0 "show_callback_inference" $ unlines
+      [ "emit: [P(Show)] => (*P) -> None"
+      , "def emit(*args):"
+      , "    pass"
+      , ""
+      , "actor Channel():"
+      , "    def cb_install(callback: action(Channel, bytes) -> None):"
+      , "        pass"
+      , "    def write(data: bytes):"
+      , "        pass"
+      , "    def close():"
+      , "        pass"
+      , ""
+      , "actor Server(conn):"
+      , "    def on_receive(c, data):"
+      , "        emit(c, data)"
+      , "        c.write(data)"
+      , "        c.close()"
+      , ""
+      , "actor Listener():"
+      , "    def accept(c):"
+      , "        s = Server(c)"
+      , "        c.cb_install(s.on_receive)"
+      , "    proc def __startup__():"
+      , "        accept(Channel())" ]
+    Pretty.print typed `shouldSatisfy` isInfixOf "ShowD_value()"
+
+  it "carries Show evidence through inferred variadic wrappers" $ do
+    typed <- typecheckSource env0 "show_variadic_forward" $ unlines
+      [ "def render(*args) -> str:", "    return str(args)"
+      , "def forward(*args) -> str:", "    return render(*args)"
+      , "def supplied[A(Show)](x: A) -> str:", "    return forward(x, [x])" ]
+    let listing = Pretty.print typed
+    listing `shouldSatisfy` isInfixOf "W_ShowD_A"
+    listing `shouldSatisfy` (not . isInfixOf "ShowD_value()")
+    case findTypedDef "render" typed of
+      Just d -> S.qbinds d `shouldSatisfy` any (\(S.QBind v _) -> S.tvkind v == S.PRow)
+      Nothing -> expectationFailure "missing inferred variadic function"
+
+  it "preserves inferred row evidence in an imported interface" $ do
+    (iface, _, _, _) <- check "show_row_provider"
+      [ "def render(*args) -> str:", "    return str(args)" ]
+    let I.NModule imports stored doc = iface
+        entries = Data.Binary.decode (Data.Binary.encode stored)
+        env1 = Acton.Env.addMod (S.modName ["show_row_provider"]) imports entries doc env0
+    typed <- typecheckSource env1 "show_row_consumer" $ unlines
+      [ "import show_row_provider"
+      , "def forward(*args) -> str:", "    return show_row_provider.render(*args)"
+      , "def supplied[A(Show)](x: A) -> str:", "    return forward(x, [x])" ]
+    let listing = Pretty.print typed
+    listing `shouldSatisfy` isInfixOf "W_ShowD_A"
+    listing `shouldSatisfy` (not . isInfixOf "ShowD_value()")
+
+  it "matches a variadic Show signature and preserves keyword defaults" $ do
+    typed <- typecheckSource env0 "show_variadic_signature" $ unlines
+      [ "render: [P(Show)] => (*P, end: str) -> str"
+      , "def render(*args, end: str=\"done\") -> str:", "    return str(args) + end"
+      , "def forward(*args) -> str:", "    return render(*args)" ]
+    let listing = Pretty.print typed
+    listing `shouldSatisfy` isInfixOf "W_ShowD_P"
+    listing `shouldSatisfy` isInfixOf "end = \"done\""
+    listing `shouldSatisfy` (not . isInfixOf "ShowD_value()")
+
+  it "accepts supplied Show bounds on positional and keyword rows" $ do
+    typed <- typecheckSource env0 "show_open_rows" $ unlines
+      [ "def positional[P(Show)](xs: (*P)) -> str:", "    return str(xs)"
+      , "def keyword[K(Show)](xs: (**K)) -> str:", "    return repr(xs)"
+      , "def extend[P(Show)](xs: (int, *P)) -> str:", "    return str(xs)" ]
+    let listing = Pretty.print typed
+    listing `shouldSatisfy` isInfixOf "W_ShowD_P"
+    listing `shouldSatisfy` isInfixOf "W_ShowD_K"
+    listing `shouldSatisfy` (not . isInfixOf "ShowD_value()")
+
+  it "rejects a rigid row without its required Show evidence" $ do
+    result <- liftIO $ E.try $ do
+      let mn = S.modName ["show_missing_row_bound"]
+          src = "def render[P](xs: (*P)) -> str:\n    return str(xs)\n"
+      parsed <- P.parseModule mn "<show_missing_row_bound>" src Nothing
+      env <- Acton.Env.mkEnv systemTypes env0 parsed
+      kinded <- Acton.Kinds.check env parsed
+      (_, typed, _, _) <- Acton.Types.reconstruct Nothing Nothing env kinded Nothing
+      E.evaluate (rnf typed)
+    case result of
+      Left (_ :: TypeError) -> pure ()
+      Right _ -> expectationFailure "An unconstrained row must not use value's default Show witness"
+
+  it "does not require element evidence for tuple truth" $ do
+    typed <- typecheckSource env0 "bool_tuple" $ unlines
+      [ "def truth(x: ((int)->str,)) -> bool:"
+      , "    return Bool.__bool__(x)" ]
+    let listing = Pretty.print typed
+    listing `shouldSatisfy` isInfixOf "$BoolTuple@"
+    listing `shouldSatisfy` (not . isInfixOf "BoolD_value")
+
+  it "supports tuple truth with an open row and no component evidence" $ do
+    typed <- typecheckSource env0 "bool_tuple_open" $ unlines
+      [ "def truth(x: (first: int, **)) -> bool:"
+      , "    return Bool.__bool__(x)" ]
+    let listing = Pretty.print typed
+    listing `shouldSatisfy` isInfixOf "$BoolTuple@"
+    listing `shouldSatisfy` (not . isInfixOf "BoolD_value")
+
+  it "uses dedicated Show and Bool evidence for None" $ do
+    typed <- typecheckSource env0 "show_bool_none" $ unlines
+      [ "def display() -> str:", "    return Show.__str__(None)"
+      , "def truth() -> bool:", "    return Bool.__bool__(None)" ]
+    let listing = Pretty.print typed
+    listing `shouldSatisfy` isInfixOf "$wShowNone"
+    listing `shouldSatisfy` isInfixOf "$wBoolNone"
+
+  it "preserves optional and tuple types in generic Show/Bool calls" $ do
+    (_, typed, _, _) <- check "show_bool_structural_keep"
+      (keep ++ [ "def optional(x: ?int) -> ?int:", "    return keep(x)"
+               , "def tuple(x: (int, str)) -> (int, str):", "    return keep(x)" ])
+    let listing = Pretty.print typed
+    listing `shouldSatisfy` isInfixOf "keep@[?__builtin__.int]"
+    listing `shouldSatisfy` isInfixOf "keep@[(__builtin__.int, __builtin__.str)]"
+
+  it "passes supplied evidence to ordinary str, repr and bool conversion" $ do
+    typed <- typecheckSource env0 "show_bool_typed_conversions" $ unlines
+      [ "def convert[A(Show, Bool)](x: A) -> (str, str, bool):"
+      , "    return (str(x), repr(x), bool(x))" ]
+    let listing = Pretty.print typed
+    forM_ ["str@[A](W_ShowD_A", "repr@[A](W_ShowD_A", "bool@[A](W_BoolD_A"] $ \call ->
+      listing `shouldSatisfy` isInfixOf call
+    listing `shouldSatisfy` (not . isInfixOf "ShowD_value()")
+    listing `shouldSatisfy` (not . isInfixOf "BoolD_value()")
+
+  it "requires the supplied Bool evidence in generic conditions" $ do
+    typed <- typecheckSource env0 "show_bool_typed_conditions" $ unlines
+      [ "def truth[A(Bool)](x: A) -> bool:"
+      , "    if x:", "        return True", "    return False" ]
+    Pretty.print typed `shouldSatisfy` isInfixOf "if W_BoolD_A.__bool__(x):"
+
+  it "preserves the operand type of generic and/or" $ do
+    typed <- typecheckSource env0 "show_bool_typed_andor" $ unlines
+      [ "def either[A(Bool)](x: A, y: A) -> A:", "    return x or y"
+      , "def both[A(Bool)](x: A, y: A) -> A:", "    return x and y" ]
+    let listing = Pretty.print typed
+    listing `shouldSatisfy` isInfixOf "W_BoolD_A.__bool__("
+    listing `shouldSatisfy` (not . isInfixOf "BoolD_value()")
 
 -- Tests for uninitialized class attribute checking
 

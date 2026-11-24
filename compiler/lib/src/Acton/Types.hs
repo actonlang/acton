@@ -1040,7 +1040,8 @@ genEnv env cs te ds
                                              (cs,eq) <- newSimplify env te cs
                                              te <- usubst te
                                              (gen_us, gen_cs, te, eq) <- refine env cs te eq
-                                             let gen_vs = take (length gen_us) tvarSupply
+                                             -- Instantiation must distinguish row parameters from ordinary types.
+                                             let gen_vs = zipWith (\u v -> v{ tvkind = uvkind u }) gen_us tvarSupply
                                              sequence [ usubstitute uv (tVar tv) | (uv,tv) <- gen_us `zip` gen_vs ]
                                              te <- usubst te
                                              gen_cs <- usubst gen_cs
@@ -1271,7 +1272,7 @@ instance InfEnv Stmt where
                                              (cs,e') <- inferSub env t e
                                              return (cs, te, Assign l pats' e')
 
-    infEnv env (Assert l e1 e2)         = do (cs1,_,_,_,e1') <- inferTest env e1
+    infEnv env (Assert l e1 e2)         = do (cs1,_,_,_,e1') <- inferBoolTest env e1
                                              (cs2,e2') <- inferSub env tStr e2
                                              return (cs1++cs2, [], Assert l e1' e2')
     infEnv env s@(Pass l)               = return ([], [], s)
@@ -1287,7 +1288,7 @@ instance InfEnv Stmt where
                                              (cs0,te,els') <- infLiveEnv env els
                                              (cs1,te1) <- commonTEnv env $ catMaybes (te:tes)
                                              return (cs0++cs1++concat css, te1, If l bs' els')
-    infEnv env (While l e b els)        = do (cs1,env',s,_,e') <- inferTest env e
+    infEnv env (While l e b els)        = do (cs1,env',s,_,e') <- inferBoolTest env e
                                              (cs2,te1,b') <- infSuiteEnv env' b
                                              (cs3,te2,els') <- infSuiteEnv env els
                                              return (cs1++cs2++cs3, [], While l e' (termsubst s b') els')
@@ -1538,7 +1539,12 @@ instance InfEnv Decl where
                                              NSig sc dec _ | t@TFun{} <- sctype sc, matchingDec n sc dec dec' -> do
                                                  --traceM ("\n## infEnv (sig) def " ++ prstr (n, NDef sc dec Nothing))
                                                  when (inClass env) $ lockSelf env l p k dec
-                                                 return ([], [(n, NDef (fxUnwrapSc env sc) dec ddoc)], d{deco = dec})
+                                                 -- A function-type signature has no default expressions.
+                                                 -- Publish the declaration's defaults as we do for an
+                                                 -- unsigned definition, before checking later callers.
+                                                 let [(_, NDef sc0 _ _)] = refreshDefaults [(n, NDef sc dec ddoc)] (sDecl [d])
+                                                 t0 <- deferDefaultExpansions (sctype sc0)
+                                                 return ([], [(n, NDef (fxUnwrapSc env sc0{ sctype = t0 }) dec ddoc)], d{deco = dec})
                                              NReserved -> do
                                                  when (inClass env) $ lockSelf env l p k dec'
                                                  t0 <- tFun (fxUnwrap env fx) (prowOf p) (krowOf k) <$> maybe (newUnivar env) return a
@@ -1733,7 +1739,11 @@ checkClassAttributesInitialized className classLoc env ancestors b
                                                              calledParentInits = getCalledParentInits env initBody
                                                              -- Get attributes initialized by called parent __init__ methods
                                                              parentInitialized = nub $ concatMap (getInitializedByParent env) calledParentInits
-                                                             uninitialized = expected \\ (initialized ++ parentInitialized)
+                                                             -- The exception allocator initializes this metadata
+                                                             -- before invoking any user constructor.
+                                                             runtimeInitialized = [name "_exception_show" |
+                                                                 any ((== qnBaseException) . unalias env . tcname . snd) ancestors]
+                                                             uninitialized = expected \\ (initialized ++ parentInitialized ++ runtimeInitialized)
 
                                                          forM_ uninitialized $ \prop ->
                                                              let parentInfo = findAttributeParent prop
@@ -2576,7 +2586,7 @@ noDefaultsK k                           = k
 --------------------------------------------------------------------------------------------------------------------------
 
 instance InfEnv Branch where
-    infEnv env (Branch e b)             = do (cs1,env',s,_,e') <- inferTest env e
+    infEnv env (Branch e b)             = do (cs1,env',s,_,e') <- inferBoolTest env e
                                              (cs2,te,b') <- infEnv env' b
                                              return (cs1++cs2, te, Branch e' (termsubst s b'))
 
@@ -2685,11 +2695,15 @@ instance Infer Expr where
                                              w <- newWitness
                                              return (Proto (locinfo2 77 e) env w t (pISliceable t0) :
                                                      cs1++cs2, t, eCall (eDot (eVar w) getsliceKW) [e', sliz2exp sl'])
-    infer env (Raise l e _)             = do (cs,e') <- inferSub env tException e
+    infer env (Raise l e _)             = do (cs,exceptionType,e') <- infer env e
+                                             w <- newWitness
                                              t <- newUnivar env
-                                             return (cs, t, Raise l e' t)
+                                             let rendered = annot (proto2type exceptionType pShow) (eVar w) exceptionType e'
+                                             return (Cast (locinfo2 32 e) env exceptionType tException :
+                                                     Proto (locinfo2 32 e) env w exceptionType pShow : cs,
+                                                     t, Raise l rendered t)
     infer env (Cond l e1 e e2)          = do t0 <- newUnivar env
-                                             (cs0,env',s,_,e') <- inferTest env e
+                                             (cs0,env',s,_,e') <- inferBoolTest env e
                                              (cs1,e1') <- inferSub env' t0 e1
                                              (cs2,e2') <- inferSub env t0 e2
                                              return (cs0++cs1++cs2, t0, Cond l (termsubst s e1') e' e2')
@@ -2782,7 +2796,7 @@ instance Infer Expr where
             rtype ShiftR t              = tInt
             rtype _ t                   = t
     infer env (UnOp l op e)
-      | op == Not                       = do (cs,_,_,_,e') <- inferTest env e
+      | op == Not                       = do (cs,_,_,_,e') <- inferBoolTest env e
                                              return (cs, tBool, UnOp l op e')
       | otherwise                       = do (cs,t,e') <- infer env e
                                              w <- newWitness
@@ -3046,21 +3060,34 @@ infAssocs env (StarStar e : as) tk tv   = do t1 <- newUnivar env
                                                      cs1++cs2, StarStar e' : as')
 
 
-inferTest env (BinOp l e1 And e2)       = do (cs1,env1,s1,t1,e1') <- inferTest env e1
-                                             (cs2,env2,s2,t2,e2') <- inferTest env1 e2
-                                             t <- newUnivar env
+-- In a value context, and/or return an operand. Bind the left operand once
+-- before testing it, and leave the right operand inside the selected branch.
+-- Conditions use inferBoolTest instead, avoiding a second truth call on the
+-- selected operand and retaining the usual narrowing across an and expression.
+inferTest env (BinOp l e1 op e2)
+  | op `elem` [And,Or]                  = do (cs1,env1,s1,t1,e1') <- inferTest env e1
+                                             let rightEnv = if op == And then env1 else env
+                                             (cs2,env2,s2,t2,e2') <- inferTest rightEnv e2
+                                             -- Retain a known common type, particularly a rigid
+                                             -- type parameter: widening it to its class bound
+                                             -- would lose the operand type in a generic helper.
+                                             t <- if t1 == t2 || (op == Or && t1 == tOpt t2)
+                                                    then return t2 else newUnivar env
                                              w1 <- newWitness
                                              w2 <- newWitness
-                                             return (Sub (locinfo' l 91 e1) env w1 t1 t : Sub (locinfo' l 92 e2) env w2 t2 t :
-                                                     cs1++cs2, env2, s1++s2, t, BinOp l (eCall (eVar w1) [e1']) And (eCall (eVar w2) [termsubst s1 e2']))
-inferTest env (BinOp l e1 Or e2)        = do (cs1,_,_,t1,e1') <- inferTest env e1
-                                             (cs2,_,_,t2,e2') <- inferTest env e2
-                                             t <- newUnivar env
-                                             w1 <- newWitness
-                                             w2 <- newWitness
-                                             return (Sub (locinfo2 93 e1) env w1 t1 (tOpt t) : Sub (locinfo2 94 e2) env w2 t2 t :
-                                                     cs1++cs2, env, [], t, BinOp l (eCall (eVar w1) [e1']) Or (eCall (eVar w2) [e2']))
-inferTest env (UnOp l Not e)            = do (cs,_,_,_,e') <- inferTest env e
+                                             n <- newTmp
+                                             resultName <- newTmp
+                                             (cs3,test) <- truthEvidence env e1 t1 (eVar n)
+                                             let leftType = if op == Or then tOpt t else t
+                                                 left0 = eCall (eVar w1) [eVar n]
+                                                 left = if op == Or then eCAST leftType t left0 else left0
+                                                 right = eCall (eVar w2) [if op == And then termsubst s1 e2' else e2']
+                                                 result = if op == And then Cond l right test left else Cond l left test right
+                                                 body = eLet [sAssign (pVar n t1) e1', sAssign (pVar resultName t) result] (eVar resultName)
+                                                 (outEnv,outSubst) = if op == And then (env2,s1++s2) else (env,[])
+                                             return (Sub (locinfo2 91 e1) env w1 t1 leftType : Sub (locinfo2 92 e2) env w2 t2 t :
+                                                     cs1++cs2++cs3, outEnv, outSubst, t, body)
+inferTest env (UnOp l Not e)            = do (cs,_,_,_,e') <- inferBoolTest env e
                                              return (cs, env, [], tBool, UnOp l Not e')
 inferTest env (CompOp l e [OpArg IsNot None{}])
                                         = do t <- newUnivar env
@@ -3087,6 +3114,32 @@ inferTest env (Paren l e)               = do (cs,env',s,t,e') <- inferTest env e
                                              return (cs, env', s, t, Paren l e')
 inferTest env e                         = do (cs,t,e') <- infer env e
                                              return (cs, env, [], t, e')
+
+
+-- Truth is a protocol requirement, not an unchecked method inserted by the
+-- normalizer. Keep boolean contexts separate from operand-valued and/or.
+inferBoolTest env (BinOp l e1 And e2)   = do (cs1,env1,s1,_,e1') <- inferBoolTest env e1
+                                             (cs2,env2,s2,_,e2') <- inferBoolTest env1 e2
+                                             return (cs1++cs2, env2, s1++s2, tBool, BinOp l e1' And (termsubst s1 e2'))
+inferBoolTest env (BinOp l e1 Or e2)    = do (cs1,_,_,_,e1') <- inferBoolTest env e1
+                                             (cs2,_,_,_,e2') <- inferBoolTest env e2
+                                             return (cs1++cs2, env, [], tBool, BinOp l e1' Or e2')
+inferBoolTest env (UnOp l Not e)        = do (cs,_,_,_,e') <- inferBoolTest env e
+                                             return (cs, env, [], tBool, UnOp l Not e')
+inferBoolTest env (Paren l e)           = do (cs,env',s,t,e') <- inferBoolTest env e
+                                             return (cs, env', s, t, Paren l e')
+inferBoolTest env e                     = do (cs,env',s,t,e') <- inferTest env e
+                                             (cs1,test) <- truthEvidence env e t e'
+                                             return (cs++cs1, env', s, tBool, test)
+
+-- Evidence is selected for the static operand type before converting operands
+-- to a common result type for and/or. An operand already widened to
+-- value uses Bool[value]'s default; it does not redispatch on its runtime class.
+truthEvidence env original t e
+  | t == tBool                         = return ([],e)
+  | otherwise                           = do w <- newWitness
+                                             return ([Proto (locinfo2 91 original) env w t pBoolProtocol],
+                                                     eCall (eDot (eVar w) boolKW) [e])
 
 
 sCast n t t'                            = [(n, eCAST t t' (eVar n))]
@@ -3172,7 +3225,7 @@ instance Infer KwdArg where
 
 
 infComp env NoComp                      = return ([], env, [], NoComp)
-infComp env (CompIf l e c)              = do (cs1,env1,s,_,e') <- inferTest env e
+infComp env (CompIf l e c)              = do (cs1,env1,s,_,e') <- inferBoolTest env e
                                              (cs2,env2,s',c') <- infComp env1 c
                                              return (cs1++cs2, env2, s++s', CompIf l e' (termsubst s c'))
 infComp env (CompFor l p e c)           = do (te1,t1,p') <- infEnvT (reserve (bound p) env) p

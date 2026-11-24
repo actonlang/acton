@@ -180,7 +180,7 @@ class Sink(logging.Sink):
         if text is not None:
             data = m.data
             if data is not None:
-                text += " - " + str(data)
+                text += " - " + logging.format_data(data)
             app_name = self.app_name
             if app_name is None and len(m.path) > (1 if m.name is not None else 0):
                 candidate = m.path[0]

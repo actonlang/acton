@@ -69,6 +69,7 @@ library:
     - Acton.Boxing
     - Acton.BuildSpec
     - Acton.Builtin
+    - Acton.BuiltinCalls
     - Acton.CPS
     - Acton.CodeGen
     - Acton.Completion

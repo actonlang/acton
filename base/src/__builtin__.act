@@ -11,16 +11,17 @@
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 
+protocol Show:
+    __str__: () -> str
+    __repr__: () -> str
+
+protocol Bool:
+    __bool__: () -> bool
+
 ## Built-in types ##################################################################################
 
 class value:
     __init__ : () -> None
-    def __bool__(self) -> bool:
-        NotImplemented
-    def __str__(self) -> str:
-        NotImplemented
-    def __repr__(self) -> str:
-        NotImplemented
 
 class object (value):
     pass
@@ -73,7 +74,7 @@ class float (atom):
         NotImplemented
 
 class bool (atom):
-    def __init__(self, val: value) -> None:
+    def __init__[A(Bool)](self, val: A) -> None:
         NotImplemented
 
 class slice(value):
@@ -99,7 +100,7 @@ class list[A] (object):
     # generic type B should really just be A(Eq), but I don't think we can say
     # that A is a generic type without constraints in one place and then adds
     # constraints in another, so using B is a bit of a workaround.
-    def index[B(Eq)](self, val: B, start: int=0, stop: ?int=None) -> int:
+    def index[B(Eq,Show)](self, val: B, start: int=0, stop: ?int=None) -> int:
         """Return the index of the first occurrence of val in the list
 
         The optional arguments start and stop are interpreted as in slice
@@ -147,7 +148,7 @@ class range(Iterator[int]):
         NotImplemented
 
 class str (atom):
-    def __init__     (self, val: ?value=None) -> None:
+    def __init__[A(Show)](self, val: ?A=None) -> None:
         NotImplemented
     def capitalize   (self) -> str:
         NotImplemented
@@ -380,14 +381,14 @@ class Msg[A] (value):
 # constructor, which can be used to override the default message.
 class BaseException (value):
     error_message: str
+    # Compiler/runtime metadata: retain the first raise's Show evidence through
+    # erased catches, reraises, serialization, and asynchronous propagation.
+    @property
+    _exception_show: ?value
     def __init__(self, msg: ?str=None) -> None:
         self.error_message = msg if msg is not None else ""
+        self._exception_show = None
 
-    def __str__(self):
-        return f"{self._name()}: {self.error_message}"
-
-    def __repr__(self):
-        return "{self._name()}({self.error_message.__repr__()})"
 
     def _name(self) -> str:
         NotImplemented
@@ -415,22 +416,19 @@ class IndexError (LookupError):
         self.index = index
         self.error_message = msg if msg is not None else "List index out of range"
 
-    def __str__(self):
-        return f"{self._name()}: {self.error_message}, index: {self.index}"
-
-    def __repr__(self):
-        return "{self._name()}({self.index}, {self.error_message.__repr__()})"
 
 class KeyError(LookupError):
-    def __init__(self, key: value, msg: ?str=None):
+    @property
+    key: value
+    @property
+    _key_render: (bool) -> str
+    def __init__[A(Show)](self, key: A, msg: ?str=None):
         self.key = key
         self.error_message = msg if msg is not None else "Key not found"
+        # Keep the original key and its Show policy together. Rendering stays
+        # lazy, including after serialization, and sees changes to that object.
+        self._key_render = lambda representation: Show.__repr__(key) if representation else Show.__str__(key)
 
-    def __str__(self):
-        return f"{self._name()}: {self.error_message}, key: {str(self.key)}"
-
-    def __repr__(self):
-        return '{self._name()}({self.key.__repr__()}, {self.error_message.__repr__()})'
 
 class MemoryError (Exception):
     pass
@@ -443,11 +441,6 @@ class FileNotFoundError (OSError):
         self.error_message = ""
         self.filename = filename
 
-    def __str__(self):
-        return f"{self._name()}: No such file or directory: '{self.filename}'"
-
-    def __repr__(self):
-        return '{self._name()}({self.filename.__repr__()})'
 
 class RuntimeError (Exception):
     pass
@@ -739,6 +732,174 @@ protocol Integral (Rational,Logical):
 
     __invert__   : () -> Self
 
+# Root defaults are ordinary extensions, inherited by subclasses. More
+# specific builtin and user extensions override them through normal resolution.
+extension value (Show):
+    NotImplemented
+extension value (Bool):
+    NotImplemented
+extension object (Show):
+    NotImplemented
+extension object (Bool):
+    NotImplemented
+
+## Builtin Show and Bool implementations ############################################################
+
+# Container Show witnesses retain the formatting witnesses of their elements;
+# Bool only tests the container itself and adds no Show constraints.
+extension int (Show):
+    NotImplemented
+extension int (Bool):
+    NotImplemented
+
+extension i32 (Show):
+    NotImplemented
+extension i32 (Bool):
+    NotImplemented
+
+extension i16 (Show):
+    NotImplemented
+extension i16 (Bool):
+    NotImplemented
+
+extension i8 (Show):
+    NotImplemented
+extension i8 (Bool):
+    NotImplemented
+
+extension u64 (Show):
+    NotImplemented
+extension u64 (Bool):
+    NotImplemented
+
+extension u32 (Show):
+    NotImplemented
+extension u32 (Bool):
+    NotImplemented
+
+extension u16 (Show):
+    NotImplemented
+extension u16 (Bool):
+    NotImplemented
+
+extension u8 (Show):
+    NotImplemented
+extension u8 (Bool):
+    NotImplemented
+
+extension u1 (Show):
+    NotImplemented
+extension u1 (Bool):
+    NotImplemented
+
+extension bigint (Show):
+    NotImplemented
+extension bigint (Bool):
+    NotImplemented
+
+extension float (Show):
+    NotImplemented
+extension float (Bool):
+    NotImplemented
+
+extension bool (Show):
+    NotImplemented
+extension bool (Bool):
+    NotImplemented
+
+extension complex (Show):
+    NotImplemented
+extension complex (Bool):
+    NotImplemented
+
+extension slice (Show):
+    NotImplemented
+extension slice (Bool):
+    NotImplemented
+
+extension range (Show):
+    NotImplemented
+extension range (Bool):
+    NotImplemented
+
+extension hasher (Show):
+    NotImplemented
+extension hasher (Bool):
+    NotImplemented
+
+extension bitarray (Show):
+    NotImplemented
+extension bitarray (Bool):
+    NotImplemented
+
+extension bitset (Show):
+    NotImplemented
+extension bitset (Bool):
+    NotImplemented
+
+extension str (Show):
+    NotImplemented
+extension str (Bool):
+    NotImplemented
+
+extension bytes (Show):
+    NotImplemented
+extension bytes (Bool):
+    NotImplemented
+
+extension bytearray (Show):
+    NotImplemented
+extension bytearray (Bool):
+    NotImplemented
+
+extension list[A(Show)] (Show):
+    NotImplemented
+extension list[A] (Bool):
+    NotImplemented
+
+extension ilist[A(Show)] (Show):
+    NotImplemented
+extension ilist[A] (Bool):
+    NotImplemented
+
+extension array[A(ArrayElement,Show)] (Show):
+    NotImplemented
+extension array[A(ArrayElement)] (Bool):
+    NotImplemented
+
+extension dict[A(Hashable,Show),B(Show)] (Show):
+    NotImplemented
+extension dict[A(Hashable),B] (Bool):
+    NotImplemented
+
+extension idict[A(Hashable,Show),B(Show)] (Show):
+    NotImplemented
+extension idict[A(Hashable),B] (Bool):
+    NotImplemented
+
+extension set[A(Hashable,Show)] (Show):
+    NotImplemented
+extension set[A(Hashable)] (Bool):
+    NotImplemented
+
+extension iset[A(Hashable,Show)] (Show):
+    NotImplemented
+extension iset[A(Hashable)] (Bool):
+    NotImplemented
+
+# Native formatters keep these statically allocated witnesses stateless.
+# In particular, they do not capture compiler-generated formatting evidence.
+extension BaseException (Show):
+    NotImplemented
+extension Exception (Show):
+    NotImplemented
+extension IndexError (Show):
+    NotImplemented
+extension KeyError (Show):
+    NotImplemented
+extension FileNotFoundError (Show):
+    NotImplemented
+
 ## Number protocol extensions ######################################################################
 
 #extension bool (Eq): pass
@@ -861,13 +1022,13 @@ extension complex (Hashable):
 
 ## Collection protocols ############################################################################
 
-protocol IIndexed[A (Eq),B]:
+protocol IIndexed[A (Eq,Show),B]:
     __getitem__  : (A) -> B
 
-protocol MutIndexed[A (Eq),B] (IIndexed[A,B]):
+protocol MutIndexed[A (Eq,Show),B] (IIndexed[A,B]):
     __setitem__  : mut(A,B) -> None
 
-protocol Indexed[A (Eq),B] (MutIndexed[A,B]):
+protocol Indexed[A (Eq,Show),B] (MutIndexed[A,B]):
     __delitem__  : mut(A) -> None
 
 protocol ISliceable[A] (IIndexed[int,A]):
@@ -885,7 +1046,6 @@ protocol Collection[A] (Iterable[A]):
 protocol Container[A(Eq)] (Collection[A]):
     __contains__    : (A) -> bool
     __containsnot__ : (A) -> bool
-
 
 
 #   IIndexed               Iterable       Plus
@@ -911,7 +1071,6 @@ protocol Sequence[A] (ISequence[A], Sliceable[A]):
     reverse     : mut() -> None
 
 
-
 #   Iterable
 #    |
 #    |
@@ -926,14 +1085,14 @@ protocol Sequence[A] (ISequence[A], Sliceable[A]):
 #    |                         |
 #   Mapping <-------------------
 
-protocol IMapping[A(Eq),B] (Container[A], IIndexed[A,B]):
+protocol IMapping[A(Eq,Show),B] (Container[A], IIndexed[A,B]):
     get         : (A) -> ?B
     get_def     : (A,B) -> B
     keys        : () -> Iterator[A]
     values      : () -> Iterator[B]
     items       : () -> Iterator[(A,B)]
 
-protocol Mapping[A(Eq), B] (IMapping[A,B], Indexed[A,B]):
+protocol Mapping[A(Eq,Show), B] (IMapping[A,B], Indexed[A,B]):
     pop         : mut(A) -> ?B
     pop_def     : mut(A,B) -> B
     update      : mut(Iterable[(A,B)]) -> None
@@ -976,7 +1135,6 @@ protocol ISet[A (Eq)] (Container[A], Ord, Logical, Minus):
         return a - b
     def symmetric_difference(a,b):
         return a ^ b
-
 
 
 protocol Set[A (Eq)] (ISet[A]):
@@ -1084,14 +1242,14 @@ extension ilist[A(Eq)] (Eq):
 extension ilist[A(Ord)] (Ord):
     NotImplemented
 
-extension dict[A(Hashable),B] (Mapping[A,B]):
+extension dict[A(Hashable,Show),B] (Mapping[A,B]):
     NotImplemented
 extension dict[A(Hashable),B(Eq)] (Ord):
     NotImplemented
 extension dict[A(Hashable),B] (Freeze[idict[A,B]]):
     NotImplemented
 
-extension idict[A(Hashable),B] (IMapping[A,B]):
+extension idict[A(Hashable,Show),B] (IMapping[A,B]):
     NotImplemented
 extension idict[A(Hashable),B(Eq)] (Ord):
     NotImplemented
@@ -1183,19 +1341,19 @@ _stdin_bytes_on_error_error = ValueError("on_error must not be set when on_stdin
 def abs(x : Number) -> Real:
     return x.__abs__()
 
-def all[A(value)](it: Iterable[A]) -> bool:
+def all[A(Bool)](it: Iterable[A]) -> bool:
     for x in it:
         if bool(x) == False:
             return False
     return True
 
-def any[A(value)](it: Iterable[A]) -> bool:
+def any[A(Bool)](it: Iterable[A]) -> bool:
     for x in it:
         if bool(x) == True:
             return True
     return False
 
-def ascii(x : value) -> str:
+def ascii[A(Show)](x: A) -> str:
     NotImplemented
 
 def bin(x: Integral) -> str:
@@ -1368,6 +1526,8 @@ def ord(c: str) -> int:
 def pow [A(Number)] (a : A, b : A) -> A:
     return Number.__pow__(a,b)
 
+# Show on the positional row carries one renderer for each argument.
+print: [P(Show)] => (*P, sep: str, end: str, err: bool, flush: bool) -> None
 def print(*args, sep: str=" ", end: str="\n", err: bool=False, flush: bool=False) -> None:
     """Prints values
 
@@ -1382,10 +1542,8 @@ def print(*args, sep: str=" ", end: str="\n", err: bool=False, flush: bool=False
     """
     NotImplemented
 
-def repr(x: ?value):
-    if x is not None:
-        return x.__repr__()
-    return str(None)
+def repr[A(Show)](x: A) -> str:
+    return Show.__repr__(x)
 
 def reversed[A](seq : Sequence[A]) -> Iterator[A]:
     return seq.__reversed__()

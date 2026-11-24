@@ -103,13 +103,13 @@ static bool B_list_base_bool(B_list_base self) {
     return self->length > 0;
 }
 
-static B_str B_list_base_str(B_list_base self) {
+B_str B_list_base_str(B_list_base self, B_Show show) {
     B_list parts = B_listD_new(self->length);
     for (int i = 0; i < self->length; i++) {
         B_value elem = (B_value)self->data[i];
         // __repr__ allocates, and the array of parts is reached through
         // parts, so each store has a barrier.
-        B_str r = elem == B_None ? B_None_str : elem->$class->__repr__(elem);
+        B_str r = show->$class->__repr__(show, elem);
         $WORD *data = parts->data;
         ACTON_STORE_ELEM(data, parts->length, r);
         parts->length++;
@@ -208,7 +208,7 @@ static $WORD B_list_base_pop(B_list_base lst, B_int i) {
     return res;
 }
 
-static int64_t B_list_base_index(B_list_base self, B_Eq eqwit, $WORD val, int64_t start, B_int stop) {
+static int64_t B_list_base_index(B_list_base self, B_Eq eqwit, B_Show showwit, $WORD val, int64_t start, B_int stop) {
     int64_t strt = start;
     if (strt < 0)
         RAISE_EXC(&B_list_negative_start_error);
@@ -226,7 +226,7 @@ static int64_t B_list_base_index(B_list_base self, B_Eq eqwit, $WORD val, int64_
         if (eqwit->$class->__eq__(eqwit, val, self->data[i]))
             return i;
     }
-    RAISE(B_KeyError, val, actStrFromCString("element is not in list"));
+    RAISE(B_KeyError, showwit, val, actStrFromCString("element is not in list"));
     return 0;
 }
 
@@ -465,16 +465,8 @@ B_NoneType B_listD___init__(B_list self, B_Iterable wit, $WORD iterable) {
     return B_list_base_init((B_list_base)self, wit, iterable);
 }
 
-bool B_listD___bool__(B_list self) {
+bool B_list_bool(B_list self) {
     return B_list_base_bool((B_list_base)self);
-}
-
-B_str B_listD___str__(B_list self) {
-    return B_list_base_str((B_list_base)self);
-}
-
-B_str B_listD___repr__(B_list self) {
-    return B_listD___str__(self);
 }
 
 void B_listD___serialize__(B_list self, $Serial$state state) {
@@ -501,8 +493,8 @@ $WORD B_listD_pop(B_list self, B_int i) {
     return B_list_base_pop((B_list_base)self, i);
 }
 
-int64_t B_listD_index(B_list self, B_Eq eqwit, $WORD val, int64_t start, B_int stop) {
-    return B_list_base_index((B_list_base)self, eqwit, val, start, stop);
+int64_t B_listD_index(B_list self, B_Eq eqwit, B_Show showwit, $WORD val, int64_t start, B_int stop) {
+    return B_list_base_index((B_list_base)self, eqwit, showwit, val, start, stop);
 }
 
 int64_t B_listD_count(B_list self, B_Eq eqwit, $WORD val) {
@@ -525,17 +517,8 @@ B_NoneType B_ilistD___init__(B_ilist self, B_Iterable wit, $WORD iterable) {
     return B_list_base_init((B_list_base)self, wit, iterable);
 }
 
-bool B_ilistD___bool__(B_ilist self) {
+bool B_ilist_bool(B_ilist self) {
     return B_list_base_bool((B_list_base)self);
-}
-
-B_str B_ilistD___str__(B_ilist self) {
-    B_str contents = B_list_base_str((B_list_base)self);
-    return $FORMAT("ilist(%s)", contents->str);
-}
-
-B_str B_ilistD___repr__(B_ilist self) {
-    return B_ilistD___str__(self);
 }
 
 void B_ilistD___serialize__(B_ilist self, $Serial$state state) {
@@ -619,8 +602,7 @@ B_IteratorD_list B_IteratorD_list$_deserialize(B_IteratorD_list self, $Serial$st
 
 struct B_IteratorD_listG_class B_IteratorD_listG_methods = {
     "B_IteratorD_list", UNASSIGNED, ($SuperG_class)&B_IteratorG_methods,
-    B_IteratorD_listD_init, B_IteratorD_listD_serialize, B_IteratorD_list$_deserialize,
-    B_IteratorD_listD_bool, B_IteratorD_listD_str, B_IteratorD_listD_str, B_IteratorD_listD_next
+    B_IteratorD_listD_init, B_IteratorD_listD_serialize, B_IteratorD_list$_deserialize, B_IteratorD_listD_next
 };
 
 // Sequence[list] wrappers /////////////////////////////////////////////////////////////////////////
@@ -797,10 +779,7 @@ struct B_SequenceD_listG_class B_SequenceD_listG_methods = {
     ($SuperG_class)&B_SequenceG_methods,
     NULL, // B_SequenceD_listD___init__
     NULL, // B_SequenceD_listD___serialize__
-    NULL, // B_SequenceD_listD___deserialize__
-    (bool (*)(B_SequenceD_list))$default__bool__,
-    (B_str (*)(B_SequenceD_list))$default__str__,
-    (B_str (*)(B_SequenceD_list))$default__str__,
+    NULL,
     B_SequenceD_listD___getitem__,
     B_SequenceD_listD___getslice__,
     B_SequenceD_listD___reversed__,
@@ -808,3 +787,30 @@ struct B_SequenceD_listG_class B_SequenceD_listG_methods = {
     B_SequenceD_listD_append,
     B_SequenceD_listD_reverse
 };
+
+B_DEFINE_BOOL(list)
+B_DEFINE_BOOL(ilist)
+
+
+
+B_str B_ShowD_listD___str__(B_ShowD_list witness, B_list self) {
+    return B_list_base_str((B_list_base)self, witness->W_ShowD_AD_ShowD_list);
+}
+
+B_str B_ShowD_listD___repr__(B_ShowD_list witness, B_list self) {
+    return B_list_base_str((B_list_base)self, witness->W_ShowD_AD_ShowD_list);
+}
+
+B_str B_ilist_str(B_ilist self, B_Show elements) {
+    B_str contents = B_list_base_str((B_list_base)self, elements);
+    return $FORMAT("ilist(%s)", contents->str);
+}
+
+
+B_str B_ShowD_ilistD___str__(B_ShowD_ilist witness, B_ilist self) {
+    return B_ilist_str(self, witness->W_ShowD_AD_ShowD_ilist);
+}
+
+B_str B_ShowD_ilistD___repr__(B_ShowD_ilist witness, B_ilist self) {
+    return B_ilist_str(self, witness->W_ShowD_AD_ShowD_ilist);
+}

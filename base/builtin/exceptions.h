@@ -33,6 +33,10 @@ struct JumpBuf {
 };
 
 _Noreturn B_value $RAISE(B_BaseException e);
+B_BaseException $exceptionShow(B_Show, B_BaseException);
+B_str B_exception_str(B_BaseException);
+B_str B_exception_repr(B_BaseException);
+extern struct B_ShowD_BaseException B_ShowD_BaseExceptionG_instance;
 JumpBuf $PUSH_BUF(JumpBuf frame);
 void $DROP();
 B_BaseException $POP();
@@ -46,6 +50,7 @@ B_BaseException $POP();
 // separately constructed exceptions.
 #define STATIC_EXCEPTION($T, msg) { \
     .$class = &$T ## G_methods, \
+    ._exception_show = (B_value)&B_ShowD_BaseExceptionG_instance, \
     .error_message = &(struct B_str){ \
         &B_strG_methods, sizeof("" msg) - 1, sizeof("" msg) - 1, (unsigned char *)("" msg) \
     } \
@@ -148,13 +153,11 @@ struct $SEQG_class {
     B_NoneType (*__init__) ($SEQ);
     void (*__serialize__) ($SEQ, $Serial$state);
     $SEQ (*__deserialize__) ($SEQ, $Serial$state);
-    bool (*__bool__) ($SEQ);
-    B_str (*__str__) ($SEQ);
-    B_str (*__repr__) ($SEQ);
 };
 struct $SEQ {
     struct $SEQG_class *$class;
     B_str error_message;
+    _Atomic(B_value) _exception_show;
 };
 struct $BRKG_class {
     char *$GCINFO;
@@ -163,13 +166,11 @@ struct $BRKG_class {
     B_NoneType (*__init__) ($BRK);
     void (*__serialize__) ($BRK, $Serial$state);
     $BRK (*__deserialize__) ($BRK, $Serial$state);
-    bool (*__bool__) ($BRK);
-    B_str (*__str__) ($BRK);
-    B_str (*__repr__) ($BRK);
 };
 struct $BRK {
     struct $BRKG_class *$class;
     B_str error_message;
+    _Atomic(B_value) _exception_show;
 };
 struct $CNTG_class {
     char *$GCINFO;
@@ -178,13 +179,11 @@ struct $CNTG_class {
     B_NoneType (*__init__) ($CNT);
     void (*__serialize__) ($CNT, $Serial$state);
     $CNT (*__deserialize__) ($CNT, $Serial$state);
-    bool (*__bool__) ($CNT);
-    B_str (*__str__) ($CNT);
-    B_str (*__repr__) ($CNT);
 };
 struct $CNT {
     struct $CNTG_class *$class;
     B_str error_message;
+    _Atomic(B_value) _exception_show;
 };
 struct $RETG_class {
     char *$GCINFO;
@@ -193,13 +192,11 @@ struct $RETG_class {
     B_NoneType (*__init__) ($RET, B_value);
     void (*__serialize__) ($RET, $Serial$state);
     $RET (*__deserialize__) ($RET, $Serial$state);
-    bool (*__bool__) ($RET);
-    B_str (*__str__) ($RET);
-    B_str (*__repr__) ($RET);
 };
 struct $RET {
     struct $RETG_class *$class;
     B_str error_message;
+    _Atomic(B_value) _exception_show;
     B_value val;
 };
 
@@ -215,3 +212,13 @@ $RET $RETG_new(B_value);
 
 $WORD $raiseValueError(B_str str);
  
+
+// Witness-free native exception formatters.
+B_str B_BaseException_str(B_BaseException self);
+B_str B_BaseException_repr(B_BaseException self);
+B_str B_IndexError_str(B_IndexError self);
+B_str B_IndexError_repr(B_IndexError self);
+B_str B_KeyError_str(B_KeyError self);
+B_str B_KeyError_repr(B_KeyError self);
+B_str B_FileNotFoundError_str(B_FileNotFoundError self);
+B_str B_FileNotFoundError_repr(B_FileNotFoundError self);

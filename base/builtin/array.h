@@ -22,9 +22,6 @@ struct B_IteratorD_arrayG_class {
     void (*__init__)(B_IteratorD_array, B_array);
     void (*__serialize__)(B_IteratorD_array, $Serial$state);
     B_IteratorD_array (*__deserialize__)(B_IteratorD_array, $Serial$state);
-    bool (*__bool__)(B_IteratorD_array);
-    B_str (*__str__)(B_IteratorD_array);
-    B_str (*__repr__)(B_IteratorD_array);
     bool (*__next__)(B_IteratorD_array, $WORD *);
 };
 
@@ -52,6 +49,7 @@ B_NoneType $arrayD_U__setitem_float(B_array self, int64_t index, double value);
 int64_t $arrayD_U__len(B_array self);
 
 // Concrete inherited-method symbols required by C-defined builtin classes.
-bool B_arrayD___bool__(B_array self);
-B_str B_arrayD___str__(B_array self);
-B_str B_arrayD___repr__(B_array self);
+
+// Formatting uses the element Show witnesses, independently of stored hashing.
+bool B_array_bool(B_array self);
+B_str B_array_str(B_array self, B_Show elements);

@@ -20,9 +20,12 @@ import Acton.NameInfo
 import Acton.Env
 import Acton.QuickType
 import Acton.Prim
+import Acton.BuiltinCalls
 import Acton.Builtin
 import Acton.Transform (termsubst)
 import Data.List
+import qualified Data.Set as Set
+import qualified Data.Map.Strict as Map
 import Pretty
 import Utils
 import Control.Monad.State.Strict
@@ -30,7 +33,7 @@ import Debug.Trace
 
 normalize                           :: Env0 -> Module -> IO (Module, Env0)
 normalize env0 m                    = return (evalState (norm env m) (0,[]), env0')
-  where env                         = normEnv env0
+  where env                         = modX (normEnv env0) $ \x -> x{ builtinBoolWitnessesX = builtinBoolWitnesses m }
         env0'                       = convertModules (const []) (convEnv env) env0
 
 
@@ -70,7 +73,9 @@ data NormX                          = NormX {
                                         capturedLocalsX :: [Name],
                                         lambdavarsX :: PosPar,
                                         classattrsX :: [Name],
-                                        selfparamX :: Maybe Name
+                                        selfparamX :: Maybe Name,
+                                        builtinBoolWitnessesX :: Set.Set Name,
+                                        raiseWitnessesX :: Map.Map Name Expr
                                       }
 
 data ContextMark                    = DROP | LOOP | FINAL deriving (Eq,Show)
@@ -86,15 +91,59 @@ setRet t env                        = modX env $ \x -> x{ rtypeX = t }
 getRet env                          = fromJust $ rtypeX $ envX env
 
 enterFunctionScope ns env          = modX env $ \x -> x{ localScopeX = True,
-                                                          capturedLocalsX = nub (ns ++ capturedLocalsX x) }
+                                                          capturedLocalsX = nub (ns ++ capturedLocalsX x),
+                                                          raiseWitnessesX = shadowRaiseWitnesses ns (raiseWitnessesX x) }
 
 enterActorScope ns env             = modX env $ \x -> x{ localScopeX = True,
-                                                          capturedLocalsX = nub (ns ++ capturedLocalsX x) }
+                                                          capturedLocalsX = nub (ns ++ capturedLocalsX x),
+                                                          raiseWitnessesX = shadowRaiseWitnesses ns (raiseWitnessesX x) }
+
+-- A captured recipe must keep referring to its original evidence when a
+-- nested generic function or actor introduces parameters with the same name.
+shadowRaiseWitnesses ns            = Map.filterWithKey (\n e -> n `notElem` ns && null (free e `intersect` ns))
 
 advanceLocalEnv s env
   | localScopeX (envX env)          = modX env1 $ \x -> x{ capturedLocalsX = nub (bound s ++ capturedLocalsX x) }
   | otherwise                       = env1
-  where env1                        = define (envOf s) env
+  where env1                        = modX (define (envOf s) env) $ \x -> x{
+                                        raiseWitnessesX = case s of
+                                          Assign _ [PVar _ w _] rhs
+                                            | isWitness w, w `notElem` free rhs, witnessRecipe env rhs
+                                              -> Map.insert w (raiseWitness env rhs) cleared
+                                          _ -> cleared }
+        cleared                     = foldr Map.delete (raiseWitnessesX $ envX env) (bound s)
+
+-- Diagnostics are a cold path. Recreate only mechanical witness constructors
+-- at the raise itself, rather than allocating their parameter-dependent state
+-- on every successful call (notably testing.assertEqual). Boxing removes the
+-- original bindings when this was their only use. Ordinary calls stay put.
+raiseWitness env e@(Var _ (NoQ n))  = Map.findWithDefault e n (raiseWitnessesX $ envX env)
+raiseWitness env (Paren l e)        = Paren l $ raiseWitness env e
+raiseWitness env (Dot l e n)        = Dot l (raiseWitness env e) n
+raiseWitness env (Call l f p KwdNil) = Call l f (fmapArgs p) KwdNil
+  where fmapArgs (PosArg e rest)   = PosArg (raiseWitness env e) (fmapArgs rest)
+        fmapArgs p                = p
+raiseWitness _ e                   = e
+
+witnessRecipe env Var{}            = True
+witnessRecipe env (Paren _ e)      = witnessRecipe env e
+witnessRecipe env (Dot _ e _)      = witnessRecipe env e
+witnessRecipe env (Call _ f p KwdNil)
+  | Just q <- headName f,
+    q == primCAST || witnessClass q = all (witnessRecipe env) (posargs p)
+  where headName (Var _ q)         = Just q
+        headName (TApp _ f _)      = headName f
+        headName _                = Nothing
+        witnessClass q            = case tryQName q env of
+                                      Just NExt{} -> True
+                                      Just (NClass _ as _ _) ->
+                                        q `elem` [primShowOpt,primShowTuple,primBoolOpt,primBoolTuple] ||
+                                        any (isProto env . tcname . snd) as ||
+                                        case noq q of
+                                          Derived p _ -> any ((== p) . noq . tcname . snd) as
+                                          _ -> False
+                                      _ -> False
+witnessRecipe _ _                 = False
 
 advanceLocalSuite ss env           = foldl (flip advanceLocalEnv) env ss
 
@@ -115,7 +164,35 @@ setSelfParam n env                  = modX env $ \x -> x{ selfparamX = Just n }
 
 normEnv env0                        = setX env0 NormX{ marksX = [], rtypeX = Nothing, localScopeX = False,
                                                       capturedLocalsX = [],
-                                                      lambdavarsX = PosNIL, classattrsX = [], selfparamX = Nothing }
+                                                      lambdavarsX = PosNIL, classattrsX = [], selfparamX = Nothing,
+                                                      builtinBoolWitnessesX = Set.empty, raiseWitnessesX = Map.empty }
+
+-- Conditions whose result only becomes known to be bool after solving may
+-- carry the builtin identity witness. Remove that call before CPS/lifting:
+-- doing it in Boxing would leave an unnecessary witness capture in a Cont.
+-- Only compiler-generated, globally unique bindings of the actual builtin
+-- constructor qualify; supplied generic witnesses are deliberately excluded.
+builtinBoolWitnesses (Module mn _ _ ss) = Set.fromList $ suite ss
+  where suite = concatMap stmt
+        stmt (Assign _ [PVar _ n@(Internal Witness _ _) _] e)
+          | constructor e = [n]
+        stmt (Decl _ ds) = concat [suite (dbody d) | d <- ds, notTypedef d]
+        stmt (If _ bs els) = concat [suite b | Branch _ b <- bs] ++ suite els
+        stmt (While _ _ b els) = suite (b ++ els)
+        stmt (For _ _ _ b els) = suite (b ++ els)
+        stmt (Try _ b hs els fin) = suite (b ++ els ++ fin) ++ concat [suite h | Handler _ h <- hs]
+        stmt (With _ _ b) = suite b
+        stmt (Data _ _ b) = suite b
+        stmt _ = []
+        notTypedef Typedef{} = False
+        notTypedef _ = True
+        constructor (Call _ f PosNil KwdNil) = headIsBuiltin f
+        constructor _ = False
+        headIsBuiltin (TApp _ f _) = headIsBuiltin f
+        headIsBuiltin (Var _ (GName m n)) = m == mBuiltin && n == Derived nBoolProtocol nBool
+        headIsBuiltin (Var _ (QName m n)) = m == mBuiltin && n == Derived nBoolProtocol nBool
+        headIsBuiltin (Var _ (NoQ n)) = mn == mBuiltin && n == Derived nBoolProtocol nBool
+        headIsBuiltin _ = False
 
 
 -- Normalize terms ---------------------------------------------------------------------------------------
@@ -371,15 +448,13 @@ normSuite' env (s : ss)             = do s' <- norm' env s
                                          r <- newName "res"
                                          let env0 = define (envOf lambound) env
                                              fx = fxOf env0 comp
-                                             (tw,w1,tr,e0,stmt) = transComp env0 w r comp
-                                             body = sAssign (pVar w tw) w1 :
-                                                    sAssign (pVar r tr) e0 :
-                                                    stmt :
-                                                    sReturn (eVar r) : []
+                                             (bindings,tr,e0,stmt) = transComp env0 w r comp
+                                             body = bindings ++
+                                                    [sAssign (pVar r tr) e0,stmt,sReturn (eVar r)]
                                          norm' env (sDef f lambound tr body fx)
 
         transComp env w r (ListComp _ (Elem e) co)
-                                    = (tw, w1, tr, e0, compStmt co e1)
+                                    = ([sAssign (pVar w tw) w1], tr, e0, compStmt co e1)
           where env1                = define (envOf co) env
                 te                  = typeOf env1 e
                 tr                  = tList te
@@ -388,7 +463,7 @@ normSuite' env (s : ss)             = do s' <- norm' env s
                 e1                  = eCall (eDot (eVar w) appendKW) [eVar r, e]
                 w1                  = eCall (tApp (eQVar witSequenceList) [te]) []
         transComp env w r (SetComp _ (Elem annot_e) co)
-                                    = (tw, w1, tr, e0, compStmt co e1)
+                                    = ([sAssign (pVar w tw) w1], tr, e0, compStmt co e1)
           where env1                = define (envOf co) env
                 te                  = typeOf env1 annot_e
                 tr                  = tSet te
@@ -398,16 +473,18 @@ normSuite' env (s : ss)             = do s' <- norm' env s
                 e1                  = eCall (eDot (eVar w) (name "add")) [eVar r, e]
                 w1                  = eCall (tApp (eQVar witSetSet) [te]) [w0]
         transComp env w r (DictComp _ (Assoc annot_k v) co)
-                                    = (tw, w1, tr, e0, compStmt co e1)
+                                    = ([], tr, e0, compStmt co e1)
           where env1                = define (envOf co) env
                 tk                  = typeOf env1 annot_k
                 tv                  = typeOf env1 v
                 tr                  = tDict tk tv
-                tw                  = tMappingW tr tk tv
                 (w0, k)             = unAnnot (tHashableW tk) annot_k
                 e0                  = eCall (tApp (eQVar primMkDict) [tv,tk]) [w0, Dict NoLoc []]
-                e1                  = eCall (eDot (eDot (eVar w) (Internal Witness (packText "Indexed") 0)) setitemKW) [eVar r, k, v]
-                w1                  = eCall (tApp (eQVar witMappingDict) [tk,tv]) [w0]
+                -- The comprehension constructs a builtin dict and only inserts.
+                -- Its stored Hashable is sufficient; no Mapping or key Show
+                -- evidence is needed for this operation.
+                Just worker         = hashContainerWorker qnDict setitemKW 3
+                e1                  = eCall (tApp (eQVar $ bwName worker) [tk,tv]) [eVar r,k,v]
 
         compStmt (CompFor l p e c) x = For l p e [compStmt c x] []
         compStmt (CompIf l e c) x   = If l [Branch e [compStmt c x]] []
@@ -815,20 +892,17 @@ catStrings ss                       = map (quote . escape '"') ss
 
 normInst env ts e                   = norm env e
 
-normBool env e
-  | t == tBool                      = norm env e
-  | TOpt _ t' <- t, Var{} <- e      = return $ eBinOp (eCall (tApp (eQVar primISNOTNONE) [t']) [e]) And (eCall (eDot (eCAST t t' e) boolKW) [])
-  | BinOp l e1 op e2 <- e,
-    op `elem` [And,Or]              = do e1 <- normBool env e1
-                                         e2 <- normBool env e2
-                                         return $ BinOp l e1 op e2
-  | otherwise                       = do e' <- norm env e
-                                         return $ eCall (eDot e' boolKW) []
-  where t                           = expTypeOf env e
+-- The type checker has already inserted Bool evidence for every source
+-- condition. Generated conditions in this pass are typed boolean expressions.
+normBool env e                      = norm env e
 
 instance Norm Expr where
-    norm env (Raise l e t)          = do e' <- norm env e
-                                         return $ eCall (tApp (eQVar primRAISE) [conv env t]) [e']
+    norm env (Raise l e t)          = do let exceptionType = expTypeOf env e
+                                             (w,original) = unAnnot (tCon $ TC qnShow [exceptionType]) e
+                                         e' <- norm env original
+                                         w' <- norm env (raiseWitness env w)
+                                         return $ eCall (tApp (eQVar primRAISE) [conv env t])
+                                             [eCall (tApp (eQVar primExceptionShow) [conv env exceptionType]) [w',e']]
     norm env (Var l (NoQ n))
       | n `elem` classattrs env,
         Just self <- selfparam env  = return $ eDot (eVar self) n
@@ -842,16 +916,19 @@ instance Norm Expr where
     norm env (Ellipsis l)           = return $ Ellipsis l
     norm env (Strings l ss)         = return $ Strings l (catStrings ss)
     norm env (BStrings l ss)        = return $ BStrings l (catStrings ss)
+    norm env (Call _ (Dot _ (Var _ (NoQ w)) n) (PosArg e PosNil) KwdNil)
+      | n == boolKW,
+        Set.member w (builtinBoolWitnessesX $ envX env) = norm env e
     norm env (Call l e p k)
       | Just (w,result,co,start) <- sumGeneratorCall env e (joinArg p k)
                                     = do plan <- iteratorPlan result co
                                          let env1 = define (iteratorPlanEnv plan) env
                                          fusedSum env1 w start plan >>= norm env1
     norm env (Call l e p k)
-      | Just (kind,result,co) <- boolGeneratorCall env e (joinArg p k)
+      | Just (kind,w,result,co) <- boolGeneratorCall env e (joinArg p k)
                                     = do plan <- iteratorPlan result co
                                          let env1 = define (iteratorPlanEnv plan) env
-                                         fusedBool env1 kind plan >>= norm env1
+                                         fusedBool env1 kind w plan >>= norm env1
     norm env (Call l e p k)
       | Just (kind,w,result,co,dflt) <- extremumGeneratorCall env e (joinArg p k)
                                     = do plan <- iteratorPlan result co
@@ -1044,21 +1121,21 @@ fusedSum env witness start plan     = do sourceName <- newName "gen_source"
 
 data BoolGeneratorFold             = FoldAny | FoldAll
 
-boolGeneratorCall                  :: NormEnv -> Expr -> PosArg -> Maybe (BoolGeneratorFold,Expr,Comp)
+boolGeneratorCall                  :: NormEnv -> Expr -> PosArg -> Maybe (BoolGeneratorFold,Expr,Expr,Comp)
 boolGeneratorCall env f args
-  | Just [_,GeneratorExpr _ (Elem result) co] <- fixedPosArgs args,
+  | Just [w,_,GeneratorExpr _ (Elem result) co] <- fixedPosArgs args,
     isBuiltinFunction env (name "any") f
-                                    = Just (FoldAny,result,co)
-  | Just [_,GeneratorExpr _ (Elem result) co] <- fixedPosArgs args,
+                                    = Just (FoldAny,w,result,co)
+  | Just [w,_,GeneratorExpr _ (Elem result) co] <- fixedPosArgs args,
     isBuiltinFunction env (name "all") f
-                                    = Just (FoldAll,result,co)
+                                    = Just (FoldAll,w,result,co)
   | otherwise                       = Nothing
 
 -- any and all use the same direct-loop machinery as a fused for-loop, but
 -- stop at the first decisive value.  The result and escape flag are raw bools;
 -- the yielded value itself remains unboxed whenever its __bool__ path permits.
-fusedBool                          :: NormEnv -> BoolGeneratorFold -> IteratorPlan -> NormM Expr
-fusedBool env kind plan             = do sourceName <- newName "gen_source"
+fusedBool                          :: NormEnv -> BoolGeneratorFold -> Expr -> IteratorPlan -> NormM Expr
+fusedBool env kind witness plan     = do sourceName <- newName "gen_source"
                                          resultName <- newName "bool_result"
                                          doneName <- newName "gen_done"
                                          let source = iteratorPlanSource plan
@@ -1071,7 +1148,7 @@ fusedBool env kind plan             = do sourceName <- newName "gen_source"
                                              initSource = sAssign (pVar sourceName $ conv env sourceType) source
                                              initResult = sAssign (pVar resultName tBool) (eBool initial)
                                              initDone = sAssign (pVar doneName tBool) (eBool False)
-                                             truth result = eCall (eDot result boolKW) []
+                                             truth result = eCall (eDot witness boolKW) [result]
                                              decide = [ sAssign (pVar resultName tBool) (eBool decisive)
                                                       , sAssign (pVar doneName tBool) (eBool True)
                                                       , sBreak

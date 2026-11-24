@@ -281,7 +281,7 @@ static bool B_dict_base_bool(B_dict_base self) {
     return self->numelements > 0;
 }
 
-static B_str B_dict_base_str(B_dict_base self) {
+B_str B_dict_base_str(B_dict_base self, B_Show keys, B_Show values) {
     B_list parts = B_listD_new(self->numelements);
     B_SequenceD_list wit = B_SequenceD_listG_witness;
     if (self->table) {
@@ -291,8 +291,8 @@ static B_str B_dict_base_str(B_dict_base self) {
                 continue;
             B_value key = (B_value)entry->key;
             B_value value = (B_value)entry->value;
-            B_str keystr = key->$class->__repr__(key);
-            B_str valuestr = value ? value->$class->__repr__(value) : B_None_str;
+            B_str keystr = keys->$class->__repr__(keys, key);
+            B_str valuestr = values->$class->__repr__(values, value);
             B_str elem = acton_malloc(sizeof(struct B_str));
             elem->$class = &B_strG_methods;
             elem->nbytes = keystr->nbytes + valuestr->nbytes + 1;
@@ -408,16 +408,8 @@ B_NoneType B_dictD___init__(B_dict self, B_Hashable hashwit, B_Iterable wit, $WO
     return B_dict_base_init((B_dict_base)self, hashwit, wit, iterable);
 }
 
-bool B_dictD___bool__(B_dict self) {
+bool B_dict_bool(B_dict self) {
     return B_dict_base_bool((B_dict_base)self);
-}
-
-B_str B_dictD___str__(B_dict self) {
-    return B_dict_base_str((B_dict_base)self);
-}
-
-B_str B_dictD___repr__(B_dict self) {
-    return B_dictD___str__(self);
 }
 
 void B_dictD___serialize__(B_dict self, $Serial$state state) {
@@ -447,17 +439,8 @@ B_NoneType B_idictD___init__(B_idict self, B_Hashable hashwit, B_Iterable wit, $
     return B_dict_base_init((B_dict_base)self, hashwit, wit, iterable);
 }
 
-bool B_idictD___bool__(B_idict self) {
+bool B_idict_bool(B_idict self) {
     return B_dict_base_bool((B_dict_base)self);
-}
-
-B_str B_idictD___str__(B_idict self) {
-    B_str contents = B_dict_base_str((B_dict_base)self);
-    return $FORMAT("idict(%s)", contents->str);
-}
-
-B_str B_idictD___repr__(B_idict self) {
-    return B_idictD___str__(self);
 }
 
 void B_idictD___serialize__(B_idict self, $Serial$state state) {
@@ -648,8 +631,8 @@ B_IteratorD_dict B_IteratorD_dict__deserialize(B_IteratorD_dict res, $Serial$sta
 
 
 struct B_IteratorD_dictG_class B_IteratorD_dictG_methods = {"B_IteratorD_dict",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_IteratorD_dictD_init,
-                                                      B_IteratorD_dictD_serialize, B_IteratorD_dict__deserialize, B_IteratorD_dictD_bool,B_IteratorD_dictD_str,
-                                                      B_IteratorD_dictD_str, B_IteratorD_dictD_next};
+                                                      B_IteratorD_dictD_serialize, B_IteratorD_dict__deserialize, B_IteratorD_dictD_next
+};
 
 
 B_Iterator B_MappingD_dictD___iter__ (B_MappingD_dict wit, B_dict dict) {
@@ -687,16 +670,16 @@ $WORD B_dict_base_get(B_dict_base dict, $WORD key, $WORD deflt) {
     return res;
 }
 
-$WORD B_dict_base_getitem(B_dict_base dict, $WORD key) {
+$WORD B_dict_base_getitem(B_dict_base dict, $WORD key, B_Show show_key) {
     if (dict->numelements == 0)
-        RAISE(B_KeyError, key, actStrFromCString("getitem: empty dictionary"));
+        RAISE(B_KeyError, show_key, key, actStrFromCString("getitem: empty dictionary"));
     uint64_t hash = 0;
     if (dict->table->tb_size > INIT_SIZE)
         hash = B_hash(dict->hashwit, key);
     $WORD res;
     int ix = B_dict_lookup(dict, hash, key, &res);
     if (ix < 0)
-        RAISE(B_KeyError, key, actStrFromCString("getitem: key not in dictionary"));
+        RAISE(B_KeyError, show_key, key, actStrFromCString("getitem: key not in dictionary"));
     return res;
 }
 
@@ -828,8 +811,8 @@ B_IteratorD_dict_values B_IteratorD_dict_values_deserialize(B_IteratorD_dict_val
 }
 
 struct B_IteratorD_dict_valuesG_class B_IteratorD_dict_valuesG_methods = {"B_IteratorD_dict_values",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_IteratorD_dict_values_init,
-                                                                    B_IteratorD_dict_values_serialize, B_IteratorD_dict_values_deserialize, B_IteratorD_dict_values_bool,
-                                                                          B_IteratorD_dict_values_str,B_IteratorD_dict_values_str, B_IteratorD_dict_values_next};
+                                                                    B_IteratorD_dict_values_serialize, B_IteratorD_dict_values_deserialize, B_IteratorD_dict_values_next
+};
 
 // items iterator
 static bool B_IteratorD_dict_items_next(B_IteratorD_dict_items self, $WORD *out) {
@@ -903,8 +886,8 @@ B_IteratorD_dict_items B_IteratorD_dict_items_deserialize(B_IteratorD_dict_items
 
 
 struct B_IteratorD_dict_itemsG_class B_IteratorD_dict_itemsG_methods = {"B_IteratorD_dict_items",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_IteratorD_dict_items_init,
-                                                                  B_IteratorD_dict_items_serialize, B_IteratorD_dict_items_deserialize,B_IteratorD_dict_items_bool, B_IteratorD_dict_items_str,
-                                                                  B_IteratorD_dict_items_str, B_IteratorD_dict_items_next};
+                                                                  B_IteratorD_dict_items_serialize, B_IteratorD_dict_items_deserialize, B_IteratorD_dict_items_next
+};
 
 
 B_Iterator B_MappingD_dictD_values (B_MappingD_dict wit, B_dict dict) {
@@ -1018,12 +1001,12 @@ $WORD B_MappingD_dictD_setdefault (B_MappingD_dict wit, B_dict dict, $WORD key, 
 // B_IndexedD_MappingD_dict ///////////////////////////////////////////////////////////////////////
 
 $WORD B_IndexedD_MappingD_dictD___getitem__(B_IndexedD_MappingD_dict wit, B_dict dict, $WORD key) {
-    return B_dict_base_getitem((B_dict_base)dict, key);
+    return B_dict_base_getitem((B_dict_base)dict, key, wit->W_ShowD_AD_IIndexed);
 }
 
 $WORD B_IIndexedD_MappingD_dictD___getitem__(B_IIndexedD_MappingD_dict wit,
                                              B_dict dict, $WORD key) {
-    return B_dict_base_getitem((B_dict_base)dict, key);
+    return B_dict_base_getitem((B_dict_base)dict, key, wit->W_ShowD_AD_IIndexed);
 }
 
 B_NoneType B_IndexedD_MappingD_dictD___setitem__ (B_IndexedD_MappingD_dict wit, B_dict dict, $WORD key, $WORD value) {
@@ -1044,7 +1027,7 @@ B_NoneType B_IndexedD_MappingD_dictD___delitem__(B_IndexedD_MappingD_dict wit,
 
 $WORD B_IIndexedD_IMappingD_idictD___getitem__(B_IIndexedD_IMappingD_idict wit,
                                                B_idict dict, $WORD key) {
-    return B_dict_base_getitem((B_dict_base)dict, key);
+    return B_dict_base_getitem((B_dict_base)dict, key, wit->W_ShowD_AD_IIndexed);
 }
 
 B_NoneType B_dict_base_setitem(B_dict_base dict, $WORD key, $WORD value) {
@@ -1077,3 +1060,30 @@ B_NoneType B_dictD_clear(B_dict dict, B_Hashable hashwit) {
     return B_None;
 }
 */
+
+B_DEFINE_BOOL(dict)
+B_DEFINE_BOOL(idict)
+
+
+
+B_str B_ShowD_dictD___str__(B_ShowD_dict witness, B_dict self) {
+    return B_dict_base_str((B_dict_base)self, witness->W_ShowD_AD_ShowD_dict, witness->W_ShowD_BD_ShowD_dict);
+}
+
+B_str B_ShowD_dictD___repr__(B_ShowD_dict witness, B_dict self) {
+    return B_dict_base_str((B_dict_base)self, witness->W_ShowD_AD_ShowD_dict, witness->W_ShowD_BD_ShowD_dict);
+}
+
+B_str B_idict_str(B_idict self, B_Show keys, B_Show values) {
+    B_str contents = B_dict_base_str((B_dict_base)self, keys, values);
+    return $FORMAT("idict(%s)", contents->str);
+}
+
+
+B_str B_ShowD_idictD___str__(B_ShowD_idict witness, B_idict self) {
+    return B_idict_str(self, witness->W_ShowD_AD_ShowD_idict, witness->W_ShowD_BD_ShowD_idict);
+}
+
+B_str B_ShowD_idictD___repr__(B_ShowD_idict witness, B_idict self) {
+    return B_idict_str(self, witness->W_ShowD_AD_ShowD_idict, witness->W_ShowD_BD_ShowD_idict);
+}

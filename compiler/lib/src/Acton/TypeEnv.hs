@@ -1166,7 +1166,27 @@ spliteqns eqns                          = partition isTop eqns
 
 -- Misc. ---------------------------------------------------------------------------------------------------------------------------
 
-proto2type t (TC n ts)                   = tCon $ TC n (t:ts)
+-- A Show bound on a row means Show evidence for its tuple representation.
+-- This lets the ordinary quantified-witness machinery carry evidence through
+-- variadic functions. It is not a Show implementation for a new runtime type:
+-- the evidence is the existing structural $ShowTuple witness.
+showRowTuple :: Type -> Maybe Type
+showRowTuple t                          = case rowKind t of
+                                            PRow -> Just $ tTupleP t
+                                            KRow -> Just $ tTupleK t
+                                            _ -> Nothing
+  where rowKind (TVar _ v)             = tvkind v
+        rowKind (TUni _ v)             = uvkind v
+        rowKind r@TRow{}              = rkind r
+        rowKind r@TStar{}             = rkind r
+        rowKind r@TNil{}              = rkind r
+        rowKind _                     = KType
+
+isShowRow :: Type -> PCon -> Bool
+isShowRow t p                          = tcname p == qnShow && isJust (showRowTuple t)
+
+proto2type t (TC n ts)                   = tCon $ TC n (receiver:ts)
+  where receiver                        = if n == qnShow then fromMaybe t (showRowTuple t) else t
 
 wit2row ws                              = \p -> foldr f p ws
   where f (w,t)                         = TRow NoLoc PRow nWild t Nothing
@@ -1297,8 +1317,9 @@ explainRequirement c                = case info c of
 -- A trailing hint for protocol requirements on tuple types, which are solved
 -- by derivation (Solver.reduce' over tupleWits), not witness search.
 protoHint (TTuple _ prow krow) p
-  | tcname p `notElem` map fst tupleWits
-                                       = text " (tuples can only implement Eq, Ord and Hashable)"
+  | tcname p `notElem` map tcname tupleProtos
+                                       = text " (tuples can only implement Eq, Ord, Hashable, Show and Bool)"
+  | tcname p == qnBoolProtocol          = empty
   | Nothing <- tupleComponents prow krow
                                        = text " (cannot be derived for a tuple with an open row)"
 protoHint _ _                          = empty

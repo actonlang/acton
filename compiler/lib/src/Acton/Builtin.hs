@@ -188,6 +188,7 @@ nContainer                          = name "Container"
 nIterable                           = name "Iterable"
 nContextManager                     = name "ContextManager"
 nShow                               = name "Show"
+nBoolProtocol                       = name "Bool"
 nArrayElement                       = name "ArrayElement"
 ---
 nTuple                              = name "tuple"
@@ -273,6 +274,7 @@ qnContainer                         = gBuiltin nContainer
 qnIterable                          = gBuiltin nIterable
 qnContextManager                    = gBuiltin nContextManager
 qnShow                              = gBuiltin nShow
+qnBoolProtocol                      = gBuiltin nBoolProtocol
 qnArrayElement                      = gBuiltin nArrayElement
 ---
 qnTuple                             = gBuiltin nTuple
@@ -354,6 +356,7 @@ pContainer a                        = TC qnContainer [a]
 pIterable a                         = TC qnIterable [a]
 pContextManager                     = TC qnContextManager []
 pShow                               = TC qnShow []
+pBoolProtocol                       = TC qnBoolProtocol []
 
 tValue                              = tCon cValue
 tAtom                               = tCon cAtom

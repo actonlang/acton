@@ -344,9 +344,6 @@ class DateTime(object):
         self.weekday = weekday
         self.yearday = yearday
 
-    def __str__(self):
-        return self.str_iso8601_ns()
-
     def str_iso8601_ns(self):
         tz_str = ""
 #        if self.timezone is not None:
@@ -412,6 +409,14 @@ class DateTime(object):
             WEEKDAYS[self.weekday][0:3], MONTHS[self.month][0:3], self.day,
             self.hour, self.minute, self.second, self.year)
 
+extension DateTime(Show):
+    def __str__(self):
+        return self.str_iso8601_ns()
+    def __repr__(self) -> str:
+        base: value = self
+        return repr(base)
+
+
 
 
 class Instant(object):
@@ -440,12 +445,6 @@ class Instant(object):
         self.second = sec
         self.attosecond = asec
         self.clock = c
-
-    def __str__(self):
-        return f"{self.second}.{self.attosecond:018d}"
-
-    def __repr__(self):
-        return f"Instant({self.second}, {self.attosecond})"
 
     def str_ms(self):
         """Return a string representation of the duration with milliseconds.
@@ -518,6 +517,13 @@ class Instant(object):
         """
         return self.second * 1000000000 + self.attosecond // 10**9
 
+extension Instant(Show):
+    def __str__(self):
+        return f"{self.second}.{self.attosecond:018d}"
+    def __repr__(self):
+        return f"Instant({self.second}, {self.attosecond})"
+
+
 extension Instant(Ord):
     def __eq__(self, other):
         return self.second == other.second and self.attosecond == other.attosecond
@@ -543,12 +549,6 @@ class Duration(object):
         self.second = sec
         self.attosecond = asec
         self.clock = c
-
-    def __str__(self):
-        return self.str_human()
-
-    def __repr__(self):
-        return f"{self.second}.{self.attosecond:018d}"
 
     @staticmethod
     def from_parts(week: int, day: int, hour: int, minute: int, second: int, attosecond: int, c: Clock) -> Duration:
@@ -596,6 +596,13 @@ class Duration(object):
 
     def to_float(self) -> float:
         return float(self.second) + (float(self.attosecond) / 10**18)
+
+extension Duration(Show):
+    def __str__(self):
+        return self.str_human()
+    def __repr__(self):
+        return f"{self.second}.{self.attosecond:018d}"
+
 
 
 def monotonic() -> Instant:

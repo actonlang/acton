@@ -20,9 +20,6 @@ struct init_call_barrierQ_BaseG_class {
     B_NoneType (*__init__) (init_call_barrierQ_Base);
     void (*__serialize__) (init_call_barrierQ_Base, $Serial$state);
     init_call_barrierQ_Base (*__deserialize__) (init_call_barrierQ_Base, $Serial$state);
-    bool (*__bool__) (init_call_barrierQ_Base);
-    B_str (*__str__) (init_call_barrierQ_Base);
-    B_str (*__repr__) (init_call_barrierQ_Base);
     B_value (*__get_attr__) (init_call_barrierQ_Base, B_str);
     B_NoneType (*G_init) (init_call_barrierQ_Base);
 };
@@ -37,9 +34,6 @@ struct init_call_barrierQ_DerivedG_class {
     B_NoneType (*__init__) (init_call_barrierQ_Derived);
     void (*__serialize__) (init_call_barrierQ_Derived, $Serial$state);
     init_call_barrierQ_Derived (*__deserialize__) (init_call_barrierQ_Derived, $Serial$state);
-    bool (*__bool__) (init_call_barrierQ_Derived);
-    B_str (*__str__) (init_call_barrierQ_Derived);
-    B_str (*__repr__) (init_call_barrierQ_Derived);
     B_value (*__get_attr__) (init_call_barrierQ_Derived, B_str);
     B_NoneType (*G_init) (init_call_barrierQ_Derived);
 };
@@ -54,9 +48,6 @@ struct init_call_barrierQ_LaterG_class {
     $R (*__init__) (init_call_barrierQ_Later, $Cont);
     void (*__serialize__) (init_call_barrierQ_Later, $Serial$state);
     init_call_barrierQ_Later (*__deserialize__) (init_call_barrierQ_Later, $Serial$state);
-    bool (*__bool__) (init_call_barrierQ_Later);
-    B_str (*__str__) (init_call_barrierQ_Later);
-    B_str (*__repr__) (init_call_barrierQ_Later);
     B_value (*__get_attr__) (init_call_barrierQ_Later, B_str);
     B_NoneType (*G_init) (init_call_barrierQ_Later);
 };
@@ -71,9 +62,6 @@ struct init_call_barrierQ_RenewG_class {
     B_NoneType (*__init__) (init_call_barrierQ_Base);
     void (*__serialize__) (init_call_barrierQ_Renew, $Serial$state);
     init_call_barrierQ_Renew (*__deserialize__) (init_call_barrierQ_Renew, $Serial$state);
-    bool (*__bool__) (init_call_barrierQ_Renew);
-    B_str (*__str__) (init_call_barrierQ_Renew);
-    B_str (*__repr__) (init_call_barrierQ_Renew);
     B_value (*__get_attr__) (init_call_barrierQ_Renew, B_str);
     B_NoneType (*G_init) (init_call_barrierQ_Renew);
     B_NoneType (*hook) (init_call_barrierQ_Renew);

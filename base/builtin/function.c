@@ -14,42 +14,8 @@
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
-bool $procD___bool__($proc self) {
-  return true;
-}
-B_str $procD___str__($proc self) {
-  return $FORMAT("<proc closure at %p>", self);
-}
-
-bool $actionD___bool__($action self) {
-  return true;
-}
-B_str $actionD___str__($action self) {
-  return $FORMAT("<action closure at %p>", self);
-}
-
-bool $mutD___bool__($mut self) {
-  return true;
-}
-B_str $mutD___str__($mut self) {
-  return $FORMAT("<mut closure at %p>", self);
-}
-
-bool $pureD___bool__($pure self) {
-  return true;
-}
-B_str $pureD___str__($pure self) {
-  return $FORMAT("<pure closure at %p>", self);
-}
-
 void $ContD___init__($Cont $this) {
     // Empty
-}
-bool $ContD___bool__($Cont self) {
-  return true;
-}
-B_str $ContD___str__($Cont self) {
-  return $FORMAT("<$Cont closure at %p>", self);
 }
 void $ContD___serialize__($Cont self, $Serial$state state) {
     // Empty
@@ -65,9 +31,6 @@ struct $ContG_class $ContG_methods = {
     $ContD___init__,
     $ContD___serialize__,
     $ContD___deserialize__,
-    $ContD___bool__,
-    $ContD___str__,
-    $ContD___str__,
     NULL                /* __call__ */
 };
 struct $procG_class $procG_methods = {
@@ -76,10 +39,7 @@ struct $procG_class $procG_methods = {
     NULL,
     NULL,               /* __init__ */
     NULL,               /* __serialize__ */
-    NULL,               /* __deserialize__ */
-    $procD___bool__,
-    $procD___str__,
-    $procD___str__,
+    NULL,
     NULL,               /* __call__ */
     NULL                /* __exec__ */
 };
@@ -89,10 +49,7 @@ struct $actionG_class $actionG_methods = {
     NULL,
     NULL,               /* __init__ */
     NULL,               /* __serialize__ */
-    NULL,               /* __deserialize__ */
-    $actionD___bool__,
-    $actionD___str__,
-    $actionD___str__,
+    NULL,
     NULL,               /* __call__ */
     NULL,               /* __exec__ */
     NULL                /* __asyn__ */
@@ -103,10 +60,7 @@ struct $mutG_class $mutG_methods = {
     NULL,
     NULL,               /* __init__ */
     NULL,               /* __serialize__ */
-    NULL,               /* __deserialize__ */
-    $mutD___bool__,
-    $mutD___str__,
-    $mutD___str__,
+    NULL,
     NULL,               /* __call__ */
     NULL,               /* __exec__ */
     NULL                /* __eval__ */
@@ -117,10 +71,7 @@ struct $pureG_class $pureG_methods = {
     NULL,
     NULL,               /* __init__ */
     NULL,               /* __serialize__ */
-    NULL,               /* __deserialize__ */
-    $pureD___bool__,
-    $pureD___str__,
-    $pureD___str__,
+    NULL,
     NULL,               /* __call__ */
     NULL,               /* __exec__ */
     NULL                /* __eval__ */
@@ -143,9 +94,6 @@ void $cont_class_init(struct $ContClass *cls, char *name,
         .__init__ = NULL,
         .__serialize__ = $cont_serialize,
         .__deserialize__ = restore,
-        .__bool__ = (bool (*)($Cont))B_valueG_methods.__bool__,
-        .__str__ = (B_str (*)($Cont))B_valueG_methods.__str__,
-        .__repr__ = (B_str (*)($Cont))B_valueG_methods.__repr__,
         .__call__ = call
     };
     $register(&cls->methods);
@@ -276,9 +224,6 @@ void $proc0_class_init(struct $Proc0Class *cls, char *name,
         .__init__ = NULL,
         .__serialize__ = $proc0_serialize,
         .__deserialize__ = restore,
-        .__bool__ = (bool (*)($proc))B_valueG_methods.__bool__,
-        .__str__ = (B_str (*)($proc))B_valueG_methods.__str__,
-        .__repr__ = (B_str (*)($proc))B_valueG_methods.__repr__,
         .__call__ = call,
         .__exec__ = call
     };
@@ -379,9 +324,6 @@ void $action0_class_init(struct $Action0G_class *methods, char *name,
         .__init__ = NULL,
         .__serialize__ = $action_r1_serialize,
         .__deserialize__ = restore,
-        .__bool__ = (bool (*)($action))B_valueG_methods.__bool__,
-        .__str__ = (B_str (*)($action))B_valueG_methods.__str__,
-        .__repr__ = (B_str (*)($action))B_valueG_methods.__repr__,
         .__call__ = $action0_call,
         .__exec__ = $action0_exec,
         .__asyn__ = asyn
@@ -407,9 +349,6 @@ void $action1_class_init(struct $Action1G_class *methods, char *name,
         .__init__ = NULL,
         .__serialize__ = $action_r1_serialize,
         .__deserialize__ = restore,
-        .__bool__ = (bool (*)($action))B_valueG_methods.__bool__,
-        .__str__ = (B_str (*)($action))B_valueG_methods.__str__,
-        .__repr__ = (B_str (*)($action))B_valueG_methods.__repr__,
         .__call__ = $action1_call,
         .__exec__ = $action1_exec,
         .__asyn__ = asyn
@@ -435,9 +374,6 @@ void $action2_class_init(struct $Action2G_class *methods, char *name,
         .__init__ = NULL,
         .__serialize__ = $action_r1_serialize,
         .__deserialize__ = restore,
-        .__bool__ = (bool (*)($action))B_valueG_methods.__bool__,
-        .__str__ = (B_str (*)($action))B_valueG_methods.__str__,
-        .__repr__ = (B_str (*)($action))B_valueG_methods.__repr__,
         .__call__ = $action2_call,
         .__exec__ = $action2_exec,
         .__asyn__ = asyn
@@ -463,9 +399,6 @@ void $action3_class_init(struct $Action3G_class *methods, char *name,
         .__init__ = NULL,
         .__serialize__ = $action_r1_serialize,
         .__deserialize__ = restore,
-        .__bool__ = (bool (*)($action))B_valueG_methods.__bool__,
-        .__str__ = (B_str (*)($action))B_valueG_methods.__str__,
-        .__repr__ = (B_str (*)($action))B_valueG_methods.__repr__,
         .__call__ = $action3_call,
         .__exec__ = $action3_exec,
         .__asyn__ = asyn

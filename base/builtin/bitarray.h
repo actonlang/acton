@@ -17,9 +17,6 @@ struct B_IteratorD_bitarrayG_class {
     void (*__init__)(B_IteratorD_bitarray, B_bitarray);
     void (*__serialize__)(B_IteratorD_bitarray, $Serial$state);
     B_IteratorD_bitarray (*__deserialize__)(B_IteratorD_bitarray, $Serial$state);
-    bool (*__bool__)(B_IteratorD_bitarray);
-    B_str (*__str__)(B_IteratorD_bitarray);
-    B_str (*__repr__)(B_IteratorD_bitarray);
     bool (*__next__)(B_IteratorD_bitarray, $WORD *);
 };
 
@@ -39,7 +36,7 @@ bool $bitarrayD_U__getitem__(B_bitarray self, int64_t index);
 B_NoneType $bitarrayD_U__setitem__(B_bitarray self, int64_t index, bool value);
 int64_t $bitarrayD_U__len(B_bitarray self);
 
-// Concrete inherited-method symbols required by C-defined builtin classes.
-bool B_bitarrayD___bool__(B_bitarray self);
-B_str B_bitarrayD___str__(B_bitarray self);
-B_str B_bitarrayD___repr__(B_bitarray self);
+// Witness-free formatting and truth workers.
+bool B_bitarray_bool(B_bitarray self);
+B_str B_bitarray_str(B_bitarray self);
+B_str B_bitarray_repr(B_bitarray self);

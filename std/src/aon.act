@@ -95,9 +95,9 @@ class AonParseError(ValueError):
         self.line = line
         self.column = column
 
+extension AonParseError(Show):
     def __str__(self) -> str:
         return f"{self.source}:{self.line}:{self.column}: {self.error_message}"
-
     def __repr__(self) -> str:
         return f"AonParseError({repr(self.error_message)}, {repr(self.source)}, {self.line}, {self.column})"
 

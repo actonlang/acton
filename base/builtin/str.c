@@ -997,8 +997,7 @@ void escape_str(unsigned char *out, unsigned char *in, int64_t outlen, int64_t i
 
 // General methods //////////////////////////////////////////////////////////////
 
-B_str B_strG_new(B_value s) {
-    B_str res = s == B_None ? B_None_str : s->$class->__str__(s);
+B_str B_str_from_str(B_str res) {
     if (res->$class == &B_strG_methods)
         return res;
     B_str self = acton_malloc(sizeof(struct B_str));
@@ -1007,24 +1006,28 @@ B_str B_strG_new(B_value s) {
     return self;
 }
 
-B_NoneType B_strD___init__(B_str self, B_value s) {
-    B_str res = s == B_None ? B_None_str : s->$class->__str__(s);
+B_str B_strG_new(B_Show witness, $WORD s) {
+    return B_str_from_str(s == B_None ? B_None_str : witness->$class->__str__(witness, s));
+}
+
+B_NoneType B_strD___init__(B_str self, B_Show witness, $WORD s) {
+    B_str res = s == B_None ? B_None_str : witness->$class->__str__(witness, s);
     self->nchars = res->nchars;
     self->nbytes = res->nbytes;
     self->str = res->str;
     return B_None;
 }
 
-bool B_strD___bool__(B_str s) {
+bool B_str_bool(B_str s) {
     return s->nchars > 0;
 };
 
-B_str B_strD___str__(B_str s) {
+B_str B_str_str(B_str s) {
     return s;
 }
 
 
-B_str B_strD___repr__(B_str s) {
+B_str B_str_repr(B_str s) {
     struct byte_counts bs = byte_count(s->str, s->nbytes);
     // We aim to produce a simple, readable representation of the string
     // - Default to single quotes unless string contains single quotes
@@ -1987,8 +1990,8 @@ static bool B_IteratorD_strD_next(B_IteratorD_str self, $WORD *out) {
 
 struct B_IteratorD_strG_class B_IteratorD_strG_methods = {"B_IteratorD_str",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_IteratorD_strD_init,
                                                     B_IteratorD_strD_serialize, B_IteratorD_str$_deserialize,
-                                                    B_IteratorD_strD_bool, B_IteratorD_strD_str, B_IteratorD_strD_str,
-                                                    B_IteratorD_strD_next};
+                                                    B_IteratorD_strD_next
+};
 
 // now, define __iter__
 
@@ -2163,11 +2166,11 @@ B_NoneType B_bytearrayD___init__(B_bytearray self, B_bytes b) {
     return B_None;
 }
 
-bool B_bytearrayD___bool__(B_bytearray s) {
+bool B_bytearray_bool(B_bytearray s) {
     return s->nbytes > 0;
 };
 
-B_str B_bytearrayD___str__(B_bytearray s) {
+B_str B_bytearray_str(B_bytearray s) {
     struct byte_counts bs = byte_count(s->str, s->nbytes);
     bool use_single_quotes = !(bs.dquotes==0 && bs.squotes>0);
     int64_t escaped_quotes = use_single_quotes ? bs.squotes : bs.dquotes;
@@ -2188,8 +2191,8 @@ B_str B_bytearrayD___str__(B_bytearray s) {
     return res;
 }
 
-B_str B_bytearrayD___repr__(B_bytearray s) {
-    return B_bytearrayD___str__(s);
+B_str B_bytearray_repr(B_bytearray s) {
+    return B_bytearray_str(s);
 }
 
 void B_bytearrayD___serialize__(B_bytearray str,$Serial$state state) {
@@ -2950,9 +2953,6 @@ struct B_IteratorD_bytearrayG_class B_IteratorD_bytearrayG_methods = {
     B_IteratorD_bytearrayD_init,
     B_IteratorD_bytearrayD_serialize,
     B_IteratorD_bytearray$_deserialize,
-    B_IteratorD_bytearrayD_bool,
-    B_IteratorD_bytearrayD_str,
-    B_IteratorD_bytearrayD_str,
     B_IteratorD_bytearrayD_next
 };
 
@@ -3367,11 +3367,11 @@ B_NoneType B_bytesD___init__(B_bytes self, B_Iterable wit, $WORD iter) {
     return B_None;
 }
 
-bool B_bytesD___bool__(B_bytes s) {
+bool B_bytes_bool(B_bytes s) {
     return s->nbytes > 0;
 };
 
-B_str B_bytesD___str__(B_bytes s) {
+B_str B_bytes_str(B_bytes s) {
     struct byte_counts bs = byte_count(s->str, s->nbytes);
     bool use_single_quotes = !(bs.dquotes==0 && bs.squotes>0);
     int64_t escaped_quotes = use_single_quotes ? bs.squotes : bs.dquotes;
@@ -3391,8 +3391,8 @@ B_str B_bytesD___str__(B_bytes s) {
     return res;
 }
 
-B_str B_bytesD___repr__(B_bytes s) {
-    return  B_bytesD___str__(s);
+B_str B_bytes_repr(B_bytes s) {
+    return  B_bytes_str(s);
 }
 
 void B_bytesD___serialize__(B_bytes str,$Serial$state state) {
@@ -4168,8 +4168,8 @@ static bool B_IteratorD_bytesD_next(B_IteratorD_bytes self, $WORD *out) {
 
 struct B_IteratorD_bytesG_class B_IteratorD_bytesG_methods = {"B_IteratorD_bytes",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_IteratorD_bytesD_init,
                                                         B_IteratorD_bytesD_serialize, B_IteratorD_bytes$_deserialize,
-                                                        B_IteratorD_bytesD_bool, B_IteratorD_bytesD_str,  B_IteratorD_bytesD_str,
-                                                        B_IteratorD_bytesD_next};
+                                                        B_IteratorD_bytesD_next
+};
 
 B_Iterator B_ContainerD_bytesD___iter__(B_ContainerD_bytes wit, B_bytes str) {
     return B_bytes_iter(str);
@@ -4298,8 +4298,8 @@ B_NoneType B_bytes_hash(B_bytes a, B_hasher h) {
 
 // Builtin functions involving strings /////////////////////////////////////////////
 
-B_str B_ascii(B_value v) {
-    B_str s  = v->$class->__str__(v);
+B_str B_ascii(B_Show witness, $WORD v) {
+    B_str s = witness->$class->__str__(witness, v);
     struct byte_counts bs = byte_count(s->str, s->nbytes);
     //    printf("%d %d %d %d %d %d\n",bs.escaped,bs.squotes,bs.dquotes,bs.printable,bs.non_printable,bs.non_ascii);
     bool use_single_quotes = !(bs.dquotes==0 && bs.squotes>0);
@@ -4665,9 +4665,9 @@ B_str $FORMAT_len(const char *format, int64_t nbytes, ...) {
         } else if (format_is("sra", conv)) {
             B_str s = va_arg(args, B_str);
             if (conv == 'r')
-                s = B_strD___repr__(s);
+                s = B_str_repr(s);
             else if (conv == 'a')
-                s = B_ascii((B_value)s);
+                s = B_ascii((B_Show)B_ShowD_strG_witness, s);
             format_str(&b, s, left, width, prec);
         } else {
             if (width >= 0)
@@ -4697,3 +4697,11 @@ B_str $FORMAT_len(const char *format, int64_t nbytes, ...) {
     b.data[b.len] = 0;
     return actStrFromCStringLength(b.data, b.len);
 }
+
+// Show/Bool protocol entry points.
+B_DEFINE_SHOW(str)
+B_DEFINE_BOOL(str)
+B_DEFINE_SHOW(bytes)
+B_DEFINE_BOOL(bytes)
+B_DEFINE_SHOW(bytearray)
+B_DEFINE_BOOL(bytearray)

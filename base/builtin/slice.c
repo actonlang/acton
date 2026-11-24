@@ -105,14 +105,18 @@ B_slice B_sliceD___deserialize__ (B_slice self, $Serial$state state) {
     return res;
 }
 
-bool B_sliceD___bool__(B_slice s) {
+bool B_slice_bool(B_slice s) {
     return true;
 }
 
-B_str B_sliceD___str__(B_slice s) {
+B_str B_slice_str(B_slice s) {
     return $FORMAT("Slice [%ld:%ld:%ld]", *s->start, *s->stop, *s->step);
 }
 
-B_str B_sliceD___repr__(B_slice s) {
-    return B_sliceD___str__(s);
+B_str B_slice_repr(B_slice s) {
+    return B_slice_str(s);
 }
+
+// Show/Bool protocol entry points and legacy class-method shims.
+B_DEFINE_SHOW(slice)
+B_DEFINE_BOOL(slice)

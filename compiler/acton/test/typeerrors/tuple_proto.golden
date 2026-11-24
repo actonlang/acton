@@ -6,7 +6,7 @@ Building file test/typeerrors/tuple_proto.act using temporary scratch directory
    2 |     d = {(1, [2]): "a"}
      :         ^--------------
      :         `------- t0 must implement __builtin__.Hashable
-     :          |    |  __builtin__.list[t2] must be a subclass of t0
+     :          |    |  t0 must implement __builtin__.Show__builtin__.list[t2] must be a subclass of t0
      :          `------ The type of the indicated expression (which we call t1) must be a subclass of t2
      :               |- The type of the indicated expression (which we call t3) must be a subtype of t1
      :               `- The type of the indicated expression (which we call t3) must implement __builtin__.Number

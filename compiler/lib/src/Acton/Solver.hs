@@ -162,6 +162,7 @@ newrank pol (Cast _ env (TUni _ v) t)
   where (pos, neg)                          = (v `elem` fst pol, v `elem` snd pol)
         alts                                = allBelow (limitQuant v env) (expanded env t)
 newrank pol (Proto _ env _ (TUni _ v) p)                                                        -- Proto behaves as an upper type bound
+  | isShowRow (tUni v) p                    = R_ret
   | neg && pos                              = R_ret
 --  | neg                                     = R_neg v alts                                    -- Later, when protos have become proper types
   | neg || pos                              = R_ret
@@ -452,7 +453,9 @@ rank _ (Cast _ env (TUni _ v) t2)
   | otherwise                               = RTry v (allBelow (limitQuant v env) (expanded env t2)) False
 rank _ (Cast _ env t1 (TUni _ v))           = RTry v (allAbove (limitQuant v env) (expanded env t1)) True
 
-rank _ (Proto _ env _ (TUni _ v) p)         = RTry v ts False
+rank _ (Proto _ env _ (TUni _ v) p)
+  | isShowRow (tUni v) p                    = RSkip
+  | otherwise                               = RTry v ts False
   where ts                                  = allBelowProto (limitQuant v env) p
 
 rank _ (Sel _ env _ (TUni _ v) n _)         = RTry v (allClassAttr env_ n ++ allProtoAttr env_ n ++ [wildTuple]) False
@@ -618,10 +621,20 @@ allBelowProto env (TC n [t@TFX{},_])
   | n == primWrappedP               = [ schematic (wtype w) | w <- witsByPName env n, t == (head $ tcargs $ proto w) ]
 allBelowProto env p
   | p == pIdentity                  = ts ++ [ schematic $ tCon tc | tc <- tyactorsAll env ++ importedActors env ]
-  | p == pEq                        = ts ++ [tTuple tWild tWild, tOpt tWild]
+  -- Explicit witnesses are not the complete candidate set for these two
+  -- protocols: nominal subclasses inherit their root implementations. Include
+  -- those classes before intersecting with callback/attribute candidates.
+  | tcname p `elem` [qnShow,qnBoolProtocol]
+                                    = typeUnion env ts (filter valueType (allBelow env tValue) ++ actors) ++
+                                      [tTuple tWild tWild,tOpt tWild,tFun tWild tWild tWild tWild,tNone]
+  | tcname p `elem` map fst optionalWits
+                                    = ts ++ [tTuple tWild tWild, tOpt tWild]
   | p `elem` tupleProtos            = ts ++ [tTuple tWild tWild]
   | otherwise                       = ts
-  where ts                          = [ schematic (wtype w) | w <- witsByPName env (tcname p) ] -- includes tvars; oldest first, lazy
+  where ts                          = [ schematic (wtype w) | w <- witsByPName env (tcname p), not (isShowRow (wtype w) p) ] -- includes tvars; oldest first, lazy
+        actors                      = [ schematic $ tCon tc | tc <- tyactorsAll env ++ importedActors env ]
+        valueType (TVar _ v)         = tvkind v == KType
+        valueType _                 = True
 
 -- Local candidate classes come from the in-memory type-id lattice (lazy, O(1)
 -- attribute lookup, preserving the speedup on large local modules); imported
@@ -653,7 +666,15 @@ reduce' eq c@(Sub i env w t1 t2)            = sub' env i eq w t1 t2
 reduce' eq c@(Proto _ env w TUni{} p)       = do defer [c]; return eq
 
 reduce' eq c@(Proto _ env w t@(TVar _ tv) p)
+  | isShowRow t p                          = case witSearch of
+                                                [wit] -> do (eq',cs) <- solveProto env wit w t p
+                                                            reduce (eq'++eq) cs
+                                                _ -> noRed0 env c
   | [wit] <- witSearch                      = do (eq',cs) <- solveProto env wit w t p
+                                                 reduce (eq'++eq) cs
+  | null witSearch,
+    Just (parent,[wit]) <- inheritedShowBoolWitness env t p
+                                            = do (eq',cs) <- solveInheritedShowBool env parent wit w t p
                                                  reduce (eq'++eq) cs
   | [wit] <- witSearch'                     = do (eq',cs) <- solveProto env wit w (tCon tc) p
                                                  reduce (eq'++eq) cs
@@ -667,9 +688,18 @@ reduce' eq c@(Proto _ env w t@(TCon _ tc) p)
                                                  return (mkEqn env w (proto2type t p) e : eq)
   | [wit] <- witSearch                      = do (eq',cs) <- solveProto env wit w t p
                                                  reduce (eq'++eq) cs
+  | null witSearch,
+    Just (parent,[wit]) <- inheritedShowBoolWitness env t p
+                                            = do (eq',cs) <- solveInheritedShowBool env parent wit w t p
+                                                 reduce (eq'++eq) cs
 --  | w1:w2:_ <- witSearch                    = error ("###### AMBIGUOUS: " ++ prstr c ++ " (" ++ prstrs [w1,w2] ++ ")") c w1
   | Just t' <- tExpand env tc               = reduce' eq c{ type1 = t' }
   where witSearch                           = findWitness env t p
+
+reduce' eq c@(Proto _ env w t@TFun{} p)
+  | Just (parent,[wit]) <- inheritedShowBoolWitness env t p
+                                            = do (eq',cs) <- solveInheritedShowBool env parent wit w t p
+                                                 reduce (eq'++eq) cs
 
 reduce' eq c@(Proto _ env w t@(TFX _ tc) p)
   | [wit] <- witSearch                      = do (eq',cs) <- solveProto env wit w t p
@@ -677,22 +707,47 @@ reduce' eq c@(Proto _ env w t@(TFX _ tc) p)
   where witSearch                           = findWitness env t p
 
 reduce' eq c@(Proto info env w t@(TOpt _ t') p)
-  | tcname p == qnEq                        = do w' <- newWitness
-                                                 let e = eCall (tApp (eQVar primEqOpt) [t']) [eVar w']
+  | Just wit <- lookup (tcname p) optionalWits
+                                            = do w' <- newWitness
+                                                 let e = eCall (tApp (eQVar wit) [t']) [eVar w']
                                                  reduce (mkEqn env w (proto2type t p) e : eq) [Proto info env w' t' p]
 
 reduce' eq c@(Proto _ env w t@(TNone _) p)
-  | tcname p == qnEq                        = return (mkEqn env w (proto2type t p) (eQVar primWEqNone) : eq)
+  | Just wit <- lookup (tcname p) noneWits   = return (mkEqn env w (proto2type t p) (eQVar wit) : eq)
+
+reduce' eq c@(Proto info env w row p)
+  | isShowRow row p                        = do
+      let (ts,tailRow) = showRowParts row
+      ws <- mapM (const newWitness) ts
+      let Just resultType = showRowTuple row
+          prefixType = tTupleP $ foldr posRow posNil ts
+          prefix = tupleShow prefixType ts ws
+          components = [ Proto info env w' t' p | (w',t') <- zip ws ts ]
+      case tailRow of
+          Nothing -> reduce (mkEqn env w (proto2type row p) (tupleShow resultType ts ws) : eq) components
+          Just rest -> do
+              wr <- newWitness
+              let Just restType = showRowTuple rest
+                  e = if null ts then eVar wr else
+                          eCall (tApp (eQVar primShowTupleJoin) [prefixType,restType,resultType]) [prefix,eVar wr]
+              reduce (mkEqn env w (proto2type row p) e : eq) (components ++ [Proto info env wr rest p])
 
 reduce' eq c@(Proto info env w t@(TTuple _ prow krow) p)
+  | tcname p == qnBoolProtocol              = let e = eCall (tApp (eQVar primBoolTuple) [prow, krow]) []
+                                              in return (mkEqn env w (proto2type t p) e : eq)
   | Just wit <- witSearch                   = case tupleComponents prow krow of
                                                 Just ts -> do
                                                     ws <- mapM (const newWitness) ts
                                                     let wrow = foldr posRow posNil [ proto2type t' p | t' <- ts ]
                                                         e = eCall (tApp (eQVar wit) [wrow, prow, krow]) [eTuple (map eVar ws)]
                                                     reduce (mkEqn env w (proto2type t p) e : eq) [ Proto info env w' t' p | (w',t') <- ws `zip` ts ]
-                                                Nothing ->
-                                                    do defer [c]; return eq
+                                                Nothing | tcname p == qnShow -> do
+                                                    wp <- newWitness
+                                                    wk <- newWitness
+                                                    let e = eCall (tApp (eQVar primShowTupleJoin) [tTupleP prow,tTupleK krow,t]) [eVar wp,eVar wk]
+                                                    reduce (mkEqn env w (proto2type t p) e : eq)
+                                                        [Proto info env wp prow p,Proto info env wk krow p]
+                                                Nothing -> do defer [c]; return eq
   where witSearch                           = lookup (tcname p) tupleWits
 
 reduce' eq c@(Sel _ env w TUni{} n _)       = do defer [c]; return eq
@@ -704,7 +759,7 @@ reduce' eq c@(Sel _ env w (TVar _ tv) n _)
                                                  reduce (eq'++eq) cs
   | otherwise                               = tyerr n "Attribute not found"
   where attrSearch                          = findTVAttr env tv n
-        protoSearch                         = findProtoByAttr env (NoQ $ tvname tv) n
+        protoSearch                         = findProtoByAttr env (NoQ $ tvname tv) n `mplus` showBoolAttr n
 
 reduce' eq c@(Sel _ env w (TCon _ tc) n _)
   | Just wsc <- attrSearch                  = do (eq',cs) <- solveSelAttr wsc c
@@ -714,15 +769,15 @@ reduce' eq c@(Sel _ env w (TCon _ tc) n _)
   | Just t <- tExpand env tc                = reduce' eq c{ type1 = t }
   | otherwise                               = tyerr n "Attribute not found"
   where attrSearch                          = findAttr env tc n
-        protoSearch                         = findProtoByAttr env (tcname tc) n
+        protoSearch                         = findProtoByAttr env (tcname tc) n `mplus` showBoolAttr n
 
 
 reduce' eq c@(Sel info env w t1@(TTuple _ _ TUni{}) n t2)
                                             = do defer [c]; return eq
 
 reduce' eq c@(Sel info env w t1@(TTuple _ _ r) n t2)
-  | n `elem` valueKWs                       = do let e = eLambda [(px0,t1)] (eDot (eVar px0) n)
-                                                 return (mkEqn env w (wFun t1 t2) e : eq)
+  | Just p <- showBoolAttr n                = do (eq',cs) <- solveSelProto p c
+                                                 reduce (eq'++eq) cs
   | otherwise                               = do --traceM ("### Sel " ++ prstr c)
                                                  select r
   where select (TRow _ _ n' t _ r)
@@ -734,6 +789,14 @@ reduce' eq c@(Sel info env w t1@(TTuple _ _ r) n t2)
                                                  let e = eLambda [(px0,t1)] (eCallVar w' [eDot (eVar px0) attrKW])
                                                  reduce (mkEqn env w (wFun t1 t2) e : eq) [Sel info env w' (tTupleK r) n t2]
         select (TNil _ _)                   = kwdNotFound0 env info n
+
+reduce' eq c@(Sel _ _ _ t n _)
+  | isStructural t, Just p <- showBoolAttr n = do (eq',cs) <- solveSelProto p c
+                                                  reduce (eq'++eq) cs
+  where isStructural TOpt{} = True
+        isStructural TNone{} = True
+        isStructural TFun{} = True
+        isStructural _ = False
 
 --  lambda (x:(a:int,b:int,**(c:int))): x.b  ==>  lambda x: (b=x.b, a=x.a, KW=x.KW).b            ==>  lambda x: x.b
 --  lambda (x:(a:int,b:int,**(c:int))): x.c  ==>  lambda x: (c=x.KW.x, a=x.a, b=x.b, KW=x.KW).c  ==>  lambda x: x.KW.c
@@ -769,9 +832,32 @@ reduce' eq (Seal info env t)                = reduce eq (map (Seal info env) ts)
 reduce' eq c                                = noRed0 (scope c) c
 
 
+-- Row evidence follows Normalizer's tuple representation: a starred tail is
+-- one nested tuple component; a bare row tail extends the same tuple. Only
+-- the latter needs composition with a supplied row witness.
+showRowParts (TRow _ _ _ t _ rest)          = let (ts,tailRow) = showRowParts rest
+                                              in (t:ts,tailRow)
+showRowParts (TStar _ PRow rest)            = ([tTupleP rest],Nothing)
+showRowParts (TStar _ KRow rest)            = ([tTupleK rest],Nothing)
+showRowParts TNil{}                        = ([],Nothing)
+showRowParts rest                          = ([],Just rest)
+
+tupleShow (TTuple _ prow krow) ts ws        = eCall (tApp (eQVar primShowTuple) [wrow,prow,krow]) [eTuple $ map eVar ws]
+  where wrow                               = foldr posRow posNil [proto2type t pShow | t <- ts]
+
 solveProto env wit w t p                    = do (cs,t',we) <- instWitness env p wit
                                                  unify env (noinfo 7) t t'
                                                  return ([mkEqn env w (proto2type t p) we], cs)
+
+-- Show/Bool only consume Self, so a parent's witness also accepts a subclass.
+-- Preserve the subclass in the evidence type (and hence in generic results),
+-- reusing the parent's witness through a representation-preserving cast. This
+-- is not sound for arbitrary protocols, whose methods may return Self.
+solveInheritedShowBool env parent wit w t p = do (cs,t',we) <- instWitness env p wit
+                                                 unify env (noinfo 7) parent t'
+                                                 let target = proto2type t p
+                                                     source = proto2type parent p
+                                                 return ([mkEqn env w target (eCAST source target we)], cs)
 
 solveSelAttr (wf,sc,d) (Sel info env w t1 n t2)
   | d == Just Static                        = tyerr n "A static method cannot be selected by instance:"
@@ -829,6 +915,28 @@ findWitness env t p         = filter match $ candidates t
         candidates (TVar _ v)           = witsByTName env (NoQ $ tvname v)
         candidates _                    = witsByPName env (tcname p)
 
+-- Follow the class MRO only for these two builtin protocols. Exact witnesses
+-- (including an explicit type-variable bound) are checked by the caller first.
+-- Stop at the first ancestor with witnesses, retaining any ambiguity there.
+inheritedShowBoolWitness :: Env -> Type -> PCon -> Maybe (Type,[Witness])
+inheritedShowBoolWitness env t p
+  | tcname p `elem` [qnShow,qnBoolProtocol]
+                            = listToMaybe [ (tCon c,ws) | (_,c) <- parents t,
+                                            let ws = findWitness env (tCon c) p, not (null ws) ]
+  | otherwise               = Nothing
+  -- Actors acquire their value superclass in Deactorizer, after type checking.
+  -- Their root defaults are already valid for the runtime object layout.
+  where parents (TCon _ c) | isActor env (tcname c) = [([],cValue)]
+        parents (TCon _ c) = drop 1 $ findAncestry env c
+        parents (TVar _ v) | tvkind v == KType = findAncestry env (findTVBound env v)
+        parents TFun{}     = [([],cValue)]
+        parents _          = []
+
+showBoolAttr n
+  | n `elem` [strKW,reprKW] = Just pShow
+  | n == boolKW            = Just pBoolProtocol
+  | otherwise              = Nothing
+
 findProtoByAttr env cn n    = case filter hasAttr $ witsByTName env cn of
                                 [] -> Nothing
                                 ws -> Just $ schematic' $ proto (last ws)   -- newest matching witness
@@ -840,9 +948,19 @@ hasWitness env (TCon _ c) p
   | isActor env (tcname c),
     tcname p == qnIdentity  = True
 hasWitness env (TTuple _ prow krow) p
+  | tcname p == qnBoolProtocol
+                            = True
   | Just _ <- tupleComponents prow krow
                             = tcname p `elem` map fst tupleWits
-hasWitness env t p          =  not $ null $ findWitness env t p
+  | tcname p == qnShow       = hasWitness env prow p && hasWitness env krow p
+hasWitness env TOpt{} p     = tcname p `elem` map fst optionalWits
+hasWitness env TNone{} p    = tcname p `elem` map fst noneWits
+hasWitness env row p
+  | isShowRow row p         = case row of
+                                TVar{} -> not $ null $ findWitness env row p
+                                _ -> let (ts,rest) = showRowParts row in
+                                     all (\t -> hasWitness env t p) ts && maybe True (\r -> hasWitness env r p) rest
+hasWitness env t p          =  not (null $ findWitness env t p) || isJust (inheritedShowBoolWitness env t p)
 
 
 ----------------------------------------------------------------------------------------------------------------------
@@ -890,6 +1008,7 @@ cast' env info t1@(TFun _ fx1 p1 k1 t1') t2@(TFun _ fx2 p2 k2 t2')
                                                  return ()
 
 cast' env info t1@(TTuple _ p1 k1) t2@(TTuple _ p2 k2)
+  | p1 == p2 && k1 == k2                    = return ()
   | varTails [p1,p2] || varTails [k1,k2]    = do --traceM ("### Unifying tuples: " ++ prstr t1 ++ " ~ " ++ prstr t2)
                                                  unify env info t1 t2
                                                  return ()
@@ -940,15 +1059,20 @@ cast' env info (TUni _ tv1) (TUni _ tv2)
 cast' env info t1@(TUni _ tv) t2            = defer [Cast info env t1 t2]
 cast' env info t1 t2@(TUni _ tv)            = defer [Cast info env t1 t2]
 
+-- Promote A to ?A before consulting A's nominal bound. Widening A to value
+-- first loses both the rigid type and any supplied protocol evidence when
+-- inferring an optional argument (notably str's defaultable argument).
+cast' env info t1 (TOpt _ t2)               = cast env info t1 t2                -- Only matches when t1 is NOT a univar
+
 cast' env info t1@(TVar _ tv) t2            = cast' env info (tCon tc) t2
   where tc                                  = findTVBound env tv
-
-cast' env info t1 (TOpt _ t2)               = cast env info t1 t2                -- Only matches when t1 is NOT a univar
 
 cast' env info t1 t2                        = noRed0 env (Cast info env t1 t2)
 
 
 castpos                                     :: Env -> ErrInfo -> PosRow -> PosRow -> TypeM (Constraints, [Type])
+castpos env _ r1@TVar{} r2
+  | r1 == r2                                = return ([], [])
 castpos env info TUni{}         TUni{}      = error "INTERNAL ERROR: castpos"
 castpos env info (TUni _ tv)     r2
   | tv `elem` ufree r2                      = conflictingRow tv                     -- use rowTail?
@@ -988,6 +1112,8 @@ castpos env info (TRow _ _ _ t1 _ r1) r2@TNil{}
                                                  (cs,ts) <- castpos env info r1 r2
                                                  return (cs, t1 : ts)
 
+castpos env info r1 r2                      = noRed0 env (Cast info env r1 r2)
+
 castposEntry env info t1 r1 t2 r2   = do
                                              (cs,ts) <- castpos env info r1 r2
                                              return (Cast info env t1 t2 : cs, ts)
@@ -1003,6 +1129,8 @@ castkwd0 env info (t1:ts) r1 row
 castkwd0 env info ts r1 r2                  = posElemNotFound0 env False (Cast info env r1 r2) nWild
 
 castkwd                                     :: Env -> ErrInfo -> KwdRow -> KwdRow -> TypeM Constraints
+castkwd env _ r1@TVar{} r2
+  | r1 == r2                                = return []
 castkwd env info r1 (TUni _ tv)             = do unif r1
                                                  r2 <- usubst (tUni tv)
                                                  castkwd env info r1 r2
@@ -1038,7 +1166,7 @@ castkwd env info r1 (TStar _ _ r2)          = match r1
           | Just (n,_,_,_) <- rowEntryView row
                                             = kwdUnexpected info n
         match r1@(TStar _ _ r)
-          | TUni _ v <- r, TUni _ v2 <- r2  = do --traceM (" ## castkwd StarVar - StarVar: " ++ prstr (tStar KRow r) ++ " = " ++ prstr (tStar KRow r2))
+          | rowVariable r && rowVariable r2 = do -- Both row variables are opaque, including rigid ones.
                                                  unify env info r r2
                                                  return []
           | TUni _ v <- r                   = do --traceM (" ## castkwd StarVar - Star: " ++ prstr (tStar KRow r) ++ " = " ++ prstr (tStar KRow r2))
@@ -1060,6 +1188,8 @@ castkwd env info r1 r2@TNil{}               = term r1
                                             = kwdUnexpected info n
         term (TStar _ _ r)                  = do --traceM (" ## castkwd Star - Nil: " ++ prstr (tStar KRow r) ++ " ≠ " ++ prstr (tNil KRow))
                                                  noRed0 env (Cast info env r1 r2)
+
+castkwd env info r1 r2                      = noRed0 env (Cast info env r1 r2)
 
 castkwdRow env info r1 n2 t2 md r2
                                             = do (t1,r1') <- pick r1
@@ -1137,6 +1267,7 @@ sub' env info eq w t1@(TFun _ fx1 p1 k1 t1') t2@(TFun _ fx2 p2 k2 t2')
 
 --                     existing            expected
 sub' env info eq w t1@(TTuple _ p1 k1) t2@(TTuple _ p2 k2)
+  | p1 == p2 && k1 == k2                    = return (idwit env w t1 t2 : eq)
   | varTails [p1,p2] || varTails [k1,k2]    = do --traceM ("### Unifying tuples: " ++ prstr w ++ ": " ++ prstr t1 ++ " ~ " ++ prstr t2)
                                                  unify env info t1 t2
                                                  return (idwit env w t1 t2 : eq)
@@ -1180,7 +1311,11 @@ sub' env info eq w t1 t2                    = do cast env info t1 t2
 rowTail (TRow _ _ _ _ _ r)                  = rowTail r
 rowTail r                                   = r
 
-varTails                                    = all (isUnivar . rowTail)
+-- A rigid row is opaque too: unify it as a whole, rather than trying to
+-- enumerate its unknown fields while matching a polymorphic signature.
+varTails                                    = all (rowVariable . rowTail)
+rowVariable TVar{}                          = True
+rowVariable t                               = isUnivar t
 
 rowShape env (TRow _ k n t d r)             = do t' <- newUnivar env
                                                  r' <- rowShape env r
@@ -1293,7 +1428,7 @@ subkwd env info f seen r1 (TStar _ _ r2)    = do (cs,e) <- match f seen r1
                                                 else do (cs,as) <- subkwd env info f seen r1 r2
                                                         return (cs, eTupleK as)
         match f seen r1@(TStar _ _ r)
-          | TUni _ v <- r, TUni _ v2 <- r2  = do --traceM (" ## subkwd StarVar - StarVar: " ++ prstr (tStar KRow r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tStar KRow r2))
+          | rowVariable r && rowVariable r2 = do -- Forward an opaque keyword row without unpacking it.
                                                  unify env info r r2
                                                  return ([], f attrKW)
           | TUni _ v <- r                   = do --traceM (" ## subkwd StarVar - Star: " ++ prstr (tStar KRow r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tStar KRow r2))
@@ -1854,9 +1989,10 @@ findWitAttrs env attrs bounds           = [ ((v,n), (p, wexpr ws $ eVar w)) | (v
 implAll env [] t                        = True
 implAll env ps t@TCon{}                 = and [ hasWitness env t p | (w,p) <- ps ]
 implAll env ps t@TFX{}                  = and [ hasWitness env t p | (w,p) <- ps ]
-implAll env ps t@TOpt{}                 = all ((`elem` [qnIdentity,qnEq]) . tcname . snd) ps
+implAll env ps t@TOpt{}                 = all ((`elem` (qnIdentity : map fst optionalWits)) . tcname . snd) ps
 implAll env ps (TTuple _ p k)
-  | Just _ <- tupleComponents p k       = all ((`elem` map fst tupleWits) . tcname . snd) ps
+  | all ((== qnBoolProtocol) . tcname . snd) ps = True
+  | Just _ <- tupleComponents p k       = all ((`elem` map tcname tupleProtos) . tcname . snd) ps
 implAll env ps t                        = False
 
 noDots vi v                             = null (lookup' v $ selattrs vi) && null (lookup' v $ mutattrs vi)

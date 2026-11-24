@@ -1,0 +1,63 @@
+class Item:
+    def __init__(self, n: int):
+        self.n = n
+
+extension Item(Show):
+    def __str__(self) -> str:
+        return "item " + str(self.n)
+    def __repr__(self) -> str:
+        return "Item(" + str(self.n) + ")"
+
+def next_render() -> str:
+    NotImplemented
+
+def render_count() -> int:
+    NotImplemented
+
+class Tick:
+    def __init__(self):
+        pass
+
+extension Tick(Show):
+    def __str__(self) -> str:
+        return next_render()
+    def __repr__(self) -> str:
+        return "Tick"
+
+def relay(*args, sep: str=" ", end: str="\n", err: bool=False, flush: bool=False):
+    print(*args, sep=sep, end=end, err=err, flush=flush)
+
+def generic[A(Show)](x: A):
+    relay(x, [x], (x, None))
+
+mut def produce(log: list[int], n: int) -> Item:
+    log.append(n)
+    return Item(n)
+
+actor Worker():
+    pass
+
+actor main(env):
+    proc def __startup__():
+        try:
+            print()
+            print(7, "hello", None, True, 2.5)
+            print(Item(3), [Item(4)], (Item(5), 6))
+            relay(Item(7), "tail", sep="|", end="!\n")
+            generic(Item(8))
+            print(*("star", Item(9)))
+            print("one\0two")
+            print("error", Item(10), err=True, flush=True)
+            worker = Worker()
+            print(str(worker).startswith("<"), repr(worker).startswith("<"), bool(worker), sep="|")
+            f = print
+            f(Item(12))
+            print(Tick(), Tick(), sep="|")
+            assert render_count() == 2, "print rendered an argument more than once"
+            log: list[int] = []
+            print(produce(log, 1), produce(log, 2))
+            assert log == [1, 2], "print changed argument evaluation order"
+        except Exception as e:
+            print("FAIL:", str(e), err=True)
+            env.exit(1)
+        env.exit(0)

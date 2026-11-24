@@ -15,8 +15,14 @@ class Foo(object):
         self.x = x
         self.y = y
 
+# The defaults assertions below exercise constructors independently of
+# protocol selection.
+extension Foo(Show):
     def __str__(self):
         return self.x + ', ' + self.y
+    def __repr__(self) -> str:
+        base: value = self
+        return repr(base)
 
 class Bar(object):
     def __init__(self):

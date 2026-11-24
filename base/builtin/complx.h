@@ -39,3 +39,8 @@ B_complex B_complex_sub(B_complex a, B_complex b);
 bool B_complex_eq(B_complex a, B_complex b);
 bool B_complex_ne(B_complex a, B_complex b);
 B_NoneType B_complex_hash(B_complex a, B_hasher h);
+
+// Witness-free formatting and truth workers.
+bool B_complex_bool(B_complex self);
+B_str B_complex_str(B_complex self);
+B_str B_complex_repr(B_complex self);

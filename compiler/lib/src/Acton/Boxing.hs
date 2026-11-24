@@ -7,6 +7,7 @@ import Acton.NameInfo
 import Acton.Env
 import Acton.QuickType
 import Acton.Prim
+import Acton.BuiltinCalls
 import Acton.Builtin
 import Acton.Subst
 import qualified Acton.WitnessSharing as WitnessSharing
@@ -54,6 +55,8 @@ data BoxX                          = BoxX { inClassX :: Maybe (TCon, TEnv)
                                           , returnTypeX :: Maybe Type
                                           , staticWitnessesX :: M.HashMap Name StaticWitness
                                           , hashWitnessesX :: M.HashMap Name QName
+                                          , keyShowWitnessesX :: M.HashMap Name Expr
+                                          , showBoolWitnessesX :: M.HashMap Name QName
                                           , boxedParamsX :: HashSet.HashSet Name
                                           }
 
@@ -64,6 +67,8 @@ boxEnv env0                        = setX env0 BoxX{ inClassX = Nothing
                                                    , returnTypeX = Nothing
                                                    , staticWitnessesX = M.empty
                                                    , hashWitnessesX = M.empty
+                                                   , keyShowWitnessesX = M.empty
+                                                   , showBoolWitnessesX = M.empty
                                                    , boxedParamsX = HashSet.empty
                                                    }
 
@@ -110,6 +115,62 @@ lookupStaticWitness env n           = M.lookup n (staticWitnessesX $ envX env)
 setHashWitness n q env              = modX env $ \x -> x{ hashWitnessesX =
                                         maybe (M.delete n) (M.insert n) q (hashWitnessesX x) }
 
+setShowBoolWitness n q env          = modX env $ \x -> x{ showBoolWitnessesX =
+                                        maybe (M.delete n) (M.insert n) q (showBoolWitnessesX x) }
+
+setKeyShowWitness n e env           = modX env $ \x -> x{ keyShowWitnessesX =
+                                        maybe (M.delete n) (M.insert n) e (keyShowWitnessesX x) }
+
+-- Recover the key policy from the selected builtin witness, before discarding
+-- its receiver. Follow constructors and aliases so a concrete lookup does not
+-- allocate a Mapping merely to read its Show field. A retained witness can
+-- supply the field directly; a genuinely generic implementation still dispatches.
+keyShowOf env (Var _ (NoQ n))
+  | Just e <- M.lookup n (keyShowWitnessesX $ envX env) = Just e
+keyShowOf env (Paren _ e)           = keyShowOf env e
+keyShowOf env (Dot _ e (Internal Witness _ _)) = keyShowOf env e
+keyShowOf env (Call _ f p KwdNil)
+  | Var _ q <- stripHashTApp f, q == primCAST,
+    [e] <- posargs p               = keyShowOf env e
+  | Var _ q <- stripHashTApp f,
+    q `elem` [gBuiltin (Derived nMapping nDict),gBuiltin (Derived (name "IMapping") nIDict)],
+    TFun _ _ row _ _ <- typeOf env f = listToMaybe [ e | (e,t) <- zip (posargs p) (fields row), isShow t ]
+  where fields (TRow _ _ _ t _ r)  = t : fields r
+        fields _                  = []
+        isShow (TCon _ (TC q _))   = q == qnShow
+        isShow _                  = False
+keyShowOf env e
+  | TCon _ tc <- typeOf env e      = listToMaybe [ eDot e n | (n,NSig sc Property _) <- snd (findCon env tc),
+                                                           TCon _ (TC q _) <- [sctype sc], q == qnShow ]
+keyShowOf _ _                      = Nothing
+
+-- These constructors fix their implementation even when they take unused
+-- class-constraint witnesses (for example Bool for dict). Never infer this
+-- from the evidence's protocol type, or from a captured type-parameter field.
+showBoolWitnessOf env (Var _ (NoQ n)) = M.lookup n (showBoolWitnessesX $ envX env)
+showBoolWitnessOf env (Paren _ e)    = showBoolWitnessOf env e
+showBoolWitnessOf env (Call _ f p KwdNil)
+  | Var _ q <- stripHashTApp f,
+    q == primCAST, [e] <- posargs p = showBoolWitnessOf env e
+  | Var _ q <- stripHashTApp f,
+    let q' = case q of NoQ n | thismod env == Just mBuiltin -> gBuiltin n; _ -> q,
+    isShowBoolImplementation q' = Just q'
+showBoolWitnessOf _ _              = Nothing
+
+rawShowBoolCall env impl attr optional p@(PosArg recv PosNil)
+  | Just w <- showBoolWorker impl attr,
+    attr == boolKW, bwType w == qnBool = Just $ Box tBool $ forceUnbox env tBool recv
+  | Just w <- showBoolWorker impl attr,
+    let t = tCon (TC (bwType w) []),
+    attr == boolKW, isUnboxable t = Just $ Box tBool $ CompOp NoLoc
+                                        (forceUnbox env t recv) [OpArg NEq (UnBox t $ Int NoLoc 0 "0")]
+  | Just w <- showBoolWorker impl attr =
+      let w' = if optional then optionalShowWorker (impl,w) else w
+          f = tApp (eQVar $ bwName w') [boxedRepType $ typeOf env recv]
+          TFun _ _ pr _ rt = rtypeOfFun env f
+      in Just $ tryBox rt $ eCallP f (fixargs env p pr)
+rawShowBoolCall _ _ _ _ _          = Nothing
+
 -- Track the primary builtin implementation, not just the protocol's type:
 -- the latter alone does not identify a method-table implementation.
 -- These constructors fix the method tables even with dynamic Hashable inputs;
@@ -136,6 +197,8 @@ stripHashTApp f                    = f
 -- Recognize witness expressions whose runtime object has a static C name.  A
 -- dot path records selection of embedded super-witness fields from that root.
 staticWitnessOf                     :: BoxEnv -> Expr -> Maybe StaticWitness
+staticWitnessOf env (Call _ f (PosArg e PosNil) KwdNil)
+  | Var _ q <- stripHashTApp f, q == primCAST = staticWitnessOf env e
 staticWitnessOf env (Dot _ e n)     = do w <- staticWitnessOf env e
                                          return w{ swObjectPath = swObjectPath w ++ [n] }
 staticWitnessOf env (Call _ f p KwdNil)
@@ -295,7 +358,8 @@ rawBuiltinMethod env attr es        = rawHashContainerMethod env attr es <|> raw
 -- even when its key/element witness is a function parameter. Only the Iterable of
 -- update survives; Hashable is already owned by the destination container.
 rawHashContainerMethod env attr (recv:es)
-  | attr `elem` map bwMethod hashContainerWorkers,
+  | attr /= getitemKW,
+    attr `elem` map bwMethod hashContainerWorkers,
     TCon _ (TC q ts) <- unalias env (typeOf env recv),
     Just w <- hashContainerWorker q attr (1 + length es)
                                     = Just $ tApp (eQVar $ bwName w)
@@ -948,7 +1012,6 @@ rtypeOfFun env f@(Dot _ (Var _ x) n)
 rtypeOfFun env f@(Dot _ e n)        = case typeOf env e of
                                         TCon _ tc -> rtypeOf env tc n
                                         TVar _ tv -> rtypeOf env (findTVBound env tv) n
-                                        TTuple{}  -> rtypeOf env cValue n     -- tuple value attrs (e.g. __bool__) use the value class slot ABI (cf. CodeGen.dotCast)
                                         _         -> typeOf env f
 rtypeOfFun env f@(Var _ n)
   | Just rt <- generatedMethodType env n []
@@ -1006,7 +1069,9 @@ instance {-# OVERLAPS #-} Boxing ([Stmt]) where
                                            (ws2,xs') <- boxing env1 xs
                                            return $ if HashSet.member w  ws2 then (HashSet.union ws1 (HashSet.delete w ws2),x':xs') else (ws2,xs')
       where te                        = envOf x
-            env1                      = setHashWitness w (hashWitnessOf env rhs) $
+            env1                      = setKeyShowWitness w (keyShowOf env rhs) $
+                                        setShowBoolWitness w (showBoolWitnessOf env rhs) $
+                                        setHashWitness w (hashWitnessOf env rhs) $
                                         setStaticWitness w (staticWitnessOf env rhs) (define te env)
 
     boxing env (x : xs)              = do (ws1,x') <- boxing env x
@@ -1033,6 +1098,20 @@ instance Boxing Expr where
     -- generic keys work too, and ordinary dead-witness cleanup sees the use
     -- disappear. Receiver-less factories and dict value comparisons do not
     -- match: their independent witnesses are still necessary.
+    boxing env (Call _ f p KwdNil)
+      | Just attr <- hashWitnessMethod env f, attr == getitemKW,
+        Just wit <- methodWitness f,
+        Just showKey <- keyShowOf env wit,
+        [recv,key] <- posargs p,
+        TCon _ (TC q ts) <- unalias env (typeOf env recv),
+        Just w <- hashContainerWorker q attr 2
+                                    = do (ws,args) <- boxing env [recv,key,showKey]
+                                         let target = tApp (eQVar $ bwName w) ts
+                                             TFun _ _ row _ result = rtypeOfFun env target
+                                         return (ws, tryBox result $ eCallP target (fixargs env (foldr PosArg PosNil args) row))
+      where methodWitness (TApp _ f _) = methodWitness f
+            methodWitness (Dot _ w _) = Just w
+            methodWitness _           = Nothing
     boxing env (Call _ f p KwdNil)
       | Just attr <- hashWitnessMethod env f,
         Just _ <- rawHashContainerMethod env attr (posargs p)
@@ -1076,6 +1155,9 @@ instance Boxing Expr where
 --             vFree _                = False
 
       boxingDirectOrDynamic w attr p rt pr rest
+        | Just impl <- M.lookup n (showBoolWitnessesX $ envX env),
+          Just c <- rawShowBoolCall env impl attr False p
+                                    = return (HashSet.empty,c)
         | Just _ <- rawMatrixMethod env attr (posargs p)
                                     = do (ws,p1) <- boxing env p
                                          case rawMatrixMethodCall env attr p1 of
@@ -1142,6 +1224,15 @@ instance Boxing Expr where
       boxingCompop w attr es _ rt pr rest
                                     = boxingDirectOrDynamic w attr (posarg es) rt pr rest
     boxing env (Call l e@(TApp _ (Var _ f) ts) p KwdNil)
+      | Just (attr,optional) <- lookup (unalias env f)
+            [(qnBool,(boolKW,False)), (qnStr,(strKW,True)), (gBuiltin nRepr,(reprKW,False))],
+        [wit,recv] <- posargs p,
+        Just impl <- showBoolWitnessOf env wit,
+        Just _ <- rawShowBoolCall env impl attr optional (PosArg recv PosNil)
+                                    = do (ws,recv') <- boxing env recv
+                                         case rawShowBoolCall env impl attr optional (PosArg recv' PosNil) of
+                                           Just c -> return (ws,c)
+                                           Nothing -> error "Internal error: native Show/Bool conversion lost during boxing"
       -- These unary builtin functions pass a protocol witness and a value.
       -- Their concrete workers drop the former, preserving generic dispatch
       -- when no worker is available for the value's type.

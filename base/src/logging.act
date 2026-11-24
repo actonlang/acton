@@ -114,6 +114,15 @@ lvl_names = {
     TRACE     : 'TRACE',
 }
 
+def format_data(data: dict[str, ?value]) -> str:
+    """Render structured data using builtin scalar and container formats.
+
+    The payload type erases per-entry Show evidence. Unknown user classes
+    therefore use value's default representation.
+    """
+    NotImplemented
+
+
 class Message():
     """A log message
     """
@@ -193,7 +202,7 @@ class StdoutSink(Sink):
         if text is not None:
             data = m.data
             if data is not None:
-                text += " - " + str(data)
+                text += " - " + format_data(data)
             print(text)
 
 class ConsoleSink(Sink):
@@ -204,7 +213,7 @@ class ConsoleSink(Sink):
         if text is not None:
             data = m.data
             if data is not None:
-                text += " - " + str(data)
+                text += " - " + format_data(data)
             print(text, err=True)
 
 # Untested and doesn't work yet?

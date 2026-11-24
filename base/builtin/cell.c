@@ -17,21 +17,6 @@ B_NoneType $CellD___init__($Cell self, $WORD cell) {
     return B_None;
 }
 
-bool $CellD___bool__($Cell self) {
-    B_value it = (B_value)self->cell;
-    return it->$class->__bool__(it);
-}
-
-B_str $CellD___str__($Cell self) {
-    B_value it = (B_value)self->cell;
-    return it->$class->__str__(it);
-}
-
-B_str $CellD___repr__($Cell self) {
-    B_value it = (B_value)self->cell;
-    return it->$class->__repr__(it);
-}
-
 void $CellD___serialize__ ($Cell self, $Serial$state state) {
     $step_serialize(self->cell, state);
 }
@@ -60,9 +45,6 @@ struct $CellG_class $CellG_methods = {
     .$GCINFO            = "$Cell",
     .$superclass        = ($SuperG_class)&B_ExceptionG_methods,
     .__init__           = $CellD___init__,
-    .__bool__           = $CellD___bool__,
-    .__str__            = $CellD___str__,
-    .__repr__           = $CellD___repr__,
     .__serialize__      = $CellD___serialize__,
     .__deserialize__    = $CellD___deserialize__
 };

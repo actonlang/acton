@@ -17,3 +17,8 @@ extern struct B_ZeroDivisionError B_u16_mod_zero_error;
 #define u16_MOD(a,b)       ( {if (b==0) RAISE_EXC(&B_u16_mod_zero_error); a%b;} )
 
 uint16_t u16_pow(uint16_t a, uint16_t b);
+
+// Witness-free formatting and truth workers.
+bool B_u16_bool(B_u16 self);
+B_str B_u16_str(B_u16 self);
+B_str B_u16_repr(B_u16 self);

@@ -2,9 +2,15 @@ proc def p () -> __builtin__.bool:
     return True
 
 proc def f (b : __builtin__.bool) -> __builtin__.bool:
-    N_tmp: __builtin__.bool = b and p()
+    N_tmp: __builtin__.bool = let:
+                                  V_f_7: __builtin__.bool = b
+                                  V_f_8: __builtin__.bool = p() if V_f_7 else V_f_7
+                              in V_f_8
     return N_tmp
 
 proc def g (b : __builtin__.bool) -> __builtin__.bool:
-    N_1tmp: __builtin__.bool = b or p()
+    N_1tmp: __builtin__.bool = let:
+                                   V_g_7: __builtin__.bool = b
+                                   V_g_8: __builtin__.bool = $CAST@[?__builtin__.bool, __builtin__.bool](V_g_7) if V_g_7 else p()
+                               in V_g_8
     return N_1tmp
