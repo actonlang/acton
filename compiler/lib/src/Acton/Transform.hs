@@ -164,12 +164,19 @@ transCall (Dot _ (Var _ n) m) ts [e1,e2]
   | n == primWrapMut,   m == attrWrap   = Just e2
   | n == primWrapPure,  m == attrWrap   = Just e2
   | n == primWrapCom, m == attrWrap = Just e2
-transCall (Dot _ (Var _ n) m) ts [e1]
-  | n == primWrapProc,  m == attrUnwrap = Just e1
-  | n == primWrapAction,m == attrUnwrap = Just e1
-  | n == primWrapMut,   m == attrUnwrap = Just e1
-  | n == primWrapPure,  m == attrUnwrap = Just e1
-  | n == primWrapCom, m == attrUnwrap = Just e1
+transCall (Dot _ (Var _ n) m) [p,k,r] [f]
+  | n == primUnwrapAction, m == attrUnwrap
+                                     = Just $ Let NoLoc [sAssign (pVar captured source) f] adapter
+  | n == primUnwrap_Action, m == attrUnwrap_
+                                     = Just $ eAsync f
+  | n `elem` unwrapWitnesses, m == attrUnwrap = Just f
+  | n `elem` unwrap_Witnesses, m == attrUnwrap_ = Just f
+  where source                       = tFun fxAction p k r
+        captured                     = head $ xNames \\ free f
+        pp                           = pPar (pNames \\ [captured]) p
+        kp                           = kPar attrKW k
+        result                       = Call NoLoc (eAsync $ eVar captured) (pArg pp) (kArg kp)
+        adapter                      = Lambda NoLoc pp kp (eAwait result) fxProc
 transCall _ _ _                         = Nothing
 
 instance Transform Expr where

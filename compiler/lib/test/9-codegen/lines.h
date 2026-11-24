@@ -28,8 +28,8 @@ typedef struct $Proc0_R1 *linesQ_L_26proc;
 typedef struct linesQ_Apa *linesQ_Apa;
 typedef struct linesQ_Bepa *linesQ_Bepa;
 typedef struct linesQ_main *linesQ_main;
-$R linesQ_L_1C_1cont ($action, $Cont, int64_t);
-$R linesQ_L_3C_3cont ($Cont, B_NoneType);
+$R linesQ_L_1C_2cont ($action, $Cont, int64_t);
+$R linesQ_L_3C_4cont ($Cont, B_NoneType);
 struct linesQ_L_9procG_class {
     char *$GCINFO;
     int $class_id;
@@ -86,8 +86,8 @@ struct linesQ_L_19proc {
     linesQ_main self;
 };
 $R linesQ_L_22nop ($Cont);
-$R linesQ_L_23C_7cont ($Cont, B_NoneType);
-$R linesQ_L_18C_5cont (linesQ_Apa, linesQ_main, B_Iterable, B_Number, $Cont, int64_t);
+$R linesQ_L_23C_8cont ($Cont, B_NoneType);
+$R linesQ_L_18C_6cont (linesQ_Apa, linesQ_main, B_Iterable, B_Number, $Cont, int64_t);
 struct linesQ_ApaG_class {
     char *$GCINFO;
     int $class_id;

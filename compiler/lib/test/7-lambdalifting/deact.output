@@ -7,11 +7,12 @@ W_Apa_101: __builtin__.Times[__builtin__.int, __builtin__.int] = __builtin__.Int
 W_Apa_395: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
 
 # recursive group:
-proc def L_1C_1cont (cb : $action[(__builtin__.int,), __builtin__.int], C_cont : $Cont[__builtin__.int], C_2res : __builtin__.int) -> $R:
-    v: __builtin__.int = C_2res
+proc def L_1C_2cont (cb : $action[(__builtin__.int,), __builtin__.int], C_cont : $Cont[__builtin__.int], C_3res : __builtin__.int) -> $R:
+    C_1pre: __builtin__.int = C_3res
+    v: __builtin__.int = C_1pre
     m: __builtin__.Msg[__builtin__.int] = cb.__asyn__(W_Apa_32.__fromatom__(2))
-    N_tmp: __builtin__.int = W_Apa_101.__mul__(v, W_Apa_32.__fromatom__(10))
-    return $R_CONT@[__builtin__.int](C_cont, N_tmp)
+    N_1tmp: __builtin__.int = W_Apa_101.__mul__(v, W_Apa_32.__fromatom__(10))
+    return $R_CONT@[__builtin__.int](C_cont, N_1tmp)
 class L_2Cont ($Cont[__builtin__.int], __builtin__.value):
     @property
     cb : $action[(__builtin__.int,), __builtin__.int]
@@ -24,8 +25,8 @@ class L_2Cont ($Cont[__builtin__.int], __builtin__.value):
     proc def __call__ (L_self : Self, G_1 : __builtin__.int) -> $R:
         cb: $action[(__builtin__.int,), __builtin__.int] = L_self.cb
         C_cont: $Cont[__builtin__.int] = L_self.C_cont
-        return L_1C_1cont(cb, C_cont, G_1)
-proc def L_3C_3cont (C_cont : $Cont[None], C_4res : None) -> $R:
+        return L_1C_2cont(cb, C_cont, G_1)
+proc def L_3C_4cont (C_cont : $Cont[None], C_5res : None) -> $R:
     print@[(__builtin__.str,)](("\"Apa\"",), "\" \"", "\"\\n\"", False, False)
     return $R_CONT@[None](C_cont, None)
 class L_4Cont ($Cont[None], __builtin__.value):
@@ -36,7 +37,7 @@ class L_4Cont ($Cont[None], __builtin__.value):
         return None
     proc def __call__ (L_self : Self, G_1 : None) -> $R:
         C_cont: $Cont[None] = L_self.C_cont
-        return L_3C_3cont(C_cont, G_1)
+        return L_3C_4cont(C_cont, G_1)
 class L_6action ($action[(__builtin__.int,), __builtin__.int], $proc[(__builtin__.int,), __builtin__.int], __builtin__.value):
     @property
     L_5obj : Apa
@@ -213,8 +214,8 @@ class L_20action ($action[(__builtin__.int,), __builtin__.int], $proc[(__builtin
         self: main = L_self.self
         return $ASYNC@[__builtin__.int](self, L_19proc(G_1, self))
     # (recursive group)
-proc def L_18C_5cont (a : Apa, self : main, C_cont : $Cont[None], C_6res : __builtin__.int) -> $R:
-    r: __builtin__.int = C_6res
+proc def L_18C_6cont (a : Apa, self : main, C_cont : $Cont[None], C_7res : __builtin__.int) -> $R:
+    r: __builtin__.int = C_7res
     print@[(__builtin__.str, __builtin__.int)](("\"r =\"", r), "\" \"", "\"\\n\"", False, False)
     (async a.compute)(L_20action(self))
     print@[(__builtin__.str,)](("\"main\"",), "\" \"", "\"\\n\"", False, False)
@@ -235,7 +236,7 @@ class L_21Cont ($Cont[__builtin__.int], __builtin__.value):
         a: Apa = L_self.a
         self: main = L_self.self
         C_cont: $Cont[None] = L_self.C_cont
-        return L_18C_5cont(a, self, C_cont, G_1)
+        return L_18C_6cont(a, self, C_cont, G_1)
 class L_22proc ($proc[(), None], __builtin__.value):
     @property
     self : main
@@ -259,11 +260,12 @@ class Apa ($Actor, __builtin__.value):
         return $R_CONT@[None](C_cont, None)
     proc def computeG_local (self : Self, C_cont : $Cont[__builtin__.int], cb : $action[(__builtin__.int,), __builtin__.int]) -> $R:
         print@[(__builtin__.str,)](("\"compute\"",), "\" \"", "\"\\n\"", False, False)
-        return $AWAIT@[__builtin__.int](L_2Cont(cb, C_cont), cb.__asyn__(W_Apa_32.__fromatom__(1)))
+        N_function: $action[(__builtin__.int,), __builtin__.int] = cb
+        return $AWAIT@[__builtin__.int](L_2Cont(cb, C_cont), N_function.__asyn__(W_Apa_32.__fromatom__(1)))
     proc def noticeG_local (self : Self, C_cont : $Cont[__builtin__.int], i : __builtin__.int) -> $R:
         print@[(__builtin__.str,)](("\"notice\"",), "\" \"", "\"\\n\"", False, False)
-        N_1tmp: __builtin__.int = W_Apa_138.__add__(i, W_Apa_32.__fromatom__(1))
-        return $R_CONT@[__builtin__.int](C_cont, N_1tmp)
+        N_2tmp: __builtin__.int = W_Apa_138.__add__(i, W_Apa_32.__fromatom__(1))
+        return $R_CONT@[__builtin__.int](C_cont, N_2tmp)
     proc def __startup__G_local (self : Self, C_cont : $Cont[None]) -> $R:
         return self.setupG_local($SKIPRES@[None](L_4Cont(C_cont)), L_6action(self))
     action def setup (self : Self, cb : $action[(__builtin__.int,), __builtin__.int]) -> None:
@@ -280,8 +282,8 @@ class Bepa ($Actor, __builtin__.value):
         return None
     proc def callbackG_local (self : Self, C_cont : $Cont[__builtin__.int], i : __builtin__.int) -> $R:
         print@[(__builtin__.str, __builtin__.int)](("\"callback\"", i), "\" \"", "\"\\n\"", False, False)
-        N_3tmp: __builtin__.int = W_Apa_138.__add__(i, W_Apa_32.__fromatom__(1))
-        return $R_CONT@[__builtin__.int](C_cont, N_3tmp)
+        N_4tmp: __builtin__.int = W_Apa_138.__add__(i, W_Apa_32.__fromatom__(1))
+        return $R_CONT@[__builtin__.int](C_cont, N_4tmp)
     proc def __startup__G_local (self : Self, C_cont : $Cont[None]) -> $R:
         print@[(__builtin__.str,)](("\"Bepa\"",), "\" \"", "\"\\n\"", False, False)
         return $R_CONT@[None](C_cont, None)

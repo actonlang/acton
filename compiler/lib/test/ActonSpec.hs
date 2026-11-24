@@ -408,17 +408,30 @@ main = do
           E.evaluate (rnf typed)
       forM_ [("pure",S.fxPure,S.fxPure), ("mut",S.fxMut,S.fxMut),
              ("proc",S.fxProc,S.fxProc), ("action",S.fxAction,S.fxProc)] $ \(label,source,expected) ->
-        it ("resolves the shared wrap/unwrap effect for " ++ label ++ " without contextual bounds") $ do
+        it ("resolves the value-unwrapping effect for " ++ label ++ " without contextual bounds") $ do
           let (remaining, inferred) = TE.runTypeM $ do
                 fx <- TE.newUnivarOfKind S.KFX env
                 w <- TE.newWitness
-                let wrapped = S.TC (S.GName (S.modName ["$"]) (S.name "Wrapped")) [fx]
+                let wrapped = S.TC (S.GName (S.modName ["$"]) (S.name "Unwrapped")) [fx]
                 _ <- Solver.reduce [] [TE.Proto info env w source wrapped]
                 remaining <- TE.collectDeferred
                 inferred <- TE.usubst fx
                 return (remaining,inferred)
           length remaining `shouldBe` 0
           inferred `shouldBe` expected
+      it "infers com for a discarded action call" $ do
+        typed <- typecheckSource env0 "discarded_action" $ unlines
+          [ "def send(cb: action(int) -> int):", "    cb(1)" ]
+        fmap S.dfx (findTypedDef "send" typed) `shouldBe` Just S.fxCom
+      forM_ [("value", "    return cb(1)"),
+             ("nested", "    sink(cb(1))")] $ \(label,body) ->
+        it ("requires proc for an action result in " ++ label ++ " position") $ do
+          let src = unlines
+                [ "com def invalid(cb: action(int) -> int, sink: action(int) -> None):", body ]
+          result <- E.try (typecheckSource env0 "action_result" src >>= E.evaluate . rnf) :: IO (Either TypeError ())
+          case result of
+            Left _ -> pure ()
+            Right _ -> expectationFailure "Expected awaiting an action reply to require proc"
       it "finds wrapped effects using the single shared effect parameter" $ do
         forM_ [(S.fxPure,[S.fxPure]), (S.fxMut,[S.fxMut]),
                (S.fxProc,[S.fxProc,S.fxAction]), (S.fxAction,[])] $ \(fx,expected) -> do
@@ -426,7 +439,7 @@ main = do
               candidates = Solver.allBelowProto env wrapped
           length candidates `shouldBe` length expected
           forM_ expected $ \candidate -> candidates `shouldSatisfy` elem candidate
-      it "prefers pure across a Wrapped bound in every constraint order" $ do
+      it "prefers pure across an Unwrapped bound in every constraint order" $ do
         forM_ (permutations [0,1,2,3]) $ \order -> do
           let (remaining, inferred) = TE.runTypeM $ do
                 signature <- TE.newUnivarOfKind S.KFX env
@@ -436,7 +449,7 @@ main = do
                 selectW <- TE.newWitness
                 unwrapW <- TE.newWitness
                 callW <- TE.newWitness
-                let wrapped = S.TC (S.GName (S.modName ["$"]) (S.name "Wrapped")) [unwrapped]
+                let wrapped = S.TC (S.GName (S.modName ["$"]) (S.name "Unwrapped")) [unwrapped]
                     cs = [ TE.Sub info env selectW S.fxPure selected
                          , TE.Proto info env unwrapW selected wrapped
                          , TE.Sub info env callW unwrapped body
@@ -478,12 +491,15 @@ main = do
           Acton.Env.lub env S.fxAction a `shouldBe` expected
           Acton.Env.glb env a S.fxAction `shouldBe` Just S.fxPure
           Acton.Env.glb env S.fxAction a `shouldBe` Just S.fxPure
-      it "reports proc effect for action calls after unwrap is erased" $ do
+      it "keeps action calls distinct from explicit sends and awaits" $ do
         let callback = S.name "callback"
             fn = S.tFun S.fxAction S.posNil S.kwdNil Builtin.tInt
             callEnv = Acton.Env.define [(callback,I.NVar fn)] env
         QuickType.typeOf callEnv (S.eCall (S.eVar callback) []) `shouldBe` Builtin.tInt
-        QuickType.fxOf callEnv (S.eCall (S.eVar callback) []) `shouldBe` S.fxProc
+        QuickType.fxOf callEnv (S.eCall (S.eVar callback) []) `shouldBe` S.fxAction
+        let sent = S.eCall (S.eAsync $ S.eVar callback) []
+        QuickType.fxOf callEnv sent `shouldBe` S.fxCom
+        QuickType.fxOf callEnv (S.eAwait sent) `shouldBe` S.fxProc
       forM_ [("action_as_proc", unlines
                 [ "pure def as_proc(a: action() -> int) -> proc() -> int:"
                 , "    return a" ])

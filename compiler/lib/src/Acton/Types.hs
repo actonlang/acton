@@ -974,7 +974,7 @@ inlineWitnessExpr eq e                 = case allEqs of
         inlineEqs                       = [ q | q@(Eqn _ _ sc rhs) <- allEqs, inlineEq sc rhs ]
         inlineEq (TSchema _ [] TFun{}) _ = True
         inlineEq (TSchema _ [] _) rhs   = wrapperRoot rhs `elem`
-                                              [primWrapProc, primWrapAction, primWrapMut, primWrapPure]
+                                              callWitnesses
         inlineEq _ _                    = False
         wrapperRoot (Var _ n)           = n
         wrapperRoot (TApp _ f _)        = wrapperRoot f
@@ -1241,7 +1241,8 @@ wrap env t@TFun{}                       = do tvx <- newUnivarOfKind KFX env
                                              return (Proto (locinfo t 28) env w tvx (pWrapped (effect t)), t{ effect = tvx })
 
 wrapped l kw env cs ts args             = do tvx <- newUnivarOfKind KFX env
-                                             let p = pWrapped tvx
+                                             let p = (if kw == attrWrap then pWrapped
+                                                      else if kw == attrUnwrap then pUnwrapped else pUnwrapped_) tvx
                                                  Just (_, sc, Just Static) = findAttr env p kw
                                              (_,tvs,t0) <- instantiateDefaults env sc
                                              fx <- newUnivarOfKind KFX env
@@ -1271,7 +1272,7 @@ instance (InfEnv a) => InfEnv [a] where
 instance InfEnv Stmt where
     infEnv env (Expr l e)
       | e == eNotImpl                   = return ([], [], Expr l e)
-      | otherwise                       = do (cs,_,e') <- infer env e
+      | otherwise                       = do (cs,e') <- inferStmtExpr env e
                                              return (cs, [], Expr l e')
 
     infEnv env (Assign l pats e)
@@ -2892,32 +2893,7 @@ instance Infer Expr where
                                          -- The parser inserts Opt nodes only within OptChain nodes (which each contains exactly one Opt node).
                                          -- The Opt nodes are handled and eliminated by infer on an OptChain node.
                                          -- e is an atomic expression (atom_expr in the parser) which contains exactly one ? in its sequence of trailers
-    infer env (OptChain l e)           = do x <- newTmp                                                                                      -- Example: a s1 s2 ? t1 t2
-                                            let (b,e1,e2) = split x e                                                                          -- e1 = a s1 s2, e2 = x t1 t2
-                                            te <- newUnivar env
-                                            (cs1,e1') <- inferSub env (tOpt te) e1
-                                            let env1 = define [(x,NVar te)] env
-                                            (cs2,t,e2') <- infer env1 e2
-                                            y <- newTmp
-                                            (cs3,t',e3) <- alt t b
-                                            return (cs1++cs2++cs3,
-                                                     t', eLet [sAssign (pVar y (tOpt te)) e1']
-                                                                           (eCond (termsubst [(x,eCAST (tOpt te) te (eVar y))] e2')
-                                                                                  (eCall (tApp (eQVar primISNOTNONE) [te]) [eVar y])
-                                                                                  e3))
-      where split x (Opt l e b)         = (b, e, eVar x)
-            split x (Dot l e n)         = (b, e1,Dot l e2 n) where (b,e1,e2) = split x e
-            split x (DotI l e i)        = (b, e1,DotI l e2 i) where (b,e1,e2) = split x e
-            split x (Rest l e n)        = (b, e1,Rest l e2 n) where (b,e1,e2) = split x e
-            split x (RestI l e i)       = (b, e1,RestI l e2 i) where (b,e1,e2) = split x e
-            split x (Call l f ps ks)    = (b, e1,Call l e2 ps ks) where (b,e1,e2) = split x f
-            split x (Index l e ix)      = (b, e1,Index l e2 ix) where (b,e1,e2) = split x e
-            split x (Slice l e sz)      = (b, e1,Slice l e2 sz) where (b,e1,e2) = split x e
-            alt t True                  = do w <- newWitness
-                                             w1 <- newWitness
-                                             t1 <- newUnivar env
-                                             return ([Sub (noinfo 444) env w tNone t1, Sub (noinfo 555) env w1 t t1],t1,eNone)
-            alt t False                 = return ([],t,eCall (tApp (eQVar primRaiseValueError) [t]) [Strings NoLoc ["Forced unwrapping applied to None"]] )
+    infer env (OptChain l e)           = inferOptChain infer env l e
 
     infer env e@(Rest _ _ _)            = notYetExpr e
 --    infer env (Rest l e n)              = do p <- newUnivarOfKind PRow env
@@ -3002,27 +2978,88 @@ instance Infer Expr where
     infer env (Paren l e)               = do (cs,t,e') <- infer env e
                                              return (cs, t, Paren l e')
 
+inferOptChain result env l e = do
+    x <- newTmp
+    let (b,e1,e2) = split x e
+    te <- newUnivar env
+    (cs1,e1') <- inferSub env (tOpt te) e1
+    let env1 = define [(x,NVar te)] env
+    (cs2,t,e2') <- result env1 e2
+    y <- newTmp
+    (cs3,t',e3) <- alt t b
+    return (cs1++cs2++cs3,
+             t', eLet [sAssign (pVar y (tOpt te)) e1']
+                                   (eCond (termsubst [(x,eCAST (tOpt te) te (eVar y))] e2')
+                                          (eCall (tApp (eQVar primISNOTNONE) [te]) [eVar y])
+                                          e3))
+  where split x (Opt l e b)         = (b, e, eVar x)
+        split x (Dot l e n)         = (b, e1,Dot l e2 n) where (b,e1,e2) = split x e
+        split x (DotI l e i)        = (b, e1,DotI l e2 i) where (b,e1,e2) = split x e
+        split x (Rest l e n)        = (b, e1,Rest l e2 n) where (b,e1,e2) = split x e
+        split x (RestI l e i)       = (b, e1,RestI l e2 i) where (b,e1,e2) = split x e
+        split x (Call l f ps ks)    = (b, e1,Call l e2 ps ks) where (b,e1,e2) = split x f
+        split x (Index l e ix)      = (b, e1,Index l e2 ix) where (b,e1,e2) = split x e
+        split x (Slice l e sz)      = (b, e1,Slice l e2 sz) where (b,e1,e2) = split x e
+        alt t True                  = do w <- newWitness
+                                         w1 <- newWitness
+                                         t1 <- newUnivar env
+                                         return ([Sub (noinfo 444) env w tNone t1, Sub (noinfo 555) env w1 t t1],t1,eNone)
+        alt t False                 = return ([],t,eCall (tApp (eQVar primRaiseValueError) [t]) [Strings NoLoc ["Forced unwrapping applied to None"]] )
+
+-- Only the result positions of a statement use unwrap_. Nested arguments and
+-- conditions still use value inference and therefore await action replies.
+inferStmtExpr env (Call l f ps ks) = do
+    (cs,_,e) <- inferCallWith env (Just attrUnwrap_) l f ps ks
+    return (cs,e)
+inferStmtExpr env (Paren l e) = do
+    (cs,e') <- inferStmtExpr env e
+    return (cs,Paren l e')
+inferStmtExpr env (Cond l yes test no) = do
+    (cs0,env',s,_,test') <- inferTest env test
+    (cs1,yes') <- inferStmtExpr env' yes
+    (cs2,no') <- inferStmtExpr env no
+    return (cs0++cs1++cs2, Cond l (discard $ termsubst s yes') test' (discard no'))
+inferStmtExpr env (Let l ss e) = do
+    (cs1,te,ss') <- infEnv env ss
+    (cs2,e') <- inferStmtExpr (define te env) e
+    return (cs1++cs2,Let l ss' (discard e'))
+inferStmtExpr env (OptChain l e) = do
+    (cs,_,e') <- inferOptChain result env l e
+    return (cs,e')
+  where result env e = do
+            (cs,e') <- inferStmtExpr env e
+            return (cs,tNone,discard e')
+inferStmtExpr env e = do
+    (cs,_,e') <- infer env e
+    return (cs,e')
+
+discard e                              = eLet [sExpr e] eNone
+
 -- Adapting arguments is separate from permission to perform the call. In
 -- particular, a pure call in an action must still produce its ordinary result.
-inferCall env unwrap l e ps ks          = do (cs1,t,e') <- infer env e{eloc = l}
-                                             (cs1,t,e') <- if unwrap then wrapped l attrUnwrap env cs1 [t] [e'] else pure (cs1,t,e')
-                                             (cs2,prow,ps') <- infer env ps
-                                             (cs3,krow,ks') <- infer env ks
-                                             t0 <- newUnivar env
-                                             fx <- case t of
-                                                       TFun{effect=fx} -> return fx
-                                                       _ -> newUnivarOfKind KFX env
-                                             w <- newWitness
-                                             let i = case e of
-                                                        Var _ n@(NoQ n')
-                                                          | NDef sc _ _ <- findQName n env,
-                                                            Just l2 <- findDefLoc n' env ->
-                                                                   DeclInfo l l2 n' sc ("Type incompatibility between definition of and call of "++Pretty.print n')
-                                                        _ -> DfltInfo l 837 (Just (Call l e ps ks)) []
-                                             requirement <- requireEffect env i fx
-                                             return (Sub i env w t (tFun fx prow krow t0) : requirement :
-                                            -- return (Sub (DfltInfo l 837 (Just (Call l e ps ks)) []) w [] t (tFun fx prow krow t0) :
-                                                     cs1++cs2++cs3, t0, Call l (eCall (eVar w) [e']) ps' ks')
+inferCall env unwrap                   = inferCallWith env (if unwrap then Just attrUnwrap else Nothing)
+
+inferCallWith env operation l e ps ks = do
+    (cs1,t,e') <- infer env e{eloc = l}
+    (cs1,t,e') <- case operation of
+                      Just op -> wrapped l op env cs1 [t] [e']
+                      Nothing -> pure (cs1,t,e')
+    (cs2,prow,ps') <- infer env ps
+    (cs3,krow,ks') <- infer env ks
+    t0 <- newUnivar env
+    fx <- case t of
+              TFun{effect=fx} -> return fx
+              _ -> newUnivarOfKind KFX env
+    w <- newWitness
+    let i = case e of
+               Var _ n@(NoQ n')
+                 | NDef sc _ _ <- findQName n env,
+                   Just l2 <- findDefLoc n' env ->
+                          DeclInfo l l2 n' sc ("Type incompatibility between definition of and call of "++Pretty.print n')
+               _ -> DfltInfo l 837 (Just (Call l e ps ks)) []
+    requirement <- requireEffect env i fx
+    return (Sub i env w t (tFun fx prow krow t0) : requirement :
+            cs1++cs2++cs3, t0, Call l (eCall (eVar w) [e']) ps' ks')
 
 
 

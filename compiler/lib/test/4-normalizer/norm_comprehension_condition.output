@@ -37,23 +37,23 @@ actor main (env : __builtin__.Env):
         W_main_32: __builtin__.Eq[__builtin__.list[__builtin__.int]] = __builtin__.EqD_list@[__builtin__.int](W_main_64)
         W_main_13: __builtin__.Iterable[__builtin__.list[__builtin__.int], __builtin__.int] = __builtin__.SequenceD_list@[__builtin__.int]().W_Collection
         pure def N_7compfun () -> __builtin__.list[__builtin__.int]:
-            W_N_8w: __builtin__.Sequence[__builtin__.list[__builtin__.int], __builtin__.int] = __builtin__.SequenceD_list@[__builtin__.int]()
-            N_9res: __builtin__.list[__builtin__.int] = []
-            N_10iter: __builtin__.Iterator[__builtin__.int] = W_main_13.__iter__([W_main_43.__fromatom__(1), W_main_43.__fromatom__(2)])
+            W_N_10w: __builtin__.Sequence[__builtin__.list[__builtin__.int], __builtin__.int] = __builtin__.SequenceD_list@[__builtin__.int]()
+            N_11res: __builtin__.list[__builtin__.int] = []
+            N_12iter: __builtin__.Iterator[__builtin__.int] = W_main_13.__iter__([W_main_43.__fromatom__(1), W_main_43.__fromatom__(2)])
             while True:
                 if True:
                     pass
                 else:
                     break
-                N_11maybe: __builtin__.maybe[__builtin__.int] = N_10iter.__next__()
-                if isinstance(N_11maybe, __builtin__.just):
-                    x: __builtin__.int = $CAST@[__builtin__.maybe[__builtin__.int], __builtin__.just[__builtin__.int]](N_11maybe).val
-                    W_N_8w.append(N_9res, W_main_21.__mul__(x, W_main_43.__fromatom__(2)))
+                N_13maybe: __builtin__.maybe[__builtin__.int] = N_12iter.__next__()
+                if isinstance(N_13maybe, __builtin__.just):
+                    x: __builtin__.int = $CAST@[__builtin__.maybe[__builtin__.int], __builtin__.just[__builtin__.int]](N_13maybe).val
+                    W_N_10w.append(N_11res, W_main_21.__mul__(x, W_main_43.__fromatom__(2)))
                 else:
                     break
-            return N_9res
+            return N_11res
         if W_main_32.__eq__(N_7compfun(), [W_main_43.__fromatom__(2), W_main_43.__fromatom__(4)]):
-            env.exit(W_main_43.__fromatom__(0))
-        env.exit(W_main_43.__fromatom__(1))
+            (async env.exit)(W_main_43.__fromatom__(0))
+        (async env.exit)(W_main_43.__fromatom__(1))
         return None
     $MarkStartup((async $WRAP@[(), (), None](self, __startup__))())

@@ -1,147 +1,27 @@
 /* Acton impl hash: test-hash */
 #include "rts/common.h"
 #include "out/types/deact.h"
-struct deactQ_L_9proc;
-struct deactQ_L_11proc;
-struct deactQ_L_19proc;
-typedef struct $Cont_R2 *deactQ_L_2Cont;
-typedef struct $Cont_R1 *deactQ_L_4Cont;
-typedef struct $Action_R1 *deactQ_L_6action;
-typedef struct $Proc0_R2 *deactQ_L_7proc;
-typedef struct $Proc0_R2 *deactQ_L_8proc;
-typedef struct deactQ_L_9proc *deactQ_L_9proc;
-typedef struct $Proc0_R1 *deactQ_L_10proc;
-typedef struct deactQ_L_11proc *deactQ_L_11proc;
-typedef struct $Proc0_R1 *deactQ_L_12proc;
-typedef struct $Action_R1 *deactQ_L_15action;
-typedef struct $Action_R1 *deactQ_L_17action;
-typedef struct deactQ_L_19proc *deactQ_L_19proc;
-typedef struct $Action_R1 *deactQ_L_20action;
-typedef struct $Cont_R3 *deactQ_L_21Cont;
-typedef struct $Proc0_R1 *deactQ_L_22proc;
-$R deactQ_L_1C_1cont ($action, $Cont, int64_t);
-$R deactQ_L_3C_3cont ($Cont, B_NoneType);
-struct deactQ_L_9procG_class {
-    char *$GCINFO;
-    int $class_id;
-    $SuperG_class $superclass;
-    B_NoneType (*__init__) (deactQ_L_9proc, deactQ_Apa, int64_t);
-    void (*__serialize__) (deactQ_L_9proc, $Serial$state);
-    deactQ_L_9proc (*__deserialize__) (deactQ_L_9proc, $Serial$state);
-    bool (*__bool__) (deactQ_L_9proc);
-    B_str (*__str__) (deactQ_L_9proc);
-    B_str (*__repr__) (deactQ_L_9proc);
-    $R (*__call__) (deactQ_L_9proc, $Cont);
-    $R (*__exec__) (deactQ_L_9proc, $Cont);
-};
-struct deactQ_L_9proc {
-    struct deactQ_L_9procG_class *$class;
-    deactQ_Apa self;
-    int64_t i;
-};
-struct deactQ_L_11procG_class {
-    char *$GCINFO;
-    int $class_id;
-    $SuperG_class $superclass;
-    B_NoneType (*__init__) (deactQ_L_11proc, deactQ_Bepa, int64_t);
-    void (*__serialize__) (deactQ_L_11proc, $Serial$state);
-    deactQ_L_11proc (*__deserialize__) (deactQ_L_11proc, $Serial$state);
-    bool (*__bool__) (deactQ_L_11proc);
-    B_str (*__str__) (deactQ_L_11proc);
-    B_str (*__repr__) (deactQ_L_11proc);
-    $R (*__call__) (deactQ_L_11proc, $Cont);
-    $R (*__exec__) (deactQ_L_11proc, $Cont);
-};
-struct deactQ_L_11proc {
-    struct deactQ_L_11procG_class *$class;
-    deactQ_Bepa self;
-    int64_t i;
-};
-$R deactQ_L_13myproc (deactQ_main, $Cont, int64_t);
-struct deactQ_L_19procG_class {
-    char *$GCINFO;
-    int $class_id;
-    $SuperG_class $superclass;
-    B_NoneType (*__init__) (deactQ_L_19proc, int64_t, deactQ_main);
-    void (*__serialize__) (deactQ_L_19proc, $Serial$state);
-    deactQ_L_19proc (*__deserialize__) (deactQ_L_19proc, $Serial$state);
-    bool (*__bool__) (deactQ_L_19proc);
-    B_str (*__str__) (deactQ_L_19proc);
-    B_str (*__repr__) (deactQ_L_19proc);
-    $R (*__call__) (deactQ_L_19proc, $Cont);
-    $R (*__exec__) (deactQ_L_19proc, $Cont);
-};
-struct deactQ_L_19proc {
-    struct deactQ_L_19procG_class *$class;
-    int64_t G_1;
-    deactQ_main self;
-};
-$R deactQ_L_18C_5cont (deactQ_Apa, deactQ_main, $Cont, int64_t);
-extern struct $ContClass deactQ_L_2ContG_methods;
-$R deactQ_L_2ContD___call__($Cont $closure, $WORD $result);
-$Cont deactQ_L_2ContD___deserialize__($Cont self, $Serial$state state);
-extern struct $ContClass deactQ_L_4ContG_methods;
-$R deactQ_L_4ContD___call__($Cont $closure, $WORD $result);
-$Cont deactQ_L_4ContD___deserialize__($Cont self, $Serial$state state);
-extern struct $Action1G_class deactQ_L_6actionG_methods;
-B_Msg deactQ_L_6actionD___asyn__($action $closure, $WORD $arg1);
-$action deactQ_L_6actionD___deserialize__($action self, $Serial$state state);
-extern struct $Proc0Class deactQ_L_7procG_methods;
-$R deactQ_L_7procD___call__($proc $closure, $Cont $continuation);
-$proc deactQ_L_7procD___deserialize__($proc self, $Serial$state state);
-extern struct $Proc0Class deactQ_L_8procG_methods;
-$R deactQ_L_8procD___call__($proc $closure, $Cont $continuation);
-$proc deactQ_L_8procD___deserialize__($proc self, $Serial$state state);
-extern struct deactQ_L_9procG_class deactQ_L_9procG_methods;
-deactQ_L_9proc deactQ_L_9procG_new(deactQ_Apa, int64_t);
-$R deactQ_L_9procD___call__(deactQ_L_9proc L_self, $Cont C_cont);
-extern struct $Proc0Class deactQ_L_10procG_methods;
-$R deactQ_L_10procD___call__($proc $closure, $Cont $continuation);
-$proc deactQ_L_10procD___deserialize__($proc self, $Serial$state state);
-extern struct deactQ_L_11procG_class deactQ_L_11procG_methods;
-deactQ_L_11proc deactQ_L_11procG_new(deactQ_Bepa, int64_t);
-$R deactQ_L_11procD___call__(deactQ_L_11proc L_self, $Cont C_cont);
-extern struct $Proc0Class deactQ_L_12procG_methods;
-$R deactQ_L_12procD___call__($proc $closure, $Cont $continuation);
-$proc deactQ_L_12procD___deserialize__($proc self, $Serial$state state);
-extern struct $Action1G_class deactQ_L_15actionG_methods;
-B_Msg deactQ_L_15actionD___asyn__($action $closure, $WORD $arg1);
-$action deactQ_L_15actionD___deserialize__($action self, $Serial$state state);
-extern struct $Action1G_class deactQ_L_17actionG_methods;
-B_Msg deactQ_L_17actionD___asyn__($action $closure, $WORD $arg1);
-$action deactQ_L_17actionD___deserialize__($action self, $Serial$state state);
-extern struct deactQ_L_19procG_class deactQ_L_19procG_methods;
-deactQ_L_19proc deactQ_L_19procG_new(int64_t, deactQ_main);
-$R deactQ_L_19procD___call__(deactQ_L_19proc L_self, $Cont C_cont);
-extern struct $Action1G_class deactQ_L_20actionG_methods;
-B_Msg deactQ_L_20actionD___asyn__($action $closure, $WORD $arg1);
-$action deactQ_L_20actionD___deserialize__($action self, $Serial$state state);
-extern struct $ContClass deactQ_L_21ContG_methods;
-$R deactQ_L_21ContD___call__($Cont $closure, $WORD $result);
-$Cont deactQ_L_21ContD___deserialize__($Cont self, $Serial$state state);
-extern struct $Proc0Class deactQ_L_22procG_methods;
-$R deactQ_L_22procD___call__($proc $closure, $Cont $continuation);
-$proc deactQ_L_22procD___deserialize__($proc self, $Serial$state state);
-$R deactQ_L_1C_1cont ($action cb, $Cont C_cont, int64_t C_2res) {
+$R deactQ_L_1C_2cont ($action cb, $Cont C_cont, int64_t C_3res) {
+    int64_t C_1pre = C_3res;
     #line 7 "test/src/deact.act"
-    int64_t v = C_2res;
+    int64_t v = C_1pre;
     #line 8 "test/src/deact.act"
     B_Msg m = ((B_Msg)((B_Msg (*) ($WORD, B_int))(($action)(cb))->$class->__asyn__)(cb, toB_int(2LL)));
-    int64_t N_tmp = (((int64_t)(v * 10LL)));
-    return $R_CONT(C_cont, toB_int(N_tmp));
+    int64_t N_1tmp = (((int64_t)(v * 10LL)));
+    return $R_CONT(C_cont, toB_int(N_1tmp));
 }
 $R deactQ_L_2ContD___call__($Cont $closure, $WORD $result) {
     deactQ_L_2Cont L_self = (deactQ_L_2Cont)$closure;
     B_int G_1 = (B_int)$result;
     $action cb = ($action)(((deactQ_L_2Cont)(L_self))->ref0);
     $Cont C_cont = ($Cont)(((deactQ_L_2Cont)(L_self))->ref1);
-    return deactQ_L_1C_1cont(cb, C_cont, ((B_int)G_1)->val);
+    return deactQ_L_1C_2cont(cb, C_cont, ((B_int)G_1)->val);
 }
 $Cont deactQ_L_2ContD___deserialize__($Cont self, $Serial$state state) {
     return $cont_restore(&deactQ_L_2ContG_methods, self, state);
 }
 struct $ContClass deactQ_L_2ContG_methods;
-$R deactQ_L_3C_3cont ($Cont C_cont, B_NoneType C_4res) {
+$R deactQ_L_3C_4cont ($Cont C_cont, B_NoneType C_5res) {
     #line 16 "test/src/deact.act"
     ((B_NoneType (*) (B_tuple, B_str, B_str, bool, bool))B_print)($NEWTUPLE(1, actStrFromLiteral("Apa", 3, 3)), actStrFromLiteral(" ", 1, 1), actStrFromLiteral("\n", 1, 1), false, false);
     return $R_CONT(C_cont, B_None);
@@ -150,7 +30,7 @@ $R deactQ_L_4ContD___call__($Cont $closure, $WORD $result) {
     deactQ_L_4Cont L_self = (deactQ_L_4Cont)$closure;
     B_NoneType G_1 = (B_NoneType)$result;
     $Cont C_cont = ($Cont)(((deactQ_L_4Cont)(L_self))->ref0);
-    return deactQ_L_3C_3cont(C_cont, G_1);
+    return deactQ_L_3C_4cont(C_cont, G_1);
 }
 $Cont deactQ_L_4ContD___deserialize__($Cont self, $Serial$state state) {
     return $cont_restore(&deactQ_L_4ContG_methods, self, state);
@@ -324,9 +204,9 @@ $action deactQ_L_20actionD___deserialize__($action self, $Serial$state state) {
     return $action_r1_restore(&deactQ_L_20actionG_methods, self, state);
 }
 struct $Action1G_class deactQ_L_20actionG_methods;
-$R deactQ_L_18C_5cont (deactQ_Apa a, deactQ_main self, $Cont C_cont, int64_t C_6res) {
+$R deactQ_L_18C_6cont (deactQ_Apa a, deactQ_main self, $Cont C_cont, int64_t C_7res) {
     #line 38 "test/src/deact.act"
-    int64_t r = C_6res;
+    int64_t r = C_7res;
     #line 39 "test/src/deact.act"
     ((B_NoneType (*) (B_tuple, B_str, B_str, bool, bool))B_print)($NEWTUPLE(2, actStrFromLiteral("r =", 3, 3), toB_int(r)), actStrFromLiteral(" ", 1, 1), actStrFromLiteral("\n", 1, 1), false, false);
     #line 40 "test/src/deact.act"
@@ -341,7 +221,7 @@ $R deactQ_L_21ContD___call__($Cont $closure, $WORD $result) {
     deactQ_Apa a = (deactQ_Apa)(((deactQ_L_21Cont)(L_self))->ref0);
     deactQ_main self = (deactQ_main)(((deactQ_L_21Cont)(L_self))->ref1);
     $Cont C_cont = ($Cont)(((deactQ_L_21Cont)(L_self))->ref2);
-    return deactQ_L_18C_5cont(a, self, C_cont, ((B_int)G_1)->val);
+    return deactQ_L_18C_6cont(a, self, C_cont, ((B_int)G_1)->val);
 }
 $Cont deactQ_L_21ContD___deserialize__($Cont self, $Serial$state state) {
     return $cont_restore(&deactQ_L_21ContG_methods, self, state);
@@ -373,14 +253,15 @@ $R deactQ_ApaD_setupG_local (deactQ_Apa self, $Cont C_cont, $action cb) {
 $R deactQ_ApaD_computeG_local (deactQ_Apa self, $Cont C_cont, $action cb) {
     #line 6 "test/src/deact.act"
     ((B_NoneType (*) (B_tuple, B_str, B_str, bool, bool))B_print)($NEWTUPLE(1, actStrFromLiteral("compute", 7, 7)), actStrFromLiteral(" ", 1, 1), actStrFromLiteral("\n", 1, 1), false, false);
-    return $AWAIT((($Cont)((deactQ_L_2Cont)$Cont_R2_new(&deactQ_L_2ContG_methods, cb, C_cont))), ((B_Msg)((B_Msg (*) ($WORD, B_int))(($action)(cb))->$class->__asyn__)(cb, toB_int(1LL))));
+    $action N_function = cb;
+    return $AWAIT((($Cont)((deactQ_L_2Cont)$Cont_R2_new(&deactQ_L_2ContG_methods, cb, C_cont))), ((B_Msg)((B_Msg (*) ($WORD, B_int))(($action)(N_function))->$class->__asyn__)(N_function, toB_int(1LL))));
 }
 #line 10 "test/src/deact.act"
 $R deactQ_ApaD_noticeG_local (deactQ_Apa self, $Cont C_cont, int64_t i) {
     #line 11 "test/src/deact.act"
     ((B_NoneType (*) (B_tuple, B_str, B_str, bool, bool))B_print)($NEWTUPLE(1, actStrFromLiteral("notice", 6, 6)), actStrFromLiteral(" ", 1, 1), actStrFromLiteral("\n", 1, 1), false, false);
-    int64_t N_1tmp = (((int64_t)(i + 1LL)));
-    return $R_CONT(C_cont, toB_int(N_1tmp));
+    int64_t N_2tmp = (((int64_t)(i + 1LL)));
+    return $R_CONT(C_cont, toB_int(N_2tmp));
 }
 #line 14 "test/src/deact.act"
 $R deactQ_ApaD___startup__G_local (deactQ_Apa self, $Cont C_cont) {
@@ -433,8 +314,8 @@ B_NoneType deactQ_BepaD___init__ (deactQ_Bepa self) {
 $R deactQ_BepaD_callbackG_local (deactQ_Bepa self, $Cont C_cont, int64_t i) {
     #line 20 "test/src/deact.act"
     ((B_NoneType (*) (B_tuple, B_str, B_str, bool, bool))B_print)($NEWTUPLE(2, actStrFromLiteral("callback", 8, 8), toB_int(i)), actStrFromLiteral(" ", 1, 1), actStrFromLiteral("\n", 1, 1), false, false);
-    int64_t N_3tmp = (((int64_t)(i + 1LL)));
-    return $R_CONT(C_cont, toB_int(N_3tmp));
+    int64_t N_4tmp = (((int64_t)(i + 1LL)));
+    return $R_CONT(C_cont, toB_int(N_4tmp));
 }
 #line 23 "test/src/deact.act"
 $R deactQ_BepaD___startup__G_local (deactQ_Bepa self, $Cont C_cont) {

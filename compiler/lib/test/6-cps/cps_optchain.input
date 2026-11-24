@@ -12,6 +12,7 @@ proc def maybe_log (c : ?Cls) -> None:
     V_maybe_log_17: ?Cls = c
     if $ISNOTNONE@[Cls](V_maybe_log_17):
         $CAST@[?Cls, Cls](V_maybe_log_17).f("\"boom\"")
+        None
     else:
         None
     return None
@@ -41,15 +42,17 @@ com def LoggerG_newact () -> Logger:
     return G_act
 # (recursive group)
 
-proc def must_log (a : ?Logger) -> None:
+com def must_log (a : ?Logger) -> None:
     V_must_log_17: ?Logger = a
     if $ISNOTNONE@[Logger](V_must_log_17):
         (async $CAST@[?Logger, Logger](V_must_log_17).log)("\"bang\"")
+        None
     else:
         $raiseValueError@[None]("\"Forced unwrapping applied to None\"")
     V_must_log_33: ?Logger = a
     if $ISNOTNONE@[Logger](V_must_log_33):
         (async $CAST@[?Logger, Logger](V_must_log_33).log)("\"chain\"")
+        None
     else:
         None
     return None

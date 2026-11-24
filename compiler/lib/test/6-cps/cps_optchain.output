@@ -13,7 +13,10 @@ proc def maybe_log (C_cont : proc(None) -> $R, c : ?Cls) -> $R:
     proc def C_1cont (C_2res : None) -> $R:
         return $R_CONTc@[None](C_cont, None)
     if $ISNOTNONE@[Cls](V_maybe_log_17):
-        return $CAST@[?Cls, Cls](V_maybe_log_17).f($SKIPRESc@[None](C_1cont), "\"boom\"")
+        proc def C_3cont (C_4res : None) -> $R:
+            None
+            return $R_CONTc@[None](C_cont, None)
+        return $CAST@[?Cls, Cls](V_maybe_log_17).f($SKIPRESc@[None](C_3cont), "\"boom\"")
     else:
         None
         return $R_CONTc@[None](C_cont, None)
@@ -43,15 +46,17 @@ com def LoggerG_newact () -> Logger:
     return G_act
 # (recursive group)
 
-proc def must_log (C_cont : proc(None) -> $R, a : ?Logger) -> $R:
+com def must_log (a : ?Logger) -> None:
     V_must_log_17: ?Logger = a
     if $ISNOTNONE@[Logger](V_must_log_17):
         (async $CAST@[?Logger, Logger](V_must_log_17).log)("\"bang\"")
+        None
     else:
         $raiseValueError@[None]("\"Forced unwrapping applied to None\"")
     V_must_log_33: ?Logger = a
     if $ISNOTNONE@[Logger](V_must_log_33):
         (async $CAST@[?Logger, Logger](V_must_log_33).log)("\"chain\"")
+        None
     else:
         None
-    return $R_CONTc@[None](C_cont, None)
+    return None

@@ -366,6 +366,10 @@ instance Lift Expr where
     ll env (Call l e p KwdNil)
       | Just (e',vts) <- freefun env e  = do p' <- ll env p
                                              return $ Call l e' (addArgs vts p') KwdNil
+      | Async _ f <- e,
+        Just (f',vts) <- freefun env f = do
+            p' <- ll env p
+            return $ Call l f' (addArgs vts p') KwdNil
       | Async _ e' <- e,
         closedType env e'               = do e' <- ll env e'
                                              p' <- ll env p
@@ -383,16 +387,12 @@ instance Lift Expr where
                                              p' <- ll env p
                                              return $ Call l e' p' KwdNil
 
-    -- An async function value is a proc returning a Msg. Build its CPS
-    -- continuation explicitly and capture the action at construction time.
+    -- Capture an async function value once; invoking it is a direct com call.
     ll env (Async l e)                  = do e' <- ll env e
                                              captured <- newName "action"
                                              let call = Call l0 (eDot (eVar captured) attr_asyn_) (pArg par) KwdNil
-                                                 result = eCall (tApp (eQVar primRCont) [conv $ tMsg t]) [eVar llCont,call]
-                                                 cont = tFun fxProc (posRow (tMsg t) posNil) kwdNil tR
-                                                 params = PosPar llCont (Just cont) Nothing par
-                                             closureConvert env (Lambda l0 params KwdNIL result fxProc)
-                                                               tR [(captured,typeOf env e)] [e']
+                                             closureConvert env (Lambda l0 par KwdNIL call fxCom)
+                                                               (tMsg t) [(captured,typeOf env e)] [e']
       where par                         = pPar paramNames p
             TFun _ fx p _ t             = typeOf env e
 

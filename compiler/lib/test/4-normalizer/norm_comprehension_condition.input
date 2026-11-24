@@ -21,6 +21,10 @@ actor main (env : __builtin__.Env):
         W_main_32: __builtin__.Eq[__builtin__.list[__builtin__.int]] = __builtin__.EqD_list@[__builtin__.int](W_main_64)
         W_main_13: __builtin__.Iterable[__builtin__.list[__builtin__.int], __builtin__.int] = __builtin__.SequenceD_list@[__builtin__.int]().W_Collection
         if W_main_32.__eq__([W_main_21.__mul__(x, W_main_43.__fromatom__(2)) for x: __builtin__.int in W_main_13.__iter__([W_main_43.__fromatom__(1), W_main_43.__fromatom__(2)])], [W_main_43.__fromatom__(2), W_main_43.__fromatom__(4)]):
-            env.exit(n = W_main_43.__fromatom__(0))
-        env.exit(n = W_main_43.__fromatom__(1))
+            (async let:
+                       G_2x: action(n: __builtin__.int) -> None = env.exit
+                   in action lambda (G_1p : __builtin__.int): G_2x(n = G_1p))(W_main_43.__fromatom__(0))
+        (async let:
+                   G_2x: action(n: __builtin__.int) -> None = env.exit
+               in action lambda (G_1p : __builtin__.int): G_2x(n = G_1p))(W_main_43.__fromatom__(1))
     $MarkStartup((async $WRAP@[(), (), None](self, __startup__))())

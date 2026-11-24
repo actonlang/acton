@@ -1709,7 +1709,7 @@ actor _RTSWorkerMonitor(wthread_id: int):
     proc def __startup__():
         _init()
 
-def _rts_io_handles() -> dict[u64, (typ: str, act: u64)]:
+pure def _rts_io_handles() -> dict[u64, (typ: str, act: u64)]:
     NotImplemented
 
 actor Env (wc: WorldCap, args: list[str], wthreads: int, envcap: _EnvCap):

@@ -1,9 +1,10 @@
 # recursive group:
-proc def L_1C_1cont (cb : $action[(__builtin__.int,), __builtin__.int], C_cont : $Cont[__builtin__.int], C_2res : UNBOXED __builtin__.int) -> $R:
-    v: UNBOXED __builtin__.int = (UNBOX __builtin__.int C_2res)
+proc def L_1C_2cont (cb : $action[(__builtin__.int,), __builtin__.int], C_cont : $Cont[__builtin__.int], C_3res : UNBOXED __builtin__.int) -> $R:
+    C_1pre: UNBOXED __builtin__.int = (UNBOX __builtin__.int C_3res)
+    v: UNBOXED __builtin__.int = (UNBOX __builtin__.int C_1pre)
     m: __builtin__.Msg[__builtin__.int] = cb.__asyn__((BOX __builtin__.int (UNBOX __builtin__.int 2)))
-    N_tmp: UNBOXED __builtin__.int = ((UNBOX __builtin__.int v) * (UNBOX __builtin__.int 10))
-    return $R_CONT@[__builtin__.int](C_cont, (BOX __builtin__.int N_tmp))
+    N_1tmp: UNBOXED __builtin__.int = ((UNBOX __builtin__.int v) * (UNBOX __builtin__.int 10))
+    return $R_CONT@[__builtin__.int](C_cont, (BOX __builtin__.int N_1tmp))
 class L_2Cont ($Cont[__builtin__.int], __builtin__.value):
     @property
     cb : $action[(__builtin__.int,), __builtin__.int]
@@ -16,8 +17,8 @@ class L_2Cont ($Cont[__builtin__.int], __builtin__.value):
     proc def __call__ (L_self : L_2Cont, G_1 : __builtin__.int) -> $R:
         cb: $action[(__builtin__.int,), __builtin__.int] = L_self.cb
         C_cont: $Cont[__builtin__.int] = L_self.C_cont
-        return L_1C_1cont(cb, C_cont, (UNBOX __builtin__.int G_1))
-proc def L_3C_3cont (C_cont : $Cont[None], C_4res : None) -> $R:
+        return L_1C_2cont(cb, C_cont, (UNBOX __builtin__.int G_1))
+proc def L_3C_4cont (C_cont : $Cont[None], C_5res : None) -> $R:
     print@[(__builtin__.str,)](("\"Apa\"",), "\" \"", "\"\\n\"", (UNBOX __builtin__.bool False), (UNBOX __builtin__.bool False))
     return $R_CONT@[None](C_cont, None)
 class L_4Cont ($Cont[None], __builtin__.value):
@@ -28,7 +29,7 @@ class L_4Cont ($Cont[None], __builtin__.value):
         return None
     proc def __call__ (L_self : L_4Cont, G_1 : None) -> $R:
         C_cont: $Cont[None] = L_self.C_cont
-        return L_3C_3cont(C_cont, G_1)
+        return L_3C_4cont(C_cont, G_1)
 class L_6action ($action[(__builtin__.int,), __builtin__.int], $proc[(__builtin__.int,), __builtin__.int], __builtin__.value):
     @property
     L_5obj : Apa
@@ -205,8 +206,8 @@ class L_20action ($action[(__builtin__.int,), __builtin__.int], $proc[(__builtin
         self: main = L_self.self
         return $ASYNC@[__builtin__.int](self, L_19proc((UNBOX __builtin__.int G_1), self))
     # (recursive group)
-proc def L_18C_5cont (a : Apa, self : main, C_cont : $Cont[None], C_6res : UNBOXED __builtin__.int) -> $R:
-    r: UNBOXED __builtin__.int = (UNBOX __builtin__.int C_6res)
+proc def L_18C_6cont (a : Apa, self : main, C_cont : $Cont[None], C_7res : UNBOXED __builtin__.int) -> $R:
+    r: UNBOXED __builtin__.int = (UNBOX __builtin__.int C_7res)
     print@[(__builtin__.str, __builtin__.int)](("\"r =\"", (BOX __builtin__.int r)), "\" \"", "\"\\n\"", (UNBOX __builtin__.bool False), (UNBOX __builtin__.bool False))
     (async a.compute)(L_20action(self))
     print@[(__builtin__.str,)](("\"main\"",), "\" \"", "\"\\n\"", (UNBOX __builtin__.bool False), (UNBOX __builtin__.bool False))
@@ -227,7 +228,7 @@ class L_21Cont ($Cont[__builtin__.int], __builtin__.value):
         a: Apa = L_self.a
         self: main = L_self.self
         C_cont: $Cont[None] = L_self.C_cont
-        return L_18C_5cont(a, self, C_cont, (UNBOX __builtin__.int G_1))
+        return L_18C_6cont(a, self, C_cont, (UNBOX __builtin__.int G_1))
 class L_22proc ($proc[(), None], __builtin__.value):
     @property
     self : main
@@ -251,11 +252,12 @@ class Apa ($Actor, __builtin__.value):
         return $R_CONT@[None](C_cont, None)
     proc def computeG_local (self : Apa, C_cont : $Cont[__builtin__.int], cb : $action[(__builtin__.int,), __builtin__.int]) -> $R:
         print@[(__builtin__.str,)](("\"compute\"",), "\" \"", "\"\\n\"", (UNBOX __builtin__.bool False), (UNBOX __builtin__.bool False))
-        return $AWAIT@[__builtin__.int](L_2Cont(cb, C_cont), cb.__asyn__((BOX __builtin__.int (UNBOX __builtin__.int 1))))
+        N_function: $action[(__builtin__.int,), __builtin__.int] = cb
+        return $AWAIT@[__builtin__.int](L_2Cont(cb, C_cont), N_function.__asyn__((BOX __builtin__.int (UNBOX __builtin__.int 1))))
     proc def noticeG_local (self : Apa, C_cont : $Cont[__builtin__.int], i : UNBOXED __builtin__.int) -> $R:
         print@[(__builtin__.str,)](("\"notice\"",), "\" \"", "\"\\n\"", (UNBOX __builtin__.bool False), (UNBOX __builtin__.bool False))
-        N_1tmp: UNBOXED __builtin__.int = ((UNBOX __builtin__.int i) + (UNBOX __builtin__.int 1))
-        return $R_CONT@[__builtin__.int](C_cont, (BOX __builtin__.int N_1tmp))
+        N_2tmp: UNBOXED __builtin__.int = ((UNBOX __builtin__.int i) + (UNBOX __builtin__.int 1))
+        return $R_CONT@[__builtin__.int](C_cont, (BOX __builtin__.int N_2tmp))
     proc def __startup__G_local (self : Apa, C_cont : $Cont[None]) -> $R:
         return self.setupG_local($SKIPRES@[None](L_4Cont(C_cont)), L_6action(self))
     action def setup (self : Apa, cb : $action[(__builtin__.int,), __builtin__.int]) -> None:
@@ -272,8 +274,8 @@ class Bepa ($Actor, __builtin__.value):
         return None
     proc def callbackG_local (self : Bepa, C_cont : $Cont[__builtin__.int], i : UNBOXED __builtin__.int) -> $R:
         print@[(__builtin__.str, __builtin__.int)](("\"callback\"", (BOX __builtin__.int i)), "\" \"", "\"\\n\"", (UNBOX __builtin__.bool False), (UNBOX __builtin__.bool False))
-        N_3tmp: UNBOXED __builtin__.int = ((UNBOX __builtin__.int i) + (UNBOX __builtin__.int 1))
-        return $R_CONT@[__builtin__.int](C_cont, (BOX __builtin__.int N_3tmp))
+        N_4tmp: UNBOXED __builtin__.int = ((UNBOX __builtin__.int i) + (UNBOX __builtin__.int 1))
+        return $R_CONT@[__builtin__.int](C_cont, (BOX __builtin__.int N_4tmp))
     proc def __startup__G_local (self : Bepa, C_cont : $Cont[None]) -> $R:
         print@[(__builtin__.str,)](("\"Bepa\"",), "\" \"", "\"\\n\"", (UNBOX __builtin__.bool False), (UNBOX __builtin__.bool False))
         return $R_CONT@[None](C_cont, None)
