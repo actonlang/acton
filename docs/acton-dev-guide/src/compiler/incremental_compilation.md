@@ -209,6 +209,27 @@ data C file that a back job would write reruns the back passes, as a `.c` or a
 whose name ends with `.embed.c` with `-fno-lto`, so that a build with link-time
 optimization gets the content as an object file and not as bitcode.
 
+The C compiler reads an embedded file when zig compiles the data C file, which
+is after the plan looked at the file. The `_Static_assert` of the data C file
+stops the C compile for a file of another size and for a file that is gone, and
+the command line compiler reports a failed zig as an internal compiler error.
+Nothing stops the C compile for other content of the same size. So the command
+line compiler looks at the embedded files once more after zig, also when zig
+failed (`changedEmbeds`). It takes each file that the `.tydb` of a module of
+the plan records, for the modules that have a data C file. The stat of the file
+must be the one that the plan saw, else the build fails with `<path> changed
+while the build ran. Run the build again`. And the SHA-256 that the plan has
+for the file must be the recorded one, else the build fails with `<path>
+changed since its module was compiled. Run the build without --only-build`: a
+build with `--only-build` runs no front pass, so it leaves the row as it was
+when its plan found other content. A file that the plan looked at is not read
+again. So the look costs one stat per module, and for a module that embeds
+files one read of its header and one stat per file. It compares with the stat
+that the plan saw and not with the recorded one, so for a recorded stat that
+could not be refreshed the look reads nothing and reports nothing. A message of
+this look is printed in place of the report of a failed zig. The language
+server runs no zig and does not look.
+
 An absolute prefix is written into each `#embed` line as it is, so `embedPass`
 refuses one that has a double quote or a control character. The data C file of
 a module `tool` has the path of the generated `.c` of the module of a source

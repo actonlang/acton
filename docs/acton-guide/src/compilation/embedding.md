@@ -64,9 +64,17 @@ again the code of each module that uses a name whose value holds the content.
 `acton test` runs a test again when the test uses such a name. A file that is
 written again with the same content is read once and compiles nothing.
 
-A build can look at an embedded file more than once. When the file is written
-between two looks, the build stops with a message such as `data/title.txt
-changed while the build ran. Run the build again`.
+A build looks at an embedded file more than once: before it compiles a
+module, and again after the C compiler has read the file. When the file is
+written or removed between two looks, the build stops with a message such as
+`data/title.txt changed while the build ran. Run the build again`. The
+executable of such a build can hold other content than the module was compiled
+with.
+
+A build with `--only-build` compiles no module. When an embedded file has
+changed since its module was compiled, such a build stops with a message such
+as `data/title.txt changed since its module was compiled. Run the build
+without --only-build`.
 
 The module that embeds a file is type checked again each time the content of
 the file changes. So a name that holds a large file, or a file that changes

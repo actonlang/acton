@@ -73,7 +73,10 @@ itself is in the module's data C file, which the C compiler fills from the
 embedded files (#embed) and which a back job writes from the recorded files
 (writeDataFile).  Its first line is tagged with dataTag, which does not
 cover the impl hash, so an edit of other code of the module leaves the file
-as it is and the C compiler does not read the embedded files again.
+as it is and the C compiler does not read the embedded files again.  The C
+compiler reads an embedded file after the plan looked at it, so the CLI asks
+after its Zig build which files are not the ones that the build took them
+for (changedEmbeds), and fails the build for any.
 
 Plan
 ----
@@ -367,6 +370,7 @@ module Acton.Compile
   , FileChanged(..)
   , fileFact
   , hashOfFile
+  , changedEmbeds
   , docIndexEntry
   , parseActSource
   , parseActFile
@@ -1661,21 +1665,57 @@ fileFact facts recorded path status = do
       Just r | recordedStat r == meta && InterfaceFiles.sfmMTimeNs meta < recordedWritten r -> return (recordedSha256 r)
       _                                                                                    -> hashOfFile path
 
--- | Each of the given embedded paths below a directory, as a plan sees it:
--- the file as a .tydb records it, or why embed cannot take it.  A path names
--- a regular file of fewer than 2^31 bytes whose components are spelled as
--- their directories list them (Embed.embeddedFileStatus), each directory
--- listed once in a plan.  The SHA-256 follows the stat rule with the given
--- records (fileFact), and the stat is taken before the content is read.
+-- | An embedded path below a directory, as a plan sees it: the file as a
+-- .tydb records it, or why embed cannot take it.  A path names a regular
+-- file of fewer than 2^31 bytes whose components are spelled as their
+-- directories list them (Embed.embeddedFileStatus), each directory listed
+-- once in a plan.  The SHA-256 follows the stat rule with the given records
+-- (fileFact), and the stat is taken before the content is read.  The look
+-- throws FileChanged for a file that changed since the plan first looked at
+-- it.
+embedFact :: FileFacts -> FilePath -> M.Map FilePath Recorded -> FilePath -> IO (Either String InterfaceFiles.EmbeddedFile)
+embedFact facts root records path = handle (return . Left . Embed.cannotBeRead path) $ do
+    status <- fmap fileMeta <$> Embed.embeddedFileStatus (listedIn facts) root path
+    sha    <- fileFact facts (M.lookup path records) (root </> path) status
+    return (InterfaceFiles.EmbeddedFile path . InterfaceFiles.sfmSize <$> status <*> sha <*> status)
+
+-- | The message for an embedded path whose file changed since the plan first
+-- looked at it.
+changedWhileBuilding :: FilePath -> String
+changedWhileBuilding path = path ++ " changed while the build ran. Run the build again"
+
+-- | Each of the given embedded paths below a directory, as a plan sees it
+-- (embedFact).  Embed cannot take a file that changed since the plan first
+-- looked at it.
 embedFacts :: FileFacts -> FilePath -> M.Map FilePath Recorded -> [FilePath] -> IO [Either String InterfaceFiles.EmbeddedFile]
-embedFacts facts root records paths = mapM fact paths
+embedFacts facts root records = mapM fact
   where
-    no = return . Left
-    fact path = handle (\(FileChanged _) -> no (path ++ " changed while the build ran. Run the build again"))
-              . handle (no . Embed.cannotBeRead path) $ do
-      status <- fmap fileMeta <$> Embed.embeddedFileStatus (listedIn facts) root path
-      sha    <- fileFact facts (M.lookup path records) (root </> path) status
-      return (InterfaceFiles.EmbeddedFile path . InterfaceFiles.sfmSize <$> status <*> sha <*> status)
+    fact path = handle (\(FileChanged _) -> return (Left (changedWhileBuilding path))) (embedFact facts root records path)
+
+-- | The messages for the embedded files of a plan's modules that are not the
+-- files that the build took them for, each message once.  The C compiler
+-- reads the embedded files of a module when Zig compiles its data C file,
+-- which is after the plan looked at them.  So this look comes after Zig, and
+-- takes each file that the .tydb of a module with a data C file records.
+-- The stat of the file is the one that the plan saw, else the file changed
+-- while the build ran.  And the SHA-256 that the plan has for the file is
+-- the recorded one, else the file changed since its module was compiled,
+-- which only a build that runs no front passes (--only-build) leaves so.  A
+-- file that the plan looked at is not read: it costs one stat.
+changedEmbeds :: CompilePlan -> IO [String]
+changedEmbeds plan = Data.List.nub . concat <$> mapM changed (cpNeededTasks plan)
+  where
+    changed t = do
+      let paths = gtPaths t
+          mn    = tkMod (gtKey t)
+      hasData <- doesFileExist (generatedPath paths mn dataFile)
+      header  <- if hasData then InterfaceFiles.tryReadHeaderSummary (tyDbPath paths mn) else return Nothing
+      let records = maybe M.empty recordedEmbeds header
+      concat <$> mapM (look (embedRoot paths) records) (M.toList records)
+    look root records (path, recorded) = handle (\(FileChanged _) -> return [changedWhileBuilding path]) $ do
+      file <- embedFact (ccFiles (cpContext plan)) root records path
+      return [ path ++ " changed since its module was compiled. Run the build without --only-build"
+             | fmap InterfaceFiles.embeddedSha256 file /= Right (recordedSha256 recorded) ]
 
 -- | Read stable source metadata used for quick .tydb reuse checks.
 readSourceFileMeta :: FilePath -> IO InterfaceFiles.SourceFileMeta

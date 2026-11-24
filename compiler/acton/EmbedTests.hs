@@ -1,9 +1,10 @@
 {-# LANGUAGE OverloadedStrings, ScopedTypeVariables #-}
 -- | The expression embed("path").  The messages for a path that names no
 -- file as embed takes it: as the command line compiler prints them, and as
--- the language server publishes them for the same project.  And programs
--- that embed files, built through zig and run.
-module EmbedTests (embedErrorTests, embedProgramTests) where
+-- the language server publishes them for the same project.  Programs that
+-- embed files, built through zig and run.  And builds in which an embedded
+-- file is not the one that its module was compiled with when zig has run.
+module EmbedTests (embedErrorTests, embedProgramTests, embedChangedTests) where
 
 import Control.Exception (IOException, try)
 import Control.Monad
@@ -13,20 +14,22 @@ import Data.Bits (shiftR, (.&.))
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as LBS
-import Data.List (isPrefixOf, isSuffixOf, sort)
+import Data.List (isInfixOf, isPrefixOf, isSuffixOf, sort)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
+import Data.Time.Clock (addUTCTime, getCurrentTime)
 import GHC.IO.Encoding (getFileSystemEncoding)
 import System.Directory
 import System.Exit
 import System.FilePath
 import System.IO
 import System.IO.Temp (withSystemTempDirectory)
-import System.Posix.Files (createNamedPipe, nullFileMode, ownerModes, setFileMode, setFileSize)
+import System.Posix.Files (createNamedPipe, createSymbolicLink, nullFileMode, ownerModes, setFileMode, setFileSize)
 import System.Process
 import qualified System.Timeout as Timeout
 
 import qualified Acton.Fingerprint as Fingerprint
+import WatchTests (writeExecutable)
 import Test.Tasty
 import Test.Tasty.Golden (goldenVsString)
 import Test.Tasty.HUnit
@@ -412,3 +415,147 @@ linuxDataObjects = withSystemTempDirectory "acton-embed-linux" $ \tmp -> do
   where
     elf     = "\DELELF"
     bitcode = "BC\192\222"
+
+
+-- After zig ----------------------------------------------------------------------------------------
+
+-- | The look at the embedded files after zig.  The C compiler reads an
+-- embedded file when zig runs, which is after the build looked at the file.
+-- A file that is then not the one that the build took it for stops the build
+-- with a message that names it, whatever zig made of it.
+embedChangedTests :: TestTree
+embedChangedTests = testGroup "embedded files after zig"
+    [ testCase "other content of the same size while zig runs" changedWhileZigRuns
+    , testCase "a file that is removed while zig runs" removedWhileZigRuns
+    , testCase "the file of a source file without a project" looseChangedWhileZigRuns
+    , testCase "a file that changed before a build with --only-build" changedBeforeOnlyBuild
+    ]
+
+-- | The message for a file that is not the one that the plan of the build
+-- saw, as the command line compiler prints it.
+whileBuilding :: String
+whileBuilding = "acton: data/value.txt changed while the build ran. Run the build again\n"
+
+-- | Run acton in a directory and return its exit code and what it prints to
+-- standard output and to standard error.
+actonResult :: FilePath -> [String] -> IO (ExitCode, String, String)
+actonResult dir args = do
+    exe <- canonicalizePath "../../dist/bin/acton"
+    readCreateProcessWithExitCode (proc exe args) { cwd = Just dir } ""
+
+-- | Run an action on a project "shop" below a new directory.  Its module
+-- main embeds data/value.txt, which holds "first\n", tests the size of the
+-- content and prints the content.  The action gets the project root and a
+-- function that makes a system directory for --syspath: the distribution
+-- with a zig that is a shell script of the given lines.  The script runs in
+-- the working directory of the build, which is the project root, and
+-- compiles nothing.  So its lines change a file at the time zig runs, after
+-- the front passes looked at the file, and its exit code is that of zig.
+withShop :: (FilePath -> ([String] -> IO FilePath) -> IO ()) -> IO ()
+withShop action = withSystemTempDirectory "acton-embed-changed" $ \tmp -> do
+    root <- canonicalizePath tmp
+    dist <- canonicalizePath "../../dist"
+    let shop   = root </> "shop"
+        system = root </> "system"
+        zig    = system </> "zig" </> "zig"
+    forM_ [shop </> "src", shop </> "data", system </> "zig"] (createDirectoryIfMissing True)
+    entries <- listDirectory dist
+    forM_ (filter (/= "zig") entries) $ \entry -> createSymbolicLink (dist </> entry) (system </> entry)
+    writeFile (shop </> "Build.act") (buildAct "shop" [])
+    BS.writeFile (shop </> "data" </> "value.txt") "first\n"
+    writeFile (shop </> "src" </> "main.act") $ unlines
+      [ "import testing"
+      , ""
+      , "text = embed(\"data/value.txt\")"
+      , ""
+      , "def _test_size():"
+      , "    testing.assertEqual(len(text), 6)"
+      , ""
+      , "actor main(env):"
+      , "    proc def __startup__():"
+      , "        print(text)"
+      , "        env.exit(0)"
+      ]
+    action shop $ \script -> do
+      writeExecutable zig script
+      return system
+
+-- | Other content of the same size is written to an embedded file while zig
+-- runs, and zig succeeds, as it does for a file of the size that the data C
+-- file asserts.  The build fails all the same, and so does the build of
+-- acton test.  The next build takes the file as it is.  The file that a
+-- build starts with was last modified some seconds ago, so that the file
+-- that zig leaves has another stat on a file system with coarse timestamps
+-- too.
+changedWhileZigRuns :: IO ()
+changedWhileZigRuns = withShop $ \shop systemWith -> do
+    system <- systemWith ["printf 'other\\n' > data/value.txt"]
+    now    <- getCurrentTime
+    forM_ ["build", "test"] $ \command -> do
+      BS.writeFile (shop </> "data" </> "value.txt") "first\n"
+      setModificationTime (shop </> "data" </> "value.txt") (addUTCTime (-30) now)
+      (code, out, err) <- actonResult shop [command, "--color", "never", "--syspath", system]
+      let printed = "acton " ++ command ++ "\nstdout:\n" ++ out ++ "\nstderr:\n" ++ err
+      assertEqual printed (ExitFailure 1) code
+      assertEqual printed whileBuilding err
+    _ <- runActon shop ["build", "--color", "never"]
+    programOutput (shop </> "out" </> "bin" </> "main") >>= (@?= "b'other\\n'\n")
+
+-- | An embedded file is removed while zig runs, and zig fails, as it does
+-- when the C compiler does not find the file.  The build names the file,
+-- and does not report the failure of zig as an error of the compiler.
+removedWhileZigRuns :: IO ()
+removedWhileZigRuns = withShop $ \shop systemWith -> do
+    system <- systemWith ["rm data/value.txt", "echo 'the C compiler found no file' >&2", "exit 1"]
+    (code, out, err) <- actonResult shop ["build", "--color", "never", "--syspath", system]
+    let printed = "stdout:\n" ++ out ++ "\nstderr:\n" ++ err
+    assertEqual printed (ExitFailure 1) code
+    assertEqual printed whileBuilding err
+    assertBool ("did not expect the report of a failed zig\n" ++ printed)
+      (not (any (`isInfixOf` out) ["internal compiler error", "the C compiler found no file"]))
+
+-- | A file that is compiled without a project embeds a file beside itself.
+-- Content of another size is written to that file while zig runs, and zig
+-- fails, as it does for a file of another size than the data C file asserts.
+-- The build names the file by the path that the source file embeds.
+looseChangedWhileZigRuns :: IO ()
+looseChangedWhileZigRuns = withShop $ \shop systemWith -> do
+    let root    = takeDirectory shop
+        loose   = root </> "loose"
+        scratch = root </> "scratch"
+    forM_ [loose, scratch] createDirectory
+    BS.writeFile (loose </> "text.txt") "first\n"
+    writeFile (loose </> "prog.act") $ unlines
+      [ "text = embed(\"text.txt\")"
+      , ""
+      , "actor main(env):"
+      , "    proc def __startup__():"
+      , "        print(text)"
+      , "        env.exit(0)"
+      ]
+    system <- systemWith ["echo 'another version' > \"" ++ loose </> "text.txt" ++ "\"", "exit 1"]
+    (code, out, err) <- actonResult loose ["prog.act", "--color", "never", "--syspath", system, "--tempdir", scratch]
+    let printed = "stdout:\n" ++ out ++ "\nstderr:\n" ++ err
+    assertEqual printed (ExitFailure 1) code
+    assertEqual printed "acton: text.txt changed while the build ran. Run the build again\n" err
+
+-- | A build with --only-build runs no front pass, so the module is not
+-- compiled again for new content of a file that it embeds, or for a file
+-- that is gone.  The build fails after zig.  A build without --only-build
+-- then compiles the module with the new content.
+changedBeforeOnlyBuild :: IO ()
+changedBeforeOnlyBuild = withShop $ \shop _ -> do
+    let file = shop </> "data" </> "value.txt"
+        onlyBuild = do
+          (code, out, err) <- actonResult shop ["build", "--color", "never", "--only-build"]
+          let printed = "stdout:\n" ++ out ++ "\nstderr:\n" ++ err
+          assertEqual printed (ExitFailure 1) code
+          assertEqual printed "acton: data/value.txt changed since its module was compiled. Run the build without --only-build\n" err
+    _ <- runActon shop ["build", "--color", "never"]
+    BS.writeFile file "other\n"
+    onlyBuild
+    removeFile file
+    onlyBuild
+    BS.writeFile file "third\n"
+    _ <- runActon shop ["build", "--color", "never"]
+    programOutput (shop </> "out" </> "bin" </> "main") >>= (@?= "b'third\\n'\n")

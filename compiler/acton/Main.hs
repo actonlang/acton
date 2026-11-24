@@ -1992,7 +1992,6 @@ runCliPostCompile reporter gopts plan env = do
         rootProj = ccRootProj cctx
         sysAbs = ccSysAbs cctx
         rootModules = cpRootModules plan
-        allowPrune = cpAllowPrune plan
         neededTasks = cpNeededTasks plan
         projMap = cpProjMap plan
         proj = projName pathsRoot
@@ -2046,7 +2045,7 @@ runCliPostCompile reporter gopts plan env = do
         selected <- mapM (selectRootActor env pathsRoot explicitRoot) candidateBinTasks
         case partitionEithers selected of
           ([], binTasks) ->
-            runFinal (zigBuild env gopts opts' pathsRoot rootSpec rootModules (catMaybes binTasks) allowPrune rootModuleSources rootBuildLibraries rootDepModuleOpts rootDepPathOverrides (Just (reporterProgressUI reporter)))
+            runFinal (zigBuild env gopts plan rootSpec (catMaybes binTasks) rootModuleSources rootBuildLibraries rootDepModuleOpts rootDepPathOverrides (Just (reporterProgressUI reporter)))
           (diags, _) -> do
             progressWithLog (reporterProgressUI reporter) (printDiagnostics gopts diags)
             unless (C.watch opts') System.Exit.exitFailure
@@ -2310,7 +2309,7 @@ readProcessWithExitCodeCancelable cp onStart = mask $ \restore -> do
               err <- Async.wait errReader
               return (code, out, err)) `finally` stop
 
-runZig gopts opts zigExe zigArgs paths wd mProgressUI = do
+runZig gopts opts zigExe zigArgs plan wd mProgressUI = do
     let display = showCommandForUser zigExe zigArgs
     iff (C.ccmd opts || C.verbose gopts) $ putStrLn ("zigCmd: " ++ display)
     env0 <- System.Environment.getEnvironment
@@ -2363,7 +2362,17 @@ runZig gopts opts zigExe zigArgs paths wd mProgressUI = do
     (returnCode, zigStdout, zigStderr) <- readProcessWithExitCodeCancelable cp onStart `finally` onStop
     let logLine = maybe putStrLn progressLogLine mProgressUI
     logTiming gopts opts logLine "Zig build" zigStart
+    -- The C compiler read the embedded files while zig ran. A file that is
+    -- not the one that the build took it for fails the build, whatever zig
+    -- returned. It is reported in place of a failure of zig: zig fails on a
+    -- file that got another size or went away, and that failure is reported
+    -- as an internal compiler error.
+    changed <- changedEmbeds plan
     case returnCode of
+        _ | not (null changed) -> do
+          let msg = intercalate "\n" changed
+          if C.watch opts then logLine msg else printErrorAndExit msg
+          return False
         ExitSuccess -> do
           iff (C.verboseZig gopts) $ putStrLn zigStderr
           when (C.timing gopts && not (quiet gopts opts) && not (C.verboseZig gopts)) $
@@ -2708,16 +2717,18 @@ defCpuFlag = ["-Dcpu=x86_64_v2+aes"]
 #error "Unsupported platform"
 #endif
 
--- | Run zig build for generated artifacts and prune stale outputs.
-zigBuild :: Acton.Env.Env0 -> C.GlobalOptions -> C.CompileOptions -> Paths -> BuildSpec.BuildSpec -> [A.ModName] -> [BinTask] -> Bool -> [FilePath] -> [BuildLibrary] -> M.Map String String -> M.Map String FilePath -> Maybe ProgressUI -> IO Bool
-zigBuild env gopts opts paths rootSpec rootModules binTasks allowPrune moduleSources buildLibraries depModuleOpts depPathOverrides mProgressUI = do
+-- | Run zig build for the generated artifacts of a plan and prune stale outputs.
+zigBuild :: Acton.Env.Env0 -> C.GlobalOptions -> CompilePlan -> BuildSpec.BuildSpec -> [BinTask] -> [FilePath] -> [BuildLibrary] -> M.Map String String -> M.Map String FilePath -> Maybe ProgressUI -> IO Bool
+zigBuild env gopts plan rootSpec binTasks moduleSources buildLibraries depModuleOpts depPathOverrides mProgressUI = do
+    let opts = ccOpts (cpContext plan)
+        paths = ccPathsRoot (cpContext plan)
     prepStart <- getTime Monotonic
     allBinTasks <- mapM (writeRootC env gopts opts paths) binTasks
     let realBinTasks = catMaybes allBinTasks
 
-    let pruningAllowed = allowPrune && not (C.only_build opts)
+    let pruningAllowed = cpAllowPrune plan && not (C.only_build opts)
     when pruningAllowed $
-      removeUndeclaredRoots paths rootModules realBinTasks
+      removeUndeclaredRoots paths (cpRootModules plan) realBinTasks
 
     let no_threads = if isWindowsOS (C.target opts) then True else C.no_threads opts
     projAbs <- normalizePathSafe (projPath paths)
@@ -2763,7 +2774,7 @@ zigBuild env gopts opts paths rootSpec rootModules binTasks allowPrune moduleSou
         zigArgs = baseArgs ++ prefixArgs ++ targetArgs ++ cpuArgs ++ optArgs ++ moduleArgs ++ featureArgs ++ buildOptionArgs
 
     logTiming gopts opts (maybe putStrLn progressLogLine mProgressUI) "root and build file preparation" prepStart
-    success <- runZig gopts opts zigExe zigArgs paths (Just (projPath paths)) mProgressUI
+    success <- runZig gopts opts zigExe zigArgs plan (Just (projPath paths)) mProgressUI
     -- if we are in a temp acton project, copy the outputted binary next to the source file
     if (success && isTmp paths && not (null realBinTasks))
       then do

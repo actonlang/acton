@@ -100,6 +100,7 @@ main = do
       , rootErrorAutoTests
       , embedErrorTests
       , EmbedTests.embedProgramTests
+      , EmbedTests.embedChangedTests
       , parseFlagTests
       , WatchTests.watchTriggerTests
       , WatchTests.watchProcessTests

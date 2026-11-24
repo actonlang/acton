@@ -4823,6 +4823,149 @@ p88_kept_module_takes_embedded_file_by_row =
     editBase "build of the plan that holds page as an older header" plan2 "def size():\n    return 3\n"
     readTyEmbeds tyPage >>= (@?= kept3)
 
+-- | Plan a build of the given source files of a project on a scheduler and
+-- run it in process, with the given compile options, then wait for its back
+-- jobs. Returns the plan and the result line.
+runPlanOf :: Compile.CompileScheduler -> C.CompileOptions -> [FilePath] -> IO (Compile.CompilePlan, String)
+runPlanOf sched opts srcFiles = do
+  let disk = Source.diskSourceProvider
+  plan <- planBuild disk quietGlobalOptions sched opts (Compile.PlanRequest srcFiles Compile.WholeProject Nothing)
+  gen <- Compile.currentGeneration sched
+  res <- Compile.runCompilePlan disk quietGlobalOptions sched gen plan (\_ -> return ())
+  backFailure <- Compile.waitBackJobs sched gen
+  return (plan, buildResult res backFailure)
+
+-- | The look at the embedded files after zig (Compile.changedEmbeds), on the
+-- plan of a build that ran in process. A file that the plan looked at is
+-- taken by its stat and not read. Here the content of the file is replaced
+-- and the row is given the stat that the file has then, with the SHA-256
+-- that it had, which the plan takes by the stat rule: a look that read the
+-- file would find another SHA-256 than the row holds. A file that is
+-- written or removed after the plan looked at it changed while the build
+-- ran. A row whose stat is not the stat of the file is no error, since the
+-- look compares with the stat that the plan saw. A build with --only-build
+-- runs no front pass, so the row keeps the SHA-256 of the content that the
+-- module was compiled with, and a file with other content, or no file,
+-- changed since then. Such a build by a compiler binary that is newer than
+-- the .tydb does not look at the file before zig, so the look after zig is
+-- the first look of its plan at the file, and takes the file by the stat
+-- rule.
+p89_look_after_zig :: TestTree
+p89_look_after_zig =
+  testCase "89-the look after zig takes an embedded file by its stat" $ withSystemTempDirectory "embedded-after-zig" $ \tmp -> do
+    proj <- (</> "shop") <$> canonicalizePath tmp
+    opts <- inProcessCompileOptions
+    sched <- Compile.newCompileScheduler quietGlobalOptions
+    now <- getCurrentTime
+    let actPage  = proj </> "src" </> "page.act"
+        tyPage   = proj </> "out" </> "types" </> "shop" </> "page.tydb"
+        fileData = proj </> "data" </> "value.txt"
+        whileBuilding = ["data/value.txt changed while the build ran. Run the build again"]
+        sinceCompiled = ["data/value.txt changed since its module was compiled. Run the build without --only-build"]
+        built label options = do
+          (plan, result) <- runPlanOf sched options [actPage]
+          assertEqual label "result ok" result
+          return plan
+    writeEmbedProject proj "one\n"
+    plan1 <- built "first build" opts
+    Compile.changedEmbeds plan1 >>= assertEqual "the look after the first build" []
+    B.writeFile fileData "two\n"
+    setModificationTime fileData (addUTCTime (-30) now)
+    stat2 <- sourceFileMetaForPath fileData
+    kept <- map (\f -> f { InterfaceFiles.embeddedStat = stat2 }) <$> readTyEmbeds tyPage
+    InterfaceFiles.updateEmbeds tyPage kept
+    plan2 <- built "build with the recorded stat" opts
+    -- The .tydb gets a modification time before that of the file, so the
+    -- stat rule does not hold at the look either.
+    setModificationTime (tyPage </> "data.mdb") (addUTCTime (-60) now)
+    Compile.changedEmbeds plan2 >>= assertEqual "the look at a file with the stat that the plan saw" []
+    -- A row whose stat could not be refreshed holds another stat than the
+    -- file has. The look takes the stat that the plan saw, so it is no error.
+    InterfaceFiles.updateEmbeds tyPage (map (\f -> f { InterfaceFiles.embeddedStat = stat2 { InterfaceFiles.sfmMTimeNs = InterfaceFiles.sfmMTimeNs stat2 + 1 } }) kept)
+    Compile.changedEmbeds plan2 >>= assertEqual "the look at a file whose recorded stat is not the stat of the file" []
+    InterfaceFiles.updateEmbeds tyPage kept
+    readTyEmbeds tyPage >>= (@?= kept)
+    B.writeFile fileData "thr\n"
+    Compile.changedEmbeds plan2 >>= assertEqual "the look at a file that was written after the plan looked at it" whileBuilding
+    removeFile fileData
+    Compile.changedEmbeds plan2 >>= assertEqual "the look at a file that was removed after the plan looked at it" whileBuilding
+    B.writeFile fileData "fou\n"
+    plan3 <- built "build with --only-build after new content" opts { C.only_build = True }
+    Compile.changedEmbeds plan3 >>= assertEqual "the look of a build with --only-build after new content" sinceCompiled
+    removeFile fileData
+    plan4 <- built "build with --only-build without the file" opts { C.only_build = True }
+    Compile.changedEmbeds plan4 >>= assertEqual "the look of a build with --only-build without the file" sinceCompiled
+    B.writeFile fileData "fiv\n"
+    plan5 <- built "build after the builds with --only-build" opts
+    Compile.changedEmbeds plan5 >>= assertEqual "the look after the front passes ran" []
+    file5 <- embeddedNow proj "data/value.txt"
+    readTyEmbeds tyPage >>= (@?= [file5])
+    -- A compiler binary that is newer than the .tydb does not use the header
+    -- at discovery, and a build with --only-build runs no front pass, so the
+    -- look is the first look of the plan at the file. The content of the
+    -- file is replaced and the row is given the stat that the file has then:
+    -- the look takes the file by the stat rule and does not read it.
+    let old = posixSecondsToUTCTime 946684800
+        byNewerCompiler = opts { C.only_build = True, C.ignore_compiler_version = False }
+        heldAsSource plan = case map Compile.gtTask (Compile.cpGlobalTasks plan) of
+          [Compile.ParseTask{}] -> return ()
+          _                     -> assertFailure "expected the plan to hold page as its source"
+    B.writeFile fileData "six\n"
+    setModificationTime fileData (addUTCTime (-60) old)
+    stat6 <- sourceFileMetaForPath fileData
+    kept6 <- map (\f -> f { InterfaceFiles.embeddedStat = stat6 }) <$> readTyEmbeds tyPage
+    InterfaceFiles.updateEmbeds tyPage kept6
+    setModificationTime (tyPage </> "data.mdb") old
+    plan6 <- built "build with --only-build by a compiler that is newer than the .tydb" byNewerCompiler
+    heldAsSource plan6
+    Compile.changedEmbeds plan6 >>= assertEqual "the first look of a plan at a file with its recorded stat" []
+    readTyEmbeds tyPage >>= (@?= kept6)
+    B.writeFile fileData "sev\n"
+    plan7 <- built "build with --only-build by a newer compiler after new content" byNewerCompiler
+    heldAsSource plan7
+    Compile.changedEmbeds plan7 >>= assertEqual "the first look of a plan at a file with other content" sinceCompiled
+
+-- | The look after zig takes the embedded files of every module of the
+-- plan, each below the root of the project of its module. A module of a
+-- dependency and a module of the project that depends on it embed the same
+-- path. A change of the file of either project is reported, and a change of
+-- both is reported once, since the message names the path as it is written.
+-- Two changed files of one module are both reported, in the order of their
+-- paths.
+p90_look_after_zig_in_each_project :: TestTree
+p90_look_after_zig_in_each_project =
+  testCase "90-the look after zig takes the files of each project" $ withSystemTempDirectory "embedded-after-zig-projects" $ \tmp -> do
+    root <- canonicalizePath tmp
+    opts <- inProcessCompileOptions
+    sched <- Compile.newCompileScheduler quietGlobalOptions
+    let app = root </> "app"
+        lib = root </> "lib"
+        whileBuilding = ["data/a.txt changed while the build ran. Run the build again"]
+        built = do
+          (plan, result) <- runPlanOf sched opts [app </> "src" </> "main.act"]
+          assertEqual "build of the application" "result ok" result
+          return plan
+    forM_ [app </> "src", app </> "data", lib </> "src", lib </> "data"] (createDirectoryIfMissing True)
+    writeBuildAct lib "lib" []
+    writeBuildAct app "app" [("lib", "../lib")]
+    writeFileUtf8 (lib </> "src" </> "text.act") "data = embed(\"data/a.txt\")\n"
+    writeFileUtf8 (app </> "src" </> "main.act") "import lib.text\n\ndata = embed(\"data/a.txt\")\nmore = embed(\"data/b.txt\")\ntexts = [data, more, lib.text.data]\n"
+    B.writeFile (lib </> "data" </> "a.txt") "from the library\n"
+    B.writeFile (app </> "data" </> "a.txt") "from the application\n"
+    B.writeFile (app </> "data" </> "b.txt") "more from the application\n"
+    plan1 <- built
+    Compile.changedEmbeds plan1 >>= assertEqual "the look after the first build" []
+    B.writeFile (lib </> "data" </> "a.txt") "from the library, again\n"
+    Compile.changedEmbeds plan1 >>= assertEqual "the look after the file of the dependency was written" whileBuilding
+    plan2 <- built
+    Compile.changedEmbeds plan2 >>= assertEqual "the look after the second build" []
+    B.writeFile (app </> "data" </> "a.txt") "from the application, again\n"
+    Compile.changedEmbeds plan2 >>= assertEqual "the look after the file of the application was written" whileBuilding
+    B.writeFile (lib </> "data" </> "a.txt") "from the library, once more\n"
+    Compile.changedEmbeds plan2 >>= assertEqual "the look after the files of both projects were written" whileBuilding
+    B.writeFile (app </> "data" </> "b.txt") "more from the application, again\n"
+    Compile.changedEmbeds plan2 >>= assertEqual "the look after two files of the application were written" (whileBuilding ++ ["data/b.txt changed while the build ran. Run the build again"])
+
 -- Source written during a read ------------------------------------------------
 
 -- | A disk source provider that writes new text to a source file right after
@@ -5254,6 +5397,8 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
       , p86_embedded_file_changes_during_plan
       , p87_kept_module_takes_embedded_file_by_stat
       , p88_kept_module_takes_embedded_file_by_row
+      , p89_look_after_zig
+      , p90_look_after_zig_in_each_project
       ]
   , sequentialTestGroup "incremental-cache-cases" AllSucceed
       [ p41_stale_header_missing_import_reparses_source

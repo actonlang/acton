@@ -1,5 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables #-}
-module WatchTests (watchTriggerTests, watchProcessTests) where
+module WatchTests (watchTriggerTests, watchProcessTests, writeExecutable) where
 
 import Control.Concurrent (threadDelay)
 import Control.Exception (IOException, catch, finally, mask, onException)
@@ -271,6 +271,19 @@ watchProcessTests = testGroup "watch subprocesses"
           runs <- zigRuns proj
           assertEqual "no build should follow the first" 1 runs
           assertEqual "watch should remain running" Nothing =<< getProcessExitCode ph
+  , testCase "build watch reports an embedded file that changed while Zig ran" $
+      withProcessProject $ \acton proj system -> do
+        createDirectory (proj </> "data")
+        writeFile (proj </> "data/text.txt") "one\n"
+        writeFile (proj </> "src/page.act") "text = embed(\"data/text.txt\")\n"
+        writeExecutable (system </> "zig/zig") ["echo 'another version' > data/text.txt"]
+        withActon acton proj ["build", "--watch", "--syspath", system] $ \ph _ output -> do
+          await "the report of the changed file" $ do
+            logText <- output
+            return $ if "data/text.txt changed while the build ran. Run the build again" `isInfixOf` logText then Just () else Nothing
+          awaitGeneration proj
+          assertBool "the build should not be reported as done" . not . isInfixOf "Final compilation done" =<< output
+          assertEqual "watch should survive the changed file" Nothing =<< getProcessExitCode ph
   , testCase "one-shot stress Ctrl-C reports partial results" $
       withProcessProject $ \acton proj system -> do
         writeExecutable (proj </> "out/bin/.test_main")
