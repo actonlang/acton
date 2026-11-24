@@ -2,7 +2,7 @@
 The expression embed("path"), whose value is the content of a file: the rule
 for a path as it is written (pathProblem), the name of a path in the generated
 C (pathDigits), the embed expressions of a piece of syntax (Embeds), and the
-file that a path names below a directory (embeddedFileSize).
+file that a path names below a directory (embeddedFileStatus).
 -}
 module Acton.Embed
   ( pathProblem
@@ -10,7 +10,7 @@ module Acton.Embed
   , Embeds(..)
   , embedExprs
   , listedPath
-  , embeddedFileSize
+  , embeddedFileStatus
   , cannotBeRead
   ) where
 
@@ -29,7 +29,7 @@ import qualified Data.Text.Encoding as TE
 import GHC.IO.Exception (IOErrorType(InappropriateType), ioe_description)
 import System.FilePath.Posix ((</>))
 import System.IO.Error (ioeGetErrorType, isDoesNotExistError)
-import System.Posix.Files (deviceID, fileID, fileSize, getFileStatus, getSymbolicLinkStatus, isDirectory, isRegularFile)
+import System.Posix.Files (FileStatus, deviceID, fileID, fileSize, getFileStatus, getSymbolicLinkStatus, isDirectory, isRegularFile)
 
 -- | Why embed cannot take a path as it is written, or Nothing for a path that
 -- it takes: a relative path with / between its components, none of them empty,
@@ -249,12 +249,12 @@ listedPath names root path = fmap (intercalate "/") <$> listed root (components 
     firstM p (x : xs) = do found <- p x
                            if found then return (Just x) else firstM p xs
 
--- | The size of the file that a path names below a directory, or why embed
+-- | The stat of the file that a path names below a directory, or why embed
 -- cannot take it.  The path names a regular file of fewer than 2^31 bytes,
 -- and each component is spelled as its directory lists it.  A symbolic link
 -- is followed.  The path is one that pathProblem accepts.
-embeddedFileSize :: (FilePath -> IO (S.Set FilePath)) -> FilePath -> FilePath -> IO (Either String Integer)
-embeddedFileSize names root path = handle (no . cannotBeRead path) $ do
+embeddedFileStatus :: (FilePath -> IO (S.Set FilePath)) -> FilePath -> FilePath -> IO (Either String FileStatus)
+embeddedFileStatus names root path = handle (no . cannotBeRead path) $ do
     listed <- listedPath names root path
     case listed of
       Nothing    -> missing
@@ -269,7 +269,7 @@ embeddedFileSize names root path = handle (no . cannotBeRead path) $ do
             | named /= path           -> no ("the file is named " ++ named ++ ", and the path is written " ++ path)
             | not (isRegularFile st)  -> no (path ++ " is not a regular file")
             | size >= 2 ^ (31 :: Int) -> no (path ++ " has " ++ show size ++ " bytes, and embed takes a file of fewer than 2147483648 bytes")
-            | otherwise               -> return (Right size)
+            | otherwise               -> return (Right st)
             where size = toInteger (fileSize st)
   where
     no      = return . Left

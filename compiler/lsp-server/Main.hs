@@ -354,7 +354,7 @@ compilePlanFromCache :: Compile.CompileContext -> Compile.PlanRequest -> FilePat
 compilePlanFromCache ctx request changedPath cache = do
   exists <- doesFileExist changedPath
   refreshed <- if exists
-    then refreshChangedGlobalTask changedPath (Compile.ccOpts ctx) cache
+    then refreshChangedGlobalTask changedPath ctx cache
     else return Nothing
   case refreshed of
     Nothing -> return Nothing
@@ -371,17 +371,18 @@ compilePlanFromCache ctx request changedPath cache = do
 
 refreshChangedGlobalTask
   :: FilePath
-  -> C.CompileOptions
+  -> Compile.CompileContext
   -> ProjectBuildCache
   -> IO (Maybe [Compile.GlobalTask])
-refreshChangedGlobalTask changedPath opts cache =
+refreshChangedGlobalTask changedPath ctx cache =
   case find isChanged (cachedGlobalTasks cache) of
     Nothing -> return Nothing
     Just old -> do
       newTask <- Compile.readModuleTask
         (overlaySourceProvider overlaysRef)
         lspGlobalOpts
-        opts
+        (Compile.ccOpts ctx)
+        (Compile.ccFiles ctx)
         (Compile.gtPaths old)
         (Compile.tkMod (Compile.gtKey old))
         changedPath

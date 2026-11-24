@@ -55,11 +55,18 @@ is compiled.
 
 ## When an embedded file changes
 
-A build looks at each embedded file. When a file has new content, the build
-compiles the module that embeds it again, and generates again the code of
-each module that uses a name whose value holds the content. `acton test` runs
-a test again when the test uses such a name. A file that is written again
-with the same content compiles nothing.
+A build looks at each embedded file. It reads a file only when what the file
+system records of the file has changed since the last build: its size, the
+times of its last changes, or which file is at the path. So a file that did
+not change costs a build no read, whatever its size. When a file has new
+content, the build compiles the module that embeds it again, and generates
+again the code of each module that uses a name whose value holds the content.
+`acton test` runs a test again when the test uses such a name. A file that is
+written again with the same content is read once and compiles nothing.
+
+A build can look at an embedded file more than once. When the file is written
+between two looks, the build stops with a message such as `data/title.txt
+changed while the build ran. Run the build again`.
 
 The module that embeds a file is type checked again each time the content of
 the file changes. So a name that holds a large file, or a file that changes

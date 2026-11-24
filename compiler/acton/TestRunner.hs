@@ -217,21 +217,22 @@ selectTestSources gopts opts paths topts files = do
     regexes <- compileTestNameRegexes (C.testNames topts)
     let wanted = modulesOpt paths topts
         matches = not . null . filterTests regexes
-    sources <- filterM (selected wanted matches) files
+    facts <- newFileFacts
+    sources <- filterM (selected facts wanted matches) files
     when (C.timing gopts && not (quiet gopts opts)) $ do
       end <- getTime Monotonic
       putStrLn ("Timing: test source selection " ++ fmtTime (diffTimeSpec end start))
     return sources
   where
     sp = Source.diskSourceProvider
-    selected wanted matches file = do
+    selected facts wanted matches file = do
       mn <- moduleNameFromFile (srcDir paths) (projName paths) file
       if not (null wanted) && modNameToString mn `notElem` wanted
         then return False
         else if null (C.testNames topts)
           then return True
           else do
-            task <- readModuleTask sp gopts opts paths mn file
+            task <- readModuleTask sp gopts opts facts paths mn file
             case task of
               TyTask h | matches (InterfaceFiles.summaryTests h) -> return True
               ParseTask source _ _ -> fromSource mn matches file (sourceText source)

@@ -67,16 +67,47 @@ SHA-256 of its content. For `__builtin__`, whose generated `.c` also includes
 `builtin/builtin.c`, that file counts as if its `.ext.c` included it.
 
 A module that embeds files (`embed("path")`) records each of them in the row
-`embeds` of its `.tydb`: the path, the size and the SHA-256 of the content. The
-recorded hash combines the source-bytes hash with the path and the SHA-256 of
-each embedded file. Such a module is checked by content hash too: discovery
-hashes each recorded file, so new content, or a recorded file that cannot be
-read, makes the module a `ParseTask`. Its first front pass, `embedPass`, checks
-that each path names a file as `embed` takes it and writes the size and the
-SHA-256 of the file into the expression, and the hash of the expression covers
-them. So the content is part of the `implHash` of each name that holds the
-expression and of each name that uses such a name, in any module, and of no
-`pubHash`.
+`embeds` of its `.tydb`: the path, the size and the SHA-256 of the content, and
+the stat of the file, taken before the content was read. The recorded hash
+combines the source-bytes hash with the path and the SHA-256 of each embedded
+file. Its first front pass, `embedPass`, checks that each path names a file as
+`embed` takes it and writes the size and the SHA-256 of the file into the
+expression, and the hash of the expression covers them. So the content is part
+of the `implHash` of each name that holds the expression and of each name that
+uses such a name, in any module, and of no `pubHash`.
+
+An embedded file is read only when its stat does not tell that it is unchanged.
+This is the stat rule (`fileFact`): the recorded SHA-256 stands for the content
+when the stat of the file is the recorded one and its modification time is
+strictly older than that of the `.tydb`. Discovery looks at each recorded file
+before it reads the source of the module. It takes the stat, compares each
+component of the path with a listing of its directory, which a plan lists once,
+and hashes the file only when the stat rule does not hold. The header is
+trusted without a read of the source when the source and every recorded file
+are found as they are recorded, and else when the recorded hash equals the hash
+of the source and of the embedded files as they are now. The recorded stats are
+then refreshed in place (`updateEmbeds`), so a file that was written again with
+the same content is hashed once and costs one stat in the next build. New
+content makes the module a `ParseTask`, and so does a recorded file that is
+gone, is no regular file, cannot be read, has 2^31 bytes or more or is spelled
+otherwise: `embedPass` then reports the file at its expression.
+
+The compile context holds two maps of what its plan has seen (`ccFiles`): the
+stat and the SHA-256 of each file that it looked at, and the names of each
+directory that it listed. A later look of the same plan takes the SHA-256 and
+the names from there. So a plan reads a file at most once, also when several
+modules embed it, lists a directory once, and `embedPass` reads no file that
+discovery looked at. A look that finds another stat than the first look of the
+plan means that the file changed while the build ran: the module fails with
+that message at the expression. `acton test` and the documentation index read
+module headers outside a plan, each with maps of its own.
+
+`embedPass` takes the recorded stats from the row of the module's `.tydb` as it
+is when the pass runs. The language server keeps a discovered module over many
+compiles, and each run of the module's front passes writes the row again. So a
+module of a plan that it kept reads no embedded file that passes the stat rule.
+A file that does not pass it is read, and front passes that complete write the
+stat of that look to the row.
 
 The public hash (**modulePubHash**) is derived from the module's public-name
 `pubHash` values (which already include any external signature dependencies).

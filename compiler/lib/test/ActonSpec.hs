@@ -75,7 +75,7 @@ import System.Directory (createDirectoryIfMissing, createDirectoryLink, createFi
 import System.IO (IOMode(ReadWriteMode), hSetFileSize, withFile)
 import System.IO.Temp (withSystemTempDirectory)
 import GHC.IO.Encoding (getFileSystemEncoding)
-import System.Posix.Files (createNamedPipe, nullFileMode, ownerModes, setFileMode, setFileSize)
+import System.Posix.Files (createNamedPipe, fileSize, nullFileMode, ownerModes, setFileMode, setFileSize)
 import qualified System.IO.Unsafe
 import System.Timeout (timeout)
 import Control.Monad (forM_, when, foldM)
@@ -2630,7 +2630,7 @@ main = do
             utf8 <- (== "UTF-8") . show <$> getFileSystemEncoding
             let nested = "web/a b*/" ++ (if utf8 then "\229" else "a") ++ ".txt"
                 names  = fmap Set.fromList . listDirectory
-                size   = Embed.embeddedFileSize names dir
+                size   = fmap (fmap (toInteger . fileSize)) . Embed.embeddedFileStatus names dir
             createDirectoryIfMissing True (dir </> "web" </> "a b*")
             B8.writeFile (dir </> "web" </> "index.html") (B8.pack "hello\n")
             B8.writeFile (dir </> nested) (B8.pack "abc")
@@ -2672,8 +2672,103 @@ main = do
             forM_ ["a", "b", "c"] $ \name -> B8.writeFile (dir </> "web" </> name) (B8.pack name)
             listed <- newIORef []
             let names d = modifyIORef' listed (d :) >> (Set.fromList <$> listDirectory d)
-            forM_ ["web/a", "web/b", "web/c", "web/none"] $ \path -> Embed.embeddedFileSize names dir path
+            forM_ ["web/a", "web/b", "web/c", "web/none"] $ \path -> Embed.embeddedFileStatus names dir path
             sort <$> readIORef listed `shouldReturn` (replicate 4 dir ++ replicate 4 (dir </> "web"))
+
+        describe "The stat rule" $ do
+          let stat mtime    = InterfaceFiles.SourceFileMeta mtime mtime 4 (Just 1) (Just 2)
+              recorded      = Compile.Recorded (stat 1000) "recorded" 1001
+              look facts r  = Compile.fileFact facts r :: FilePath -> Either String InterfaceFiles.SourceFileMeta -> IO (Either String String)
+              changed path  = \(Compile.FileChanged file) -> file == path
+
+          it "takes the recorded SHA-256 for a file with the recorded stat and reads nothing" $
+            withSystemTempDirectory "acton-file-fact" $ \dir -> do
+              -- The content is not the recorded one, and a path with no file
+              -- cannot be read at all.
+              B8.writeFile (dir </> "replaced") (B8.pack "new\n")
+              facts <- Compile.newFileFacts
+              look facts (Just recorded) (dir </> "replaced") (Right (stat 1000)) `shouldReturn` Right "recorded"
+              look facts (Just recorded) (dir </> "none") (Right (stat 1000)) `shouldReturn` Right "recorded"
+
+          it "reads a file with another stat, and one that is not older than the file that holds the record" $
+            withSystemTempDirectory "acton-file-fact" $ \dir -> do
+              B8.writeFile (dir </> "abc") (B8.pack "abc")
+              let sha = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+              forM_ [ (Nothing, stat 1000)
+                    , (Just recorded, stat 999)
+                    , (Just recorded, (stat 1000) { InterfaceFiles.sfmCTimeNs = 999 })
+                    , (Just recorded, (stat 1000) { InterfaceFiles.sfmSize = 3 })
+                    , (Just recorded, (stat 1000) { InterfaceFiles.sfmDevice = Just 3 })
+                    , (Just recorded, (stat 1000) { InterfaceFiles.sfmInode = Just 3 })
+                    , (Just recorded { Compile.recordedWritten = 1000 }, stat 1000)
+                    , (Just recorded { Compile.recordedWritten = 999 }, stat 1000)
+                    ] $ \(r, st) -> do
+                facts <- Compile.newFileFacts
+                look facts r (dir </> "abc") (Right st) `shouldReturn` Right sha
+
+          it "reads a file once in a plan" $
+            withSystemTempDirectory "acton-file-fact" $ \dir -> do
+              B8.writeFile (dir </> "abc") (B8.pack "abc")
+              facts <- Compile.newFileFacts
+              first <- look facts Nothing (dir </> "abc") (Right (stat 1000))
+              removeFile (dir </> "abc")
+              look facts Nothing (dir </> "abc") (Right (stat 1000)) `shouldReturn` first
+              look facts (Just recorded) (dir </> "abc") (Right (stat 1000)) `shouldReturn` first
+              -- Another plan has seen nothing of the file.
+              other <- Compile.newFileFacts
+              look other Nothing (dir </> "abc") (Right (stat 1000)) `shouldThrow` (\(_ :: E.IOException) -> True)
+
+          it "reads a file again after a read that failed" $
+            withSystemTempDirectory "acton-file-fact" $ \dir -> do
+              facts <- Compile.newFileFacts
+              look facts Nothing (dir </> "abc") (Right (stat 1000)) `shouldThrow` (\(_ :: E.IOException) -> True)
+              B8.writeFile (dir </> "abc") (B8.pack "abc")
+              look facts Nothing (dir </> "abc") (Right (stat 1000))
+                `shouldReturn` Right "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+
+          it "returns the reason where there is no file to read" $ do
+            facts <- Compile.newFileFacts
+            look facts (Just recorded) "none" (Left "no file") `shouldReturn` Left "no file"
+            look facts Nothing "none" (Left "a directory") `shouldReturn` Left "a directory"
+
+          it "stops at a later look of the plan that brings another stat" $
+            withSystemTempDirectory "acton-file-fact" $ \dir -> do
+              let path = dir </> "abc"
+              B8.writeFile path (B8.pack "abc")
+              facts <- Compile.newFileFacts
+              _ <- look facts Nothing path (Right (stat 1000))
+              look facts Nothing path (Right ((stat 1000) { InterfaceFiles.sfmCTimeNs = 999 })) `shouldThrow` changed path
+              look facts Nothing path (Right ((stat 1000) { InterfaceFiles.sfmSize = 3 })) `shouldThrow` changed path
+              look facts Nothing path (Right (stat 1001)) `shouldThrow` changed path
+              look facts (Just recorded { Compile.recordedStat = stat 1001, Compile.recordedWritten = 1002 }) path (Right (stat 1001)) `shouldThrow` changed path
+              look facts Nothing path (Left "no file") `shouldThrow` changed path
+              gone <- Compile.newFileFacts
+              _ <- look gone Nothing path (Left "no file")
+              look gone Nothing path (Right (stat 1000)) `shouldThrow` changed path
+
+          it "writes the row of the embedded files and no other row" $
+            withSystemTempDirectory "acton-update-embeds" $ \dir -> do
+              let mn        = S.modName ["page"]
+                  tyPath    = dir </> "page.tydb"
+                  meta      = stat 500
+                  file m    = InterfaceFiles.EmbeddedFile "data/value.txt" 4 "aa" (stat m)
+                  names     = [nameHash (S.name "value") "s" "p" "i"]
+                  nmod      = I.NModule [] [(S.name "value", I.NVar S.tWild)] (Just "docs")
+                  tmod      = S.Module mn [] (Just "docs") []
+              InterfaceFiles.writeFile tyPath "src" "pub" "impl" (Just meta) [file 1000] [] [] names [] [] ["t"] (Just "docs") nmod tmod
+              before <- InterfaceFiles.readFile tyPath
+              InterfaceFiles.storedEmbeds before `shouldBe` [file 1000]
+              InterfaceFiles.updateEmbeds tyPath [file 2000]
+              after <- InterfaceFiles.readFile tyPath
+              after `shouldBe` before { InterfaceFiles.storedEmbeds = [file 2000] }
+              header <- InterfaceFiles.readHeaderSummary tyPath
+              InterfaceFiles.summaryEmbeds header `shouldBe` [file 2000]
+              InterfaceFiles.summarySourceMeta header `shouldBe` Just meta
+              InterfaceFiles.interfaceModifiedTimeNs tyPath `shouldReturn` InterfaceFiles.summaryModified header
+              -- A row of many files needs room that the .tydb does not have.
+              let many = [ (file 3000) { InterfaceFiles.embeddedPath = "data/" ++ show n ++ ".txt" } | n <- [1 .. 20000 :: Int] ]
+              InterfaceFiles.updateEmbeds tyPath many
+              InterfaceFiles.summaryEmbeds <$> InterfaceFiles.readHeaderSummary tyPath `shouldReturn` many
 
       describe "Completion" $ do
         it "completes inherited transform input attributes" $ do

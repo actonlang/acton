@@ -43,7 +43,8 @@
 --                                                     --   (doc-free) + imports' pub hashes
 --                         , ByteString )              -- moduleImplHash: structural hash of per-name impl hashes
 --     "embeds"         :: [EmbeddedFile]              -- each file that an embed expression names, once,
---                                                     --   sorted by path
+--                                                     --   sorted by path, with the stat taken before its
+--                                                     --   content was read
 --     "imports"        :: [(A.ModName, ByteString)]   -- dependency module and pub hash used
 --     "deps"           :: [DepModuleInfo]              -- dependency modules with pub/impl hashes
 --     "roots"          :: [A.Name]                    -- root actors (e.g. main or test_main)
@@ -153,6 +154,7 @@ module InterfaceFiles
   , writeFileWithProgress
   , writeFileWithVersion
   , updateSourceMeta
+  , updateEmbeds
   , updateImplRefresh
   ) where
 
@@ -272,11 +274,13 @@ instance Persist.Persist SourceFileMeta
 instance NFData SourceFileMeta
 
 -- | A file that an embed expression of a module names: its path as written,
--- and the size and the SHA-256 of its content, as 64 hexadecimal digits.
+-- the size and the SHA-256 of its content, as 64 hexadecimal digits, and the
+-- stat of the file, taken before the content was read.
 data EmbeddedFile = EmbeddedFile
   { embeddedPath   :: FilePath
   , embeddedSize   :: Integer
   , embeddedSha256 :: String
+  , embeddedStat   :: SourceFileMeta
   } deriving (Show, Eq, Generic)
 
 instance Persist.Persist EmbeddedFile
@@ -308,9 +312,12 @@ data StoredModule = StoredModule
   } deriving (Show, Eq)
 
 -- | The small module-level keys of a .tydb, which readHeaderSummary decodes
--- without touching any per-name or per-statement row.
+-- without touching any per-name or per-statement row, and the modification
+-- time of the .tydb when they were read, in POSIX nanoseconds.  A stat that
+-- the header records is trusted only for a file that is older than that.
 data HeaderSummary = HeaderSummary
-  { summaryCompiler   :: String                           -- the build of the compiler that wrote it
+  { summaryModified   :: Integer
+  , summaryCompiler   :: String                           -- the build of the compiler that wrote it
   , summarySourceMeta :: Maybe SourceFileMeta
   , summarySourceHash :: BS.ByteString
   , summaryPubHash    :: BS.ByteString
@@ -1517,6 +1524,19 @@ updateSourceMeta f sourceMeta = do
       (_oldMeta, srcH, pubH, implH) <- readMeta txn dbi
       putValue txn dbi keyMeta (encodeStrict (sourceMeta, srcH, pubH, implH))
 
+-- | Update only the row of the embedded files, leaving every other row
+-- untouched, as updateSourceMeta does for the stat of the source: a file
+-- that was written again with the same content has another stat.
+updateEmbeds :: FilePath -> [EmbeddedFile] -> IO ()
+updateEmbeds f embeds = do
+    extra <- entryMapSize [row]
+    size <- readMapSize f
+    withWriteTxn f (size + extra) $ \txn dbi -> do
+      validateVersion txn dbi
+      uncurry (putValue txn dbi) row
+  where
+    row = (keyEmbeds, encodeStrict embeds)
+
 -- | Apply an impl-hash refresh surgically: update the meta row, upsert the
 -- dependency index rows and rewrite only the per-name rows whose stored
 -- encoding actually changed. Everything else (module header, statements,
@@ -1646,6 +1666,7 @@ readModuleIface f =
 readHeaderSummary :: FilePath -> IO HeaderSummary
 readHeaderSummary f =
     withReadTxn f $ \txn dbi -> do
+      modified <- interfaceModifiedTimeNs f
       (sourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash) <- readMeta txn dbi
       compiler <- getValue "compiler" txn dbi keyCompiler
       embeds <- getValue "embeds" txn dbi keyEmbeds
@@ -1657,7 +1678,8 @@ readHeaderSummary f =
       nameCount <- getValue "name-count" txn dbi keyNameCount
       traceTydbRead "header" f "cached"
       return HeaderSummary
-        { summaryCompiler   = compiler
+        { summaryModified   = modified
+        , summaryCompiler   = compiler
         , summarySourceMeta = sourceMeta
         , summarySourceHash = moduleSrcBytesHash
         , summaryPubHash    = modulePubHash

@@ -2059,9 +2059,10 @@ generateProjectDocIndex sp gopts opts paths srcFiles = do
     unless (C.skip_build opts || C.only_build opts || isTmp paths) $ do
         let docDir = projectDocDir (projPath paths)
         createDirectoryIfMissing True docDir
+        facts <- newFileFacts
         entries <- catMaybes <$> forM srcFiles (\f -> do
                      (p, mn) <- findPaths f opts
-                     docIndexEntry opts p mn <$> readModuleTask sp gopts opts p mn f)
+                     docIndexEntry opts p mn <$> readModuleTask sp gopts opts facts p mn f)
         DocP.generateDocIndex docDir entries
 
 -- | Relative C source paths for selected tasks in one project.
