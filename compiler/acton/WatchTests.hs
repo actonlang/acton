@@ -116,57 +116,55 @@ watchProcessTests = testGroup "watch subprocesses"
           , "if read -r line; then exit 1; fi"
           , "touch stdin-checked"
           ]
-        withActon acton proj ["build", "--syspath", system] $ \ph _ output -> do
-          code <- await "build exit" (getProcessExitCode ph)
-          logText <- output
+        withActon acton proj ["build", "--syspath", system] $ \run -> do
+          code <- awaitExit run
+          logText <- runOutput run
           assertEqual logText ExitSuccess code
           assertBool "Zig should receive a valid stdin descriptor at EOF" =<< doesFileExist (proj </> "stdin-checked")
   , testCase "stopping build watch stops Zig descendants" $
       withProcessProject $ \acton proj system -> do
         writeExecutable (system </> "zig/zig") (childProcess True ++ waitingParent)
-        withActon acton proj ["build", "--watch", "--syspath", system] $ \ph _ output -> do
-          child <- awaitPid proj "child.pid"
-          leader <- awaitPid proj "leader.pid"
-          terminateProcess ph
-          code <- await "build watch exit" (getProcessExitCode ph)
+        withActon acton proj ["build", "--watch", "--syspath", system] $ \run -> do
+          child <- awaitPid run "child.pid"
+          leader <- awaitPid run "leader.pid"
+          terminateProcess (runHandle run)
+          code <- awaitExit run
           assertEqual "watch should handle TERM" (ExitFailure 143) code
           assertStopped "Zig leader" leader
           assertStopped "Zig descendant" child
-          assertBool "interrupted build should not report success" . not . isInfixOf "Final compilation done" =<< output
+          assertBool "interrupted build should not report success" . not . isInfixOf "Final compilation done" =<< runOutput run
   , testGroup "successful Zig exit stops descendants"
       [ testCase pipes $ withProcessProject $ \acton proj system -> do
           writeExecutable (system </> "zig/zig") (childProcess redirected ++ ["exit 0"])
-          withActon acton proj ["build", "--syspath", system] $ \ph _ output -> do
-            child <- awaitPid proj "child.pid"
+          withActon acton proj ["build", "--syspath", system] $ \run -> do
+            child <- awaitPid run "child.pid"
             assertStopped "Zig descendant" child
-            code <- await "build exit" (getProcessExitCode ph)
-            logText <- output
+            code <- awaitExit run
+            logText <- runOutput run
             assertEqual logText ExitSuccess code
       | (pipes, redirected) <- [("redirected pipes", True), ("inherited pipes", False)]
       ]
   , testCase "stopping test watch stops test descendants" $
       withProcessProject $ \acton proj system -> do
         writeExecutable (proj </> "out/bin/.test_main") (childProcess True ++ waitingParent)
-        withActon acton proj ["test", "--watch", "--tty", "--no-cache", "--syspath", system] $ \ph _ output -> do
-          child <- awaitPid proj "child.pid"
-          leader <- awaitPid proj "leader.pid"
-          terminateProcess ph
-          code <- await "test watch exit" (getProcessExitCode ph)
+        withActon acton proj ["test", "--watch", "--tty", "--no-cache", "--syspath", system] $ \run -> do
+          child <- awaitPid run "child.pid"
+          leader <- awaitPid run "leader.pid"
+          terminateProcess (runHandle run)
+          code <- awaitExit run
           assertEqual "watch should handle TERM" (ExitFailure 143) code
           assertStopped "test leader" leader
           assertStopped "test descendant" child
-          assertCursorRestored =<< output
+          assertCursorRestored =<< runOutput run
   , testGroup "successful test exit stops descendants"
       [ testCase pipes $ withProcessProject $ \acton proj system -> do
           writeExecutable (proj </> "out/bin/.test_main")
             (childProcess redirected ++ [testInfo True, "exit 0"])
-          withActon acton proj ["test", "--watch", "--no-cache", "--syspath", system] $ \ph _ output -> do
-            child <- awaitPid proj "child.pid"
+          withActon acton proj ["test", "--watch", "--no-cache", "--syspath", system] $ \run -> do
+            child <- awaitPid run "child.pid"
             assertStopped "test descendant" child
-            await "successful test report" $ do
-              logText <- output
-              return $ if "All 1 tests passed" `isInfixOf` logText then Just () else Nothing
-            assertEqual "watch should remain running" Nothing =<< getProcessExitCode ph
+            awaitOutput run "successful test report" ("All 1 tests passed" `isInfixOf`)
+            assertRunning run "watch should remain running"
       | (pipes, redirected) <- [("redirected pipes", True), ("inherited pipes", False)]
       ]
   , testCase "failed final build skips retained test binary and recovers" $
@@ -178,19 +176,17 @@ watchProcessTests = testGroup "watch subprocesses"
           , "if [ -e fail-build ]; then exit 1; fi"
           ]
         writeExecutable (proj </> "out/bin/.test_main") ["touch test-ran", testInfo True]
-        withActon acton proj ["test", "--watch", "--no-cache", "--syspath", system] $ \ph _ output -> do
-          awaitFile (proj </> "build-started")
+        withActon acton proj ["test", "--watch", "--no-cache", "--syspath", system] $ \run -> do
+          awaitFile run "build-started"
           writeFile (proj </> "finish-build") ""
-          await "failed build report" $ do
-            logText <- output
-            return $ if "compilation of generated Zig code failed" `isInfixOf` logText then Just () else Nothing
+          awaitOutput run "failed build report" ("compilation of generated Zig code failed" `isInfixOf`)
           -- The lock covers the complete generation, including any test run.
-          awaitGeneration proj
+          awaitGeneration run
           assertBool "failed build must not run the retained binary" . not =<< doesFileExist (proj </> "test-ran")
-          assertEqual "watch should survive a failed build" Nothing =<< getProcessExitCode ph
+          assertRunning run "watch should survive a failed build"
           removeFile (proj </> "fail-build")
           appendFile (proj </> "src/main.act") "\n# Recover from failed build\n"
-          awaitReports 1 output
+          awaitReports run 1
           assertBool "the next successful build should run tests" =<< doesFileExist (proj </> "test-ran")
   , testCase "interrupted test generation retains both edited modules" $
       withProcessProject $ \acton proj system -> do
@@ -208,36 +204,36 @@ watchProcessTests = testGroup "watch subprocesses"
           , testInfo True
           ]
         writeExecutable (proj </> "out/bin/.test_other") ["touch other-ran", moduleTestInfo "other" True]
-        withActon acton proj ["test", "--watch", "--no-cache", "--syspath", system] $ \ph _ output -> do
-          awaitReports 1 output
-          awaitGeneration proj
+        withActon acton proj ["test", "--watch", "--no-cache", "--syspath", system] $ \run -> do
+          awaitReports run 1
+          awaitGeneration run
           forM_ ["main-ran", "other-ran"] $ \name -> removeFile (proj </> name)
           writeFile (proj </> "interrupt-main") ""
           appendFile (proj </> "src/main.act") "\n# First edit\n"
-          awaitFile (proj </> "main-started")
+          awaitFile run "main-started"
           removeFile (proj </> "interrupt-main")
           appendFile (proj </> "src/other.act") "\n# Second edit interrupts the first test run\n"
-          awaitReports 2 output
-          awaitGeneration proj
+          awaitReports run 2
+          awaitGeneration run
           forM_ ["main-ran", "other-ran"] $ \name ->
             assertBool (name ++ " should run after the interrupted generation") =<< doesFileExist (proj </> name)
-          assertEqual "watch should remain running" Nothing =<< getProcessExitCode ph
+          assertRunning run "watch should remain running"
   , testCase "build watch rebuilds after a save of an .ext.c or a file it includes" $
       withProcessProject $ \acton proj system -> do
         writeNativeModule proj
         writeExecutable (system </> "zig/zig") ["echo run >> zig-runs"]
-        withActon acton proj ["build", "--watch", "--verbose", "--syspath", system] $ \ph _ output -> do
-          awaitZigRuns proj 1
-          awaitGeneration proj
+        withActon acton proj ["build", "--watch", "--verbose", "--syspath", system] $ \run -> do
+          awaitZigRuns run 1
+          awaitGeneration run
           appendFile (proj </> "src/native.ext.c") "\n// First edit\n"
-          awaitZigRuns proj 2
-          awaitGeneration proj
-          logText <- output
+          awaitZigRuns run 2
+          awaitGeneration run
+          logText <- runOutput run
           -- The first build reports it too.
           assertBool logText (count "Stale native: source changed" logText >= 2)
           appendFile (proj </> "src/native_value.h") "\n// Second edit\n"
-          awaitZigRuns proj 3
-          assertEqual "watch should remain running" Nothing =<< getProcessExitCode ph
+          awaitZigRuns run 3
+          assertRunning run "watch should remain running"
   , testCase "test watch reruns the tests that use a module whose .ext.c is saved" $
       withProcessProject $ \acton proj system -> do
         writeNativeModule proj
@@ -249,28 +245,28 @@ watchProcessTests = testGroup "watch subprocesses"
           ]
         writeExecutable (proj </> "out/bin/.test_main") ["touch main-ran", testInfo True]
         writeExecutable (proj </> "out/bin/.test_other") ["touch other-ran", moduleTestInfo "other" True]
-        withActon acton proj ["test", "--watch", "--no-cache", "--syspath", system] $ \ph _ output -> do
-          awaitReports 1 output
-          awaitGeneration proj
+        withActon acton proj ["test", "--watch", "--no-cache", "--syspath", system] $ \run -> do
+          awaitReports run 1
+          awaitGeneration run
           forM_ ["main-ran", "other-ran"] $ \name -> removeFile (proj </> name)
           appendFile (proj </> "src/native.ext.c") "\n// An edit of native's C code\n"
-          awaitReports 2 output
-          awaitGeneration proj
+          awaitReports run 2
+          awaitGeneration run
           assertBool "the tests of other, which imports native, should run" =<< doesFileExist (proj </> "other-ran")
           assertBool "the tests of main should not run" . not =<< doesFileExist (proj </> "main-ran")
-          assertEqual "watch should remain running" Nothing =<< getProcessExitCode ph
+          assertRunning run "watch should remain running"
   , testCase "build watch with --tydb settles" $
       withProcessProject $ \acton proj system -> do
         writeExecutable (system </> "zig/zig") ["echo run >> zig-runs"]
         -- --tydb writes a copy of each module's interface next to its
         -- source, which the watch must not take for an edit.
-        withActon acton proj ["build", "--watch", "--tydb", "--syspath", system] $ \ph _ _ -> do
-          awaitZigRuns proj 1
-          awaitGeneration proj
+        withActon acton proj ["build", "--watch", "--tydb", "--syspath", system] $ \run -> do
+          awaitZigRuns run 1
+          awaitGeneration run
           threadDelay 2000000
           runs <- zigRuns proj
           assertEqual "no build should follow the first" 1 runs
-          assertEqual "watch should remain running" Nothing =<< getProcessExitCode ph
+          assertRunning run "watch should remain running"
   , testCase "one-shot stress Ctrl-C reports partial results" $
       withProcessProject $ \acton proj system -> do
         writeExecutable (proj </> "out/bin/.test_main")
@@ -283,11 +279,11 @@ watchProcessTests = testGroup "watch subprocesses"
           , "echo $$ > leader.pid"
           , "while :; do sleep 1; done"
           ]
-        withActon acton proj ["test", "stress", "--tty", "--show-log", "--syspath", system] $ \ph group output -> do
-          _ <- awaitPid proj "leader.pid"
-          signalProcessGroup sigINT group
-          code <- await "interrupted stress exit" (getProcessExitCode ph)
-          logText <- output
+        withActon acton proj ["test", "stress", "--tty", "--show-log", "--syspath", system] $ \run -> do
+          _ <- awaitPid run "leader.pid"
+          signalProcessGroup sigINT (runPid run)
+          code <- awaitExit run
+          logText <- runOutput run
           assertEqual logText ExitSuccess code
           assertBool logText ("Stress run interrupted by user; showing partial results collected so far." `isInfixOf` logText)
           assertBool logText ("stdout before interrupt" `isInfixOf` logText && "stderr before interrupt" `isInfixOf` logText)
@@ -300,9 +296,9 @@ watchProcessTests = testGroup "watch subprocesses"
           , "printf 'stdout after final result'"
           , "printf 'stderr after final result' >&2"
           ]
-        withActon acton proj ["test", "--no-cache", "--show-log", "--syspath", system] $ \ph _ output -> do
-          code <- await "test exit" (getProcessExitCode ph)
-          logText <- output
+        withActon acton proj ["test", "--no-cache", "--show-log", "--syspath", system] $ \run -> do
+          code <- awaitExit run
+          logText <- runOutput run
           assertEqual logText ExitSuccess code
           assertBool logText ("stdout after final result" `isInfixOf` logText && "stderr after final result" `isInfixOf` logText)
   , testCase "a crashed test retains preamble and unterminated output" $
@@ -315,9 +311,9 @@ watchProcessTests = testGroup "watch subprocesses"
           , "printf 'stderr before crash' >&2"
           , "exit 1"
           ]
-        withActon acton proj ["test", "--no-cache", "--json", "--syspath", system] $ \ph _ output -> do
-          code <- await "failed test exit" (getProcessExitCode ph)
-          logText <- output
+        withActon acton proj ["test", "--no-cache", "--json", "--syspath", system] $ \run -> do
+          code <- awaitExit run
+          logText <- runOutput run
           assertBool logText (code /= ExitSuccess)
           forM_ ["startup diagnostic", "stdout before crash", "stderr before crash"] $ \message ->
             assertBool logText (message `isInfixOf` logText)
@@ -330,9 +326,9 @@ watchProcessTests = testGroup "watch subprocesses"
           , "sleep 0.3"
           , testInfo True
           ]
-        withActon acton proj ["test", "--tty", "--no-cache", "--color", "never", "--syspath", system] $ \ph _ output -> do
-          code <- await "test exit" (getProcessExitCode ph)
-          logText <- output
+        withActon acton proj ["test", "--tty", "--no-cache", "--color", "never", "--syspath", system] $ \run -> do
+          code <- awaitExit run
+          logText <- runOutput run
           assertEqual logText ExitSuccess code
           assertCursorRestored logText
           assertBool "cursor restoration is the last terminal operation" ("\ESC[?25h" `isSuffixOf` logText)
@@ -346,9 +342,9 @@ watchProcessTests = testGroup "watch subprocesses"
   , testGroup "non-interactive test reports do not change cursor visibility"
       [ testCase label $ withProcessProject $ \acton proj system -> do
           writeExecutable (proj </> "out/bin/.test_main") [testInfo True]
-          withActon acton proj (["test", "--no-cache", "--syspath", system] ++ args) $ \ph _ output -> do
-            code <- await "test exit" (getProcessExitCode ph)
-            logText <- output
+          withActon acton proj (["test", "--no-cache", "--syspath", system] ++ args) $ \run -> do
+            code <- awaitExit run
+            logText <- runOutput run
             assertEqual logText ExitSuccess code
             assertBool logText (not ("\ESC[?25" `isInfixOf` logText))
       | (label, args) <- [("redirected", []), ("quiet", ["--tty", "--quiet"]), ("JSON", ["--tty", "--json"])]
@@ -373,9 +369,9 @@ watchProcessTests = testGroup "watch subprocesses"
   , testCase "a failed test process restores the cursor" $
       withProcessProject $ \acton proj system -> do
         writeExecutable (proj </> "out/bin/.test_main") ["exit 1"]
-        withActon acton proj ["test", "--tty", "--no-cache", "--syspath", system] $ \ph _ output -> do
-          code <- await "failed test exit" (getProcessExitCode ph)
-          logText <- output
+        withActon acton proj ["test", "--tty", "--no-cache", "--syspath", system] $ \run -> do
+          code <- awaitExit run
+          logText <- runOutput run
           assertBool logText (code /= ExitSuccess)
           assertCursorRestored logText
   ]
@@ -404,16 +400,15 @@ watchProcessTests = testGroup "watch subprocesses"
          length (dropWhile (not . isPrefixOf "\ESC[?25h") (tails logText)))
     moduleTestInfo modName complete = "echo '{\"test_info\":{\"definition\":{\"module\":\"" ++ modName ++ "\",\"name\":\"_test_ready\"},\"complete\":" ++
       (if complete then "true" else "false") ++ ",\"success\":true,\"num_iterations\":1}}' >&2"
-    awaitFile path = await path $ do
-      exists <- doesFileExist path
+    awaitFile run name = await run name $ do
+      exists <- doesFileExist (runProject run </> name)
       return $ if exists then Just () else Nothing
-    awaitReports count output = await "successful test report" $ do
-      logText <- output
-      return $ if length (filter ("tests passed" `isInfixOf`) (lines logText)) >= count then Just () else Nothing
-    awaitGeneration proj = await "watch generation completion" (Just <$> withProjectLock proj (return ()))
+    awaitReports run n = awaitOutput run "successful test report" $ \logText ->
+      length (filter ("tests passed" `isInfixOf`) (lines logText)) >= n
+    awaitGeneration run = await run "watch generation completion" (Just <$> withProjectLock (runProject run) (return ()))
     zigRuns proj = length . lines <$> readOutput (proj </> "zig-runs")
-    awaitZigRuns proj n = await ("Zig run " ++ show n) $ do
-      runs <- zigRuns proj
+    awaitZigRuns run n = await run ("Zig run " ++ show n) $ do
+      runs <- zigRuns (runProject run)
       return $ if runs >= n then Just () else Nothing
     -- A module whose NotImplemented answer native.ext.c implements, with a
     -- value from native_value.h.
@@ -481,7 +476,16 @@ writeExecutable path body = do
       \_ _ _ ph -> waitForProcess ph
     assertEqual ("writing " ++ path) ExitSuccess code
 
-withActon :: FilePath -> FilePath -> [String] -> (ProcessHandle -> ProcessID -> IO String -> IO a) -> IO a
+-- | An acton process that a test started in its project.
+data ActonRun = ActonRun
+  { runProject :: FilePath
+  , runArgs    :: [String]
+  , runHandle  :: ProcessHandle
+  , runPid     :: ProcessID      -- also its process group
+  , runOutput  :: IO String      -- what it has written so far
+  }
+
+withActon :: FilePath -> FilePath -> [String] -> (ActonRun -> IO a) -> IO a
 withActon acton proj args action = mask $ \restore ->
     withFile (proj </> "compiler.log") WriteMode $ \output ->
       withCreateProcess (proc acton args)
@@ -489,7 +493,8 @@ withActon acton proj args action = mask $ \restore ->
         , std_err = UseHandle output, create_group = True
         } $ \_ _ _ ph -> do
           Just pid <- getPid ph
-          (restore (action ph pid (readOutput (proj </> "compiler.log")))
+          let run = ActonRun proj args ph pid (readOutput (proj </> "compiler.log"))
+          (restore (action run)
             `onException` restore (saveProcessDiagnostics acton proj args ph pid `catch` ignoreIO))
             `finally` stopProcessGroup ph (Just pid)
 
@@ -520,23 +525,51 @@ saveProcessDiagnostics acton proj args ph pid = do
 readOutput :: FilePath -> IO String
 readOutput path = (BS.unpack <$> BS.readFile path) `catch` \(_ :: IOException) -> return ""
 
-awaitPid :: FilePath -> FilePath -> IO ProcessID
-awaitPid proj name = await name (readMaybe <$> readOutput (proj </> name))
+-- | Wait until 'check' gives a value while acton runs. Once acton has exited
+-- and the check still gives nothing, nothing will: fail at once, with
+-- acton's output, rather than after the two minutes that a hang gets.
+await :: ActonRun -> String -> IO (Maybe a) -> IO a
+await run label check = awaitWithin run label $ do
+    -- Asked before the check, so that the check saw all that acton did.
+    exited <- getProcessExitCode (runHandle run)
+    result <- check
+    case (result, exited) of
+      (Nothing, Just code) -> failRun run ("acton exited with " ++ show code ++ " before " ++ label)
+      _                    -> return result
 
-await :: String -> IO (Maybe a) -> IO a
-await label check = do
-    result <- Timeout.timeout 120000000 loop
-    case result of
-      Just value -> return value
-      Nothing -> assertFailure ("Timed out waiting for " ++ label)
-  where
-    loop = do
-      result <- check
-      maybe (threadDelay 20000 >> loop) return result
+-- | Wait for acton to exit, and give its exit code.
+awaitExit :: ActonRun -> IO ExitCode
+awaitExit run = awaitWithin run "acton to exit" (getProcessExitCode (runHandle run))
+
+awaitOutput :: ActonRun -> String -> (String -> Bool) -> IO ()
+awaitOutput run label done = await run label $ do
+    output <- runOutput run
+    return $ if done output then Just () else Nothing
+
+awaitPid :: ActonRun -> FilePath -> IO ProcessID
+awaitPid run name = await run name (readMaybe <$> readOutput (runProject run </> name))
+
+-- | Poll 'check' for two minutes, and then fail with acton's output.
+awaitWithin :: ActonRun -> String -> IO (Maybe a) -> IO a
+awaitWithin run label check =
+    maybe (failRun run ("Timed out waiting for " ++ label)) return =<< Timeout.timeout 120000000 (poll check)
+
+assertRunning :: ActonRun -> String -> Assertion
+assertRunning run label = do
+    exited <- getProcessExitCode (runHandle run)
+    forM_ exited $ \code -> failRun run (label ++ ", but acton exited with " ++ show code)
+
+failRun :: ActonRun -> String -> IO a
+failRun run message = do
+    output <- runOutput run
+    assertFailure (message ++ "\nacton " ++ unwords (runArgs run) ++ " wrote:\n" ++ output)
+
+poll :: IO (Maybe a) -> IO a
+poll check = check >>= maybe (threadDelay 20000 >> poll check) return
 
 assertStopped :: String -> ProcessID -> Assertion
 assertStopped label pid = do
-    stopped <- Timeout.timeout 5000000 $ await label $ do
+    stopped <- Timeout.timeout 5000000 $ poll $ do
       (code, status, _) <- readProcessWithExitCode "ps" ["-o", "stat=", "-p", show pid] ""
       return $ if code /= ExitSuccess || 'Z' `elem` status then Just () else Nothing
     assertBool (label ++ " should stop with its owner") (isJust stopped)
