@@ -1,0 +1,8 @@
+Building file test/syntaxerrors/embed_path_out.act using temporary scratch directory
+[error Syntax error]: "out/x.bin" is in out, which a build writes and which is not committed
+     +--> test/syntaxerrors/embed_path_out.act@2:14-2:25
+     |
+   2 | page = embed("out/x.bin")
+     :              ^---------- 
+     :              `- "out/x.bin" is in out, which a build writes and which is not committed
+-----+

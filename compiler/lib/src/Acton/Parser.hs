@@ -50,6 +50,7 @@ import qualified Text.Megaparsec.Debug as D
 import qualified Data.List.NonEmpty
 import qualified Acton.Syntax as S
 import qualified Acton.Builtin as Builtin
+import Acton.Embed (pathProblem)
 import qualified Acton.Names as Names
 import Utils
 import Debug.Trace
@@ -58,6 +59,8 @@ import System.IO.Unsafe
 -- Custom error types for better structured error handling
 data CustomParseError = TypeVariableNameError String  -- Name that looks like type variable
                       | EmbedAsName  -- The reserved word embed in the place of a name
+                      | EmbedForm  -- The word embed before parentheses that hold other than one path in double quotes
+                      | EmbedPath String  -- A path that embed cannot take, with the message of Acton.Embed.pathProblem
                       | InvalidFormatSpecifier String
                       | MissingClosingQuote String  -- String is the quote type (e.g., "\"\"\"" or "'")
                       | TooManyQuotesError String
@@ -94,6 +97,8 @@ data CustomParseError = TypeVariableNameError String  -- Name that looks like ty
 instance ShowErrorComponent CustomParseError where
   showErrorComponent (TypeVariableNameError name) = "Invalid name (reserved for type variables)"
   showErrorComponent EmbedAsName = "embed is a reserved word and cannot be a name"
+  showErrorComponent EmbedForm = "embed takes one path in double quotes, as in embed(\"web/index.html\")"
+  showErrorComponent (EmbedPath problem) = problem
   showErrorComponent (InvalidFormatSpecifier spec) = "Invalid format specifier" ++ if null spec then "" else ": " ++ spec
   showErrorComponent (MissingClosingQuote quote) = "missing closing " ++ quote
   showErrorComponent (TooManyQuotesError quote) = "too many quote characters"
@@ -2682,6 +2687,24 @@ isinstance = addLoc $ do
                 (e,c) <- parens ((,) <$> expr <* comma <*> qual_name)
                 return $ S.IsInstance NoLoc e c
 
+-- embed("path"): the word and, in parentheses, one path in double quotes. The
+-- characters between the quotes are the path as written, on one line. The
+-- word before anything but a parenthesis is left to the parser of a name,
+-- which reports it.
+embed :: Parser S.Expr
+embed = do
+          off <- getOffset
+          try (rword "embed" *> lookAhead (char '('))
+          form <- optional (try (withCtx PAR (L.symbol sc2 "(" *> withLoc path <* sc2 <* char ')')))
+          end <- getOffset
+          currSC
+          case form of
+            Nothing -> parseException (Loc off (off + length "embed")) EmbedForm
+            Just (l,p) -> case pathProblem p of
+                            Just problem -> parseException l (EmbedPath problem)
+                            Nothing -> return $ S.Embed (Loc off end) p Nothing
+  where path = char '"' *> takeWhileP Nothing (\c -> c /= '"' && c /= '\n') <* char '"'
+
 -- recurring pattern below
 commaList p = many (try (comma *> p)) <* optional comma
 
@@ -2728,7 +2751,9 @@ atom_expr = do
                 finish (Nothing,_,outerOpt,e) = (outerOpt,e)
         
         atom :: Parser S.Expr
-        atom =  addLoc (try strings
+        atom =  embed
+               <|>
+                addLoc (try strings
                <|>
                  ((try . parens) $ return $ S.Paren NoLoc (S.Tuple NoLoc S.PosNil S.KwdNil))
                <|>

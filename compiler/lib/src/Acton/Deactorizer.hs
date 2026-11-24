@@ -267,6 +267,7 @@ instance Deact Expr where
     deact env (Ellipsis l)          = return $ Ellipsis l
     deact env (Strings l s)         = return $ Strings l s
     deact env (BStrings l s)        = return $ BStrings l s
+    deact env e@Embed{}             = return e
     deact env (Call l e as KwdNil)  = deactCall env True l e as
     deact env (TApp l e ts)         = TApp l <$> deact env e <*> pure ts
     deact env (Let l ss e)          = Let l <$> deact env1 ss <*> deact env1 e

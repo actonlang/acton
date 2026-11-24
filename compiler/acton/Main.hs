@@ -2009,13 +2009,13 @@ runCliPostCompile reporter gopts plan env = do
     let preTestBinTasks = [ BinTask (A.GName mn (A.name "test_main")) True
                           | mn <- rootModules, mn `elem` requestedModules ]
         selectedTasksByProj = M.fromListWith (++) [ (tkProj (gtKey t), [t]) | t <- neededTasks ]
-        depModuleOptsByProj = depModuleOptionsByProj selectedTasksByProj projMap
         rootTasks = M.findWithDefault [] rootProj selectedTasksByProj
-        selectedModuleSources = selectedCSourceEntriesForProj rootProj rootTasks
-        rootBuildLibraries = explicitBuildLibraries env rootProj rootTasks rootSpec
-        rootModuleSources = excludeLibrarySources rootBuildLibraries selectedModuleSources
-        rootDepModuleOpts = M.findWithDefault M.empty rootProj depModuleOptsByProj
         rootDepPathOverrides = projectDepPathOverrides projMap rootProj
+    depModuleOptsByProj <- depModuleOptionsByProj selectedTasksByProj projMap
+    selectedModuleSources <- selectedCSourceEntriesForProj rootProj rootTasks
+    rootBuildLibraries <- explicitBuildLibraries env rootProj rootTasks rootSpec
+    let rootModuleSources = excludeLibrarySources rootBuildLibraries selectedModuleSources
+        rootDepModuleOpts = M.findWithDefault M.empty rootProj depModuleOptsByProj
 
     -- Zig follows every declared dependency, including projects with no
     -- selected modules. Refresh their build files too so nested dependencies
@@ -2065,32 +2065,42 @@ generateProjectDocIndex sp gopts opts paths srcFiles = do
         DocP.generateDocIndex docDir entries
 
 -- | Relative C source paths for selected tasks in one project.
-selectedCSourceEntriesForProj :: FilePath -> [GlobalTask] -> [FilePath]
-selectedCSourceEntriesForProj proj tasks = nub (map (taskCSourceEntry proj) tasks)
+selectedCSourceEntriesForProj :: FilePath -> [GlobalTask] -> IO [FilePath]
+selectedCSourceEntriesForProj proj tasks = nub . concat <$> mapM (taskCSourceEntry proj) tasks
 
--- | The C source path of a task relative to the root of its project 'proj'.
-taskCSourceEntry :: FilePath -> GlobalTask -> FilePath
-taskCSourceEntry proj t = collapseDots (makeRelativeOrAbsolute proj (generatedPath (gtPaths t) (tkMod (gtKey t)) cFile))
+-- | The C sources of a task relative to the root of its project 'proj': the
+-- C file of its module and, when the module embeds files, its data C file,
+-- which the back job of such a module writes and that of any other module
+-- removes.
+taskCSourceEntry :: FilePath -> GlobalTask -> IO [FilePath]
+taskCSourceEntry proj t = do
+    hasData <- doesFileExist (generated dataFile)
+    return (map (collapseDots . makeRelativeOrAbsolute proj) (generated cFile : [ generated dataFile | hasData ]))
+  where generated = generatedPath (gtPaths t) (tkMod (gtKey t))
 
 -- | The libraries of 'spec' that have a module among the selected tasks of
--- project 'proj'. A dynamic library also gets the init functions of the
--- modules that its modules import from outside the library.
-explicitBuildLibraries :: Acton.Env.Env0 -> FilePath -> [GlobalTask] -> BuildSpec.BuildSpec -> [BuildLibrary]
-explicitBuildLibraries env proj tasks spec =
-    [ BuildLibrary libName linkage sources importInits
-    | (libName, lib) <- M.toList (BuildSpec.libraries spec)
-    , let linkage = BuildSpec.libLinkage lib
-          sources = map moduleCSource (BuildSpec.libModules lib)
-          members = [ t | t <- tasks, taskCSourceEntry proj t `elem` sources ]
-          inLibrary mn = mn `elem` map (tkMod . gtKey) members
-          importInits
-            | linkage == "dynamic" = nub [ Acton.CodeGen.genInitName env mn
-                                         | t <- members, mn <- map (providerName t) (importsOf (gtTask t))
-                                         , mn /= Acton.Builtin.mBuiltin, not (inLibrary mn)
-                                         ]
-            | otherwise            = []
-    , not (null members)
-    ]
+-- project 'proj'. The sources of a library are the C files of its modules
+-- and the data C files of those that embed files. A dynamic library also
+-- gets the init functions of the modules that its modules import from
+-- outside the library.
+explicitBuildLibraries :: Acton.Env.Env0 -> FilePath -> [GlobalTask] -> BuildSpec.BuildSpec -> IO [BuildLibrary]
+explicitBuildLibraries env proj tasks spec = do
+    entries <- mapM (taskCSourceEntry proj) tasks
+    return
+      [ BuildLibrary libName linkage (nub (sources ++ concatMap snd members)) importInits
+      | (libName, lib) <- M.toList (BuildSpec.libraries spec)
+      , let linkage = BuildSpec.libLinkage lib
+            sources = map moduleCSource (BuildSpec.libModules lib)
+            members = [ member | member@(_, entry) <- zip tasks entries, any (`elem` sources) entry ]
+            inLibrary mn = mn `elem` map (tkMod . gtKey . fst) members
+            importInits
+              | linkage == "dynamic" = nub [ Acton.CodeGen.genInitName env mn
+                                           | (t, _) <- members, mn <- map (providerName t) (importsOf (gtTask t))
+                                           , mn /= Acton.Builtin.mBuiltin, not (inLibrary mn)
+                                           ]
+              | otherwise            = []
+      , not (null members)
+      ]
   where
     -- A parsed module's import is a spelling that its provider among the
     -- tasks resolves to a module name. The imports of a cached interface, and
@@ -2119,17 +2129,14 @@ selectedRootStubEntriesForBins paths bins =
       ]
 
 -- | For each consuming project, map dep name to selected C-source CSV.
-depModuleOptionsByProj :: M.Map FilePath [GlobalTask] -> M.Map FilePath ProjCtx -> M.Map FilePath (M.Map String String)
+depModuleOptionsByProj :: M.Map FilePath [GlobalTask] -> M.Map FilePath ProjCtx -> IO (M.Map FilePath (M.Map String String))
 depModuleOptionsByProj tasksByProj projMap =
-    M.map mkForProj projMap
+    mapM mkForProj projMap
   where
     mkForProj ctx =
-      M.fromList
-        [ (depName, mkCsv depProj)
-        | (depName, depProj) <- projDeps ctx
-        ]
+      M.fromList <$> forM (projDeps ctx) (\(depName, depProj) -> (,) depName <$> mkCsv depProj)
     mkCsv depProj =
-      intercalate "," (selectedCSourceEntriesForProj depProj (M.findWithDefault [] depProj tasksByProj))
+      intercalate "," <$> selectedCSourceEntriesForProj depProj (M.findWithDefault [] depProj tasksByProj)
 
 -- | Canonical package dependency roots reachable from one project.
 --

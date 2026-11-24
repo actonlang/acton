@@ -31,6 +31,7 @@ import Acton.Env
 import Acton.QuickType
 import Acton.Subst
 import Acton.Transform (termsubst)
+import Acton.Embed (embedExprs, pathDigits)
 import qualified Acton.Boxing as B
 import Control.Monad.State.Lazy
 import Prelude hiding ((<>))
@@ -62,10 +63,11 @@ generateCode supportInclude env srcbase srcText emitLines m = return (n,h,c,supp
         Module _ _ _ stmts          = m
         env0                        = shareClosureLayouts (classdefine stmts $ genEnv $ setMod (modname m) env) stmts
 
--- | The first line of a generated .c, .h and closure support file starts with
--- this tag, followed by the text that 'tagged' is given: the file's tag in
--- hex, in a build the stamp of the compiler that wrote it, and on a .c the
--- tag of the header generated with it.
+-- | The first line of each generated file of a module starts with this tag:
+-- of its .c, its .h, its closure support file and its data C file.  The
+-- text that 'tagged' is given follows: the file's tag in hex, in a build the
+-- stamp of the compiler that wrote it, and on the .c the tag of the header
+-- generated with it.
 implHashTag                         :: String
 implHashTag                         = "/* Acton impl hash:"
 
@@ -92,6 +94,33 @@ initName env m                      = gen env (GName m initKW)
 
 genInitName                         :: Acton.Env.Env0 -> ModName -> String
 genInitName env0 m                  = render (initName (genEnv env0) m)
+
+-- | The C name of the array that holds the content of the file that module
+-- 'm' embeds by the path 'p'.  A path may hold characters that a C name
+-- cannot, so the name is made from the SHA-256 of the path.
+embedName                           :: GenEnv -> ModName -> String -> Doc
+embedName env m p                   = gen env (GName m (name ("embed$" ++ pathDigits p)))
+
+-- | The text of the data C file of module 'm', without the tag line that
+-- starts the file (see 'tagged'): an array for each file that the module
+-- embeds and that has content, filled by the C compiler from the file itself
+-- (#embed).  'files' gives the path, the size and the SHA-256 of each embedded
+-- file, and 'prefix' leads from the directory of the data C file to the
+-- directory that the paths count from.  The comment before an array holds the
+-- SHA-256 of its file and not the path, which may hold */.  The assertion
+-- stops the C compiler when the file has another size than the one that the
+-- module was compiled with.
+genEmbedData                        :: Acton.Env.Env0 -> ModName -> FilePath -> [(FilePath,Integer,String)] -> String
+genEmbedData env0 m prefix files    = render $ text "#pragma clang diagnostic push" $+$
+                                               text "#pragma clang diagnostic ignored \"-Wc23-extensions\"" $+$
+                                               vcat [ array (embedName env m p) p size sha | (p,size,sha) <- files, size > 0 ] $+$
+                                               text "#pragma clang diagnostic pop"
+  where env                         = genEnv env0
+        array n p size sha          = text "/*" <+> text sha <+> text "*/" $+$
+                                      text "const _Alignas(16) unsigned char" <+> n <> text "[] = {" $+$
+                                      text "#embed" <+> doubleQuotes (text (prefix ++ p)) $+$
+                                      text "};" $+$
+                                      text "_Static_assert" <> parens (text "sizeof" <+> n <+> text "==" <+> pretty size <> comma <+> doubleQuotes (text p)) <> semi
 
 
 
@@ -819,6 +848,7 @@ cModuleParts supportInclude env srcbase srcText emitLines (Module m imps _ stmts
                                       -- The names the passes made up, which the header leaves out.
                                       hDecls isInternal envDecl stmts $+$
                                       ext_include $+$
+                                      embedDecls $+$
                                       (if split then empty else adapterDocs) $+$
                                       declModuleSelect (\d -> not split || not (closureDecl d)) True envWithLine stmts $+$
                                       maybe globalChunkDefs (\file -> text "#include" <+> doubleQuotes (text file)) supportInclude $+$
@@ -845,6 +875,10 @@ cModuleParts supportInclude env srcbase srcText emitLines (Module m imps _ stmts
         ext_include                 = if notImpl then text "#include" <+> doubleQuotes (text srcbase <> text ".ext.c") else empty
         ext_init                    = if notImpl then genTopName env (name "__ext_init__") <+> parens empty <> semi else empty
         notImpl                     = hasNotImpl stmts
+        -- The arrays of the module's data C file that the embed expressions
+        -- of these statements name.  A file without content has no array.
+        embedDecls                  = vcat [ text "extern const unsigned char" <+> embedName env m p <> text "[]" <> semi
+                                           | p <- Data.Set.toList (Data.Set.fromList [ p | Embed _ p (Just (size,_)) <- embedExprs stmts, size > 0 ]) ]
         env1                        = classdefine stmts env
         envDecl                     = declEnv env stmts
         -- Emit a C #line directive for a given Acton SrcLoc if available
@@ -2945,6 +2979,11 @@ instance Gen Expr where
             nchars                  = fromMaybe (error ("CodeGen: str literal is not valid UTF-8: " ++ show (sval e))) (utf8Chars bs)
     gen env e@BStrings{}            = gen env primToBytes <> parens (cLiteral bs <> comma <+> pretty (length bs))
       where bs                      = literalTokenBytes (sval e)
+    -- The bytes value borrows the array of the module's data C file, so
+    -- no content is copied.
+    gen env (Embed _ p (Just (size,_)))
+      | size == 0                   = gen env primToBytes <> parens (cLiteral [] <> comma <+> pretty size)
+      | Just m <- thismod env       = gen env primToBytes <> parens (parens (text "const char *") <> embedName env m p <> comma <+> pretty size)
     gen env (Call l  (TApp _ e@(Var _ mk) _) p@(PosArg w (PosArg (Set _ es) PosNil)) KwdNil)
       | mk == primMkSet             = text "B_mk_set" <> parens (pretty (length es) <> comma <+> gen env w <> hsep [comma <+> gen env e | e <- es])
     gen env (Call l  (TApp _ e@(Var _ mk) _) p@(PosArg w (PosArg (Dict _ es) PosNil)) KwdNil)

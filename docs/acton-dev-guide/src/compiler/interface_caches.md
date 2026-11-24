@@ -56,6 +56,7 @@ Metadata and module-level keys:
 | `version` | `[Int]` |
 | `compiler` | `String` |
 | `meta` | `(Maybe SourceFileMeta, ByteString, ByteString, ByteString)` |
+| `embeds` | `[EmbeddedFile]` |
 | `imports` | `[(ModName, ByteString)]` |
 | `deps` | `[DepModuleInfo]` |
 | `roots` | `[Name]` |
@@ -78,6 +79,10 @@ another build wrote only under `--ignore-compiler-version` (see
 The three `ByteString` hashes in `meta` are the module source-bytes hash, module
 public hash, and module implementation hash. The `ByteString` stored with each
 import is that imported module's public hash.
+
+The `embeds` row holds each file that an `embed` expression of the module
+names, once and sorted by path (see
+[Incremental compilation](incremental_compilation.md)).
 
 The `deps` row stores every module whose names this module depends on, together
 with the recorded public and implementation hash for that dependency module.

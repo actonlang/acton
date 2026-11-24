@@ -1,0 +1,7 @@
+[error Compilation error]: web/big.bin has 3221225472 bytes, and embed takes a file of fewer than 2147483648 bytes
+     +--> page.act@2:15-2:35
+     |
+   2 | page: bytes = embed("web/big.bin")
+     :               ^-------------------
+     :               `- web/big.bin has 3221225472 bytes, and embed takes a file of fewer than 2147483648 bytes
+-----+

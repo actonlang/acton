@@ -1,0 +1,8 @@
+Building file test/syntaxerrors/embed_path_relative.act using temporary scratch directory
+[error Syntax error]: the path "../x" of embed must be a relative path inside the project, using / and without . or .. components
+     +--> test/syntaxerrors/embed_path_relative.act@2:14-2:20
+     |
+   2 | page = embed("../x")
+     :              ^----- 
+     :              `- the path "../x" of embed must be a relative path inside the project, using / and without . or .. components
+-----+

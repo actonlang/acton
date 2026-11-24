@@ -1,0 +1,7 @@
+[error Compilation error]: the file is named web/index.html, and the path is written web/Index.html
+     +--> page.act@2:15-2:38
+     |
+   2 | page: bytes = embed("web/Index.html")
+     :               ^----------------------
+     :               `- the file is named web/index.html, and the path is written web/Index.html
+-----+

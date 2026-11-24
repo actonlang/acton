@@ -511,6 +511,7 @@ isVal Bool{}                        = True
 isVal None{}                        = True
 isVal Strings{}                     = True
 isVal BStrings{}                    = True
+isVal Embed{}                       = True
 isVal Lambda{}                      = True
 isVal (Call _ (TApp _ (Var _ n) _) (PosArg e PosNil) KwdNil)
                                     = n == primCAST && isVal e
@@ -842,6 +843,7 @@ instance Norm Expr where
     norm env (Ellipsis l)           = return $ Ellipsis l
     norm env (Strings l ss)         = return $ Strings l (catStrings ss)
     norm env (BStrings l ss)        = return $ BStrings l (catStrings ss)
+    norm env e@Embed{}              = return e
     norm env (Call l e p k)
       | Just (w,result,co,start) <- sumGeneratorCall env e (joinArg p k)
                                     = do plan <- iteratorPlan result co

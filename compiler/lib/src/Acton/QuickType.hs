@@ -171,6 +171,7 @@ instance QType Expr where
     qType env f e@(None _)          = (tNone, fxPure, e)
     qType env f e@(Strings _ _)     = (tStr, fxPure, e)
     qType env f e@(BStrings _ _)    = (tBytes, fxPure, e)
+    qType env f e@Embed{}           = (tBytes, fxPure, e)
 --  qType env f (Imaginary _ i s)   = undefined
 --  qType env f (NotImplemented _)  = undefined
 --  qType env f (Ellipsis _)        = undefined

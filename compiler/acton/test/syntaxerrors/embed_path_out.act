@@ -1,0 +1,2 @@
+# A path of embed in the directory that a build writes
+page = embed("out/x.bin")

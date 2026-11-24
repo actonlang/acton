@@ -66,6 +66,18 @@ one that a directive names through a macro. An `.ext.c` that includes no project
 SHA-256 of its content. For `__builtin__`, whose generated `.c` also includes
 `builtin/builtin.c`, that file counts as if its `.ext.c` included it.
 
+A module that embeds files (`embed("path")`) records each of them in the row
+`embeds` of its `.tydb`: the path, the size and the SHA-256 of the content. The
+recorded hash combines the source-bytes hash with the path and the SHA-256 of
+each embedded file. Such a module is checked by content hash too: discovery
+hashes each recorded file, so new content, or a recorded file that cannot be
+read, makes the module a `ParseTask`. Its first front pass, `embedPass`, checks
+that each path names a file as `embed` takes it and writes the size and the
+SHA-256 of the file into the expression, and the hash of the expression covers
+them. So the content is part of the `implHash` of each name that holds the
+expression and of each name that uses such a name, in any module, and of no
+`pubHash`.
+
 The public hash (**modulePubHash**) is derived from the module's public-name
 `pubHash` values (which already include any external signature dependencies).
 The implementation hash (**moduleImplHash**) is derived from per-name
@@ -138,6 +150,43 @@ gives both the same version, with the build time for a development build
 by `stack` alone keeps its version, so the age check stays: such a binary is
 newer than the outputs of the build before it. Programs that use the library
 directly, such as the test suites, leave the identity empty.
+
+A module that embeds files has a fourth generated file, the data C file
+`<module>.embed.c`. It holds an array for each embedded file with content,
+which the C compiler fills from the file itself (`#embed`). The generated `.c`
+declares the arrays, and each `embed` expression is a `bytes` value that
+borrows its array. The path of each `#embed` is written from the real directory
+of the data C file, where the C compiler looks first: with `../` once per level
+up to the directory that the paths count from, or with the absolute path of
+that directory when the data C file does not lie below it. That is so for a
+file that is compiled without a project and for a project whose `out` is a
+symbolic link. The data C file has a tag of its own (`dataTag`): a hash of the
+module name, of that prefix and of the path, size and SHA-256 of each recorded
+file. It does not cover the implementation hash. Its first line holds the tag
+and the stamp of the compiler, as the first line of a `.closures.inc` does. A
+back job writes the file only when it is missing, carries another tag, was
+written by another build of the compiler or is older than the compiler binary,
+and removes it when the module embeds no file. So an edit of other code of the
+module leaves the file as it is, and the C compiler does not read the embedded
+files again. New content of an embedded file changes the tag of the `.c` and of
+the data C file and leaves the `.h` of the module as it is. New text of the
+`.h` of a module of a dependency makes Zig compile every C file of each project
+that depends on it again, the data C files among them, since the directory of
+the headers of a dependency is an include directory of each of those C files. A
+data C file that a back job would write reruns the back passes, as a `.c` or a
+`.closures.inc` that is out of date does. `builder/build.zig` compiles a source
+whose name ends with `.embed.c` with `-fno-lto`, so that a build with link-time
+optimization gets the content as an object file and not as bitcode.
+
+An absolute prefix is written into each `#embed` line as it is, so `embedPass`
+refuses one that has a double quote or a control character. The data C file of
+a module `tool` has the path of the generated `.c` of the module of a source
+file `tool.embed.act`. Discovery stops with a project error when two source
+files of a project have modules with a generated file in common
+(`Project.enumerateProjectModules`). A source file `tool.embed.act` with no
+`tool.act` beside it is compiled as any other module. The name of its generated
+`.c` ends with `.embed.c`, so `builder/build.zig` compiles the code of that
+module with `-fno-lto` too.
 
 Builds of several projects can share a dependency: its outputs live in its own
 directory, and those of a fetched dependency in the shared `~/.cache/acton/deps`,

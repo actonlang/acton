@@ -34,7 +34,7 @@ import Control.DeepSeq
 import Prelude hiding((<>))
 
 version :: [Int]
-version = [0,43]
+version = [0,44]
 
 data Module     = Module        { modname::ModName, imps::[Import], mdoc::Maybe String, mbody::Suite } deriving (Eq,Show,Generic,NFData)
 
@@ -85,6 +85,7 @@ data Expr       = Var           { eloc::SrcLoc, var::QName }
                 | Ellipsis      { eloc::SrcLoc }
                 | Strings       { eloc::SrcLoc, sval::[String] }
                 | BStrings      { eloc::SrcLoc, sval::[String] }
+                | Embed         { eloc::SrcLoc, epath::String, efile::Maybe (Integer, String) }  -- size and SHA-256 of the file, Nothing from the parser
                 | Call          { eloc::SrcLoc, fun::Expr, pargs::PosArg, kargs::KwdArg }
                 | Let           { eloc::SrcLoc, suit::Suite, exp1::Expr }
                 | TApp          { eloc::SrcLoc, fun::Expr, targs::[Type] }
@@ -791,6 +792,7 @@ instance Eq Expr where
     x@Ellipsis{}        ==  y@Ellipsis{}        = True
     x@Strings{}         ==  y@Strings{}         = sval x == sval y
     x@BStrings{}        ==  y@BStrings{}        = sval x == sval y
+    x@Embed{}           ==  y@Embed{}           = epath x == epath y && efile x == efile y
     x@Call{}            ==  y@Call{}            = fun x == fun y && pargs x == pargs y && kargs x == kargs y
     x@TApp{}            ==  y@TApp{}            = fun x == fun y && targs x == targs y
     x@Let{}             ==  y@Let{}             = suit x == suit y && exp1 x == exp1 y

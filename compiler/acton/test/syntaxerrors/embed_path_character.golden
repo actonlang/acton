@@ -1,0 +1,8 @@
+Building file test/syntaxerrors/embed_path_character.act using temporary scratch directory
+[error Syntax error]: the path "a{b}.txt" of embed has a double quote, a brace or a control character
+     +--> test/syntaxerrors/embed_path_character.act@2:14-2:24
+     |
+   2 | page = embed("a{b}.txt")
+     :              ^--------- 
+     :              `- the path "a{b}.txt" of embed has a double quote, a brace or a control character
+-----+

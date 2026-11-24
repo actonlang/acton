@@ -78,6 +78,7 @@ expressionHash e = case e of
     Ellipsis{} -> 7
     Strings _ s -> hash (8 :: Int, s)
     BStrings _ s -> hash (9 :: Int, s)
+    Embed _ p _ -> hash (16 :: Int, p)
     Call _ f p k -> hashNode 10 [expressionHash f, pos p, kwd k]
     TApp _ f ts -> hashNode 11 (expressionHash f : map typeHash ts)
     Dot _ x n -> hashNode 12 [expressionHash x, hash n]
@@ -351,6 +352,7 @@ expr env e = do
       None{} -> literal
       Strings{} -> literal
       BStrings{} -> literal
+      Embed{} -> literal
       Tuple _ p k -> do
         (p',ps) <- positional env p
         (k',ks) <- keywords env k

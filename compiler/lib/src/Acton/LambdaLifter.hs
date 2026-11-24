@@ -410,6 +410,7 @@ instance Lift Expr where
     ll env e@Ellipsis{}                 = pure e
     ll env e@Strings{}                  = pure e
     ll env e@BStrings{}                 = pure e
+    ll env e@Embed{}                    = pure e
     ll env (Cond l e1 e e2)             = Cond l <$> ll env e1 <*> ll env e <*> ll env e2
     ll env (IsInstance l e c)           = IsInstance l <$> ll env e <*> pure c
     ll env (BinOp l e1 Or e2)           = BinOp l <$> ll env e1 <*> pure Or <*> ll env e2

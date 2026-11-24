@@ -46,6 +46,7 @@ import qualified Options.Applicative as OA
 import qualified Paths_acton
 import qualified Repl
 import qualified WatchTests
+import qualified EmbedTests
 import qualified PerfTests
 import qualified TestOutputTests
 import qualified ZigProgressTests
@@ -77,6 +78,7 @@ main = do
     -- Root actor errors come after type checking, so --quiet keeps the
     -- progress lines of the passes that ran out of the golden output.
     rootErrorAutoTests <- createGoldenErrorAutoTests "root actor errors" "test/rooterrors" "--quiet"
+    embedErrorTests <- EmbedTests.embedErrorTests
     defaultMain $ localOption timeout $ testGroup "Tests" $
       [ builtinsAutoTests
       , coreLangAutoTests
@@ -96,6 +98,8 @@ main = do
       , syntaxErrorAutoTests
       , typeErrorAutoTests
       , rootErrorAutoTests
+      , embedErrorTests
+      , EmbedTests.embedProgramTests
       , parseFlagTests
       , WatchTests.watchTriggerTests
       , WatchTests.watchProcessTests
@@ -813,6 +817,45 @@ compilerTests =
           "<empty>\n" (Repl.renderReplState Repl.emptyReplState)
         assertBool "repl reset should rewrite session source"
           (not ("def gone()" `isInfixOf` Repl.renderReplSessionSource Repl.emptyReplState))
+
+    , testCase "finds an embed expression in an input of every kind" $ do
+        forM_ [ "embed(\"web/a.txt\")"
+              , "len(embed(\"web/a.txt\"))"
+              , "page = embed(\"web/a.txt\")"
+              , "def page() -> bytes:\n    return embed(\"web/a.txt\")"
+              , "class Page(object):\n    def body(self) -> bytes:\n        return embed(\"web/a.txt\")"
+              , "for part in [embed(\"web/a.txt\")]:\n    print(part)"
+              ] $ \input -> do
+          found <- Repl.replHasEmbed input
+          assertBool ("repl should find the embed expression in: " ++ input) found
+        forM_ [ "\"embed(web/a.txt)\"", "embedded = 3", "2 + 2", "import std.math", "print(\"embed\")", "x = (" ] $ \input -> do
+          found <- Repl.replHasEmbed input
+          assertBool ("repl should find no embed expression in: " ++ input) (not found)
+
+    , testCase "refuses embed at the prompt" $ do
+        withSystemTempDirectory "acton-repl-embed" $ \tmp -> do
+          actonExe <- canonicalizePath "../../dist/bin/acton"
+          writeFile (tmp </> "a.txt") "abc"
+          let input = unlines
+                [ "embed(\"a.txt\")"
+                , "page = embed(\"a.txt\")"
+                , "def page() -> bytes:"
+                , "    return embed(\"a.txt\")"
+                , ""
+                , "2 + 2"
+                , ":show"
+                , ":q"
+                ]
+              refusal = "embed is not available at the prompt. Write it in a module\n"
+          (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode
+            (proc actonExe ["repl", "--color", "never", "--tempdir", tmp]) { cwd = Just tmp } input
+          assertEqual ("acton repl should exit successfully: " ++ cmdErr) ExitSuccess returnCode
+          assertEqual ("repl should refuse each input that holds embed: " ++ cmdErr)
+            3 (length (splitOn refusal cmdErr) - 1)
+          assertBool ("repl should evaluate the input after a refusal: " ++ cmdOut)
+            ("4\n" `isInfixOf` cmdOut)
+          assertBool ("repl should keep no refused input: " ++ cmdOut)
+            ("<empty>\n" `isInfixOf` cmdOut)
 
     , testCase "retains definitions, resets, and rejects failed setup" $ do
         actonExe <- canonicalizePath "../../dist/bin/acton"

@@ -41,6 +41,10 @@ customParseErrorToDiagnostic (TypeVariableNameError name)      = ("Invalid name 
                                                                    Hint "Use a longer name"])
 customParseErrorToDiagnostic EmbedAsName                       = (showErrorComponent EmbedAsName,
                                                                   [])
+customParseErrorToDiagnostic EmbedForm                         = (showErrorComponent EmbedForm,
+                                                                  [])
+customParseErrorToDiagnostic (EmbedPath problem)               = (problem,
+                                                                  [])
 customParseErrorToDiagnostic (InvalidFormatSpecifier spec)     = ("Invalid format specifier" ++ if null spec then "" else ": " ++ spec,
                                                                   [])
 customParseErrorToDiagnostic (TooManyQuotesError quote)        = ("Too many quote characters",

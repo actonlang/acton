@@ -18,6 +18,7 @@ module Repl
   , ReplEval(..)
   , emptyReplState
   , addReplInput
+  , replHasEmbed
   , renderReplState
   , renderReplSessionSource
   , renderReplEvalSource
@@ -29,6 +30,7 @@ import qualified Acton.Parser
 import qualified Acton.Syntax as A
 import qualified Acton.BuildSpec as BuildSpec
 import qualified Acton.CommandLineParser as C
+import qualified Acton.Embed as Embed
 import Acton.Project (ProjectError(..), findProjectDir, projectBinDir, projectBuildAct, projectSrcDir)
 import qualified Acton.Fingerprint as Fingerprint
 import qualified PkgCommands
@@ -40,6 +42,7 @@ import Control.Exception (IOException, SomeException, finally, fromException, tr
 import Control.Monad
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Char (isSpace)
+import Data.Either (rights)
 import qualified Data.List
 import Data.List (isPrefixOf, isSuffixOf)
 import Data.List.Split (splitOn)
@@ -346,10 +349,16 @@ handleReplInput shell ctx st raw =
             liftIO $ hPutStrLn stderr ("Unknown REPL command: " ++ trim raw)
             replLoop shell ctx st
         | otherwise -> do
-            input <- liftIO $ classifyReplInput st raw
-            case input of
-              ReplTop top -> acceptReplTop shell ctx st raw top
-              ReplEvalInput eval -> runReplEval shell ctx st eval
+            embeds <- liftIO $ replHasEmbed raw
+            if embeds
+              then do
+                liftIO $ hPutStrLn stderr "embed is not available at the prompt. Write it in a module"
+                replLoop shell ctx st
+              else do
+                input <- liftIO $ classifyReplInput st raw
+                case input of
+                  ReplTop top -> acceptReplTop shell ctx st raw top
+                  ReplEvalInput eval -> runReplEval shell ctx st eval
 
 printReplHelp :: IO ()
 printReplHelp = do
@@ -650,6 +659,15 @@ classifyReplInput _ src = do
         case exprRes of
           Right _ -> return (ReplEvalInput (ReplExpr src))
           Left _  -> return (ReplEvalInput (ReplStmt src))
+
+-- | Whether an input holds an embed expression: as the module that it is
+-- when it has only declarations and assignments, or as the body of a
+-- function, which every other input is compiled as.
+replHasEmbed :: String -> IO Bool
+replHasEmbed src = do
+    whole <- parseReplModule src
+    body  <- parseReplModule (unlines ("def input():" : map ("    " ++) (blockLines src)))
+    return (any (not . null . Embed.embedExprs) (rights [whole, body]))
 
 parseReplModule :: String -> IO (Either SomeException A.Module)
 parseReplModule src =

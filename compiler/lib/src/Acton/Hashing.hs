@@ -495,6 +495,7 @@ feedExpr expr sink = case expr of
   A.Ellipsis _          -> feedTag 57 sink
   A.Strings _ ss        -> feedTag 58 sink >> feedList feedString ss sink
   A.BStrings _ ss       -> feedTag 59 sink >> feedList feedString ss sink
+  A.Embed _ p f         -> feedTag 93 sink >> feedString p sink >> feedMaybe feedFile f sink
   A.Call _ f ps ks      -> feedTag 60 sink >> feedExpr f sink >> feedPosArg ps sink >> feedKwdArg ks sink
   A.Let _ ss e          -> feedTag 61 sink >> feedSuite ss sink >> feedExpr e sink
   A.TApp _ f ts         -> feedTag 62 sink >> feedExpr f sink >> feedList feedType ts sink
@@ -527,6 +528,10 @@ feedExpr expr sink = case expr of
   A.Box t e             -> feedTag 89 sink >> feedType t sink >> feedExpr e sink
   A.UnBox t e           -> feedTag 90 sink >> feedType t sink >> feedExpr e sink
   A.GeneratorExpr _ e c -> feedTag 91 sink >> feedElem e sink >> feedComp c sink
+  where
+    -- The size and the SHA-256 of an embedded file: its content is part of
+    -- the hash of every name that holds the expression.
+    feedFile (size, sha) s = feedInteger size s >> feedString sha s
 
 feedPattern :: A.Pattern -> HashFeed
 feedPattern pat sink = case pat of
@@ -1310,6 +1315,7 @@ implItemSplitDeps mn env localNames item =
       A.Ellipsis{}          -> acc
       A.Strings{}           -> acc
       A.BStrings{}          -> acc
+      A.Embed{}             -> acc
       A.Call _ f ps ks      -> splitKwdArgDirect bound ks (splitPosArgDirect bound ps (splitExprDirect bound f acc))
       A.Let _ ss e          ->
         let bound' = boundSuite ss bound
