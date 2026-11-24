@@ -68,6 +68,17 @@ declared dependencies, or system modules. Following declarations count as
 direct declarations. This check also applies when compilation reuses cached
 interfaces; removing a declaration must not leave its imports available.
 
+A cached interface records each import as the module it resolved to, so a
+bare dependency import `foo` is recorded as `foo.lib`. When the project later
+declares a module that such a recorded import now overlaps, for example after
+the dependency is dropped and `src/foo.act` is added, discovery reads the
+importing module's source again, so that `import foo` resolves to the local
+module (`overlapsLocal` in `Acton.Compile`). An import recorded as one of the
+project's own modules needs no such check. Other projects record those with
+their project prefix, but the base library, whose module names have none,
+records `__builtin__` and `time` as they are; the check skips them because base
+declares them, so an unchanged build of base reuses its cached modules.
+
 The compiler still needs the complete transitive interface closure to resolve
 types appearing in dependency APIs and to generate code. Internal interface
 loading therefore retains access to transitive projects. This access does not

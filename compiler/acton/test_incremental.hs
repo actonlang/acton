@@ -3916,6 +3916,14 @@ copyDistBase tmp = do
   createDirectoryLink (dist </> "deps") (tmp </> "deps")
   return proj
 
+-- | A verbose build of a copy of the base library, as make builds the base
+-- library of the dist tree.
+buildBaseCopy :: FilePath -> IO T.Text
+buildBaseCopy proj = do
+  res <- runActonIn proj ["build", "--skip-build", "--no-dbp", "--color", "never", "--verbose"]
+  assertExitSuccess ("build in " ++ proj) res
+  return (snd res)
+
 p75_cached_builtin_regenerates_stale_code :: TestTree
 p75_cached_builtin_regenerates_stale_code =
   testCase "75-a cached __builtin__ generates its out of date code again" $
@@ -3924,24 +3932,35 @@ p75_cached_builtin_regenerates_stale_code =
       let builtinC = proj </> "out" </> "types" </> "__builtin__.c"
           staleTag = "/* Acton impl hash: deadbeef */"
           firstLine file = T.takeWhile (/= '\n') <$> T.readFile file
-          -- As make builds the base library of the dist tree.
-          build = do
-            res <- runActonIn proj ["build", "--skip-build", "--no-dbp", "--color", "never", "--verbose"]
-            assertExitSuccess ("build in " ++ proj) res
-            return (snd res)
-      _ <- build
+      _ <- buildBaseCopy proj
       generated <- firstLine builtinC
       -- What an interrupted build leaves behind: the .tydb of the current
       -- source next to code that an earlier build generated.
       rewriteFirstLine builtinC staleTag
-      out <- build
+      out <- buildBaseCopy proj
       regenerated <- firstLine builtinC
       assertBool ("expected __builtin__'s code to be generated again\n" ++ T.unpack out)
         (regenerated /= T.pack staleTag)
       regenerated @?= generated
-      out2 <- build
+      out2 <- buildBaseCopy proj
       assertBool ("did not expect __builtin__ to be checked again\n" ++ T.unpack out2)
         (not (typechecked out2 "__builtin__"))
+
+p76_unchanged_base_build_checks_nothing :: TestTree
+p76_unchanged_base_build_checks_nothing =
+  testCase "76-an unchanged build of the base library checks no module again" $
+    withSystemTempDirectory "base-rebuild" $ \tmp -> do
+      proj <- copyDistBase tmp
+      _ <- buildBaseCopy proj
+      out <- buildBaseCopy proj
+      -- Every module of base imports __builtin__, and some import each
+      -- other.  The module names of base have no project prefix, so such an
+      -- import names the module of base itself.
+      modules <- filter (/= "__builtin__") . map dropExtension . filter Project.isActFile <$> listDirectory (proj </> "src")
+      forM_ modules $ \m ->
+        assertBool ("expected " ++ m ++ " to be fresh\n" ++ T.unpack out) (fresh out (T.pack m))
+      assertBool ("did not expect a module to be checked again\n" ++ T.unpack out)
+        (not (any ("Type check done" `T.isInfixOf`) (T.lines out)))
 
 -- | The directories of Zig's local cache, which the Zig builds of every
 -- project share, that hold an object compiled from a C file with the given
@@ -4554,6 +4573,7 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
       , p73_doc_page_written_after_builds_without_docs
       , p74_outputs_of_another_compiler_build_are_redone
       , p75_cached_builtin_regenerates_stale_code
+      , p76_unchanged_base_build_checks_nothing
       , p77_body_and_ext_c_edits_keep_header
       , p78_build_waits_for_dependency_lock
       ]
