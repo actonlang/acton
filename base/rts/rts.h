@@ -340,6 +340,9 @@ struct WorkerCtx {
     // drops it and zeroes it right before the loop polls, so it cannot live
     // on the stack.
     struct JumpBuf jump0;
+    // Only a raise escaping to jump0 writes these native return addresses.
+    uintptr_t exception_frames[32];
+    size_t exception_frame_count;
 } __attribute__((aligned(128)));
 extern WorkerCtx wctxs[MAX_WTHREADS];
 #ifdef ACTON_THREADS

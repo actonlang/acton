@@ -1,0 +1,48 @@
+class Calls(object):
+    def __init__(self):
+        pass
+
+    def first(self, text: str) -> int:
+        return self.middle(text) + 1
+
+    def middle(self, text: str) -> int:
+        return self.last(text) + 2
+
+    def last(self, text: str) -> int:
+        return int(text) + 3
+
+actor Worker():
+    def handled(calls: Calls) -> int:
+        try:
+            return calls.first("caught")
+        except ValueError:
+            return 17
+
+    def fail(calls: Calls) -> int:
+        return calls.first("uncaught") + 4
+
+    def ping() -> int:
+        return 23
+
+actor Relay():
+    def read(msg: Msg[int]) -> int:
+        return await msg
+
+    def ping() -> int:
+        return 42
+
+actor main(env):
+    proc def __startup__():
+        calls = Calls()
+        worker = Worker()
+        print(worker.handled(calls))
+        msg = async worker.fail(calls)
+        print(worker.ping())
+        relay = Relay()
+        async relay.read(msg)
+        print(relay.ping())
+        try:
+            print(await msg)
+        except ValueError:
+            print("caught")
+        env.exit(0)

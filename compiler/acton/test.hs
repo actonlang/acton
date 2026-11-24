@@ -4352,6 +4352,26 @@ rtsTests =
   ,   workerStackTests
   ,   stdioTerminalTests
 
+  ,   testCase "unhandled exception prints its local native stack" $ do
+          let file = "../../test/rts/native_traceback.act"
+          testBuildThing "" ExitSuccess False file
+          (code, out, err) <- runThing "" file
+          assertEqual "actors still answer messages" ExitSuccess code
+          assertEqual "direct and awaited catches" "17\n23\n42\ncaught\n" out
+          case splitOn "Unhandled exception in actor: native_traceback." err of
+              ["", worker, relay] -> do
+                  assertBool worker ("Worker[" `isPrefixOf` worker)
+                  assertBool relay ("Relay[" `isPrefixOf` relay)
+                  let trace = drop 1 (lines worker)
+                  assertEqual "failed await preserves the producer's stack" trace (drop 1 (lines relay))
+                  assertBool worker ("Native traceback (most recent call first):" `elem` trace)
+                  assertEqual "native calls, innermost first" ["last", "middle", "first"]
+                      [name | line <- trace, name <- ["first", "middle", "last"],
+                              ("CallsD_" ++ name) `isInfixOf` line]
+                  assertBool worker (any (isInfixOf "native_traceback.act:") trace)
+                  assertBool worker (any (isInfixOf "ValueError:") trace)
+              _ -> assertFailure err
+
   ,   testCase "arg parsing: --rts-verbose --rts-wthreads 7 foo --bar" $ do
           testBuildAndRun "" "--rts-verbose --rts-wthreads 7 foo --bar" ExitSuccess False "../../test/rts/argv2.act"
 

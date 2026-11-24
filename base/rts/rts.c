@@ -1021,8 +1021,8 @@ struct $Cont $Done$instance = {
     &$DoneG_methods
 };
 ////////////////////////////////////////////////////////////////////////////////////////
-$R $FailD___call__($Cont $this, $WORD ex) {
-    return $R_FAIL(ex);
+$R $FailD___call__($Cont $this, $WORD failure) {
+    return $R_FAIL(failure);
 }
 
 bool $FailD___bool__($Cont self) {
@@ -1447,9 +1447,18 @@ void $DROP() {
     wctx->jump_top = current->prev;
 }
 
+extern size_t zig_capture_traceback(uintptr_t *frames, size_t capacity);
+extern B_bytes zig_format_traceback(const uintptr_t *frames, size_t count);
+
 _Noreturn B_value $RAISE(B_BaseException e) {
     WorkerCtx wctx = GET_WCTX();
     JumpBuf jump = wctx->jump_top;
+    if (jump == &wctx->jump0) {
+        $Actor actor = GET_SELF();
+        if (!actor || !actor->$catcher)
+            wctx->exception_frame_count = zig_capture_traceback(wctx->exception_frames,
+                sizeof(wctx->exception_frames) / sizeof(wctx->exception_frames[0]));
+    }
     jump->xval = e;
     $LONGJMP(jump->buf, 1);
     __builtin_unreachable();
@@ -2779,9 +2788,23 @@ void wt_work_cb(uv_check_t *ev) {
         }
         case $RFAIL: {
             $Catcher c = current->$catcher;
+            B_BaseException ex = r.value;
+            B_bytes trace = NULL;
+            size_t count = wctx->exception_frame_count;
+            wctx->exception_frame_count = 0;
+            // A failed message carries its exception and its original native trace.
+            // Older messages and failures without frames carry the exception alone.
+            B_tuple pair = r.value;
+            if (pair->$class == &B_tupleG_methods) {
+                ex = pair->components[0];
+                trace = pair->components[1];
+            } else if (!c && count) {
+                trace = zig_format_traceback(wctx->exception_frames, count);
+                if (trace)
+                    r.value = $NEWTUPLE(2, ex, trace);
+            }
             if (c) {                            // Normal exception handling
-                c->xval = (B_BaseException)r.value;
-                ACTON_WBAR(c, &c->xval, r.value);
+                ACTON_STORE(c, c->xval, ex);
                 $Cont k = c->$cont;
                 ACTON_STORE(m, m->$cont, k);
                 m->value = B_False;             // False signals the exceptional branch
@@ -2789,16 +2812,19 @@ void wt_work_cb(uv_check_t *ev) {
                 more = true;
             } else {                            // An unhandled exception
                 save_actor_state(current, m, end_us);
-                B_BaseException ex = (B_BaseException)r.value;
-                ACTON_STORE(m, m->value, r.value);                  // m->value holds the raised exception,
-                $Actor b = FREEZE_waiting(m, MARK_EXCEPTION);       // so mark this and stop further m->waiting additions
+                ACTON_STORE(m, m->value, r.value);
+                $Actor b = FREEZE_waiting(m, MARK_EXCEPTION);
                 // If any other actor is waiting for our result / exception,
                 // then we consider the exception handled and we can avoid
                 // printing the exception both in the originating actor and in
                 // the waiting actor. Thus we only print Unhandled exception in
                 // the originating actor when there is no one waiting for us.
                 if (!b)
-                    fprintf(stderr, "Unhandled exception in actor: %s[%" PRId64 "]:\n  %s\n", unmangle_name(current->$class->$GCINFO), current->$globkey, fromB_str(ex->$class->__str__(ex)));
+                    fprintf(stderr, "Unhandled exception in actor: %s[%" PRId64 "]:\n%s%.*s  %s\n",
+                            unmangle_name(current->$class->$GCINFO), current->$globkey,
+                            trace ? "Native traceback (most recent call first):\n" : "",
+                            trace ? (int)trace->nbytes : 0, trace ? (char *)trace->str : "",
+                            fromB_str(ex->$class->__str__(ex)));
                 while (b) {
                     B_Msg bm = b->B_Msg;
                     bm->$cont = &$Fail$instance;
@@ -2858,7 +2884,7 @@ void wt_work_cb(uv_check_t *ev) {
 
             if (added_waiting) {      // x->cont is a proper $Cont: x is still being processed so current was added to x->waiting
                 rtsd_printf("## AWAIT actor %" PRId64 " : %s", current->$globkey, current->$class->$GCINFO);
-            } else if (EXCEPTIONAL(x)) {        // x->cont == MARK_EXCEPTION: x->value holds the raised exception, current is not in x->waiting
+            } else if (EXCEPTIONAL(x)) {        // x->value holds the failed message's value, current is not in x->waiting
                 rtsd_printf("## AWAIT/fail actor %" PRId64 " : %s", current->$globkey, current->$class->$GCINFO);
                 m->$cont = &$Fail$instance;
                 $WORD v = x->value;
