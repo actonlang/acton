@@ -51,7 +51,7 @@ import Test.Syd
 import Test.Syd.Modify (sequential)
 import Test.Syd.Def.Golden (goldenTextFile)
 import qualified Control.Monad.Trans.State.Strict as St
-import Text.Megaparsec (ParseErrorBundle, PosState(..), bundleErrors, bundlePosState, errorOffset, reachOffset, runParser, errorBundlePretty, ShowErrorComponent(..))
+import Text.Megaparsec (ParseErrorBundle, ParseError(..), ErrorFancy(..), PosState(..), bundleErrors, bundlePosState, errorOffset, reachOffset, runParser, errorBundlePretty, ShowErrorComponent(..))
 import Text.Megaparsec.Pos (sourceLine, unPos)
 import qualified Data.Text as T
 import qualified Data.Text.Short as TS
@@ -2430,6 +2430,37 @@ main = do
           case afterIn "after now 3.8: g()" of
             Right [S.Decl _ [S.Def{S.dbody = [s]}]] -> Pretty.print s `shouldBe` "after now 3.8: g()"
             other -> expectationFailure $ "Unexpected parse: " ++ show other
+
+      describe "The reserved word embed" $ do
+        forM_ [ ("a variable of a module", "size = 3\n", " = size + 1\n")
+              , ("a variable of a function", "def f():\n    size = 3\n    ", " = size + 1\n")
+              , ("a function", "def ", "(path):\n    return path\n")
+              , ("a method", "class Page(object):\n    def ", "(self):\n        pass\n")
+              , ("a parameter", "def page(path, ", "):\n    return path\n")
+              , ("a class", "class ", "(object):\n    pass\n")
+              , ("the first part of a module name", "import ", ".files\n")
+              , ("a later part of a module name without quotes", "import web.", "\n")
+              , ("an attribute without quotes", "def f(page):\n    return page.", "\n")
+              , ("a called attribute without quotes", "def f(page):\n    return page.", "(\"x\")\n")
+              , ("a value", "def f():\n    return ", "\n")
+              ] $ \(place, before, after) ->
+          it ("refuses embed as " ++ place) $ expectEmbedRefused before after
+
+        it "reads embed in quotes as an attribute name" $
+          case parseExprAst "page.\"embed\"" of
+            Right e@(S.Dot _ _ n) -> do
+              S.nstr n `shouldBe` "embed"
+              Pretty.print e `shouldBe` "page.'embed'"
+              parseExprAst (Pretty.print e) `shouldBe` Right e
+            other -> expectationFailure $ "Unexpected parse: " ++ show other
+
+        it "reads embed in quotes as a later part of a module name" $
+          (S.importedModules <$> P.parseModuleImports "quoted.act" "import web.\"embed\"\n")
+            `shouldReturn` [S.modName ["web", "embed"]]
+
+        it "reads a name that starts with embed as a name" $
+          forM_ ["embedded", "embed_files", "Embed"] $ \n ->
+            parseExprAst n `shouldBe` Right (S.Var NoLoc (S.NoQ (S.name n)))
 
       describe "Completion" $ do
         it "completes inherited transform input attributes" $ do
@@ -5430,6 +5461,17 @@ expectMixedIndentation offset input =
         l `shouldBe` Loc offset (offset + 1)
       Left err -> expectationFailure ("Expected mixed indentation, got " ++ show err)
       Right _ -> expectationFailure "Expected mixed indentation to be rejected"
+
+-- | Both module parsers refuse the word embed between the two texts as a name,
+-- at the word.
+expectEmbedRefused :: String -> String -> Expectation
+expectEmbedRefused before after =
+  forM_ [P.parseModuleSerial, P.parseModule] $ \parse -> do
+    result <- E.try (parse (S.modName ["reserved"]) "reserved.act" (before ++ "embed" ++ after) Nothing)
+    case result of
+      Left (bundle :: ParseErrorBundle String P.CustomParseError) ->
+        NE.head (bundleErrors bundle) `shouldBe` FancyError (length before) (Set.singleton (ErrorCustom P.EmbedAsName))
+      Right _ -> expectationFailure "Expected embed to be refused as a name"
 
 parseBundleErrorLine :: ParseErrorBundle String P.CustomParseError -> Int
 parseBundleErrorLine bundle =

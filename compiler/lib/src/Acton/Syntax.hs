@@ -1009,7 +1009,7 @@ isKeyword x                         = x `Data.Set.member` rws
   where rws                         = Data.Set.fromDistinctAscList [
                                         "False","None","NotImplemented","Self","True","after","and","as",
                                         "assert","async","await","break","continue","def","del","elif","else",
-                                        "except","finally","for","if","in","is","isinstance",
+                                        "embed","except","finally","for","if","in","is","isinstance",
                                         "lambda","not","or","pass","raise","return","try",
                                         "var","while","with","yield","_"
                                         -- The following are soft keywords and not included in the above list:

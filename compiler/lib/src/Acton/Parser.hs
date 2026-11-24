@@ -57,6 +57,7 @@ import System.IO.Unsafe
 
 -- Custom error types for better structured error handling
 data CustomParseError = TypeVariableNameError String  -- Name that looks like type variable
+                      | EmbedAsName  -- The reserved word embed in the place of a name
                       | InvalidFormatSpecifier String
                       | MissingClosingQuote String  -- String is the quote type (e.g., "\"\"\"" or "'")
                       | TooManyQuotesError String
@@ -92,6 +93,7 @@ data CustomParseError = TypeVariableNameError String  -- Name that looks like ty
 
 instance ShowErrorComponent CustomParseError where
   showErrorComponent (TypeVariableNameError name) = "Invalid name (reserved for type variables)"
+  showErrorComponent EmbedAsName = "embed is a reserved word and cannot be a name"
   showErrorComponent (InvalidFormatSpecifier spec) = "Invalid format specifier" ++ if null spec then "" else ": " ++ spec
   showErrorComponent (MissingClosingQuote quote) = "missing closing " ++ quote
   showErrorComponent (TooManyQuotesError quote) = "too many quote characters"
@@ -1464,9 +1466,15 @@ identifier = (lexeme . try) $ do
     c <-  satisfy (\c -> isAlpha c || c=='_') <?> "identifier"
     cs <- hidden (takeWhileP Nothing (\c -> isAlphaNum c || c=='_'))
     let x = c:cs
-    if S.isKeyword x
-      then parseError (TrivialError off (Just (Tokens (N.fromList x))) (Set.fromList [Label (N.fromList "identifier")]))
-      else return x
+    -- embed is read as a name, and the error is kept with the parse state. An
+    -- alternative of the grammar that fails takes the error back with it, and
+    -- a parse that keeps the name reports it. Each other reserved word fails
+    -- here, on the way to its own statement or expression.
+    if x == "embed"
+      then x <$ registerParseError (FancyError off (Set.fromList [ErrorCustom EmbedAsName]))
+      else if S.isKeyword x
+        then parseError (TrivialError off (Just (Tokens (N.fromList x))) (Set.fromList [Label (N.fromList "identifier")]))
+        else return x
 
 name, escname, tvarname :: Parser S.Name
 name = do off <- getOffset

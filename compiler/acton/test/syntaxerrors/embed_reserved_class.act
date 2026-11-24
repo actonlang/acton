@@ -1,0 +1,3 @@
+# The reserved word embed as the name of a class
+class embed(object):
+    pass
