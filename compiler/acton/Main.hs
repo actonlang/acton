@@ -56,7 +56,7 @@ import Watch
 import FileUtil (readFile, writeFile, writeFileIfChanged)
 
 import Control.Concurrent.MVar
-import Control.Exception (throw,catch,finally,IOException,try,SomeException,onException,evaluate,bracket,mask)
+import Control.Exception (throw,throwIO,catch,finally,IOException,try,SomeException,SomeAsyncException,fromException,displayException,onException,evaluate,bracket,mask)
 import qualified Control.Concurrent.Async as Async
 import ProcessUtil (stopProcessGroup)
 import PerfScaling (validateScalingOptions, printScaleRecording, readScaleRecording)
@@ -993,7 +993,7 @@ runWatchProject gopts projDir srcRoot dependencyDirs sched runOnce = do
           atomicModifyIORef' pendingRef $ \(version, pending) ->
             let changed = nub <$> ((++) <$> pending <*> fmap (:[]) mpath)
             in ((version + 1, changed), ())
-          void $ startCompile sched 0 $ \gen -> do
+          void $ startCompile sched 0 $ \gen -> reportWatchFailure gen $ do
             (version, changed) <- readIORef pendingRef
             completed <- runOnce gen changed
             -- Canceled and failed generations leave their paths pending. A
@@ -1050,13 +1050,32 @@ runWatchFile gopts absFile sched runOnce = do
         onEvent ev =
           forM_ (fileWatchTrigger watchPath ev) (dispatchWatchTrigger (shouldTriggerFile stampsRef) schedule)
         schedule mpath = void $ startCompile sched 0 $ \gen ->
-          runOnce gen (fmap (:[]) mpath)
+          reportWatchFailure gen (runOnce gen (fmap (:[]) mpath))
     FS.withManager $ \mgr -> do
       _ <- FS.watchDir mgr watchDir isTarget onEvent
       schedule Nothing
       unless (C.quiet gopts) $
         putStrLn ("Watching for changes in " ++ absFile)
       forever $ threadDelay maxBound
+
+-- | Run a generation of a watch, and report an exception that ends it as
+-- acton reports one that ends a one-shot build. The generation runs in an
+-- async that nothing waits for (startCompile), so the exception, such as
+-- one from a Zig that cannot be started, would end the generation without
+-- a word while the watch went on waiting for changes. The watch goes on
+-- all the same, and the generation's paths stay pending. Cancelling a
+-- generation is no failure, an exit says nothing, as it does at the top
+-- level, and the failure of a superseded generation no longer matters.
+reportWatchFailure :: Generation -> IO () -> IO ()
+reportWatchFailure gen run = run `catch` report
+  where
+    report :: SomeException -> IO ()
+    report e
+      | isJust (fromException e :: Maybe SomeAsyncException) = throwIO e
+      | isJust (fromException e :: Maybe ExitCode) = return ()
+      | otherwise = whenCurrent gen $ do
+          name <- System.Environment.getProgName
+          hPutStrLn stderr (name ++ ": " ++ displayException e)
 
 -- | Fetch dependencies for the current project without compiling.
 fetchCommand :: C.GlobalOptions -> IO ()

@@ -17,7 +17,7 @@ import System.FilePath
 import System.IO
 import System.IO.Temp (withSystemTempDirectory)
 import System.Info (os)
-import System.Posix.Files (createSymbolicLink)
+import System.Posix.Files (createSymbolicLink, setFileMode)
 import System.Posix.Signals
 import System.Posix.Types (ProcessID)
 import System.Process
@@ -266,6 +266,20 @@ watchProcessTests = testGroup "watch subprocesses"
           threadDelay 2000000
           runs <- zigRuns proj
           assertEqual "no build should follow the first" 1 runs
+          assertRunning run "watch should remain running"
+  , testCase "build watch reports a Zig that cannot start and builds again after a save" $
+      withProcessProject $ \acton proj system -> do
+        let zig = system </> "zig/zig"
+        writeExecutable zig ["echo run >> zig-runs"]
+        -- With no execute bit at all, not even root can run it.
+        setFileMode zig 0o644
+        withActon acton proj ["build", "--watch", "--syspath", system] $ \run -> do
+          awaitOutput run "the report that Zig cannot start" ("zig/zig: createProcess: " `isInfixOf`)
+          awaitGeneration run
+          assertRunning run "watch should survive a Zig that cannot start"
+          setFileMode zig 0o755
+          appendFile (proj </> "src/main.act") "\n# Build again\n"
+          awaitZigRuns run 1
           assertRunning run "watch should remain running"
   , testCase "one-shot stress Ctrl-C reports partial results" $
       withProcessProject $ \acton proj system -> do
