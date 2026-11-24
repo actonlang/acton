@@ -102,6 +102,7 @@ module InterfaceFiles
   , SourceFileMeta(..)
   , StoredModule(..)
   , HeaderSummary(..)
+  , TyCacheInvalid(..)
   , InterfaceDB
   , interfaceExt
   , interfacePath
@@ -838,8 +839,11 @@ withReadTxn path action = do
     cpath <- canonicalizePath path
     -- mdb_txn_begin can hit a transient lock-table OS error, and another
     -- process may have grown the map since the shared environment was opened;
-    -- both retire the cached environment and retry with a fresh one.
-    runInLmdbThread $ readTxnWithRetry lmdbTransientMaxAttempts cpath
+    -- both retire the cached environment and retry with a fresh one.  An
+    -- invalid entry names the file, which a version or a decode error does
+    -- not.
+    (runInLmdbThread $ readTxnWithRetry lmdbTransientMaxAttempts cpath)
+      `E.catch` \(TyCacheInvalid msg) -> E.throwIO (TyCacheInvalid (path ++ ": " ++ msg))
   where
     readTxnWithRetry attempt cpath = do
       env <- acquireSharedEnv cpath path

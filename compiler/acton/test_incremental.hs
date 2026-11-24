@@ -3935,6 +3935,71 @@ p75_cached_builtin_regenerates_stale_code =
       assertBool ("did not expect __builtin__ to be checked again\n" ++ T.unpack out2)
         (not (typechecked out2 "__builtin__"))
 
+-- | A build of a project that uses a dependency waits for the lock of the
+-- dependency's project, as another build of it, or of another project
+-- that uses it, holds it, before it reads or writes any of its outputs.
+p78_build_waits_for_dependency_lock :: TestTree
+p78_build_waits_for_dependency_lock =
+  testCase "78-a build waits for the lock of a dependency project" $ do
+    ensureCasesProjectWithDeps [("libfoo", "deps/libfoo")]
+    depDir <- ensureDepProject casesProjDir "libfoo"
+    writeFileUtf8 (depDir </> "src" </> "lib.act") $ T.unlines
+      [ "def calculate(x: int) -> int:"
+      , "    return x * 2"
+      ]
+    writeFileUtf8 (casesSrcDir </> "main.act") $ T.unlines
+      [ "import libfoo.lib"
+      , ""
+      , "actor main(env: Env):"
+      , "    proc def __startup__():"
+      , "        print(libfoo.lib.calculate(21))"
+      , "        env.exit(0)"
+      ]
+    actonExe <- actonPath
+    depAbs <- canonicalizePath depDir
+    let depTydb = depDir </> "out" </> "types" </> "libfoo" </> "lib.tydb"
+    res <- Project.withProjectLock depDir $ do
+      (_, mOut, mErr, ph) <- createProcess
+        (proc actonExe ["build", "--color", "never", "--jobs", "1"])
+          { cwd = Just casesProjDir
+          , std_out = CreatePipe
+          , std_err = CreatePipe
+          }
+      let outH = requirePipe "stdout" mOut
+          errH = requirePipe "stderr" mErr
+      (do
+          waited <- timeout 10000000 (waitForLockNotice outH)
+          case waited of
+            Nothing -> assertFailure "build did not wait for the lock of its dependency"
+            Just line -> assertBool ("expected the notice to name the dependency\n" ++ T.unpack line)
+                           (T.pack depAbs `T.isInfixOf` line)
+          written <- doesDirectoryExist depTydb
+          assertBool "did not expect the build to write the dependency's .tydb while its lock is held" (not written)
+          pure (ph, outH, errH))
+        `E.onException` do
+          terminateProcess ph
+          _ <- waitForProcess ph
+          pure ()
+    let (ph, outH, errH) = res
+    ec <- waitForProcess ph
+    out <- T.hGetContents outH
+    err <- T.hGetContents errH
+    assertEqual ("build should succeed after the dependency's lock is released\n" ++ T.unpack (out <> err))
+      ExitSuccess ec
+    run <- runBinaryIn casesProjDir "main"
+    run @?= "42\n"
+  where
+    waitForLockNotice :: Handle -> IO T.Text
+    waitForLockNotice h = do
+      line <- T.hGetLine h
+      if T.isInfixOf "Waiting for compiler lock in" line
+        then pure line
+        else waitForLockNotice h
+
+    requirePipe :: String -> Maybe Handle -> Handle
+    requirePipe label =
+      maybe (error ("missing " ++ label ++ " pipe for dependency lock test")) id
+
 -- Source written during a read ------------------------------------------------
 
 -- | A disk source provider that writes new text to a source file right after
@@ -4352,6 +4417,7 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
       , p73_doc_page_written_after_builds_without_docs
       , p74_outputs_of_another_compiler_build_are_redone
       , p75_cached_builtin_regenerates_stale_code
+      , p78_build_waits_for_dependency_lock
       ]
   , sequentialTestGroup "incremental-cache-cases" AllSucceed
       [ p41_stale_header_missing_import_reparses_source

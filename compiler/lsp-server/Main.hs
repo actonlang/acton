@@ -314,11 +314,13 @@ prepareLspCompilePlan
   :: Source.SourceProvider
   -> C.GlobalOptions
   -> C.CompileOptions
+  -> ([FilePath] -> IO ())
   -> FilePath
   -> LspM () (Either String (PlanOrigin, Compile.CompilePlan))
-prepareLspCompilePlan sp gopts opts path = do
+prepareLspCompilePlan sp gopts opts lockDependencies path = do
   planE <- liftIO ((try $ do
-    ctx <- Compile.prepareCompileContext opts [path]
+    ctx0 <- Compile.prepareCompileContext opts [path]
+    let ctx = ctx0 { Compile.ccLockDependencies = lockDependencies }
     path' <- Project.normalizePathSafe path
     mcache <- HM.lookup (Compile.ccRootProj ctx) <$> readIORef projectBuildCachesRef
     case mcache of
@@ -656,15 +658,20 @@ planAndCompile gen rootProj path sp gopts opts progress = do
           progressForQueued (backProgressMessage job result)
         _ -> return ()
   progressReportImmediate progress "Preparing Acton project" Nothing
+  -- A plan locks the dependency projects as soon as it knows them, a plan
+  -- from the cache before the run, and the run holds them to its end.
+  let waitForDependency dir = progressFor (T.pack ("Waiting for compiler lock in " ++ dir))
   compileRes <- liftIO $
     Project.withProjectLock rootProj $
-      do
+      Project.withDependencyLocks $ \locks -> do
+        let lockDependencies = Project.lockDependencies locks waitForDependency
         planE <- runLspT env $
-          prepareLspCompilePlan sp gopts opts path
+          prepareLspCompilePlan sp gopts opts lockDependencies path
         case planE of
           Left msg ->
             return (Left msg)
           Right (origin, plan) -> do
+            lockDependencies (Compile.planDependencyDirs plan)
             progressFor $
               case origin of
                 PlanFromCache -> "Acton cached project ready"

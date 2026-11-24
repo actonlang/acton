@@ -121,6 +121,26 @@ by `stack` alone keeps its version, so the age check stays: such a binary is
 newer than the outputs of the build before it. Programs that use the library
 directly, such as the test suites, leave the identity empty.
 
+Builds of several projects can share a dependency: its outputs live in its own
+directory, and those of a fetched dependency in the shared `~/.cache/acton/deps`,
+which every project that uses that version shares. So a build takes the work
+lock of every dependency project besides its root project's (`.acton.lock`),
+from the moment its plan knows them, before it prunes or reads any of their
+outputs, until its final build, which compiles their code, is done
+(`lockDependencies`). Without the locks, a build of another compiler could
+rewrite a dependency's `.tydb` in its own format after this build had checked
+it, and the build would then fail on it, or compile C of two compilers
+together. With them, the second build waits ("Waiting for compiler lock in
+...") and then finds the other format a cache miss, as any other mismatch,
+and compiles the dependency again. A build takes every free lock and, when one
+is busy, gives back the ones it just took before it waits, so two builds never
+wait for each other. The distribution's projects are not locked, since no
+build writes them, and neither is a dependency in a read-only directory. A
+`.tydb` that still turns invalid under a build, as one written by a compiler
+that does not take these locks, fails the module that reads it with a
+diagnostic that says so, instead of stopping the build, and the next build
+compiles it again.
+
 Hashing within a module is done per top-level name. A hashable unit is a `Def`,
 `Actor`, `Class`, `Protocol`, `Extension`, or any top-level value introduced by
 a binding statement such as `a = 123` or `b, c = f()`. Entries are keyed by the

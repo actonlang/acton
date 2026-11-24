@@ -62,15 +62,27 @@ Plan
 prepareCompileContext finds the paths of the file that roots a build and
 makes the --dep overrides absolute.  prepareCompilePlan fetches the
 dependencies unless the scheduler's last completed fetch was of the same
-Build.act.  It discovers the projects (buildProjects) and prunes the
-outputs of their deleted sources, so that a cached header cannot bring a
-deleted module back.  It then discovers their modules (buildGlobalTasks)
+Build.act.  It discovers the projects (buildProjects), locks the
+dependency projects through the context's ccLockDependencies, and prunes
+the outputs of their deleted sources, so that a cached header cannot bring
+a deleted module back.  It then discovers their modules (buildGlobalTasks)
 and selects the modules to compile (selectPlan): the requested modules
 with everything they import or, for an incremental plan, the modules
 that the changed files affect.  A declared build library is compiled
 whole.  The LSP server plans an edit of a project it already discovered
 by reading the edited module again (readModuleTask) and selecting from
 the modules it keeps.
+
+A build holds its root project's work lock, and from planning to its
+final build the locks of the dependency projects whose outputs it reads
+and writes (Acton.Project.lockDependencies).  Several projects share a
+dependency, a fetched one in the shared cache above all, and builds of
+other compilers write other .tydb formats and code.  A build that ran
+while another rewrote a dependency would read a .tydb that it checked
+before in another format.  A .tydb that still turns invalid under a build,
+as one that a compiler that takes no such lock writes, fails the module
+that reads it with a diagnostic (InterfaceChanged), and the next build
+compiles it again.
 
 Discovery starts from the requested modules, or from every module when the
 selection may need any of them, and goes breadth first.  It reads each
@@ -318,6 +330,8 @@ module Acton.Compile
   , CompilePlan(..)
   , prepareCompilePlan
   , planFetched
+  , dependencyDirs
+  , planDependencyDirs
   , selectPlan
   , readModuleTask
   , docIndexEntry
@@ -925,6 +939,7 @@ data CompileContext = CompileContext
   , ccRootProj   :: FilePath             -- the root project's directory, normalized
   , ccSysAbs     :: FilePath             -- the system directory, normalized
   , ccBuildStamp :: BuildSpecStamp       -- the root project's Build.act when the context was made
+  , ccLockDependencies :: [FilePath] -> IO ()  -- locks the given dependency project directories (dependencyDirs)
   }
 
 -- | A module's options: dependency projects build neither their tests nor a
@@ -946,7 +961,9 @@ hasParseStage ctx t                     = case gtTask t of
 -- --dep overrides are made absolute against the first file's project
 -- directory, or the working directory outside a project, before the paths
 -- are found, so that the paths and discovery see absolute overrides.  The
--- Build.act stamp is read at the project path as the paths give it.
+-- Build.act stamp is read at the project path as the paths give it.  The
+-- context locks no dependency: a caller that holds dependency locks sets
+-- ccLockDependencies.
 prepareCompileContext :: C.CompileOptions -> [FilePath] -> IO CompileContext
 prepareCompileContext _ []              = throwProjectError "No source files found"
 prepareCompileContext opts (first : _)  = do
@@ -958,7 +975,8 @@ prepareCompileContext opts (first : _)  = do
     root        <- normalizePathSafe (projPath paths)
     sys         <- normalizePathSafe (sysPath paths)
     stamp       <- readBuildSpecStamp (projPath paths)
-    return CompileContext { ccOpts = opts', ccPathsRoot = paths, ccRootModule = mn, ccRootProj = root, ccSysAbs = sys, ccBuildStamp = stamp }
+    return CompileContext { ccOpts = opts', ccPathsRoot = paths, ccRootModule = mn, ccRootProj = root, ccSysAbs = sys, ccBuildStamp = stamp
+                          , ccLockDependencies = \_ -> return () }
 
 -- | How much of a project a build asks for.  A whole-project build seeds
 -- discovery with every module and lets the final build prune stale
@@ -1001,13 +1019,16 @@ prepareCompilePlan sp gopts sched ctx request = do
   where
     stamp = Just (ccBuildStamp ctx)
 
--- | Plan a build whose dependencies are in place.  Orphan outputs are pruned
--- before discovery, so that a cached header cannot resurrect a deleted
--- module: in every project for a full plan, and for an incremental plan
--- only those of changed sources that no longer exist.
+-- | Plan a build whose dependencies are in place.  The dependency projects
+-- are locked as soon as they are known, before any of their outputs is
+-- pruned or read (ccLockDependencies).  Orphan outputs are pruned before
+-- discovery, so that a cached header cannot resurrect a deleted module: in
+-- every project for a full plan, and for an incremental plan only those of
+-- changed sources that no longer exist.
 planFetched :: Source.SourceProvider -> C.GlobalOptions -> CompileContext -> PlanRequest -> IO CompilePlan
 planFetched sp gopts ctx request = do
     projects <- buildProjects gopts ctx
+    ccLockDependencies ctx (dependencyDirs ctx projects)
     let paths     = buildPaths ctx projects
         withPaths = M.elems (M.intersectionWith (,) projects paths)
     case requestChanged request of
@@ -1047,6 +1068,18 @@ buildProjects gopts ctx = withoutTestLibraries <$> projects
     withoutTestLibraries
       | C.test opts = M.adjust (\p -> p { projBuildSpec = (projBuildSpec p) { BuildSpec.libraries = M.empty } }) root
       | otherwise   = id
+
+-- | The directories of the dependency projects of a build whose outputs it
+-- writes: every project but the root project, which the caller locks
+-- first, and those of the distribution, which no build writes.
+dependencyDirs :: CompileContext -> M.Map FilePath ProjCtx -> [FilePath]
+dependencyDirs ctx projects = [ dir | dir <- M.keys projects, dir /= ccRootProj ctx, not (inSystem dir) ]
+  where sys          = ccSysAbs ctx
+        inSystem dir = dir == sys || addTrailingPathSeparator sys `Data.List.isPrefixOf` dir
+
+-- | The dependency project directories of a plan (dependencyDirs).
+planDependencyDirs :: CompilePlan -> [FilePath]
+planDependencyDirs plan = dependencyDirs (cpContext plan) (cpProjMap plan)
 
 -- | The paths of each project of a build.  The one project of a scratch
 -- build has the paths findPaths gave the file that roots the build.
@@ -1848,6 +1881,7 @@ data ModuleError
   | MissingNameHash       A.QName
   | MissingDependencyHash HashKind A.Name SrcLoc A.QName    -- the kind, the module's name using it, its location, the name
   | InterfaceWriteFailed  String                            -- the module's own .tydb
+  | InterfaceChanged      String                            -- a .tydb that turned unreadable after the plan read it
   deriving (Show)
 
 newtype ModuleErrors = ModuleErrors [ModuleError] deriving (Show)
@@ -1855,13 +1889,16 @@ newtype ModuleErrors = ModuleErrors [ModuleError] deriving (Show)
 instance Exception ModuleErrors
 
 -- | The diagnostic for a module error, shown with the given source text.  A
--- missing interface or a failed write names the module's full file, a hash
--- error its file without the project prefix.  A failed write shows no
--- source.
+-- missing or changed interface or a failed write names the module's full
+-- file, a hash error its file without the project prefix.  A failed write
+-- and a changed interface show no source.
 explainError :: ModuleEnv -> String -> ModuleError -> Diagnostic String
 explainError env src err = case err of
     MissingInterface m                    -> compilationError fullFile  src NoLoc ("Type interface file not found or unreadable for " ++ modNameToString m)
     InterfaceWriteFailed e                -> compilationError fullFile  ""  NoLoc ("Failed to write .tydb for " ++ modNameToString (nameOf env) ++ ": " ++ e)
+    InterfaceChanged e                    -> compilationError fullFile  ""  NoLoc
+                                               ("An interface that this build read changed while it ran: " ++ e
+                                                ++ ". Another build that does not lock this project's dependencies, such as one of an older compiler, may have written it. Build again.")
     MissingNameHash qn                    -> compilationError labelFile src NoLoc ("Hash info missing for " ++ prstr qn)
     MissingDependencyHash kind owner l qn -> compilationError labelFile src l
                                                (hashKindName kind ++ " hash missing for " ++ prstr qn ++ " (used by " ++ A.nstr owner ++ ")")
@@ -1900,6 +1937,7 @@ tryDiagnostics handlers action = (Right <$> action) `catches` map (fmap Left) ha
 frontFailures :: ModuleEnv -> String -> [Handler [Diagnostic String]]
 frontFailures env src =
     [ Handler $ \(ModuleErrors errs)               -> return (map (explainError env src) errs)
+    , Handler $ \(InterfaceFiles.TyCacheInvalid e) -> return [explainError env src (InterfaceChanged e)]
     , Handler $ \(e :: GeneralError)               -> return (located (generalError e))
     , Handler $ \(e :: Acton.Env.CompilationError) -> return (located (Acton.Env.compilationError e))
     , Handler $ \(Acton.Types.TypeErrors errs)     -> return (map typed errs)
@@ -1910,9 +1948,13 @@ frontFailures env src =
     typed e      = Acton.TypeEnv.mkErrorDiagnostic file src (Acton.TypeEnv.typeReport e file src)
 
 -- | A module stage outside its front passes: only module errors are its
--- own, and they are shown without source text.
+-- own, and they are shown without source text.  A .tydb that the stage
+-- reads and finds invalid, after the plan found it valid, changed while the
+-- build ran, and fails the module too.
 moduleBoundary :: ModuleEnv -> IO (Either [Diagnostic String] a) -> IO (Either [Diagnostic String] a)
-moduleBoundary env run = run `catch` \(ModuleErrors errs) -> return (Left (map (explainError env "") errs))
+moduleBoundary env run = run `catches`
+    [ Handler $ \(ModuleErrors errs)               -> return (Left (map (explainError env "") errs))
+    , Handler $ \(InterfaceFiles.TyCacheInvalid e) -> return (Left [explainError env "" (InterfaceChanged e)]) ]
 
 
 -- Outputs ------------------------------------------------------------------------------------------

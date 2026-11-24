@@ -72,6 +72,9 @@ module Acton.Project
   , withBackgroundCompilerLock
   , withProjectLockOnWait
   , withProjectLock
+  , DependencyLocks
+  , withDependencyLocks
+  , lockDependencies
   , isAbsolutePath
   , normalizePathSafe
   , isUnder
@@ -92,7 +95,8 @@ import Control.Exception (Exception, IOException, catch, finally, throwIO, try)
 import Control.Monad
 import Data.Bits (shiftL, shiftR, (.|.))
 import Data.Char (isAlpha, isDigit)
-import Data.List (intercalate, isPrefixOf, isSuffixOf)
+import Data.IORef (IORef, modifyIORef', newIORef, readIORef)
+import Data.List (intercalate, isPrefixOf, isSuffixOf, nub, sort)
 import Data.Maybe (isJust)
 import qualified Data.Map as M
 import qualified Data.Set
@@ -1018,6 +1022,60 @@ withProjectLockOnWait projDir onWait action = do
 withProjectLock :: FilePath -> IO a -> IO a
 withProjectLock projDir action =
     withProjectLockOnWait projDir (return ()) action
+
+-- | The work locks of the dependency projects that one build holds besides
+-- its root project's, by project directory.
+--
+-- A dependency's outputs live in its own directory, and so does a fetched
+-- dependency's in the shared cache, which every project that uses it at
+-- that version shares.  A build reads and writes them from planning to its
+-- final build.  Builds of different compilers write different .tydb
+-- formats and code, so a build that ran while another rewrote them would
+-- read a .tydb that it had checked in another format, and compile C of two
+-- compilers together.
+newtype DependencyLocks = DependencyLocks (IORef (M.Map FilePath FileLock))
+
+-- | Run an action with a holder of dependency locks, and release every lock
+-- it took when the action ends.
+withDependencyLocks :: (DependencyLocks -> IO a) -> IO a
+withDependencyLocks action = do
+    held <- newIORef M.empty
+    action (DependencyLocks held) `finally` (readIORef held >>= mapM_ unlockFile)
+
+-- | Take the work locks of the given dependency project directories that
+-- the holder does not hold yet, and keep them until the end of
+-- withDependencyLocks.  Every free one is taken.  When one is busy, the
+-- ones just taken are released, 'onWait' is run with its directory, the
+-- build waits until that lock is free, and tries again.  So a build never
+-- waits for a dependency's lock while it holds another that it took here,
+-- and since a build holds its root project's lock first and projects do
+-- not depend on each other in a cycle, two builds never wait for each
+-- other.  A directory whose lock file cannot be created, such as a
+-- read-only one, which no build can write either, is not locked.
+lockDependencies :: DependencyLocks -> (FilePath -> IO ()) -> [FilePath] -> IO ()
+lockDependencies (DependencyLocks held) onWait dirs = do
+    current <- readIORef held
+    acquire (nub (sort (filter (`M.notMember` current) dirs)))
+  where
+    acquire []     = return ()
+    acquire wanted = do
+      result <- tryEach wanted []
+      case result of
+        Right taken -> modifyIORef' held (M.union (M.fromList taken))
+        Left (busy, taken) -> do
+          mapM_ (unlockFile . snd) taken
+          onWait busy
+          withFileLock (projectLockPath busy) Exclusive (\_ -> return ())
+          acquire wanted
+    tryEach [] taken = return (Right taken)
+    tryEach (dir : rest) taken = do
+      lock <- tryIO (tryLockFile (projectLockPath dir) Exclusive)
+      case lock of
+        Right (Just l) -> tryEach rest ((dir, l) : taken)
+        Right Nothing  -> return (Left (dir, taken))
+        Left _         -> tryEach rest taken
+    tryIO :: IO a -> IO (Either IOException a)
+    tryIO = try
 
 
 -- Path utilities -----------------------------------------------------------------------------------
