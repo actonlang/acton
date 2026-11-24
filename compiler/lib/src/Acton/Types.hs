@@ -1225,9 +1225,12 @@ liveCombine (Just te) (Just te')        = Just $ te++te'
 
 -- Ambient effect requirements use semantic subtyping. The witness is proof
 -- only: no function value is being converted at these sites.
+-- Until local mutation can be distinguished from observable mutation, an
+-- explicitly pure body also permits mut operations, matching the temporary
+-- mut-to-pure cast without adding it to the semantic effect hierarchy.
 requireEffect env info required         = do fx <- currFX
                                              w <- newWitness
-                                             return $ Sub info env w required fx
+                                             return $ Sub info env w required (if fx == fxPure then fxMut else fx)
 
 fxUnwrapSc env sc                       = sc{ sctype = fxUnwrap env $ sctype sc }
 

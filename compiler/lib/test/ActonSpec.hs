@@ -402,10 +402,29 @@ main = do
                 [ "pure def apply(cb: mut() -> int) -> int:"
                 , "    return cb()" ])
             , ("nested_sum_comprehension",
-                "values = [sum([i * i for i in range(k)]) for k in range(1, 4)]\n")] $ \(label,src) ->
+                "values = [sum([i * i for i in range(k)]) for k in range(1, 4)]\n")
+            , ("local_initialization", unlines
+                [ "def finish(values: list[int], n: int):"
+                , "    values.append(n)"
+                , "    if n > 0:"
+                , "        parse(n - 1)"
+                , "pure def parse(n: int) -> list[int]:"
+                , "    values: list[int] = []"
+                , "    finish(values, n)"
+                , "    return values" ])
+            , ("local_initialization_result", unlines
+                [ "def finish(values: list[int], n: int) -> int:"
+                , "    values.append(n)"
+                , "    return parse(n - 1) if n > 0 else len(values)"
+                , "pure def parse(n: int) -> int:"
+                , "    values: list[int] = []"
+                , "    return finish(values, n)" ])] $ \(label,src) ->
         it ("retains temporary mut-to-pure compatibility for " ++ label) $ do
           typed <- typecheckSource env0 label src
           E.evaluate (rnf typed)
+          when (label `elem` ["local_initialization", "local_initialization_result"]) $ do
+            fmap S.dfx (findTypedDef "finish" typed) `shouldBe` Just S.fxMut
+            fmap S.dfx (findTypedDef "parse" typed) `shouldBe` Just S.fxPure
       forM_ [("pure",S.fxPure,S.fxPure), ("mut",S.fxMut,S.fxMut),
              ("proc",S.fxProc,S.fxProc), ("action",S.fxAction,S.fxProc)] $ \(label,source,expected) ->
         it ("resolves the value-unwrapping effect for " ++ label ++ " without contextual bounds") $ do
