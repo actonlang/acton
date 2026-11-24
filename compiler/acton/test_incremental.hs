@@ -2,7 +2,7 @@
 
 module Main (main) where
 
-import           Control.Monad (foldM, forM, forM_, unless, when)
+import           Control.Monad (filterM, foldM, forM, forM_, unless, when)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.Text as T
@@ -1543,21 +1543,29 @@ p24_codegen_equal_hash = testCase "24-codegen mismatch names each stale file" $ 
   -- The single-delta message is emitted by the EAGER codegen refresh; under
   -- default-on DBP the module would be deferred, so pin this path explicitly.
   _ <- buildOutInArgs proj ["--no-dbp"]
-  -- Only the stale files are named, each with its own delta: the header
-  -- carries a tag of its own.
+  -- Only the stale files are named, each with its own delta.
   rewriteFirstLine bC "/* Acton impl hash: deadbeef */"
   out <- buildOutInArgs proj ["--no-dbp"]
   let staleLine text = filter (T.isInfixOf "generated code out of date") (T.lines text)
   assertBool ("expected only the .c to be named\n" ++ T.unpack out)
     (any (\l -> "{codegen c deadbeef ->" `T.isInfixOf` l && not (", h " `T.isInfixOf` l)) (staleLine out))
-  rewriteFirstLine bC "/* Acton impl hash: deadbeef */"
-  rewriteFirstLine bH "/* Acton impl hash: deadbeef */"
-  rewriteFirstLine bSupport "/* Acton impl hash: deadbeef */"
-  out2 <- buildOutInArgs proj ["--no-dbp"]
-  assertBool ("expected a delta for each stale file\n" ++ T.unpack out2)
-    (any (\l -> all (`T.isInfixOf` l) ["{codegen c deadbeef ->", ", h deadbeef ->", ", support deadbeef ->"]) (staleLine out2))
   assertBool "expected b.act to compile codegen" (compiled out modB)
   assertBool "did not expect b.act to type check" (not (typechecked out modB))
+  -- The header carries the hash of its own text, and the .c records the
+  -- tag of the header generated with it.
+  rewriteFirstLine bH "/* Acton impl hash: deadbeef */"
+  out2 <- buildOutInArgs proj ["--no-dbp"]
+  assertBool ("expected only the header to be named\n" ++ T.unpack out2)
+    (any (\l -> "{codegen h deadbeef ->" `T.isInfixOf` l && not ("c deadbeef" `T.isInfixOf` l) && not ("support" `T.isInfixOf` l)) (staleLine out2))
+  assertBool "expected b.act to compile codegen for its header" (compiled out2 modB)
+  assertBool "did not expect b.act to type check for its header" (not (typechecked out2 modB))
+  header <- T.readFile bH
+  assertBool "expected the header to be written again" (not ("deadbeef" `T.isInfixOf` header))
+  rewriteFirstLine bC "/* Acton impl hash: deadbeef */"
+  rewriteFirstLine bSupport "/* Acton impl hash: deadbeef */"
+  out3 <- buildOutInArgs proj ["--no-dbp"]
+  assertBool ("expected a delta for each stale file\n" ++ T.unpack out3)
+    (any (\l -> all (`T.isInfixOf` l) ["{codegen c deadbeef ->", ", support deadbeef ->"]) (staleLine out3))
 
 p25_whitespace_change :: TestTree
 p25_whitespace_change = testCase "25-whitespace-only change does not propagate" $ do
@@ -3935,6 +3943,135 @@ p75_cached_builtin_regenerates_stale_code =
       assertBool ("did not expect __builtin__ to be checked again\n" ++ T.unpack out2)
         (not (typechecked out2 "__builtin__"))
 
+-- | The directories of Zig's local cache, which the Zig builds of every
+-- project share, that hold an object compiled from a C file with the given
+-- base name.  A compilation of other contents makes a directory of its own,
+-- named by the hash of its inputs, headers included.
+zigObjectDirsOf :: String -> IO [FilePath]
+zigObjectDirsOf base = do
+  home <- getHomeDirectory
+  let objects = Project.zigLocalCacheDir home </> "o"
+  exists <- doesDirectoryExist objects
+  if not exists
+    then return []
+    else do
+      dirs <- listDirectory objects
+      sort <$> filterM (\dir -> doesFileExist (objects </> dir </> base <.> "o")) dirs
+
+p77_body_and_ext_c_edits_keep_header :: TestTree
+p77_body_and_ext_c_edits_keep_header =
+  testCase "77-an edit of a body or an .ext.c keeps the header and the objects that include it" $ do
+    let proj = casesProjDir
+        src = casesSrcDir
+        modShapes = modLabel proj "shapes"
+        modNative = modLabel proj "native"
+        modUser = modLabel proj "header_user"
+        [shapesC, shapesH, _] = generatedFilesOf "shapes"
+        [_, nativeH, _] = generatedFilesOf "native"
+        lifted = T.pack casesProjName <> "Q_shapesQ_L_"
+        prefix = T.pack casesProjName <> "Q_nativeQ_"
+        shapesAct :: [T.Text] -> T.Text
+        shapesAct body = T.unlines $
+          [ "class Point:"
+          , "    x: int"
+          , ""
+          , "    def __init__(self, x: int):"
+          , "        self.x = x"
+          , ""
+          , "def scaled(x: int) -> int:"
+          ] ++ body
+        nativeAct :: [T.Text] -> T.Text
+        nativeAct extra = T.unlines $
+          [ "class Box:"
+          , "    v: int"
+          , ""
+          , "    def __init__(self, v: int):"
+          , "        self.v = v"
+          , ""
+          , "def answer() -> int:"
+          , "    NotImplemented"
+          ] ++ extra
+        extC :: Int -> T.Text
+        extC n = T.unlines
+          [ "void " <> prefix <> "__ext_init__() {"
+          , "}"
+          , ""
+          , "int64_t " <> prefix <> "answer() {"
+          , "    return " <> T.pack (show n) <> ";"
+          , "}"
+          ]
+        userObjects = zigObjectDirsOf "header_user"
+    -- The C of header_user differs in every run of this test, so that Zig
+    -- compiles it into a directory of its cache that no earlier run made.
+    nonce <- T.pack . show <$> getCurrentTime
+    ensureCasesProject
+    -- shapes is a deferred module, native an eager one, and header_user
+    -- uses only their classes, whose code the edits below leave alone.
+    writeFileUtf8 (src </> "shapes.act") (shapesAct ["    return x * 2"])
+    writeFileUtf8 (src </> "native.act") (nativeAct [])
+    writeFileUtf8 (src </> "native.ext.c") (extC 1)
+    writeFileUtf8 (src </> "header_user.act") $ T.unlines
+      [ "import native"
+      , "import shapes"
+      , ""
+      , "def total() -> int:"
+      , "    run = \"" <> nonce <> "\""
+      , "    return shapes.Point(2).x + native.Box(3).v + len(run) * 0"
+      ]
+    writeFileUtf8 (src </> "main.act") $ T.unlines
+      [ "import header_user"
+      , "import native"
+      , "import shapes"
+      , ""
+      , "actor main(env: Env):"
+      , "    proc def __startup__():"
+      , "        print(shapes.scaled(5), native.answer(), header_user.total())"
+      , "        env.exit(0)"
+      ]
+    _ <- buildOutIn proj
+    run1 <- runBinaryIn proj "main"
+    run1 @?= "10 1 5\n"
+    shapesH1 <- T.readFile shapesH
+    nativeH1 <- T.readFile nativeH
+    objects1 <- userObjects
+    assertBool "expected an object of header_user in Zig's cache" (not (null objects1))
+    -- The lambda becomes a closure at the top level of shapes, which only
+    -- shapes' own C declares.
+    writeFileUtf8 (src </> "shapes.act") (shapesAct ["    f = lambda y: y * 3", "    return f(x)"])
+    out2 <- buildOutIn proj
+    assertBool ("expected shapes to be checked again\n" ++ T.unpack out2) (typechecked out2 modShapes)
+    assertBool ("expected header_user to be fresh\n" ++ T.unpack out2) (fresh out2 modUser)
+    shapesC2 <- T.readFile shapesC
+    assertBool ("expected shapes' C to declare the lifted closure\n" ++ T.unpack shapesC2) (lifted `T.isInfixOf` shapesC2)
+    shapesH2 <- T.readFile shapesH
+    shapesH2 @?= shapesH1
+    run2 <- runBinaryIn proj "main"
+    run2 @?= "15 1 5\n"
+    objects2 <- userObjects
+    assertEqual "expected Zig to reuse the object of header_user after an edit of a body of shapes" objects1 objects2
+    -- An edit of only native.ext.c changes native's impl hash and its C,
+    -- which includes the .ext.c, but not its header.
+    writeFileUtf8 (src </> "native.ext.c") (extC 2)
+    out3 <- buildOutIn proj
+    assertBool ("expected native to be checked again\n" ++ T.unpack out3) (typechecked out3 modNative)
+    assertBool ("expected header_user to be fresh\n" ++ T.unpack out3) (fresh out3 modUser)
+    nativeH3 <- T.readFile nativeH
+    nativeH3 @?= nativeH1
+    run3 <- runBinaryIn proj "main"
+    run3 @?= "15 2 5\n"
+    objects3 <- userObjects
+    assertEqual "expected Zig to reuse the object of header_user after an edit of native.ext.c" objects1 objects3
+    -- A new name changes native's header, and Zig compiles header_user
+    -- again, which includes it.
+    writeFileUtf8 (src </> "native.act") (nativeAct ["", "def extra() -> int:", "    return 7"])
+    out4 <- buildOutIn proj
+    assertBool ("expected header_user to be fresh\n" ++ T.unpack out4) (fresh out4 modUser)
+    nativeH4 <- T.readFile nativeH
+    assertBool "expected native's header to declare extra" (nativeH4 /= nativeH1)
+    objects4 <- userObjects
+    assertBool ("expected Zig to compile header_user again after a change of native's header\n" ++ show objects4)
+      (any (`notElem` objects1) objects4)
+
 -- | A build of a project that uses a dependency waits for the lock of the
 -- dependency's project, as another build of it, or of another project
 -- that uses it, holds it, before it reads or writes any of its outputs.
@@ -4417,6 +4554,7 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
       , p73_doc_page_written_after_builds_without_docs
       , p74_outputs_of_another_compiler_build_are_redone
       , p75_cached_builtin_regenerates_stale_code
+      , p77_body_and_ext_c_edits_keep_header
       , p78_build_waits_for_dependency_lock
       ]
   , sequentialTestGroup "incremental-cache-cases" AllSucceed

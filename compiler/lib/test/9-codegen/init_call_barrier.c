@@ -1,6 +1,11 @@
 /* Acton impl hash: test-hash */
 #include "rts/common.h"
 #include "out/types/init_call_barrier.h"
+typedef struct $Cont_R2 *init_call_barrierQ_L_2Cont;
+$R init_call_barrierQ_L_1C_1cont (init_call_barrierQ_Later, $Cont, B_NoneType);
+extern struct $ContClass init_call_barrierQ_L_2ContG_methods;
+$R init_call_barrierQ_L_2ContD___call__($Cont $closure, $WORD $result);
+$Cont init_call_barrierQ_L_2ContD___deserialize__($Cont self, $Serial$state state);
 #line 8 "test/src/init_call_barrier.act"
 $R init_call_barrierQ_step ($Cont C_cont) {
     #line 9 "test/src/init_call_barrier.act"

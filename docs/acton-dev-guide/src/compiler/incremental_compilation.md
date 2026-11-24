@@ -57,8 +57,8 @@ sets up: a quoted name next to the including file, then any name in the project
 root, the first `-I`. A file is in the project when the path clang reads it by,
 or the file that path leads to, lies in it, so a file reached through a linked
 directory counts. A file found elsewhere, in a dependency's or the compiler's
-include tree, changes only with them, and a file under `out/` is generated: a
-module's own header carries the tag that this hash decides. When a directive
+include tree, changes only with them, and a file under `out/` is generated from
+the sources, as a module's own header is. When a directive
 names its file through a macro, every other file under `src/` counts. Two kinds
 of project file stay out of reach: one that only a header outside the project
 includes, through the project root on the include path, and, in a scratch build,
@@ -71,31 +71,48 @@ The public hash (**modulePubHash**) is derived from the module's public-name
 The implementation hash (**moduleImplHash**) is derived from per-name
 `implHash` values; it is stored in the `.tydb` header.
 
-Generated `.c`, `.h` and `.closures.inc` files are tagged with a codegen hash,
-on a first line that reads "Acton impl hash" for historical reasons. Every
-tag covers the module implementation hash and what else the back passes read
-for every file:
+Generated `.c` and `.closures.inc` files are tagged with a codegen tag, on a
+first line that reads "Acton impl hash" for historical reasons. It covers the
+module implementation hash and what else the back passes read:
 
 - the module's imports, in `.tydb` header order: the generated code calls the
   init function of each and includes its header;
-- the selected top-level names of a DBP module.
-
-The tag of the `.c` and the `.closures.inc` also covers what only they hold:
-
-- where they name it, the source path relative to the project: the `.ext.c`
-  that a module with `NotImplemented` bodies includes and the file of each
-  `#line` directive (it differs from the module name only in a scratch build);
+- the selected top-level names of a DBP module;
+- where the code names it, the source path relative to the project: the
+  `.ext.c` that a module with `NotImplemented` bodies includes and the file of
+  each `#line` directive (it differs from the module name only in a scratch
+  build);
 - unless `--dbg-no-lines` is given, the source hash, since an edit that only
   moves lines moves the `#line` directives.
 
-The `.h` holds neither, so its tag leaves them out: an edit that changes only
-comments rewrites the `.c` but leaves the `.h`, and so the objects of every
-module that includes it, alone. All of these are in the `.tydb` header, so a
-cached module's expected tags are computed without reading its statements
-(`codegenTags`). If the tag of any of the three files is missing or
-mismatched, another build of the compiler wrote a file, or a file is older than
-the compiler binary, we rerun back passes even if no other hashes changed. The
-front passes write the `.tydb` before the back passes write the code, so this
+All of these are in the `.tydb` header, so a cached module's expected tag is
+computed without reading its statements (`codegenTag`).
+
+The `.h` declares only the names of the module's source, which the modules
+that import it use. The names that the compiler makes up, such as the
+closures, functions and continuations that lambda lifting moves to the top
+level and the witnesses of top-level expressions, are declared at the top of
+the module's own `.c` instead, since no other module uses them. The `.h` is
+tagged with the hash of its own text (`headerTag`), which the `.c` records
+after its own tag and stamp, and it is written only when its text changes. So
+an edit of a body or of comments, or of the module's `.ext.c` or a file that
+it includes, leaves the `.h` as it is, and Zig reuses the object of every
+module that includes it and whose own code is unchanged. A module that uses a
+name whose implementation changed gets a new impl hash, and with it a new
+tag and a new object, although its code is the same. The `.h` of a DBP module
+declares its selected names, so a body that starts to use a name of its module
+that nothing selected before adds that name to it.
+
+If the tag of the `.c` or the `.closures.inc` is missing or mismatched, the
+`.h` carries another tag than the `.c` records, another build of the compiler
+wrote a file, or the `.c` or the `.closures.inc` is older than the compiler
+binary, we rerun back passes even if no other hashes changed. The back passes
+write the `.h` before the `.c`, so a `.c` with the expected tag names the `.h`
+generated with it, and an `.h` that a later, interrupted job wrote carries
+another tag. The `.h` needs no age check, since its tag is the hash of its
+text. A `.c` that records no `.h`, as a missing `.c` or one that another build
+of the compiler wrote does not, decides alone, and its `.h` only has to carry a
+tag. The front passes write the `.tydb` before the back passes write the code, so this
 check also catches the code that such a build leaves behind: `acton build
 --sigs` and `acton sig` write the `.tydb` but not the code, and so does a build
 that is interrupted or cancelled in between. `__builtin__`, which only the base
@@ -106,8 +123,9 @@ Every `.tydb`, generated file and documentation page records the build of the
 compiler that wrote it: the `.tydb` in its `compiler` key, a file as a stamp
 after its tag on its first line, the first 16 hex digits of a hash of the
 build's identity. A build trusts only the outputs of its own build, and only
-those that are not older than its binary (`trustsCompiler`,
-`compilerNewerThan`); `--ignore-compiler-version` turns both checks off.
+those that are not older than its binary, a generated `.h` excepted
+(`trustsCompiler`, `compilerNewerThan`); `--ignore-compiler-version` turns both
+checks off.
 Another build may write other outputs from the same inputs, which no hash shows,
 and the age of the binary alone does not show it: a release, a Homebrew install,
 a build the user switches back to, or a dependency in the shared
@@ -280,14 +298,16 @@ chain. Selected declarations, signatures, assignments, and compiler-introduced
 dropped. Other source-level top-level statements are not a fallback case because
 the parser rejects them before type checking.
 
-Before reading any statement, DBP computes the codegen tags from the module's
-`.tydb` header and the sorted selected top-level names. If the existing `.c`,
-`.h` and `.closures.inc` files already carry that hash in their generated
-"Acton impl hash" tag, this build of the compiler wrote them, and none is older
-than the compiler binary, the deferred job is skipped. Otherwise DBP reads only the
+Before reading any statement, DBP computes the codegen tag from the module's
+`.tydb` header and the sorted selected top-level names. If the existing `.c`
+and `.closures.inc` already carry that tag in their generated "Acton impl hash"
+line, the `.h` carries the tag that the `.c` records, this build of the
+compiler wrote them, and neither the `.c` nor the `.closures.inc` is older than
+the compiler binary, the deferred job is skipped. Otherwise DBP reads only the
 statements of the selected names (`readSelectedModule`), prunes them to the
-selected top-level declarations, runs the normal back-pass chain, and writes all
-three files tagged with those codegen tags. A `.tydb` written by the same
+selected top-level declarations, runs the normal back-pass chain, and writes the
+`.c` and the `.closures.inc` tagged with that codegen tag, and the `.h` when its
+text changed. A `.tydb` written by the same
 compiler version always has those statement rows, so when they cannot be read
 the file is corrupt, and the build stops with an internal error instead of
 reading the whole module. A later consumer change that selects a different
@@ -342,9 +362,10 @@ $ acton build --verbose
 ```
 
 `b` computes its impl hashes again from its stored rows. Both deferred back
-jobs find their generated code out of date, because their codegen hashes cover
+jobs find their generated code out of date, because their codegen tags cover
 their modules' impl hashes. The job of `a` selects `foo`, the one name `b`
-uses. `b` has neither dependents nor root actors, so its job selects no names.
+uses, and writes `a.c` again but leaves `a.h` as it is, since its text is the
+same. `b` has neither dependents nor root actors, so its job selects no names.
 
 **Public signature change.** Before:
 
@@ -399,16 +420,20 @@ $ acton build --verbose
 ```
 
 A module whose code is generated whole, for example every module under
-`--no-dbp`, compares the tags of its `.c`, `.h` and `.closures.inc` with its
-codegen tags in its front stage and reports a mismatch as a stale reason. After a
-`--no-dbp` build, the same deletion shows:
+`--no-dbp`, compares the tags of its `.c` and `.closures.inc` with its codegen
+tag, and the tag of its `.h` with the one its `.c` records, in its front stage
+and reports a mismatch as a stale reason. After a `--no-dbp` build, the same
+deletion shows:
 
 ```text
 $ rm out/types/proj/b.c out/types/proj/b.h out/types/proj/b.closures.inc
 $ acton build --verbose --no-dbp
   Fresh a: using cached .tydb
-  Stale b: generated code out of date {codegen c missing -> 176042b0, h missing -> 3e81a7c2, support missing -> 176042b0}
+  Stale b: generated code out of date {codegen c missing -> 176042b0, h missing -> any, support missing -> 176042b0}
 ```
+
+With the `.c` gone, no tag is known for the `.h`, so any tag would do, but a
+missing `.h` carries none.
 
 **Non-propagating change.** Adding an unused import changes the module source
 bytes, so the module itself re-runs front passes, but downstream modules do

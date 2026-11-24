@@ -43,30 +43,36 @@ import qualified Data.IntMap.Strict as IM
 
 generate                            :: Acton.Env.Env0 -> FilePath -> String -> Bool -> Module -> String -> IO (String,String,String)
 generate env srcbase srcText emitLines m hash = do
-    (n,h,c,_) <- generateCode Nothing env srcbase srcText emitLines m hash hash
-    return (n,h,c)
+    (n,h,c,_) <- generateCode Nothing env srcbase srcText emitLines m
+    return (n, tagged hash h, tagged hash c)
 
--- File builds keep mechanical support in a fragment of its own, which the .c
--- includes by the name 'supportInclude' gives.  Diagnostics and golden tests
--- request a complete listing with Nothing.  The header is tagged with
--- 'headerHash', and the .c and the support fragment with 'codeHash'.
-generateCode                        :: Maybe FilePath -> Acton.Env.Env0 -> FilePath -> String -> Bool -> Module -> String -> String -> IO (String,String,String,String)
-generateCode supportInclude env srcbase srcText emitLines m headerHash codeHash = return (n,h,c,support)
+-- | A module's name and the text of its generated header, .c and closure
+-- support fragment, each without the tag line that starts its file (see
+-- 'tagged').  File builds keep mechanical support in a fragment of its own,
+-- which the .c includes by the name 'supportInclude' gives.  Diagnostics and
+-- golden tests request a complete listing with Nothing.
+generateCode                        :: Maybe FilePath -> Acton.Env.Env0 -> FilePath -> String -> Bool -> Module -> IO (String,String,String,String)
+generateCode supportInclude env srcbase srcText emitLines m = return (n,h,c,support)
 
   where n                           = modNameToString (modname m)
-        hashComment hash            = text implHashTag <+> text hash <+> text "*/"
-        h                           = render $ hashComment headerHash $+$ hModule env0 m
+        h                           = render $ hModule env0 m
         (cDoc,supportDoc)            = cModuleParts supportInclude env0 srcbase srcText emitLines m
-        c                           = render $ hashComment codeHash $+$ cDoc
-        support                     = render $ hashComment codeHash $+$ supportDoc
+        c                           = render cDoc
+        support                     = render supportDoc
         Module _ _ _ stmts          = m
         env0                        = shareClosureLayouts (classdefine stmts $ genEnv $ setMod (modname m) env) stmts
 
 -- | The first line of a generated .c, .h and closure support file starts with
--- this tag, followed by the text that generateCode is given: the file's tag
--- in hex, and in a build the stamp of the compiler that wrote it.
+-- this tag, followed by the text that 'tagged' is given: the file's tag in
+-- hex, in a build the stamp of the compiler that wrote it, and on a .c the
+-- tag of the header generated with it.
 implHashTag                         :: String
 implHashTag                         = "/* Acton impl hash:"
+
+-- | The text of a generated file: its tag line, holding the given text, then
+-- its body.
+tagged                              :: String -> String -> String
+tagged tag body                     = render (text implHashTag <+> text tag <+> text "*/") ++ "\n" ++ body
 
 genRoot                            :: Acton.Env.Env0 -> QName -> IO String
 genRoot env0 qn@(GName m n)         = do return $ render (cInclude $+$ cIncludeMods $+$ cInit $+$ cRoot)
@@ -484,7 +490,8 @@ closureFieldId t
 -- with the runtime. Keep a class identity and a typed body for each one.
 -- Constructor and property order must agree: do not reorder/evaluate captures
 -- here. Other arities, scalar captures and larger environments use the usual
--- generated representation. Compute this once for both header and C emission.
+-- generated representation. Compute this once for both declarations and
+-- definitions.
 shareClosureLayouts env stmts       = modX env $ \x -> x{ sharedClosuresX = Map.fromList entries }
   where entries                    = [ (gname env n, (family,props))
                                      | Decl _ ds <- stmts, Class _ n q _ b _ <- ds,
@@ -567,28 +574,41 @@ shareClosureFields env stmts        = modX env $ \x -> x{ closureFieldsX = owner
 
 -- Header -------------------------------------------------------------------------------------------
 
+-- The header declares the names of the module's source, which other modules
+-- use, or those that a deferred module selected.  The names that the passes
+-- made up, such as the lambda-lifted closures, functions and continuations
+-- of the bodies and the witnesses of top-level expressions, are declared at
+-- the top of the module's own .c (cModuleParts), since nothing else uses
+-- them.  So an edit of a body that selects no other name leaves the header
+-- as it is, and with it the objects of the modules that include it.
 hModule env (Module m imps _ stmts) = text "#pragma" <+> text "once" $+$
                                       (if inBuiltin env
                                        then empty
                                        else text "#include \"builtin/builtin.h\"" $+$ -- TODO: can we include out/types/__builtin__.h instead?
                                             include env "rts" (modName ["rts"])) $+$
                                       vcat (map (include env "out/types") $ modNames imps) $+$
-                                      hSuite 1 env1 stmts $+$
-                                      hSuite 2 env1 stmts $+$
+                                      hDecls (not . isInternal) (declEnv env stmts) stmts $+$
                                       text "void" <+> genTopName env initKW <+> parens empty <> semi
-  where env1                        = shareClosureAdapters (classdefine stmts env) stmts
 
+-- | The environment that a module's top-level names are declared in.
+declEnv env stmts                   = shareClosureAdapters (classdefine stmts env) stmts
 
-hSuite phase env []                 = empty
-hSuite phase env (s:ss)             = hStmt phase env s $+$ hSuite phase (gdefine (envOf s) env) ss
+-- | The declarations of the top-level names that 'select' accepts, in the
+-- order of the statements: first their structs, typedefs, prototypes and
+-- method tables, then their variables.
+hDecls select env stmts             = hSuite select 1 env stmts $+$ hSuite select 2 env stmts
 
-hStmt 1 env (Decl _ ds)             = vmap (declstub env1) ds $+$
-                                      vmap (typedef env1) ds $+$
-                                      vmap (decl env1) ds $+$
-                                      vmap (methstub env1) ds
+hSuite select phase env []          = empty
+hSuite select phase env (s:ss)      = hStmt select phase env s $+$ hSuite select phase (gdefine (envOf s) env) ss
+
+hStmt select 1 env (Decl _ ds)      = vmap (declstub env1) ds' $+$
+                                      vmap (typedef env1) ds' $+$
+                                      vmap (decl env1) ds' $+$
+                                      vmap (methstub env1) ds'
   where env1                        = gdefine (envOf ds) env
-hStmt 2 env s                       = vcat [ text "extern" <+> genTypeDecl env n t <+> genTopName env n <> semi | (n,NVar t) <- envOf s]
-hStmt _ env s                       = empty
+        ds'                         = filter (select . dname') ds
+hStmt select 2 env s                = vcat [ text "extern" <+> genTypeDecl env n t <+> genTopName env n <> semi | (n,NVar t) <- envOf s, select n ]
+hStmt _ _ env s                     = empty
 
 declstub env (Class _ n q a b ddoc)
   | Just _ <- sharedClosureSpec env (NoQ n) = empty
@@ -796,6 +816,8 @@ cModuleParts supportInclude env srcbase srcText emitLines (Module m imps _ stmts
         mainDoc                     = (if inBuiltin env then text "#include \"builtin/builtin.c\"" else empty) $+$
                                       text "#include \"rts/common.h\"" $+$
                                       include env (if inBuiltin env then "" else "out/types") m $+$
+                                      -- The names the passes made up, which the header leaves out.
+                                      hDecls isInternal envDecl stmts $+$
                                       ext_include $+$
                                       (if split then empty else adapterDocs) $+$
                                       declModuleSelect (\d -> not split || not (closureDecl d)) True envWithLine stmts $+$
@@ -824,6 +846,7 @@ cModuleParts supportInclude env srcbase srcText emitLines (Module m imps _ stmts
         ext_init                    = if notImpl then genTopName env (name "__ext_init__") <+> parens empty <> semi else empty
         notImpl                     = hasNotImpl stmts
         env1                        = classdefine stmts env
+        envDecl                     = declEnv env stmts
         -- Emit a C #line directive for a given Acton SrcLoc if available
         actFile                     = srcbase ++ ".act"
         -- Our AST source locations (SrcLoc) carry byte offsets (start,end), not (row,col).
@@ -840,7 +863,7 @@ cModuleParts supportInclude env srcbase srcText emitLines (Module m imps _ stmts
         emitLine NoLoc              = empty
         emitLine (Loc startOffset _) =
             text "#line" <+> pretty (offsetToLine startOffset) <+> doubleQuotes (text actFile)
-        envWithFields               = modX (shareClosureFields (shareClosureAdapters env1 stmts) stmts) $ \x -> x
+        envWithFields               = modX (shareClosureFields envDecl stmts) $ \x -> x
                                         { moduleWitnessesX = Map.mapMaybe unique $ Map.fromListWith (++)
                                             [(GName m n,[e]) | Assign _ [PVar _ n _] e <- stmts, isWitness n] }
         unique [e]                  = Just e
@@ -852,7 +875,8 @@ cModuleParts supportInclude env srcbase srcText emitLines (Module m imps _ stmts
 declModule                         = declModuleSelect (const True) True
 
 -- Thread the complete environment through both partitions, even for omitted
--- declarations. Fragments share the main translation unit and header.
+-- declarations. Fragments share the main translation unit, its header and
+-- the declarations at its top.
 declModuleSelect select globals env [] = empty
 declModuleSelect select globals env (Decl _ ds : ss)
                                     = vcat [ declDecl env1 d | d <- ds, select d ] $+$
