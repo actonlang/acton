@@ -233,8 +233,9 @@ watchProcessTests = testGroup "watch subprocesses"
           awaitZigRuns proj 2
           awaitGeneration proj
           logText <- output
-          -- The first build reports it too.
-          assertBool logText (count "Stale native: source changed" logText >= 2)
+          -- The first build finds no .tydb.
+          assertBool logText (count "Stale native: no .tydb" logText >= 1)
+          assertBool logText (count "Stale native: source changed" logText >= 1)
           appendFile (proj </> "src/native_value.h") "\n// Second edit\n"
           awaitZigRuns proj 3
           assertEqual "watch should remain running" Nothing =<< getProcessExitCode ph

@@ -110,7 +110,8 @@ the recorded stat is then refreshed in place.  An editor overlay is
 compared by content hash only.  So is a module whose .tydb was written
 while it had an .ext.c: such a .tydb records no stat, since the stat of
 the source would not show that the .ext.c was deleted.  A module whose
-header is not trusted is read from its source.
+header is not trusted is read from its source, and its task records why
+(CacheMiss), which --verbose reports.
 
 The stat that a .tydb records is taken before the source is read, and one
 read gives both the text that is compiled and the bytes that are hashed.
@@ -136,8 +137,9 @@ import cycle, a failure of __builtin__, a failed output and a failed
 preparation of a deferred back job fail the run itself (CompileFailure).
 
 A module's front stage decides what the module needs (assess), reports why
-under --verbose (describe) and does it (perform).  A source that changed
-runs the front passes (compileModule).  A TyTask is checked in this order:
+under --verbose (describe) and does it (perform).  A module read from its
+source runs the front passes (compileModule).  A TyTask is checked in this
+order:
 
   1. An import whose interface is gone fails the module.
   2. Its dependency rows are compared with the current hashes.  A changed
@@ -283,6 +285,7 @@ module Acton.Compile
   , GlobalTask(..)
   , taskSourceFile
   , CompileTask(..)
+  , CacheMiss(..)
   , importsOf
   , ModuleSource(..)
   , BackJob(..)
@@ -445,19 +448,31 @@ data GlobalTask = GlobalTask
 taskSourceFile                          :: GlobalTask -> FilePath
 taskSourceFile t                        = srcFile (gtPaths t) (tkMod (gtKey t))
 
--- | A module as discovery found it.
+-- | A module as discovery found it.  A module read from its source carries
+-- why its .tydb header was not used.
 data CompileTask
-  = TyTask         InterfaceFiles.HeaderSummary              -- a .tydb header trusted while the source is unchanged
-  | ParseTask      ModuleSource [A.ModName] (Maybe String)   -- header imports and docstring
-  | ActonTask      ModuleSource A.Module                     -- parsed; imports as written until the front stage adjusts them
+  = TyTask         InterfaceFiles.HeaderSummary                        -- a .tydb header trusted while the source is unchanged
+  | ParseTask      CacheMiss ModuleSource [A.ModName] (Maybe String)   -- header imports and docstring
+  | ActonTask      CacheMiss ModuleSource A.Module                     -- parsed; imports as written until the front stage adjusts them
   | ParseErrorTask [Diagnostic String]
+
+-- | Why discovery read a module from its source instead of trusting its
+-- .tydb header (readModuleTask), in the order it checks.
+data CacheMiss
+  = NoTydb                      -- the module has no .tydb
+  | TydbUnusable String         -- its header cannot be read: the error (readFailureText)
+  | OtherCompiler String        -- another build of the compiler wrote it: that build's identity
+  | CompilerNewer               -- the compiler binary is newer than it
+  | SourceChanged               -- the source is not the one it records
+  | ImportsNowLocal [A.ModName] -- recorded imports that now name modules of the module's own project (overlapsLocal)
+  deriving (Eq, Show)
 
 -- | The modules a task imports: a cached header's imports are canonical, a
 -- source's as written.
 importsOf                               :: CompileTask -> [A.ModName]
 importsOf (TyTask h)                    = map fst (InterfaceFiles.summaryImports h)
-importsOf (ParseTask _ imps _)          = imps
-importsOf (ActonTask _ m)               = A.importsOf m
+importsOf (ParseTask _ _ imps _)        = imps
+importsOf (ActonTask _ _ m)             = A.importsOf m
 importsOf (ParseErrorTask _)            = []
 
 -- | The text and bytes of one read of a module's source: the text is
@@ -1372,8 +1387,8 @@ buildGlobalTasks sp gopts opts projects pathsByProject seedFiles = do
         -- local, the source is parsed again, so that its spelling resolves to
         -- the local module and its interface is rebuilt.
         task       <- case discovered of
-                        TyTask _ | any (overlapsLocal index paths) (importsOf discovered)
-                          -> either ParseErrorTask (uncurry ActonTask) <$> materialize sp opts paths (tkMod key) file Nothing discovered
+                        TyTask _ | locals@(_:_) <- filter (overlapsLocal index paths) (importsOf discovered)
+                          -> either ParseErrorTask (uncurry (ActonTask (ImportsNowLocal locals))) <$> materialize sp opts paths (tkMod key) file Nothing discovered
                         _ -> return discovered
         let imports = restoredImportsOf paths task
         either throwProjectError return (checkImportPrefixes index paths imports >> checkImportDependencies index paths (tkMod key) imports)
@@ -1394,8 +1409,8 @@ readModuleTask :: Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -
 readModuleTask sp gopts opts paths mn file = do
     reusable <- reusableHeader gopts opts tydb
     case reusable of
-      Nothing               -> fromSource =<< readModuleSource sp paths mn file
-      Just (header, tydbNs) -> do
+      Left miss             -> fromSource miss =<< readModuleSource sp paths mn file
+      Right (header, tydbNs) -> do
         extHash <- readExtSourceHash paths mn file
         overlay <- Source.spReadOverlay sp file
         case overlay of
@@ -1408,8 +1423,8 @@ readModuleTask sp gopts opts paths mn file = do
   where
     tydb = tyDbPath paths mn
 
-    fromSource source = either ParseErrorTask (\(imps, doc) -> ParseTask source imps doc)
-                          <$> parseSourceHeader mn file (sourceText source)
+    fromSource miss source = either ParseErrorTask (\(imps, doc) -> ParseTask miss source imps doc)
+                               <$> parseSourceHeader mn file (sourceText source)
 
     -- The stat refresh updates one row, failures ignored.  Rewriting the
     -- whole .tydb would re-derive its dependency rows from the stored
@@ -1429,7 +1444,7 @@ readModuleTask sp gopts opts paths mn file = do
                   ++ " header=" ++ Hashing.shortHash (InterfaceFiles.summarySourceHash header)
                   ++ " len=" ++ show (B.length (sourceBytes source))
                   ++ if same then " (match)" else " (diff)")
-      if not same then fromSource source else do
+      if not same then fromSource SourceChanged source else do
         -- An overlay has no stat to record.  A module with an .ext.c must
         -- not keep one, which a .tydb from an earlier compiler can hold.
         let recorded = recordedSourceMeta source
@@ -1438,19 +1453,24 @@ readModuleTask sp gopts opts paths mn file = do
           void (trySync (InterfaceFiles.updateSourceMeta tydb recorded))
         return (TyTask header)
 
--- | The .tydb header and the .tydb's modification time, unless the .tydb is
--- missing, its header unreadable, another build of the compiler wrote it or
--- the compiler binary is newer.  A failure to stat the .tydb itself
--- propagates.
-reusableHeader :: C.GlobalOptions -> C.CompileOptions -> FilePath -> IO (Maybe (InterfaceFiles.HeaderSummary, Integer))
+-- | The .tydb header and the .tydb's modification time, or why they cannot
+-- be used: the .tydb is missing, its header unreadable, another build of
+-- the compiler wrote it or the compiler binary is newer.  A failure to stat
+-- the .tydb itself propagates.
+reusableHeader :: C.GlobalOptions -> C.CompileOptions -> FilePath -> IO (Either CacheMiss (InterfaceFiles.HeaderSummary, Integer))
 reusableHeader gopts opts tydb = do
-    header <- InterfaceFiles.tryReadHeaderSummary tydb
-    case header of
-      Just h | trustsCompiler gopts opts (InterfaceFiles.summaryCompiler h) -> do
-        tydbNs <- InterfaceFiles.interfaceModifiedTimeNs tydb
-        newer  <- compilerNewerThan opts tydbNs
-        return (if newer then Nothing else Just (h, tydbNs))
-      _ -> return Nothing
+    exists <- InterfaceFiles.interfaceExists tydb
+    if not exists then return (Left NoTydb) else do
+      header <- trySync (InterfaceFiles.readHeaderSummary tydb)
+      case header of
+        Left err -> return (Left (TydbUnusable (InterfaceFiles.readFailureText err)))
+        Right h
+          | not (trustsCompiler gopts opts (InterfaceFiles.summaryCompiler h))
+                      -> return (Left (OtherCompiler (InterfaceFiles.summaryCompiler h)))
+          | otherwise -> do
+              tydbNs <- InterfaceFiles.interfaceModifiedTimeNs tydb
+              newer  <- compilerNewerThan opts tydbNs
+              return (if newer then Left CompilerNewer else Right (h, tydbNs))
 
 -- | Whether an output that the given build of the compiler wrote (a .tydb,
 -- generated code or a documentation page) can be trusted: when this build
@@ -1535,7 +1555,7 @@ readSourceFileMeta path = do
 docIndexEntry                           :: C.CompileOptions -> Paths -> A.ModName -> CompileTask -> Maybe (A.ModName, Maybe String, Bool)
 docIndexEntry opts paths mn (TyTask h)  = Just (mn, InterfaceFiles.summaryDoc h,
                                                 shouldGenerateDocOutput opts (isTmp paths) (InterfaceFiles.summaryNameCount h))
-docIndexEntry _ _ mn (ParseTask _ _ d)  = Just (mn, d, True)
+docIndexEntry _ _ mn (ParseTask _ _ _ d) = Just (mn, d, True)
 docIndexEntry _ _ _ _                   = Nothing
 
 -- | The parsed source of a module.  A ParseTask parses the text read at
@@ -1544,10 +1564,10 @@ docIndexEntry _ _ _ _                   = Nothing
 materialize :: Source.SourceProvider -> C.CompileOptions -> Paths -> A.ModName -> FilePath -> Maybe (ParseProgress -> IO ())
             -> CompileTask -> IO (Either [Diagnostic String] (ModuleSource, A.Module))
 materialize sp opts paths mn file progress task = case task of
-    ActonTask source m   -> return (Right (source, m))
-    ParseErrorTask diags -> return (Left diags)
-    ParseTask source _ _ -> parse source
-    TyTask _             -> parse =<< readModuleSource sp paths mn file
+    ActonTask _ source m   -> return (Right (source, m))
+    ParseErrorTask diags   -> return (Left diags)
+    ParseTask _ source _ _ -> parse source
+    TyTask _               -> parse =<< readModuleSource sp paths mn file
   where
     parse source         = do display <- displayPath file
                               fmap ((,) source) <$> parseActSource opts mn display (sourceText source) progress
@@ -2044,7 +2064,7 @@ data DepChange
   | RowsMissing A.ModName                                            -- a changed dependency module without name rows
 
 -- | Why a module runs its front passes.
-data Reason = SourceChanged | DependencyChanges [DepChange] | DumpRequested | ImplRefreshFailed
+data Reason = Uncached CacheMiss | DependencyChanges [DepChange] | DumpRequested | ImplRefreshFailed
 
 -- | How a module's front stage brings it up to date, in priority order.
 -- An impl refresh carries the module's NotImplemented flag as assess read
@@ -2063,7 +2083,8 @@ frontStage env = moduleBoundary env $ case moduleCurrent env of
     ParseErrorTask diags                    -> return (Left diags)
     task | C.only_build (moduleOptions env) -> Right <$> onlyBuild env task
     TyTask header                           -> assess env header >>= act env
-    _                                       -> act env (RunFront SourceChanged)
+    ParseTask miss _ _ _                    -> act env (RunFront (Uncached miss))
+    ActonTask miss _ _                      -> act env (RunFront (Uncached miss))
 
 -- | What a cached module needs.  An import without an interface fails it
 -- at once.  Then its dependency rows are compared with the current hashes
@@ -2184,15 +2205,15 @@ dependencyChanges env header = do
             qn       = A.GName m n
             users    = depUsers kind <$> InterfaceFiles.readDepUsers tydb m n
 
--- | The --verbose lines of an action.  Tests match this text.  A source
--- change says only that, and a dump request says nothing. Deltas come
--- newest first, the reverse of the order they were found in.  Missing items
--- come pub, then impl, each sorted by name, then the modules without rows.
--- A module's dependency rows hold each name once, so no two missing items
--- of one kind have the same name.
+-- | The --verbose lines of an action.  Tests match this text.  A module read
+-- from its source says why its .tydb was not used, and a dump request says
+-- nothing. Deltas come newest first, the reverse of the order they were
+-- found in.  Missing items come pub, then impl, each sorted by name, then
+-- the modules without rows.  A module's dependency rows hold each name once,
+-- so no two missing items of one kind have the same name.
 describe :: ModuleEnv -> Action -> [String]
 describe env action = case action of
-    RunFront SourceChanged          -> [ stale "source changed" ]
+    RunFront (Uncached miss)        -> [ stale (cacheMissText (C.compilerIdentity (buildOptions (moduleBuild env))) miss) ]
     RunFront (DependencyChanges cs) -> [ stale ("pub changes in " ++ deltas Pub cs)      | any (changedIn Pub) cs ]
                                     ++ [ stale ("missing dep hashes in " ++ missing cs) | any isMissing cs ]
     RunFront DumpRequested          -> []
@@ -2212,6 +2233,19 @@ describe env action = case action of
     usedBy users                    = case map A.nstr (sortedNames (Data.Set.fromList users)) of
                                         []    -> ""
                                         names -> " (used by " ++ intercalate ", " names ++ ")"
+
+-- | Why a module was read from its source, as a --verbose line says it,
+-- given the identity of the running build of the compiler.
+cacheMissText                           :: String -> CacheMiss -> String
+cacheMissText _ NoTydb                  = "no .tydb"
+cacheMissText _ (TydbUnusable why)      = why
+cacheMissText ours (OtherCompiler theirs)
+                                        = ".tydb written by compiler " ++ identity theirs ++ ", this is " ++ identity ours
+  where identity ""                     = "(unnamed)"
+        identity name                   = name
+cacheMissText _ CompilerNewer           = "compiler binary newer than its .tydb"
+cacheMissText _ SourceChanged           = "source changed"
+cacheMissText _ (ImportsNowLocal ms)    = "imports that now name local modules: " ++ intercalate ", " (map modNameToString ms)
 
 -- | Report an action under --verbose, then perform it.
 act :: ModuleEnv -> Action -> IO (Either [Diagnostic String] FrontResult)
@@ -3672,7 +3706,9 @@ moduleEnv run state k = ModuleEnv
 -- | Parse a module's source in a stage of its own, in parallel with its
 -- providers' front stages.  The syntax tree is forced here, so the parse
 -- runs on the stage's thread.  A parse error completes the stage as a
--- ParseErrorTask, which the module's front stage reports.
+-- ParseErrorTask, which the module's front stage reports.  The parsed module
+-- keeps the reason its task was read from source; only a ParseTask has a
+-- parse stage (hasParseStage).
 parseStage :: BuildEnv -> C.CompileOptions -> GlobalTask -> IO (CompileTask, Maybe TimeSpec)
 parseStage build opts t = do
     (parsed, elapsed) <- timed $ do
@@ -3681,7 +3717,11 @@ parseStage build opts t = do
       return result
     return $ case parsed of
       Left diags        -> (ParseErrorTask diags, Nothing)
-      Right (source, m) -> (ActonTask source m, reportedTime (buildOptions build) opts elapsed)
+      Right (source, m) -> (ActonTask (missOf (gtTask t)) source m, reportedTime (buildOptions build) opts elapsed)
+  where
+    missOf (ParseTask miss _ _ _)       = miss
+    missOf (ActonTask miss _ _)         = miss
+    missOf _                            = SourceChanged
 
 
 -- Output status ------------------------------------------------------------------------------------

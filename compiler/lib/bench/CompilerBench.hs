@@ -743,7 +743,7 @@ runCompilerFront buildFront runBack typesPath sourcePath = do
 
     build <- Compile.standaloneBuild Source.diskSourceProvider benchGopts (\_ -> return ())
     let source = Compile.ModuleSource src srcBytes Nothing Nothing
-        task = Compile.GlobalTask (Compile.TaskKey (Project.projPath paths) modName) paths (Compile.ParseTask source [] Nothing) Map.empty
+        task = Compile.GlobalTask (Compile.TaskKey (Project.projPath paths) modName) paths (Compile.ParseTask Compile.NoTydb source [] Nothing) Map.empty
         -- A failed background output fails the benchmark.
         awaitOutputs = Compile.awaitOutputs build >>= mapM_ (ioError . userError . Compile.compileFailureMessage)
     res <- Compile.checkModule build task opts env0 source parsed
