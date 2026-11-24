@@ -3,6 +3,7 @@ const builtin = @import("builtin");
 const acton = @import("../acton.zig");
 
 extern fn actBytesFromCStringLengthCopy(text: [*]const u8, len: i64) ?*acton.bytes;
+extern "kernel32" fn RtlPcToFileHeader(pc: *const anyopaque, base: *?*anyopaque) callconv(.winapi) ?*anyopaque;
 
 // The first address is in $RAISE. Its caller is the innermost frame we report.
 export fn zig_capture_traceback(frames: [*]usize, capacity: usize) usize {
@@ -38,7 +39,10 @@ export fn zig_format_traceback(frames: [*]const usize, count: usize) ?*acton.byt
                 text.writer.print("  {s}:{d} in {s}\n", .{ loc.file_name, loc.line, name }) catch return null;
             } else {
                 // Undo address randomization so the matching binary can resolve the address offline.
-                const slide = info.getModuleSlide(io, pc) catch 0;
+                const slide = if (builtin.os.tag == .windows) base: {
+                    var image: ?*anyopaque = undefined;
+                    break :base @intFromPtr(RtlPcToFileHeader(@ptrFromInt(pc), &image));
+                } else info.getModuleSlide(io, pc) catch 0;
                 const module = info.getModuleName(io, pc) catch "?";
                 text.writer.print("  0x{x} in {s} ({s})\n", .{ pc -| slide, name, module }) catch return null;
             }
