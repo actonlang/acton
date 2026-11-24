@@ -1255,13 +1255,17 @@ directDependencies index paths          = projDeps (indexProjects index M.! proj
 
 -- | Whether a cached canonical import names a namespace that the module's
 -- own project now declares: the import itself, or, for a dependency's lib
--- module, the dependency's bare name.
+-- module, the dependency's bare name.  An import of one of the project's
+-- own modules does not, since it already names the local module, as
+-- resolveProviders reads it.  Other projects record such an import with
+-- their prefix, but base, whose module names have none, records
+-- __builtin__ and time as they are.
 overlapsLocal                           :: ModuleIndex -> Paths -> A.ModName -> Bool
 overlapsLocal index paths mn            = case A.modPath mn of
-                                            n:ns | n /= projName paths
-                                              -> any (declares index (projPath paths))
-                                                     (addProjPrefix paths mn : [ addProjPrefix paths (A.modName [n]) | ns == ["lib"] ])
+                                            n:ns | n /= projName paths, not (local mn)
+                                              -> any local (addProjPrefix paths mn : [ addProjPrefix paths (A.modName [n]) | ns == ["lib"] ])
                                             _ -> False
+  where local                           = declares index (projPath paths)
 
 -- | Imports name the modules of their own project without the project's
 -- prefix.
