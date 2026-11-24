@@ -22,6 +22,7 @@ That cache stores:
 - fast-path source metadata such as modification time, change time, and file size
 - file identity metadata where available, such as inode/device on POSIX
 - the compiler/cache schema version
+- the build of the compiler that wrote it, named by its version (what `acton version` prints)
 
 The important rule is:
 
@@ -31,7 +32,9 @@ The important rule is:
 In practice, Acton decides reuse like this:
 
 1. If the `.ty` file is missing, unreadable, or from an incompatible cache
-   schema version, Acton reparses the `.act` file and rebuilds the `.ty`.
+   schema version, or another build of the compiler wrote it, or the compiler
+   binary is newer than it, Acton reparses the `.act` file and rebuilds the
+   `.ty`.
 2. If the cached source metadata still matches the current source file and the
    source mtime is strictly older than the `.ty` mtime, Acton reuses the `.ty`
    header immediately without reading and hashing the source.
@@ -55,6 +58,16 @@ outside the project, such as the headers of a Zig dependency, and the generated
 files under `out/` do not count, but a file reached through a linked directory
 in the project does. When an `#include` names its file through a
 macro, every other file under `src/` counts for that module.
+
+Another build of the compiler can compile the same source differently, and its
+binary can be older than the files it wrote, for example after you switch back
+to an earlier release, or when a dependency in the shared cache was built by
+another installation. So the build that wrote a file counts, not only the age
+of the compiler binary. The version of a development build of Acton includes
+the time it was built, so every build has its own. `acton` and the language
+server of one installation share the version, and with it the `out/` directory
+of a project. Use `--ignore-compiler-version` to trust the files of another
+build or of an older binary anyway.
 
 This means harmless metadata drift, like a `touch`, checkout, restore, copy,
 or cross-machine sync, does not by itself force a front-end rebuild. It also
@@ -113,7 +126,11 @@ If no name actually uses the import, per-name deps do not change, so nothing pro
 
 ## Code generation staleness
 
-Generated C/H files embed a hash of everything their code is generated from: the module impl hash, the module's imports, and, unless `--dbg-no-lines` is given, its source, which the `#line` directives point into. If the embedded hash differs from the current one, or the files are older than the compiler, the compiler treats the generated code as out of date and regenerates it.
+Generated C/H files embed a hash of everything their code is generated from: the module impl hash, the module's imports, and, unless `--dbg-no-lines` is given, its source, which the `#line` directives point into, followed by a stamp of the build of the compiler that generated them. If the embedded hash differs from the current one, another build of the compiler generated the files, or the files are older than the compiler, the compiler treats the generated code as out of date and regenerates it.
+
+## Documentation pages
+
+`acton build` writes an HTML page for each module of the project to `out/doc/`, with an index in `out/doc/index.html`. A page embeds a hash of the module's source, which holds the docstrings, and of its public interface, which holds the signatures, again with a stamp of the build of the compiler. Some commands check modules without writing their pages, such as `acton build --skip-build`, `acton test list` and the language server, and so does a build of a project that depends on the module's project. When the next build finds such a module unchanged, it compares the page with the module's cached interface and writes the page again if it is missing or out of date, without checking the module again.
 
 ## Tests and hashes
 

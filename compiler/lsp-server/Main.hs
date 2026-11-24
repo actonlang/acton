@@ -17,6 +17,7 @@ import qualified Data.HashMap.Strict as HM
 import qualified Data.Map.Strict as M
 import Data.Maybe (fromMaybe, listToMaybe)
 import Data.Sequence (Seq, ViewL(..), (|>))
+import Data.Version (showVersion)
 import qualified Data.Sequence as Seq
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
@@ -37,6 +38,7 @@ import qualified Acton.Env as Env
 import qualified Acton.Project as Project
 import qualified Acton.SourceProvider as Source
 import qualified Acton.Syntax as S
+import qualified Paths_lsp_server_acton
 
 import Error.Diagnose (Diagnostic)
 import Error.Diagnose.Diagnostic (reportsOf)
@@ -138,13 +140,16 @@ projectWatchersRef = unsafePerformIO (newIORef HM.empty)
 compileScheduler :: Compile.CompileScheduler
 compileScheduler = unsafePerformIO (Compile.newCompileScheduler lspGlobalOpts)
 
--- | Global compiler options for the LSP server (quiet, no color).
+-- | Global compiler options for the LSP server (quiet, no color), naming
+-- this build of the compiler by its version, which acton of the same build
+-- shares: the two read and write the same out/ directory.
 lspGlobalOpts :: C.GlobalOptions
 lspGlobalOpts =
   C.defaultGlobalOptions
     { C.color = C.Never
     , C.quiet = True
     , C.noProgress = True
+    , C.compilerIdentity = showVersion Paths_lsp_server_acton.version
     }
 
 -- | Compile options for LSP runs (front passes only, no final build).
@@ -309,11 +314,13 @@ prepareLspCompilePlan
   :: Source.SourceProvider
   -> C.GlobalOptions
   -> C.CompileOptions
+  -> ([FilePath] -> IO ())
   -> FilePath
   -> LspM () (Either String (PlanOrigin, Compile.CompilePlan))
-prepareLspCompilePlan sp gopts opts path = do
+prepareLspCompilePlan sp gopts opts lockDependencies path = do
   planE <- liftIO ((try $ do
-    ctx <- Compile.prepareCompileContext opts [path]
+    ctx0 <- Compile.prepareCompileContext opts [path]
+    let ctx = ctx0 { Compile.ccLockDependencies = lockDependencies }
     path' <- Project.normalizePathSafe path
     mcache <- HM.lookup (Compile.ccRootProj ctx) <$> readIORef projectBuildCachesRef
     case mcache of
@@ -651,15 +658,20 @@ planAndCompile gen rootProj path sp gopts opts progress = do
           progressForQueued (backProgressMessage job result)
         _ -> return ()
   progressReportImmediate progress "Preparing Acton project" Nothing
+  -- A plan locks the dependency projects as soon as it knows them, a plan
+  -- from the cache before the run, and the run holds them to its end.
+  let waitForDependency dir = progressFor (T.pack ("Waiting for compiler lock in " ++ dir))
   compileRes <- liftIO $
     Project.withProjectLock rootProj $
-      do
+      Project.withDependencyLocks $ \locks -> do
+        let lockDependencies = Project.lockDependencies locks waitForDependency
         planE <- runLspT env $
-          prepareLspCompilePlan sp gopts opts path
+          prepareLspCompilePlan sp gopts opts lockDependencies path
         case planE of
           Left msg ->
             return (Left msg)
           Right (origin, plan) -> do
+            lockDependencies (Compile.planDependencyDirs plan)
             progressFor $
               case origin of
                 PlanFromCache -> "Acton cached project ready"

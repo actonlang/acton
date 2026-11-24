@@ -17,7 +17,7 @@ import           Data.Function (on)
 import           Data.IORef (IORef, atomicModifyIORef', newIORef, readIORef)
 import           Data.List (elemIndex, find, groupBy, intercalate, isInfixOf, isPrefixOf, partition, sort, sortOn)
 import qualified Data.Map.Strict as M
-import           Data.Maybe (isJust)
+import           Data.Maybe (isJust, isNothing)
 import           System.Directory
 import           System.Environment (getEnvironment)
 import           System.Exit
@@ -574,7 +574,7 @@ rewriteTy version tyPath change = do
   nameHashes <- restoreExternalDeps tyPath (InterfaceFiles.storedDepModules stored) (InterfaceFiles.storedNames stored)
   escapeSummaries <- readTyEscapeSummaries tyPath
   let updated = change stored { InterfaceFiles.storedNames = nameHashes }
-  InterfaceFiles.writeFileWithVersion version tyPath
+  InterfaceFiles.writeFileWithVersion version (InterfaceFiles.storedCompiler updated) tyPath
     (InterfaceFiles.storedSourceHash updated) (InterfaceFiles.storedPubHash updated) (InterfaceFiles.storedImplHash updated)
     (InterfaceFiles.storedSourceMeta updated) (InterfaceFiles.storedImports updated) (InterfaceFiles.storedDepModules updated)
     (InterfaceFiles.storedNames updated) escapeSummaries (InterfaceFiles.storedRoots updated) (InterfaceFiles.storedTests updated)
@@ -1704,8 +1704,11 @@ p27_overlay_source_provider = testCase "27-overlay snapshots drive readModuleTas
         }
       disk = Source.diskSourceProvider
       spSame = disk { Source.spReadOverlay = \path -> return (if path == actAAbs then Just snapSame else Nothing) }
+      -- The acton binary wrote the .tydb, a build of the compiler other
+      -- than this test program, which reads it.
+      readOpts = C.defaultCompileOptions { C.ignore_compiler_version = True }
   (paths, moduleA) <- Project.findPaths actAAbs C.defaultCompileOptions
-  taskSame <- Compile.readModuleTask spSame quietGlobalOptions C.defaultCompileOptions paths moduleA actAAbs
+  taskSame <- Compile.readModuleTask spSame quietGlobalOptions readOpts paths moduleA actAAbs
   case taskSame of
     Compile.TyTask _ -> pure ()
     _ -> assertFailure "expected TyTask when overlay matches header"
@@ -1716,7 +1719,7 @@ p27_overlay_source_provider = testCase "27-overlay snapshots drive readModuleTas
         , Source.ssBytes = bytesDiff
         }
       spDiff = disk { Source.spReadOverlay = \path -> return (if path == actAAbs then Just snapDiff else Nothing) }
-  taskDiff <- Compile.readModuleTask spDiff quietGlobalOptions C.defaultCompileOptions paths moduleA actAAbs
+  taskDiff <- Compile.readModuleTask spDiff quietGlobalOptions readOpts paths moduleA actAAbs
   case taskDiff of
     Compile.ParseTask source _ doc -> do
       Compile.sourceText source @?= textDiff
@@ -3772,6 +3775,231 @@ p72_ext_c_include_through_linked_directory =
     removeDirectoryLink (src </> "vendor")
     removePathForcibly vendor
 
+-- | The documentation page of a cases module.
+docPageOf :: String -> FilePath
+docPageOf name = casesProjDir </> "out" </> "doc" </> casesProjName </> name <.> "html"
+
+-- | The verbose line of a cached module whose documentation page is written
+-- again.
+docLineFor :: T.Text -> T.Text -> Maybe T.Text
+docLineFor out name = find (T.isInfixOf ("Doc " <> name <> ":")) (T.lines out)
+
+-- | A module boxes with the given module docstring title, whose page shows
+-- what the doc printer renders: a generic class with docstrings, a
+-- protocol, and functions whose signatures use a class of the module
+-- shapes, which boxes imports.
+writeBoxesModule :: T.Text -> IO ()
+writeBoxesModule title = do
+  writeFileUtf8 (casesSrcDir </> "shapes.act") $ T.unlines
+    [ "class Point:"
+    , "    x: int"
+    , ""
+    , "    def __init__(self, x: int):"
+    , "        self.x = x"
+    ]
+  writeFileUtf8 (casesSrcDir </> "boxes.act") $ T.unlines
+    [ "\"\"\"" <> title
+    , ""
+    , "The module of the doc page tests."
+    , "\"\"\""
+    , "import shapes"
+    , ""
+    , "class Box[T]:"
+    , "    \"\"\"A box around one value.\"\"\""
+    , "    value: T"
+    , ""
+    , "    def __init__(self, value: T):"
+    , "        self.value = value"
+    , ""
+    , "    def get(self) -> T:"
+    , "        \"\"\"The value in the box.\"\"\""
+    , "        return self.value"
+    , ""
+    , "protocol Named:"
+    , "    name : () -> str"
+    , ""
+    , "def origin() -> shapes.Point:"
+    , "    \"\"\"The point at zero.\"\"\""
+    , "    return shapes.Point(0)"
+    , ""
+    , "def boxed(p: shapes.Point) -> Box[shapes.Point]:"
+    , "    return Box(p)"
+    ]
+
+p73_doc_page_written_after_builds_without_docs :: TestTree
+p73_doc_page_written_after_builds_without_docs =
+  testCase "73-a doc page that is missing or that a build without doc output left out of date is written" $ do
+    let proj = casesProjDir
+        page = docPageOf "boxes"
+        index = proj </> "out" </> "doc" </> "index.html"
+    ensureCasesProject
+    writeBoxesModule "First title"
+    _ <- buildOutIn proj
+    written <- T.readFile page
+    assertBool "expected the page to show the first title" ("First title" `T.isInfixOf` written)
+    -- A deleted page is written again, as the front passes wrote it, while
+    -- the index still links to it.
+    removeFile page
+    out1 <- buildOutIn proj
+    exists <- doesFileExist page
+    assertBool ("expected the deleted page to be written again\n" ++ T.unpack out1) exists
+    rewritten <- T.readFile page
+    assertBool "expected the page that the front passes wrote" (rewritten == written)
+    assertBool ("expected the page to be reported out of date\n" ++ T.unpack out1) (isJust (docLineFor out1 "boxes"))
+    linked <- T.readFile index
+    assertBool "expected the index to link the page" ("href=\"incremental_cases/boxes.html\"" `T.isInfixOf` linked)
+    -- --skip-build checks the edited module and writes its .tydb but no doc
+    -- page, so the next build finds the module fresh and its page out of
+    -- date.
+    writeBoxesModule "Second title"
+    _ <- buildOutInArgs proj ["--skip-build"]
+    out2 <- buildOutIn proj
+    updated <- T.readFile page
+    assertBool ("expected the page to show the second title\n" ++ T.unpack out2) ("Second title" `T.isInfixOf` updated)
+    assertBool ("expected boxes to be fresh\n" ++ T.unpack out2) (fresh out2 (modLabel proj "boxes"))
+    -- The page is up to date now.
+    out3 <- buildOutIn proj
+    assertBool ("did not expect the page to be written again\n" ++ T.unpack out3) (isNothing (docLineFor out3 "boxes"))
+
+p74_outputs_of_another_compiler_build_are_redone :: TestTree
+p74_outputs_of_another_compiler_build_are_redone =
+  testCase "74-the .tydb files and code that another build of the compiler wrote are redone" $ do
+    let proj = casesProjDir
+        modUtil = modLabel proj "util"
+        modNative = modLabel proj "native"
+        modMain = modLabel proj "main"
+    ensureCasesProject
+    writeUtilNativeProject [] 0
+    -- This test program is another build of the compiler than the acton
+    -- binary, and it writes its outputs after that binary was built, as a
+    -- newer build does that the user then switches away from.
+    projAbs <- canonicalizePath proj
+    opts <- inProcessCompileOptions
+    sched <- Compile.newCompileScheduler quietGlobalOptions
+    result <- buildOnScheduler Source.diskSourceProvider quietGlobalOptions (\_ -> return ()) sched projAbs opts
+    result @?= "result ok"
+    out <- buildOutIn proj
+    forM_ [modUtil, modNative, modMain] $ \m ->
+      assertBool ("did not expect " ++ T.unpack m ++ " to trust the .tydb of another compiler\n" ++ T.unpack out)
+        (typechecked out m)
+    -- util's back passes are deferred, and its code is tagged with the same
+    -- hashes: only the compiler that generated it differs.
+    assertBool ("expected util's generated code to be out of date\n" ++ T.unpack out)
+      (maybe False ("generated code out of date" `T.isInfixOf`) (dbpLineFor out "util"))
+    run <- runBinaryIn proj "main"
+    run @?= "hi 1\n"
+    out2 <- buildOutIn proj
+    forM_ [modUtil, modNative, modMain] $ \m ->
+      assertBool ("expected " ++ T.unpack m ++ " to be fresh\n" ++ T.unpack out2) (fresh out2 m)
+    assertBool ("expected util's generated code to be up to date\n" ++ T.unpack out2)
+      (maybe False ("generated code up to date" `T.isInfixOf`) (dbpLineFor out2 "util"))
+
+-- | A copy of the base library of the dist tree in a new directory under
+-- 'tmp', laid out as in the dist tree, so that its dependencies are found
+-- at the same relative paths.  Returns the copy's project directory.
+copyDistBase :: FilePath -> IO FilePath
+copyDistBase tmp = do
+  dist <- distPath
+  let proj = tmp </> "base"
+  createDirectoryIfMissing True proj
+  forM_ ["Build.act", "build.zig", "build.zig.zon", "__root.zig", "acton.zig", "builtin", "rts", "src"] $ \entry ->
+    callProcess "cp" ["-R", dist </> "base" </> entry, proj </> entry]
+  createDirectoryLink (dist </> "backend") (tmp </> "backend")
+  createDirectoryLink (dist </> "deps") (tmp </> "deps")
+  return proj
+
+p75_cached_builtin_regenerates_stale_code :: TestTree
+p75_cached_builtin_regenerates_stale_code =
+  testCase "75-a cached __builtin__ generates its out of date code again" $
+    withSystemTempDirectory "builtin-codegen" $ \tmp -> do
+      proj <- copyDistBase tmp
+      let builtinC = proj </> "out" </> "types" </> "__builtin__.c"
+          staleTag = "/* Acton impl hash: deadbeef */"
+          firstLine file = T.takeWhile (/= '\n') <$> T.readFile file
+          -- As make builds the base library of the dist tree.
+          build = do
+            res <- runActonIn proj ["build", "--skip-build", "--no-dbp", "--color", "never", "--verbose"]
+            assertExitSuccess ("build in " ++ proj) res
+            return (snd res)
+      _ <- build
+      generated <- firstLine builtinC
+      -- What an interrupted build leaves behind: the .tydb of the current
+      -- source next to code that an earlier build generated.
+      rewriteFirstLine builtinC staleTag
+      out <- build
+      regenerated <- firstLine builtinC
+      assertBool ("expected __builtin__'s code to be generated again\n" ++ T.unpack out)
+        (regenerated /= T.pack staleTag)
+      regenerated @?= generated
+      out2 <- build
+      assertBool ("did not expect __builtin__ to be checked again\n" ++ T.unpack out2)
+        (not (typechecked out2 "__builtin__"))
+
+-- | A build of a project that uses a dependency waits for the lock of the
+-- dependency's project, as another build of it, or of another project
+-- that uses it, holds it, before it reads or writes any of its outputs.
+p78_build_waits_for_dependency_lock :: TestTree
+p78_build_waits_for_dependency_lock =
+  testCase "78-a build waits for the lock of a dependency project" $ do
+    ensureCasesProjectWithDeps [("libfoo", "deps/libfoo")]
+    depDir <- ensureDepProject casesProjDir "libfoo"
+    writeFileUtf8 (depDir </> "src" </> "lib.act") $ T.unlines
+      [ "def calculate(x: int) -> int:"
+      , "    return x * 2"
+      ]
+    writeFileUtf8 (casesSrcDir </> "main.act") $ T.unlines
+      [ "import libfoo.lib"
+      , ""
+      , "actor main(env: Env):"
+      , "    proc def __startup__():"
+      , "        print(libfoo.lib.calculate(21))"
+      , "        env.exit(0)"
+      ]
+    actonExe <- actonPath
+    depAbs <- canonicalizePath depDir
+    let depTydb = depDir </> "out" </> "types" </> "libfoo" </> "lib.tydb"
+    res <- Project.withProjectLock depDir $ do
+      (_, mOut, mErr, ph) <- createProcess
+        (proc actonExe ["build", "--color", "never", "--jobs", "1"])
+          { cwd = Just casesProjDir
+          , std_out = CreatePipe
+          , std_err = CreatePipe
+          }
+      let outH = requirePipe "stdout" mOut
+          errH = requirePipe "stderr" mErr
+      (do
+          waited <- timeout 10000000 (waitForLockNotice outH)
+          case waited of
+            Nothing -> assertFailure "build did not wait for the lock of its dependency"
+            Just line -> assertBool ("expected the notice to name the dependency\n" ++ T.unpack line)
+                           (T.pack depAbs `T.isInfixOf` line)
+          written <- doesDirectoryExist depTydb
+          assertBool "did not expect the build to write the dependency's .tydb while its lock is held" (not written)
+          pure (ph, outH, errH))
+        `E.onException` do
+          terminateProcess ph
+          _ <- waitForProcess ph
+          pure ()
+    let (ph, outH, errH) = res
+    ec <- waitForProcess ph
+    out <- T.hGetContents outH
+    err <- T.hGetContents errH
+    assertEqual ("build should succeed after the dependency's lock is released\n" ++ T.unpack (out <> err))
+      ExitSuccess ec
+    run <- runBinaryIn casesProjDir "main"
+    run @?= "42\n"
+  where
+    waitForLockNotice :: Handle -> IO T.Text
+    waitForLockNotice h = do
+      line <- T.hGetLine h
+      if T.isInfixOf "Waiting for compiler lock in" line
+        then pure line
+        else waitForLockNotice h
+
+    requirePipe :: String -> Maybe Handle -> Handle
+    requirePipe label =
+      maybe (error ("missing " ++ label ++ " pipe for dependency lock test")) id
+
 -- Source written during a read ------------------------------------------------
 
 -- | A disk source provider that writes new text to a source file right after
@@ -4186,6 +4414,10 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
       , p70_ext_c_include_edit_rebuilds_module
       , p71_ext_c_including_own_header_settles
       , p72_ext_c_include_through_linked_directory
+      , p73_doc_page_written_after_builds_without_docs
+      , p74_outputs_of_another_compiler_build_are_redone
+      , p75_cached_builtin_regenerates_stale_code
+      , p78_build_waits_for_dependency_lock
       ]
   , sequentialTestGroup "incremental-cache-cases" AllSucceed
       [ p41_stale_header_missing_import_reparses_source

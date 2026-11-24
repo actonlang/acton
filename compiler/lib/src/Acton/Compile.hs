@@ -30,8 +30,19 @@ codegen tags (codegenTags): its impl hash with everything else the back
 passes read, namely its imports and a deferred back job's selected names,
 and for the .c and the support file also its source path where they name it
 and, unless --dbg-no-lines is given, its source hash, which the #line
-directives follow.  The test result cache keys each test on its
-name's impl hash.
+directives follow.  The first line of its documentation page is tagged with
+its source hash, which covers the docstrings, and its pub hash (docTag).
+The test result cache keys each test on its name's impl hash.
+
+Every .tydb, generated file and documentation page also records the build
+of the compiler that wrote it (GlobalOptions.compilerIdentity, stamped on
+the first line of a file), and a build trusts only those of its own build
+and not older than its binary (trustsCompiler, compilerNewerThan).  Another
+build may write other outputs from the same inputs, which no hash shows,
+and its binary can be older than what it wrote: a release, or a build that
+the user switches back to.  A build is named by its version, which make
+stamps with the build time of a development build.  acton and
+lsp-server-acton share it, and with it the out/ directory of a project.
 
 The code of a module's NotImplemented bodies is the hand-written .ext.c
 next to its source, which its generated .c includes, and the project files
@@ -51,15 +62,27 @@ Plan
 prepareCompileContext finds the paths of the file that roots a build and
 makes the --dep overrides absolute.  prepareCompilePlan fetches the
 dependencies unless the scheduler's last completed fetch was of the same
-Build.act.  It discovers the projects (buildProjects) and prunes the
-outputs of their deleted sources, so that a cached header cannot bring a
-deleted module back.  It then discovers their modules (buildGlobalTasks)
+Build.act.  It discovers the projects (buildProjects), locks the
+dependency projects through the context's ccLockDependencies, and prunes
+the outputs of their deleted sources, so that a cached header cannot bring
+a deleted module back.  It then discovers their modules (buildGlobalTasks)
 and selects the modules to compile (selectPlan): the requested modules
 with everything they import or, for an incremental plan, the modules
 that the changed files affect.  A declared build library is compiled
 whole.  The LSP server plans an edit of a project it already discovered
 by reading the edited module again (readModuleTask) and selecting from
 the modules it keeps.
+
+A build holds its root project's work lock, and from planning to its
+final build the locks of the dependency projects whose outputs it reads
+and writes (Acton.Project.lockDependencies).  Several projects share a
+dependency, a fetched one in the shared cache above all, and builds of
+other compilers write other .tydb formats and code.  A build that ran
+while another rewrote a dependency would read a .tydb that it checked
+before in another format.  A .tydb that still turns invalid under a build,
+as one that a compiler that takes no such lock writes, fails the module
+that reads it with a diagnostic (InterfaceChanged), and the next build
+compiles it again.
 
 Discovery starts from the requested modules, or from every module when the
 selection may need any of them, and goes breadth first.  It reads each
@@ -72,12 +95,12 @@ them.  A discovered module is a CompileTask:
   ActonTask       its parsed source
   ParseErrorTask  the diagnostics of a source that does not parse
 
-A header can be trusted when the .tydb exists, its header reads and the
-compiler binary is not newer than the .tydb (--ignore-compiler-version
-skips that check).  It is trusted without reading the source when the
-module has no .ext.c, the source's stat (device, inode, size, mtime,
-ctime) equals the recorded one and its mtime is strictly older than the
-.tydb's.  Strictly, because on a file system with coarse timestamps a
+A header can be trusted when the .tydb exists, its header reads, this
+build of the compiler wrote it and the compiler binary is not newer than
+the .tydb (--ignore-compiler-version skips the last two checks).  It is
+trusted without reading the source when the module has no .ext.c, the
+source's stat (device, inode, size, mtime, ctime) equals the recorded one
+and its mtime is strictly older than the .tydb's.  Strictly, because on a file system with coarse timestamps a
 changed source and the .tydb written from its previous version can show
 the same time.  Otherwise it is trusted when the content hash of the
 source, with that of its .ext.c, equals the recorded one, and
@@ -125,13 +148,24 @@ runs the front passes (compileModule).  A TyTask is checked in this order:
   4. A module whose code is generated whole, in a build without
      alternative output, compares the tags of its .c, .h and closure
      support file with its codegen hash, and generates its code again from
-     the stored typed module when they differ or a file is older than the
-     compiler binary (refreshCodegen).  A build that wrote the .tydb but
-     not the code, such as acton build --sigs or an interrupted build,
-     thus leaves no stale code behind.  __builtin__, which only the base
-     library compiles, is the exception: its code is checked only when its
-     front passes run (compileBuiltin).
+     the stored typed module when they differ, another build of the
+     compiler wrote a file or a file is older than the compiler binary
+     (refreshCodegen).  A build that wrote the .tydb but not the code, such
+     as acton build --sigs or an interrupted build, thus leaves no stale
+     code behind.  __builtin__, which only the base library compiles,
+     compares the same before its cached interface serves, and runs its
+     front passes again when its code is out of date (compileBuiltin).
   5. Otherwise the .tydb is used as it is (reuse).
+
+A module that steps 3 to 5 bring up to date without its front passes also
+compares the tag of its documentation page, when it gets one, with the one
+its .tydb header gives, and writes the page again when it is missing,
+carries another tag, or another or newer build of the compiler wrote it
+(docRefresh).  A build without doc output, such as acton build
+--skip-build, acton test list, the LSP server or a build of a dependent
+project, writes the .tydb and leaves the page behind.  The page is written
+from the stored interface and the source parsed again, without checking
+the module again.
 
 Under --only-build, every module's stored interface is trusted and no
 front pass runs.
@@ -173,7 +207,8 @@ Outputs
 
 A module's .tydb is written in its front stage (commitTydb).  Its
 documentation page and its --tydb copy are written in the background
-(startOutputs), and the run waits for them (awaitOutputs).
+(startOutputs), and the run waits for them (awaitOutputs).  So is the page
+that a module used from its .tydb writes again.
 
 Back queue
 ----------
@@ -295,6 +330,8 @@ module Acton.Compile
   , CompilePlan(..)
   , prepareCompilePlan
   , planFetched
+  , dependencyDirs
+  , planDependencyDirs
   , selectPlan
   , readModuleTask
   , docIndexEntry
@@ -902,6 +939,7 @@ data CompileContext = CompileContext
   , ccRootProj   :: FilePath             -- the root project's directory, normalized
   , ccSysAbs     :: FilePath             -- the system directory, normalized
   , ccBuildStamp :: BuildSpecStamp       -- the root project's Build.act when the context was made
+  , ccLockDependencies :: [FilePath] -> IO ()  -- locks the given dependency project directories (dependencyDirs)
   }
 
 -- | A module's options: dependency projects build neither their tests nor a
@@ -923,7 +961,9 @@ hasParseStage ctx t                     = case gtTask t of
 -- --dep overrides are made absolute against the first file's project
 -- directory, or the working directory outside a project, before the paths
 -- are found, so that the paths and discovery see absolute overrides.  The
--- Build.act stamp is read at the project path as the paths give it.
+-- Build.act stamp is read at the project path as the paths give it.  The
+-- context locks no dependency: a caller that holds dependency locks sets
+-- ccLockDependencies.
 prepareCompileContext :: C.CompileOptions -> [FilePath] -> IO CompileContext
 prepareCompileContext _ []              = throwProjectError "No source files found"
 prepareCompileContext opts (first : _)  = do
@@ -935,7 +975,8 @@ prepareCompileContext opts (first : _)  = do
     root        <- normalizePathSafe (projPath paths)
     sys         <- normalizePathSafe (sysPath paths)
     stamp       <- readBuildSpecStamp (projPath paths)
-    return CompileContext { ccOpts = opts', ccPathsRoot = paths, ccRootModule = mn, ccRootProj = root, ccSysAbs = sys, ccBuildStamp = stamp }
+    return CompileContext { ccOpts = opts', ccPathsRoot = paths, ccRootModule = mn, ccRootProj = root, ccSysAbs = sys, ccBuildStamp = stamp
+                          , ccLockDependencies = \_ -> return () }
 
 -- | How much of a project a build asks for.  A whole-project build seeds
 -- discovery with every module and lets the final build prune stale
@@ -978,13 +1019,16 @@ prepareCompilePlan sp gopts sched ctx request = do
   where
     stamp = Just (ccBuildStamp ctx)
 
--- | Plan a build whose dependencies are in place.  Orphan outputs are pruned
--- before discovery, so that a cached header cannot resurrect a deleted
--- module: in every project for a full plan, and for an incremental plan
--- only those of changed sources that no longer exist.
+-- | Plan a build whose dependencies are in place.  The dependency projects
+-- are locked as soon as they are known, before any of their outputs is
+-- pruned or read (ccLockDependencies).  Orphan outputs are pruned before
+-- discovery, so that a cached header cannot resurrect a deleted module: in
+-- every project for a full plan, and for an incremental plan only those of
+-- changed sources that no longer exist.
 planFetched :: Source.SourceProvider -> C.GlobalOptions -> CompileContext -> PlanRequest -> IO CompilePlan
 planFetched sp gopts ctx request = do
     projects <- buildProjects gopts ctx
+    ccLockDependencies ctx (dependencyDirs ctx projects)
     let paths     = buildPaths ctx projects
         withPaths = M.elems (M.intersectionWith (,) projects paths)
     case requestChanged request of
@@ -1024,6 +1068,18 @@ buildProjects gopts ctx = withoutTestLibraries <$> projects
     withoutTestLibraries
       | C.test opts = M.adjust (\p -> p { projBuildSpec = (projBuildSpec p) { BuildSpec.libraries = M.empty } }) root
       | otherwise   = id
+
+-- | The directories of the dependency projects of a build whose outputs it
+-- writes: every project but the root project, which the caller locks
+-- first, and those of the distribution, which no build writes.
+dependencyDirs :: CompileContext -> M.Map FilePath ProjCtx -> [FilePath]
+dependencyDirs ctx projects = [ dir | dir <- M.keys projects, dir /= ccRootProj ctx, not (inSystem dir) ]
+  where sys          = ccSysAbs ctx
+        inSystem dir = dir == sys || addTrailingPathSeparator sys `Data.List.isPrefixOf` dir
+
+-- | The dependency project directories of a plan (dependencyDirs).
+planDependencyDirs :: CompilePlan -> [FilePath]
+planDependencyDirs plan = dependencyDirs (cpContext plan) (cpProjMap plan)
 
 -- | The paths of each project of a build.  The one project of a scratch
 -- build has the paths findPaths gave the file that roots the build.
@@ -1319,16 +1375,17 @@ buildGlobalTasks sp gopts opts projects pathsByProject seedFiles = do
             paths = pathsByProject M.! tkProj key
 
 -- | A module in the cheapest form discovery can use.  Its .tydb header is
--- reused when the compiler binary is not newer than the .tydb and the source
--- is unchanged: by recorded stat with the source older than the .tydb, else by
--- content hash (then the recorded stat is refreshed in place).  An editor
--- overlay is compared by content only, and so is a module with an .ext.c,
+-- reused when this build of the compiler wrote the .tydb and its binary is
+-- not newer than the .tydb (reusableHeader), and the source is unchanged: by
+-- recorded stat with the source older than the .tydb, else by content hash
+-- (then the recorded stat is refreshed in place).  An editor overlay is
+-- compared by content only, and so is a module with an .ext.c,
 -- whose content hash the recorded one covers, or one that had an .ext.c
 -- when its .tydb was written (recordedSourceMeta).  Otherwise only the
 -- source header is parsed.  Reading can write: the stat refresh.
 readModuleTask :: Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -> Paths -> A.ModName -> FilePath -> IO CompileTask
 readModuleTask sp gopts opts paths mn file = do
-    reusable <- reusableHeader opts tydb
+    reusable <- reusableHeader gopts opts tydb
     case reusable of
       Nothing               -> fromSource =<< readModuleSource sp paths mn file
       Just (header, tydbNs) -> do
@@ -1375,21 +1432,33 @@ readModuleTask sp gopts opts paths mn file = do
         return (TyTask header)
 
 -- | The .tydb header and the .tydb's modification time, unless the .tydb is
--- missing, its header unreadable or the compiler binary newer.  A failure to
--- stat the .tydb itself propagates.
-reusableHeader :: C.CompileOptions -> FilePath -> IO (Maybe (InterfaceFiles.HeaderSummary, Integer))
-reusableHeader opts tydb = do
+-- missing, its header unreadable, another build of the compiler wrote it or
+-- the compiler binary is newer.  A failure to stat the .tydb itself
+-- propagates.
+reusableHeader :: C.GlobalOptions -> C.CompileOptions -> FilePath -> IO (Maybe (InterfaceFiles.HeaderSummary, Integer))
+reusableHeader gopts opts tydb = do
     header <- InterfaceFiles.tryReadHeaderSummary tydb
     case header of
-      Nothing -> return Nothing
-      Just h  -> do
+      Just h | trustsCompiler gopts opts (InterfaceFiles.summaryCompiler h) -> do
         tydbNs <- InterfaceFiles.interfaceModifiedTimeNs tydb
         newer  <- compilerNewerThan opts tydbNs
         return (if newer then Nothing else Just (h, tydbNs))
+      _ -> return Nothing
+
+-- | Whether an output that the given build of the compiler wrote (a .tydb,
+-- generated code or a documentation page) can be trusted: when this build
+-- wrote it, or under --ignore-compiler-version.  Another build may write
+-- other outputs from the same inputs, which no hash shows, and its binary
+-- can be older than what it wrote: a release, or a build the user switches
+-- back to.  The build is named by its version (GlobalOptions), which acton
+-- and lsp-server-acton share.
+trustsCompiler :: C.GlobalOptions -> C.CompileOptions -> String -> Bool
+trustsCompiler gopts opts identity = C.ignore_compiler_version opts || identity == C.compilerIdentity gopts
 
 -- | Whether the running compiler binary was modified after a time, in POSIX
 -- nanoseconds.  Checked on every call.  A failure to find or stat the binary
--- counts as not newer.
+-- counts as not newer.  It catches what the compiler's version does not
+-- show: a binary rebuilt without make, which keeps the version.
 compilerNewerThan :: C.CompileOptions -> Integer -> IO Bool
 compilerNewerThan opts ns
   | C.ignore_compiler_version opts      = return False
@@ -1812,6 +1881,7 @@ data ModuleError
   | MissingNameHash       A.QName
   | MissingDependencyHash HashKind A.Name SrcLoc A.QName    -- the kind, the module's name using it, its location, the name
   | InterfaceWriteFailed  String                            -- the module's own .tydb
+  | InterfaceChanged      String                            -- a .tydb that turned unreadable after the plan read it
   deriving (Show)
 
 newtype ModuleErrors = ModuleErrors [ModuleError] deriving (Show)
@@ -1819,13 +1889,16 @@ newtype ModuleErrors = ModuleErrors [ModuleError] deriving (Show)
 instance Exception ModuleErrors
 
 -- | The diagnostic for a module error, shown with the given source text.  A
--- missing interface or a failed write names the module's full file, a hash
--- error its file without the project prefix.  A failed write shows no
--- source.
+-- missing or changed interface or a failed write names the module's full
+-- file, a hash error its file without the project prefix.  A failed write
+-- and a changed interface show no source.
 explainError :: ModuleEnv -> String -> ModuleError -> Diagnostic String
 explainError env src err = case err of
     MissingInterface m                    -> compilationError fullFile  src NoLoc ("Type interface file not found or unreadable for " ++ modNameToString m)
     InterfaceWriteFailed e                -> compilationError fullFile  ""  NoLoc ("Failed to write .tydb for " ++ modNameToString (nameOf env) ++ ": " ++ e)
+    InterfaceChanged e                    -> compilationError fullFile  ""  NoLoc
+                                               ("An interface that this build read changed while it ran: " ++ e
+                                                ++ ". Another build that does not lock this project's dependencies, such as one of an older compiler, may have written it. Build again.")
     MissingNameHash qn                    -> compilationError labelFile src NoLoc ("Hash info missing for " ++ prstr qn)
     MissingDependencyHash kind owner l qn -> compilationError labelFile src l
                                                (hashKindName kind ++ " hash missing for " ++ prstr qn ++ " (used by " ++ A.nstr owner ++ ")")
@@ -1864,6 +1937,7 @@ tryDiagnostics handlers action = (Right <$> action) `catches` map (fmap Left) ha
 frontFailures :: ModuleEnv -> String -> [Handler [Diagnostic String]]
 frontFailures env src =
     [ Handler $ \(ModuleErrors errs)               -> return (map (explainError env src) errs)
+    , Handler $ \(InterfaceFiles.TyCacheInvalid e) -> return [explainError env src (InterfaceChanged e)]
     , Handler $ \(e :: GeneralError)               -> return (located (generalError e))
     , Handler $ \(e :: Acton.Env.CompilationError) -> return (located (Acton.Env.compilationError e))
     , Handler $ \(Acton.Types.TypeErrors errs)     -> return (map typed errs)
@@ -1874,9 +1948,13 @@ frontFailures env src =
     typed e      = Acton.TypeEnv.mkErrorDiagnostic file src (Acton.TypeEnv.typeReport e file src)
 
 -- | A module stage outside its front passes: only module errors are its
--- own, and they are shown without source text.
+-- own, and they are shown without source text.  A .tydb that the stage
+-- reads and finds invalid, after the plan found it valid, changed while the
+-- build ran, and fails the module too.
 moduleBoundary :: ModuleEnv -> IO (Either [Diagnostic String] a) -> IO (Either [Diagnostic String] a)
-moduleBoundary env run = run `catch` \(ModuleErrors errs) -> return (Left (map (explainError env "") errs))
+moduleBoundary env run = run `catches`
+    [ Handler $ \(ModuleErrors errs)               -> return (Left (map (explainError env "") errs))
+    , Handler $ \(InterfaceFiles.TyCacheInvalid e) -> return (Left [explainError env "" (InterfaceChanged e)]) ]
 
 
 -- Outputs ------------------------------------------------------------------------------------------
@@ -1967,7 +2045,7 @@ data Reason = SourceChanged | DependencyChanges [DepChange] | DumpRequested | Im
 data Action
   = RunFront       Reason
   | RefreshImpl    InterfaceFiles.HeaderSummary Bool [DepChange]
-  | RefreshCodegen InterfaceFiles.HeaderSummary CodegenStatus
+  | RefreshCodegen InterfaceFiles.HeaderSummary OutputStatus
   | Reuse          InterfaceFiles.HeaderSummary (Maybe DeferredBackJob)
 
 -- | A module's front stage: its parse errors, what --only-build trusts, or
@@ -1997,9 +2075,9 @@ assess env header = do
         | C.altOutput (moduleOptions env) || isJust deferred -> return (Reuse header deferred)
         | otherwise -> do
             let opts = moduleOptions env
-            status <- codegenStatus opts (pathsOf env) (nameOf env)
+            status <- codegenStatus (buildOptions (moduleBuild env)) opts (pathsOf env) (nameOf env)
                         (headerCodegenTags opts (pathsOf env) (nameOf env) header hasNotImpl (InterfaceFiles.summaryImplHash header) WholeModule)
-            return (if codegenUpToDate status then Reuse header deferred else RefreshCodegen header status)
+            return (if outputsUpToDate status then Reuse header deferred else RefreshCodegen header status)
 
 -- | The action a cached module's dependency changes call for, if any.  A
 -- changed pub hash or a missing hash runs the front passes, and so does a
@@ -2113,7 +2191,7 @@ describe env action = case action of
     RunFront DumpRequested          -> []
     RunFront ImplRefreshFailed      -> [ stale "impl refresh encountered unresolved dep hashes; rerunning front passes" ]
     RefreshImpl _ _ cs              -> [ stale ("impl changes in " ++ deltas Impl cs) ]
-    RefreshCodegen _ status         -> [ stale ("generated code out of date" ++ formatCodegenDelta status) ]
+    RefreshCodegen _ status         -> [ stale ("generated code out of date" ++ formatOutputDelta "codegen" "generated code" status) ]
     Reuse _ _                       -> [ "  Fresh " ++ labelOf env ++ ": using cached .tydb" ]
   where
     stale reason                    = "  Stale " ++ labelOf env ++ ": " ++ reason
@@ -2193,7 +2271,7 @@ refreshImpl env header hasNotImpl = do
     case attempt of
       Right (Recomputed dependencies names fr) -> do
         commitTydb env (\_ -> InterfaceFiles.updateImplRefresh (tydbOf env) (mhImpl (frHashes fr)) dependencies names)
-        Right <$> finishStored env fr
+        Right <$> finishStored env (Just header) fr
       Right InterfaceGone -> missingOwnInterface env
       _                   -> act env (RunFront ImplRefreshFailed)
 
@@ -2284,7 +2362,7 @@ refreshCodegen env header = do
     job        <- storedBackJob env module' (storedCodegenTags env module' (InterfaceFiles.storedImplHash module'))
     interest   <- storedInterest tydb (InterfaceFiles.summaryDepModules header)
     moduleInfo <- storedModuleInfo tydb (nameOf env) module'
-    finishStored env (storedResult moduleInfo
+    finishStored env (Just header) (storedResult moduleInfo
                         ModuleHashes { mhPub   = InterfaceFiles.storedPubHash module'
                                      , mhImpl  = InterfaceFiles.storedImplHash module'
                                      , mhNames = Just (publicNameMap (InterfaceFiles.storedNames module')) }
@@ -2296,33 +2374,37 @@ reuse :: ModuleEnv -> InterfaceFiles.HeaderSummary -> Maybe DeferredBackJob -> I
 reuse env header deferred = do
     shell <- readInterfaceShell env (Just (InterfaceFiles.summaryPubHash header))
                >>= maybe (missingOwnInterface env) return
-    shellResult env (InterfaceFiles.summaryDepModules header) (maybe NoBack DeferredBack deferred) shell
+    shellResult env (Just header) (InterfaceFiles.summaryDepModules header) (maybe NoBack DeferredBack deferred) shell
 
 -- | --only-build trusts the stored interfaces.  A module without a readable
 -- .tydb gets an empty interface and publishes nothing.
 onlyBuild :: ModuleEnv -> CompileTask -> IO FrontResult
 onlyBuild env task = do
     shell <- readInterfaceShell env (InterfaceFiles.summaryPubHash <$> header)
-    maybe (return (emptyResult env)) (shellResult env (maybe [] InterfaceFiles.summaryDepModules header) NoBack) shell
+    maybe (return (emptyResult env)) (shellResult env Nothing (maybe [] InterfaceFiles.summaryDepModules header) NoBack) shell
   where header = case task of
                    TyTask h -> Just h
                    _        -> Nothing
 
 -- | A result from a module's interface shell.  Its interest comes from the
 -- given dependency rows: the per-name rows on disk carry no external
--- dependencies.
-shellResult :: ModuleEnv -> [InterfaceFiles.DepModuleInfo] -> BackPlan -> InterfaceShell -> IO FrontResult
-shellResult env dependencies back shell = do
+-- dependencies.  Its documentation page is checked against the given .tydb
+-- header; --only-build gives none.
+shellResult :: ModuleEnv -> Maybe InterfaceFiles.HeaderSummary -> [InterfaceFiles.DepModuleInfo] -> BackPlan -> InterfaceShell -> IO FrontResult
+shellResult env header dependencies back shell = do
     interest <- storedInterest (tydbOf env) dependencies
-    finishStored env (storedResult (shellModuleInfo shell)
+    finishStored env header (storedResult (shellModuleInfo shell)
                         ModuleHashes { mhPub = shellPubHash shell, mhImpl = shellImplHash shell, mhNames = Nothing }
                         interest back)
 
 -- | The last steps of a result rebuilt from the .tydb, in the stage's
--- thread: the --tydb copy starts, then the hashes become visible to reads.
-finishStored :: ModuleEnv -> FrontResult -> IO FrontResult
-finishStored env fr = do
-    startOutputs (moduleBuild env) (keyOf env) (tydbCopy env)
+-- thread: given the module's .tydb header, its documentation page is
+-- written again when it is out of date (docRefresh), the --tydb copy
+-- starts, then the hashes become visible to reads.
+finishStored :: ModuleEnv -> Maybe InterfaceFiles.HeaderSummary -> FrontResult -> IO FrontResult
+finishStored env header fr = do
+    pages <- maybe (return []) (docRefresh env) header
+    startOutputs (moduleBuild env) (keyOf env) (pages ++ tydbCopy env)
     rememberFront (buildCache (moduleBuild env)) (nameOf env) fr
     return fr
 
@@ -2766,7 +2848,7 @@ rootActorProblem _ _ = Just "it is not an actor"
 -- | Write a checked and hashed module's .tydb, reporting its progress.
 writeTydb :: ModuleEnv -> ModuleSource -> Checked -> Hashed -> (InterfaceFiles.TyDbWriteProgress -> IO ()) -> IO ()
 writeTydb env source checked hashed onProgress =
-    InterfaceFiles.writeFileWithProgress onProgress A.version (tydbOf env)
+    InterfaceFiles.writeFileWithProgress onProgress A.version (C.compilerIdentity (buildOptions (moduleBuild env))) (tydbOf env)
       (hashedSource hashed) (hashedPub hashed) (hashedImpl hashed) (recordedSourceMeta source) (hashedImports hashed)
       (hashedDependencies hashed) (hashedNames hashed) (checkedEscapes checked) (hashedRoots hashed) (checkedTests checked)
       doc (checkedInterface checked) (checkedModule checked)
@@ -2777,32 +2859,116 @@ docNameCountThreshold :: Int
 docNameCountThreshold = 10000
 
 -- | Whether a module gets a documentation page: not under --skip-build,
--- not in a scratch build, and with at most docNameCountThreshold names.
+-- not in a scratch build, and with at most docNameCountThreshold names, as
+-- its interface counts them (the name count of its .tydb header).
 shouldGenerateDocOutput :: C.CompileOptions -> Bool -> Int -> Bool
 shouldGenerateDocOutput opts temporary nameCount =
   not (C.skip_build opts) && not temporary && nameCount <= docNameCountThreshold
 
 -- | The module's HTML documentation page, unless the module has too many
--- names, --skip-build is given or the build is temporary.  The page shows
--- the public names as --sigs simplifies them, with the docstrings of the
--- parsed module.
+-- names, --skip-build is given or the build is temporary.  A build that
+-- writes no page can still write the module's .tydb, so the page is tagged
+-- with what it is made from (docTag), and a later build that uses the
+-- .tydb as it is writes the page again when it is out of date
+-- (docRefresh).
 docOutputs :: ModuleEnv -> A.Module -> Checked -> Hashed -> [(FrontOutputKind, IO ())]
 docOutputs env parsed checked hashed =
-    [ (FrontOutputDoc, writeDoc) | shouldGenerateDocOutput (moduleOptions env) (isTmp paths) (length (hashedNames hashed)) ]
+    [ (FrontOutputDoc, writeDoc) | shouldGenerateDocOutput (moduleOptions env) (isTmp (pathsOf env)) (length iface) ]
   where
-    paths       = pathsOf env
-    mn          = nameOf env
-    I.NModule imports iface doc = checkedInterface checked
-    publicIface = Acton.Env.publicTEnv iface
-    docDir      = projectDocDir (projPath paths)
-    docFile     = case A.modPath mn of
-                    []   -> docDir </> "unnamed" <.> "html"
-                    path -> joinPath (docDir : init path) </> last path <.> "html"
-    moduleTypes = maybe publicIface Acton.Env.modulePublicTEnv (Acton.Env.lookupModuleInfo mn (checkedTypeEnv checked))
-    simplified  = simp (define publicIface (setMod mn (checkedScope checked))) moduleTypes
-    writeDoc    = do
-      createDirectoryIfMissing True (takeDirectory docFile)
-      writeFileUtf8Atomic docFile (DocP.printHtmlDoc (I.NModule imports simplified doc) parsed)
+    I.NModule _ iface _ = checkedInterface checked
+    writeDoc            = writeDocPage (buildOptions (moduleBuild env)) (pathsOf env) (nameOf env) (docTag (hashedSource hashed) (hashedPub hashed))
+                            (renderDocPage (nameOf env) (checkedInterface checked) (checkedScope checked) (checkedTypeEnv checked) parsed)
+
+-- | A module's documentation page: its public names as --sigs simplifies
+-- them, in the scope the module is checked in, with the docstrings of its
+-- parsed source.  The module's entry in the type environment, which only
+-- __builtin__ has, gives the names when there is one.
+renderDocPage :: A.ModName -> I.NModule -> Acton.Env.Env0 -> Acton.Env.Env0 -> A.Module -> String
+renderDocPage mn (I.NModule imports iface doc) scope typeEnv parsed =
+    DocP.printHtmlDoc (I.NModule imports simplified doc) parsed
+  where publicIface = Acton.Env.publicTEnv iface
+        moduleTypes = maybe publicIface Acton.Env.modulePublicTEnv (Acton.Env.lookupModuleInfo mn typeEnv)
+        simplified  = simp (define publicIface (setMod mn scope)) moduleTypes
+
+-- | Write a module's documentation page, its first line tagged with the
+-- given tag and stamped by this build of the compiler.
+writeDocPage :: C.GlobalOptions -> Paths -> A.ModName -> B.ByteString -> String -> IO ()
+writeDocPage gopts paths mn tag page = do
+    createDirectoryIfMissing True (takeDirectory file)
+    writeFileUtf8Atomic file (docHashTag ++ " " ++ stampedHex gopts tag ++ " -->\n" ++ page)
+  where file = docPagePath paths mn
+
+-- | Where a module's documentation page is: under its project's doc
+-- directory, at the module's path.
+docPagePath :: Paths -> A.ModName -> FilePath
+docPagePath paths mn = case A.modPath mn of
+    []   -> docDir </> "unnamed" <.> "html"
+    path -> joinPath (docDir : init path) </> last path <.> "html"
+  where docDir = projectDocDir (projPath paths)
+
+-- | The text before the tag on the first line of a documentation page, an
+-- HTML comment, which may precede the doctype.
+docHashTag :: String
+docHashTag = "<!-- Acton doc hash:"
+
+-- | The tag of a module's documentation page, from the hashes that its .tydb
+-- records: of its source, which holds the docstrings the page shows, and of
+-- its public interface, which holds the signatures, so that a page is out of
+-- date when a provider's change changes them.
+docTag :: B.ByteString -> B.ByteString -> B.ByteString
+docTag sourceHash pubHash = SHA256.hash (BL.toStrict (encode ("doc" :: String, sourceHash, pubHash)))
+
+-- | The documentation page of a cached module, as one tagged output.
+docPageOutput :: Paths -> A.ModName -> B.ByteString -> TaggedOutput
+docPageOutput paths mn tag = TaggedOutput "page" (docPagePath paths mn) docHashTag (Hashing.hashHex tag)
+
+-- | The status of a cached module's documentation page, when the module gets
+-- one.  A build that writes no page, such as acton build --skip-build,
+-- acton test list, the LSP server or a build of a project that depends on
+-- the module's project, can still write the module's .tydb, after which
+-- the module is cached and its page out of date.  So can a build stopped
+-- between the two writes, and a deleted page is missing.
+docPageStatus :: C.GlobalOptions -> C.CompileOptions -> Paths -> A.ModName -> InterfaceFiles.HeaderSummary -> IO (Maybe OutputStatus)
+docPageStatus gopts opts paths mn header
+  | shouldGenerateDocOutput opts (isTmp paths) (InterfaceFiles.summaryNameCount header)
+              = Just <$> outputStatus gopts opts [docPageOutput paths mn (headerDocTag header)]
+  | otherwise = return Nothing
+
+-- | The tag of a cached module's documentation page.
+headerDocTag :: InterfaceFiles.HeaderSummary -> B.ByteString
+headerDocTag header = docTag (InterfaceFiles.summarySourceHash header) (InterfaceFiles.summaryPubHash header)
+
+-- | The documentation page of a module used from its .tydb, written again
+-- in the background when it is out of date (docPageStatus).
+docRefresh :: ModuleEnv -> InterfaceFiles.HeaderSummary -> IO [(FrontOutputKind, IO ())]
+docRefresh env header = do
+    status <- docPageStatus (buildOptions build) (moduleOptions env) (pathsOf env) (nameOf env) header
+    case status of
+      Just page | not (outputsUpToDate page) -> do
+        info build ("  Doc " ++ labelOf env ++ ": page out of date" ++ formatOutputDelta "doc" "doc page" page)
+        return [(FrontOutputDoc, refreshDocPage env (headerDocTag header))]
+      _ -> return []
+  where build = moduleBuild env
+
+-- | Write a cached module's documentation page again, from the interface its
+-- .tydb stores and its source parsed again, in the scope its front passes
+-- check it in.  The source is the one the .tydb was written from, so the
+-- page is the one its front passes write, without checking the module
+-- again.  A source that no longer parses changed after the plan read it,
+-- and the next build checks it.
+refreshDocPage :: ModuleEnv -> B.ByteString -> IO ()
+refreshDocPage env tag = do
+    parsed <- materialize (buildSources build) (moduleOptions env) paths mn (taskSourceFile (moduleTask env)) Nothing (moduleCurrent env)
+    case parsed of
+      Left _       -> return ()
+      Right (_, m) -> do
+        let adjusted = adjustImports (gtImportProviders (moduleTask env)) m
+        interface <- InterfaceFiles.readModuleIface (tydbOf env)
+        scope     <- Acton.Env.mkEnv (searchPath paths) (moduleBase env) adjusted
+        writeDocPage (buildOptions build) paths mn tag (renderDocPage mn interface scope (Converter.convEnvProtos scope) adjusted)
+  where build = moduleBuild env
+        paths = pathsOf env
+        mn    = nameOf env
 
 -- | When the last event of one progress stream passed.
 newtype Pacer = Pacer (IORef (Maybe TimeSpec))
@@ -2902,8 +3068,8 @@ prepareDeferredBackJob build base interestMap job = do
                             , interestedNames = Data.Set.size interested
                             , rootNames       = Data.Set.size roots
                             , selectedClosure = Data.Set.size names }
-    status   <- codegenStatus (deferredOptions job) paths mn expected
-    if codegenUpToDate status
+    status   <- codegenStatus (buildOptions build) (deferredOptions job) paths mn expected
+    if outputsUpToDate status
       then Nothing <$ info build (describeDbp label stats True)
       else do
         -- Same-version .tydb files always carry statement indices, so a
@@ -3117,7 +3283,7 @@ runBackPasses gopts job shouldWrite onProgress = do
       (converted, env3)   <- transform BackPassCPS        fst (Acton.CPS.convert env2 deactorized)
       (lifted, env4)      <- transform BackPassLLift      fst (Acton.LambdaLifter.liftModule env3 converted)
       boxed               <- transform BackPassBoxing     id  (Acton.Boxing.doBoxing env4 lifted >>= witnessStats env4 lifted)
-      (_, h, c, support)  <- pass BackPassCodeGen             (Acton.CodeGen.generateCode supportInclude env4 relSrcBase (bjSource job) (not (C.dbg_no_lines opts)) boxed (Hashing.hashHex (tagHeader (bjCodegenTags job))) (Hashing.hashHex (tagCode (bjCodegenTags job))))
+      (_, h, c, support)  <- pass BackPassCodeGen             (Acton.CodeGen.generateCode supportInclude env4 relSrcBase (bjSource job) (not (C.dbg_no_lines opts)) boxed (stampedHex gopts (tagHeader (bjCodegenTags job))) (stampedHex gopts (tagCode (bjCodegenTags job))))
       case output of
         PrintHeader -> pass BackPassRender (render h) >> putStrLn h
         PrintCode   -> pass BackPassRender (render c) >> putStrLn c
@@ -3251,14 +3417,21 @@ compileModules build plan = do
 -- | __builtin__ defines the environment every other module is checked in,
 -- so it compiles first, in its own environment, with its imports read
 -- through the module cache.  Its cached interface serves as it is unless
--- alternative output asks for it, and --only-build compiles nothing.  A
--- failure fails the run.  Its outputs finish and its hashes become visible
--- before it reports success.
+-- alternative output asks for it or its outputs are out of date
+-- (staleBuiltinOutputs), and --only-build compiles nothing.  A failure
+-- fails the run.  Its outputs finish and its hashes become visible before
+-- it reports success.
 compileBuiltin :: BuildEnv -> CompileContext -> GlobalTask -> IO (Either CompileFailure ())
 compileBuiltin build ctx t
-  | C.only_build opts                              = return (Right ())
-  | TyTask _ <- gtTask t, not (altOutputFor ctx k) = return (Right ())
-  | otherwise                                      = do
+  | C.only_build opts                                   = return (Right ())
+  | TyTask header <- gtTask t, not (altOutputFor ctx k) = do
+      stale <- staleBuiltinOutputs build opts t header
+      if stale then compile else return (Right ())
+  | otherwise                                           = compile
+  where
+    k    = gtKey t
+    opts = optionsFor ctx k
+    compile = do
       parsed <- materialize (buildSources build) opts (gtPaths t) (tkMod k) (taskSourceFile t) Nothing (gtTask t)
       case parsed of
         Left diags        -> Left BuiltinFailed <$ emit build (Diagnostics t diags)
@@ -3274,8 +3447,30 @@ compileBuiltin build ctx t
                 Just f  -> return (Left f)
                 Nothing -> do rememberFront (buildCache build) (tkMod k) fr
                               Right () <$ reportFrontSuccess build t fr
-  where k    = gtKey t
-        opts = optionsFor ctx k
+
+-- | Whether the outputs of a cached __builtin__ are out of date: its
+-- generated code, or its documentation page when it gets one.  Its front
+-- passes then run again and write them all, its code through its eager
+-- back job.  A build of the base library that is stopped after the .tydb
+-- of __builtin__ is written leaves code of an earlier build behind, which
+-- would otherwise never be written again.  A .tydb that cannot be read
+-- for the check counts as out of date.
+staleBuiltinOutputs :: BuildEnv -> C.CompileOptions -> GlobalTask -> InterfaceFiles.HeaderSummary -> IO Bool
+staleBuiltinOutputs build opts t header = do
+    checked <- trySync $ do
+      hasNotImpl <- InterfaceFiles.readStmtHasNotImpl (tyDbPath paths mn)
+      code       <- codegenStatus gopts opts paths mn (headerCodegenTags opts paths mn header hasNotImpl (InterfaceFiles.summaryImplHash header) WholeModule)
+      page       <- docPageStatus gopts opts paths mn header
+      return ([ "generated code out of date" ++ formatOutputDelta "codegen" "generated code" code | not (outputsUpToDate code) ]
+              ++ [ "doc page out of date" ++ formatOutputDelta "doc" "doc page" status | Just status <- [page], not (outputsUpToDate status) ])
+    case checked of
+      Left e        -> True <$ info build ("  Stale " ++ label ++ ": outputs unreadable: " ++ displayException e)
+      Right []      -> return False
+      Right reasons -> True <$ mapM_ (\reason -> info build ("  Stale " ++ label ++ ": " ++ reason)) reasons
+  where gopts = buildOptions build
+        paths = gtPaths t
+        mn    = tkMod (gtKey t)
+        label = moduleLabel paths mn
 
 -- | A front stage per module, after its providers' front stages and, when
 -- its source is parsed in a stage of its own, after its parse stage.
@@ -3467,65 +3662,97 @@ parseStage build opts t = do
       Right (source, m) -> (ActonTask source m, reportedTime (buildOptions build) opts elapsed)
 
 
--- Codegen status -----------------------------------------------------------------------------------
+-- Output status ------------------------------------------------------------------------------------
 
--- | Each of a module's generated files with the tag it carries, Nothing for
--- a file that cannot be read or is not tagged, and the tag it should carry,
--- both in hex, and whether the compiler binary is newer than one of them.
-data CodegenStatus = CodegenStatus
-  { csFiles         :: [(GeneratedFile, Maybe String, String)]
-  , csCompilerNewer :: Bool
+-- | An output that a module's back passes or documentation write, whose
+-- first line holds, after a fixed text, its tag and the stamp of the build
+-- of the compiler that wrote it (stampedHex): its label in --verbose lines,
+-- its path, the text before its tag, and the tag it should carry, in hex.
+data TaggedOutput = TaggedOutput
+  { toLabel    :: String
+  , toPath     :: FilePath
+  , toPrefix   :: String
+  , toExpected :: String
   }
 
--- | The hash tagged into a generated file's first line, when the file can
--- be read and its first line is tagged.
-readCodegenHash :: FilePath -> IO (Maybe String)
-readCodegenHash path = either (const Nothing) taggedHash <$> trySync (withFile path ReadMode hGetLine)
-  where taggedHash line = do rest <- Data.List.stripPrefix Acton.CodeGen.implHashTag line
-                             case takeWhile isHexDigit (dropWhile isSpace rest) of
-                               ""  -> Nothing
-                               hex -> Just hex
+-- | Each of a module's tagged outputs with the tag it carries, Nothing for
+-- an output that cannot be read or is not tagged, whether another build of
+-- the compiler wrote one of them, and whether the compiler binary is newer
+-- than one of them.
+data OutputStatus = OutputStatus
+  { osOutputs       :: [(TaggedOutput, Maybe String)]
+  , osOtherCompiler :: Bool
+  , osCompilerNewer :: Bool
+  }
 
--- | The tags a module's generated files carry, read in the order
--- generatedFiles lists them, with the tags they should carry, and whether
--- the compiler binary is newer than one of the files.  A newer compiler may
--- generate other code from the same inputs, which no tag shows, so its
--- files count as out of date, as a .tydb does (compilerNewerThan, which
--- --ignore-compiler-version turns off).
-codegenStatus :: C.CompileOptions -> Paths -> A.ModName -> CodegenTags -> IO CodegenStatus
-codegenStatus opts paths mn expected = do
-    files <- mapM tagOf generatedFiles
-    newer <- or <$> mapM olderThanCompiler generatedFiles
-    return (CodegenStatus files newer)
-  where path file = generatedPath paths mn file
-        tagOf file = do tag <- readCodegenHash (path file)
-                        return (file, tag, Hashing.hashHex (expectedTag expected file))
-        -- A file that cannot be read has no tag, so it is out of date anyway.
-        olderThanCompiler file = do
-          status <- trySync (getFileStatus (path file))
-          either (const (return False))
-                 (compilerNewerThan opts . InterfaceFiles.posixNanoseconds . modificationTimeHiRes)
-                 status
+-- | A tag in hex, followed by the stamp of this build of the compiler: the
+-- text after the fixed text on the first line of a tagged output.
+stampedHex :: C.GlobalOptions -> B.ByteString -> String
+stampedHex gopts tag = Hashing.hashHex tag ++ " " ++ compilerStamp (C.compilerIdentity gopts)
 
--- | Whether every generated file is tagged with the expected hash and none
--- is older than the compiler binary.
-codegenUpToDate :: CodegenStatus -> Bool
-codegenUpToDate status = codegenTagsMatch status && not (csCompilerNewer status)
+-- | The stamp of a build of the compiler on the outputs it writes: the first
+-- 16 hex digits of the hash of its identity.
+compilerStamp :: String -> String
+compilerStamp identity = take 16 (Hashing.hashHex (SHA256.hash (BL.toStrict (encode ("compiler" :: String, identity)))))
 
--- | Whether every generated file is tagged with the tag it should carry.
-codegenTagsMatch :: CodegenStatus -> Bool
-codegenTagsMatch status = and [ tag == Just expected | (_, tag, expected) <- csFiles status ]
+-- | The tag and the compiler stamp on a file's first line after the given
+-- text, when the file can be read and the line holds a tag.  An output
+-- written before outputs were stamped has a tag only.
+readTagLine :: String -> FilePath -> IO (Maybe (String, Maybe String))
+readTagLine prefix path = either (const Nothing) tagged <$> trySync (withFile path ReadMode hGetLine)
+  where tagged line = do rest <- Data.List.stripPrefix prefix line
+                         let (tag, after) = span isHexDigit (dropWhile isSpace rest)
+                             stamp        = takeWhile isHexDigit (dropWhile isSpace after)
+                         if null tag then Nothing else Just (tag, if null stamp then Nothing else Just stamp)
 
--- | The verbose suffix of a module whose generated code is out of date: for
--- each file with another tag than it should carry, its label, the first
--- eight hex digits of its tag, or missing, and of the tag it should carry.
--- Files with the expected tags are out of date because the compiler is
+-- | The status of a module's tagged outputs, in the given order.  Another
+-- build of the compiler, or a newer one, may write other outputs from the
+-- same inputs, which no tag shows, so an output that another build wrote or
+-- that is older than the compiler binary is out of date, as a .tydb is
+-- (trustsCompiler, compilerNewerThan).
+outputStatus :: C.GlobalOptions -> C.CompileOptions -> [TaggedOutput] -> IO OutputStatus
+outputStatus gopts opts outputs = do
+    lines' <- mapM (\output -> readTagLine (toPrefix output) (toPath output)) outputs
+    newer  <- or <$> mapM (olderThanCompiler . toPath) outputs
+    let other = not (C.ignore_compiler_version opts)
+                && any (/= Just (compilerStamp (C.compilerIdentity gopts))) [ stamp | Just (_, stamp) <- lines' ]
+    return (OutputStatus (zip outputs (map (fmap fst) lines')) other newer)
+  where
+    -- A file that cannot be read has no tag, so it is out of date anyway.
+    olderThanCompiler path = do
+      status <- trySync (getFileStatus path)
+      either (const (return False))
+             (compilerNewerThan opts . InterfaceFiles.posixNanoseconds . modificationTimeHiRes)
+             status
+
+-- | The status of a module's generated files, in the order generatedFiles
+-- lists them, against its codegen tags.
+codegenStatus :: C.GlobalOptions -> C.CompileOptions -> Paths -> A.ModName -> CodegenTags -> IO OutputStatus
+codegenStatus gopts opts paths mn expected =
+    outputStatus gopts opts [ TaggedOutput (generatedLabel file) (generatedPath paths mn file) Acton.CodeGen.implHashTag (Hashing.hashHex (expectedTag expected file))
+                            | file <- generatedFiles ]
+
+-- | Whether every output carries the tag it should, this build of the
+-- compiler wrote them all and none is older than the compiler binary.
+outputsUpToDate :: OutputStatus -> Bool
+outputsUpToDate status = outputTagsMatch status && not (osOtherCompiler status) && not (osCompilerNewer status)
+
+-- | Whether every output carries the tag it should.
+outputTagsMatch :: OutputStatus -> Bool
+outputTagsMatch status = and [ tag == Just (toExpected output) | (output, tag) <- osOutputs status ]
+
+-- | The verbose suffix of outputs that are out of date, given what they are
+-- named by: for each output with another tag than it should carry, its
+-- label, the first eight hex digits of its tag, or missing, and of the tag
+-- it should carry.  Outputs with the expected tags are out of date because
+-- another build of the compiler wrote them, or because the compiler is
 -- newer.
-formatCodegenDelta :: CodegenStatus -> String
-formatCodegenDelta status
-  | codegenTagsMatch status = " {compiler newer than generated code}"
-  | otherwise               = " {codegen " ++ intercalate ", " [ generatedLabel file ++ " " ++ delta tag expected | (file, tag, expected) <- stale ] ++ "}"
-  where stale              = [ f | f@(_, tag, expected) <- csFiles status, tag /= Just expected ]
+formatOutputDelta :: String -> String -> OutputStatus -> String
+formatOutputDelta kind noun status
+  | not (outputTagsMatch status) = " {" ++ kind ++ " " ++ intercalate ", " [ toLabel output ++ " " ++ delta tag (toExpected output) | (output, tag) <- stale ] ++ "}"
+  | osOtherCompiler status       = " {" ++ noun ++ " written by another build of the compiler}"
+  | otherwise                    = " {compiler newer than " ++ noun ++ "}"
+  where stale              = [ o | o@(output, tag) <- osOutputs status, tag /= Just (toExpected output) ]
         delta tag expected = maybe "missing" Hashing.shortHex tag ++ " -> " ++ Hashing.shortHex expected
 
 -- One JSON line per module, written by a single strict hPut so that lines

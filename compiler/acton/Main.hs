@@ -140,7 +140,7 @@ raiseOpenFileLimit =
 main = do
     raiseOpenFileLimit
     hSetBuffering stdout LineBuffering
-    arg <- C.parseCmdLine
+    arg <- withCompilerIdentity <$> C.parseCmdLine
     let gopts = case arg of
           C.CmdOpt g _ -> g
           C.CompileOpt _ g _ -> g
@@ -178,6 +178,15 @@ main = do
           C.CmdOpt gopts C.Version            -> printVersion
           C.CompileOpt nms gopts opts         -> runFile gopts opts (head nms)
     run `catch` \(ProjectError msg) -> printErrorAndExit msg
+
+-- | A command line with this build of the compiler named in its global
+-- options by its version, which lsp-server-acton of the same build shares.
+withCompilerIdentity :: C.CmdLineOptions -> C.CmdLineOptions
+withCompilerIdentity (C.CmdOpt gopts cmd)              = C.CmdOpt (identified gopts) cmd
+withCompilerIdentity (C.CompileOpt files gopts opts)   = C.CompileOpt files (identified gopts) opts
+
+identified :: C.GlobalOptions -> C.GlobalOptions
+identified gopts = gopts { C.compilerIdentity = getVer }
 
 -- Apply global options to compile options
 applyGlobalOpts :: C.GlobalOptions -> C.CompileOptions -> C.CompileOptions
@@ -1078,13 +1087,18 @@ sigCommand gopts sigOpts = do
         paths = ccPathsRoot cctx
         depOverrides = C.dep_overrides opts
         rootProj = ccRootProj cctx
-    withProjectLockNotice queryGopts rootProj $ do
+    withProjectLockNotice queryGopts rootProj $ withDependencyLocks $ \locks -> do
+      let waitForDependency dir =
+            unless (C.quiet queryGopts) $ putStrLn ("Waiting for compiler lock in " ++ dir)
+          cctx' = cctx { ccLockDependencies = lockDependencies locks waitForDependency }
       fetchDependencies queryGopts paths depOverrides
       projMap <- discoverProjects queryGopts (ccSysAbs cctx) rootProj depOverrides
+      -- A target in a dependency may be read from its .tydb without a plan.
+      lockDependencies locks waitForDependency (dependencyDirs cctx projMap)
       target <- resolveSigTarget opts paths rootProj projMap (C.sigTarget sigOpts)
       tyFile <- case target of
         SigSourceTarget ctx mn _ srcPath ->
-          compileSigTarget gopts queryGopts cctx ctx mn srcPath
+          compileSigTarget gopts queryGopts cctx' ctx mn srcPath
         SigTyTarget _ _ tyPath ->
           return tyPath
       case target of
@@ -1450,12 +1464,17 @@ compileFilesChanged sp gopts opts srcFiles scope mChangedPaths mWatch = do
         return (sched', gen')
     let cleanupProgress = whenCurrent gen (progressReset progressUI progressState)
     cleanupProgress
-    let runCompile = do
+    -- The plan locks the dependency projects, and the build holds them up to
+    -- and including its final build, which compiles their code.
+    let waitForDependency dir =
+          unless (C.quiet gopts) $ logLine ("Waiting for compiler lock in " ++ dir)
+        runCompile locks = do
           sp' <- overlayChangedPaths sp mChangedPaths
           planStart <- getTime Monotonic
           planRes <- try $
             prepareCompileContext opts srcFiles >>= \ctx ->
-              prepareCompilePlan sp' gopts sched ctx (PlanRequest srcFiles scope mChangedPaths)
+              prepareCompilePlan sp' gopts sched ctx { ccLockDependencies = lockDependencies locks waitForDependency }
+                                 (PlanRequest srcFiles scope mChangedPaths)
           logTiming gopts opts logLine "compile planning" planStart
           let reportPlanError (ProjectError msg) = do
                 if C.watch opts
@@ -1499,7 +1518,7 @@ compileFilesChanged sp gopts opts srcFiles scope mChangedPaths mWatch = do
                             cleanupProgress
                             not <$> ifCurrent gen False (runCliPostCompile reporter gopts plan env)
           either reportPlanError runPlan planRes
-    runCompile `finally` cleanupProgress
+    withDependencyLocks runCompile `finally` cleanupProgress
 
 overlayChangedPaths :: Source.SourceProvider -> Maybe [FilePath] -> IO Source.SourceProvider
 overlayChangedPaths sp mPaths = do
@@ -2204,10 +2223,15 @@ selectRootActor env paths explicitRoot binTask = do
     let A.GName m n = rootActor binTask
         mn = dropProjPrefix paths m
     mty <- Acton.Env.findTyFile (searchPath paths) m
-    db <- case mty of
-            Just ty -> InterfaceFiles.openInterfaceDB ty
-            Nothing -> throwProjectError ("Root module " ++ prstr mn ++ " not found")
-    entry <- InterfaceFiles.readInterfaceDBNameInfoMaybe db n
+    -- The build checked the module's .tydb, so an invalid one changed since.
+    let changed (InterfaceFiles.TyCacheInvalid e) =
+          throwProjectError ("An interface that this build read changed while it ran: " ++ e
+                             ++ ". Another build that does not lock this project's dependencies, such as one of an older compiler, may have written it. Build again.")
+    entry <- (`catch` changed) $ do
+      db <- case mty of
+              Just ty -> InterfaceFiles.openInterfaceDB ty
+              Nothing -> throwProjectError ("Root module " ++ prstr mn ++ " not found")
+      InterfaceFiles.readInterfaceDBNameInfoMaybe db n
     case entry of
       Just (n', i) -> case rootActorProblem (simp (setMod m env)) i of
         Nothing -> return (Right (Just binTask))

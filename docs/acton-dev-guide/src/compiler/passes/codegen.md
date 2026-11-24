@@ -15,7 +15,10 @@ implementation hash combined with its imports and, for a DBP module, its
 selected top-level names, and for the `.c` and the `.closures.inc` also its
 source path and, while `#line` directives are emitted, its source hash. The
 label is therefore historical: the hash covers everything the back passes read,
-not just the raw module implementation hash.
+not just the raw module implementation hash. A build follows each tag with the
+stamp of the build of the compiler that generates the code, so that the code of
+another build counts as out of date (see
+[Incremental compilation](../incremental_compilation.md)).
 
 File builds put generated closure implementations, global initialization chunks,
 and method-table initialization in `<module>.closures.inc`, next to the module's
