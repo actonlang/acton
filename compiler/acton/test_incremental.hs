@@ -2735,7 +2735,6 @@ p46_huge_module_skips_doc_output :: TestTree
 p46_huge_module_skips_doc_output =
   testCase "46-huge module skips doc output" $ do
     let opts = C.defaultCompileOptions
-        docDir = casesProjDir </> "doc-index"
     assertBool "doc output should run at the threshold"
       (Compile.shouldGenerateDocOutput opts False Compile.docNameCountThreshold)
     assertBool "doc output should skip above the threshold"
@@ -2744,14 +2743,13 @@ p46_huge_module_skips_doc_output =
       (not (Compile.shouldGenerateDocOutput opts{ C.skip_build = True } False 1))
     assertBool "temporary builds should skip doc output"
       (not (Compile.shouldGenerateDocOutput opts True 1))
-    removeDirIfExists docDir
-    createDirectoryIfMissing True docDir
-    DocP.generateDocIndex docDir [(A.modName ["huge"], Just "Huge module", False)]
-    index <- T.readFile (docDir </> "index.html")
-    assertBool "skipped module should remain visible"
-      ("huge" `T.isInfixOf` index)
-    assertBool "skipped module should not link to missing page"
-      (not ("href=\"huge.html\"" `T.isInfixOf` index))
+    withSystemTempDirectory "doc-index" $ \docDir -> do
+      DocP.generateDocIndex docDir [(A.modName ["huge"], Just "Huge module", False)]
+      index <- T.readFile (docDir </> "index.html")
+      assertBool "skipped module should remain visible"
+        ("huge" `T.isInfixOf` index)
+      assertBool "skipped module should not link to missing page"
+        (not ("href=\"huge.html\"" `T.isInfixOf` index))
 
 p47_unchanged_dep_reads_module_hashes_only :: TestTree
 p47_unchanged_dep_reads_module_hashes_only =
