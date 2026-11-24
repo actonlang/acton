@@ -465,12 +465,21 @@ withProcessProject action =
           forM_ (readMaybe text :: Maybe ProcessID) $ \pid ->
             signalProcess sigKILL pid `catch` ignoreIO)
 
+-- | Write a shell script for acton to run. Linux refuses to run a file that
+-- any process holds open for writing (ETXTBSY). Tests run in parallel, and
+-- a process that another test starts while this process holds a descriptor
+-- gets a copy of it: for good when the descriptor is inheritable, as
+-- writeFile's is, and up to its exec when it is close-on-exec. A copy that
+-- is renamed into place is the same file, so that does not help either. A
+-- shell writes the script instead, and once it has exited no process holds
+-- the script open.
 writeExecutable :: FilePath -> [String] -> IO ()
 writeExecutable path body = do
     createDirectoryIfMissing True (takeDirectory path)
-    writeFile path (unlines ("#!/bin/sh" : body))
-    permissions <- getPermissions path
-    setPermissions path permissions { executable = True }
+    let write = "printf '%s' \"$1\" > \"$2\" && chmod 755 \"$2\""
+    code <- withCreateProcess (proc "/bin/sh" ["-c", write, "sh", unlines ("#!/bin/sh" : body), path]) $
+      \_ _ _ ph -> waitForProcess ph
+    assertEqual ("writing " ++ path) ExitSuccess code
 
 withActon :: FilePath -> FilePath -> [String] -> (ProcessHandle -> ProcessID -> IO String -> IO a) -> IO a
 withActon acton proj args action = mask $ \restore ->
