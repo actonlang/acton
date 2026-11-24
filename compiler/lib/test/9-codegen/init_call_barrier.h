@@ -7,12 +7,10 @@ struct init_call_barrierQ_Base;
 struct init_call_barrierQ_Derived;
 struct init_call_barrierQ_Later;
 struct init_call_barrierQ_Renew;
-typedef struct $Cont_R2 *init_call_barrierQ_L_2Cont;
 typedef struct init_call_barrierQ_Base *init_call_barrierQ_Base;
 typedef struct init_call_barrierQ_Derived *init_call_barrierQ_Derived;
 typedef struct init_call_barrierQ_Later *init_call_barrierQ_Later;
 typedef struct init_call_barrierQ_Renew *init_call_barrierQ_Renew;
-$R init_call_barrierQ_L_1C_1cont (init_call_barrierQ_Later, $Cont, B_NoneType);
 struct init_call_barrierQ_BaseG_class {
     char *$GCINFO;
     int $class_id;
@@ -82,9 +80,6 @@ struct init_call_barrierQ_Renew {
     struct init_call_barrierQ_RenewG_class *$class;
     B_NoneType items;
 };
-extern struct $ContClass init_call_barrierQ_L_2ContG_methods;
-$R init_call_barrierQ_L_2ContD___call__($Cont $closure, $WORD $result);
-$Cont init_call_barrierQ_L_2ContD___deserialize__($Cont self, $Serial$state state);
 extern struct init_call_barrierQ_BaseG_class init_call_barrierQ_BaseG_methods;
 init_call_barrierQ_Base init_call_barrierQ_BaseG_new();
 B_value init_call_barrierQ_BaseD___get_attr__(init_call_barrierQ_Base self, B_str name);

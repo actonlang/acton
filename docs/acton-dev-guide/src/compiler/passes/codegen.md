@@ -2,23 +2,36 @@
 
 Implementation lives in `compiler/lib/src/Acton/CodeGen.hs`.
 
-`Acton.CodeGen.generateCode` receives the hash strings that should be stamped
-into the generated output: one for the `.h`, and one for the `.c` and the
-`.closures.inc`:
+`Acton.CodeGen.generateCode` returns the text of the `.h`, the `.c` and the
+`.closures.inc`, and `Acton.CodeGen.tagged` puts a tag line in front of each:
 
 ```c
 /* Acton impl hash: ... */
 ```
 
-`Acton.Compile` passes the module's codegen tags (`codegenTags`): the module
-implementation hash combined with its imports and, for a DBP module, its
-selected top-level names, and for the `.c` and the `.closures.inc` also its
-source path and, while `#line` directives are emitted, its source hash. The
-label is therefore historical: the hash covers everything the back passes read,
-not just the raw module implementation hash. A build follows each tag with the
-stamp of the build of the compiler that generates the code, so that the code of
-another build counts as out of date (see
-[Incremental compilation](../incremental_compilation.md)).
+`Acton.Compile` tags the `.c` and the `.closures.inc` with the module's codegen
+tag (`codegenTag`): the module implementation hash combined with its imports,
+for a DBP module its selected top-level names, its source path and, while
+`#line` directives are emitted, its source hash. The label is therefore
+historical: the tag covers everything the back passes read, not just the raw
+module implementation hash. The `.h` is tagged with the hash of its own text
+(`headerTag`), and the `.c` records that tag after its own, following the word
+`header`. A build follows each tag with the stamp of the build of the compiler
+that generates the code, so that the code of another build counts as out of
+date (see [Incremental compilation](../incremental_compilation.md)).
+
+The `.h` declares the top-level names of the module's source, which the modules
+that import it use. The names that the compiler makes up are `Internal` names,
+such as the closures, functions and continuations that lambda lifting moves to
+the top level and the witness variables of top-level expressions. Their
+declarations, made by the same code as the header's (`hDecls`), come right
+after the `.c` includes its own `.h`, before the `.ext.c` and every
+definition, and the `.closures.inc` shares them, since it is part of the same
+translation unit. No other module and no hand-written C names them, so an edit
+that adds, removes or changes a closure or a top-level witness changes the `.c`
+but not the `.h`, and Zig reuses the objects of the modules that include the
+`.h` and whose own code is the same. `--hgen` prints the `.h` and `--cgen` the
+`.c` with these declarations.
 
 File builds put generated closure implementations, global initialization chunks,
 and method-table initialization in `<module>.closures.inc`, next to the module's

@@ -562,17 +562,17 @@ result ok
 
 == no DBP refreshes generated code
 front-start events.a
-info   Stale a: generated code out of date {codegen c <hash> -> <hash>, h <hash> -> <hash>, support <hash> -> <hash>}
+info   Stale a: generated code out of date {codegen c <hash> -> <hash>, support <hash> -> <hash>}
 front-done events.a
 front-result events.a eager
 back-queued events.a
 front-start events.b
-info   Stale b: generated code out of date {codegen c <hash> -> <hash>, h <hash> -> <hash>, support <hash> -> <hash>}
+info   Stale b: generated code out of date {codegen c <hash> -> <hash>, support <hash> -> <hash>}
 front-done events.b
 front-result events.b eager
 back-queued events.b
 front-start events.c
-info   Stale c: generated code out of date {codegen c <hash> -> <hash>, h <hash> -> <hash>, support <hash> -> <hash>}
+info   Stale c: generated code out of date {codegen c <hash> -> <hash>, support <hash> -> <hash>}
 front-done events.c
 front-result events.c eager
 back-queued events.c

@@ -25,12 +25,14 @@ of the names it uses.  A name's pub hash covers its signature without
 docstrings, its escape summary and the pub hashes of the names its
 signature uses.  Its impl hash covers its implementation and the impl
 hashes of the names it uses.  Acton.Hashing defines both.  The first line
-of a module's generated .c, .h and closure support file is tagged with its
-codegen tags (codegenTags): its impl hash with everything else the back
-passes read, namely its imports and a deferred back job's selected names,
-and for the .c and the support file also its source path where they name it
-and, unless --dbg-no-lines is given, its source hash, which the #line
-directives follow.  The first line of its documentation page is tagged with
+of a module's generated .c and closure support file is tagged with its
+codegen tag (codegenTag): its impl hash with everything else the back
+passes read, namely its imports, a deferred back job's selected names, its
+source path where the code names it and, unless --dbg-no-lines is given, its
+source hash, which the #line directives follow.  Its generated header
+declares only the names of its source, which the modules that import it use,
+and is tagged with the hash of its own text, which the .c records after its
+own tag (headerTag).  The first line of its documentation page is tagged with
 its source hash, which covers the docstrings, and its pub hash (docTag).
 The test result cache keys each test on its name's impl hash.
 
@@ -146,10 +148,11 @@ runs the front passes (compileModule).  A TyTask is checked in this order:
      stored rows (refreshImpl), or runs the front passes when a hash it
      needs is unavailable.
   4. A module whose code is generated whole, in a build without
-     alternative output, compares the tags of its .c, .h and closure
-     support file with its codegen hash, and generates its code again from
-     the stored typed module when they differ, another build of the
-     compiler wrote a file or a file is older than the compiler binary
+     alternative output, compares the tags of its .c and closure support
+     file with its codegen tag and the tag of its header with the one its
+     .c records, and generates its code again from the stored typed module
+     when they differ, another build of the compiler wrote a file or the .c
+     or the support file is older than the compiler binary
      (refreshCodegen).  A build that wrote the .tydb but not the code, such
      as acton build --sigs or an interrupted build, thus leaves no stale
      code behind.  __builtin__, which only the base library compiles,
@@ -478,7 +481,7 @@ data BackJob = BackJob
   , bjTypeEnv     :: Acton.Env.Env0     -- protocols converted
   , bjModule      :: A.Module           -- typed; only the selected names for a deferred module
   , bjSource      :: String             -- for #line directives
-  , bjCodegenTags :: CodegenTags        -- tagged into the first line of each generated file
+  , bjCodegenTag  :: B.ByteString       -- tagged into the first line of the .c and the closure support file
   }
 
 -- | Back work that waits for every dependent's interest.  It keeps only
@@ -2076,7 +2079,7 @@ assess env header = do
         | otherwise -> do
             let opts = moduleOptions env
             status <- codegenStatus (buildOptions (moduleBuild env)) opts (pathsOf env) (nameOf env)
-                        (headerCodegenTags opts (pathsOf env) (nameOf env) header hasNotImpl (InterfaceFiles.summaryImplHash header) WholeModule)
+                        (headerCodegenTag opts (pathsOf env) (nameOf env) header hasNotImpl (InterfaceFiles.summaryImplHash header) WholeModule)
             return (if outputsUpToDate status then Reuse header deferred else RefreshCodegen header status)
 
 -- | The action a cached module's dependency changes call for, if any.  A
@@ -2315,7 +2318,7 @@ recomputeImpl env header hasNotImpl = do
                 case full of
                   Nothing      -> return InterfaceGone
                   Just module' -> do
-                    job <- storedBackJob env module' (storedCodegenTags env module' implHash)
+                    job <- storedBackJob env module' (storedCodegenTag env module' implHash)
                     -- Forced here, so a corrupt row fails the attempt before
                     -- anything is written.
                     evaluate (rnf (InterfaceFiles.storedInterface module'))
@@ -2359,7 +2362,7 @@ restoreExternalDeps tydb dependencies names = do
 refreshCodegen :: ModuleEnv -> InterfaceFiles.HeaderSummary -> IO FrontResult
 refreshCodegen env header = do
     module'    <- InterfaceFiles.readFileMaybe tydb >>= maybe (missingOwnInterface env) return
-    job        <- storedBackJob env module' (storedCodegenTags env module' (InterfaceFiles.storedImplHash module'))
+    job        <- storedBackJob env module' (storedCodegenTag env module' (InterfaceFiles.storedImplHash module'))
     interest   <- storedInterest tydb (InterfaceFiles.summaryDepModules header)
     moduleInfo <- storedModuleInfo tydb (nameOf env) module'
     finishStored env (Just header) (storedResult moduleInfo
@@ -2468,27 +2471,27 @@ readInterfaceShell env pubHash = do
   where tydb = tydbOf env
 
 -- | The back job of the typed module that a module's own .tydb stores, in
--- the environment of the modules checked before it, tagged with the given
--- codegen tags.
-storedBackJob :: ModuleEnv -> InterfaceFiles.StoredModule -> CodegenTags -> IO BackJob
+-- the environment of the modules checked before it, with the given codegen
+-- tag.
+storedBackJob :: ModuleEnv -> InterfaceFiles.StoredModule -> B.ByteString -> IO BackJob
 storedBackJob env module' = loadBackJob (moduleBuild env) (moduleBase env) (keyOf env) (pathsOf env) (moduleOptions env) (InterfaceFiles.storedTyped module')
 
--- | The codegen tags of a whole module that its own .tydb stores, with the
+-- | The codegen tag of a whole module that its own .tydb stores, with the
 -- given impl hash: an impl refresh computes the new one before it writes.
-storedCodegenTags :: ModuleEnv -> InterfaceFiles.StoredModule -> B.ByteString -> CodegenTags
-storedCodegenTags env module' implHash =
-    codegenTags (moduleOptions env) (pathsOf env) (nameOf env) (A.hasNotImpl (A.mbody (InterfaceFiles.storedTyped module')))
-                (InterfaceFiles.storedSourceHash module') implHash
-                (map fst (InterfaceFiles.storedImports module')) WholeModule
+storedCodegenTag :: ModuleEnv -> InterfaceFiles.StoredModule -> B.ByteString -> B.ByteString
+storedCodegenTag env module' implHash =
+    codegenTag (moduleOptions env) (pathsOf env) (nameOf env) (A.hasNotImpl (A.mbody (InterfaceFiles.storedTyped module')))
+               (InterfaceFiles.storedSourceHash module') implHash
+               (map fst (InterfaceFiles.storedImports module')) WholeModule
 
 -- | A back job for a typed module read back from a .tydb: its source read
 -- again, its environment rebuilt with protocols converted.
-loadBackJob :: BuildEnv -> Acton.Env.Env0 -> TaskKey -> Paths -> C.CompileOptions -> A.Module -> CodegenTags -> IO BackJob
-loadBackJob build base key paths opts typed tags = do
+loadBackJob :: BuildEnv -> Acton.Env.Env0 -> TaskKey -> Paths -> C.CompileOptions -> A.Module -> B.ByteString -> IO BackJob
+loadBackJob build base key paths opts typed tag = do
     snap  <- Source.readSource (buildSources build) (srcFile paths (tkMod key))
     scope <- Acton.Env.mkEnv (searchPath paths) base typed
     return BackJob { bjKey = key, bjPaths = paths, bjOpts = opts, bjTypeEnv = Converter.convEnvProtos scope
-                   , bjModule = typed, bjSource = Source.ssText snap, bjCodegenTags = tags }
+                   , bjModule = typed, bjSource = Source.ssText snap, bjCodegenTag = tag }
 
 
 -- Front passes -------------------------------------------------------------------------------------
@@ -2587,8 +2590,8 @@ runFrontPasses env source parsed = do
           -- later build computes the same tag from the header.
           job    = BackJob { bjKey = keyOf env, bjPaths = pathsOf env, bjOpts = opts, bjTypeEnv = typeEnv
                            , bjModule = typed, bjSource = sourceText source
-                           , bjCodegenTags = codegenTags opts (pathsOf env) mn (A.hasNotImpl (A.mbody typed)) (hashedSource hashed) (hashedImpl hashed)
-                                                         (map fst (hashedImports hashed)) WholeModule }
+                           , bjCodegenTag = codegenTag opts (pathsOf env) mn (A.hasNotImpl (A.mbody typed)) (hashedSource hashed) (hashedImpl hashed)
+                                                       (map fst (hashedImports hashed)) WholeModule }
           timing = FrontTiming
             { ftEnv               = envDone - start
             , ftKinds             = kindsDone - envDone
@@ -2920,7 +2923,7 @@ docTag sourceHash pubHash = SHA256.hash (BL.toStrict (encode ("doc" :: String, s
 
 -- | The documentation page of a cached module, as one tagged output.
 docPageOutput :: Paths -> A.ModName -> B.ByteString -> TaggedOutput
-docPageOutput paths mn tag = TaggedOutput "page" (docPagePath paths mn) docHashTag (Hashing.hashHex tag)
+docPageOutput paths mn tag = TaggedOutput "page" (docPagePath paths mn) docHashTag (Just (Hashing.hashHex tag)) True
 
 -- | The status of a cached module's documentation page, when the module gets
 -- one.  A build that writes no page, such as acton build --skip-build,
@@ -3052,7 +3055,7 @@ addInterestDeps deps im =
 -- finished its front passes, so the interest in its names is complete.  The
 -- selected names are the module's roots and every name other modules use,
 -- closed over local dependencies and extensions.  The roots and the imports
--- come from the module's .tydb header.  The codegen hash is compared with
+-- come from the module's .tydb header.  The codegen tag is compared with
 -- the tags of the generated files before any statement is read, and the job
 -- is Nothing when the generated code is up to date.
 prepareDeferredBackJob :: BuildEnv -> Acton.Env.Env0 -> InterestMap -> DeferredBackJob -> IO (Maybe BackJob)
@@ -3063,7 +3066,7 @@ prepareDeferredBackJob build base interestMap job = do
     selected <- selectedRows tydb label (Data.Set.union interested roots)
     let names    = M.keysSet selected
         -- A module with NotImplemented bodies is never deferred.
-        expected = headerCodegenTags (deferredOptions job) paths mn header False (deferredImplHash job) (SelectedNames names)
+        expected = headerCodegenTag (deferredOptions job) paths mn header False (deferredImplHash job) (SelectedNames names)
         stats    = DbpStats { totalNames      = deferredNameCount job
                             , interestedNames = Data.Set.size interested
                             , rootNames       = Data.Set.size roots
@@ -3105,59 +3108,58 @@ describeDbp label stats upToDate =
 -- that its deferred back job selected.
 data CodegenScope = WholeModule | SelectedNames (Data.Set.Set A.Name)
 
--- | The tags of a module's generated files: one for its header, and one for
--- its .c and closure support file.
-data CodegenTags = CodegenTags
-  { tagHeader :: B.ByteString
-  , tagCode   :: B.ByteString
-  } deriving (Eq, Show)
-
--- | The tag that a generated file should carry.
-expectedTag :: CodegenTags -> GeneratedFile -> B.ByteString
-expectedTag tags file
-  | generatedLabel file == generatedLabel headerFile = tagHeader tags
-  | otherwise                                        = tagCode tags
-
--- | The hashes that a module's generated files are tagged with.  The impl
+-- | The tag of a module's generated .c and closure support file.  The impl
 -- hash covers the module's statements, and through the impl hashes of the
--- names they use, the code of other modules.  Both tags add what else the
--- back passes read for every file:
+-- names they use, the code of other modules.  The tag adds what else the
+-- back passes read:
 --
 --   * the imports, in the order of the .tydb header: the code calls the
 --     init function of each and includes its header;
---   * the selected names of a deferred module.
---
--- The code's tag also covers what only the .c and the support file hold:
---
---   * where they name it, the source path relative to the project, in
+--   * the selected names of a deferred module;
+--   * where the code names it, the source path relative to the project, in
 --     #line directives and in the #include of the .ext.c of a module with
 --     NotImplemented bodies, which differs from the module's name only in
 --     a scratch build;
 --   * while #line directives are emitted (no --dbg-no-lines), the source
 --     hash, since an edit that only moves lines moves them.
 --
--- The header's tag leaves them out, so that an edit of only comments leaves
--- the header alone, and with it the objects of every module that includes
--- it.  Every input is in the .tydb header and its NotImplemented flag, so a
--- cached module's tags are computed without reading its statements, and the
--- front passes compute the same tags from the values they record.
-codegenTags :: C.CompileOptions -> Paths -> A.ModName -> Bool -> B.ByteString -> B.ByteString -> [A.ModName] -> CodegenScope -> CodegenTags
-codegenTags opts paths mn hasNotImpl sourceHash implHash imports scope =
-    CodegenTags { tagHeader = tag Nothing Nothing, tagCode = tag sourcePath lineSource }
+-- Every input is in the .tydb header and its NotImplemented flag, so a
+-- cached module's tag is computed without reading its statements, and the
+-- front passes compute the same tag from the values they record.
+--
+-- The header is tagged with the hash of its own text instead (headerTag).
+-- It declares only the names of the module's source, or of a deferred
+-- module's selection, so an edit of comments, of the module's .ext.c or of
+-- a body that selects no other name leaves it as it is, and with it the
+-- objects of every module that includes it.
+codegenTag :: C.CompileOptions -> Paths -> A.ModName -> Bool -> B.ByteString -> B.ByteString -> [A.ModName] -> CodegenScope -> B.ByteString
+codegenTag opts paths mn hasNotImpl sourceHash implHash imports scope =
+    SHA256.hash (BL.toStrict (encode ("codegen" :: String, implHash, map modNameToString imports, selection, sourcePath, lineSource)))
   where emitLines  = not (C.dbg_no_lines opts)
-        tag :: Maybe FilePath -> Maybe B.ByteString -> B.ByteString
-        tag path lineHash = SHA256.hash (BL.toStrict (encode ("codegen" :: String, implHash, map modNameToString imports, selection, path, lineHash)))
         selection  = case scope of
                        WholeModule         -> Nothing
                        SelectedNames names -> Just (map A.nstr (sortedNames names))
         sourcePath = if emitLines || hasNotImpl then Just (generatedSrcBase paths mn) else Nothing
         lineSource = if emitLines then Just sourceHash else Nothing
 
--- | The codegen tags of a cached module from its .tydb header, given its
+-- | The codegen tag of a cached module from its .tydb header, given its
 -- NotImplemented flag and its impl hash.
-headerCodegenTags :: C.CompileOptions -> Paths -> A.ModName -> InterfaceFiles.HeaderSummary -> Bool -> B.ByteString -> CodegenScope -> CodegenTags
-headerCodegenTags opts paths mn header hasNotImpl implHash =
-    codegenTags opts paths mn hasNotImpl (InterfaceFiles.summarySourceHash header) implHash (map fst (InterfaceFiles.summaryImports header))
+headerCodegenTag :: C.CompileOptions -> Paths -> A.ModName -> InterfaceFiles.HeaderSummary -> Bool -> B.ByteString -> CodegenScope -> B.ByteString
+headerCodegenTag opts paths mn header hasNotImpl implHash =
+    codegenTag opts paths mn hasNotImpl (InterfaceFiles.summarySourceHash header) implHash (map fst (InterfaceFiles.summaryImports header))
+
+-- | The tag of a generated header: the hash of its text after the tag line.
+-- The .c generated with the header records it after its own tag and stamp,
+-- following the word recordedHeaderLabel.  So one build of the compiler
+-- writes the same file for the same text, and a header that a later job
+-- left next to an earlier job's .c carries another tag than the .c records.
+headerTag :: String -> B.ByteString
+headerTag text = SHA256.hash (BL.toStrict (encode ("header" :: String, text)))
+
+-- | The word on the first line of a generated .c that the tag of its header
+-- follows.
+recordedHeaderLabel :: String
+recordedHeaderLabel = "header"
 
 -- | A module's source path relative to its project, without the .act
 -- extension: the generated code names its .ext.c and its #line file by it.
@@ -3250,8 +3252,8 @@ backPassDump _                  = Nothing
 -- The passes return lazily: their work happens in Render, or earlier in a
 -- dump, so a pass's failure surfaces after Render has started.  Nothing is
 -- forced between passes.  A dump prints inside its pass.  shouldWrite is
--- asked once, right before writing, and the closure support file, the .h
--- and the .c are written in that order.
+-- asked once, right before writing, and the closure support file, the .h,
+-- unless its text is unchanged, and the .c are written in that order.
 -- The elapsed time is Nothing when quiet, and the timing is collected only
 -- with --timing.
 runBackPasses :: C.GlobalOptions -> BackJob -> IO Bool -> (BackPassProgress -> IO ()) -> IO (Maybe TimeSpec, Maybe BackTiming)
@@ -3283,7 +3285,12 @@ runBackPasses gopts job shouldWrite onProgress = do
       (converted, env3)   <- transform BackPassCPS        fst (Acton.CPS.convert env2 deactorized)
       (lifted, env4)      <- transform BackPassLLift      fst (Acton.LambdaLifter.liftModule env3 converted)
       boxed               <- transform BackPassBoxing     id  (Acton.Boxing.doBoxing env4 lifted >>= witnessStats env4 lifted)
-      (_, h, c, support)  <- pass BackPassCodeGen             (Acton.CodeGen.generateCode supportInclude env4 relSrcBase (bjSource job) (not (C.dbg_no_lines opts)) boxed (stampedHex gopts (tagHeader (bjCodegenTags job))) (stampedHex gopts (tagCode (bjCodegenTags job))))
+      (_, hBody, cBody, supportBody)
+                          <- pass BackPassCodeGen             (Acton.CodeGen.generateCode supportInclude env4 relSrcBase (bjSource job) (not (C.dbg_no_lines opts)) boxed)
+      let header  = headerTag hBody
+          h       = Acton.CodeGen.tagged (stampedHex gopts header) hBody
+          c       = Acton.CodeGen.tagged (stampedHex gopts code ++ " " ++ recordedHeaderLabel ++ " " ++ Hashing.hashHex header) cBody
+          support = Acton.CodeGen.tagged (stampedHex gopts code) supportBody
       case output of
         PrintHeader -> pass BackPassRender (render h) >> putStrLn h
         PrintCode   -> pass BackPassRender (render c) >> putStrLn c
@@ -3292,7 +3299,9 @@ runBackPasses gopts job shouldWrite onProgress = do
           pass BackPassRender (render h >> render c >> render support)
           current <- shouldWrite
           if current
-            then pass BackPassWrite (mapM_ writeGenerated [(closureSupportFile, support), (headerFile, h), (cFile, c)])
+            then pass BackPassWrite (do writeGenerated closureSupportFile support
+                                        writeHeader h
+                                        writeGenerated cFile c)
             else report BackPassWrite (fromEnum BackPassWrite + 1) BackPassSkipped
     timing <- reverse <$> readIORef laps
     return ( reportedTime gopts opts elapsed
@@ -3306,8 +3315,17 @@ runBackPasses gopts job shouldWrite onProgress = do
     -- a file of its own, which the .c next to it includes by file name.
     supportInclude = if output == WriteFiles then Just (takeFileName (generatedPath paths mn closureSupportFile)) else Nothing
     relSrcBase     = generatedSrcBase paths mn
+    code           = bjCodegenTag job
     total          = fromEnum (maxBound :: BackPass) + (if output == WriteFiles then 1 else 0)
-    writeGenerated (file, text) = writeFileUtf8Atomic (generatedPath paths mn file) text
+    writeGenerated file text = writeFileUtf8Atomic (generatedPath paths mn file) text
+    -- A header with the same text is left as it is: the C compiler's cache
+    -- then sees no change in any module that includes it.  Its tag is the
+    -- hash of its text, so it needs no newer file to show that this
+    -- compiler generated it (codegenStatus).
+    writeHeader text = do
+      let path = generatedPath paths mn headerFile
+      existing <- trySync (withFile path ReadMode (\hdl -> hSetEncoding hdl utf8 >> hGetContents' hdl))
+      unless (either (const False) (== text) existing) (writeFileUtf8Atomic path text)
     -- --witness-stats reports the module after sharing inside the boxing
     -- pass, before its dump.
     witnessStats :: Acton.Env.Env0 -> A.Module -> A.Module -> IO A.Module
@@ -3459,7 +3477,7 @@ staleBuiltinOutputs :: BuildEnv -> C.CompileOptions -> GlobalTask -> InterfaceFi
 staleBuiltinOutputs build opts t header = do
     checked <- trySync $ do
       hasNotImpl <- InterfaceFiles.readStmtHasNotImpl (tyDbPath paths mn)
-      code       <- codegenStatus gopts opts paths mn (headerCodegenTags opts paths mn header hasNotImpl (InterfaceFiles.summaryImplHash header) WholeModule)
+      code       <- codegenStatus gopts opts paths mn (headerCodegenTag opts paths mn header hasNotImpl (InterfaceFiles.summaryImplHash header) WholeModule)
       page       <- docPageStatus gopts opts paths mn header
       return ([ "generated code out of date" ++ formatOutputDelta "codegen" "generated code" code | not (outputsUpToDate code) ]
               ++ [ "doc page out of date" ++ formatOutputDelta "doc" "doc page" status | Just status <- [page], not (outputsUpToDate status) ])
@@ -3667,12 +3685,15 @@ parseStage build opts t = do
 -- | An output that a module's back passes or documentation write, whose
 -- first line holds, after a fixed text, its tag and the stamp of the build
 -- of the compiler that wrote it (stampedHex): its label in --verbose lines,
--- its path, the text before its tag, and the tag it should carry, in hex.
+-- its path, the text before its tag, the tag it should carry, in hex, or
+-- Nothing when any tag will do, and whether it is out of date when it is
+-- older than the compiler binary.
 data TaggedOutput = TaggedOutput
   { toLabel    :: String
   , toPath     :: FilePath
   , toPrefix   :: String
-  , toExpected :: String
+  , toExpected :: Maybe String
+  , toAged     :: Bool
   }
 
 -- | Each of a module's tagged outputs with the tag it carries, Nothing for
@@ -3709,11 +3730,12 @@ readTagLine prefix path = either (const Nothing) tagged <$> trySync (withFile pa
 -- build of the compiler, or a newer one, may write other outputs from the
 -- same inputs, which no tag shows, so an output that another build wrote or
 -- that is older than the compiler binary is out of date, as a .tydb is
--- (trustsCompiler, compilerNewerThan).
+-- (trustsCompiler, compilerNewerThan).  An output whose tag is the hash of
+-- its own text is exempt from the age check (toAged).
 outputStatus :: C.GlobalOptions -> C.CompileOptions -> [TaggedOutput] -> IO OutputStatus
 outputStatus gopts opts outputs = do
     lines' <- mapM (\output -> readTagLine (toPrefix output) (toPath output)) outputs
-    newer  <- or <$> mapM (olderThanCompiler . toPath) outputs
+    newer  <- or <$> mapM (olderThanCompiler . toPath) (filter toAged outputs)
     let other = not (C.ignore_compiler_version opts)
                 && any (/= Just (compilerStamp (C.compilerIdentity gopts))) [ stamp | Just (_, stamp) <- lines' ]
     return (OutputStatus (zip outputs (map (fmap fst) lines')) other newer)
@@ -3726,11 +3748,36 @@ outputStatus gopts opts outputs = do
              status
 
 -- | The status of a module's generated files, in the order generatedFiles
--- lists them, against its codegen tags.
-codegenStatus :: C.GlobalOptions -> C.CompileOptions -> Paths -> A.ModName -> CodegenTags -> IO OutputStatus
-codegenStatus gopts opts paths mn expected =
-    outputStatus gopts opts [ TaggedOutput (generatedLabel file) (generatedPath paths mn file) Acton.CodeGen.implHashTag (Hashing.hashHex (expectedTag expected file))
-                            | file <- generatedFiles ]
+-- lists them: of the .c and the closure support file against its codegen
+-- tag, and of the header against the tag that the .c records.  The writes
+-- of a back job end with the .c, so a .c that carries the codegen tag
+-- names the header generated with it, and a header that a later,
+-- interrupted job wrote carries another tag.  The header's tag is the hash
+-- of its own text, and a header with the same text is not written again,
+-- so a header older than the compiler binary is not out of date.  When the
+-- .c records no header, as a missing .c or one that another build of the
+-- compiler wrote does not, the .c decides, and the header only has to
+-- carry a tag.
+codegenStatus :: C.GlobalOptions -> C.CompileOptions -> Paths -> A.ModName -> B.ByteString -> IO OutputStatus
+codegenStatus gopts opts paths mn code = do
+    recorded <- recordedHeaderTag (generatedPath paths mn cFile)
+    outputStatus gopts opts [ outputOf file recorded | file <- generatedFiles ]
+  where
+    outputOf file recorded
+      | generatedLabel file == generatedLabel headerFile = output file recorded False
+      | otherwise                                        = output file (Just (Hashing.hashHex code)) True
+    output file = TaggedOutput (generatedLabel file) (generatedPath paths mn file) Acton.CodeGen.implHashTag
+
+-- | The tag of the header that a generated .c records on its first line
+-- after the word recordedHeaderLabel, when the file can be read and the
+-- line records one.
+recordedHeaderTag :: FilePath -> IO (Maybe String)
+recordedHeaderTag path = either (const Nothing) recorded <$> trySync (withFile path ReadMode hGetLine)
+  where recorded line = do
+          rest <- Data.List.stripPrefix Acton.CodeGen.implHashTag line
+          case dropWhile (/= recordedHeaderLabel) (words rest) of
+            _ : tag : _ | not (null tag), all isHexDigit tag -> Just tag
+            _                                                -> Nothing
 
 -- | Whether every output carries the tag it should, this build of the
 -- compiler wrote them all and none is older than the compiler binary.
@@ -3739,21 +3786,26 @@ outputsUpToDate status = outputTagsMatch status && not (osOtherCompiler status) 
 
 -- | Whether every output carries the tag it should.
 outputTagsMatch :: OutputStatus -> Bool
-outputTagsMatch status = and [ tag == Just (toExpected output) | (output, tag) <- osOutputs status ]
+outputTagsMatch status = all tagMatches (osOutputs status)
+
+-- | Whether an output carries the tag it should: the expected one, or any
+-- tag when no tag is expected.
+tagMatches :: (TaggedOutput, Maybe String) -> Bool
+tagMatches (output, tag) = maybe (isJust tag) ((== tag) . Just) (toExpected output)
 
 -- | The verbose suffix of outputs that are out of date, given what they are
 -- named by: for each output with another tag than it should carry, its
 -- label, the first eight hex digits of its tag, or missing, and of the tag
--- it should carry.  Outputs with the expected tags are out of date because
--- another build of the compiler wrote them, or because the compiler is
--- newer.
+-- it should carry, or any.  Outputs with the expected tags are out of date
+-- because another build of the compiler wrote them, or because the
+-- compiler is newer.
 formatOutputDelta :: String -> String -> OutputStatus -> String
 formatOutputDelta kind noun status
   | not (outputTagsMatch status) = " {" ++ kind ++ " " ++ intercalate ", " [ toLabel output ++ " " ++ delta tag (toExpected output) | (output, tag) <- stale ] ++ "}"
   | osOtherCompiler status       = " {" ++ noun ++ " written by another build of the compiler}"
   | otherwise                    = " {compiler newer than " ++ noun ++ "}"
-  where stale              = [ o | o@(output, tag) <- osOutputs status, tag /= Just (toExpected output) ]
-        delta tag expected = maybe "missing" Hashing.shortHex tag ++ " -> " ++ Hashing.shortHex expected
+  where stale              = filter (not . tagMatches) (osOutputs status)
+        delta tag expected = maybe "missing" Hashing.shortHex tag ++ " -> " ++ maybe "any" Hashing.shortHex expected
 
 -- One JSON line per module, written by a single strict hPut so that lines
 -- from modules compiled in parallel do not interleave.
