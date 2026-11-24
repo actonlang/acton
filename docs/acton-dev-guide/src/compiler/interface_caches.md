@@ -245,7 +245,19 @@ run waits for them before it ends.
 
 `copyInterface` uses LMDB's environment copy API. It copies durable data without
 copying a stale `lock.mdb`, so copied `--tydb` artifacts reopen with fresh LMDB
-runtime lock state.
+runtime lock state. The copy writes the meta pages before the data pages, so it
+is made in a new directory next to the destination, named like an interface
+copy, and renamed into place: the destination is either a whole copy or absent.
+
+LMDB maps `data.mdb` up to the last page that its newest meta page names,
+whatever the file's length, and a read of a mapped page past the end of the
+file kills the process with SIGBUS. A `data.mdb` that LMDB wrote always reaches
+that page (a commit writes its pages before the meta page, and only the page
+merges of a delete leave pages below the last one unwritten; the `.tydb`
+writers only clear and put). A shorter file was cut by something else, such as
+an interrupted copy, so every environment open compares the file's length with
+the last page and reports a shorter file as `MDB_CORRUPTED`: a cache miss to
+readers, replaced by the next write.
 
 ## Performance Snapshot
 

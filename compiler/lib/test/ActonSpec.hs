@@ -69,7 +69,8 @@ import Error.Diagnose.Report (Report(..))
 import Prettyprinter (unAnnotate, layoutPretty, defaultLayoutOptions)
 import Prettyprinter.Render.Text (renderStrict)
 import System.FilePath ((</>), joinPath, takeFileName, takeBaseName, takeDirectory, splitDirectories)
-import System.Directory (createDirectoryIfMissing, createDirectoryLink, getCurrentDirectory, setCurrentDirectory, listDirectory, doesDirectoryExist, doesFileExist, removeFile)
+import System.Directory (createDirectoryIfMissing, createDirectoryLink, getCurrentDirectory, getFileSize, setCurrentDirectory, listDirectory, doesDirectoryExist, doesFileExist, removeFile)
+import System.IO (IOMode(ReadWriteMode), hSetFileSize, withFile)
 import System.IO.Temp (withSystemTempDirectory)
 import qualified System.IO.Unsafe
 import System.Timeout (timeout)
@@ -1201,6 +1202,53 @@ main = do
           doesFileExist (dstPath </> "lock.mdb") `shouldReturn` False
           moduleHashes <$> InterfaceFiles.readHeaderSummary dstPath `shouldReturn` ("src", "pub", "impl")
           InterfaceFiles.readNameHashes dstPath `shouldReturn` nameHashes
+
+      it "keeps the previous copy and no temporary directory when a copy fails" $ do
+        withSystemTempDirectory "acton-iface-copy-fail" $ \dir -> do
+          let mn = S.modName ["iface"]
+              srcPath = dir </> "iface.tydb"
+              badPath = dir </> "bad.tydb"
+              dstPath = dir </> "iface-copy.tydb"
+              firstName = S.name "first"
+              iface = [(firstName, I.NVar S.tWild)]
+              nameHashes = [nameHash firstName "src1" "pub1" "impl1"]
+              nmod = I.NModule [] iface Nothing
+              tmod = S.Module mn [] Nothing []
+          InterfaceFiles.writeFile srcPath "src" "pub" "impl" Nothing [] [] nameHashes [] [] [] Nothing nmod tmod
+          InterfaceFiles.copyInterface srcPath dstPath
+          createDirectoryIfMissing True badPath
+          B8.writeFile (badPath </> "data.mdb") "garbage"
+          copied <- E.try (InterfaceFiles.copyInterface badPath dstPath)
+          either (\e -> const True (e :: E.SomeException)) (const False) copied `shouldBe` True
+          moduleHashes <$> InterfaceFiles.readHeaderSummary dstPath `shouldReturn` ("src", "pub", "impl")
+          InterfaceFiles.readNameHashes dstPath `shouldReturn` nameHashes
+          sort <$> listDirectory dir `shouldReturn` ["bad.tydb", "iface-copy.tydb", "iface.tydb"]
+
+      -- LMDB maps a data.mdb up to the last page its meta page names, so a
+      -- read of a file cut short below that page would die with SIGBUS.
+      it "treats a .tydb whose data.mdb is cut short as a cache miss and replaces it" $ do
+        withSystemTempDirectory "acton-iface-short" $ \dir -> do
+          let mn = S.modName ["iface_short"]
+              tyPath = dir </> "iface_short.tydb"
+              dataPath = tyPath </> "data.mdb"
+              names = [ S.name ("name" ++ show i) | i <- [1 .. 2000 :: Int] ]
+              iface = [ (n, I.NVar S.tWild) | n <- names ]
+              nameHashes = [ nameHash n "src1" "pub1" "impl1" | n <- names ]
+              nmod = I.NModule [] iface Nothing
+              tmod = S.Module mn [] Nothing []
+              write = InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] nameHashes [] [] [] Nothing nmod tmod
+          write
+          size <- getFileSize dataPath
+          -- Half of the file still holds both meta pages at any page size
+          -- up to 64 KiB, so the open gets past them to the length check.
+          size `shouldSatisfy` (>= 256 * 1024)
+          withFile dataPath ReadWriteMode (\h -> hSetFileSize h (size `div` 2))
+          InterfaceFiles.tryReadHeaderSummary tyPath `shouldReturn` Nothing
+          InterfaceFiles.readNameHashesMaybe tyPath `shouldReturn` Nothing
+          InterfaceFiles.readFileMaybe tyPath `shouldReturn` Nothing
+          write
+          moduleHashes <$> InterfaceFiles.readHeaderSummary tyPath `shouldReturn` ("src", "pub", "impl")
+          length <$> InterfaceFiles.readNameHashes tyPath `shouldReturn` length nameHashes
 
       it "does not create lock files when reading registered system roots" $ do
         withSystemTempDirectory "acton-iface-syspath" $ \dir -> do

@@ -22,7 +22,7 @@ import           System.Directory
 import           System.Environment (getEnvironment)
 import           System.Exit
 import           System.FilePath
-import           System.IO (Handle)
+import           System.IO (Handle, IOMode(ReadWriteMode), hSetFileSize, withFile)
 import           System.IO.Temp (withSystemTempDirectory)
 import           System.Posix.Files (deviceID, fileID, fileSize, getFileStatus, modificationTimeHiRes, statusChangeTimeHiRes)
 import           System.Process
@@ -1639,6 +1639,45 @@ p26_ty_version_mismatch = testCase "26b-.tydb version mismatch forces re-parse" 
   assertBool "expected a.act to type check after .tydb version mismatch" (typechecked out modA)
   assertBool "did not expect raw .tydb version mismatch" $
     not (".tydb version mismatch" `T.isInfixOf` out)
+
+-- | LMDB maps a data.mdb up to the last page that its meta page names, so a
+-- build that read a data.mdb cut short below that page (an interrupted copy)
+-- died with SIGBUS, every time, until the .tydb was deleted by hand.
+p26_cut_short_ty_data :: TestTree
+p26_cut_short_ty_data = testCase "26c-.tydb data file cut short forces re-parse" $ do
+  let proj = casesProjDir
+      src = casesSrcDir
+      modA = modLabel proj "a"
+      tyA = proj </> "out" </> "types" </> "incremental_cases" </> "a.tydb"
+      dataA = tyA </> "data.mdb"
+  ensureCasesProject
+  writeFileUtf8 (src </> "a.act") $ T.unlines $ concat
+    [ [ T.pack ("def f" ++ show i ++ "(x: int, s: str) -> list[str]:")
+      , T.pack ("    return [s] * (x + " ++ show i ++ ")")
+      , ""
+      ]
+    | i <- [1 .. 600 :: Int] ]
+  writeFileUtf8 (src </> "c.act") $ T.unlines
+    [ "import a"
+    , ""
+    , "actor main(env: Env):"
+    , "    proc def __startup__():"
+    , "        print(a.f1(1, \"a\"))"
+    , "        env.exit(0)"
+    ]
+  _ <- buildOutIn proj
+  size <- getFileSize dataA
+  -- Half of the file still holds both meta pages at any page size up to
+  -- 64 KiB, so the open reads them and the cut is past them.
+  assertBool ("expected a.tydb to span many pages, data.mdb is " ++ show size ++ " bytes")
+    (size >= 256 * 1024)
+  withFile dataA ReadWriteMode (\h -> hSetFileSize h (size `div` 2))
+  out <- buildOutIn proj
+  assertBool "expected a.act to type check after its .tydb was cut short" (typechecked out modA)
+  rewritten <- InterfaceFiles.tryReadHeaderSummary tyA
+  assertBool "expected the rewritten a.tydb to be readable" (isJust rewritten)
+  out2 <- buildOutIn proj
+  assertBool "did not expect a.act to type check with its rewritten .tydb" (not (typechecked out2 modA))
 
 p27_overlay_source_provider :: TestTree
 p27_overlay_source_provider = testCase "27-overlay snapshots drive readModuleTask" $ do
@@ -4120,6 +4159,7 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
       , p25_whitespace_change
       , p26_corrupt_ty_header
       , p26_ty_version_mismatch
+      , p26_cut_short_ty_data
       , p27_overlay_source_provider
       , p28_protocol_extension_deps
       , p29_protocol_impl_rebuild

@@ -182,13 +182,14 @@ import Utils (SrcLoc(NoLoc), chunksOf, trySync)
 import Foreign.Ptr (castPtr)
 import Foreign.Storable (peek)
 import GHC.Generics (Generic)
-import System.Directory (canonicalizePath, createDirectoryIfMissing, doesDirectoryExist, doesFileExist, getFileSize, getModificationTime, listDirectory, removeFile, removePathForcibly)
+import System.Directory (canonicalizePath, createDirectory, createDirectoryIfMissing, doesDirectoryExist, doesFileExist, getFileSize, getModificationTime, listDirectory, removeFile, removePathForcibly, renameDirectory)
 import System.Environment (getExecutablePath, lookupEnv)
-import System.FilePath ((</>), addTrailingPathSeparator, normalise, takeDirectory, takeExtension)
+import System.FilePath ((</>), addTrailingPathSeparator, dropExtension, normalise, takeDirectory, takeExtension, takeFileName)
 import System.IO (hPutStrLn, stderr)
-import System.IO.Error (isDoesNotExistError)
+import System.IO.Error (isAlreadyExistsError, isDoesNotExistError)
 import System.IO.Unsafe (unsafePerformIO)
 import System.Posix.Files (deviceID, fileAccess, fileID, getFileStatus, modificationTimeHiRes, setFileMode)
+import System.Posix.Process (getProcessID)
 
 data NameHashInfo = NameHashInfo
   { nhName     :: A.Name
@@ -408,18 +409,50 @@ interfaceModifiedTimeNs path = do
 posixNanoseconds :: POSIXTime -> Integer
 posixNanoseconds t = floor (toRational t * 1000000000)
 
+-- | Copy the environment at src to dst. LMDB's copy writes the meta pages
+-- first and the data pages after them, so a copy made at dst itself would be
+-- a cut-short data.mdb while it runs, and for good if it is interrupted (a
+-- full volume, a kill); see checkDataFileLength. The copy is made in a new
+-- directory next to dst and renamed into place, so dst is either whole or
+-- absent. When the rename fails because another build put its copy at dst
+-- meanwhile, that copy stays.
 copyInterface :: FilePath -> FilePath -> IO ()
-copyInterface src dst = do
-    removePathForcibly dst `E.catch` ignoreMissing
-    createDirectoryIfMissing True dst
-    mapSize <- readMapSize src
-    runInLmdbThread $
-      withEnv src True mapSize $ \env ->
-        LMDB.mdb_env_copy env dst
-    setReadableInterfacePermissions dst
+copyInterface src dst =
+    E.bracketOnError (newCopyDirectory dst) removeQuietly $ \tmp -> do
+      mapSize <- readMapSize src
+      runInLmdbThread $
+        withEnv src True mapSize $ \env ->
+          LMDB.mdb_env_copy env tmp
+      setReadableInterfacePermissions tmp
+      removeQuietly dst
+      renameDirectory tmp dst `E.catch` \err -> do
+        installed <- doesDirectoryExist dst
+        unless installed $ E.throwIO (err :: E.IOException)
+        removeQuietly tmp
   where
-    ignoreMissing :: E.IOException -> IO ()
-    ignoreMissing _ = return ()
+    removeQuietly path = removePathForcibly path `E.catch` \(_ :: E.IOException) -> return ()
+
+-- | A new, empty directory next to an interface copy at path, to make the
+-- copy in. Its name ends in interfaceExt like the copy's own, so the watch
+-- and the .ext.c include scan skip it as they skip the copy
+-- (Acton.Project.isInterfaceCopy). It is hidden, so a copy that a kill
+-- leaves behind stays out of listings, and it holds a character that no
+-- module name does, so it is never the copy of a module.
+newCopyDirectory :: FilePath -> IO FilePath
+newCopyDirectory path = do
+    createDirectoryIfMissing True (takeDirectory path)
+    pid <- getProcessID
+    let attempt :: Int -> IO FilePath
+        attempt n = do
+          let name = "." ++ takeFileName (dropExtension path) ++ ".copy-" ++ show pid ++ "-" ++ show n ++ interfaceExt
+              dir = takeDirectory path </> name
+          created <- E.try (createDirectory dir)
+          case created of
+            Right () -> return dir
+            Left err
+              | isAlreadyExistsError err -> attempt (n + 1)
+              | otherwise -> E.throwIO err
+    attempt 0
 
 listInterfaceDirsRecursive :: FilePath -> IO [FilePath]
 listInterfaceDirsRecursive root = do
@@ -603,6 +636,7 @@ openEnvWithRetry path readOnly mapSize =
       env <- LMDB.mdb_env_create
       let configure = do LMDB.mdb_env_set_mapsize env mapSize
                          openEnv env
+                         checkDataFileLength path env
       r <- E.try (configure `E.onException` LMDB.mdb_env_close env)
       case r of
         Right () -> return env
@@ -615,6 +649,41 @@ openEnvWithRetry path readOnly mapSize =
           flags <- readOnlyOpenFlags path
           LMDB.mdb_env_open env path flags
       | otherwise = LMDB.mdb_env_open env path []
+
+-- | Fail with MDB_CORRUPTED when data.mdb ends before the last page that its
+-- newest meta page names.
+--
+-- LMDB maps the file up to that last page whatever the file's length, and a
+-- read of a mapped page past the end of the file raises SIGBUS ("FS pagein
+-- error"), which kills the process: every build that opens such a .tydb dies
+-- with exit status 138 and no message. A data.mdb that LMDB wrote always
+-- reaches its last page: a commit writes its pages before the meta page that
+-- names them, and only the page merges of a delete leave pages below the
+-- last one unwritten, while the .tydb writers here only clear and put. A
+-- shorter file was cut by something else: a copy that was interrupted, or
+-- that is still running, or a truncation. As MDB_CORRUPTED it is a cache miss
+-- to readers (isTyCacheMiss) and is replaced by the writer (writeEntries),
+-- before any read of the missing pages. A data.mdb that is gone by the time
+-- of the check was replaced by another build; the environment keeps the file
+-- it opened, as it did before this check.
+checkDataFileLength :: FilePath -> LMDB.MDB_env -> IO ()
+checkDataFileLength path env = do
+    info <- LMDB.mdb_env_info env
+    stat <- LMDB.mdb_env_stat env
+    let needed = (toInteger (LMDB.me_last_pgno info) + 1) * toInteger (LMDB.ms_psize stat)
+    size <- E.try (getFileSize (dataFilePath path))
+    case size of
+      Left err
+        | isDoesNotExistError err -> return ()
+        | otherwise -> E.throwIO err
+      Right actual ->
+        when (actual < needed) $
+          E.throwIO LMDB.LMDB_Error
+            { LMDB.e_context = "mdb_env_open"
+            , LMDB.e_description = dataFilePath path ++ " is cut short: " ++ show actual
+                                     ++ " bytes, but its last page ends at byte " ++ show needed
+            , LMDB.e_code = Right LMDB.MDB_CORRUPTED
+            }
 
 -- A transient LMDB failure is an OS-level error (Either Left, a raw errno) from
 -- lock-table setup/use under concurrent readers. LMDB-semantic errors (Either
