@@ -51,7 +51,12 @@ actor main(env):
 
     def request(server: std.http.Server, req: std.http.Request, respond: action(int, dict[str, str], bytes) -> None):
         obj = std.json.decode(req.body.decode())
-        respond(200, {"Content-Type": "application/json"}, str(obj["value"]).encode())
+        # JSON decoding erases the field type; recover its integer Show policy.
+        number = obj["value"]
+        if isinstance(number, int):
+            respond(200, {"Content-Type": "application/json"}, str(number).encode())
+        else:
+            respond(400, {"Content-Type": "text/plain"}, b"Expected an integer value")
 
     def server_error(server: std.http.Server, message: str):
         fail(message)
