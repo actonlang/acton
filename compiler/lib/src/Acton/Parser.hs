@@ -12,8 +12,9 @@
 --
 
 {-# LANGUAGE FlexibleInstances #-}
--- GHC 9.8.4 on arm64 can segfault in RTS apply stubs when full laziness floats
--- parser subexpressions into shared closures evaluated by concurrent parses.
+-- -fno-full-laziness keeps parser subexpressions from floating into shared
+-- CAFs, which concurrent parses can apply while one of them is being claimed;
+-- the remaining CAFs are evaluated up front, see Note [Parser warm-up].
 {-# OPTIONS_GHC -fno-warn-orphans -fno-full-laziness #-}
 module Acton.Parser
   ( module Acton.Parser
@@ -27,7 +28,7 @@ import Control.Concurrent.Chan
 import Control.Concurrent.MVar
 import Control.Concurrent.QSem
 import Control.Monad (replicateM, replicateM_, void, when, join, forM_, foldM, foldM_, unless)
-import Control.DeepSeq (rnf)
+import Control.DeepSeq (NFData, rnf)
 import Data.IORef
 import Data.List (isPrefixOf, elemIndex)
 import Data.Maybe (fromMaybe)
@@ -148,6 +149,7 @@ makeReport ps src = errReport (map setSpan ps) src
 
 parseModule :: S.ModName -> String -> String -> Maybe (Int -> Int -> IO ()) -> IO S.Module
 parseModule qn fileName fileContent mReportProgress = do
+    warmUpParser
     let contentWithNewline = addFinalNewline fileContent
     (is, mdoc, bodyStart) <-
       case runParser (St.evalStateT module_header_with_offset initState) fileName contentWithNewline of
@@ -163,6 +165,7 @@ parseModule qn fileName fileContent mReportProgress = do
 
 parseModuleSerial :: S.ModName -> String -> String -> Maybe (Int -> Int -> IO ()) -> IO S.Module
 parseModuleSerial qn fileName fileContent mReportProgress = do
+    warmUpParser
     let contentWithNewline = addFinalNewline fileContent
     st <- parserStateWithProgress contentWithNewline mReportProgress
     case runParser (St.evalStateT file_input st) fileName contentWithNewline of
@@ -173,18 +176,29 @@ parseModuleImports :: String -> String -> IO [S.Import]
 parseModuleImports fileName fileContent = fst <$> parseModuleHeader fileName fileContent
 
 parseModuleHeader :: String -> String -> IO ([S.Import], Maybe String)
-parseModuleHeader fileName fileContent =
+parseModuleHeader fileName fileContent = do
+    warmUpParser
     let contentWithNewline = addFinalNewline fileContent
-    in case runParser (St.evalStateT import_input initState) fileName contentWithNewline of
+    case runParser (St.evalStateT import_input initState) fileName contentWithNewline of
         Left err -> Control.Exception.throw err
         Right res -> return res
 
 parseExpression :: String -> String -> IO S.Expr
-parseExpression fileName fileContent =
+parseExpression fileName fileContent = do
+    warmUpParser
     let contentWithNewline = addFinalNewline fileContent
-    in case runParser (St.evalStateT (rhs <* sc2 <* eof) initState) fileName contentWithNewline of
+    case runParser (St.evalStateT (rhs <* sc2 <* eof) initState) fileName contentWithNewline of
         Left err -> Control.Exception.throw err
         Right res -> return res
+
+-- | A type, as the language server reads one from a completion context.
+-- Nothing when the text does not parse as a type.
+parseTypeMaybe :: String -> Maybe S.Type
+parseTypeMaybe raw =
+    parserWarmUp `seq`
+    case runParser (St.evalStateT (ttype <* eof) initState) "" raw of
+        Left _ -> Nothing
+        Right typ -> Just typ
 
 addFinalNewline :: String -> String
 addFinalNewline s
@@ -193,13 +207,18 @@ addFinalNewline s
 
 -- parseTest file = snd (unsafePerformIO (do cont <- readFile file; parseModule (S.modName ["test"]) file cont))
 
-parseTestStr p str = case runParser (St.evalStateT p initState) "" str of
+parseTestStr p str = warmUpParser >>
+                     case runParser (St.evalStateT p initState) "" str of
                          Left err -> putStrLn (errorBundlePretty err)
                          Right t  -> print t
 
 extractSrcSpan :: SrcLoc -> String -> SrcSpan
-extractSrcSpan NoLoc src = SpanEmpty
-extractSrcSpan (Loc l r) src = sp
+extractSrcSpan loc src = parserWarmUp `seq` srcSpanAt loc src
+
+-- | extractSrcSpan without the warm-up, for the warm-up itself.
+srcSpanAt :: SrcLoc -> String -> SrcSpan
+srcSpanAt NoLoc src = SpanEmpty
+srcSpanAt (Loc l r) src = sp
   where Right sp = runParser (St.evalStateT (extractP l r) initState) "" src
         extractP :: Int -> Int -> Parser SrcSpan
         extractP l r = do
@@ -212,6 +231,248 @@ extractSrcSpan (Loc l r) src = sp
                     then return $ SpanPoint f (unPos srow) (unPos scol)
                     else return $ SpanCoLinear f (unPos srow) (unPos scol) (unPos ecol - 1)
                 else return $ SpanMultiLine f (unPos srow) (unPos scol) (unPos erow) (unPos ecol - 1)
+
+
+-- Parser warm-up -----------------------------------------------------------
+
+-- Note [Parser warm-up]
+-- ~~~~~~~~~~~~~~~~~~~~~
+-- Most parsers in this module are CAFs whose values are functions, and they
+-- are applied through GHC's generic apply code (the stg_ap_* stubs that
+-- utils/genapply generates).  When R1 is an IND_STATIC, that code loads the
+-- indirectee with no ordering against its earlier plain load of the info
+-- pointer; the RTS's own IND_STATIC entry code has an ACQUIRE_FENCE at the
+-- same point.  The first thread to evaluate a CAF claims it in lockCAF, which
+-- stores the indirectee and then IND_STATIC as the info pointer.  On arm64 a
+-- thread that applies the same CAF at that moment can load the new info
+-- pointer together with the old indirectee, which is NULL in a static
+-- closure, and then applies a NULL closure: a segfault at address 0 in
+-- stg_ap_p_info, stg_ap_pppppp_info and their siblings.
+--
+-- The chunked parser makes this likely.  Its workers start together and
+-- apply the same parser CAFs for the first time at the same moment, in the
+-- first parse of every process (Build.act).  -fno-full-laziness keeps parser
+-- subexpressions out of CAFs, but the top-level parsers and the static
+-- operator tables remain CAFs.
+--
+-- So every parsing entry point first evaluates parserWarmUp.  On one thread,
+-- it runs the parsers of those entry points, the chunked parser over a sample
+-- that covers the grammar and the others over shorter texts and some parse
+-- errors, which claims and evaluates the parser CAFs there.  parserWarmUp is
+-- a CAF too, but it is only evaluated, never applied, and evaluation goes
+-- through the fenced entry code: a thread that finds it under evaluation
+-- waits on its blackhole, and afterwards sees every CAF the warm-up
+-- evaluated; the chunk workers are started after it.  A parse error in the
+-- sample would leave CAFs cold, so test_lib checks that the sample parses.
+
+-- | Evaluated before any parse; see Note [Parser warm-up].
+parserWarmUp :: ()
+parserWarmUp = unsafePerformIO $ do
+    -- A failed warm-up leaves some CAFs cold but must not fail the compiler,
+    -- and an asynchronous exception must still reach the thread.
+    _ <- trySync runParserWarmUp
+    return ()
+{-# NOINLINE parserWarmUp #-}
+
+warmUpParser :: IO ()
+warmUpParser = void (Control.Exception.evaluate parserWarmUp)
+
+-- | The parsers of every entry point, on this thread: the chunked parser
+-- over the sample, its chunks one after the other, the other entry points
+-- over shorter texts, and some parse errors.  Throws when the sample does
+-- not parse.
+runParserWarmUp :: IO ()
+runParserWarmUp = do
+    let file = "parser-warm-up.act"
+        parse :: NFData a => Parser a -> String -> IO a
+        parse p text =
+            either Control.Exception.throwIO (\r -> r <$ Control.Exception.evaluate (rnf r))
+              (runParser (St.evalStateT p initState) file text)
+        -- parseModule's steps, with the chunks parsed in turn on this thread
+        chunked text = do
+            (is, mdoc, bodyStart) <- parse module_header_with_offset text
+            chunksRef <- newIORef []
+            scanned <- scanTopLevelChunks text bodyStart (\chunk -> modifyIORef' chunksRef (chunk :))
+            either Control.Exception.throwIO return scanned
+            chunks <- reverse <$> readIORef chunksRef
+            parsed <- mapM (parseTopLevelChunk file text) chunks >>= collectParsedChunks
+            let suite = regroupTopDecls (concat parsed)
+            parse (checkModuleBindings suite) text
+            Control.Exception.evaluate (rnf (S.Module (S.modName ["warm"]) is mdoc suite))
+    chunked parserWarmUpSample
+    -- parseModuleSerial, whose statements are the ones the chunks parsed
+    _ <- parse file_input "\"\"\"Docs.\"\"\"\nimport math\n\nanswer = 1\n\ndef get():\n    return answer\n"
+    -- parseModuleHeader, parseExpression, parseTypeMaybe and extractSrcSpan
+    _ <- parse import_input parserWarmUpSample
+    _ <- parse (rhs <* sc2 <* eof) "[x for x in xs if x > 0], await async f(1)\n"
+    _ <- parse (ttype <* eof) "dict[str, (int, ?list[A]) -> bool]"
+    _ <- Control.Exception.evaluate (srcSpanAt (Loc 0 (length "\"\"\"A sample")) parserWarmUpSample)
+    -- Parse errors reach parsers and exceptions of their own.
+    mapM_ (trySync . chunked) parserWarmUpErrors
+    mapM_ (trySync . parse file_input) parserWarmUpErrors
+
+-- | Texts with parse errors, for the warm-up.
+parserWarmUpErrors :: [String]
+parserWarmUpErrors =
+    [ "import\n"
+    , "def f(:\n    pass\n"
+    , "class Box:\npass\n"
+    , "  answer = 1\n"
+    , "items = (1,\n"
+    , "text = f\"{\"\n"
+    , "def g():\n    return 1\n      return 2\n"
+    , "def h():\n    if True:\n\treturn 1\n"
+    , "def k():\n    actor inner():\n        pass\n"
+    , "answer = 1\nanswer = 2\n"
+    , "text = \"\"\"unterminated\n"
+    ]
+
+-- | Source that covers the grammar, for the warm-up; see Note [Parser warm-up].
+parserWarmUpSample :: String
+parserWarmUpSample = unlines
+    [ "\"\"\"A sample that exercises the grammar.\"\"\""
+    , "import math"
+    , "import testing as t"
+    , "from a.b import c, d as e"
+    , ""
+    , "limit: int = 1"
+    , "var_y = [1, 2.5, -3, 0x1f, 1e3, True, False, None, \"s\", 'q', b\"b\", r\"r\", rb\"x\", \"\"\"doc\"\"\"]"
+    , ""
+    , "def f[A(Eq), B](a: A, b: ?B, *args: (int, str), **kw: (k: int, m: str)) -> (int, str) -> bool:"
+    , "    \"\"\"Docstring.\"\"\""
+    , "    x = a if b is not None else a"
+    , "    y = [i * 2 for i in range(10) if i % 2 == 0]"
+    , "    s = {k2: v for k2, v in kw.items()}"
+    , "    u = {i for i in args}"
+    , "    g = lambda m, n=1: m + n"
+    , "    h = lambda: None"
+    , "    o = x.y?.z?.w if isinstance(x, int) else not x"
+    , "    v = (1 + 2 - 3 * 4 / 5 // 6 % 7) ** 2 << 1 >> 1 & 3 | 4 ^ 5"
+    , "    c = 1 < 2 <= 3 > 0 >= 0 == 0 != 1 and True or False"
+    , "    c2 = a in args and a not in args and a is a and a is not b"
+    , "    l = args[1:2] + args[::2] + args[1:] + args[:-1]"
+    , "    m = f\"{x} and {y:>10} {{literal}} {x:.2f}\""
+    , "    n = \"%d %s\" % (1, \"x\")"
+    , "    d = {\"a\": 1, \"b\": 2}"
+    , "    st = {1, 2}"
+    , "    tp = (a=1, b=\"x\")"
+    , "    esc = \"\\n\\t\\x41\\u00e5\\\\\" + tp.b"
+    , "    for (k3, v3) in d.items():"
+    , "        if k3 == \"a\": pass"
+    , "    del l[0]"
+    , "    assert x, \"message\""
+    , "    x += 1"
+    , "    x -= 1"
+    , "    x *= 2"
+    , "    x //= 2"
+    , "    x |= 1"
+    , "    pass"
+    , "    return lambda q: q > 0"
+    , ""
+    , "proc def pf(x: int) -> None:"
+    , "    for i in range(x):"
+    , "        if i == 1:"
+    , "            continue"
+    , "        elif i == 2:"
+    , "            break"
+    , "        else:"
+    , "            pass"
+    , "    else:"
+    , "        pass"
+    , "    while x > 0:"
+    , "        x -= 1"
+    , "    else:"
+    , "        x = 0"
+    , "    try:"
+    , "        raise ValueError(\"bad\")"
+    , "    except ValueError as e:"
+    , "        print(e)"
+    , "    except Exception:"
+    , "        pass"
+    , "    else:"
+    , "        pass"
+    , "    finally:"
+    , "        pass"
+    , "    with open(\"x\") as fh:"
+    , "        pass"
+    , ""
+    , "mut def mf(x: int, y: int=1) -> int: return x + y"
+    , "pure def puref(x: int) -> int: return x"
+    , ""
+    , "class Point[T](object):"
+    , "    \"\"\"A class.\"\"\""
+    , "    x: T"
+    , "    y: T"
+    , "    @property"
+    , "    norm: int"
+    , "    def __init__(self, x: T, y: T) -> None:"
+    , "        self.x = x"
+    , "        self.y = y"
+    , "    @staticmethod"
+    , "    def origin() -> Point[int]:"
+    , "        return Point(0, 0)"
+    , ""
+    , "protocol Shape:"
+    , "    area : () -> float"
+    , "    name : (str, ?int) -> str"
+    , "    @staticmethod"
+    , "    same : (Self, Self) -> bool"
+    , ""
+    , "extension Point[T] (Shape):"
+    , "    def area(self) -> float:"
+    , "        return 0.0"
+    , "    def name(self, s: str, n: ?int) -> str:"
+    , "        return s"
+    , "    @staticmethod"
+    , "    def same(a: Point[T], b: Point[T]) -> bool:"
+    , "        return True"
+    , ""
+    , "actor Counter(env: Env, start: int):"
+    , "    \"\"\"An actor.\"\"\""
+    , "    var count = start"
+    , "    var items: list[int] = []"
+    , "    def increment(n: int) -> int:"
+    , "        count += n"
+    , "        return count"
+    , "    action def tick() -> None:"
+    , "        after 1: tick()"
+    , "    proc def __startup__():"
+    , "        print(count)"
+    , "        env.exit(0)"
+    , ""
+    , "actor main(env):"
+    , "    c = Counter(env, 1)"
+    , "    def gen():"
+    , "        yield 1"
+    , "    proc def __startup__():"
+    , "        r = c.increment(2)"
+    , "        a = async c.increment(3)"
+    , "        b = await async c.increment(4)"
+    , "        env.exit(0)"
+    , ""
+    , "type Pair[A] = (A, A)"
+    , "type Named = (name: str, size: int)"
+    , ""
+    , "def kw(x: int, y: str) -> (x: int, y: str):"
+    , "    return (x=x, y=y)"
+    , ""
+    , "def schemed(f: (int, label: str) -> bool, g: (int, *A) -> None) -> None:"
+    , "    pass"
+    , ""
+    , "protocol Sized[A] (Shape):"
+    , "    size : () -> int"
+    , "    pick : [B(Eq)] => (A, B) -> B"
+    , ""
+    , "extension [A(Eq)] => list[A] (Sized[A]):"
+    , "    def size(self) -> int:"
+    , "        return 0"
+    , "    def area(self) -> float:"
+    , "        return 0.0"
+    , "    def name(self, s: str, n: ?int) -> str:"
+    , "        return s"
+    , "    def pick(self, a, b):"
+    , "        return b"
+    ]
 
 
 -- Parser state -----------------------------------------------------------

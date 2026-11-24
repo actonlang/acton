@@ -9,6 +9,9 @@
 # objects); 9.6.7 reduced it and 9.8.4 eliminates it. It surfaced as rare
 # compiler segfaults on arm64 (Linux and macOS), e.g. building optional-chaining
 # code, and was exposed/amplified by binary layout (the static LMDB link).
+# The segfaults in the RTS apply stubs (stg_ap_p_info and the like) that remain
+# with 9.8.4 come from a race in GHC's generic apply code, unchanged up to GHC
+# master in November 2026; see Note [Parser warm-up] in Acton.Parser.
 snapshot: lts-23.28
 
 # User packages to be built.

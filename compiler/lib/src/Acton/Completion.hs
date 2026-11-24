@@ -25,12 +25,10 @@ module Acton.Completion
 
 import qualified Control.Exception as E
 import Control.Monad (foldM)
-import qualified Control.Monad.Trans.State.Strict as St
 import Data.Char (isAlpha, isAlphaNum, isSpace)
 import Data.List (find, findIndex, intercalate, isPrefixOf, nubBy)
 import Data.Maybe (listToMaybe, mapMaybe)
 import qualified InterfaceFiles as IF
-import Text.Megaparsec (eof, runParser)
 
 import qualified Acton.Env as Env
 import qualified Acton.NameInfo as I
@@ -898,10 +896,7 @@ typeTCon env typ =
     _ -> Nothing
 
 parseTypeText :: Env.Env0 -> String -> Maybe S.Type
-parseTypeText env raw =
-  case runParser (St.evalStateT (P.ttype <* eof) P.initState) "" raw of
-    Left _ -> Nothing
-    Right typ -> Just (Env.unalias env typ)
+parseTypeText env raw = Env.unalias env <$> P.parseTypeMaybe raw
 
 parseImports :: FilePath -> String -> IO [S.Import]
 parseImports fileName src = do
