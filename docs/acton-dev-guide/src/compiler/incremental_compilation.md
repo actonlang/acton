@@ -326,6 +326,14 @@ hash shortened to its first 8 hex digits. The transcripts below come from a
 project named `proj` with the modules `a` and `b`. They show only those lines:
 the progress, timing and dependency lines are left out.
 
+A module whose `.tydb` header is not used is read from its source, and its
+line says why: `no .tydb`; why the `.tydb` cannot be read, such as
+`.tydb version mismatch: …` or `.tydb unreadable: …`; `.tydb written by
+compiler X, this is Y` when another build of the compiler wrote it;
+`compiler binary newer than its .tydb`; `source changed`; or `imports that
+now name local modules: …` when an import that the header records now names a
+module of the project itself.
+
 **Implementation-only change.** Before:
 
 ```acton

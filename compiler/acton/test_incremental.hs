@@ -1645,8 +1645,11 @@ p26_ty_version_mismatch = testCase "26b-.tydb version mismatch forces re-parse" 
   rewriteTyVersion tyA (map (+ 1) A.version)
   out <- buildOutIn proj
   assertBool "expected a.act to type check after .tydb version mismatch" (typechecked out modA)
-  assertBool "did not expect raw .tydb version mismatch" $
-    not (".tydb version mismatch" `T.isInfixOf` out)
+  -- The mismatch is why a.act is checked again, not an error.
+  let mentions = filter (".tydb version mismatch" `T.isInfixOf`) (T.lines out)
+  assertBool ("expected the version mismatch only as a.act's stale reason\n" ++ T.unpack out) $
+    maybe False (".tydb version mismatch" `T.isInfixOf`) (staleReasonFor out "a")
+      && all (("Stale " `T.isPrefixOf`) . T.stripStart) mentions
 
 -- | LMDB maps a data.mdb up to the last page that its meta page names, so a
 -- build that read a data.mdb cut short below that page (an interrupted copy)
@@ -1682,6 +1685,8 @@ p26_cut_short_ty_data = testCase "26c-.tydb data file cut short forces re-parse"
   withFile dataA ReadWriteMode (\h -> hSetFileSize h (size `div` 2))
   out <- buildOutIn proj
   assertBool "expected a.act to type check after its .tydb was cut short" (typechecked out modA)
+  assertBool ("expected a.act's stale reason to say that its .tydb is cut short\n" ++ T.unpack out) $
+    maybe False (\r -> ".tydb unreadable: " `T.isPrefixOf` r && "is cut short" `T.isInfixOf` r) (staleReasonFor out "a")
   rewritten <- InterfaceFiles.tryReadHeaderSummary tyA
   assertBool "expected the rewritten a.tydb to be readable" (isJust rewritten)
   out2 <- buildOutIn proj
@@ -1729,7 +1734,8 @@ p27_overlay_source_provider = testCase "27-overlay snapshots drive readModuleTas
       spDiff = disk { Source.spReadOverlay = \path -> return (if path == actAAbs then Just snapDiff else Nothing) }
   taskDiff <- Compile.readModuleTask spDiff quietGlobalOptions readOpts paths moduleA actAAbs
   case taskDiff of
-    Compile.ParseTask source _ doc -> do
+    Compile.ParseTask miss source _ doc -> do
+      miss @?= Compile.SourceChanged
       Compile.sourceText source @?= textDiff
       Compile.sourceBytes source @?= bytesDiff
       doc @?= Just "Overlay doc"
@@ -3493,6 +3499,11 @@ p65_ext_c_deletion_rereads_module =
 dbpLineFor :: T.Text -> T.Text -> Maybe T.Text
 dbpLineFor out name = find (T.isInfixOf ("DBP " <> name <> ":")) (T.lines out)
 
+-- | The reason on the verbose line that reports a module stale.
+staleReasonFor :: T.Text -> T.Text -> Maybe T.Text
+staleReasonFor out name = T.drop (T.length marker) . snd . T.breakOn marker <$> find (T.isInfixOf marker) (T.lines out)
+  where marker = "Stale " <> name <> ": "
+
 -- | A project with a deferred module util and an eager module native, whose
 -- NotImplemented answer an .ext.c provides, both used by main.
 writeUtilNativeProject :: [T.Text] -> Int -> IO ()
@@ -4091,6 +4102,40 @@ p77_body_and_ext_c_edits_keep_header =
     assertBool ("expected Zig to compile header_user again after a change of native's header\n" ++ show objects4)
       (any (`notElem` objects1) objects4)
 
+-- | A module read from its source says on its --verbose line why its .tydb
+-- was not used: there is none, another build of the compiler wrote it, the
+-- compiler binary is newer than it, or the source changed.  Cases 26b and
+-- 26c cover an unusable .tydb.
+p79_stale_reason_says_why :: TestTree
+p79_stale_reason_says_why =
+  testCase "79-a stale module says why its .tydb was not used" $ do
+    let proj = casesProjDir
+        src = casesSrcDir
+        tyA = proj </> "out" </> "types" </> "incremental_cases" </> "a.tydb"
+        expectReason label expected out =
+          assertEqual (label ++ "\n" ++ T.unpack out) (Just expected) (staleReasonFor out "a")
+    ensureCasesProject
+    writeFileUtf8 (src </> "a.act") "aaa = 1\n"
+    writeFileUtf8 (src </> "c.act") $ T.unlines
+      [ "import a"
+      , ""
+      , "actor main(env: Env):"
+      , "    proc def __startup__():"
+      , "        print(a.aaa)"
+      , "        env.exit(0)"
+      ]
+    removePathForcibly tyA
+    expectReason "a module without a .tydb" "no .tydb" =<< buildOutIn proj
+    rewriteTy A.version tyA (\stored -> stored { InterfaceFiles.storedCompiler = "another-build" })
+    out <- buildOutIn proj
+    assertBool ("expected a.act's stale reason to name the build that wrote its .tydb\n" ++ T.unpack out) $
+      maybe False (".tydb written by compiler another-build, this is " `T.isPrefixOf`) (staleReasonFor out "a")
+    -- 2001-09-09, older than any compiler binary.
+    setFileMTimeNs (tyA </> "data.mdb") 1000000000000000000
+    expectReason "a .tydb older than the compiler" "compiler binary newer than its .tydb" =<< buildOutIn proj
+    writeFileUtf8 (src </> "a.act") "aaa = 2\n"
+    expectReason "an edited source" "source changed" =<< buildOutIn proj
+
 -- | A build of a project that uses a dependency waits for the lock of the
 -- dependency's project, as another build of it, or of another project
 -- that uses it, holds it, before it reads or writes any of its outputs.
@@ -4200,7 +4245,7 @@ assertNextPlanReadsWrittenSource opts act text written = do
   (paths, mn) <- Project.findPaths actAbs opts
   task <- Compile.readModuleTask Source.diskSourceProvider quietGlobalOptions opts paths mn actAbs
   case task of
-    Compile.ParseTask source _ _ -> Compile.sourceText source @?= T.unpack text
+    Compile.ParseTask _ source _ _ -> Compile.sourceText source @?= T.unpack text
     Compile.TyTask _ -> assertFailure ("the next plan trusts the .tydb of " ++ act ++ " although the file was written after the build read it")
     _ -> assertFailure ("expected the next plan to read " ++ act ++ " from its source")
 
@@ -4576,6 +4621,7 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
       , p76_unchanged_base_build_checks_nothing
       , p77_body_and_ext_c_edits_keep_header
       , p78_build_waits_for_dependency_lock
+      , p79_stale_reason_says_why
       ]
   , sequentialTestGroup "incremental-cache-cases" AllSucceed
       [ p41_stale_header_missing_import_reparses_source

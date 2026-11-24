@@ -126,6 +126,7 @@ module InterfaceFiles
   , readStmtHasNotImpl
   , readHeaderSummary
   , tryReadHeaderSummary
+  , readFailureText
   , readExtensionsByClass
   , readExtensionsByProtocol
   , readFileMaybe
@@ -163,6 +164,7 @@ import qualified Crypto.Hash.SHA256 as SHA256
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as B
+import Data.Char (toLower)
 import qualified Data.List
 import qualified Data.Set
 import Data.List (foldl')
@@ -1652,6 +1654,18 @@ readHeaderSummary f =
 -- exception propagates.
 tryReadHeaderSummary :: FilePath -> IO (Maybe HeaderSummary)
 tryReadHeaderSummary f = either (const Nothing) Just <$> trySync (readHeaderSummary f)
+
+-- | A failure to read a .tydb as one line of text, which names the .tydb:
+-- the message of a cache miss, the description of an LMDB error, else the
+-- exception as it shows.
+readFailureText :: E.SomeException -> String
+readFailureText err
+  | Just (TyCacheInvalid msg) <- E.fromException err   = lowerFirst msg
+  | Just (e :: LMDB.LMDB_Error) <- E.fromException err = ".tydb unreadable: " ++ LMDB.e_description e
+  | otherwise                                          = ".tydb unreadable: " ++ E.displayException err
+  where
+    lowerFirst (c:cs) = toLower c : cs
+    lowerFirst []     = []
 
 readDepNames :: FilePath -> A.ModName -> IO [DepNameInfo]
 readDepNames f mn =

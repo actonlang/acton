@@ -3937,9 +3937,15 @@ dependencyDeclarationTests =
           writeModule app localModule answerSource
           forM_ ["cached", "rebuilt"] $ \mode -> do
             when (mode == "rebuilt") $ removePathForcibly (app </> "out/types")
-            result <- runBuild acton app
+            result@(_, out, _) <- runBuildWith ["--verbose"] acton app
             if localImport
-              then expectSuccess (mode ++ " import of the replacement local module") result
+              then do
+                expectSuccess (mode ++ " import of the replacement local module") result
+                -- main's .tydb records its import of yang as the dependency's
+                -- yang.lib, and the project now has a module yang of its own.
+                when (mode == "cached") $
+                  assertBool ("main should say that an import now names a local module\n" ++ out)
+                    ("Stale main: imports that now name local modules: yang" `isInfixOf` out)
               else expectFailure (mode ++ " undeclared dependency import") "yang" result
       | (label, localModule, localImport) <-
           [ ("nested local lib is not a dependency declaration", "yang/lib", False)
