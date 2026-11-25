@@ -3,7 +3,7 @@
 module Main (main) where
 
 import Control.Concurrent (newEmptyMVar, putMVar, takeMVar, threadDelay)
-import Control.Concurrent.Async (async, mapConcurrently_, wait)
+import Control.Concurrent.Async (AsyncCancelled(..), async, cancel, mapConcurrently_, wait, waitCatch)
 import Data.Char (toLower, isAlphaNum)
 
 import qualified Acton.Parser as P
@@ -5140,6 +5140,26 @@ main = do
             BuildSpec.build_options spec `shouldBe` M.empty
             BuildSpec.renderBuildAct spec `shouldSatisfy` (not . isInfixOf "build_options")
             Ae.eitherDecode' json `shouldBe` Right spec
+
+      it "lets a cancel stop the parse of a Build.act" $ do
+        -- The table is long enough that the parse still runs when the
+        -- cancel arrives.  A parse that takes the cancel for a parse error
+        -- ends with that error.
+        let source = "name = \"demo\"\nfingerprint = 0x1234abcd5678ef00\n\nderived_modules = {\n"
+                     ++ concat [ "    m" ++ show n ++ ": (function=gen.one),\n" | n <- [1 .. 20000 :: Int] ] ++ "}\n"
+            failure text = either Just (const Nothing) (BuildSpec.parseBuildAct text)
+        -- The first parse of a process warms up the parser.
+        _ <- E.evaluate (failure "name = \"demo\"\nfingerprint = 0x1234abcd5678ef00\n")
+        started <- newEmptyMVar
+        parse <- async (putMVar started () >> E.evaluate (failure source))
+        takeMVar started
+        threadDelay 100000
+        cancel parse
+        ended <- waitCatch parse
+        case ended of
+          Left e | Just AsyncCancelled <- E.fromException e -> return ()
+          Left e                                            -> expectationFailure ("the parse ended with " ++ show e)
+          Right result                                      -> expectationFailure ("the parse ended with " ++ show result)
 
       it "reads, renders and updates derived modules" $ do
         let source = unlines
