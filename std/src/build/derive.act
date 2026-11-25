@@ -84,7 +84,7 @@ def input_of(path: str, content: bytes) -> InputFile:
 
     No file is read: read returns the given content.
     """
-    return InputFile(path, len(content), sha256.hash(content).hex(), lambda: content)
+    return InputFile(path, len(content), sha256.hash(content).hex(), pure lambda: content)
 
 def str_literal(text: str) -> str:
     """An Acton str literal whose value is text
