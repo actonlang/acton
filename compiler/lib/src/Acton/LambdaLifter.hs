@@ -211,7 +211,9 @@ llSuite env (Decl l ds : ss)
                                              ss' <- llSuite env1 ss
                                              return $ Decl l (ds2++ds1) : ss'
   where env'                            = extConstConts env ds $ extFree funfree $ define (envOf ds) env
-        funfree                         = [ (n, vs \\ bound p) | (n,vs) <- funfree1, let p = [ pos d | d <- ds, dname d == n ] ]
+        -- Fix captures where the functions are defined. A later local binding
+        -- must not turn a global reference into an additional capture at a call.
+        funfree                         = [ (n, vs `intersect` dom (locals env) \\ bound p) | (n,vs) <- funfree1, let p = [ pos d | d <- ds, dname d == n ] ]
         funfree1                        = expand (freemap env) $ iterexpand funfree0
         funfree0                        = [ (dname d, nub $ free d) | d@Def{} <- ds ]
         fs                              = dom funfree0
@@ -366,6 +368,10 @@ instance Lift Expr where
     ll env (Call l e p KwdNil)
       | Just (e',vts) <- freefun env e  = do p' <- ll env p
                                              return $ Call l e' (addArgs vts p') KwdNil
+      | Async _ f <- e,
+        Just (f',vts) <- freefun env f = do
+            p' <- ll env p
+            return $ Call l f' (addArgs vts p') KwdNil
       | Async _ e' <- e,
         closedType env e'               = do e' <- ll env e'
                                              p' <- ll env p
@@ -383,13 +389,12 @@ instance Lift Expr where
                                              p' <- ll env p
                                              return $ Call l e' p' KwdNil
 
-    ll env (Async l e)
-      | closedType env e                = do e <- ll env e
-                                             let vts = restrict (locals env) (free e)
-                                                 call = Call l0 (eDot e attr_asyn_) (pArg par) KwdNil
-                                             closureConvert env (Lambda l0 par KwdNIL call fxProc) (tMsg t) vts (map (eVar . fst) vts)
-      | otherwise                       = do e <- ll env e
-                                             return $ Async l e
+    -- Capture an async function value once; invoking it is a direct com call.
+    ll env (Async l e)                  = do e' <- ll env e
+                                             captured <- newName "action"
+                                             let call = Call l0 (eDot (eVar captured) attr_asyn_) (pArg par) KwdNil
+                                             closureConvert env (Lambda l0 par KwdNIL call fxCom)
+                                                               (tMsg t) [(captured,typeOf env e)] [e']
       where par                         = pPar paramNames p
             TFun _ fx p _ t             = typeOf env e
 

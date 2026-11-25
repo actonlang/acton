@@ -1,0 +1,31 @@
+# A default argument's local witness is hoisted into the loop by pre-CPS.
+# It must not become a new capture of a previously defined continuation.
+class Payload:
+    pure def __init__(self, value: int):
+        self.value = value
+
+class Item:
+    pure def __init__(self, payload: Payload=Payload(0)):
+        self.payload = payload
+
+class Sink:
+    pure def __init__(self, cb: action(Item) -> None):
+        self.cb = cb
+
+    proc def handle(self, item: Item):
+        self.cb(item)
+
+actor main(env):
+    var count = 0
+
+    def __startup__():
+        def got(item: Item):
+            assert item.payload.value == 0
+            count += 1
+            if count == 3:
+                print("Default witness captures passed")
+                env.exit(0)
+
+        for i in [1, 2, 3]:
+            sink = Sink(got)
+            sink.handle(Item())

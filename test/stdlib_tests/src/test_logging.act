@@ -99,3 +99,28 @@ actor _test_Logging(t: testing.AsyncT):
         logsome()
 
         my_app = MyApp(loghandler)
+
+
+actor _test_LoggingComAndLevelChanges(t: testing.AsyncT):
+    proc def __startup__():
+        expected = [
+            logging.Message(logging.WARNING, [], None, "warning"),
+            logging.Message(logging.INFO, [], None, "enabled"),
+        ]
+        handler = logging.Handler()
+        handler.add_sink(TestSink(t, expected))
+        handler.set_output_level(logging.WARNING)
+        log = logging.Logger(handler)
+
+        com def emit(level: int, text: str):
+            log.log(level, text)
+
+        emit(logging.INFO, "suppressed")
+        emit(logging.WARNING, "warning")
+        handler.set_output_level(logging.ALL)
+        emit(logging.INFO, "enabled")
+
+
+com def _test_LoggingWithoutHandler():
+    log = logging.Logger()
+    log.info("discarded")

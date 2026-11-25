@@ -18,10 +18,11 @@ typedef struct $Action_R1 *linesQ_L_17action;
 typedef struct linesQ_L_19proc *linesQ_L_19proc;
 typedef struct $Action_R1 *linesQ_L_20action;
 typedef struct $Proc0_R1 *linesQ_L_21proc;
-typedef struct $Cont_R5 *linesQ_L_23Cont;
-typedef struct $Proc0_R1 *linesQ_L_24proc;
-$R linesQ_L_1C_1cont ($action, $Cont, int64_t);
-$R linesQ_L_3C_3cont ($Cont, B_NoneType);
+typedef struct $Cont_R1 *linesQ_L_24Cont;
+typedef struct $Cont_R5 *linesQ_L_25Cont;
+typedef struct $Proc0_R1 *linesQ_L_26proc;
+$R linesQ_L_1C_2cont ($action, $Cont, int64_t);
+$R linesQ_L_3C_4cont ($Cont, B_NoneType);
 struct linesQ_L_9procG_class {
     char *$GCINFO;
     int $class_id;
@@ -77,8 +78,9 @@ struct linesQ_L_19proc {
     int64_t G_1;
     linesQ_main self;
 };
-B_NoneType linesQ_L_22nop ();
-$R linesQ_L_18C_5cont (linesQ_Apa, linesQ_main, B_Iterable, B_Number, $Cont, int64_t);
+$R linesQ_L_22nop ($Cont);
+$R linesQ_L_23C_8cont ($Cont, B_NoneType);
+$R linesQ_L_18C_6cont (linesQ_Apa, linesQ_main, B_Iterable, B_Number, $Cont, int64_t);
 extern struct $ContClass linesQ_L_2ContG_methods;
 $R linesQ_L_2ContD___call__($Cont $closure, $WORD $result);
 $Cont linesQ_L_2ContD___deserialize__($Cont self, $Serial$state state);
@@ -121,32 +123,36 @@ $action linesQ_L_20actionD___deserialize__($action self, $Serial$state state);
 extern struct $Proc0Class linesQ_L_21procG_methods;
 $R linesQ_L_21procD___call__($proc $closure, $Cont $continuation);
 $proc linesQ_L_21procD___deserialize__($proc self, $Serial$state state);
-extern struct $ContClass linesQ_L_23ContG_methods;
-$R linesQ_L_23ContD___call__($Cont $closure, $WORD $result);
-$Cont linesQ_L_23ContD___deserialize__($Cont self, $Serial$state state);
-extern struct $Proc0Class linesQ_L_24procG_methods;
-$R linesQ_L_24procD___call__($proc $closure, $Cont $continuation);
-$proc linesQ_L_24procD___deserialize__($proc self, $Serial$state state);
-$R linesQ_L_1C_1cont ($action cb, $Cont C_cont, int64_t C_2res) {
+extern struct $ContClass linesQ_L_24ContG_methods;
+$R linesQ_L_24ContD___call__($Cont $closure, $WORD $result);
+$Cont linesQ_L_24ContD___deserialize__($Cont self, $Serial$state state);
+extern struct $ContClass linesQ_L_25ContG_methods;
+$R linesQ_L_25ContD___call__($Cont $closure, $WORD $result);
+$Cont linesQ_L_25ContD___deserialize__($Cont self, $Serial$state state);
+extern struct $Proc0Class linesQ_L_26procG_methods;
+$R linesQ_L_26procD___call__($proc $closure, $Cont $continuation);
+$proc linesQ_L_26procD___deserialize__($proc self, $Serial$state state);
+$R linesQ_L_1C_2cont ($action cb, $Cont C_cont, int64_t C_3res) {
+    int64_t C_1pre = C_3res;
     #line 9 "test/src/lines.act"
-    int64_t v = C_2res;
+    int64_t v = C_1pre;
     #line 10 "test/src/lines.act"
     B_Msg m = ((B_Msg)((B_Msg (*) ($WORD, B_int))(($action)(cb))->$class->__asyn__)(cb, toB_int(2LL)));
-    int64_t N_tmp = (((int64_t)(v * 10LL)));
-    return $R_CONT(C_cont, toB_int(N_tmp));
+    int64_t N_1tmp = (((int64_t)(v * 10LL)));
+    return $R_CONT(C_cont, toB_int(N_1tmp));
 }
 $R linesQ_L_2ContD___call__($Cont $closure, $WORD $result) {
     linesQ_L_2Cont L_self = (linesQ_L_2Cont)$closure;
     B_int G_1 = (B_int)$result;
     $action cb = ($action)(((linesQ_L_2Cont)(L_self))->ref0);
     $Cont C_cont = ($Cont)(((linesQ_L_2Cont)(L_self))->ref1);
-    return linesQ_L_1C_1cont(cb, C_cont, ((B_int)G_1)->val);
+    return linesQ_L_1C_2cont(cb, C_cont, ((B_int)G_1)->val);
 }
 $Cont linesQ_L_2ContD___deserialize__($Cont self, $Serial$state state) {
     return $cont_restore(&linesQ_L_2ContG_methods, self, state);
 }
 struct $ContClass linesQ_L_2ContG_methods;
-$R linesQ_L_3C_3cont ($Cont C_cont, B_NoneType C_4res) {
+$R linesQ_L_3C_4cont ($Cont C_cont, B_NoneType C_5res) {
     #line 20 "test/src/lines.act"
     int64_t z = 1LL;
     #line 21 "test/src/lines.act"
@@ -157,7 +163,7 @@ $R linesQ_L_4ContD___call__($Cont $closure, $WORD $result) {
     linesQ_L_4Cont L_self = (linesQ_L_4Cont)$closure;
     B_NoneType G_1 = (B_NoneType)$result;
     $Cont C_cont = ($Cont)(((linesQ_L_4Cont)(L_self))->ref0);
-    return linesQ_L_3C_3cont(C_cont, G_1);
+    return linesQ_L_3C_4cont(C_cont, G_1);
 }
 $Cont linesQ_L_4ContD___deserialize__($Cont self, $Serial$state state) {
     return $cont_restore(&linesQ_L_4ContG_methods, self, state);
@@ -342,14 +348,26 @@ $proc linesQ_L_21procD___deserialize__($proc self, $Serial$state state) {
 }
 struct $Proc0Class linesQ_L_21procG_methods;
 #line 97 "test/src/lines.act"
-B_NoneType linesQ_L_22nop () {
+$R linesQ_L_22nop ($Cont C_cont) {
     #line 98 "test/src/lines.act"
-    #line 99 "test/src/lines.act"
-    return B_None;
+    return $R_CONT(C_cont, B_None);
 }
-$R linesQ_L_18C_5cont (linesQ_Apa a, linesQ_main self, B_Iterable W_Apa_857, B_Number W_Apa_934, $Cont C_cont, int64_t C_6res) {
+$R linesQ_L_23C_8cont ($Cont C_cont, B_NoneType C_9res) {
+    return $R_CONT(C_cont, B_None);
+}
+$R linesQ_L_24ContD___call__($Cont $closure, $WORD $result) {
+    linesQ_L_24Cont L_self = (linesQ_L_24Cont)$closure;
+    B_NoneType G_1 = (B_NoneType)$result;
+    $Cont C_cont = ($Cont)(((linesQ_L_24Cont)(L_self))->ref0);
+    return linesQ_L_23C_8cont(C_cont, G_1);
+}
+$Cont linesQ_L_24ContD___deserialize__($Cont self, $Serial$state state) {
+    return $cont_restore(&linesQ_L_24ContG_methods, self, state);
+}
+struct $ContClass linesQ_L_24ContG_methods;
+$R linesQ_L_18C_6cont (linesQ_Apa a, linesQ_main self, B_Iterable W_Apa_851, B_Number W_Apa_925, $Cont C_cont, int64_t C_7res) {
     #line 43 "test/src/lines.act"
-    int64_t r = C_6res;
+    int64_t r = C_7res;
     #line 44 "test/src/lines.act"
     ((B_NoneType (*) (B_tuple, B_str, B_str, bool, bool))B_print)($NEWTUPLE(2, actStrFromLiteral("r =", 3, 3), toB_int(r)), actStrFromLiteral(" ", 1, 1), actStrFromLiteral("\n", 1, 1), false, false);
     #line 45 "test/src/lines.act"
@@ -414,15 +432,15 @@ $R linesQ_L_18C_5cont (linesQ_Apa a, linesQ_main self, B_Iterable W_Apa_857, B_N
         #line 73 "test/src/lines.act"
         ((B_NoneType (*) (B_tuple, B_str, B_str, bool, bool))B_print)($NEWTUPLE(2, actStrFromLiteral("loop body", 9, 9), toB_int(i)), actStrFromLiteral(" ", 1, 1), actStrFromLiteral("\n", 1, 1), false, false);
     }
-    B_Iterator N_3iter = ((B_Iterator (*) ($WORD, B_list))((B_Iterable)(W_Apa_857))->$class->__iter__)(W_Apa_857, B_mk_list(3, toB_int(1LL) , toB_int(2LL) , toB_int(3LL)));
+    B_Iterator N_12iter = ((B_Iterator (*) ($WORD, B_list))((B_Iterable)(W_Apa_851))->$class->__iter__)(W_Apa_851, B_mk_list(3, toB_int(1LL) , toB_int(2LL) , toB_int(3LL)));
     #line 78 "test/src/lines.act"
     while (true) {
-        $MaybeWord N_4maybe;
-        B_Iterator N_4maybeG_next_iter = N_3iter;
-        N_4maybe.just = N_4maybeG_next_iter->$class->__next__(N_4maybeG_next_iter, &N_4maybe.val);
+        $MaybeWord N_13maybe;
+        B_Iterator N_13maybeG_next_iter = N_12iter;
+        N_13maybe.just = N_13maybeG_next_iter->$class->__next__(N_13maybeG_next_iter, &N_13maybe.val);
         int64_t j;
-        if (N_4maybe.just) {
-            j = ((B_int)N_4maybe.val)->val;
+        if (N_13maybe.just) {
+            j = ((B_int)N_13maybe.val)->val;
             #line 79 "test/src/lines.act"
             if (j == 2LL) {
                 #line 80 "test/src/lines.act"
@@ -435,7 +453,7 @@ $R linesQ_L_18C_5cont (linesQ_Apa a, linesQ_main self, B_Iterable W_Apa_857, B_N
             break;
         }
     }
-    B_BaseException N_8xx;
+    B_BaseException N_17xx;
     {
         struct JumpBuf $frame;
         if ($PUSHF(&$frame)) {
@@ -453,15 +471,15 @@ $R linesQ_L_18C_5cont (linesQ_Apa a, linesQ_main self, B_Iterable W_Apa_857, B_N
                     $DROP();
                 }
                 else {
-                    B_BaseException N_7x = $POP();
+                    B_BaseException N_16x = $POP();
                     B_ValueError e;
-                    if ($ISINSTANCE0(N_7x, B_ValueError)) {
-                        e = ((B_ValueError)N_7x);
+                    if ($ISINSTANCE0(N_16x, B_ValueError)) {
+                        e = ((B_ValueError)N_16x);
                         #line 89 "test/src/lines.act"
                         ((B_NoneType (*) (B_tuple, B_str, B_str, bool, bool))B_print)($NEWTUPLE(2, actStrFromLiteral("caught", 6, 6), actStrFromLiteral("ValueError", 10, 10)), actStrFromLiteral(" ", 1, 1), actStrFromLiteral("\n", 1, 1), false, false);
                     }
                     else {
-                        $RAISE(N_7x);
+                        $RAISE(N_16x);
                         __builtin_unreachable();
                     }
                 }
@@ -470,47 +488,45 @@ $R linesQ_L_18C_5cont (linesQ_Apa a, linesQ_main self, B_Iterable W_Apa_857, B_N
             __builtin_unreachable();
         }
         else {
-            N_8xx = $POP();
+            N_17xx = $POP();
             #line 91 "test/src/lines.act"
             ((B_NoneType (*) (B_tuple, B_str, B_str, bool, bool))B_print)($NEWTUPLE(1, actStrFromLiteral("finally", 7, 7)), actStrFromLiteral(" ", 1, 1), actStrFromLiteral("\n", 1, 1), false, false);
-            if ($ISINSTANCE0(N_8xx, $SEQ)) {
+            if ($ISINSTANCE0(N_17xx, $SEQ)) {
             }
             else {
-                $RAISE(N_8xx);
+                $RAISE(N_17xx);
                 __builtin_unreachable();
             }
         }
     }
     #line 94 "test/src/lines.act"
     $AFTER(toB_float(1), (($Cont)((linesQ_L_21proc)$Proc0_R1_new(&linesQ_L_21procG_methods, self))));
-    #line 100 "test/src/lines.act"
-    linesQ_L_22nop();
-    return $R_CONT(C_cont, B_None);
+    return linesQ_L_22nop($SKIPRES((($Cont)((linesQ_L_24Cont)$Cont_R1_new(&linesQ_L_24ContG_methods, C_cont)))));
 }
-$R linesQ_L_23ContD___call__($Cont $closure, $WORD $result) {
-    linesQ_L_23Cont L_self = (linesQ_L_23Cont)$closure;
+$R linesQ_L_25ContD___call__($Cont $closure, $WORD $result) {
+    linesQ_L_25Cont L_self = (linesQ_L_25Cont)$closure;
     B_int G_1 = (B_int)$result;
-    linesQ_Apa a = (linesQ_Apa)(((linesQ_L_23Cont)(L_self))->ref0);
-    linesQ_main self = (linesQ_main)(((linesQ_L_23Cont)(L_self))->ref1);
-    B_Iterable W_Apa_857 = (B_Iterable)(((linesQ_L_23Cont)(L_self))->ref2);
-    B_Number W_Apa_934 = (B_Number)(((linesQ_L_23Cont)(L_self))->ref3);
-    $Cont C_cont = ($Cont)(((linesQ_L_23Cont)(L_self))->ref4);
-    return linesQ_L_18C_5cont(a, self, W_Apa_857, W_Apa_934, C_cont, ((B_int)G_1)->val);
+    linesQ_Apa a = (linesQ_Apa)(((linesQ_L_25Cont)(L_self))->ref0);
+    linesQ_main self = (linesQ_main)(((linesQ_L_25Cont)(L_self))->ref1);
+    B_Iterable W_Apa_851 = (B_Iterable)(((linesQ_L_25Cont)(L_self))->ref2);
+    B_Number W_Apa_925 = (B_Number)(((linesQ_L_25Cont)(L_self))->ref3);
+    $Cont C_cont = ($Cont)(((linesQ_L_25Cont)(L_self))->ref4);
+    return linesQ_L_18C_6cont(a, self, W_Apa_851, W_Apa_925, C_cont, ((B_int)G_1)->val);
 }
-$Cont linesQ_L_23ContD___deserialize__($Cont self, $Serial$state state) {
-    return $cont_restore(&linesQ_L_23ContG_methods, self, state);
+$Cont linesQ_L_25ContD___deserialize__($Cont self, $Serial$state state) {
+    return $cont_restore(&linesQ_L_25ContG_methods, self, state);
 }
-struct $ContClass linesQ_L_23ContG_methods;
-$R linesQ_L_24procD___call__($proc $closure, $Cont $continuation) {
-    linesQ_L_24proc L_self = (linesQ_L_24proc)$closure;
+struct $ContClass linesQ_L_25ContG_methods;
+$R linesQ_L_26procD___call__($proc $closure, $Cont $continuation) {
+    linesQ_L_26proc L_self = (linesQ_L_26proc)$closure;
     $Cont C_cont = ($Cont)$continuation;
-    linesQ_main self = (linesQ_main)(((linesQ_L_24proc)(L_self))->ref0);
+    linesQ_main self = (linesQ_main)(((linesQ_L_26proc)(L_self))->ref0);
     return (($R (*) ($WORD, $Cont))((linesQ_main)(self))->$class->__startup__G_local)(self, C_cont);
 }
-$proc linesQ_L_24procD___deserialize__($proc self, $Serial$state state) {
-    return $proc0_restore(&linesQ_L_24procG_methods, self, state);
+$proc linesQ_L_26procD___deserialize__($proc self, $Serial$state state) {
+    return $proc0_restore(&linesQ_L_26procG_methods, self, state);
 }
-struct $Proc0Class linesQ_L_24procG_methods;
+struct $Proc0Class linesQ_L_26procG_methods;
 B_NoneType linesQ_ApaD___init__ (linesQ_Apa self) {
     #line 2 "test/src/lines.act"
     ((linesQ_Apa)(self))->apa = 2001LL;
@@ -533,14 +549,15 @@ $R linesQ_ApaD_setupG_local (linesQ_Apa self, $Cont C_cont, $action cb) {
 $R linesQ_ApaD_computeG_local (linesQ_Apa self, $Cont C_cont, $action cb) {
     #line 8 "test/src/lines.act"
     ((B_NoneType (*) (B_tuple, B_str, B_str, bool, bool))B_print)($NEWTUPLE(1, actStrFromLiteral("compute", 7, 7)), actStrFromLiteral(" ", 1, 1), actStrFromLiteral("\n", 1, 1), false, false);
-    return $AWAIT((($Cont)((linesQ_L_2Cont)$Cont_R2_new(&linesQ_L_2ContG_methods, cb, C_cont))), ((B_Msg)((B_Msg (*) ($WORD, B_int))(($action)(cb))->$class->__asyn__)(cb, toB_int(1LL))));
+    $action N_function = cb;
+    return $AWAIT((($Cont)((linesQ_L_2Cont)$Cont_R2_new(&linesQ_L_2ContG_methods, cb, C_cont))), ((B_Msg)((B_Msg (*) ($WORD, B_int))(($action)(N_function))->$class->__asyn__)(N_function, toB_int(1LL))));
 }
 #line 12 "test/src/lines.act"
 $R linesQ_ApaD_noticeG_local (linesQ_Apa self, $Cont C_cont, int64_t i) {
     #line 13 "test/src/lines.act"
     ((B_NoneType (*) (B_tuple, B_str, B_str, bool, bool))B_print)($NEWTUPLE(1, actStrFromLiteral("notice", 6, 6)), actStrFromLiteral(" ", 1, 1), actStrFromLiteral("\n", 1, 1), false, false);
-    int64_t N_1tmp = (((int64_t)(i + 1LL)));
-    return $R_CONT(C_cont, toB_int(N_1tmp));
+    int64_t N_2tmp = (((int64_t)(i + 1LL)));
+    return $R_CONT(C_cont, toB_int(N_2tmp));
 }
 #line 18 "test/src/lines.act"
 $R linesQ_ApaD___startup__G_local (linesQ_Apa self, $Cont C_cont) {
@@ -602,8 +619,8 @@ B_NoneType linesQ_BepaD___init__ (linesQ_Bepa self) {
 $R linesQ_BepaD_callbackG_local (linesQ_Bepa self, $Cont C_cont, int64_t i) {
     #line 25 "test/src/lines.act"
     ((B_NoneType (*) (B_tuple, B_str, B_str, bool, bool))B_print)($NEWTUPLE(2, actStrFromLiteral("callback", 8, 8), toB_int(i)), actStrFromLiteral(" ", 1, 1), actStrFromLiteral("\n", 1, 1), false, false);
-    int64_t N_2tmp = (((int64_t)(i + 1LL)));
-    return $R_CONT(C_cont, toB_int(N_2tmp));
+    int64_t N_4tmp = (((int64_t)(i + 1LL)));
+    return $R_CONT(C_cont, toB_int(N_4tmp));
 }
 #line 28 "test/src/lines.act"
 $R linesQ_BepaD___startup__G_local (linesQ_Bepa self, $Cont C_cont) {
@@ -651,8 +668,8 @@ B_NoneType linesQ_mainD___init__ (linesQ_main self, B_Env env) {
 }
 #line 32 "test/src/lines.act"
 $R linesQ_mainD___startup__G_local (linesQ_main self, $Cont C_cont) {
-    B_Iterable W_Apa_857 = (B_Iterable)B_SequenceD_listG_witness->W_Collection;
-    B_Number W_Apa_934 = (B_Number)B_RealFloatD_floatG_witness;
+    B_Iterable W_Apa_851 = (B_Iterable)B_SequenceD_listG_witness->W_Collection;
+    B_Number W_Apa_925 = (B_Number)B_RealFloatD_floatG_witness;
     #line 38 "test/src/lines.act"
     linesQ_Apa a = linesQ_ApaG_newact();
     #line 39 "test/src/lines.act"
@@ -663,10 +680,10 @@ $R linesQ_mainD___startup__G_local (linesQ_main self, $Cont C_cont) {
     ((B_Msg (*) ($WORD, $action))((linesQ_Apa)(a))->$class->setup)(a, (($action)((linesQ_L_15action)$Action_R1_new(&linesQ_L_15actionG_methods, a))));
     #line 42 "test/src/lines.act"
     B_Msg x = ((B_Msg (*) ($WORD, $action))((linesQ_Apa)(a))->$class->compute)(a, (($action)((linesQ_L_17action)$Action_R1_new(&linesQ_L_17actionG_methods, b))));
-    return $AWAIT((($Cont)((linesQ_L_23Cont)$Cont_R5_new(&linesQ_L_23ContG_methods, a, self, W_Apa_857, W_Apa_934, C_cont))), x);
+    return $AWAIT((($Cont)((linesQ_L_25Cont)$Cont_R5_new(&linesQ_L_25ContG_methods, a, self, W_Apa_851, W_Apa_925, C_cont))), x);
 }
 B_Msg linesQ_mainD___startup__ (linesQ_main self) {
-    return $ASYNC((($Actor)self), (($Cont)((linesQ_L_24proc)$Proc0_R1_new(&linesQ_L_24procG_methods, self))));
+    return $ASYNC((($Actor)self), (($Cont)((linesQ_L_26proc)$Proc0_R1_new(&linesQ_L_26procG_methods, self))));
 }
 void linesQ_mainD___serialize__ (linesQ_main self, $Serial$state state) {
     $ActorG_methods.__serialize__(($Actor)self, state);
@@ -817,8 +834,9 @@ void linesQ___init__ () {
     }
     $action1_class_init(&linesQ_L_20actionG_methods, "linesQ_L_20action", linesQ_L_20actionD___asyn__, linesQ_L_20actionD___deserialize__);
     $proc0_class_init(&linesQ_L_21procG_methods, "linesQ_L_21proc", &$Proc0_R1_shape, linesQ_L_21procD___call__, linesQ_L_21procD___deserialize__);
-    $cont_class_init(&linesQ_L_23ContG_methods, "linesQ_L_23Cont", &$Cont_R5_shape, linesQ_L_23ContD___call__, linesQ_L_23ContD___deserialize__);
-    $proc0_class_init(&linesQ_L_24procG_methods, "linesQ_L_24proc", &$Proc0_R1_shape, linesQ_L_24procD___call__, linesQ_L_24procD___deserialize__);
+    $cont_class_init(&linesQ_L_24ContG_methods, "linesQ_L_24Cont", &$Cont_R1_shape, linesQ_L_24ContD___call__, linesQ_L_24ContD___deserialize__);
+    $cont_class_init(&linesQ_L_25ContG_methods, "linesQ_L_25Cont", &$Cont_R5_shape, linesQ_L_25ContD___call__, linesQ_L_25ContD___deserialize__);
+    $proc0_class_init(&linesQ_L_26procG_methods, "linesQ_L_26proc", &$Proc0_R1_shape, linesQ_L_26procD___call__, linesQ_L_26procD___deserialize__);
     {
         linesQ_ApaG_methods.$GCINFO = "linesQ_Apa";
         linesQ_ApaG_methods.$superclass = ($SuperG_class)&$ActorG_methods;

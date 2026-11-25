@@ -92,7 +92,8 @@ actor _test_executor_completes(t: testing.EnvT):
         else:
             rt.success()
 
-    def run(performance: bool, fn: proc(testing.AsyncT) -> None, outcome: str):
+    # Test-body procs stay on this actor; this is a private helper.
+    def _run(performance: bool, fn: proc(testing.AsyncT) -> None, outcome: str):
         executor_id = pending
         pending += 1
         definition = BrokenSnapshot(fn, outcome, "", "executor") if outcome == "internal" else testing.AsyncTest(fn, outcome, "", "executor")
@@ -178,13 +179,13 @@ actor _test_executor_completes(t: testing.EnvT):
 
     proc def __startup__():
         for performance in [False, True]:
-            run(performance, success, "success")
-            run(performance, failure, "failure")
-            run(performance, error, "error")
-            run(performance, skip, "skip")
-            run(performance, seeded_failure, "seeded")
-            run(performance, snapshot, "internal")
-        run(True, measurement_failure, "measurement")
-        run(False, first_run_fails, "unreproduced")
+            _run(performance, success, "success")
+            _run(performance, failure, "failure")
+            _run(performance, error, "error")
+            _run(performance, skip, "skip")
+            _run(performance, seeded_failure, "seeded")
+            _run(performance, snapshot, "internal")
+        _run(True, measurement_failure, "measurement")
+        _run(False, first_run_fails, "unreproduced")
 
         after 1: check()
