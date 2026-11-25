@@ -39,6 +39,12 @@ customParseErrorToDiagnostic :: CustomParseError -> (String, [Note String])
 customParseErrorToDiagnostic (TypeVariableNameError name)      = ("Invalid name '" ++ name ++ "'",
                                                                   [Note "Single upper case character (optionally followed by digits) are reserved for type variables",
                                                                    Hint "Use a longer name"])
+customParseErrorToDiagnostic EmbedAsName                       = (showErrorComponent EmbedAsName,
+                                                                  [])
+customParseErrorToDiagnostic EmbedForm                         = (showErrorComponent EmbedForm,
+                                                                  [])
+customParseErrorToDiagnostic (EmbedPath problem)               = (problem,
+                                                                  [])
 customParseErrorToDiagnostic (InvalidFormatSpecifier spec)     = ("Invalid format specifier" ++ if null spec then "" else ": " ++ spec,
                                                                   [])
 customParseErrorToDiagnostic (TooManyQuotesError quote)        = ("Too many quote characters",

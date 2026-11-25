@@ -1,0 +1,70 @@
+# embed in the places where an expression may stand. The embedded files lie
+# beside this file: embed_places.txt holds the three bytes "abc", and
+# embed_places_empty.txt has no content.
+
+top = embed("embed_places.txt")
+pair = (embed("embed_places.txt"), [embed("embed_places_empty.txt"), embed("embed_places.txt")])
+table = {"abc": embed("embed_places.txt"), "empty": embed("embed_places_empty.txt")}
+text: str = embed("embed_places.txt").decode()
+
+def plain() -> bytes:
+    return embed("embed_places.txt")
+
+def chosen(first: bool) -> bytes:
+    if first:
+        return embed("embed_places.txt")
+    return embed("embed_places_empty.txt")
+
+def summed() -> int:
+    n = 0
+    for b in embed("embed_places.txt"):
+        n += b
+    return n
+
+def lengths() -> list[int]:
+    return [len(embed("embed_places.txt")) + i for i in range(2)]
+
+def appended(prefix: bytes) -> bytes:
+    f = lambda x: x + embed("embed_places.txt")
+    return f(prefix)
+
+class Holder(object):
+    data: bytes
+
+    def __init__(self):
+        self.data = embed("embed_places.txt")
+
+    def twice(self) -> bytes:
+        return self.data + embed("embed_places.txt")
+
+actor Keeper():
+    var kept = embed("embed_places.txt")
+
+    def get() -> bytes:
+        return kept + embed("embed_places_empty.txt")
+
+actor main(env):
+    def check(what: str, ok: bool) -> bool:
+        if not ok:
+            print("unexpected", what)
+        return ok
+
+    proc def __startup__():
+        abc = b"abc"
+        keeper = Keeper()
+        results = [
+            check("top", top == abc),
+            check("pair", pair.0 == abc and pair.1 == [b"", abc]),
+            check("table", len(table) == 2 and table["abc"] == abc and table["empty"] == b""),
+            check("text", text == "abc"),
+            check("plain", plain() == abc),
+            check("plain again", plain() == abc),
+            check("chosen", chosen(True) == abc and chosen(False) == b""),
+            check("summed", summed() == 97 + 98 + 99),
+            check("lengths", lengths() == [3, 4]),
+            check("appended", appended(b">") == b">abc"),
+            check("twice", Holder().twice() == abc + abc),
+            check("kept", keeper.get() == abc),
+            check("in an actor", embed("embed_places.txt") + embed("embed_places_empty.txt") == abc),
+        ]
+        env.exit(0 if all(results) else 1)

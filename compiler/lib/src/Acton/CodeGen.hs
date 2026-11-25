@@ -31,12 +31,15 @@ import Acton.Env
 import Acton.QuickType
 import Acton.Subst
 import Acton.Transform (termsubst)
+import Acton.Embed (embedExprs, pathDigits)
 import qualified Acton.Boxing as B
 import Control.Monad.State.Lazy
 import Prelude hiding ((<>))
 import System.FilePath.Posix
 import Numeric
-import Data.Char (isSpace)
+import Data.Bits (shiftR, (.&.))
+import qualified Data.ByteString as BS
+import Data.Char (intToDigit, isSpace)
 import Data.Word (Word8)
 -- For fast SrcLoc offset->line lookup when emitting #line
 import qualified Data.IntMap.Strict as IM
@@ -62,10 +65,11 @@ generateCode supportInclude env srcbase srcText emitLines m = return (n,h,c,supp
         Module _ _ _ stmts          = m
         env0                        = shareClosureLayouts (classdefine stmts $ genEnv $ setMod (modname m) env) stmts
 
--- | The first line of a generated .c, .h and closure support file starts with
--- this tag, followed by the text that 'tagged' is given: the file's tag in
--- hex, in a build the stamp of the compiler that wrote it, and on a .c the
--- tag of the header generated with it.
+-- | The first line of each generated file of a module starts with this tag:
+-- of its .c, its .h, its closure support file and its data C file.  The
+-- text that 'tagged' is given follows: the file's tag in hex, in a build the
+-- stamp of the compiler that wrote it, and on the .c the tag of the header
+-- generated with it.
 implHashTag                         :: String
 implHashTag                         = "/* Acton impl hash:"
 
@@ -92,6 +96,43 @@ initName env m                      = gen env (GName m initKW)
 
 genInitName                         :: Acton.Env.Env0 -> ModName -> String
 genInitName env0 m                  = render (initName (genEnv env0) m)
+
+-- | The C name of the array that holds the content of the file that module
+-- 'm' embeds by the path 'p'.  A path may hold characters that a C name
+-- cannot, so the name is made from the SHA-256 of the path.
+embedName                           :: GenEnv -> ModName -> String -> Doc
+embedName env m p                   = gen env (GName m (name ("embed$" ++ pathDigits p)))
+
+-- | The text of the data C file of module 'm', without the tag line that
+-- starts the file (see 'tagged'): an array for each file that the module
+-- embeds and that has content, filled by the C compiler from the file itself
+-- (#embed).  'files' gives the path, the size and the SHA-256 of each embedded
+-- file, and 'prefix' leads from the directory of the data C file to the
+-- directory that the paths count from.  A file that the C compiler does not
+-- load comes with its content.  Its array is filled from string literals
+-- that hold each byte as an octal escape, 16 bytes a line, and has its size
+-- written out, so that no zero byte follows the content.  The comment before
+-- an array holds the SHA-256 of its file and not the path, which may hold
+-- */.  The assertion stops the C compiler when the file has another size
+-- than the one that the module was compiled with.  The text is made of lines
+-- and not of a Doc, so that a writer takes the string literals of a large
+-- file piece by piece.
+genEmbedData                        :: Acton.Env.Env0 -> ModName -> FilePath -> [((FilePath,Integer,String), Maybe BS.ByteString)] -> String
+genEmbedData env0 m prefix files    = Data.List.intercalate "\n" $
+                                        [ "#pragma clang diagnostic push"
+                                        , "#pragma clang diagnostic ignored \"-Wc23-extensions\"" ] ++
+                                        concat [ array (render (embedName env m p)) p size sha content | ((p,size,sha),content) <- files, size > 0 ] ++
+                                        [ "#pragma clang diagnostic pop" ]
+  where env                         = genEnv env0
+        array n p size sha content  = [ "/* " ++ sha ++ " */"
+                                      , "const _Alignas(16) unsigned char " ++ n ++ "[" ++ maybe "" (show . BS.length) content ++ "] = {" ] ++
+                                      maybe [ "#embed \"" ++ prefix ++ p ++ "\"" ] literals content ++
+                                      [ "};"
+                                      , "_Static_assert(sizeof " ++ n ++ " == " ++ show size ++ ", \"" ++ p ++ "\");" ]
+        literals content
+          | BS.null content         = []
+          | otherwise               = ('"' : concatMap octalEscape (BS.unpack line) ++ "\"") : literals rest
+          where (line, rest)        = BS.splitAt 16 content
 
 
 
@@ -819,6 +860,7 @@ cModuleParts supportInclude env srcbase srcText emitLines (Module m imps _ stmts
                                       -- The names the passes made up, which the header leaves out.
                                       hDecls isInternal envDecl stmts $+$
                                       ext_include $+$
+                                      embedDecls $+$
                                       (if split then empty else adapterDocs) $+$
                                       declModuleSelect (\d -> not split || not (closureDecl d)) True envWithLine stmts $+$
                                       maybe globalChunkDefs (\file -> text "#include" <+> doubleQuotes (text file)) supportInclude $+$
@@ -845,6 +887,10 @@ cModuleParts supportInclude env srcbase srcText emitLines (Module m imps _ stmts
         ext_include                 = if notImpl then text "#include" <+> doubleQuotes (text srcbase <> text ".ext.c") else empty
         ext_init                    = if notImpl then genTopName env (name "__ext_init__") <+> parens empty <> semi else empty
         notImpl                     = hasNotImpl stmts
+        -- The arrays of the module's data C file that the embed expressions
+        -- of these statements name.  A file without content has no array.
+        embedDecls                  = vcat [ text "extern const unsigned char" <+> embedName env m p <> text "[]" <> semi
+                                           | p <- Data.Set.toList (Data.Set.fromList [ p | Embed _ p (Just (size,_)) <- embedExprs stmts, size > 0 ]) ]
         env1                        = classdefine stmts env
         envDecl                     = declEnv env stmts
         -- Emit a C #line directive for a given Acton SrcLoc if available
@@ -2945,6 +2991,11 @@ instance Gen Expr where
             nchars                  = fromMaybe (error ("CodeGen: str literal is not valid UTF-8: " ++ show (sval e))) (utf8Chars bs)
     gen env e@BStrings{}            = gen env primToBytes <> parens (cLiteral bs <> comma <+> pretty (length bs))
       where bs                      = literalTokenBytes (sval e)
+    -- The bytes value borrows the array of the module's data C file, so
+    -- no content is copied.
+    gen env (Embed _ p (Just (size,_)))
+      | size == 0                   = gen env primToBytes <> parens (cLiteral [] <> comma <+> pretty size)
+      | Just m <- thismod env       = gen env primToBytes <> parens (parens (text "const char *") <> embedName env m p <> comma <+> pretty size)
     gen env (Call l  (TApp _ e@(Var _ mk) _) p@(PosArg w (PosArg (Set _ es) PosNil)) KwdNil)
       | mk == primMkSet             = text "B_mk_set" <> parens (pretty (length es) <> comma <+> gen env w <> hsep [comma <+> gen env e | e <- es])
     gen env (Call l  (TApp _ e@(Var _ mk) _) p@(PosArg w (PosArg (Dict _ es) PosNil)) KwdNil)
@@ -3172,8 +3223,11 @@ cLiteral bs                         = doubleQuotes (text (concatMap esc bs))
           | b == 0x0d               = "\\r"
           | b == 0x09               = "\\t"
           | b >= 0x20 && b < 0x7f   = [toEnum (fromIntegral b)]
-          | otherwise               = '\\' : pad (showOct b "")
-        pad ds                      = replicate (3 - length ds) '0' ++ ds
+          | otherwise               = octalEscape b
+
+-- A byte as an octal escape of three digits.
+octalEscape                         :: Word8 -> String
+octalEscape b                       = '\\' : [ intToDigit (fromIntegral (b `shiftR` s .&. 7)) | s <- [6, 3, 0] ]
 
 genBool env (Paren _ e)             = genBool env e
 genBool env e

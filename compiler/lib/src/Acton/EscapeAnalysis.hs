@@ -581,6 +581,7 @@ scanExpr c expression = case expression of
     Ellipsis{} -> return ()
     Strings{} -> return ()
     BStrings{} -> return ()
+    Embed{} -> return ()
     Call l f p k -> do
         scanExpr c f
         mapM_ (scanExpr c) (posArgExpressions p)

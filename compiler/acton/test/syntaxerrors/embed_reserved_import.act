@@ -1,0 +1,2 @@
+# The reserved word embed as the first part of a module name
+import embed.files

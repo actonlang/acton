@@ -41,6 +41,7 @@ import Acton.Transform
 import Acton.Converter
 import Acton.TypeEnv
 import Acton.WitKnots
+import Acton.Embed (embedExprs)
 import qualified InterfaceFiles
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Base16 as Base16
@@ -2516,6 +2517,7 @@ checkIndependentDefaults env p k        = checkP [] p
                                             = err (loc e) ("Default value may not depend on parameter " ++ prstr n)
           | n:_ <- free e `intersect` defaultLocalNames env
                                             = err (loc e) ("Default value may not capture enclosing name " ++ prstr n)
+          | e':_ <- embedExprs e            = err (loc e') "embed cannot be the default value of a parameter. Give the content a name at the top level of the module and use the name"
           | not (liftableDefault env e)     = err (loc e) "Default value must be a literal, constructor expression, or module-level name"
           | otherwise                       = return ()
 
@@ -2655,6 +2657,7 @@ instance Infer Expr where
     infer env e@(Ellipsis _)            = notYetExpr e
     infer env e@(Strings _ ss)          = return ([], tStr, e)
     infer env e@(BStrings _ ss)         = return ([], tBytes, e)
+    infer env e@Embed{}                 = return ([], tBytes, e)
     infer env (Call l e ps ks)          = inferCall env True l e ps ks
     infer env (TApp l e ts)             = internal l "Unexpected TApp in infer"
     infer env (Let l ss e)              = do (cs1, te, ss') <- infEnv env ss

@@ -19,11 +19,13 @@ import Data.Maybe (fromMaybe, listToMaybe)
 import Data.Sequence (Seq, ViewL(..), (|>))
 import Data.Version (showVersion)
 import qualified Data.Sequence as Seq
+import qualified Data.Set as Set
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import System.Directory (doesDirectoryExist, doesFileExist)
-import System.FilePath ((</>), takeFileName)
+import System.FilePath ((</>), dropTrailingPathSeparator, takeFileName)
 import qualified System.FSNotify as FS
+import System.IO (hPutStrLn, stderr)
 import System.IO.Unsafe (unsafePerformIO)
 
 import Language.LSP.Protocol.Message
@@ -34,6 +36,7 @@ import Language.LSP.Server
 import qualified Acton.Compile as Compile
 import qualified Acton.CommandLineParser as C
 import qualified Acton.Completion as Completion
+import qualified Acton.Embed as Embed
 import qualified Acton.Env as Env
 import qualified Acton.Project as Project
 import qualified Acton.SourceProvider as Source
@@ -54,6 +57,7 @@ type CompletionStateMap = HM.HashMap FilePath CompletionState
 type CompletionEnvCacheMap = HM.HashMap FilePath CompletionEnvCache
 type ProjectBuildCacheMap = HM.HashMap FilePath ProjectBuildCache
 type ProjectWatcherMap = HM.HashMap (FilePath, FilePath) ThreadId
+type EmbeddedWatchMap = HM.HashMap FilePath (Set.Set FilePath, Set.Set FilePath)
 
 data CompletionState = CompletionState
   { completionEnv :: Env.Env0
@@ -129,6 +133,18 @@ projectBuildCachesRef = unsafePerformIO (newIORef HM.empty)
 {-# NOINLINE projectWatchersRef #-}
 projectWatchersRef :: IORef ProjectWatcherMap
 projectWatchersRef = unsafePerformIO (newIORef HM.empty)
+
+{-# NOINLINE embeddedWatchesRef #-}
+-- | For each root project, the paths at which a file system event tells of
+-- a change to an embedded file, and the directories that are watched for
+-- such events.
+embeddedWatchesRef :: IORef EmbeddedWatchMap
+embeddedWatchesRef = unsafePerformIO (newIORef HM.empty)
+
+{-# NOINLINE embeddedWatchManager #-}
+-- | The file system watch of the directories that hold embedded files.
+embeddedWatchManager :: FS.WatchManager
+embeddedWatchManager = unsafePerformIO FS.startManager
 
 {-# NOINLINE compileScheduler #-}
 -- | Shared compile scheduler for LSP events and back jobs.  One scheduler
@@ -310,6 +326,44 @@ watchProjectShape rootProj watchedRoot =
     void $ FS.watchDir mgr watchedRoot isBuildActEvent invalidate
     forever $ threadDelay maxBound
 
+-- | Watch the files that a plan looked at for embed (Compile.embeddedPaths).
+-- An event that tells of a change to one of them, or to a directory on the
+-- way to one, drops the cached plan of the root project, so that the next
+-- compile looks at the embedded files of every module again.  The event
+-- starts no compile.  The directories that hold these paths
+-- (Embed.watchDirectories) are watched unless they are already.  A watched
+-- directory that is removed is forgotten where the system tells of it, so
+-- that the directory that takes its place is watched after a later compile.
+-- A directory that cannot be watched is named on the standard error of the
+-- server and tried again after the next compile.  A plan from the cache
+-- looks only at the embedded files of the modules that it compiles, so the
+-- paths of the plans before it stay.
+ensureEmbeddedWatchers :: Compile.CompilePlan -> IO ()
+ensureEmbeddedWatchers plan = do
+  places <- M.keysSet <$> Compile.embeddedPaths plan
+  dirs <- Embed.watchDirectories places
+  fresh <- atomicModifyIORef' embeddedWatchesRef $ \m ->
+    let (known, watched) = watchOf m
+    in (HM.insert rootProj (Set.union known places, Set.union watched dirs) m, dirs Set.\\ watched)
+  forM_ (Set.toList fresh) $ \dir -> do
+    started <- try $ watch embeddedWatchManager dir (const True) $ \ev -> do
+      case ev of
+        FS.WatchedDirectoryRemoved{} -> forget dir
+        _ -> return ()
+      (known, _) <- watchOf <$> readIORef embeddedWatchesRef
+      -- An event can name a directory with a separator at its end.
+      when (Set.member (dropTrailingPathSeparator (FS.eventPath ev)) known) $
+        invalidateProjectCache rootProj
+    case started of
+      Left e -> forget dir >> hPutStrLn stderr (Embed.cannotBeWatched dir e)
+      Right _ -> return ()
+  where
+    rootProj = Compile.ccRootProj (Compile.cpContext plan)
+    watchOf = HM.lookupDefault (Set.empty, Set.empty) rootProj
+    watch = if Embed.watchesTrees then FS.watchTree else FS.watchDir
+    forget dir = atomicModifyIORef' embeddedWatchesRef $ \m ->
+      (HM.adjust (\(known, watched) -> (known, Set.delete dir watched)) rootProj m, ())
+
 prepareLspCompilePlan
   :: Source.SourceProvider
   -> C.GlobalOptions
@@ -354,7 +408,7 @@ compilePlanFromCache :: Compile.CompileContext -> Compile.PlanRequest -> FilePat
 compilePlanFromCache ctx request changedPath cache = do
   exists <- doesFileExist changedPath
   refreshed <- if exists
-    then refreshChangedGlobalTask changedPath (Compile.ccOpts ctx) cache
+    then refreshChangedGlobalTask changedPath ctx cache
     else return Nothing
   case refreshed of
     Nothing -> return Nothing
@@ -365,23 +419,26 @@ compilePlanFromCache ctx request changedPath cache = do
             , cachedGlobalTasks = globalTasks
             }
       plan <- Compile.selectPlan ctx projects globalTasks request
+      -- A watcher that dropped the cache while this plan was made has the
+      -- last word: the cache is not put back.
       atomicModifyIORef' projectBuildCachesRef $ \m ->
-        (HM.insert (Compile.ccRootProj ctx) cache' m, ())
+        (HM.adjust (const cache') (Compile.ccRootProj ctx) m, ())
       return (Just plan)
 
 refreshChangedGlobalTask
   :: FilePath
-  -> C.CompileOptions
+  -> Compile.CompileContext
   -> ProjectBuildCache
   -> IO (Maybe [Compile.GlobalTask])
-refreshChangedGlobalTask changedPath opts cache =
+refreshChangedGlobalTask changedPath ctx cache =
   case find isChanged (cachedGlobalTasks cache) of
     Nothing -> return Nothing
     Just old -> do
       newTask <- Compile.readModuleTask
         (overlaySourceProvider overlaysRef)
         lspGlobalOpts
-        opts
+        (Compile.ccOpts ctx)
+        (Compile.ccFiles ctx)
         (Compile.gtPaths old)
         (Compile.tkMod (Compile.gtKey old))
         changedPath
@@ -676,7 +733,10 @@ planAndCompile gen rootProj path sp gopts opts progress = do
               case origin of
                 PlanFromCache -> "Acton cached project ready"
                 PlanFromDiscovery -> "Acton compile plan ready"
+            -- Also after a run that the next edit stops: the cached plan
+            -- trusts what this plan saw of the embedded files.
             runRes <- Compile.runCompilePlan sp gopts compileScheduler gen plan onEvent
+                        `finally` ensureEmbeddedWatchers plan
             case runRes of
               Left err ->
                 return (Left (Compile.compileFailureMessage err))

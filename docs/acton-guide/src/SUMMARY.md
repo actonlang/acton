@@ -101,6 +101,7 @@
 - [Build System](compilation.md)
   - [Application build options](compilation/build_options.md)
   - [Incremental compilation](compilation/incremental.md)
+  - [Embedding files](compilation/embedding.md)
 - [Package Management](package_management.md)
   - [Package Index](pkg/package_index.md)
   - [Fingerprint and Lineage](pkg/fingerprint.md)

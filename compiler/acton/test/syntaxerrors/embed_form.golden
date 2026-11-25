@@ -1,0 +1,8 @@
+Building file test/syntaxerrors/embed_form.act using temporary scratch directory
+[error Syntax error]: embed takes one path in double quotes, as in embed("web/index.html")
+     +--> test/syntaxerrors/embed_form.act@2:8-2:13
+     |
+   2 | page = embed("web/a.html", "web/b.html")
+     :        ^---- 
+     :        `- embed takes one path in double quotes, as in embed("web/index.html")
+-----+

@@ -32,6 +32,7 @@ import qualified Acton.CodeGen
 import qualified Acton.Diagnostics as Diag
 import qualified Acton.Compile as Compile
 import qualified Acton.ExtSource as ExtSource
+import qualified Acton.Embed as Embed
 import qualified Acton.Graph as Graph
 import qualified Acton.Project as Project
 import qualified Acton.Zon as Zon
@@ -51,7 +52,7 @@ import Test.Syd
 import Test.Syd.Modify (sequential)
 import Test.Syd.Def.Golden (goldenTextFile)
 import qualified Control.Monad.Trans.State.Strict as St
-import Text.Megaparsec (ParseErrorBundle, PosState(..), bundleErrors, bundlePosState, errorOffset, reachOffset, runParser, errorBundlePretty, ShowErrorComponent(..))
+import Text.Megaparsec (ParseErrorBundle, ParseError(..), ErrorFancy(..), PosState(..), bundleErrors, bundlePosState, errorOffset, reachOffset, runParser, errorBundlePretty, ShowErrorComponent(..))
 import Text.Megaparsec.Pos (sourceLine, unPos)
 import qualified Data.Text as T
 import qualified Data.Text.Short as TS
@@ -63,15 +64,18 @@ import qualified Data.Set as Set
 import Data.IORef
 import Data.Bits (shiftL, (.|.))
 import qualified Data.ByteString.Base16 as Base16
+import qualified Crypto.Hash.SHA256 as SHA256
 import qualified Data.Binary
 import Error.Diagnose (printDiagnostic, prettyDiagnostic, WithUnicode(..), TabSize(..), defaultStyle, addReport, addFile)
 import Error.Diagnose.Report (Report(..))
 import Prettyprinter (unAnnotate, layoutPretty, defaultLayoutOptions)
 import Prettyprinter.Render.Text (renderStrict)
 import System.FilePath ((</>), joinPath, takeFileName, takeBaseName, takeDirectory, splitDirectories)
-import System.Directory (createDirectoryIfMissing, createDirectoryLink, getCurrentDirectory, getFileSize, setCurrentDirectory, listDirectory, doesDirectoryExist, doesFileExist, removeFile)
+import System.Directory (canonicalizePath, createDirectoryIfMissing, createDirectoryLink, createFileLink, getCurrentDirectory, getFileSize, setCurrentDirectory, listDirectory, doesDirectoryExist, doesFileExist, removeFile)
 import System.IO (IOMode(ReadWriteMode), hSetFileSize, withFile)
 import System.IO.Temp (withSystemTempDirectory)
+import GHC.IO.Encoding (getFileSystemEncoding)
+import System.Posix.Files (createNamedPipe, fileSize, nullFileMode, ownerModes, setFileMode, setFileSize)
 import qualified System.IO.Unsafe
 import System.Timeout (timeout)
 import Control.Monad (forM_, when, foldM)
@@ -995,7 +999,7 @@ main = do
                 ]
               nmod = I.NModule [] iface (Just "module docs")
               tmod = S.Module mn [] (Just "typed docs") []
-          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] nameHashes escapeSummaries roots tests (Just "module docs") nmod tmod
+          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] [] nameHashes escapeSummaries roots tests (Just "module docs") nmod tmod
           InterfaceFiles.keyNameInfo firstName `shouldBe` "name-info/p/first"
           InterfaceFiles.keyNameInfo firstName `shouldNotBe` InterfaceFiles.keyNameInfo firstishName
           InterfaceFiles.keyNameHash secondName `shouldBe` "name-hash/p/second"
@@ -1062,7 +1066,7 @@ main = do
               lookupSummary env = do
                 mi <- Acton.Env.lookupModuleInfo mn env
                 Acton.Env.moduleEscapeSummary mi [fName]
-          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] [] summaries [] [] Nothing nmod tmod
+          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] [] [] summaries [] [] Nothing nmod tmod
           ordinaryEnv <- Acton.Env.initEnv dir False
           escapeEnv <- Acton.Env.initEnvWithEscapeSummaries True dir False
           lookupSummary ordinaryEnv `shouldBe` Nothing
@@ -1097,7 +1101,7 @@ main = do
               nmod = I.NModule [] iface Nothing
               tmod = S.Module mn [] Nothing []
               names = sort . map fst
-          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] [] [] [] [] Nothing nmod tmod
+          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] [] [] [] [] [] Nothing nmod tmod
           db <- InterfaceFiles.openInterfaceDB tyPath
           (do InterfaceFiles.readInterfaceDBNameInfoMaybe db clsName `shouldReturn` Just (clsName, I.NClass [] [] [(classAttr, I.NVar S.tWild)] Nothing)
               InterfaceFiles.readInterfaceDBNameInfoMaybe db (S.name "missing") `shouldReturn` Nothing
@@ -1119,7 +1123,7 @@ main = do
           let tyPath = dir </> "lockfmt.tydb"
               nmod = I.NModule [] [] Nothing
               tmod = S.Module (S.modName ["lockfmt"]) [] Nothing []
-          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] [] [] [] [] Nothing nmod tmod
+          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] [] [] [] [] [] Nothing nmod tmod
           -- liblmdb's lock table must use process-shared mutexes, which live
           -- inside lock.mdb, on every platform. Its POSIX-semaphore variant
           -- (upstream's default on macOS) stores "/MDB[rw]..." names here
@@ -1136,7 +1140,7 @@ main = do
               tyPath = dir </> "iface_rewrite.tydb"
               vName = S.name "v"
               wName = S.name "w"
-              write iface = InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] [] [] [] [] Nothing (I.NModule [] iface Nothing) (S.Module mn [] Nothing [])
+              write iface = InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] [] [] [] [] [] Nothing (I.NModule [] iface Nothing) (S.Module mn [] Nothing [])
           write [(vName, I.NVar S.tWild)]
           db <- InterfaceFiles.openInterfaceDB tyPath
           fmap fst <$> InterfaceFiles.readInterfaceDBNameInfoMaybe db vName `shouldReturn` Just vName
@@ -1159,7 +1163,7 @@ main = do
               nameHashes0 = [ nameHash n "s" "p" "i" | n <- [aName, bName, cName] ]
               nmod = I.NModule [] iface Nothing
               tmod = S.Module mn [] Nothing body
-          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] nameHashes0 [] [] [] Nothing nmod tmod
+          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] [] nameHashes0 [] [] [] Nothing nmod tmod
           nameHashesH <- InterfaceFiles.readNameHashes tyPath
           [ InterfaceFiles.nhStmtIndices nh | nh <- nameHashesH, InterfaceFiles.nhName nh == bName ]
             `shouldBe` [[1]]
@@ -1179,7 +1183,7 @@ main = do
               nameHashes = [nameHash firstName "src1" "pub1" "impl1"]
               nmod = I.NModule [] iface Nothing
               tmod = S.Module mn [] Nothing []
-          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] nameHashes [] [] [] Nothing nmod tmod
+          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] [] nameHashes [] [] [] Nothing nmod tmod
           mapConcurrently_
             (\_ -> do
                 moduleHashes <$> InterfaceFiles.readHeaderSummary tyPath `shouldReturn` ("src", "pub", "impl")
@@ -1196,7 +1200,7 @@ main = do
               nameHashes = [nameHash firstName "src1" "pub1" "impl1"]
               nmod = I.NModule [] iface Nothing
               tmod = S.Module mn [] Nothing []
-          InterfaceFiles.writeFile srcPath "src" "pub" "impl" Nothing [] [] nameHashes [] [] [] Nothing nmod tmod
+          InterfaceFiles.writeFile srcPath "src" "pub" "impl" Nothing [] [] [] nameHashes [] [] [] Nothing nmod tmod
           InterfaceFiles.copyInterface srcPath dstPath
           doesFileExist (dstPath </> "data.mdb") `shouldReturn` True
           doesFileExist (dstPath </> "lock.mdb") `shouldReturn` False
@@ -1214,7 +1218,7 @@ main = do
               nameHashes = [nameHash firstName "src1" "pub1" "impl1"]
               nmod = I.NModule [] iface Nothing
               tmod = S.Module mn [] Nothing []
-          InterfaceFiles.writeFile srcPath "src" "pub" "impl" Nothing [] [] nameHashes [] [] [] Nothing nmod tmod
+          InterfaceFiles.writeFile srcPath "src" "pub" "impl" Nothing [] [] [] nameHashes [] [] [] Nothing nmod tmod
           InterfaceFiles.copyInterface srcPath dstPath
           createDirectoryIfMissing True badPath
           B8.writeFile (badPath </> "data.mdb") "garbage"
@@ -1236,7 +1240,7 @@ main = do
               nameHashes = [ nameHash n "src1" "pub1" "impl1" | n <- names ]
               nmod = I.NModule [] iface Nothing
               tmod = S.Module mn [] Nothing []
-              write = InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] nameHashes [] [] [] Nothing nmod tmod
+              write = InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] [] nameHashes [] [] [] Nothing nmod tmod
           write
           size <- getFileSize dataPath
           -- Half of the file still holds both meta pages at any page size
@@ -1261,7 +1265,7 @@ main = do
               nameHashes = [nameHash firstName "src1" "pub1" "impl1"]
               nmod = I.NModule [] iface Nothing
               tmod = S.Module mn [] Nothing []
-          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] nameHashes [] [] [] Nothing nmod tmod
+          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] [] nameHashes [] [] [] Nothing nmod tmod
           removeFile lockPath
           InterfaceFiles.registerSystemTypeRoots [typesRoot]
           moduleHashes <$> InterfaceFiles.readHeaderSummary tyPath `shouldReturn` ("src", "pub", "impl")
@@ -1288,7 +1292,7 @@ main = do
               tyPath = dir </> "iface_version.tydb"
               nmod = I.NModule [] [] Nothing
               tmod = S.Module mn [] Nothing []
-          InterfaceFiles.writeFileWithVersion (map (+ 1) S.version) "" tyPath "" "" "" Nothing [] [] [] [] [] [] Nothing nmod tmod
+          InterfaceFiles.writeFileWithVersion (map (+ 1) S.version) "" tyPath "" "" "" Nothing [] [] [] [] [] [] [] Nothing nmod tmod
           InterfaceFiles.readNameHashesMaybe tyPath `shouldReturn` Nothing
           InterfaceFiles.readFileMaybe tyPath `shouldReturn` Nothing
 
@@ -2052,6 +2056,7 @@ main = do
             []
             []
             []
+            []
             Nothing
             directIface
             directModule
@@ -2064,6 +2069,7 @@ main = do
             (InterfaceFiles.storedPubHash stored)
             (InterfaceFiles.storedImplHash stored)
             (InterfaceFiles.storedSourceMeta stored)
+            (InterfaceFiles.storedEmbeds stored)
             (InterfaceFiles.storedImports stored)
             (InterfaceFiles.storedDepModules stored)
             (InterfaceFiles.storedNames stored)
@@ -2431,6 +2437,419 @@ main = do
             Right [S.Decl _ [S.Def{S.dbody = [s]}]] -> Pretty.print s `shouldBe` "after now 3.8: g()"
             other -> expectationFailure $ "Unexpected parse: " ++ show other
 
+      describe "The reserved word embed" $ do
+        forM_ [ ("a variable of a module", "size = 3\n", " = size + 1\n")
+              , ("a variable of a function", "def f():\n    size = 3\n    ", " = size + 1\n")
+              , ("a function", "def ", "(path):\n    return path\n")
+              , ("a method", "class Page(object):\n    def ", "(self):\n        pass\n")
+              , ("a parameter", "def page(path, ", "):\n    return path\n")
+              , ("a class", "class ", "(object):\n    pass\n")
+              , ("the first part of a module name", "import ", ".files\n")
+              , ("a later part of a module name without quotes", "import web.", "\n")
+              , ("an attribute without quotes", "def f(page):\n    return page.", "\n")
+              , ("a called attribute without quotes", "def f(page):\n    return page.", "(\"x\")\n")
+              , ("a value", "def f():\n    return ", "\n")
+              ] $ \(place, before, after) ->
+          it ("refuses embed as " ++ place) $ expectEmbedRefused before after
+
+        it "reads embed in quotes as an attribute name" $
+          case parseExprAst "page.\"embed\"" of
+            Right e@(S.Dot _ _ n) -> do
+              S.nstr n `shouldBe` "embed"
+              Pretty.print e `shouldBe` "page.'embed'"
+              parseExprAst (Pretty.print e) `shouldBe` Right e
+            other -> expectationFailure $ "Unexpected parse: " ++ show other
+
+        it "reads embed in quotes as a later part of a module name" $
+          (S.importedModules <$> P.parseModuleImports "quoted.act" "import web.\"embed\"\n")
+            `shouldReturn` [S.modName ["web", "embed"]]
+
+        it "reads a name that starts with embed as a name" $
+          forM_ ["embedded", "embed_files", "Embed"] $ \n ->
+            parseExprAst n `shouldBe` Right (S.Var NoLoc (S.NoQ (S.name n)))
+
+      describe "The expression embed" $ do
+        it "takes a relative path with / between its components" $
+          forM_ ["web/index.html", "a", "a b/c d.txt", "a*/b", "web/\229\8364.txt", ".hidden", "a..b", "outer/x", "src/out/x.bin", "x.out"] $ \path ->
+            Embed.pathProblem path `shouldBe` Nothing
+
+        it "refuses a path that is not relative, a component that is empty, . or .., and a backslash" $ do
+          Embed.pathProblem "../x" `shouldBe`
+            Just "the path \"../x\" of embed must be a relative path inside the project, using / and without . or .. components"
+          forM_ ["", "/etc/hosts", "a/../b", "./a", "a/.", "a//b", "a/", "a\\b", "out/../x", "a{b}/.."] $ \path ->
+            Embed.pathProblem path `shouldBe`
+              Just ("the path \"" ++ path ++ "\" of embed must be a relative path inside the project, using / and without . or .. components")
+
+        it "refuses a path with a double quote, a brace or a control character" $ do
+          Embed.pathProblem "a{b}.txt" `shouldBe`
+            Just "the path \"a{b}.txt\" of embed has a double quote, a brace or a control character"
+          forM_ ["a}", "a\"b", "a\tb", "a\DELb", "out/a{b}"] $ \path ->
+            Embed.pathProblem path `shouldBe`
+              Just ("the path \"" ++ path ++ "\" of embed has a double quote, a brace or a control character")
+
+        it "refuses a path whose first component is out" $ do
+          Embed.pathProblem "out/x.bin" `shouldBe`
+            Just "\"out/x.bin\" is in out, which a build writes and which is not committed"
+          Embed.pathProblem "out" `shouldBe`
+            Just "\"out\" is in out, which a build writes and which is not committed"
+
+        it "reads the form, prints it and reads it again" $
+          forM_ ["web/index.html", "x", "web/a b.txt", "a*/b c.txt", "web/\229\8364\128512.txt"] $ \path -> do
+            let src = "embed(\"" ++ path ++ "\")"
+            case parseExprAst src of
+              Right e@(S.Embed l p f) -> do
+                (l, p, f) `shouldBe` (Loc 0 (length src), path, Nothing)
+                Pretty.print e `shouldBe` src
+                parseExprAst (Pretty.print e) `shouldBe` Right e
+              other -> expectationFailure $ "Unexpected parse: " ++ show other
+
+        it "reads white space, a line break and a comment between the parentheses" $
+          forM_ ["embed ( \"x\" )", "embed(\n    \"x\"\n)", "embed(  # the page\n    \"x\")"] $ \src ->
+            parseExprAst src `shouldBe` Right (S.Embed NoLoc "x" Nothing)
+
+        it "reads the form wherever an expression may stand" $
+          forM_ ["embed(\"a\").decode()", "[embed(\"a\"), embed(\"b\")]", "{\"/a\": (body = embed(\"a\"), size = 3)}", "len(embed(\"a\")) + 1"] $ \src ->
+            (Pretty.print <$> parseExprAst src) `shouldBe` Right src
+
+        it "finds the embed expressions of a module and fills each of them" $
+          forM_ [P.parseModuleSerial, P.parseModule] $ \parse -> do
+            m <- parse (S.modName ["page"]) "page.act" embedPlaces Nothing
+            let paths     = [ "p" ++ show n | n <- [1 .. 71 :: Int] ]
+                fill e    = Just e { S.efile = Just (toInteger (length (S.epath e)), S.epath e) }
+                Just full = Embed.embeds fill m
+            map S.epath (Embed.embedExprs m) `shouldBe` paths
+            map S.efile (Embed.embedExprs m) `shouldBe` map (const Nothing) paths
+            map S.efile (Embed.embedExprs full) `shouldBe` [ Just (toInteger (length path), path) | path <- paths ]
+
+        forM_ [ ("no path", "embed()")
+              , ("a name", "embed(path)")
+              , ("two paths", "embed(\"a\", \"b\")")
+              , ("a comma after the path", "embed(\"a\",)")
+              , ("two literals", "embed(\"a\" \"b\")")
+              , ("single quotes", "embed('a')")
+              , ("triple quotes", "embed(\"\"\"a\"\"\")")
+              , ("the prefix b", "embed(b\"a\")")
+              , ("the prefix r", "embed(r\"a\")")
+              , ("an operator", "embed(\"a\" + \"b\")")
+              , ("a keyword argument", "embed(path=\"a\")")
+              , ("a path over two lines", "embed(\"a\n.txt\")")
+              , ("an escaped double quote", "embed(\"a\\\"b\")")
+              ] $ \(what, form) ->
+          it ("refuses " ++ what ++ " after the word") $
+            expectEmbedError (Loc 7 12) P.EmbedForm ("page = " ++ form ++ "\n")
+
+        it "refuses a path that breaks the rule, at the literal" $
+          forM_ ["../x", "/etc/hosts", "", "a\\b", "a{b}.txt", "out/x.bin"] $ \path -> do
+            let before        = "page = embed( "
+                Just problem  = Embed.pathProblem path
+            expectEmbedError (Loc (length before) (length before + length path + 2)) (P.EmbedPath problem)
+              (before ++ "\"" ++ path ++ "\" )\n")
+
+        it "has the type bytes and the effect pure" $ do
+          let e   = S.Embed NoLoc "web/a.txt" Nothing
+              src = unlines
+                [ "data = embed(\"web/a.txt\")"
+                , "pure def size() -> int:"
+                , "    return len(embed(\"web/a.txt\"))"
+                ]
+          QuickType.qType env0 Acton.CodeGen.adjust e `shouldBe` (Builtin.tBytes, S.fxPure, e)
+          parsed <- liftIO $ P.parseModule (S.modName ["page"]) "<page>" src Nothing
+          env <- liftIO $ Acton.Env.mkEnv systemTypes env0 parsed
+          kchecked <- liftIO $ Acton.Kinds.check env parsed
+          (I.NModule _ te _, _, _, _) <- liftIO $ Acton.Types.reconstruct Nothing Nothing env kchecked Nothing
+          lookup (S.name "data") te `shouldBe` Just (I.NVar Builtin.tBytes)
+
+        it "hashes the path of the expression and the size and the SHA-256 of its file" $ do
+          let n          = S.name "data"
+              hashOf p f = Hashing.nameHashesFromItems [Hashing.TLStmt n (S.Assign NoLoc [S.PVar NoLoc n Nothing] (S.Embed NoLoc p f))] M.! n
+              hashes     = [ hashOf "web/a.txt" Nothing, hashOf "web/a.txt" (Just (3, "aa")), hashOf "web/a.txt" (Just (4, "aa"))
+                           , hashOf "web/a.txt" (Just (3, "ab")), hashOf "web/b.txt" (Just (3, "aa")) ]
+          nub hashes `shouldBe` hashes
+
+        it "names a path in the generated C by 32 hexadecimal digits of its SHA-256" $ do
+          Embed.pathDigits "web/app.js" `shouldBe` "e24e4bd32090b0c400a70f02d1b844df"
+          Embed.pathDigits "web/\229.txt" `shouldBe` take 32 (B8.unpack (Base16.encode (SHA256.hash (B8.pack "web/\195\165.txt"))))
+
+        it "generates a data C file with an array for each embedded file that has content" $
+          Acton.CodeGen.tagged "7b0e" (Acton.CodeGen.genEmbedData env0 (S.modName ["shop", "assets"]) "../../../"
+              (map (\file -> (file, Nothing)) [("data/empty.bin", 0, "e3b0"), ("web/a b*/app.js", 3, "ba78"), ("web/app.js", 1234, "5c1f")]))
+            `shouldBe` init (unlines
+              [ "/* Acton impl hash: 7b0e */"
+              , "#pragma clang diagnostic push"
+              , "#pragma clang diagnostic ignored \"-Wc23-extensions\""
+              , "/* ba78 */"
+              , "const _Alignas(16) unsigned char shopQ_assetsQ_embed$" ++ Embed.pathDigits "web/a b*/app.js" ++ "[] = {"
+              , "#embed \"../../../web/a b*/app.js\""
+              , "};"
+              , "_Static_assert(sizeof shopQ_assetsQ_embed$" ++ Embed.pathDigits "web/a b*/app.js" ++ " == 3, \"web/a b*/app.js\");"
+              , "/* 5c1f */"
+              , "const _Alignas(16) unsigned char shopQ_assetsQ_embed$e24e4bd32090b0c400a70f02d1b844df[] = {"
+              , "#embed \"../../../web/app.js\""
+              , "};"
+              , "_Static_assert(sizeof shopQ_assetsQ_embed$e24e4bd32090b0c400a70f02d1b844df == 1234, \"web/app.js\");"
+              , "#pragma clang diagnostic pop"
+              ])
+
+        it "writes the bytes of a file that starts with a byte order mark which the C compiler refuses" $
+          withSystemTempDirectory "acton-embed-marked" $ \dir -> do
+            -- The mark of UTF-16, the mark of UTF-8, which the C compiler
+            -- takes, and the mark of UTF-16 after another byte.
+            let contents  = [ ("utf16.txt", B8.pack ("\255\254" ++ ['a' .. 'p'])), ("utf8.txt", B8.pack "\239\187\191hi"), ("second.bin", B8.pack "a\255\254") ]
+                files     = [ InterfaceFiles.EmbeddedFile path (toInteger (B8.length content)) (Hashing.hashHex (SHA256.hash content)) (InterfaceFiles.SourceFileMeta 0 0 0 Nothing Nothing)
+                            | (path, content) <- contents ]
+                sha path  = head [ InterfaceFiles.embeddedSha256 f | f <- files, InterfaceFiles.embeddedPath f == path ]
+                array p   = "shopQ_assetsQ_embed$" ++ Embed.pathDigits p
+            forM_ contents $ \(path, content) -> B8.writeFile (dir </> path) content
+            marked <- mapM (Compile.markedContent dir) files
+            marked `shouldBe` [Just (snd (head contents)), Nothing, Nothing]
+            Acton.CodeGen.genEmbedData env0 (S.modName ["shop", "assets"]) "../../../"
+                (zip [ (InterfaceFiles.embeddedPath f, InterfaceFiles.embeddedSize f, InterfaceFiles.embeddedSha256 f) | f <- files ] marked)
+              `shouldBe` init (unlines
+                [ "#pragma clang diagnostic push"
+                , "#pragma clang diagnostic ignored \"-Wc23-extensions\""
+                , "/* " ++ sha "utf16.txt" ++ " */"
+                , "const _Alignas(16) unsigned char " ++ array "utf16.txt" ++ "[18] = {"
+                , "\"\\377\\376\\141\\142\\143\\144\\145\\146\\147\\150\\151\\152\\153\\154\\155\\156\""
+                , "\"\\157\\160\""
+                , "};"
+                , "_Static_assert(sizeof " ++ array "utf16.txt" ++ " == 18, \"utf16.txt\");"
+                , "/* " ++ sha "utf8.txt" ++ " */"
+                , "const _Alignas(16) unsigned char " ++ array "utf8.txt" ++ "[] = {"
+                , "#embed \"../../../utf8.txt\""
+                , "};"
+                , "_Static_assert(sizeof " ++ array "utf8.txt" ++ " == 5, \"utf8.txt\");"
+                , "/* " ++ sha "second.bin" ++ " */"
+                , "const _Alignas(16) unsigned char " ++ array "second.bin" ++ "[] = {"
+                , "#embed \"../../../second.bin\""
+                , "};"
+                , "_Static_assert(sizeof " ++ array "second.bin" ++ " == 3, \"second.bin\");"
+                , "#pragma clang diagnostic pop"
+                ])
+            -- The bytes are the ones that the .tydb records.
+            Compile.markedContent dir (head files) { InterfaceFiles.embeddedSha256 = sha "utf8.txt" }
+              `shouldThrow` (\e -> E.displayException (e :: Compile.FileChanged) == "utf16.txt changed while the build ran. Run the build again")
+
+        it "generates a bytes value that borrows the array of the data C file" $ do
+          let src    = unlines
+                [ "page = embed(\"web/app.js\")"
+                , "def empty() -> bytes:"
+                , "    return embed(\"data/empty.bin\")"
+                , "def again() -> bytes:"
+                , "    return embed(\"web/app.js\")"
+                ]
+              fill e = Just e { S.efile = Just (if S.epath e == "web/app.js" then 1234 else 0, "5c1f") }
+              array  = "shopQ_assetsQ_embed$e24e4bd32090b0c400a70f02d1b844df"
+          parsed <- P.parseModule (S.modName ["shop", "assets"]) "<assets>" src Nothing
+          let Just filled = Embed.embeds fill parsed
+          env <- Acton.Env.mkEnv systemTypes env0 filled
+          kchecked <- Acton.Kinds.check env filled
+          (_, tchecked, typeEnv, _) <- Acton.Types.reconstruct Nothing Nothing env kchecked Nothing
+          (normalized, normEnv) <- Acton.Normalizer.normalize typeEnv tchecked
+          (deacted, deactEnv) <- Acton.Deactorizer.deactorize normEnv normalized
+          (cpstyled, cpsEnv) <- Acton.CPS.convert deactEnv deacted
+          (lifted, liftEnv) <- Acton.LambdaLifter.liftModule cpsEnv cpstyled
+          boxed <- Acton.Boxing.doBoxing liftEnv lifted
+          (_, _, c) <- Acton.CodeGen.generate liftEnv "src/assets" src True boxed "test-hash"
+          filter ("extern const unsigned char" `isPrefixOf`) (lines c) `shouldBe` ["extern const unsigned char " ++ array ++ "[];"]
+          length (filter (("actBytesFromCStringLength((const char *)" ++ array ++ ", 1234)") `isInfixOf`) (lines c)) `shouldBe` 2
+          c `shouldContain` "actBytesFromCStringLength(\"\", 0)"
+
+        it "gives the SHA-256 of the content of a file" $
+          withSystemTempDirectory "acton-embed-hash" $ \dir -> do
+            B8.writeFile (dir </> "empty") B8.empty
+            B8.writeFile (dir </> "abc") (B8.pack "abc")
+            B8.writeFile (dir </> "large") (B8.replicate 3000000 'a')
+            Compile.hashOfFile (dir </> "empty") `shouldReturn` "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            Compile.hashOfFile (dir </> "abc") `shouldReturn` "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+            Compile.hashOfFile (dir </> "large") `shouldReturn` B8.unpack (Base16.encode (SHA256.hash (B8.replicate 3000000 'a')))
+
+        it "takes a regular file below the directory that the path counts from" $
+          withSystemTempDirectory "acton-embed-file" $ \dir -> do
+            -- A letter outside ASCII where file names are UTF-8.
+            utf8 <- (== "UTF-8") . show <$> getFileSystemEncoding
+            let nested = "web/a b*/" ++ (if utf8 then "\229" else "a") ++ ".txt"
+                names  = fmap Set.fromList . listDirectory
+                size   = fmap (fmap (toInteger . fileSize)) . Embed.embeddedFileStatus names dir
+            createDirectoryIfMissing True (dir </> "web" </> "a b*")
+            B8.writeFile (dir </> "web" </> "index.html") (B8.pack "hello\n")
+            B8.writeFile (dir </> nested) (B8.pack "abc")
+            B8.writeFile (dir </> "web" </> "empty") B8.empty
+            createFileLink "index.html" (dir </> "web" </> "link.html")
+            createFileLink "none.html" (dir </> "web" </> "dangling.html")
+            createNamedPipe (dir </> "web" </> "pipe") ownerModes
+            forM_ [("most", 2147483647), ("over", 2147483648)] $ \(name, bytes) -> do
+              B8.writeFile (dir </> "web" </> name) B8.empty
+              setFileSize (dir </> "web" </> name) bytes
+            Embed.listedPath names dir nested `shouldReturn` Just nested
+            Embed.listedPath names dir "web/none.html" `shouldReturn` Nothing
+            size "web/index.html" `shouldReturn` Right 6
+            size nested `shouldReturn` Right 3
+            size "web/empty" `shouldReturn` Right 0
+            size "web/link.html" `shouldReturn` Right 6
+            size "web/none.html" `shouldReturn` Left ("no file web/none.html in " ++ dir)
+            size "web/dangling.html" `shouldReturn` Left ("no file web/dangling.html in " ++ dir)
+            size "none/index.html" `shouldReturn` Left ("no file none/index.html in " ++ dir)
+            size "web/index.html/x" `shouldReturn` Left ("no file web/index.html/x in " ++ dir)
+            size "web" `shouldReturn` Left "web is a directory, and embed takes one file"
+            size "web/a b*" `shouldReturn` Left "web/a b* is a directory, and embed takes one file"
+            size "web/pipe" `shouldReturn` Left "web/pipe is not a regular file"
+            size "web/most" `shouldReturn` Right 2147483647
+            size "web/over" `shouldReturn` Left "web/over has 2147483648 bytes, and embed takes a file of fewer than 2147483648 bytes"
+            -- A directory without permissions.  Not every user is stopped by
+            -- the mode, so the message is expected only when a listing fails.
+            -- The directory gets its permissions back so that it can be removed.
+            createDirectoryIfMissing True (dir </> "locked")
+            B8.writeFile (dir </> "locked" </> "x.txt") (B8.pack "abc")
+            setFileMode (dir </> "locked") nullFileMode
+            stopped <- either (\(_ :: E.IOException) -> True) (const False) <$> E.try (listDirectory (dir </> "locked"))
+            (when stopped $ size "locked/x.txt" `shouldReturn` Left "locked/x.txt cannot be read: Permission denied")
+              `E.finally` setFileMode (dir </> "locked") ownerModes
+
+        it "lists the directories on the way to a path through the given function" $
+          withSystemTempDirectory "acton-embed-listing" $ \dir -> do
+            createDirectoryIfMissing True (dir </> "web")
+            forM_ ["a", "b", "c"] $ \name -> B8.writeFile (dir </> "web" </> name) (B8.pack name)
+            listed <- newIORef []
+            let names d = modifyIORef' listed (d :) >> (Set.fromList <$> listDirectory d)
+            forM_ ["web/a", "web/b", "web/c", "web/none"] $ \path -> Embed.embeddedFileStatus names dir path
+            sort <$> readIORef listed `shouldReturn` (replicate 4 dir ++ replicate 4 (dir </> "web"))
+
+        it "names a path and the directories on the way to it as file system events name them" $
+          withSystemTempDirectory "acton-embed-events" $ \tmp -> do
+            dir <- canonicalizePath tmp
+            let root  = dir </> "shop"
+                paths = Embed.eventPaths canonicalizePath root
+            createDirectoryIfMissing True (root </> "web" </> "js")
+            createDirectoryIfMissing True (dir </> "shared")
+            B8.writeFile (root </> "web" </> "js" </> "app.js") (B8.pack "let a = 1\n")
+            B8.writeFile (dir </> "shared" </> "logo.png") (B8.pack "png")
+            createDirectoryLink (dir </> "shared") (root </> "linked")
+            createFileLink "app.js" (root </> "web" </> "js" </> "link.js")
+            paths "top.txt" `shouldReturn` ([], [root </> "top.txt"])
+            paths "web/js/app.js" `shouldReturn` ([root </> "web", root </> "web/js"], [root </> "web/js/app.js"])
+            -- A directory that is a link: the link in the project, and the
+            -- file in the directory that the link leads to.
+            paths "linked/logo.png" `shouldReturn` ([root </> "linked"], [dir </> "shared/logo.png"])
+            -- A file that is a link: the link and the file that it leads to.
+            paths "web/js/link.js" `shouldReturn` ([root </> "web", root </> "web/js"], [root </> "web/js/link.js", root </> "web/js/app.js"])
+            -- A file and directories that do not exist stay as they are written.
+            paths "web/js/none.js" `shouldReturn` ([root </> "web", root </> "web/js"], [root </> "web/js/none.js"])
+            paths "linked/none/x.txt" `shouldReturn` ([root </> "linked", dir </> "shared/none"], [dir </> "shared/none/x.txt"])
+
+        it "resolves the links of a directory through the given function" $ do
+          asked <- newIORef []
+          let resolved dir = modifyIORef' asked (dir :) >> return ("/real" ++ dir)
+          Embed.eventPaths resolved "/p" "web/js/app.js"
+            `shouldReturn` (["/real/p/web", "/real/p/web/js"], ["/real/p/web/js/app.js"])
+          reverse <$> readIORef asked `shouldReturn` ["/p", "/p/web", "/p/web/js"]
+
+        it "watches the directories of the paths that exist" $
+          withSystemTempDirectory "acton-embed-watch" $ \dir -> do
+            createDirectoryIfMissing True (dir </> "shop" </> "web")
+            createDirectoryIfMissing True (dir </> "shared")
+            B8.writeFile (dir </> "shop" </> "web" </> "index.html") (B8.pack "hello\n")
+            let paths = Set.fromList (map (dir </>) [ "shop/web", "shop/web/index.html", "shop/web/none.html", "shop/data", "shop/data/sub"
+                                                    , "shop/data/sub/text.txt", "shop/web/index.html/x", "shared/logo.png" ])
+            -- Where one watch tells of a whole tree, the watch of shop
+            -- stands for the watch of shop/web.
+            Embed.watchDirectories paths `shouldReturn`
+              Set.fromList (map (dir </>) (["shop", "shared"] ++ [ "shop/web" | not Embed.watchesTrees ]))
+
+        describe "The stat rule" $ do
+          let stat mtime    = InterfaceFiles.SourceFileMeta mtime mtime 4 (Just 1) (Just 2)
+              recorded      = Compile.Recorded (stat 1000) "recorded" 1001
+              look facts r  = Compile.fileFact facts r :: FilePath -> Either String InterfaceFiles.SourceFileMeta -> IO (Either String String)
+              changed path  = \(Compile.FileChanged file) -> file == path
+
+          it "takes the recorded SHA-256 for a file with the recorded stat and reads nothing" $
+            withSystemTempDirectory "acton-file-fact" $ \dir -> do
+              -- The content is not the recorded one, and a path with no file
+              -- cannot be read at all.
+              B8.writeFile (dir </> "replaced") (B8.pack "new\n")
+              facts <- Compile.newFileFacts
+              look facts (Just recorded) (dir </> "replaced") (Right (stat 1000)) `shouldReturn` Right "recorded"
+              look facts (Just recorded) (dir </> "none") (Right (stat 1000)) `shouldReturn` Right "recorded"
+
+          it "reads a file with another stat, and one that is not older than the file that holds the record" $
+            withSystemTempDirectory "acton-file-fact" $ \dir -> do
+              B8.writeFile (dir </> "abc") (B8.pack "abc")
+              let sha = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+              forM_ [ (Nothing, stat 1000)
+                    , (Just recorded, stat 999)
+                    , (Just recorded, (stat 1000) { InterfaceFiles.sfmCTimeNs = 999 })
+                    , (Just recorded, (stat 1000) { InterfaceFiles.sfmSize = 3 })
+                    , (Just recorded, (stat 1000) { InterfaceFiles.sfmDevice = Just 3 })
+                    , (Just recorded, (stat 1000) { InterfaceFiles.sfmInode = Just 3 })
+                    , (Just recorded { Compile.recordedWritten = 1000 }, stat 1000)
+                    , (Just recorded { Compile.recordedWritten = 999 }, stat 1000)
+                    ] $ \(r, st) -> do
+                facts <- Compile.newFileFacts
+                look facts r (dir </> "abc") (Right st) `shouldReturn` Right sha
+
+          it "reads a file once in a plan" $
+            withSystemTempDirectory "acton-file-fact" $ \dir -> do
+              B8.writeFile (dir </> "abc") (B8.pack "abc")
+              facts <- Compile.newFileFacts
+              first <- look facts Nothing (dir </> "abc") (Right (stat 1000))
+              removeFile (dir </> "abc")
+              look facts Nothing (dir </> "abc") (Right (stat 1000)) `shouldReturn` first
+              look facts (Just recorded) (dir </> "abc") (Right (stat 1000)) `shouldReturn` first
+              -- Another plan has seen nothing of the file.
+              other <- Compile.newFileFacts
+              look other Nothing (dir </> "abc") (Right (stat 1000)) `shouldThrow` (\(_ :: E.IOException) -> True)
+
+          it "reads a file again after a read that failed" $
+            withSystemTempDirectory "acton-file-fact" $ \dir -> do
+              facts <- Compile.newFileFacts
+              look facts Nothing (dir </> "abc") (Right (stat 1000)) `shouldThrow` (\(_ :: E.IOException) -> True)
+              B8.writeFile (dir </> "abc") (B8.pack "abc")
+              look facts Nothing (dir </> "abc") (Right (stat 1000))
+                `shouldReturn` Right "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+
+          it "returns the reason where there is no file to read" $ do
+            facts <- Compile.newFileFacts
+            look facts (Just recorded) "none" (Left "no file") `shouldReturn` Left "no file"
+            look facts Nothing "none" (Left "a directory") `shouldReturn` Left "a directory"
+
+          it "stops at a later look of the plan that brings another stat" $
+            withSystemTempDirectory "acton-file-fact" $ \dir -> do
+              let path = dir </> "abc"
+              B8.writeFile path (B8.pack "abc")
+              facts <- Compile.newFileFacts
+              _ <- look facts Nothing path (Right (stat 1000))
+              look facts Nothing path (Right ((stat 1000) { InterfaceFiles.sfmCTimeNs = 999 })) `shouldThrow` changed path
+              look facts Nothing path (Right ((stat 1000) { InterfaceFiles.sfmSize = 3 })) `shouldThrow` changed path
+              look facts Nothing path (Right (stat 1001)) `shouldThrow` changed path
+              look facts (Just recorded { Compile.recordedStat = stat 1001, Compile.recordedWritten = 1002 }) path (Right (stat 1001)) `shouldThrow` changed path
+              look facts Nothing path (Left "no file") `shouldThrow` changed path
+              gone <- Compile.newFileFacts
+              _ <- look gone Nothing path (Left "no file")
+              look gone Nothing path (Right (stat 1000)) `shouldThrow` changed path
+
+          it "writes the row of the embedded files and no other row" $
+            withSystemTempDirectory "acton-update-embeds" $ \dir -> do
+              let mn        = S.modName ["page"]
+                  tyPath    = dir </> "page.tydb"
+                  meta      = stat 500
+                  file m    = InterfaceFiles.EmbeddedFile "data/value.txt" 4 "aa" (stat m)
+                  names     = [nameHash (S.name "value") "s" "p" "i"]
+                  nmod      = I.NModule [] [(S.name "value", I.NVar S.tWild)] (Just "docs")
+                  tmod      = S.Module mn [] (Just "docs") []
+              InterfaceFiles.writeFile tyPath "src" "pub" "impl" (Just meta) [file 1000] [] [] names [] [] ["t"] (Just "docs") nmod tmod
+              before <- InterfaceFiles.readFile tyPath
+              InterfaceFiles.storedEmbeds before `shouldBe` [file 1000]
+              InterfaceFiles.updateEmbeds tyPath [file 2000]
+              after <- InterfaceFiles.readFile tyPath
+              after `shouldBe` before { InterfaceFiles.storedEmbeds = [file 2000] }
+              header <- InterfaceFiles.readHeaderSummary tyPath
+              InterfaceFiles.summaryEmbeds header `shouldBe` [file 2000]
+              InterfaceFiles.summarySourceMeta header `shouldBe` Just meta
+              InterfaceFiles.interfaceModifiedTimeNs tyPath `shouldReturn` InterfaceFiles.summaryModified header
+              -- A row of many files needs room that the .tydb does not have.
+              let many = [ (file 3000) { InterfaceFiles.embeddedPath = "data/" ++ show n ++ ".txt" } | n <- [1 .. 20000 :: Int] ]
+              InterfaceFiles.updateEmbeds tyPath many
+              InterfaceFiles.summaryEmbeds <$> InterfaceFiles.readHeaderSummary tyPath `shouldReturn` many
+
       describe "Completion" $ do
         it "completes inherited transform input attributes" $ do
           let env = completionFixtureEnv env0
@@ -2581,6 +3000,7 @@ main = do
               B8.empty
               B8.empty
               Nothing
+              []
               [(staleMod, B8.empty)]
               []
               []
@@ -5430,6 +5850,98 @@ expectMixedIndentation offset input =
         l `shouldBe` Loc offset (offset + 1)
       Left err -> expectationFailure ("Expected mixed indentation, got " ++ show err)
       Right _ -> expectationFailure "Expected mixed indentation to be rejected"
+
+-- | Both module parsers refuse the word embed between the two texts as a name,
+-- at the word.
+expectEmbedRefused :: String -> String -> Expectation
+expectEmbedRefused before after =
+  forM_ [P.parseModuleSerial, P.parseModule] $ \parse -> do
+    result <- E.try (parse (S.modName ["reserved"]) "reserved.act" (before ++ "embed" ++ after) Nothing)
+    case result of
+      Left (bundle :: ParseErrorBundle String P.CustomParseError) ->
+        NE.head (bundleErrors bundle) `shouldBe` FancyError (length before) (Set.singleton (ErrorCustom P.EmbedAsName))
+      Right _ -> expectationFailure "Expected embed to be refused as a name"
+
+-- | Both module parsers refuse a source with the given error of the embed
+-- form at the given place.
+expectEmbedError :: SrcLoc -> P.CustomParseError -> String -> Expectation
+expectEmbedError l err src =
+  forM_ [P.parseModuleSerial, P.parseModule] $ \parse -> do
+    result <- E.try (parse (S.modName ["page"]) "page.act" src Nothing)
+    case result of
+      Left (P.CustomParseException l' err') -> (l', err') `shouldBe` (l, err)
+      Right _ -> expectationFailure "Expected the embed form to be refused"
+
+-- | A module with an embed expression in each kind of place that holds an
+-- expression, with the paths p1, p2 and so on in the order of the source.
+embedPlaces :: String
+embedPlaces = unlines
+  [ "a = embed(\"p1\")"
+  , "b, c = (embed(\"p2\"), [embed(\"p3\"), *[embed(\"p4\")]])"
+  , "d = {embed(\"p5\"): embed(\"p6\"), **{1: embed(\"p7\")}}"
+  , "e = {embed(\"p8\")}"
+  , "f = (body=embed(\"p9\"), size=len(embed(\"p10\")))"
+  , "g = embed(\"p11\")[1:len(embed(\"p12\")):int(embed(\"p13\")[0])]"
+  , "h = embed(\"p14\") if embed(\"p15\") == embed(\"p16\") else -embed(\"p17\")[0]"
+  , "i = [embed(\"p18\") for x in [embed(\"p19\")] if x in embed(\"p20\")]"
+  , "j = lambda x: x + embed(\"p21\")"
+  , "k = isinstance(embed(\"p22\"), bytes)"
+  , "l = (embed(\"p23\")).decode(\"x\", errors=embed(\"p24\"))"
+  , "def m(x = embed(\"p25\"), y = embed(\"p26\")):"
+  , "    z = embed(\"p27\")"
+  , "    z += embed(\"p28\")"
+  , "    x[embed(\"p29\")] = embed(\"p30\")"
+  , "    assert embed(\"p31\"), embed(\"p32\")"
+  , "    del x[embed(\"p33\")]"
+  , "    if embed(\"p34\"):"
+  , "        print(embed(\"p35\"))"
+  , "    elif embed(\"p36\"):"
+  , "        pass"
+  , "    else:"
+  , "        embed(\"p37\")"
+  , "    while embed(\"p38\"):"
+  , "        break"
+  , "    else:"
+  , "        embed(\"p39\")"
+  , "    for q in embed(\"p40\"):"
+  , "        embed(\"p41\")"
+  , "    try:"
+  , "        embed(\"p42\")"
+  , "    except ValueError:"
+  , "        embed(\"p43\")"
+  , "    else:"
+  , "        embed(\"p44\")"
+  , "    finally:"
+  , "        embed(\"p45\")"
+  , "    with open(embed(\"p46\")) as r:"
+  , "        embed(\"p47\")"
+  , "    return embed(\"p48\")"
+  , "class Nn(object):"
+  , "    def o(self):"
+  , "        return embed(\"p49\")"
+  , "actor Oo():"
+  , "    var o = embed(\"p50\")"
+  , "    def o2():"
+  , "        after embed(\"p51\"): o2(embed(\"p52\"))"
+  , "        x = await async o3(embed(\"p53\"))"
+  , "        return x?.o(embed(\"p54\"))"
+  , "protocol Pp:"
+  , "    def o4(self):"
+  , "        return embed(\"p55\")"
+  , "extension Nn (Pp):"
+  , "    def o5(self):"
+  , "        return embed(\"p56\")"
+  , "def r(x):"
+  , "    raise ValueError(embed(\"p57\"))"
+  , "s = {embed(\"p58\"): embed(\"p59\") for x in embed(\"p60\") if embed(\"p61\")}"
+  , "t = {embed(\"p62\") for x in embed(\"p63\")}"
+  , "u = sum(len(embed(\"p64\")) for x in embed(\"p65\"))"
+  , "v = \"<{embed(\"p66\")}>\""
+  , "w = (embed(\"p67\"), 1).0"
+  , "actor Qq(x = embed(\"p68\"), y = embed(\"p69\")):"
+  , "    pass"
+  , "z = lambda x=embed(\"p70\"), y=embed(\"p71\"): x"
+  ]
 
 parseBundleErrorLine :: ParseErrorBundle String P.CustomParseError -> Int
 parseBundleErrorLine bundle =

@@ -1,0 +1,2 @@
+# A path of embed that leads out of the project
+page = embed("../x")

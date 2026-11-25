@@ -1,0 +1,9 @@
+Building file test/typeerrors/embed_default_parameter_list.act using temporary scratch directory
+   embed_default_parameter_list  Parse done                                                               0.000 s
+[error Compilation error]: embed cannot be the default value of a parameter. Give the content a name at the top level of the module and use the name
+     +--> embed_default_parameter_list.act@2:34-2:70
+     |
+   2 | def pages(bodies: list[bytes] = [embed("embed_default_parameter.txt")]) -> list[bytes]:
+     :                                  ^----------------------------------- 
+     :                                  `- embed cannot be the default value of a parameter. Give the content a name at the top level of the module and use the name
+-----+

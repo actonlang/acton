@@ -180,6 +180,7 @@ instance Pretty Expr where
     pretty (Ellipsis _)             = text "..."
     pretty (Strings _ ss)           = hsep (map (pretty . show) ss)
     pretty (BStrings _ ss)          = hsep (map (\s -> text " b" <> pretty s) ss)
+    pretty (Embed _ p _)            = text "embed" <> parens (doubleQuotes (text p))
     pretty (Call _ f (PosArg (GeneratorExpr _ e co) PosNil) KwdNil)
                                     = prettyAtom f <> parens (pretty e <+> pretty co)
     pretty (Call _ e ps ks)         = prettyAtom e <> parens (pretty (ps,ks))

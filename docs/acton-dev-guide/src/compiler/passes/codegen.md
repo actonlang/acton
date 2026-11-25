@@ -42,6 +42,18 @@ extensions, source line directives, and initialization dependencies intact.
 Incremental freshness checks include the fragment hash; deleted modules also
 have their owned fragments pruned.
 
+An expression `embed("path")` is generated as
+`actBytesFromCStringLength((const char *)<array>, <size>)`, where the array is
+declared `extern` at the top of the `.c` and defined in the module's data C
+file, `<module>.embed.c`. `Acton.CodeGen.genEmbedData` returns the text of that
+file, and `Acton.Compile` puts a tag line in front of it as for the other
+files, with the tag `dataTag`. The name of the array is the module's C prefix,
+`embed$` and the first 32 hexadecimal digits of the SHA-256 of the path. A file
+without content has no array, and its expression is
+`actBytesFromCStringLength("", 0)`. See
+[Incremental Compilation](../incremental_compilation.md) for when the data C
+file is written.
+
 Generated closures have typed capture structs and a separate class identity
 for each distinct body. A static `$ClosureLayout` describes their size,
 method table, and capture fields using C `offsetof` and `sizeof`. Field

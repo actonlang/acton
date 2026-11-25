@@ -1,0 +1,7 @@
+[error Compilation error]: web is a directory, and embed takes one file
+     +--> page.act@2:15-2:27
+     |
+   2 | page: bytes = embed("web")
+     :               ^-----------
+     :               `- web is a directory, and embed takes one file
+-----+

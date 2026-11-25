@@ -32,6 +32,7 @@ module Acton.Project
   , headerFile
   , closureSupportFile
   , generatedFiles
+  , dataFile
   , generatedPath
   , rootStubPath
   , rootBinaryName
@@ -66,6 +67,7 @@ module Acton.Project
   , existingDependencyDir
   , discoverProjects
   , discoverBuildProjects
+  , localProjects
   , BackgroundCompilerLock
   , tryBackgroundCompilerLock
   , releaseBackgroundCompilerLock
@@ -366,9 +368,14 @@ cFile                   = GeneratedFile "c"       ".c"
 headerFile              = GeneratedFile "h"       ".h"
 closureSupportFile      = GeneratedFile "support" ".closures.inc"
 
--- | Every file the back passes generate for a module.
+-- | The files the back passes generate for every module.
 generatedFiles          :: [GeneratedFile]
 generatedFiles          = [cFile, headerFile, closureSupportFile]
+
+-- | The data C file of a module that embeds files: it holds their content.
+-- A module that embeds no file has none.
+dataFile                :: GeneratedFile
+dataFile                = GeneratedFile "data"    ".embed.c"
 
 -- | The path of a module's generated file.
 generatedPath           :: Paths -> A.ModName -> GeneratedFile -> FilePath
@@ -386,7 +393,7 @@ rootBinaryName paths test mn = (if test then ".test_" else "") ++ moduleLabel pa
 
 -- | All files generated for a module.
 moduleOutputs           :: Paths -> A.ModName -> [FilePath]
-moduleOutputs paths mn  = tyDbPath paths mn : map (generatedPath paths mn) generatedFiles ++
+moduleOutputs paths mn  = tyDbPath paths mn : map (generatedPath paths mn) (dataFile : generatedFiles) ++
                           [ rootStubPath paths test mn | test <- [False, True] ]
 
 -- | Whether 'file' names an Acton source file.
@@ -466,7 +473,10 @@ moduleNameFromFile srcRoot proj actFile = do
     return (projectModName proj names)
 
 -- | Enumerate all .act files in a project and pair them with module names.
--- Used to seed the project module index for graph construction.
+-- Used to seed the project module index for graph construction.  Two
+-- modules whose generated files have a path in common are an error: the
+-- data C file of the module of tool.act is the generated .c of the module
+-- of tool.embed.act.
 enumerateProjectModules :: ProjCtx -> IO [(FilePath, A.ModName)]
 enumerateProjectModules ctx = do
     exists <- doesDirectoryExist (projSrcDir ctx)
@@ -484,9 +494,20 @@ enumerateProjectModules ctx = do
             throwProjectError ("Source files in project " ++ projRoot ctx ++ " overlap with declared dependencies:\n" ++
                                concat ["    " ++ makeRelative (projRoot ctx) f ++ "\n" | f <- depOverlaps])
 
-        forM actFiles $ \f -> do
+        mods <- forM actFiles $ \f -> do
           mn <- moduleNameFromFile (projSrcDir ctx) proj f
           return (f, mn)
+
+        -- The generated files of a module, as paths under the types directory.
+        let generated mn = [ joinPath (A.modPath mn) ++ generatedSuffix file | file <- dataFile : generatedFiles ]
+            shared = M.filter ((> 1) . length) (M.fromListWith (++) [ (path, [f]) | (f, mn) <- mods, path <- generated mn ])
+
+        unless (M.null shared) $
+            throwProjectError ("Source files in project " ++ projRoot ctx ++ " whose modules have a generated file in common:\n" ++
+                               concat [ "    " ++ intercalate " and " (map (makeRelative (projRoot ctx)) (sort fs)) ++ ": " ++ path ++ "\n"
+                                      | (path, fs) <- M.toList shared ])
+
+        return mods
 
 -- | Remove the generated outputs under a project's types directory that
 -- belong to no module the project declares, so that a cached header cannot
@@ -839,6 +860,20 @@ discoverBuildProjects gopts opts paths = do
     sys       <- normalizePathSafe (sysPath paths)
     overrides <- normalizeDepOverrides root (C.dep_overrides opts)
     either (const Nothing) Just <$> trySync (discoverProjects gopts sys root overrides)
+
+-- | The projects among those of a build, keyed by their roots, whose files
+-- can change while a watch runs: the root project and its local
+-- dependencies, which a path dependency or a --dep override names.  A
+-- dependency fetched by hash lives in the dependency cache, whose entries
+-- never change, and std and base belong to the compiler.
+localProjects :: FilePath -> FilePath -> M.Map FilePath ProjCtx -> IO (M.Map FilePath ProjCtx)
+localProjects sys root projects = do
+    cache  <- normalizePathSafe . depCacheDir =<< getHomeDirectory
+    -- The system directory and std and base inside it, each with its links
+    -- resolved, as the discovered roots are.
+    system <- mapM normalizePathSafe [sys, sys </> "std", sys </> "base"]
+    let compilers dir = any (\s -> dir == s || dir `isUnder` s) system
+    return (M.filterWithKey (\dir _ -> dir == root || not (dir `isUnder` cache || compilers dir)) projects)
 
 discoverProjects :: C.GlobalOptions -> FilePath -> FilePath -> [(String, FilePath)] -> IO (M.Map FilePath ProjCtx)
 discoverProjects gopts sysAbs rootProj depOverrides = do

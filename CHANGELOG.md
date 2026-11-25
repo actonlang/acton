@@ -3,6 +3,18 @@
 ## Unreleased
 
 ### Language
+- Add `embed("path")`, an expression of type `bytes` whose value is the
+  content of a file, as in `banner = embed("data/banner.png")`. The content is
+  part of the executable, so the program needs no file when it runs. The path
+  counts from the project root, or from the directory of a file that is
+  compiled without a project. A build compiles the module again when the file
+  has new content, and stops when the file changes while the build runs.
+  `acton build --watch` and `acton test --watch` build again when an embedded
+  file is saved or created.
+  `embed` is now a reserved word: a variable, a function, a parameter or a
+  class with this name needs another name, and an attribute is written
+  `x."embed"`. The guide page "Embedding files" has the rules for a path and
+  the limits.
 - Reject files that mix tabs and spaces in block indentation, even on separate
   lines or in separate functions. Use one style throughout each file;
   whitespace inside strings, comments, and continuation alignment does not

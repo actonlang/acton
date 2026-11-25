@@ -36,10 +36,15 @@
 --                                                     --   editor overlay or a module with an .ext.c)
 --                         , ByteString                -- moduleSrcBytesHash: SHA-256 of raw source,
 --                                                     --   combined with that of its .ext.c, and of the
---                                                     --   files it includes, if any (Acton.ExtSource)
+--                                                     --   files it includes, if any (Acton.ExtSource),
+--                                                     --   and with the paths and SHA-256 of its
+--                                                     --   embedded files, if any
 --                         , ByteString                -- modulePubHash: structural hash of public NameInfo
 --                                                     --   (doc-free) + imports' pub hashes
 --                         , ByteString )              -- moduleImplHash: structural hash of per-name impl hashes
+--     "embeds"         :: [EmbeddedFile]              -- each file that an embed expression names, once,
+--                                                     --   sorted by path, with the stat taken before its
+--                                                     --   content was read
 --     "imports"        :: [(A.ModName, ByteString)]   -- dependency module and pub hash used
 --     "deps"           :: [DepModuleInfo]              -- dependency modules with pub/impl hashes
 --     "roots"          :: [A.Name]                    -- root actors (e.g. main or test_main)
@@ -100,6 +105,7 @@ module InterfaceFiles
   , DepNameInfo(..)
   , DepUsers(..)
   , SourceFileMeta(..)
+  , EmbeddedFile(..)
   , StoredModule(..)
   , HeaderSummary(..)
   , TyCacheInvalid(..)
@@ -148,6 +154,7 @@ module InterfaceFiles
   , writeFileWithProgress
   , writeFileWithVersion
   , updateSourceMeta
+  , updateEmbeds
   , updateImplRefresh
   ) where
 
@@ -266,6 +273,19 @@ data SourceFileMeta = SourceFileMeta
 instance Persist.Persist SourceFileMeta
 instance NFData SourceFileMeta
 
+-- | A file that an embed expression of a module names: its path as written,
+-- the size and the SHA-256 of its content, as 64 hexadecimal digits, and the
+-- stat of the file, taken before the content was read.
+data EmbeddedFile = EmbeddedFile
+  { embeddedPath   :: FilePath
+  , embeddedSize   :: Integer
+  , embeddedSha256 :: String
+  , embeddedStat   :: SourceFileMeta
+  } deriving (Show, Eq, Generic)
+
+instance Persist.Persist EmbeddedFile
+instance NFData EmbeddedFile
+
 data TyDbWriteProgress = TyDbWriteProgress
   { tyDbWriteProgressLabel :: String
   , tyDbWriteProgressRatio :: Double
@@ -282,6 +302,7 @@ data StoredModule = StoredModule
   , storedSourceHash    :: BS.ByteString
   , storedPubHash       :: BS.ByteString
   , storedImplHash      :: BS.ByteString
+  , storedEmbeds        :: [EmbeddedFile]
   , storedImports       :: [(A.ModName, BS.ByteString)]
   , storedDepModules    :: [DepModuleInfo]
   , storedNames         :: [NameHashInfo]                 -- nhPubDeps and nhImplDeps empty: those live in the deps rows
@@ -291,13 +312,17 @@ data StoredModule = StoredModule
   } deriving (Show, Eq)
 
 -- | The small module-level keys of a .tydb, which readHeaderSummary decodes
--- without touching any per-name or per-statement row.
+-- without touching any per-name or per-statement row, and the modification
+-- time of the .tydb when they were read, in POSIX nanoseconds.  A stat that
+-- the header records is trusted only for a file that is older than that.
 data HeaderSummary = HeaderSummary
-  { summaryCompiler   :: String                           -- the build of the compiler that wrote it
+  { summaryModified   :: Integer
+  , summaryCompiler   :: String                           -- the build of the compiler that wrote it
   , summarySourceMeta :: Maybe SourceFileMeta
   , summarySourceHash :: BS.ByteString
   , summaryPubHash    :: BS.ByteString
   , summaryImplHash   :: BS.ByteString
+  , summaryEmbeds     :: [EmbeddedFile]
   , summaryImports    :: [(A.ModName, BS.ByteString)]
   , summaryDepModules :: [DepModuleInfo]
   , summaryNameCount  :: Int
@@ -497,10 +522,11 @@ encodeStrict = Persist.encode
 key :: String -> BS.ByteString
 key = B.pack
 
-keyVersion, keyCompiler, keyMeta, keyImports, keyDeps, keyRoots, keyTests, keyDoc, keyNameCount, keyPublicNames, keyConstructors, keyActors, keyStmtCount, keyStmtHasNotImpl, keyEscapeSummaries, keyModuleHeader :: BS.ByteString
+keyVersion, keyCompiler, keyMeta, keyEmbeds, keyImports, keyDeps, keyRoots, keyTests, keyDoc, keyNameCount, keyPublicNames, keyConstructors, keyActors, keyStmtCount, keyStmtHasNotImpl, keyEscapeSummaries, keyModuleHeader :: BS.ByteString
 keyVersion      = key "version"
 keyCompiler     = key "compiler"
 keyMeta         = key "meta"
+keyEmbeds       = key "embeds"
 keyImports      = key "imports"
 keyDeps         = key "deps"
 keyRoots        = key "roots"
@@ -1426,13 +1452,14 @@ stmtTopNames stmt =
       A.VarAssign _ ps _   -> Data.List.nub (Names.bound ps)
       _                    -> []
 
-interfaceEntries :: (String -> Double -> IO ()) -> [Int] -> String -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [DepModuleInfo] -> [NameHashInfo] -> EscapeSummaries -> [A.Name] -> [String] -> Maybe String -> I.NModule -> A.Module -> IO [(BS.ByteString, BS.ByteString)]
-interfaceEntries onProgress version compiler moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps depModules nameHashes escapeSummaries roots tests mdoc nmod tchecked = do
+interfaceEntries :: (String -> Double -> IO ()) -> [Int] -> String -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [EmbeddedFile] -> [(A.ModName, BS.ByteString)] -> [DepModuleInfo] -> [NameHashInfo] -> EscapeSummaries -> [A.Name] -> [String] -> Maybe String -> I.NModule -> A.Module -> IO [(BS.ByteString, BS.ByteString)]
+interfaceEntries onProgress version compiler moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta embeds imps depModules nameHashes escapeSummaries roots tests mdoc nmod tchecked = do
     caps <- getNumCapabilities
     let header =
           [ (keyVersion, encodeStrict version)
           , (keyCompiler, encodeStrict compiler)
           , (keyMeta, encodeStrict (sourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash))
+          , (keyEmbeds, encodeStrict embeds)
           , (keyImports, encodeStrict imps)
           , (keyRoots, encodeStrict roots)
           , (keyTests, encodeStrict tests)
@@ -1479,7 +1506,7 @@ interfaceEntries onProgress version compiler moduleSrcBytesHash modulePubHash mo
 
 -- | Write a .tydb of the current interface version that names no build of
 -- the compiler, as tests that read it back write it.
-writeFile :: FilePath -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [DepModuleInfo] -> [NameHashInfo] -> EscapeSummaries -> [A.Name] -> [String] -> Maybe String -> I.NModule -> A.Module -> IO ()
+writeFile :: FilePath -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [EmbeddedFile] -> [(A.ModName, BS.ByteString)] -> [DepModuleInfo] -> [NameHashInfo] -> EscapeSummaries -> [A.Name] -> [String] -> Maybe String -> I.NModule -> A.Module -> IO ()
 writeFile = writeFileWithVersion A.version ""
 
 -- | Update only the cached source-file metadata in the header, leaving every
@@ -1496,6 +1523,19 @@ updateSourceMeta f sourceMeta = do
       validateVersion txn dbi
       (_oldMeta, srcH, pubH, implH) <- readMeta txn dbi
       putValue txn dbi keyMeta (encodeStrict (sourceMeta, srcH, pubH, implH))
+
+-- | Update only the row of the embedded files, leaving every other row
+-- untouched, as updateSourceMeta does for the stat of the source: a file
+-- that was written again with the same content has another stat.
+updateEmbeds :: FilePath -> [EmbeddedFile] -> IO ()
+updateEmbeds f embeds = do
+    extra <- entryMapSize [row]
+    size <- readMapSize f
+    withWriteTxn f (size + extra) $ \txn dbi -> do
+      validateVersion txn dbi
+      uncurry (putValue txn dbi) row
+  where
+    row = (keyEmbeds, encodeStrict embeds)
 
 -- | Apply an impl-hash refresh surgically: update the meta row, upsert the
 -- dependency index rows and rewrite only the per-name rows whose stored
@@ -1537,13 +1577,13 @@ putValueIfChanged txn dbi k v = do
 
 -- | Write a .tydb of the given interface version, recording the given build
 -- of the compiler as the one that wrote it.
-writeFileWithVersion :: [Int] -> String -> FilePath -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [DepModuleInfo] -> [NameHashInfo] -> EscapeSummaries -> [A.Name] -> [String] -> Maybe String -> I.NModule -> A.Module -> IO ()
-writeFileWithVersion version compiler f moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps depModules nameHashes escapeSummaries roots tests mdoc nmod tchecked =
-    writeFileWithProgress (\_ -> return ()) version compiler f moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps depModules nameHashes escapeSummaries roots tests mdoc nmod tchecked
+writeFileWithVersion :: [Int] -> String -> FilePath -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [EmbeddedFile] -> [(A.ModName, BS.ByteString)] -> [DepModuleInfo] -> [NameHashInfo] -> EscapeSummaries -> [A.Name] -> [String] -> Maybe String -> I.NModule -> A.Module -> IO ()
+writeFileWithVersion version compiler f moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta embeds imps depModules nameHashes escapeSummaries roots tests mdoc nmod tchecked =
+    writeFileWithProgress (\_ -> return ()) version compiler f moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta embeds imps depModules nameHashes escapeSummaries roots tests mdoc nmod tchecked
 
-writeFileWithProgress :: (TyDbWriteProgress -> IO ()) -> [Int] -> String -> FilePath -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [DepModuleInfo] -> [NameHashInfo] -> EscapeSummaries -> [A.Name] -> [String] -> Maybe String -> I.NModule -> A.Module -> IO ()
-writeFileWithProgress onProgress version compiler f moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps depModules nameHashes escapeSummaries roots tests mdoc nmod tchecked = do
-    entries <- interfaceEntries prepProgress version compiler moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps depModules nameHashes escapeSummaries roots tests mdoc nmod tchecked
+writeFileWithProgress :: (TyDbWriteProgress -> IO ()) -> [Int] -> String -> FilePath -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [EmbeddedFile] -> [(A.ModName, BS.ByteString)] -> [DepModuleInfo] -> [NameHashInfo] -> EscapeSummaries -> [A.Name] -> [String] -> Maybe String -> I.NModule -> A.Module -> IO ()
+writeFileWithProgress onProgress version compiler f moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta embeds imps depModules nameHashes escapeSummaries roots tests mdoc nmod tchecked = do
+    entries <- interfaceEntries prepProgress version compiler moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta embeds imps depModules nameHashes escapeSummaries roots tests mdoc nmod tchecked
     writeProgress 0
     writeEntriesWithProgress writeProgress f entries
   where
@@ -1559,6 +1599,7 @@ readFile f =
     withReadTxn f $ \txn dbi -> do
       (sourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash) <- readMeta txn dbi
       compiler <- getValue "compiler" txn dbi keyCompiler
+      embeds <- getValue "embeds" txn dbi keyEmbeds
       imps <- getValue "imports" txn dbi keyImports
       depModules <- getValue "deps" txn dbi keyDeps
       roots <- getValue "roots" txn dbi keyRoots
@@ -1578,6 +1619,7 @@ readFile f =
         , storedSourceHash    = moduleSrcBytesHash
         , storedPubHash       = modulePubHash
         , storedImplHash      = moduleImplHash
+        , storedEmbeds        = embeds
         , storedImports       = imps
         , storedDepModules    = depModules
         , storedNames         = nameHashes
@@ -1624,8 +1666,10 @@ readModuleIface f =
 readHeaderSummary :: FilePath -> IO HeaderSummary
 readHeaderSummary f =
     withReadTxn f $ \txn dbi -> do
+      modified <- interfaceModifiedTimeNs f
       (sourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash) <- readMeta txn dbi
       compiler <- getValue "compiler" txn dbi keyCompiler
+      embeds <- getValue "embeds" txn dbi keyEmbeds
       imps <- getValue "imports" txn dbi keyImports
       depModules <- getValue "deps" txn dbi keyDeps
       roots <- getValue "roots" txn dbi keyRoots
@@ -1634,11 +1678,13 @@ readHeaderSummary f =
       nameCount <- getValue "name-count" txn dbi keyNameCount
       traceTydbRead "header" f "cached"
       return HeaderSummary
-        { summaryCompiler   = compiler
+        { summaryModified   = modified
+        , summaryCompiler   = compiler
         , summarySourceMeta = sourceMeta
         , summarySourceHash = moduleSrcBytesHash
         , summaryPubHash    = modulePubHash
         , summaryImplHash   = moduleImplHash
+        , summaryEmbeds     = embeds
         , summaryImports    = imps
         , summaryDepModules = depModules
         , summaryNameCount  = nameCount

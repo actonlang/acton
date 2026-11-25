@@ -1,0 +1,3 @@
+# An embed expression inside the default value of a parameter
+def pages(bodies: list[bytes] = [embed("embed_default_parameter.txt")]) -> list[bytes]:
+    return bodies
