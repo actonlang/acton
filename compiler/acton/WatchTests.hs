@@ -244,6 +244,11 @@ watchTriggerTests = testGroup "watch triggers"
         told WatchFull
         writeFile (dir </> "data/sub/two.txt") "two\n"
         told (saved "data/sub/two.txt")
+        -- A file that is written outside the input paths and moved into
+        -- that directory.
+        writeFile (dir </> "moved.new") "moved\n"
+        renameFile (dir </> "moved.new") (dir </> "data/sub/moved.txt")
+        told (saved "data/sub/moved.txt")
         -- A directory that appears at an input path.
         writeIORef triggers []
         createDirectory (dir </> "later")
