@@ -264,27 +264,34 @@ mkTyFileModuleInfo m ms mdoc db
                               }
   where lookupName n
           | not (isPublicName n) = Nothing
-          | otherwise        = unsafePerformIO $ do
-                                  mi <- InterfaceFiles.readInterfaceDBNameInfoMaybe db n
-                                  return $ snd <$> mi
-        publicNames          = unsafePerformIO $ InterfaceFiles.readInterfaceDBPublicNames db
-        escapeSummaries      = unsafePerformIO $ InterfaceFiles.readInterfaceDBEscapeSummaries db
+          | otherwise        = snd <$> tydbRead (InterfaceFiles.readInterfaceDBNameInfoMaybe db n)
+        publicNames          = tydbRead $ InterfaceFiles.readInterfaceDBPublicNames db
+        escapeSummaries      = tydbRead $ InterfaceFiles.readInterfaceDBEscapeSummaries db
         escapeSummaryMap     = Map.fromList escapeSummaries
-        constructors         = unsafePerformIO $ InterfaceFiles.readInterfaceDBConstructors db
-        actors               = map (moduleTCon m) $ unsafePerformIO $ InterfaceFiles.readInterfaceDBActors db
-        conAttr n            = map (moduleTCon m) $ unsafePerformIO $ InterfaceFiles.readInterfaceDBConAttr db n
-        protoAttr n          = map (moduleTCon m) $ unsafePerformIO $ InterfaceFiles.readInterfaceDBProtoAttr db n
+        constructors         = tydbRead $ InterfaceFiles.readInterfaceDBConstructors db
+        actors               = map (moduleTCon m) $ tydbRead $ InterfaceFiles.readInterfaceDBActors db
+        conAttr n            = map (moduleTCon m) $ tydbRead $ InterfaceFiles.readInterfaceDBConAttr db n
+        protoAttr n          = map (moduleTCon m) $ tydbRead $ InterfaceFiles.readInterfaceDBProtoAttr db n
         descendants qn       = [ moduleTCon m ni | qn' <- moduleQNameKeys m qn, ni@(_,NClass{}) <- readDesc qn' ]
         protoDescendants qn  = [ moduleTCon m ni | qn' <- moduleQNameKeys m qn, ni@(_,NProto{}) <- readDesc qn' ]
-        readDesc qn          = unsafePerformIO $ InterfaceFiles.readInterfaceDBDescendants db qn
+        readDesc qn          = tydbRead $ InterfaceFiles.readInterfaceDBDescendants db qn
         -- The proto index stores extension records; one extension can carry
         -- witnesses for several protocols, so keep only the indexed protocol.
         witsByProto qn       = concat [ filter ((== qn') . tcname . proto) $
                                           extWitnesses (GName m) (const False) $
-                                          unsafePerformIO $
+                                          tydbRead $
                                           InterfaceFiles.readInterfaceDBExtByProto db qn'
                                       | qn' <- moduleQNameKeys m qn ]
-        witsByType qn        = concat [ extWitnesses (GName m) (const False) $ unsafePerformIO $ InterfaceFiles.readInterfaceDBExtByType db qn' | qn' <- moduleQNameKeys m qn ]
+        witsByType qn        = concat [ extWitnesses (GName m) (const False) $ tydbRead $ InterfaceFiles.readInterfaceDBExtByType db qn' | qn' <- moduleQNameKeys m qn ]
+
+-- | A .tydb read behind a pure-looking value, run when the value is first
+-- needed.  The read masks asynchronous exceptions uninterruptibly, so a cancel
+-- reaches the evaluating thread after the read returns and suspends the
+-- evaluation, which a later use resumes.  Delivered inside the read, the cancel
+-- would be rethrown by the read's exception handlers and stored in the value,
+-- and the module cache shares these values across runs.
+tydbRead                    :: IO a -> a
+tydbRead                    = unsafePerformIO . Control.Exception.uninterruptibleMask_
 
 moduleTCon                  :: ModName -> (Name, NameInfo) -> TCon
 moduleTCon m (n, i)         = TC (GName m n) (wildargs i)

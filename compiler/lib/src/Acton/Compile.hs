@@ -288,6 +288,13 @@ run does not wait for.  startCompile's cancel waits for this, so a stale
 write never overlaps the next generation.  A failed output fails a run
 that otherwise succeeded.
 
+A cancel stops checking, not committing.  Stage threads run masked, and
+only their parse and check passes run interruptible, so a cancel stops a
+running type check where it is, once a .tydb read in progress returns
+(Acton.Env.tydbRead).  A stage's .tydb commit, its outputs and its module
+cache entry run masked: a cancel that arrives during them reaches the stage
+only where it blocks.
+
 Deferred jobs wait for their dependents.  A deferred back job is prepared
 only when every module that depends on its module, directly or not, has
 finished its front stage in the run.  Only then is the interest in its
@@ -435,7 +442,7 @@ import Control.Concurrent.MVar
 import Control.Concurrent (forkIO, threadDelay)
 import Control.Concurrent.STM (TChan, TVar, atomically, check, modifyTVar', newTChanIO, newTVarIO, readTChan, readTVar, readTVarIO, writeTChan, writeTVar)
 import Control.DeepSeq (NFData, force, rnf)
-import Control.Exception (Exception, Handler(..), SomeException, catch, catches, displayException, evaluate, finally, handle, mask_, throwIO, try)
+import Control.Exception (Exception, Handler(..), SomeException, catch, catches, displayException, evaluate, finally, handle, interruptible, mask_, throwIO, try)
 import Control.Monad
 import Data.Binary (encode)
 import Data.Char (isControl, isHexDigit, isSpace)
@@ -849,11 +856,10 @@ compileParallelism gopts
 -- atomically all the same, because isCurrent reads it without the MVar.
 -- The previous run is then cancelled, and cancel waits for its finalizer,
 -- which waits for its background outputs, so stale writes never overlap the
--- new run. The cancel also waits until every running stage of the previous
--- generation ends, normally at the end of its passes, because stages run
--- masked (startReady). So startCompile can take as long as the rest of a
--- running type check. After the delay the run starts only if startCompile
--- numbered no newer generation in the meantime.
+-- new run. The cancel stops the previous generation's running parse and
+-- check passes where they are, and reaches a stage that is committing only
+-- where it blocks (startReady). After the delay the run starts only if
+-- startCompile numbered no newer generation in the meantime.
 startCompile :: CompileScheduler -> Int -> (Generation -> IO ()) -> IO Generation
 startCompile sched delay run = modifyMVar (schedulerRun sched) $ \previous -> do
   number <- atomicModifyIORef' (schedulerCounter sched) (\newest -> (newest + 1, newest + 1))
@@ -2471,12 +2477,12 @@ perform env (Reuse header deferred)           = Right <$> reuse env header defer
 
 -- | Check a module from source: parse it unless its parse stage did, run
 -- its front passes with its imports renamed to their providers, and under
--- --verbose report how its public name hashes changed.  Its hashes become
--- visible to reads before it reports.
+-- --verbose report how its public name hashes changed.  The parse runs
+-- interruptible.  Its hashes become visible to reads before it reports.
 compileModule :: ModuleEnv -> IO (Either [Diagnostic String] FrontResult)
 compileModule env = do
     previous <- if C.verbose (buildOptions build) then lookupNameMap (buildCache build) (searchPath (pathsOf env)) (nameOf env) else return Nothing
-    parsed   <- materialize (buildSources build) (moduleOptions env) (pathsOf env) (nameOf env) (taskSourceFile (moduleTask env)) Nothing (moduleCurrent env)
+    parsed   <- interruptible (materialize (buildSources build) (moduleOptions env) (pathsOf env) (nameOf env) (taskSourceFile (moduleTask env)) Nothing (moduleCurrent env))
     case parsed of
       Left diags        -> return (Left diags)
       Right (source, m) -> do
@@ -2793,12 +2799,21 @@ data TypeObserver = TypeObserver
 
 -- | Check, hash and commit one parsed module, then start its doc page and
 -- --tydb copy in the background, recorded in the build for awaitOutputs.
--- Progress and outputs are reported as the module's events.  The module's
--- own errors become its diagnostics, and every other exception propagates.
+-- The passes run interruptible, and the commit and the outputs in the
+-- caller's mask.  Progress and outputs are reported as the module's events.
+-- The module's own errors become its diagnostics, and every other exception
+-- propagates.
 runFrontPasses :: ModuleEnv -> ModuleSource -> A.Module -> IO (Either [Diagnostic String] FrontResult)
 runFrontPasses env source parsed = do
     createDirectoryIfMissing True (moduleTypesDir (projTypes (pathsOf env)) mn)
-    tryDiagnostics (frontFailures env (sourceText source)) passes
+    tryDiagnostics (frontFailures env (sourceText source)) $ do
+      (embedded, checked, hashed, fr) <- interruptible passes
+      -- Once this module reports done, its rows are on disk.  Docs and the
+      -- --tydb copy are never read back within this build, so they are
+      -- written in the background.
+      commitTydb env (writeTydb env source checked hashed)
+      startOutputs (moduleBuild env) (keyOf env) (docOutputs env embedded checked hashed ++ tydbCopy env)
+      return fr
   where
     gopts    = buildOptions (moduleBuild env)
     opts     = moduleOptions env
@@ -2834,11 +2849,6 @@ runFrontPasses env source parsed = do
       dumpsDone       <- now
       (progressDone, statements, signatures) <- typeReport observer
       end             <- now
-      -- Once this module reports done, its rows are on disk.  Docs and the
-      -- --tydb copy are never read back within this build, so they are
-      -- written in the background.
-      commitTydb env (writeTydb env source checked hashed)
-      startOutputs (moduleBuild env) (keyOf env) (docOutputs env embedded checked hashed ++ tydbCopy env)
       let names  = hashedNames hashed
           -- reconstruct's typeEnv is already protocol-converted.
           -- Tagged with the hashes and imports the .tydb records, so that a
@@ -2858,14 +2868,14 @@ runFrontPasses env source parsed = do
             , ftTypeEscape        = escapeDone - forceDone
             , ftTypeHash          = hashDone - escapeDone
             , ftTypeStmtTimings   = statements }
-      return FrontResult
+      return (embedded, checked, hashed, FrontResult
         { frModuleInfo   = interfaceModuleInfo mn interface escapes
         , frHashes       = ModuleHashes { mhPub = hashedPub hashed, mhImpl = hashedImpl hashed, mhNames = Just (publicNameMap names) }
         , frInterest     = interestDeps names
         , frBack         = maybe (EagerBack job) DeferredBack (deferredJob env (A.hasNotImpl (A.mbody typed)) (hashedImpl hashed) (length names))
         , frFrontTime    = reportedTime gopts opts (end - start)
         , frFrontTiming  = if C.timing gopts then Just timing else Nothing
-        , frInferredSigs = signatures }
+        , frInferredSigs = signatures })
 
 -- | Evaluate the type check's results here, inside the module's
 -- diagnostics: a lazy type error becomes the module's diagnostic.  The
@@ -3846,8 +3856,10 @@ coordinate run state0 = do
 -- thread and recording it is interruptible, so an exception can arrive only
 -- while every started stage is recorded: reporting a start runs the
 -- caller's handler, which may block interruptibly or throw.  Stage threads
--- inherit the mask and run masked-interruptible: a cancel reaches them only
--- at interruptible points such as blocking I/O.
+-- inherit the mask.  Their parse and check passes run interruptible, and so
+-- does every thread those passes start, so a cancel stops them where they
+-- are.  What a stage commits, its .tydb, its outputs and its module cache
+-- entry, runs masked: a cancel reaches it only where it blocks.
 startReady :: Run -> BuildState -> IO BuildState
 startReady run state = startRest [] now
   where
@@ -3965,11 +3977,11 @@ moduleEnv run state k = ModuleEnv
 
 -- | Parse a module's source in a stage of its own, in parallel with its
 -- providers' front stages.  The syntax tree is forced here, so the parse
--- runs on the stage's thread.  A parse error completes the stage as a
--- ParseErrorTask, which the module's front stage reports.
+-- runs on the stage's thread, interruptible.  A parse error completes the
+-- stage as a ParseErrorTask, which the module's front stage reports.
 parseStage :: BuildEnv -> C.CompileOptions -> GlobalTask -> IO (CompileTask, Maybe TimeSpec)
 parseStage build opts t = do
-    (parsed, elapsed) <- timed $ do
+    (parsed, elapsed) <- timed $ interruptible $ do
       result <- materialize (buildSources build) opts (gtPaths t) (tkMod (gtKey t)) (taskSourceFile t) (Just (emit build . ParseProgressed t)) (gtTask t)
       mapM_ (evaluate . rnf . snd) result
       return result
