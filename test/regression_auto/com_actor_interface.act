@@ -1,0 +1,31 @@
+# Actor interfaces allow com callbacks in constructor parameters, method
+# arguments and return values. The callbacks can send asynchronous messages.
+actor Sink():
+    var hits = 0
+
+    def hit() -> None:
+        hits += 1
+
+    def count() -> int:
+        return hits
+
+com def notify(sink: Sink) -> None:
+    async sink.hit()
+
+actor Holder(callback: com(Sink) -> None):
+    def run(sink: Sink) -> None:
+        callback(sink)
+
+    def echo(f: com(Sink) -> None) -> com(Sink) -> None:
+        return f
+
+actor main(env):
+    sink = Sink()
+    holder = Holder(notify)
+
+    def __startup__():
+        cb = holder.echo(notify)
+        cb(sink)
+        done = holder.run(sink)
+        assert sink.count() == 2
+        env.exit(0)

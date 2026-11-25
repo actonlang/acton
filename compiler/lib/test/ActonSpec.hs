@@ -21,6 +21,7 @@ import qualified Acton.InitializationAnalysis as Init
 import Acton.Env (CompilationError(..))
 import qualified Acton.Kinds
 import qualified Acton.Types
+import qualified Acton.TypeEnv as TE
 import Acton.TypeEnv (TypeError(..),typeReport,initTypeEnv)
 import qualified Acton.Normalizer
 import qualified Acton.Deactorizer
@@ -56,7 +57,7 @@ import Text.Megaparsec (ParseErrorBundle, ParseError(..), ErrorFancy(..), PosSta
 import Text.Megaparsec.Pos (sourceLine, unPos)
 import qualified Data.Text as T
 import qualified Data.Text.Short as TS
-import Data.List (foldl', isInfixOf, isPrefixOf, nub, sort, subsequences)
+import Data.List (foldl', isInfixOf, isPrefixOf, nub, sort, subsequences, permutations, intersect, (\\))
 import Data.Maybe (listToMaybe)
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as M
@@ -236,6 +237,31 @@ hashDecl l doc =
 -- | The interface directories that tests type check against: std's, then base's.
 systemTypes :: [FilePath]
 systemTypes = Project.systemTypePaths (".." </> ".." </> "dist")
+-- Reference implementations retain the original list traversal so indexing
+-- changes must preserve both cycle selection and simplification order.
+referenceVarclose xys = clos [] xys
+  where clos cl [] = Right cl
+        clos cl ((x,y):rest)
+          | (x,y) `elem` cl = clos cl rest
+          | not (null common) = Left (x,y:common)
+          | otherwise = clos ((x,y):cl) ([(w,y) | w <- belowX] ++ [(x,v) | v <- aboveY] ++ rest)
+          where belowX = Solver.below x cl
+                aboveY = Solver.above y cl
+                common = belowX `intersect` aboveY
+
+referenceGsimp vi cl obs [] = []
+referenceGsimp vi cl obs ((x,y):rest)
+  | not subsumed = referenceGsimp vi cl obs rest
+  | x `elem` obs && y `elem` obs = referenceGsimp vi cl obs rest
+  | x `elem` obs = (x,y) : referenceGsimp vi cl (y:obs) rest
+  | otherwise = (x,y) : referenceGsimp vi cl (x:obs) rest
+  where subsumed = (Solver.above x cl \\ [y]) `eq` Solver.above y cl &&
+                   (Solver.below y cl \\ [x]) `eq` Solver.below x cl &&
+                   Solver.lookup' x (Solver.ubounds vi) `subset` Solver.lookup' y (Solver.ubounds vi) &&
+                   Solver.lookup' y (Solver.lbounds vi) `subset` Solver.lookup' x (Solver.lbounds vi) &&
+                   map snd (Solver.lookup' x $ Solver.pbounds vi) `eq` map snd (Solver.lookup' y $ Solver.pbounds vi)
+        a `eq` b = a `subset` b && b `subset` a
+        a `subset` b = all (`elem` b) a
 
 main :: IO ()
 main = do
@@ -245,10 +271,10 @@ main = do
   sydTest $ do
     describe "Communication effects" $ do
       let hierarchy =
-            [ (S.FXPure, [S.FXPure,S.FXMut,S.FXCom,S.FXProc])
+            [ (S.FXPure, [S.FXPure,S.FXMut,S.FXCom,S.FXProc,S.FXAction])
             , (S.FXMut, [S.FXMut,S.FXProc])
             , (S.FXProc, [S.FXProc])
-            , (S.FXAction, [S.FXAction,S.FXProc])
+            , (S.FXAction, [S.FXAction])
             , (S.FXCom, [S.FXCom,S.FXProc])
             ]
           effects = map fst hierarchy
@@ -272,7 +298,7 @@ main = do
           it ("compares and combines " ++ show a ++ " with " ++ show b) $ do
             Acton.Env.subeffect a b `shouldBe` included a b
             Acton.Env.castable env0 (S.tTFX a) (S.tTFX b) `shouldBe`
-              (included a b || (a == S.FXMut && b == S.FXPure))
+              ((included a b && (a,b) /= (S.FXPure,S.FXAction)) || (a == S.FXMut && b == S.FXPure))
             let lower = [c | c <- effects, included c a, included c b]
                 upper = [c | c <- effects, included a c, included b c]
                 greatest = [c | c <- lower, all (`included` c) lower]
@@ -322,6 +348,442 @@ main = do
           case result of
             Left (_ :: TypeError) -> pure ()
             Right _ -> expectationFailure "Unexpectedly accepted incompatible effects"
+    describe "Constraint variable graph indexes" $ do
+      let vs = [S.UV S.KType 0 n | n <- [5,11,29]]
+          graphs = [ordered | edges <- subsequences [(x,y) | x <- vs, y <- vs],
+                              ordered <- [edges,reverse edges,edges ++ take 1 edges]]
+          env = TE.initTypeEnv env0
+          info = TE.noinfo 0
+      it "preserves closure order and the first reported cycle" $
+        forM_ graphs $ \edges ->
+          Solver.varclose edges `shouldBe` referenceVarclose edges
+      it "preserves simplifications for every observable subset" $
+        forM_ graphs $ \edges -> case referenceVarclose edges of
+          Left _ -> pure ()
+          Right cl -> do
+            let Just vi = Solver.varinfo $
+                  [TE.Cast info env (S.tUni x) (S.tUni y) | (x,y) <- edges] ++
+                  [TE.Cast info env (S.tUni $ head vs) Builtin.tInt,
+                   TE.Cast info env Builtin.tInt (S.tUni $ last vs)]
+            forM_ (subsequences vs) $ \obs ->
+              Solver.gsimp vi cl obs edges `shouldBe` referenceGsimp vi cl obs edges
+    describe "Effect inference" $ do
+      let env = TE.initTypeEnv env0
+          info = TE.noinfo 0
+          solve te cs = fst <$> Solver.solve env (const True) te [] cs
+      forM_ ["pure", "action", "mut", "proc"] $ \fx ->
+        forM_ ["inferred", "defaults", "signature"] $ \form -> do
+          let label = fx ++ " (" ++ form ++ ")"
+              source method = unlines $ ["actor Worker():"] ++
+                ["    " ++ method ++ ": action(" ++ fx ++ "() -> None) -> None" | form == "signature"] ++
+                [ "    def " ++ method ++ "(cb" ++
+                    (if form == "signature" then "" else ": " ++ fx ++ "() -> None") ++
+                    (if form == "defaults" then ", count: int = 1" else "") ++ "):"
+                , "        cb()"
+                ]
+          it ("seals public actor callback effects: " ++ label) $ do
+            result <- E.try (do
+              typed <- typecheckSource env0 "actor_callback_seal" (source "apply")
+              E.evaluate (rnf typed)) :: IO (Either TypeError ())
+            case result of
+              Right _ | fx `elem` ["pure", "action"] -> pure ()
+              Left (TypeError _ message) | fx `elem` ["mut", "proc"] ->
+                message `shouldSatisfy` isPrefixOf "Leaking actor seal:"
+              Left err -> expectationFailure (show err)
+              Right _ -> expectationFailure "Expected the callback effect to leak the actor seal"
+          it ("allows private actor callback effects: " ++ label) $ do
+            typed <- typecheckSource env0 "private_actor_callback" (source "_apply")
+            E.evaluate (rnf typed)
+      it "keeps the temporary mut-to-pure cast out of effect bounds" $ do
+        Acton.Env.castable env S.fxMut S.fxPure `shouldBe` True
+        Solver.allAbove env S.fxMut `shouldSatisfy` notElem S.fxPure
+        Solver.allBelow env S.fxPure `shouldSatisfy` notElem S.fxMut
+      forM_ [("mut_callback_in_pure", unlines
+                [ "pure def apply(cb: mut() -> int) -> int:"
+                , "    return cb()" ])
+            , ("nested_sum_comprehension",
+                "values = [sum([i * i for i in range(k)]) for k in range(1, 4)]\n")
+            , ("local_initialization", unlines
+                [ "def finish(values: list[int], n: int):"
+                , "    values.append(n)"
+                , "    if n > 0:"
+                , "        parse(n - 1)"
+                , "pure def parse(n: int) -> list[int]:"
+                , "    values: list[int] = []"
+                , "    finish(values, n)"
+                , "    return values" ])
+            , ("local_initialization_result", unlines
+                [ "def finish(values: list[int], n: int) -> int:"
+                , "    values.append(n)"
+                , "    return parse(n - 1) if n > 0 else len(values)"
+                , "pure def parse(n: int) -> int:"
+                , "    values: list[int] = []"
+                , "    return finish(values, n)" ])] $ \(label,src) ->
+        it ("retains temporary mut-to-pure compatibility for " ++ label) $ do
+          typed <- typecheckSource env0 label src
+          E.evaluate (rnf typed)
+          when (label `elem` ["local_initialization", "local_initialization_result"]) $ do
+            fmap S.dfx (findTypedDef "finish" typed) `shouldBe` Just S.fxMut
+            fmap S.dfx (findTypedDef "parse" typed) `shouldBe` Just S.fxPure
+      forM_ [("pure",S.fxPure,S.fxPure), ("mut",S.fxMut,S.fxMut),
+             ("proc",S.fxProc,S.fxProc), ("action",S.fxAction,S.fxProc)] $ \(label,source,expected) ->
+        it ("resolves the value-unwrapping effect for " ++ label ++ " without contextual bounds") $ do
+          let (remaining, inferred) = TE.runTypeM $ do
+                fx <- TE.newUnivarOfKind S.KFX env
+                w <- TE.newWitness
+                let wrapped = S.TC (S.GName (S.modName ["$"]) (S.name "Unwrapped")) [fx]
+                _ <- Solver.reduce [] [TE.Proto info env w source wrapped]
+                remaining <- TE.collectDeferred
+                inferred <- TE.usubst fx
+                return (remaining,inferred)
+          length remaining `shouldBe` 0
+          inferred `shouldBe` expected
+      it "infers com for a discarded action call" $ do
+        typed <- typecheckSource env0 "discarded_action" $ unlines
+          [ "def send(cb: action(int) -> int):", "    cb(1)" ]
+        fmap S.dfx (findTypedDef "send" typed) `shouldBe` Just S.fxCom
+      forM_ [("value", "    return cb(1)"),
+             ("nested", "    sink(cb(1))")] $ \(label,body) ->
+        it ("requires proc for an action result in " ++ label ++ " position") $ do
+          let src = unlines
+                [ "com def invalid(cb: action(int) -> int, sink: action(int) -> None):", body ]
+          result <- E.try (typecheckSource env0 "action_result" src >>= E.evaluate . rnf) :: IO (Either TypeError ())
+          case result of
+            Left _ -> pure ()
+            Right _ -> expectationFailure "Expected awaiting an action reply to require proc"
+      it "finds wrapped effects using the single shared effect parameter" $ do
+        forM_ [(S.fxPure,[S.fxPure]), (S.fxMut,[S.fxMut]),
+               (S.fxProc,[S.fxProc,S.fxAction]), (S.fxAction,[])] $ \(fx,expected) -> do
+          let wrapped = S.TC (S.GName (S.modName ["$"]) (S.name "Wrapped")) [fx]
+              candidates = Solver.allBelowProto env wrapped
+          length candidates `shouldBe` length expected
+          forM_ expected $ \candidate -> candidates `shouldSatisfy` elem candidate
+      it "prefers pure across an Unwrapped bound in every constraint order" $ do
+        forM_ (permutations [0,1,2,3]) $ \order -> do
+          let (remaining, inferred) = TE.runTypeM $ do
+                signature <- TE.newUnivarOfKind S.KFX env
+                body <- TE.newUnivarOfKind S.KFX env
+                selected <- TE.newUnivarOfKind S.KFX env
+                unwrapped <- TE.newUnivarOfKind S.KFX env
+                selectW <- TE.newWitness
+                unwrapW <- TE.newWitness
+                callW <- TE.newWitness
+                let wrapped = S.TC (S.GName (S.modName ["$"]) (S.name "Unwrapped")) [unwrapped]
+                    cs = [ TE.Sub info env selectW S.fxPure selected
+                         , TE.Proto info env unwrapW selected wrapped
+                         , TE.Sub info env callW unwrapped body
+                         , TE.Cast info env body signature ]
+                    te = [(S.name "method", I.NVar (S.tFun signature S.posNil S.kwdNil S.tNone))]
+                remaining <- solve te [cs !! i | i <- order]
+                inferred <- TE.usubst [signature,body,selected,unwrapped]
+                return (remaining,inferred)
+          length remaining `shouldBe` 0
+          inferred `shouldBe` replicate 4 S.fxPure
+      it "infers optional int when None lower bounds meet integer results" $ do
+        typed <- typecheckSource env0 "none_lower_bounds" $ unlines
+          [ "pure def choose(flag: bool, n: int):"
+          , "    return None if flag else n"
+          , "def last(items: list[int]):"
+          , "    result = None"
+          , "    for item in items:"
+          , "        result = item"
+          , "    return result"
+          ]
+        forM_ ["choose","last"] $ \function ->
+          case lookup (S.name function) (QuickType.envOf $ S.mbody typed) of
+            Just (I.NDef sc _ _) -> S.restype (S.sctype sc) `shouldBe` S.tOpt Builtin.tInt
+            _ -> expectationFailure ("Expected the inferred signature of " ++ function)
+      it "places pure below action while keeping action separate from proc" $ do
+        Acton.Env.subeffect S.FXPure S.FXAction `shouldBe` True
+        Acton.Env.castable env S.fxPure S.fxAction `shouldBe` False
+        Acton.Env.subeffect S.FXAction S.FXProc `shouldBe` False
+        Acton.Env.castable env S.fxAction S.fxProc `shouldBe` False
+        Acton.Env.castable env S.fxAction S.fxPure `shouldBe` False
+        Solver.allAbove env S.fxPure `shouldSatisfy` elem S.fxAction
+        Solver.allBelow env S.fxAction `shouldSatisfy` elem S.fxPure
+        Solver.allAbove env S.fxAction `shouldBe` [S.fxAction]
+        Solver.allBelow env S.fxProc `shouldSatisfy` notElem S.fxAction
+        Solver.dnClosed env S.fxAction `shouldBe` False
+      it "joins pure with action but has no join of action with mut or proc" $ do
+        forM_ [(S.fxPure, Just S.fxAction), (S.fxMut, Nothing), (S.fxProc, Nothing)] $ \(a,expected) -> do
+          Acton.Env.lub env a S.fxAction `shouldBe` expected
+          Acton.Env.lub env S.fxAction a `shouldBe` expected
+          Acton.Env.glb env a S.fxAction `shouldBe` Just S.fxPure
+          Acton.Env.glb env S.fxAction a `shouldBe` Just S.fxPure
+      it "keeps action calls distinct from explicit sends and awaits" $ do
+        let callback = S.name "callback"
+            fn = S.tFun S.fxAction S.posNil S.kwdNil Builtin.tInt
+            callEnv = Acton.Env.define [(callback,I.NVar fn)] env
+        QuickType.typeOf callEnv (S.eCall (S.eVar callback) []) `shouldBe` Builtin.tInt
+        QuickType.fxOf callEnv (S.eCall (S.eVar callback) []) `shouldBe` S.fxAction
+        let sent = S.eCall (S.eAsync $ S.eVar callback) []
+        QuickType.fxOf callEnv sent `shouldBe` S.fxCom
+        QuickType.fxOf callEnv (S.eAwait sent) `shouldBe` S.fxProc
+      forM_ [("action_as_proc", unlines
+                [ "pure def as_proc(a: action() -> int) -> proc() -> int:"
+                , "    return a" ])
+            , ("action_proc_join", unlines
+                [ "pure def choose(flag: bool, a: action() -> int, p: proc() -> int):"
+                , "    return a if flag else p" ])] $ \(label,src) ->
+        it ("rejects " ++ label ++ " without an explicit adapter") $ do
+          result <- E.try (do
+            typed <- typecheckSource env0 label src
+            E.evaluate (rnf typed)) :: IO (Either TypeError ())
+          case result of
+            Left _ -> pure ()
+            Right _ -> expectationFailure "Expected incompatible action and proc effects"
+      it "accepts pure functions and lambdas as action callbacks" $ do
+        typed <- typecheckSource env0 "pure_action_callback" $ unlines
+          [ "pure def pure_value() -> int:"
+          , "    return 1"
+          , "pure def accept(cb: action() -> int) -> None:"
+          , "    pass"
+          , "pure def use() -> None:"
+          , "    accept(pure_value)"
+          , "    accept(lambda: 1)"
+          ]
+        typed `shouldSatisfy` const True
+      it "exposes a stateful actor method with defaults as an action" $ do
+        typed <- typecheckSource env0 "default_actor_effect" $ unlines
+          [ "actor Counter():"
+          , "    var count = 0"
+          , "    def add(n: int = 1) -> int:"
+          , "        count += n"
+          , "        return count"
+          , "pure def callback(counter: Counter):"
+          , "    return counter.add"
+          ]
+        case lookup (S.name "callback") (QuickType.envOf $ S.mbody typed) of
+          Just (I.NDef sc _ _) -> S.effect (S.restype $ S.sctype sc) `shouldBe` S.fxAction
+          _ -> expectationFailure "Expected the inferred signature of callback"
+      it "infers action when a pure argument computation precedes a tail action call" $ do
+        typed <- typecheckSource env0 "pure_action_lambda" $ unlines
+          [ "pure def combine(p: pure(int) -> int, a: action(int) -> int):"
+          , "    return lambda x: a(p(x))"
+          ]
+        case lookup (S.name "combine") (QuickType.envOf $ S.mbody typed) of
+          Just (I.NDef sc _ _) -> S.effect (S.restype $ S.sctype sc) `shouldBe` S.fxAction
+          _ -> expectationFailure "Expected the inferred signature of combine"
+
+      it "infers proc for a non-tail action call outside an actor" $ do
+        typed <- typecheckSource env0 "non_tail_action_lambda" $ unlines
+          [ "pure def combine(p: pure() -> int, a: action() -> bool):"
+          , "    return lambda: p() if a() else p()"
+          ]
+        case lookup (S.name "combine") (QuickType.envOf $ S.mbody typed) of
+          Just (I.NDef sc _ _) -> S.effect (S.restype $ S.sctype sc) `shouldBe` S.fxProc
+          _ -> expectationFailure "Expected the inferred signature of combine"
+
+      it "keeps str calls pure outside an actor" $ do
+        typed <- typecheckSource env0 "pure_string_conversion" $ unlines
+          [ "pure def stringify(value: int) -> str:"
+          , "    return str(value)"
+          ]
+        case lookup (S.name "stringify") (QuickType.envOf $ S.mbody typed) of
+          Just (I.NDef sc _ _) -> S.effect (S.sctype sc) `shouldBe` S.fxPure
+          _ -> expectationFailure "Expected the inferred signature of stringify"
+
+      it "keeps native value formatting pure outside an actor" $ do
+        typed <- typecheckSource env0 "pure_value_formatting" $ unlines
+          [ "pure def show(item: value) -> str:"
+          , "    return item.__str__() + item.__repr__() + repr(item)"
+          ]
+        case lookup (S.name "show") (QuickType.envOf $ S.mbody typed) of
+          Just (I.NDef sc _ _) -> S.effect (S.sctype sc) `shouldBe` S.fxPure
+          _ -> expectationFailure "Expected the inferred signature of show"
+
+      it "joins pure and action function values at action" $ do
+        typed <- typecheckSource env0 "pure_action_choice" $ unlines
+          [ "pure def choose(flag: bool, p: pure(int) -> int, a: action(int) -> int):"
+          , "    return p if flag else a"
+          ]
+        case lookup (S.name "choose") (QuickType.envOf $ S.mbody typed) of
+          Just (I.NDef sc _ _) -> S.effect (S.restype $ S.sctype sc) `shouldBe` S.fxAction
+          _ -> expectationFailure "Expected the inferred signature of choose"
+      it "keeps callback effects general under a proc upper bound" $ do
+        let (remaining, inferred) = TE.runTypeM $ do
+              fx <- TE.newUnivarOfKind S.KFX env
+              let callback = S.tFun fx S.posNil S.kwdNil S.tNone
+                  consumer = S.tFun S.fxPure (S.posRow callback S.posNil) S.kwdNil S.tNone
+              remaining <- solve [(S.name "consumer", I.NVar consumer)] [TE.Cast info env fx S.fxProc]
+              inferred <- TE.usubst fx
+              return (remaining, inferred)
+        length remaining `shouldBe` 0
+        inferred `shouldBe` S.fxProc
+      forM_ [ ("prefers pure under a proc upper bound", \fx -> [TE.Cast info env fx S.fxProc], S.fxPure)
+            , ("requires action under a Cast action upper bound", \fx -> [TE.Cast info env fx S.fxAction], S.fxAction)
+            , ("preserves a mut lower bound", \fx -> [TE.Cast info env S.fxMut fx], S.fxMut)
+            , ("preserves an action lower bound", \fx -> [TE.Cast info env S.fxAction fx], S.fxAction)
+            ] $ \(name, constraints, expected) -> it name $ do
+        let (remaining, inferred) = TE.runTypeM $ do
+              fx <- TE.newUnivarOfKind S.KFX env
+              remaining <- solve [(S.name "effect", I.NVar fx)] (constraints fx)
+              inferred <- TE.usubst fx
+              return (remaining, inferred)
+        length remaining `shouldBe` 0
+        inferred `shouldBe` expected
+
+      it "prefers pure under a witnessed action upper bound" $ do
+        let (remaining, inferred) = TE.runTypeM $ do
+              fx <- TE.newUnivarOfKind S.KFX env
+              w <- TE.newWitness
+              remaining <- solve [(S.name "effect", I.NVar fx)] [TE.Sub info env w fx S.fxAction]
+              inferred <- TE.usubst fx
+              return (remaining,inferred)
+        length remaining `shouldBe` 0
+        inferred `shouldBe` S.fxPure
+
+    describe "Effect-preserving eta reduction" $ do
+      let f = S.eVar (S.name "callee")
+          x = S.name "argument"
+          forwarded fx = S.Lambda NoLoc (S.pospar [(x,Builtin.tInt)]) S.KwdNIL
+                           (S.eCall f [S.eVar x]) fx
+      forM_ [("Transform", Transform.eta), ("Normalizer", Acton.Normalizer.eta)] $ \(label, eta) ->
+        describe label $ do
+          it "reduces a pure forwarding lambda" $
+            eta (forwarded S.fxPure) `shouldBe` f
+          forM_ [("mut",S.fxMut),("proc",S.fxProc),("action",S.fxAction)] $ \(effect,fx) ->
+            it ("preserves the " ++ effect ++ " calling convention") $
+              eta (forwarded fx) `shouldBe` forwarded fx
+
+      let captured = S.name "captured"
+          producer = S.eCall (S.eVar $ S.name "producer") []
+          capturedAdapter sourceFX targetFX =
+            S.Let NoLoc [S.sAssign (S.pVar captured $ S.tFun sourceFX
+                            (S.posRow Builtin.tInt S.posNil) S.kwdNil Builtin.tInt) producer]
+              (S.Lambda NoLoc (S.pospar [(x,Builtin.tInt)]) S.KwdNIL
+                (S.eCall (S.eVar captured) [S.eVar x]) targetFX)
+      forM_ [("mut",S.fxMut),("proc",S.fxProc),("action",S.fxAction)] $ \(effect,fx) ->
+        it ("eliminates an identity " ++ effect ++ " adapter without delaying its producer") $
+          Transform.trans Transform.env0 (capturedAdapter fx fx) `shouldBe` producer
+      it "keeps an adapter whose effect differs from its captured function" $
+        Transform.trans Transform.env0 (capturedAdapter S.fxAction S.fxProc)
+          `shouldBe` capturedAdapter S.fxAction S.fxProc
+
+    describe "Tuple field conversions" $ do
+      it "converts the selected callback rather than its containing tuple" $ do
+        let env = TE.initTypeEnv env0
+            info = TE.noinfo 0
+            field = S.name "callback"
+            callback = S.tFun S.fxProc (S.posRow Builtin.tInt S.posNil) S.kwdNil Builtin.tInt
+            tuple = S.tTupleK (S.kwdRow field callback S.kwdNil)
+            (w, eqs) = TE.runTypeM $ do
+              w <- TE.newWitness
+              eqs <- Solver.reduce [] [TE.Sel info env w tuple field callback]
+              return (w,eqs)
+            value = S.eVar (S.name "callbacks")
+            use = S.eCall (S.eVar w) [value]
+            reduced = Transform.wtrans Transform.env0 (TE.bindWits eqs ++ [S.sExpr use])
+            valueEnv = Acton.Env.define [(S.name "callbacks",I.NVar tuple)] env
+        case reduced of
+          [S.Expr _ e] -> QuickType.typeOf valueEnv e `shouldBe` callback
+          _ -> expectationFailure "Expected a selected callback expression"
+
+    describe "Generic effect witnesses" $ do
+      let env = TE.initTypeEnv env0
+          info = TE.noinfo 0
+          solveEffect from to = TE.runTypeM $ do
+            w <- TE.newWitness
+            (remaining, eqs) <- Solver.solve env (const True) [] [] [TE.Sub info env w from to]
+            return (w, remaining, eqs)
+          shapes = [ (S.posNil, S.kwdNil, Builtin.tInt)
+                   , (S.posRow Builtin.tStr S.posNil,
+                      S.kwdRow (S.name "flag") Builtin.tBool S.kwdNil, Builtin.tStr)
+                   ]
+      it "gives one effect witness a generic function-transforming signature" $ do
+        let (w, remaining, eqs) = solveEffect S.fxPure S.fxMut
+        length remaining `shouldBe` 0
+        case eqs of
+          [TE.Eqn _ _ sc _] -> do
+            map S.tvkind (S.qbound $ S.scbind sc) `shouldBe` [S.PRow, S.KRow, S.KType]
+            let witnessEnv = Acton.Env.define [(w,I.NDef sc S.NoDec Nothing)] env
+            forM_ shapes $ \(p,k,r) -> do
+              let expected = S.tFun S.fxPure (S.posRow (S.tFun S.fxPure p k r) S.posNil)
+                                   S.kwdNil (S.tFun S.fxMut p k r)
+              QuickType.typeOf witnessEnv (S.tApp (S.eVar w) [p,k,r]) `shouldBe` expected
+          _ -> expectationFailure "Expected a single generic witness equation"
+      it "types function-subtyping adapters before reducing their effect witnesses" $ do
+        forM_ shapes $ \(p,k,r) -> do
+          let source = S.tFun S.fxPure p k r
+              target = S.tFun S.fxMut p k Builtin.tValue
+              (w, remaining, eqs) = TE.runTypeM $ do
+                w <- TE.newWitness
+                (remaining, eqs) <- Solver.solve env (const True) [] [] [TE.Sub info env w source target]
+                return (w, remaining, eqs)
+              f = S.name "function"
+              witnessEnv = Acton.Env.define ((f,I.NVar source) :
+                [(n,I.NDef sc S.NoDec Nothing) | TE.Eqn _ n sc _ <- eqs]) env
+              expressions = [e | TE.Eqn _ n _ e <- eqs, n == w]
+          length remaining `shouldBe` 0
+          length [() | TE.Eqn _ _ sc _ <- eqs, not (null $ S.scbind sc)] `shouldBe` 1
+          case expressions of
+            [e] -> QuickType.typeOf witnessEnv e `shouldBe`
+              S.tFun S.fxPure (S.posRow source S.posNil) S.kwdNil target
+            _ -> expectationFailure "Expected the function-subtyping adapter"
+          let use = S.sExpr $ S.eCall (S.eVar w) [S.eVar f]
+              reduced = Transform.wtrans Transform.env0 (TE.bindWits eqs ++ [use])
+          reduced `shouldBe` [S.sExpr (S.eVar f)]
+      it "types pure-to-action conversion before and after reduction and captures its argument" $ do
+        Acton.Env.castable env S.fxPure S.fxAction `shouldBe` False
+        forM_ shapes $ \(p,k,r) -> do
+          let (w, remaining, eqs) = solveEffect S.fxPure S.fxAction
+              source = S.tFun S.fxPure p k r
+              target = S.tFun S.fxAction p k r
+              factory = S.name "factory"
+              factoryType = S.tFun S.fxProc S.posNil S.kwdNil source
+              expression = S.eCall (S.eVar factory) []
+              witnessEnv = Acton.Env.define ((factory,I.NVar factoryType) :
+                [(n,I.NDef sc S.NoDec Nothing) | TE.Eqn _ n sc _ <- eqs]) env
+              use = S.eCall (S.tApp (S.eVar w) [p,k,r]) [expression]
+              reduced = Transform.wtrans Transform.env0 (TE.bindWits eqs ++ [S.sExpr use])
+          length remaining `shouldBe` 0
+          QuickType.typeOf witnessEnv use `shouldBe` target
+          QuickType.fxOf witnessEnv use `shouldBe` S.fxProc
+          case reduced of
+            [S.Expr _ e@(S.Let _ [S.Assign _ [_] captured] S.Lambda{})] -> do
+              captured `shouldBe` expression
+              QuickType.typeOf witnessEnv e `shouldBe` target
+              QuickType.fxOf witnessEnv e `shouldBe` S.fxProc
+            _ -> expectationFailure "Expected eager capture followed by an action adapter"
+      it "does not capture effect variables named A, B, or C" $ do
+        forM_ [("A","B"), ("B","C"), ("C","A")] $ \(from,to) -> do
+          let fx1 = S.tVar $ S.TV S.KFX (S.name from)
+              fx2 = S.tVar $ S.TV S.KFX (S.name to)
+              sc = Solver.effectWitnessSchema fx1 fx2
+              w = S.Internal S.Witness "fresh" 0
+              witnessEnv = Acton.Env.define [(w,I.NDef sc S.NoDec Nothing)] env
+          map S.tvkind (S.qbound $ S.scbind sc) `shouldBe` [S.PRow, S.KRow, S.KType]
+          forM_ shapes $ \(p,k,r) -> do
+            let expected = S.tFun S.fxPure (S.posRow (S.tFun fx1 p k r) S.posNil)
+                                 S.kwdNil (S.tFun fx2 p k r)
+            QuickType.typeOf witnessEnv (S.tApp (S.eVar w) [p,k,r]) `shouldBe` expected
+      it "reduces two differently instantiated uses of the same witness to identities" $ do
+        let (w, _, eqs) = solveEffect S.fxPure S.fxMut
+            args = zip shapes [S.eVar (S.name "first"), S.eVar (S.name "second")]
+            uses = [ S.sExpr $ S.eCall (S.tApp (S.eVar w) [p,k,r]) [f]
+                   | ((p,k,r),f) <- args ]
+        Transform.wtrans Transform.env0 (TE.bindWits eqs ++ uses)
+          `shouldBe` map (S.sExpr . snd) args
+      it "keeps unresolved effect subtyping until a typed witness can be selected" $ do
+        let (remaining, eqs, inferred) = TE.runTypeM $ do
+              fx <- TE.newUnivarOfKind S.KFX env
+              w <- TE.newWitness
+              (remaining, eqs) <- Solver.solve env (const True) [(S.name "effect", I.NVar fx)] []
+                [TE.Sub info env w S.fxMut fx]
+              inferred <- TE.usubst fx
+              return (remaining, eqs, inferred)
+        length remaining `shouldBe` 0
+        inferred `shouldBe` S.fxMut
+        case eqs of
+          [TE.Eqn _ _ sc _] -> length (S.scbind sc) `shouldBe` 3
+          _ -> expectationFailure "Expected a generic effect witness after inference"
+      it "retains monomorphic bindings for ordinary value witnesses" $ do
+        let eqs = TE.runTypeM $ do
+              w <- TE.newWitness
+              snd <$> Solver.solve env (const True) [] [] [TE.Sub info env w Builtin.tInt Builtin.tValue]
+        case TE.bindWits eqs of
+          [S.Assign{}] -> return ()
+          _ -> expectationFailure "Expected an ordinary witness assignment"
 
     describe "Raw operator result types" $ do
       let raw t n = S.UnBox t (S.eInt n)

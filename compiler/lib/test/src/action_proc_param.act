@@ -1,4 +1,4 @@
-# Calls of a proc-typed parameter, which may be bound to an action. CPS turns
+# Calls of a proc-typed parameter. CPS turns
 # each call into a tail call with a continuation, and the lambda lifter calls
 # the closure through __call__ or __exec__. The result is used in assign, tail
 # and mutate, and discarded in discard, discard_last, discard_live,

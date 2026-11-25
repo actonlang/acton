@@ -60,7 +60,7 @@ class TaggedD_Foo (Tagged[Foo], __builtin__.value):
     pure def __init__ (W_self : Self) -> None:
         Tagged.__init__@[Foo](W_self)
     pure def tag (W_self : Self, self : Foo) -> __builtin__.int:
-        W_Keyed_61: __builtin__.Eq[Bar] = KeyedD_Bar(None)
-        W_Keyed_63: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
-        return W_Keyed_63.__fromatom__(7) if W_Keyed_61.__eq__(Bar(n = self.n), Bar(n = self.n)) else W_Keyed_63.__fromatom__(0)
+        W_Keyed_86: __builtin__.Eq[Bar] = KeyedD_Bar(None)
+        W_Keyed_88: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+        return W_Keyed_88.__fromatom__(7) if W_Keyed_86.__eq__(Bar(n = self.n), Bar(n = self.n)) else W_Keyed_88.__fromatom__(0)
 # (recursive group)

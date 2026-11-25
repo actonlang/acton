@@ -95,9 +95,6 @@ deactSuite env (s : ss)             = do s' <- deact (setSampled ns env) s
 instance Deact Stmt where
     deact env s@(Expr _ (NotImplemented _))
                                     = return s
-    deact env (Expr l (Call l' e p KwdNil))
-      | fx == fxAction              = Expr l <$> (Call l' <$> deact env (eAsync e) <*> deact env p <*> pure KwdNil)
-      where TFun{effect=fx}         = typeOf env e
     deact env (Expr l e)            = Expr l <$> deact env e
     deact env (Assign l [p@(PVar _ n _)] e)
       | n `elem` locals env         = MutAssign l (selfRef n) <$> deact env e
@@ -268,7 +265,7 @@ instance Deact Expr where
     deact env (Strings l s)         = return $ Strings l s
     deact env (BStrings l s)        = return $ BStrings l s
     deact env e@Embed{}             = return e
-    deact env (Call l e as KwdNil)  = deactCall env True l e as
+    deact env (Call l e as KwdNil)  = deactCall env l e as
     deact env (TApp l e ts)         = TApp l <$> deact env e <*> pure ts
     deact env (Let l ss e)          = Let l <$> deact env1 ss <*> deact env1 e
        where env1                   = define (envOf ss) env
@@ -281,8 +278,7 @@ instance Deact Expr where
     deact env (DotI l e i)          = DotI l <$> deact env e <*> return i
     deact env (RestI l e i)         = RestI l <$> deact env e <*> return i
     deact env (Lambda l p KwdNIL e fx)
-      | Call l' e' as KwdNil <- e   = Lambda l p KwdNIL <$> deactCall env1 False l' e' as <*> return fx
-      | otherwise                   = Lambda l p KwdNIL <$> deact env1 e <*> return fx
+                                    = Lambda l p KwdNIL <$> deact env1 e <*> return fx
       where env1                    = defineAndShadow (envOf p) env
     deact env (Yield l e)           = Yield l <$> deact env e
     deact env (YieldFrom l e)       = YieldFrom l <$> deact env e
@@ -292,7 +288,7 @@ instance Deact Expr where
     deact env (Set l es)            = Set l <$> deact env es
     deact env e                     = error ("deact unexpected expr: " ++ prstr e)
 
-deactCall env unwrap l (TApp _ (Var _ n) ts) (PosArg self (PosArg e PosNil))
+deactCall env l (TApp _ (Var _ n) ts) (PosArg self (PosArg e PosNil))
   | n == primWRAP,
     Just n' <- sealedMeth env e     = return $ Dot l (Var l (NoQ selfKW)) n'
   | n == primWRAP                   = do e <- deact env e
@@ -301,15 +297,12 @@ deactCall env unwrap l (TApp _ (Var _ n) ts) (PosArg self (PosArg e PosNil))
                                          return $ Lambda l0 ps KwdNIL (eCall (tApp (eQVar primASYNCf) [t]) [self,lam]) fxAction
   where TFun _ fx p _ t             = typeOf env e
         ps                          = pPar paramNames p
-deactCall env unwrap l e as
-  | fx == fxAction && unwrap        = deact env (eAwait $ Call l (eAsync e) as KwdNil)
-  | otherwise                       = do e <- deact env e
-                                         as <- deact env as
-                                         case e of
-                                            Lambda _ ps KwdNIL e' _ | Just s <- pzip ps as ->
-                                                 return $ termsubst s e'
-                                            _ -> return $ Call l e as KwdNil
-  where TFun{effect=fx}             = typeOf env e
+deactCall env l e as = do
+    e <- deact env e
+    as <- deact env as
+    case e of
+        Lambda _ ps KwdNIL e' _ | Just s <- pzip ps as -> return $ termsubst s e'
+        _ -> return $ Call l e as KwdNil
 
 instance Deact PosArg where
     deact env (PosArg e p)          = PosArg <$> deact env e <*> deact env p

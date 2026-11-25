@@ -1,0 +1,37 @@
+pure def choose(flag: bool, n: int):
+    return None if flag else n
+
+def last(items: list[int]):
+    result = None
+    for item in items:
+        result = item
+    return result
+
+pure def apply_optional(f: pure(int) -> int, item: ?int):
+    if item is None:
+        return None
+    return f(item!)
+
+class Slot(object):
+    def __init__(self):
+        self.item = None
+
+    def set(self, item: int):
+        self.item = item
+
+    def get(self):
+        return self.item
+
+actor main(env):
+    proc def __startup__():
+        assert choose(True, 7) is None
+        assert choose(False, 7) == 7
+        assert last([]) is None
+        assert last([1, 2, 3]) == 3
+        assert apply_optional(pure lambda x: x + 1, None) is None
+        assert apply_optional(pure lambda x: x + 1, 4) == 5
+        slot = Slot()
+        assert slot.get() is None
+        slot.set(9)
+        assert slot.get() == 9
+        env.exit(0)

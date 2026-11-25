@@ -1,0 +1,53 @@
+# Action calls used for their results await replies. Standalone calls only
+# send, even when the action returns None or the call ends a method.
+
+actor Target():
+    var total = 0
+
+    def add(n: int) -> float:
+        total += n
+        return float(total) + 0.5
+
+    def touch() -> None:
+        total += 100
+
+    def exercise(sender: Sender) -> None:
+        return sender.send(add, touch)
+
+    def get_total() -> int:
+        return total
+
+actor Sender():
+    def send(f: action(int) -> float, g: action() -> None) -> None:
+        # Target is waiting for this method: awaiting either callback deadlocks.
+        f(4)
+        g()
+        f(8)
+
+actor Watchdog(env: Env):
+    def timeout():
+        print("FAIL: action callback deadlocked")
+        env.exit(1)
+
+    def __startup__():
+        after 5.0: timeout()
+
+actor main(env):
+    target = Target()
+    sender = Sender()
+    watchdog = Watchdog(env)
+
+    def __startup__():
+        proc def use(f: action(int) -> float) -> float:
+            result = f(3)
+            return result + 0.25
+
+        proc def forward(f: action(int) -> float) -> float:
+            return f(2)
+
+        assert use(target.add) == 3.75
+        assert forward(target.add) == 5.5
+        done = target.exercise(sender)
+        assert target.get_total() == 117
+        print("OK")
+        env.exit(0)

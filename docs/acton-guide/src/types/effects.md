@@ -15,7 +15,7 @@ The four effect markers are:
 pure def square(x: int) -> int:
     return x * x
 
-class Counter:
+class Counter(object):
     value: int
 
     def __init__(self):
@@ -26,7 +26,7 @@ class Counter:
         return self.value
 
 actor Greeter():
-    def hello(msg):
+    def hello(msg: str):
         print(msg)
 
 proc def show_square(g: Greeter, x: int) -> None:
@@ -111,13 +111,23 @@ just commentary.</p>
 - Read the effect marker together with the argument and return types.
 
 <div class="advanced-content">
-<p>A useful mental model is <code>pure &lt;= mut &lt;= proc</code>, with
-<code>action &lt;= proc</code> on a separate branch. That is why pure
-code can be used where a mutating or procedural callable is accepted,
-and why actions participate in the broader effect system without being
-the same thing as ordinary sequential procedures. When you design higher
-order APIs, the effect on the callback is as important as its argument
-types.</p>
+<p>The effect hierarchy is <code>pure &lt;= mut &lt;= proc</code>, with
+<code>pure &lt;= action</code> on a separate branch. A pure function can
+therefore be supplied where a mutating, procedural, or action callback is
+expected. An action callback adapted from a pure function computes its
+result immediately.</p>
+
+<p>Calling an action uses <code>proc</code> effect: a call used as a value
+waits for its result, while a statement call sends the message without
+waiting. This does not make an action value a subtype of a proc function.
+If an API expects a proc callback, adapt the action explicitly with
+<code>proc lambda x: callback(x)</code>. Use <code>async callback</code>
+when the proc callback should return a <code>Msg</code> instead.</p>
+
+<p>Public actor interfaces accept pure and action callbacks. Callbacks
+with mut or proc effect must remain private to the actor. The compiler
+temporarily also accepts mut-to-pure casts for compatibility with mutable
+container APIs; that exception is not part of the effect hierarchy.</p>
 
 <p>In practice, this means you should choose the weakest effect that
 describes the callable accurately. That keeps more code reusable and

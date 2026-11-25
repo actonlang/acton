@@ -229,7 +229,7 @@ actor UDPConnection(cap: UDPConnectCap, address: str, port: int, on_connect: act
                 datagrams_in=_datagrams_in,
                 datagrams_out=_datagrams_out)
 
-    proc def __startup__():
+    def __startup__():
         _pin_affinity()
 
         _connect(self)
@@ -303,7 +303,7 @@ actor UDPListener(cap: UDPListenCap, address: str, port: int, on_listen: action(
         """Implementation internal"""
         NotImplemented
 
-    proc def __startup__():
+    def __startup__():
         _init()
 
 
@@ -595,7 +595,7 @@ actor TCPConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
                 bytes_in=_bytes_in,
                 bytes_out=_bytes_out)
 
-    proc def __startup__():
+    def __startup__():
         _pin_affinity()
 
         _connect(self)
@@ -669,7 +669,7 @@ actor TCPListenConnection(cap: _TCPListenConnectCap, server_client: int, worker_
         """Implementation internal"""
         NotImplemented
 
-    proc def __startup__():
+    def __startup__():
         _init()
 
 
@@ -715,7 +715,7 @@ actor TCPListener(cap: TCPListenCap, address: str, port: int, on_listen: action(
         """Implementation internal"""
         NotImplemented
 
-    proc def __startup__():
+    def __startup__():
         _init()
 
 
@@ -811,7 +811,7 @@ actor TLSListenConnection(cap: _TCPListenConnectCap, server_stream: int, tls_own
         """Implementation internal"""
         NotImplemented
 
-    proc def __startup__():
+    def __startup__():
         _init()
 
 
@@ -901,7 +901,7 @@ actor TLSListener(cap: TCPListenCap, address: str, port: int, cert_pem: bytes, k
         """Implementation internal"""
         NotImplemented
 
-    proc def __startup__():
+    def __startup__():
         if verify_peer is not None and not client_auth:
             async on_listen(self, "TLSListener: verify_peer needs client_auth=True")
         elif client_auth and not verify_tls and verify_peer is None:
@@ -1090,7 +1090,7 @@ actor TLSConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
         after connect_timeout: _connect_timeout(attempt)
         _connect_tls()
 
-    proc def __startup__():
+    def __startup__():
         _pin_affinity()
 
         _connect(self)

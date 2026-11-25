@@ -3,20 +3,20 @@ proc def force_cps (C_cont : proc(__builtin__.int) -> $R, arg : __builtin__.int)
 
 proc def compute (C_cont : proc(__builtin__.int) -> $R, aa : __builtin__.int) -> $R:
     aa: $Cell[__builtin__.int] = $Cell@[__builtin__.int](aa)
-    W_compute_19: __builtin__.Plus[__builtin__.int] = __builtin__.IntegralD_int()
+    W_compute_35: __builtin__.Plus[__builtin__.int] = __builtin__.IntegralD_int()
     W_compute_4: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
     xx: $Cell[__builtin__.int] = $Cell@[__builtin__.int](W_compute_4.__fromatom__(1))
     proc def C_3cont (C_4res : None) -> $R:
-        N_1tmp: __builtin__.int = W_compute_19.__add__(xx.cell, aa.cell)
+        N_1tmp: __builtin__.int = W_compute_35.__add__(xx.cell, aa.cell)
         return $R_CONTc@[__builtin__.int](C_cont, N_1tmp)
     proc def C_5try (C_6res : __builtin__.bool) -> $R:
         if C_6res:
             proc def C_7cont (C_8res : __builtin__.int) -> $R:
                 C_1pre: __builtin__.int = C_8res
-                xx.cell = W_compute_19.__iadd__(xx.cell, C_1pre)
+                xx.cell = W_compute_35.__iadd__(xx.cell, C_1pre)
                 proc def C_9cont (C_10res : __builtin__.int) -> $R:
                     C_2pre: __builtin__.int = C_10res
-                    aa.cell = W_compute_19.__iadd__(aa.cell, C_2pre)
+                    aa.cell = W_compute_35.__iadd__(aa.cell, C_2pre)
                     $DROP_C()
                     return $R_CONTc@[None](C_3cont, None)
                 return force_cps(C_9cont, W_compute_4.__fromatom__(1))
@@ -30,9 +30,9 @@ proc def compute (C_cont : proc(__builtin__.int) -> $R, aa : __builtin__.int) ->
             return $R_CONTc@[None](C_3cont, None)
     return $PUSH_Cc(C_5try)
 
-W_main_74: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+W_main_71: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
 
-W_main_29: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
+W_main_28: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
 
 # recursive group:
 class main ($Actor, __builtin__.value):
@@ -45,13 +45,13 @@ class main ($Actor, __builtin__.value):
     proc def __startup__G_local (self : Self, C_cont : proc(None) -> $R) -> $R:
         proc def C_11cont (C_12res : __builtin__.int) -> $R:
             v: __builtin__.int = C_12res
-            if W_main_29.__eq__(v, W_main_74.__fromatom__(13)):
-                (async self.env.exit)(W_main_74.__fromatom__(0))
+            if W_main_28.__eq__(v, W_main_71.__fromatom__(13)):
+                (async self.env.exit)(W_main_71.__fromatom__(0))
             else:
                 print@[(__builtin__.str, __builtin__.int)](("\"Excpected 13, got\"", v), "\" \"", "\"\\n\"", False, False)
-                (async self.env.exit)(W_main_74.__fromatom__(1))
+                (async self.env.exit)(W_main_71.__fromatom__(1))
             return $R_CONTc@[None](C_cont, None)
-        return compute(C_11cont, W_main_74.__fromatom__(10))
+        return compute(C_11cont, W_main_71.__fromatom__(10))
     action def __startup__ (self : Self) -> None:
         return $ASYNCc@[None](self, proc lambda (C_cont : proc(None) -> $R): self.__startup__G_local(C_cont))
 com def mainG_newact (env : __builtin__.Env) -> main:

@@ -21,7 +21,8 @@ import Acton.Env
 import Acton.QuickType
 import Acton.Prim
 import Acton.Builtin
-import Acton.Transform (termsubst)
+import Acton.Transform (termsubst, forwarding)
+import qualified Acton.Transform as Transform
 import Data.List
 import Pretty
 import Utils
@@ -862,8 +863,26 @@ instance Norm Expr where
     norm env (Call l e p k)
       | Just comp <- collectionGeneratorComp env l e (joinArg p k)
                                     = norm env comp
-    norm env (Call l e p k)         = Call l <$> norm env e <*> norm env (joinArg p k) <*> pure KwdNil
+    norm env (Call l e p k)         = do e' <- norm env e
+                                         p' <- norm env (joinArg p k)
+                                         let call = Call l e' p' KwdNil
+                                         return $ case e' of
+                                           Let{} -> Transform.trans Transform.env0 call
+                                           _ -> call
     norm env (TApp l e ts)          = TApp l <$> normInst env ts e <*> pure (conv env ts)
+    -- CPS may hoist an argument's Let bindings beside those of its callee.
+    -- Give captured functions fresh names before that can merge their scopes.
+    norm env (Let l [Assign sl [PVar pl n (Just t@TFun{})] value] e)
+                                    = do captured <- newName "function"
+                                         value' <- norm env value
+                                         let env1 = define [(captured,NVar t)] env
+                                             body = termsubst [(n,eVar captured)] e
+                                         e' <- norm env1 body
+                                         return $ case e' of
+                                           Var _ (NoQ n') | n' == captured -> value'
+                                           Lambda{efx=fx} | fx == effect t,
+                                             Just callee <- forwarding e', callee == eVar captured -> value'
+                                           _ -> Let l [Assign sl [PVar pl captured (Just $ conv env t)] value'] e'
     norm env (Let l ss e)          = Let l <$> norm env ss <*> norm env1 e
       where env1                    = define (envOf ss) env
     norm env (Dot l (Var l' x) n)
@@ -1284,7 +1303,7 @@ iteratorWitness                    :: Type -> Expr
 iteratorWitness a                   = eCall (tApp (eQVar witIterableIterator) [a]) []
 
 eta (Lambda _ p KwdNIL (Call _ e p' KwdNil) fx)
-  | eq1 p p'                        = e
+  | fx == fxPure, eq1 p p'          = e
   where
     eq1 (PosPar n _ _ p) (PosArg e p')  = eVar n == e && eq1 p p'
     eq1 (PosSTAR n _) (PosStar e)       = eVar n == e
