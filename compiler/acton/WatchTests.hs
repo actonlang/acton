@@ -2,7 +2,7 @@
 module WatchTests (watchTriggerTests, watchProcessTests, buildAct, writeExecutable) where
 
 import Control.Concurrent (threadDelay)
-import Control.Exception (IOException, catch, finally, mask, onException, try)
+import Control.Exception (IOException, bracket, catch, finally, mask, onException, try)
 import Control.Monad
 import qualified Data.ByteString.Char8 as BS
 import Data.IORef
@@ -18,6 +18,7 @@ import System.IO
 import System.IO.Temp (withSystemTempDirectory)
 import System.Info (os)
 import System.Posix.Files (createSymbolicLink, fileSize, getFileStatus, modificationTimeHiRes, nullFileMode, ownerModes, setFileMode, statusChangeTimeHiRes)
+import System.Posix.IO (OpenFileFlags(cloexec, creat, trunc), OpenMode(WriteOnly), defaultFileFlags, fdToHandle, openFd)
 import System.Posix.Signals
 import System.Posix.Types (ProcessID)
 import System.Process
@@ -278,6 +279,21 @@ watchProcessTests = testGroup "watch subprocesses"
           appendFile (proj </> "src/main.act") "\n# Recover from failed build\n"
           awaitReports 1 output
           assertBool "the next successful build should run tests" =<< doesFileExist (proj </> "test-ran")
+  , testCase "a root actor that the module does not define is reported and the watch recovers" $
+      withProcessProject $ \acton proj system -> do
+        writeExecutable (system </> "zig/zig") ["touch build-ran"]
+        withActon acton proj ["build", "--watch", "--root", "main.app", "--syspath", system] $ \ph _ output -> do
+          await "report of the missing root actor" $ do
+            logText <- output
+            return $ if "Cannot use main.app as the root actor: module main does not define app" `isInfixOf` logText then Just () else Nothing
+          awaitGeneration proj
+          assertEqual "watch should survive a missing root actor" Nothing =<< getProcessExitCode ph
+          appendFile (proj </> "src/main.act") $ unlines
+            [ "actor app(env):"
+            , "    proc def __startup__():"
+            , "        env.exit(0)"
+            ]
+          awaitFile (proj </> "build-ran")
   , testCase "interrupted test generation retains both edited modules" $
       withProcessProject $ \acton proj system -> do
         writeFile (proj </> "src/other.act") $ unlines
@@ -856,10 +872,16 @@ replaceFile path content = do
     writeFile (path <.> "new") content
     renameFile (path <.> "new") path
 
+-- | Write a shell script that a test will run.  Tests run in parallel, and a
+-- process another test starts while the script is open for writing inherits
+-- the descriptor.  Running the script fails with ETXTBSY for as long as that
+-- process keeps it open, so the descriptor is close-on-exec.
 writeExecutable :: FilePath -> [String] -> IO ()
 writeExecutable path body = do
     createDirectoryIfMissing True (takeDirectory path)
-    writeFile path (unlines ("#!/bin/sh" : body))
+    bracket (fdToHandle =<< openFd path WriteOnly defaultFileFlags { creat = Just 0o755, trunc = True, cloexec = True })
+            hClose
+            (\handle -> hPutStr handle (unlines ("#!/bin/sh" : body)))
     permissions <- getPermissions path
     setPermissions path permissions { executable = True }
 

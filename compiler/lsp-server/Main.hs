@@ -582,12 +582,15 @@ whenCurrentGen gen action = do
   current <- liftIO $ Compile.isCurrent gen
   when current action
 
+-- | Show the client a compile error.
+showCompileError :: String -> LspM () ()
+showCompileError msg =
+  sendNotification SMethod_WindowShowMessage
+    (ShowMessageParams MessageType_Error (T.pack msg))
+
 -- | Notify the client of a compile error for the current generation.
 notifyCompileError :: Compile.Generation -> String -> LspM () ()
-notifyCompileError gen msg =
-  whenCurrentGen gen $
-    sendNotification SMethod_WindowShowMessage
-      (ShowMessageParams MessageType_Error (T.pack msg))
+notifyCompileError gen = whenCurrentGen gen . showCompileError
 
 -- | Convert Acton positions to LSP ranges with zero-based offsets.
 reportRange :: Position -> Range
@@ -753,11 +756,12 @@ planAndCompile gen rootProj path sp gopts opts progress = do
     Left msg -> notifyCompileError gen msg >> return False
     Right () -> return True
 
--- | Schedule a compile run with a debounce delay.
+-- | Schedule a compile run with a debounce delay.  An exception that ends the
+-- run is shown as a compile error, as acton watch logs it.
 scheduleCompile :: Int -> FilePath -> LspM () ()
 scheduleCompile delay path = do
   env <- getLspEnv
-  void $ liftIO $ Compile.startCompile compileScheduler delay $ \gen ->
+  void $ liftIO $ Compile.startCompile compileScheduler delay (runLspT env . showCompileError . displayException) $ \gen ->
     runLspT env (runCompile gen path)
 
 -- | Convert an LSP position to a source offset. LSP columns are UTF-16 code

@@ -93,7 +93,7 @@ import Acton.Syntax (modNameToString)
 import qualified InterfaceFiles
 import Utils (readFileUtf8, trySync)
 
-import Control.Exception (Exception, IOException, catch, finally, throwIO, try)
+import Control.Exception (Exception(..), IOException, catch, finally, throwIO, try)
 import Control.Monad
 import Data.Bits (shiftL, shiftR, (.|.))
 import Data.Char (isAlpha, isDigit)
@@ -119,7 +119,8 @@ import System.Random (randomRIO)
 -- dependency.
 newtype ProjectError = ProjectError String deriving (Show)
 
-instance Exception ProjectError
+instance Exception ProjectError where
+  displayException (ProjectError msg) = msg
 
 -- | Throw a ProjectError with the message 'msg'.
 throwProjectError :: String -> IO a

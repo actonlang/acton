@@ -2,7 +2,7 @@
 
 module Main (main) where
 
-import           Control.Monad (filterM, foldM, forM, forM_, unless, when)
+import           Control.Monad (filterM, foldM, forM, forM_, unless, void, when)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.Text as T
@@ -14,7 +14,7 @@ import           Data.Word (Word64)
 import qualified Acton.Fingerprint as Fingerprint
 import qualified Crypto.Hash.SHA256 as SHA256
 import           Data.Function (on)
-import           Data.IORef (IORef, atomicModifyIORef', newIORef, readIORef)
+import           Data.IORef (IORef, atomicModifyIORef', newIORef, readIORef, writeIORef)
 import           Data.List (elemIndex, find, groupBy, intercalate, isInfixOf, isPrefixOf, partition, sort, sortOn)
 import qualified Data.Map.Strict as M
 import           Data.Maybe (isJust, isNothing)
@@ -32,7 +32,7 @@ import           Data.Time.Clock        (addUTCTime, getCurrentTime)
 import           Data.Time.Clock.POSIX  (posixSecondsToUTCTime)
 import           System.Directory       (setModificationTime)
 import qualified Control.Exception as E
-import           Control.Concurrent     (threadDelay)
+import           Control.Concurrent     (newEmptyMVar, putMVar, readMVar, threadDelay, tryPutMVar, yield)
 import           Error.Diagnose (TabSize(..), WithUnicode(..), prettyDiagnostic)
 import           Prettyprinter (unAnnotate)
 
@@ -5104,6 +5104,63 @@ p63_source_written_during_front_reread =
     buildCasesWith sp opts
     assertNextPlanReadsWrittenSource opts actB newB written
 
+-- | A newer generation stops a running type check instead of waiting for
+-- it. The handler holds the first build's type check at its first progress
+-- event, in a loop that never blocks, as a long check does, until the
+-- check is cancelled or ten seconds have passed. yield is not an
+-- interruptible point, so startCompile returns before the hold ends only
+-- when its cancel interrupts the check.
+p64_new_generation_stops_type_check :: TestTree
+p64_new_generation_stops_type_check =
+  testCase "64-new generation stops a running type check" $ withSystemTempDirectory "stop-check" $ \tmp -> do
+    proj <- canonicalizePath tmp
+    let actA = proj </> "src" </> "a.act"
+    createDirectoryIfMissing True (proj </> "src")
+    writeBuildAct proj "stop_check" []
+    writeFileUtf8 actA "def f() -> int:\n    return 1\n"
+    opts <- inProcessCompileOptions
+    sched <- Compile.newCompileScheduler quietGlobalOptions
+    plan <- planBuild Source.diskSourceProvider quietGlobalOptions sched opts (Compile.PlanRequest [actA] Compile.WholeProject Nothing)
+    holding <- newEmptyMVar
+    heldOut <- newIORef False
+    let onEvent (Compile.FrontProgressed _ p)
+          | Compile.fppPass p == Compile.FrontPassTypes = do
+              first <- tryPutMVar holding ()
+              when first (addUTCTime 10 <$> getCurrentTime >>= hold)
+        onEvent _ = return ()
+        hold deadline = do
+          now <- getCurrentTime
+          if now < deadline then yield >> hold deadline else writeIORef heldOut True
+        build gen = void (Compile.runCompilePlan Source.diskSourceProvider quietGlobalOptions sched gen plan onEvent)
+    _ <- Compile.startCompile sched 0 (\_ -> return ()) build
+    checking <- timeout (60 * 1000000) (readMVar holding)
+    assertBool "expected the first build to report type check progress" (isJust checking)
+    _ <- Compile.startCompile sched 0 (\_ -> return ()) (\_ -> return ())
+    held <- readIORef heldOut
+    Compile.stopCompile sched
+    assertBool "startCompile waited for the held type check to end" (not held)
+
+-- Nothing waits for a run, so the exception that ends it goes to the
+-- failure handler.  A run that a newer generation cancels reports nothing.
+p65_run_exception_reaches_failure_handler :: TestTree
+p65_run_exception_reaches_failure_handler =
+  testCase "65-an exception that ends a run reaches the failure handler" $ do
+    sched <- Compile.newCompileScheduler quietGlobalOptions
+    failures <- newIORef []
+    reported <- newEmptyMVar
+    let onFailure e = do
+          atomicModifyIORef' failures (\fs -> (fs ++ [E.displayException e], ()))
+          void (tryPutMVar reported ())
+    _ <- Compile.startCompile sched 0 onFailure (\_ -> E.throwIO (userError "run failed"))
+    failed <- timeout (10 * 1000000) (readMVar reported)
+    assertBool "expected the failed run to reach the failure handler" (isJust failed)
+    running <- newEmptyMVar
+    _ <- Compile.startCompile sched 0 onFailure (\_ -> putMVar running () >> threadDelay maxBound)
+    readMVar running
+    _ <- Compile.startCompile sched 0 onFailure (\_ -> return ())
+    Compile.stopCompile sched
+    assertEqual "only the failed run reaches the failure handler" ["user error (run failed)"] =<< readIORef failures
+
 -- Compile events -------------------------------------------------------------
 
 -- | The events the compiler library reports while it rebuilds a small module
@@ -5462,4 +5519,5 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
       , p59_full_build_keeps_nested_module_binary
       ]
   , testGroup "incremental-fetch-cases" [ p60_plan_after_failed_fetch_fetches_again ]
+  , testGroup "incremental-generation-cases" [ p64_new_generation_stops_type_check, p65_run_exception_reaches_failure_handler ]
   ]
