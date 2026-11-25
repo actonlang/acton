@@ -97,11 +97,11 @@ def _test_description_without_effect():
 
 def _test_read_changed_content():
     """read raises when the content is not the described content"""
-    testing.assertEqual(derive.InputFile("data/a.txt", 3, ABC, lambda: b"abc").read(), b"abc")
+    testing.assertEqual(derive.InputFile("data/a.txt", 3, ABC, pure lambda: b"abc").read(), b"abc")
     # Other content of the described size, and content of another size
     for content in [b"abd", b"abcd", b""]:
         try:
-            derive.InputFile("data/a.txt", 3, ABC, lambda: content).read()
+            derive.InputFile("data/a.txt", 3, ABC, pure lambda: content).read()
             testing.error("read returned " + str(content))
         except ValueError as exc:
             testing.assertEqual(exc.error_message, "the input file data/a.txt changed while the function ran")
@@ -136,7 +136,7 @@ def _test_embed_call():
         except ValueError as exc:
             testing.assertEqual(exc.error_message, 'embed cannot name the file "' + path + '"' + EMBED_RULE)
 
-proc def not_read() -> bytes:
+pure def not_read() -> bytes:
     """The reader of an input file that a function does not read"""
     raise ValueError("an input file was read")
 
