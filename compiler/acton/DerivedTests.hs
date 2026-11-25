@@ -1,7 +1,8 @@
 -- | Derived modules: the modules that the derived_modules table of
--- Build.act names, whose source a function returns during a build.  The
--- runner of an entry is the program that a build makes to call the function
--- of the entry.
+-- Build.act names, whose source a function returns during a build.  An
+-- entry names a module with a module name, or with a name that ends with .*
+-- and stands for every module below it.  The runner of an entry is the
+-- program that a build makes to call the function of the entry.
 module DerivedTests (derivedModuleTests) where
 
 import Control.Concurrent (forkIO, threadDelay)
@@ -93,24 +94,15 @@ derivedModuleTests = testGroup "derived modules"
         writeFile (proj </> "Build.act") . replace "{part.b, part.a, names}" "{names, part.a, part.b}" =<< readFileStrict (proj </> "Build.act")
         reordered <- succeeds "the names in another order" acton proj ["build"]
         assertBool ("no function runs when the names are written in another order\n" ++ reordered) (not ("Derived" `isInfixOf` reordered))
-        -- The names of an entry are exactly the modules that its function
-        -- returns.  A module that the function no longer returns is taken
-        -- out of the entry too, and is then removed with its outputs.  The
-        -- modules that are returned unchanged stay as they are.
+        -- The function returns every module that its entry names with a
+        -- module name.  A module that the function no longer returns is
+        -- taken out of the entry too, and is then removed with its outputs.
+        -- The modules that are returned unchanged stay as they are.
         removeFile (proj </> "parts/b.txt")
         missing <- fails "a named module that the function no longer returns" acton proj ["build"]
         assertBool missing ("Named and not returned: part.b" `isInfixOf` missing)
         writeFile (proj </> "Build.act") . replace "{names, part.a, part.b}" "{names, part.a}" =<< readFileStrict (proj </> "Build.act")
-        writeFile (proj </> "src/several.act") (unlines
-          [ "import names"
-          , "import part.a"
-          , ""
-          , "actor main(env):"
-          , "    proc def __startup__():"
-          , "        print(\" \".join(names.names))"
-          , "        print(part.a.size)"
-          , "        env.exit(0)"
-          ])
+        writeFile (proj </> "src/several.act") severalWithoutB
         _ <- succeeds "second build" acton proj ["build"]
         assertEqual "output" "a\n1\n" =<< runBinary (proj </> "out/bin/several")
         assertBool "the module that the function no longer returns is removed" . not =<< doesFileExist (proj </> "out/derived/src/part/b.act")
@@ -198,10 +190,23 @@ derivedModuleTests = testGroup "derived modules"
       withProject "demo" demoFiles $ \acton proj -> do
         (code, out) <- buildWithChange acton proj "schema" "data/greeting.txt" "hallo\n"
         assertEqual out (ExitFailure 1) code
-        assertBool out ("The function gen.schema of the derived module schema in " `isInfixOf` out
+        assertBool out ("The function gen.schema of the entry schema of derived_modules in " `isInfixOf` out
                         && "the input file data/greeting.txt changed while the function ran" `isInfixOf` out)
         _ <- succeeds "the build again" acton proj ["build"]
         assertEqual "output" "hallo, world\n" =<< runBinary (proj </> "out/bin/demo")
+      -- The run of the entry part.* no longer returns the module part.b.
+      -- The build looks at the input files before it removes the source
+      -- file of that module.
+      withProject "below" belowFiles $ \acton proj -> do
+        _ <- succeeds "first build" acton proj ["build"]
+        removePathForcibly (proj </> "out/derived/runner")
+        removeFile (proj </> "parts/b.txt")
+        (code, out) <- buildWithChange acton proj "part/all" "parts/a.txt" "4444"
+        assertEqual out (ExitFailure 1) code
+        assertBool out ("parts/a.txt changed while the build ran. Run the build again" `isInfixOf` out)
+        assertBool "no source file is removed" =<< doesFileExist (proj </> "out/derived/src/part/b.act")
+        _ <- succeeds "the build again" acton proj ["build"]
+        assertBool "the module that the function no longer returns is removed" . not =<< doesPathExist (proj </> "out/derived/src/part/b.act")
 
   , testCase "an input path is spelled as its directories list it" $
       -- A file system that takes one spelling of a name for another finds
@@ -215,10 +220,9 @@ derivedModuleTests = testGroup "derived modules"
             , ("data/sub/x.txt", "x") ]) $ \acton proj -> do
           folds <- doesDirectoryExist (proj </> "Data")
           out <- fails "build" acton proj ["build"]
-          assertBool out $ if folds
-            then ("The input path \"" ++ input ++ "\" of the derived module facts names " ++ named ++ " in ") `isInfixOf` out
-                 && (", and the path is written " ++ written ++ ".") `isInfixOf` out
-            else ("The input path \"" ++ input ++ "\" of the derived module facts names no file and no directory in ") `isInfixOf` out
+          assertBool out $ ("The input path \"" ++ input ++ "\" of the entry facts of derived_modules in ") `isInfixOf` out && if folds
+            then ("Build.act names " ++ named ++ " in ") `isInfixOf` out && (", and the path is written " ++ written ++ ".") `isInfixOf` out
+            else "Build.act names no file and no directory in " `isInfixOf` out
           assertBool "no function ran" . not =<< doesPathExist (proj </> "out/derived/src/facts.act")
 
   , testCase "an input file that cannot be read, is no regular file or has a name that is not text" $ do
@@ -227,7 +231,7 @@ derivedModuleTests = testGroup "derived modules"
               arises <- setup proj
               when arises $ do
                 out <- fails label acton proj ["build"]
-                assertBool out ("The derived module facts in " `isInfixOf` out && ("Build.act is not brought up to date: " ++ expected) `isInfixOf` out)
+                assertBool out ("The entry facts of derived_modules in " `isInfixOf` out && ("Build.act is not brought up to date: " ++ expected) `isInfixOf` out)
       -- A user who can read every file, such as root, can read this file
       -- too, and then the case does not arise.
       stops "a file without permissions"
@@ -310,7 +314,7 @@ derivedModuleTests = testGroup "derived modules"
           ]) $ \acton proj -> do
         let stops label message = do
               out <- fails label acton proj ["build"]
-              assertBool out ("The function std.build.derive.embed_files of the derived module assets in " `isInfixOf` out
+              assertBool out ("The function std.build.derive.embed_files of the entry assets of derived_modules in " `isInfixOf` out
                               && ("Build.act failed:\nValueError: " ++ message ++ "\n") `isInfixOf` out)
               assertBool "no module is moved into place" . not =<< doesPathExist (proj </> "out/derived/src/assets.act")
         -- The paths are sorted, so the function meets the file below extra
@@ -361,6 +365,277 @@ derivedModuleTests = testGroup "derived modules"
         _ <- succeeds "build" acton proj ["build"]
         assertEqual "the text of the derived module" (hex (TE.encodeUtf8 (T.pack (concat [ [toEnum c, '0'] | c <- [0 .. 255] ]))) ++ "\n")
           =<< runBinary (proj </> "out/bin/literal")
+
+  , testCase "the modules below a name follow the input files" $
+      withProject "several" (severalNamed "{names, part.*}") $ \acton proj -> do
+        let build label expected = do
+              out <- succeeds label acton proj ["build"]
+              assertBool (label ++ ": expected " ++ show expected ++ " in\n" ++ out) (expected `isInfixOf` out)
+            moduleFile name = proj </> "out/derived/src/part" </> name <.> "act"
+            interface name = proj </> "out/types/several/part" </> name <.> "tydb"
+        -- The label of the entry is names, the smallest of its names.
+        build "first build" "names  Derived 3 modules by gen.modules"
+        assertEqual "output" "a b\n1\n" =<< runBinary (proj </> "out/bin/several")
+        before <- getModificationTime (moduleFile "a")
+        -- A new input file gives a new module, and Build.act stays as it is.
+        -- acton sig runs no function, so it knows the module after the
+        -- build that wrote it.
+        writeFile (proj </> "parts/c.txt") "333"
+        unknown <- fails "acton sig before the build" acton proj ["sig", "part.c"]
+        assertBool unknown ("Module not found" `isInfixOf` unknown)
+        build "an input file was added" "Derived 4 modules by gen.modules"
+        assertEqual "the source of the new module" "size = 3\n" =<< readFile (moduleFile "c")
+        assertEqual "output" "a b c\n1\n" =<< runBinary (proj </> "out/bin/several")
+        assertBool "the interface of part.b is in place" =<< doesPathExist (interface "b")
+        known <- succeeds "acton sig after the build" acton proj ["sig", "part.c"]
+        assertBool known ("size : int" `isInfixOf` known)
+        -- A module that the function no longer returns is removed with its
+        -- outputs.  The modules that are returned unchanged stay as they
+        -- are.
+        removeFile (proj </> "parts/b.txt")
+        build "an input file was removed" "Derived 3 modules by gen.modules"
+        assertBool "the module that the function no longer returns is removed" . not =<< doesPathExist (moduleFile "b")
+        assertBool "the interface of the removed module is removed" . not =<< doesPathExist (interface "b")
+        assertEqual "the modification time of the module file of part.a" before =<< getModificationTime (moduleFile "a")
+        assertEqual "output" "a c\n1\n" =<< runBinary (proj </> "out/bin/several")
+        gone <- fails "acton sig of the removed module" acton proj ["sig", "part.b"]
+        assertBool gone ("Module not found" `isInfixOf` gone)
+        again <- succeeds "nothing changed" acton proj ["build"]
+        assertBool ("no function runs when nothing changed\n" ++ again) (not ("Derived" `isInfixOf` again))
+
+  , testCase "an entry with one name that ends with .*" $
+      withProject "below" belowFiles $ \acton proj -> do
+        let build label expected = do
+              out <- succeeds label acton proj ["build"]
+              assertBool (label ++ ": expected " ++ show expected ++ " in\n" ++ out) (expected `isInfixOf` out)
+            runnerBuilt = getModificationTime (proj </> "out/derived/runner/part.all.built")
+        build "first build" "part.*  Derived 2 modules by gen.parts"
+        assertEqual "output" "alone\n" =<< runBinary (proj </> "out/bin/below")
+        -- In the name of a file the * of the label part.* is written all.
+        forM_ [ "out/derived/src/part/a.act", "out/derived/src/part/b.act", "out/derived/part.all.json"
+              , "out/derived/runner/src/runner/part/all.act", "out/derived/runner/part.all.built", "out/derived/runner/out/bin/runner.part.all" ] $ \file ->
+          assertBool (file ++ " is in place after the first build") =<< doesFileExist (proj </> file)
+        firstRunner <- runnerBuilt
+        again <- succeeds "nothing changed" acton proj ["build"]
+        assertBool ("no function runs in the second build\n" ++ again) (not ("Derived" `isInfixOf` again))
+        assertEqual "nothing changed: the runner is not built again" firstRunner =<< runnerBuilt
+        -- The files of the entry are its two input files and the source
+        -- files of the two modules that its function returned.  A file that
+        -- was written in the same instant as the record is read once more,
+        -- and the build after that reads none.
+        settled <- succeeds "nothing changed, the build after" acton proj ["build", "--verbose"]
+        assertBool ("the line of the entry\n" ++ settled)
+                   (any (\line -> "Entry part.* of derived_modules in " `isInfixOf` line && "Build.act: up to date, 0 of 4 files read" `isSuffixOf` line)
+                        (lines settled))
+        removeFile (proj </> "parts/b.txt")
+        build "one input file" "Derived 1 module by gen.parts"
+        -- The function returns no module, and the entry asks for none.
+        removeFile (proj </> "parts/a.txt")
+        build "no input file" "Derived 0 modules by gen.parts"
+        assertBool "the directory of the removed modules is removed" . not =<< doesPathExist (proj </> "out/derived/src/part")
+        after <- succeeds "nothing changed at the end" acton proj ["build"]
+        assertBool ("no function runs when nothing changed at the end\n" ++ after) (not ("Derived" `isInfixOf` after))
+
+  , testCase "module names replaced by a name that ends with .*" $
+      withProject "several" (severalNamed "{names, part.a, part.b}") $ \acton proj -> do
+        _ <- succeeds "first build" acton proj ["build"]
+        assertBool "the interface of part.b is in place" =<< doesPathExist (proj </> "out/types/several/part/b.tydb")
+        -- The record of the first build lists part.b.  No entry names it
+        -- with a module name any more, and the function does not return it.
+        writeFile (proj </> "Build.act") (severalBuildAct "{names, part.*}")
+        removeFile (proj </> "parts/b.txt")
+        out <- succeeds "second build" acton proj ["build"]
+        assertBool ("the line of the run\n" ++ out) ("Derived 2 modules by gen.modules" `isInfixOf` out)
+        assertBool "the module that the function no longer returns is removed" . not =<< doesPathExist (proj </> "out/derived/src/part/b.act")
+        assertBool "the interface of the removed module is removed" . not =<< doesPathExist (proj </> "out/types/several/part/b.tydb")
+        assertEqual "output" "a\n1\n" =<< runBinary (proj </> "out/bin/several")
+
+  , testCase "a name that ends with .* moves to another entry" $
+      -- The order of the two entries in the table has no effect.
+      forM_ [False, True] $ \reversed ->
+        withProject "moved" (movedFiles reversed True) $ \acton proj -> do
+          _ <- succeeds "first build" acton proj ["build"]
+          assertEqual "output" "a_top b_top 1\n" =<< runBinary (proj </> "out/bin/moved")
+          before <- getModificationTime (proj </> "out/derived/src/part/a.act")
+          writeFiles proj (take 1 (movedFiles reversed False))
+          out <- succeeds "the name part.* moved to the other entry" acton proj ["build"]
+          forM_ ["a_top  Derived by gen.modules", "b_top  Derived 3 modules by gen.modules"] $ \line ->
+            assertBool ("expected " ++ show line ++ " in\n" ++ out) (line `isInfixOf` out)
+          -- The function returned the same source for part.a, so its file
+          -- is not written again.
+          assertEqual "the modification time of the module file of part.a" before =<< getModificationTime (proj </> "out/derived/src/part/a.act")
+          assertEqual "output" "a_top b_top 1\n" =<< runBinary (proj </> "out/bin/moved")
+          again <- succeeds "nothing changed" acton proj ["build"]
+          assertBool ("no function runs when nothing changed\n" ++ again) (not ("Derived" `isInfixOf` again))
+
+  , testCase "a module file that no run returned" $
+      withProject "below" belowFiles $ \acton proj -> do
+        _ <- succeeds "first build" acton proj ["build"]
+        -- The entry names the module of this file, and no run returned it.
+        writeFile (proj </> "out/derived/src/part/stray.act") "size = 0\n"
+        forM_ [["build", "--skip-build"], ["test", "list"]] $ \args -> do
+          refused <- fails "out of date" acton proj args
+          assertBool refused ("The entry part.* of derived_modules in " `isInfixOf` refused
+                              && "is out of date, and this build runs no function" `isInfixOf` refused)
+        out <- succeeds "the function runs again" acton proj ["build"]
+        assertBool ("the line of the run\n" ++ out) ("Derived 2 modules by gen.parts" `isInfixOf` out)
+        assertBool "the file that no run returned is removed" . not =<< doesPathExist (proj </> "out/derived/src/part/stray.act")
+        again <- succeeds "nothing changed" acton proj ["build"]
+        assertBool ("no function runs when nothing changed\n" ++ again) (not ("Derived" `isInfixOf` again))
+        forM_ [["build", "--skip-build"], ["test", "list"]] $ \args ->
+          void (succeeds "up to date" acton proj args)
+
+  , testCase "a returned module gets a name that differs only in the case of letters" $
+      withProject "below" (belowFiles ++ [("parts/first.txt", "333")]) $ \acton proj -> do
+        _ <- succeeds "first build" acton proj ["build"]
+        -- The function returns the module part.First in place of the
+        -- module part.first.  On a file system that ignores the case of
+        -- letters, the two modules have one file.
+        renameFile (proj </> "parts/first.txt") (proj </> "parts/First.txt")
+        out <- succeeds "an input file was renamed" acton proj ["build"]
+        assertBool ("the line of the run\n" ++ out) ("Derived 3 modules by gen.parts" `isInfixOf` out)
+        assertEqual "the module files" ["First.act", "a.act", "b.act"] . sort =<< listDirectory (proj </> "out/derived/src/part")
+        again <- succeeds "nothing changed" acton proj ["build"]
+        assertBool ("no function runs when nothing changed\n" ++ again) (not ("Derived" `isInfixOf` again))
+
+  , testCase "the name of an entry changes only in the case of letters" $
+      withProject "below" (overrideFiles belowFiles (belowNamed "Part")) $ \acton proj -> do
+        _ <- succeeds "first build" acton proj ["build"]
+        -- The first build made a directory Part for the module files and
+        -- one for the source of the runner.  On a file system that ignores
+        -- the case of letters, a directory Part that stayed would take the
+        -- files of the entry part.*, as files that no entry has.
+        writeFiles proj (belowNamed "part")
+        out <- succeeds "the name of the entry is part.*" acton proj ["build"]
+        assertBool ("the line of the run\n" ++ out) ("part.*  Derived 2 modules by gen.parts" `isInfixOf` out)
+        again <- succeeds "nothing changed" acton proj ["build"]
+        assertBool ("no function runs when nothing changed\n" ++ again) (not ("Derived" `isInfixOf` again))
+        forM_ ["out/derived/runner/src/runner/part/all.act", "out/derived/runner/part.all.built", "out/derived/runner/out/bin/runner.part.all"] $ \file ->
+          assertBool (file ++ " is in place after a build in which nothing changed") =<< doesFileExist (proj </> file)
+        assertEqual "the directories of the module files" ["part"] =<< listDirectory (proj </> "out/derived/src")
+        assertEqual "the directories of the runner sources" ["part"] =<< listDirectory (proj </> "out/derived/runner/src/runner")
+
+  , testCase "a hand-written module with the name before .*" $
+      -- part.* does not stand for the module part, which has a file under
+      -- src.
+      withProject "below" (overrideFiles belowFiles [("src/part.act", "kind = \"top\"\n"), ("src/below.act", belowWithTop)]) $ \acton proj -> do
+        _ <- succeeds "build" acton proj ["build"]
+        assertEqual "output" "top 1\n" =<< runBinary (proj </> "out/bin/below")
+        assertBool "the module part is not a derived module" . not =<< doesPathExist (proj </> "out/derived/src/part.act")
+
+  , testCase "a module name next to the same name with .*" $
+      withProject "below" (overrideFiles belowFiles
+          [ ("Build.act", buildAct "below" ["derived_modules = {", "    {part, part.*}: (function=gen.both, inputs=[\"parts/\"])", "}"])
+          , ("src/gen.act", belowFunction "parts" "part" ++ unlines
+              [ ""
+              , "def both(inputs: dict[str, derive.InputFile]) -> dict[str, str]:"
+              , "    res = parts(inputs)"
+              , "    res[\"part\"] = 'kind = \"top\"\\n'"
+              , "    return res"
+              ])
+          , ("src/below.act", belowWithTop)
+          ]) $ \acton proj -> do
+        out <- succeeds "build" acton proj ["build"]
+        assertBool ("the line of the run\n" ++ out) ("part  Derived 3 modules by gen.both" `isInfixOf` out)
+        assertEqual "output" "top 1\n" =<< runBinary (proj </> "out/bin/below")
+        forM_ ["out/derived/src/part.act", "out/derived/src/part/a.act", "out/derived/part.json"] $ \file ->
+          assertBool (file ++ " is in place") =<< doesFileExist (proj </> file)
+
+  , testCase "a project with the name of the first part of its names" $
+      -- The names of the entry and the import statement write the module
+      -- fleet.layers.a the same way, without the name of the project in
+      -- front.
+      withProject "fleet"
+          [ ("Build.act", buildAct "fleet" ["derived_modules = {", "    fleet.layers.*: (function=gen.layers, inputs=[\"parts/\"])", "}"])
+          , ("parts/a.txt", "1")
+          , ("src/gen.act", belowFunction "layers" "fleet.layers")
+          , ("src/fleet/main.act", unlines
+              [ "import fleet.layers.a"
+              , ""
+              , "actor main(env):"
+              , "    proc def __startup__():"
+              , "        print(fleet.layers.a.size)"
+              , "        env.exit(0)"
+              ])
+          ] $ \acton proj -> do
+        _ <- succeeds "build" acton proj ["build"]
+        assertBool "the derived module is below the directory fleet" =<< doesFileExist (proj </> "out/derived/src/fleet/layers/a.act")
+        assertEqual "output" "1\n" =<< runBinary (proj </> "out/bin/fleet.main")
+        -- The function returns no module any more.  The directories fleet
+        -- and fleet/layers then hold nothing and are removed.
+        removeFile (proj </> "parts/a.txt")
+        writeFile (proj </> "src/fleet/main.act") "actor main(env):\n    proc def __startup__():\n        env.exit(0)\n"
+        _ <- succeeds "the input file was removed" acton proj ["build"]
+        assertBool "the directories of the removed module are removed" . not =<< doesPathExist (proj </> "out/derived/src/fleet")
+        assertBool "the derived source directory stays" =<< doesDirectoryExist (proj </> "out/derived/src")
+
+  , testCase "a module that the function no longer returns is removed with its --tydb copy" $
+      withProject "below" belowFiles $ \acton proj -> do
+        -- A build with --tydb writes a copy of the interface of a module
+        -- beside its source file.
+        let source name = proj </> "out/derived/src/part" </> name <.> "act"
+            copy name   = proj </> "out/derived/src/part" </> name <.> "tydb"
+        _ <- succeeds "first build" acton proj ["build", "--tydb"]
+        forM_ ["a", "b"] $ \name -> assertBool ("the copy of part." ++ name ++ " is written") =<< doesPathExist (copy name)
+        removeFile (proj </> "parts/b.txt")
+        _ <- succeeds "an input file was removed" acton proj ["build", "--tydb"]
+        forM_ [source "b", copy "b", proj </> "out/types/below/part/b.tydb"] $ \path ->
+          assertBool (path ++ " is removed") . not =<< doesPathExist path
+        forM_ [source "a", copy "a"] $ \path -> assertBool (path ++ " stays") =<< doesPathExist path
+        -- The directory of the modules goes with the last of them, also
+        -- when it held a copy.
+        removeFile (proj </> "parts/a.txt")
+        _ <- succeeds "the last input file was removed" acton proj ["build", "--tydb"]
+        assertBool "the directory of the removed modules is removed" . not =<< doesPathExist (proj </> "out/derived/src/part")
+
+  , testCase "a source file below a name that ends with .* stops the build before a function runs" $
+      -- The entry of b_top comes first in the table.  Its function does not
+      -- run either: the build looks at src before it runs any function.
+      withProject "moved" (movedFiles True True ++ [("src/part/inner/hand.act", "size = 1\n")]) $ \acton proj -> do
+        out <- fails "build" acton proj ["build"]
+        assertBool out ("Every module below part is a derived module in " `isInfixOf` out
+                        && "Build.act, which names part.*, and the project has the source file " `isInfixOf` out
+                        && "src/part/inner/hand.act.\nMove the file out of " `isInfixOf` out
+                        && "src/part, or write names in place of part.* that leave out the module part.inner.hand." `isInfixOf` out)
+        assertBool "no function ran and no runner was built" . not =<< doesPathExist (proj </> "out/derived")
+
+  , testCase "a name that ends with .* next to an entry of std.build.derive.embed_files" $
+      -- Each file below web is an input file of two entries, and two
+      -- derived modules embed it.
+      withProject "shop" pagesFiles $ \acton proj -> do
+        let build label expected = do
+              out <- succeeds label acton proj ["build"]
+              forM_ expected $ \line -> assertBool (label ++ ": expected " ++ show line ++ " in\n" ++ out) (line `isInfixOf` out)
+              return out
+            prints label expected = assertEqual label expected =<< runBinary (proj </> "out/bin/shop")
+            page name = proj </> "out/derived/src/page" </> name <.> "act"
+            both count = ["assets  Derived by std.build.derive.embed_files", "page.*  Derived " ++ count ++ " modules by gen.pages"]
+        _ <- build "first build" (both "2")
+        prints "first build" "2 14 True\nlet a = 1\n"
+        assertEqual "the source of a module below page" "body: bytes = embed(\"web/app.js\")\nsize = 10\n" =<< readFile (page "app")
+        again <- build "nothing changed" []
+        assertBool ("no function runs when nothing changed\n" ++ again) (not ("Derived" `isInfixOf` again))
+        -- New content of the same size: both functions run and return the
+        -- source that they returned before, so no module is written.  The
+        -- program has the new content through embed.
+        written <- mapM getModificationTime [page "app", proj </> "out/derived/src/assets.act"]
+        writeFile (proj </> "web/app.js") "let a = 2\n"
+        _ <- build "a file has new content" (both "2")
+        assertEqual "a file has new content: the modification times of the derived modules" written
+          =<< mapM getModificationTime [page "app", proj </> "out/derived/src/assets.act"]
+        prints "a file has new content" "2 14 True\nlet a = 2\n"
+        writeFile (proj </> "web/site.css") "body {}\n"
+        _ <- build "a file was added" (both "3")
+        assertEqual "the source of the added module" "body: bytes = embed(\"web/site.css\")\nsize = 8\n" =<< readFile (page "site")
+        prints "a file was added" "3 14 True\nlet a = 2\n"
+        -- The module of the removed file goes with what was compiled from
+        -- it, the data C file among it.
+        let compiled = [ proj </> "out/types/shop/page/site" ++ suffix | suffix <- [".tydb", ".c", ".embed.c"] ]
+        forM_ compiled $ \path -> assertBool (path ++ " is in place") =<< doesPathExist path
+        removeFile (proj </> "web/site.css")
+        _ <- build "a file was removed" (both "2")
+        forM_ (page "site" : compiled) $ \path -> assertBool (path ++ " is removed") . not =<< doesPathExist path
+        prints "a file was removed" "2 14 True\nlet a = 2\n"
 
   , testCase "arguments of several types for a derived module in a package" $
       withProject "typed" typedFiles $ \acton proj -> do
@@ -435,24 +710,26 @@ derivedModuleTests = testGroup "derived modules"
         writeFiles (tmp </> "lib") (libFiles "lib")
         writeFiles (tmp </> "app") (appFiles "app")
         _ <- succeeds "build" acton (tmp </> "app") ["build"]
-        assertEqual "output" "lib:from lib\napp:from app\nown:from a function of app that read from lib\nmade:from a derived module of lib\n"
+        assertEqual "output" "lib:from lib\napp:from app\nown:from a function of app that read from lib\nmade:from a derived module of lib\nparts:1\n"
           =<< runBinary (tmp </> "app/out/bin/app")
         assertBool "the derived module of the dependency is in the dependency" =<< doesFileExist (tmp </> "lib/out/derived/src/table.act")
+        assertBool "a derived module below a name of the dependency is in the dependency" =<< doesFileExist (tmp </> "lib/out/derived/src/parts/a.act")
         assertBool "the derived module of the project is in the project" =<< doesFileExist (tmp </> "app/out/derived/src/local.act")
         again <- succeeds "second build" acton (tmp </> "app") ["build"]
         assertBool ("no function runs in the second build\n" ++ again) (not ("Derived" `isInfixOf` again))
         -- The function gen.table of lib is the function of table and of
         -- local, and the functions of wrapped and of made call it.  When
         -- gen.table changes, a build runs the functions of these four
-        -- derived modules again, and not the function of maker, which does
-        -- not use gen.table.  Each expected text starts with the label of
-        -- its entry, since the name gen.table is part of lib.gen.table.
+        -- derived modules again, and not the functions of maker and of
+        -- parts.*, which do not use gen.table.  Each expected text starts
+        -- with the label of its entry, since the name gen.table is part of
+        -- lib.gen.table.
         writeFile (tmp </> "lib/src/gen.act") . replace "\"from " "\"by " =<< readFileStrict (tmp </> "lib/src/gen.act")
         changed <- succeeds "a function of the dependency changed" acton (tmp </> "app") ["build"]
         forM_ ["table  Derived by gen.table", "local  Derived by lib.gen.table", "wrapped  Derived by appgen.wrapped", "made  Derived by lib.maker.made"] $ \line ->
           assertBool ("expected " ++ show line ++ " in\n" ++ changed) (line `isInfixOf` changed)
-        assertBool ("the function of maker does not run\n" ++ changed) (not ("Derived by gen.maker" `isInfixOf` changed))
-        assertEqual "output" "lib:by lib\napp:by app\nown:by a function of app that read by lib\nmade:by a derived module of lib\n"
+        assertBool ("the functions of maker and of parts.* do not run\n" ++ changed) (not (any (`isInfixOf` changed) ["by gen.maker", "by gen.parts"]))
+        assertEqual "output" "lib:by lib\napp:by app\nown:by a function of app that read by lib\nmade:by a derived module of lib\nparts:1\n"
           =<< runBinary (tmp </> "app/out/bin/app")
 
   , testCase "a function in a project that the project of the entry does not declare as a dependency" $
@@ -472,21 +749,23 @@ derivedModuleTests = testGroup "derived modules"
         assertBool out ("names the module other.gen of the project other, which is not a dependency in that Build.act.\nAdd other to its dependencies."
                         `isInfixOf` out)
 
-  , testCase "a derived module under the name of a dependency is refused before its function runs" $
-      withProject "demo" (overrideFiles demoFiles
-          [ ("Build.act", buildAct "demo"
-              [ "dependencies = {", "    \"lib\": (path=\"lib\")", "}"
-              , "derived_modules = {"
-              , "    lib.extra: (function=gen.schema, inputs=[\"data/greeting.txt\"], args=(name=\"world\"))"
-              , "}"
-              ])
-          , ("lib/Build.act", buildAct "lib" [])
-          , ("lib/src/unused.act", "size = 1\n")
-          ]) $ \acton proj -> do
-        out <- fails "build" acton proj ["build"]
-        assertBool out ("and lib is a dependency of the project.\nThe name lib.extra names a module of the dependency lib. Give the derived module another name."
-                        `isInfixOf` out)
-        assertBool "no function ran" . not =<< doesPathExist (proj </> "out/derived/src/lib/extra.act")
+  , testCase "a name under the name of a dependency is refused before its function runs" $
+      forM_ [ ("lib.extra", "The name lib.extra names a module of the dependency lib. Give the derived module another name.")
+            , ("lib.extra.*", "The name lib.extra.* stands for modules of the dependency lib. Give the derived modules another name.")
+            ] $ \(name, expected) ->
+        withProject "demo" (overrideFiles demoFiles
+            [ ("Build.act", buildAct "demo"
+                [ "dependencies = {", "    \"lib\": (path=\"lib\")", "}"
+                , "derived_modules = {"
+                , "    " ++ name ++ ": (function=gen.schema, inputs=[\"data/greeting.txt\"], args=(name=\"world\"))"
+                , "}"
+                ])
+            , ("lib/Build.act", buildAct "lib" [])
+            , ("lib/src/unused.act", "size = 1\n")
+            ]) $ \acton proj -> do
+          out <- fails "build" acton proj ["build"]
+          assertBool out (("and lib is a dependency of the project.\n" ++ expected) `isInfixOf` out)
+          assertBool "no function ran" . not =<< doesPathExist (proj </> "out/derived/src/lib")
 
   , testCase "a project in a directory whose name has a character outside ASCII" $ do
       -- The Build.act of the runner project holds the directory of the
@@ -528,7 +807,7 @@ derivedModuleTests = testGroup "derived modules"
         -- line reports a back job that was prepared.
         _ <- succeeds "first build" acton proj ["build"]
         out <- succeeds "nothing changed" acton proj ["build", "--verbose"]
-        let (before, entry) = break ("Derived module schema" `isInfixOf`) (lines out)
+        let (before, entry) = break ("Entry schema of derived_modules" `isInfixOf`) (lines out)
         assertBool ("the line of the entry\n" ++ out) (not (null entry))
         assertBool ("the function's module is checked before the line of the entry\n" ++ out) (any ("  Fresh gen: " `isInfixOf`) before)
         assertBool ("no back job is prepared before the line of the entry\n" ++ out) (not (any ("  DBP " `isInfixOf`) before))
@@ -540,11 +819,13 @@ derivedModuleTests = testGroup "derived modules"
           , "    other: (function=gen.schema, inputs=[\"data/greeting.txt\"], args=(name=\"there\"))"
           , "}"
           ])]) $ \acton proj -> do
-        _ <- succeeds "first build" acton proj ["build"]
+        _ <- succeeds "first build" acton proj ["build", "--tydb"]
         -- One of two entries is removed.  What the build keeps for it is
-        -- removed, and what it keeps for the other entry stays.
+        -- removed, and what it keeps for the other entry stays.  The --tydb
+        -- copy of a module is the last of these files.
         let kept label = [ "out/derived/src" </> label <.> "act", "out/derived" </> label <.> "json", "out/derived/runner/src/runner" </> label <.> "act"
-                         , "out/derived/runner" </> label <.> "built", "out/derived/runner/out/bin" </> ("runner." ++ label) ]
+                         , "out/derived/runner" </> label <.> "built", "out/derived/runner/out/bin" </> ("runner." ++ label)
+                         , "out/derived/src" </> label <.> "tydb" </> "data.mdb" ]
         forM_ (kept "schema" ++ kept "other") $ \file ->
           assertBool (file ++ " is in place after the first build") =<< doesFileExist (proj </> file)
         writeFile (proj </> "Build.act") (demoBuildAct "gen.schema")
@@ -552,7 +833,8 @@ derivedModuleTests = testGroup "derived modules"
         -- whatever its name.
         writeFile (proj </> "out/derived/src/stray.txt") "stray\n"
         _ <- succeeds "the entry other is removed" acton proj ["build"]
-        forM_ ("out/derived/src/stray.txt" : kept "other") $ \file -> assertBool (file ++ " is removed") . not =<< doesPathExist (proj </> file)
+        forM_ ("out/derived/src/stray.txt" : "out/derived/src/other.tydb" : kept "other") $ \file ->
+          assertBool (file ++ " is removed") . not =<< doesPathExist (proj </> file)
         forM_ (kept "schema") $ \file -> assertBool (file ++ " stays") =<< doesFileExist (proj </> file)
         -- The last entry is removed.
         writeFile (proj </> "Build.act") (buildAct "demo" [])
@@ -679,6 +961,48 @@ derivedModuleTests = testGroup "derived modules"
           logText <- output
           assertEqual ("the builds that one save of an input file starts\n" ++ logText) (started + 1) =<< builds
           assertEqual ("the runs of the function\n" ++ logText) 5 (length (filter ("Derived by gen.facts" `isInfixOf`) (lines logText)))
+
+  , testCase "acton build --watch follows the modules below a name that ends with .*" $
+      -- No module imports a module below part.  A build of the whole
+      -- project compiles them all the same.
+      withProject "watch-below" belowFiles $ \acton proj ->
+        withActon acton proj ["build", "--watch", "--color", "never"] $ \_ _ output -> do
+          let source name    = proj </> "out/derived/src/part" </> name <.> "act"
+              interface name = proj </> "out/types/below/part" </> name <.> "tydb"
+          awaitLines output "the first build" "Final compilation done" 1
+          awaitGeneration proj
+          -- The function returns one more module for an added input file,
+          -- and the build that the file starts compiles the module.
+          putFile proj "parts/c.txt" "333"
+          awaitLines output "the run of the function for the added file" "Derived 3 modules by gen.parts" 1
+          awaitLines output "the build after the file was added" "Final compilation done" 2
+          awaitGeneration proj
+          assertEqual "the source of the added module" "size = 3\n" =<< readFile (source "c")
+          assertBool "the added module is compiled" =<< doesPathExist (interface "c")
+          -- The first build ran the function for two input files too.
+          removeFile (proj </> "parts/c.txt")
+          awaitLines output "the run of the function for the removed file" "Derived 2 modules by gen.parts" 2
+          awaitLines output "the build after the file was removed" "Final compilation done" 3
+          awaitGeneration proj
+          forM_ [source "c", interface "c"] $ \path -> assertBool (path ++ " is removed") . not =<< doesPathExist path
+          forM_ [source "a", interface "a"] $ \path -> assertBool (path ++ " stays") =<< doesPathExist path
+
+  , testCase "acton build --watch compiles the modules that import a module that the function no longer returns" $
+      -- The root module imports part.a.  The module of the function is
+      -- saved, and the function returns no module for parts/a.txt any more,
+      -- so the generation removes the source file of part.a.  It compiles
+      -- the root module, whose import names no module, and does not
+      -- complete.
+      withProject "watch-importer" (overrideFiles belowFiles [("src/below.act", belowImports "a")]) $ \acton proj ->
+        withActon acton proj ["build", "--watch", "--color", "never"] $ \_ _ output -> do
+          awaitLines output "the first build" "Final compilation done" 1
+          awaitGeneration proj
+          writeFile (proj </> "src/gen.act") (replace "        res[" "        if name != \"a\":\n            res[" (belowFunction "parts" "part"))
+          awaitLines output "the run of the function" "Derived 1 module by gen.parts" 1
+          awaitGeneration proj
+          assertBool "the source file of the module is removed" . not =<< doesPathExist (proj </> "out/derived/src/part/a.act")
+          logText <- output
+          assertEqual ("the generations that completed\n" ++ logText) 1 (length (filter ("Final compilation done" `isInfixOf`) (lines logText)))
 
   , testCase "acton build --watch builds when an input file changes after a build that failed in its function" $
       -- The first build of the watch ends in the function, before the
@@ -901,6 +1225,33 @@ derivedModuleTests = testGroup "derived modules"
           reported <- published ("out/derived/src" </> "schema.act")
           assertBool "the error in the source of the derived module" (not (null reported))
 
+  , testCase "the language server uses the modules below a name that ends with .* as the last build left them" $
+      -- The file of the root module imports part.a.  The server gets the
+      -- text of that module with an import of part.a or of part.c.
+      withProject "below" (overrideFiles belowFiles [("src/below.act", belowImports "a")]) $ \acton tmp -> do
+        proj <- canonicalizePath tmp
+        let below = "src" </> "below.act"
+            reports label expected diags =
+              assertBool (label ++ ": " ++ show (map Ae.encode diags)) (any ((expected `isInfixOf`) . LBS.unpack . Ae.encode) diags)
+        withServerWithin 900 proj $ \notify published -> do
+          opened notify proj below (belowImports "a")
+          reports "before a build" "Type interface file not found for part.a" =<< published below
+          _ <- succeeds "first build" acton proj ["build"]
+          edited notify proj below 2 (belowImports "a")
+          published below >>= (@?= [])
+          -- A new input file changes nothing for the server.
+          writeFile (proj </> "parts/c.txt") "333"
+          edited notify proj below 3 (belowImports "c")
+          reports "an input file was added and no build ran" "Type interface file not found for part.c" =<< published below
+          _ <- succeeds "second build" acton proj ["build"]
+          edited notify proj below 4 (belowImports "c")
+          published below >>= (@?= [])
+          -- The third build removes the module part.c.
+          removeFile (proj </> "parts/c.txt")
+          _ <- succeeds "third build" acton proj ["build"]
+          edited notify proj below 5 (belowImports "c")
+          reports "a module that the function no longer returns" "Type interface file not found for part.c" =<< published below
+
   , testCase "the derived modules of a dependency are brought up to date under the lock of the dependency" $
       withSystemTempDirectory "acton-derived-lock" $ \tmp -> do
         acton <- canonicalizePath "../../dist/bin/acton"
@@ -951,17 +1302,17 @@ errorCase (name, files, later, expected) = testCase name $
 refusedCall :: String -> [String]
 refusedCall call =
   [ "--> runner/schema.act@6:"
-  , "was not built.\nIts entry gives the call\n  " ++ call ++ "\nThe function of a derived module takes"
+  , "was not built.\nIt gives the call\n  " ++ call ++ "\nThe function of a derived module takes"
   ]
 
 errorCases :: [(String, [(FilePath, String)], [(FilePath, String)], [String])]
 errorCases =
   [ ( "the module name is a string"
     , [("Build.act", buildAct "demo" ["derived_modules = {", "    \"schema\": (function=gen.schema)", "}"])]
-    , [], ["to the left of its colon an entry has a module name, or several module names in braces"] )
+    , [], ["to the left of its colon an entry has a name, or several names in braces"] )
   , ( "several names in parentheses"
     , [("Build.act", buildAct "demo" ["derived_modules = {", "    (schema, other): (function=gen.schema)", "}"])]
-    , [], ["to the left of its colon an entry has a module name, or several module names in braces"] )
+    , [], ["to the left of its colon an entry has a name, or several names in braces"] )
   , ( "the function is a string"
     , [("Build.act", buildAct "demo" ["derived_modules = {", "    schema: (function=\"gen.schema\")", "}"])]
     , [], ["function of the entry schema is a module name followed by the function's name, written without quotes"] )
@@ -970,7 +1321,7 @@ errorCases =
     , [], ["has the unknown field output"] )
   , ( "a module in two entries"
     , [("Build.act", buildAct "demo" ["derived_modules = {", "    schema: (function=gen.schema),", "    {other, schema}: (function=gen.schema)", "}"])]
-    , [], ["the module schema is named by two entries"] )
+    , [], ["two entries name the module schema"] )
   , ( "an input path outside the project"
     , [("Build.act", buildAct "demo" ["derived_modules = {", "    schema: (function=gen.schema, inputs=[\"../other\"])", "}"])]
     , [], ["must be a relative path inside the project"] )
@@ -1012,6 +1363,14 @@ errorCases =
           , "}"
           ])]
     , [], ["names the module schema, which is a derived module of the same project.\nPut the function in a module of the project that has a file under src."] )
+  , ( "a function in a module below a name that ends with .* of its own project"
+    , [("Build.act", buildAct "demo"
+          [ "derived_modules = {"
+          , "    schema.*: (function=gen.schema, inputs=[\"data/greeting.txt\"], args=(name=\"world\")),"
+          , "    other: (function=schema.a.make)"
+          , "}"
+          ])]
+    , [], ["names the module schema.a, which is a derived module of the same project.\nPut the function in a module of the project that has a file under src."] )
   , ( "args written as a dict"
     , [("Build.act", buildAct "demo" ["derived_modules = {", "    schema: (function=gen.schema, args={\"name\": \"world\"})", "}"])]
     , [], ["are the keyword arguments of its function"] )
@@ -1045,13 +1404,41 @@ errorCases =
     , [], ["no greeting today"] )
   , ( "a str result for several names"
     , [("Build.act", buildAct "demo" ["derived_modules = {", "    {schema, other}: (function=gen.schema, inputs=[\"data/greeting.txt\"], args=(name=\"world\"))", "}"])]
-    , [], ["it returns str, the source of one module, and the entry names 2 modules"] )
+    , [], ["it returns str, the source of one module, and its entry names {other, schema}.\nAn entry whose function returns str has one name, a module name."] )
+  , ( "a str result for a name that ends with .*"
+    , [("Build.act", demoBuildActBelow)]
+    , [], ["it returns str, the source of one module, and its entry names schema.*.\nAn entry whose function returns str has one name, a module name."] )
+    -- embed_files returns str, the source of one module.
+  , ( "std.build.derive.embed_files for a name that ends with .*"
+    , [("Build.act", buildAct "demo" ["derived_modules = {", "    schema.*: (function=std.build.derive.embed_files, inputs=[\"data/\"])", "}"])]
+    , [], [ "The function std.build.derive.embed_files of the entry schema.* of derived_modules in "
+          , "Build.act cannot be used: it returns str, the source of one module, and its entry names schema.*.\n"
+            ++ "An entry whose function returns str has one name, a module name. "
+            ++ "A function for several modules returns dict[str, str], from module name to source." ] )
+  , ( "std.build.derive.embed_files for a module name and the same name with .*"
+    , [("Build.act", buildAct "demo" ["derived_modules = {", "    {schema, schema.*}: (function=std.build.derive.embed_files, inputs=[\"data/\"])", "}"])]
+    , [], ["it returns str, the source of one module, and its entry names {schema, schema.*}.\nAn entry whose function returns str has one name, a module name."] )
   , ( "returned modules that the entry does not name"
     , [("src/gen.act", schemaOf "dict[str, str]" ["return {\"schema\": \"greeting = 'x'\\n\", \"schema.inner\": \"\", \"elsewhere\": \"\"}"])]
-    , [], ["returned other modules than its entry names.\nReturned and not named: elsewhere, schema.inner\nAn entry names exactly"] )
+    , [], ["returned other modules than the entry names.\nReturned and not named: elsewhere, schema.inner\nThe function returns every module"] )
   , ( "a named module that the function does not return"
     , [("src/gen.act", schemaOf "dict[str, str]" ["return {\"elsewhere\": \"greeting = 'x'\\n\"}"])]
-    , [], ["Returned and not named: elsewhere\nNamed and not returned: schema\nAn entry names exactly"] )
+    , [], ["Returned and not named: elsewhere\nNamed and not returned: schema\nThe function returns every module"] )
+  , ( "a returned module with the name before .*"
+    , [ ("Build.act", demoBuildActBelow)
+      , ("src/gen.act", schemaOf "dict[str, str]" ["return {\"schema\": \"greeting = 'x'\\n\", \"schema.a\": \"\"}"]) ]
+    , [], ["Returned and not named: schema\nschema.* stands for every module below schema, and not for the module schema. "
+           ++ "To name both, write schema and schema.* in the entry.\nThe function returns every module"] )
+  , ( "returned names that differ only in the case of letters"
+    , [ ("Build.act", demoBuildActBelow)
+      , ("src/gen.act", schemaOf "dict[str, str]" ["return {\"schema.Foo\": \"\", \"schema.foo\": \"\"}"]) ]
+    , [], [ "of the entry schema.* of derived_modules in "
+          , "the function returned \"schema.Foo\" and \"schema.foo\": schema.Foo and schema.foo differ only in the case of letters" ] )
+  , ( "a source file below a name that ends with .*"
+    , [("Build.act", demoBuildActBelow), ("src/schema/inner/hand.act", "size = 1\n")]
+    , [], [ "Every module below schema is a derived module in "
+          , "src/schema/inner/hand.act.\nMove the file out of "
+          , "src/schema, or write names in place of schema.* that leave out the module schema.inner.hand." ] )
   , ( "a function that imports a derived module of its own project"
     , []
     , [("src/gen.act", "import schema\n\n" ++ genSchema)], ["imports a derived module of its own project: gen imports schema"] )
@@ -1060,6 +1447,11 @@ errorCases =
       -- The diagnostic names the source of the derived module, and a note
       -- after it says where that source comes from.
     , [], ["--> out/derived/src/schema.act@1:17", "Note: schema is a derived module. The function gen.schema returned its source"] )
+  , ( "a derived module below a name that ends with .* with a type error"
+    , [ ("Build.act", demoBuildActBelow)
+      , ("src/gen.act", schemaOf "dict[str, str]" ["return {\"schema.bad\": \"greeting: int = 'x'\\n\"}"])
+      , ("src/demo.act", "actor main(env):\n    proc def __startup__():\n        env.exit(0)\n") ]
+    , [], ["--> out/derived/src/schema/bad.act@1:17", "Note: schema.bad is a derived module. The function gen.schema returned its source"] )
   , ( "a derived module whose actor main cannot be the root actor"
     , [ ("src/gen.act", schemaOf "str" ["return \"actor main(n: int):\\n    pass\\n\""])
       , ("src/demo.act", "import schema\n") ]
@@ -1113,6 +1505,11 @@ demoBuildActArgs function args = buildAct "demo"
   , "    )"
   , "}"
   ]
+
+-- | The Build.act of the demo project with the name schema.* in place of
+-- schema.
+demoBuildActBelow :: String
+demoBuildActBelow = replace "    schema: (" "    schema.*: (" (demoBuildAct "gen.schema")
 
 -- | The first lines of a module of functions for derived modules: the
 -- import of the module that has the class InputFile, the description of an
@@ -1222,6 +1619,41 @@ assetsModule names = unlines $
     ++ [ "    \"/" ++ name ++ "\": embed(\"web/" ++ name ++ "\")," | name <- sort names ]
     ++ [ "}" ]
 
+-- | The project shop with a second entry for the files below web: page.*,
+-- whose function returns a module below page for each file.  The module
+-- has the name of the file up to its first dot, embeds the file and holds
+-- its size.  The program prints the number of files of assets, the size
+-- that page.index holds, whether page.index and assets embed the same
+-- content for web/index.html, and the content that page.app embeds.
+pagesFiles :: [(FilePath, String)]
+pagesFiles = overrideFiles shopFiles
+  [ ("Build.act", buildAct "shop"
+      [ "derived_modules = {"
+      , "    assets: (function=std.build.derive.embed_files, inputs=[\"web/\"], args=(strip=\"web\")),"
+      , "    page.*: (function=gen.pages, inputs=[\"web/\"])"
+      , "}"
+      ])
+  , ("src/gen.act", deriveImport ++ unlines
+      [ "def pages(inputs: dict[str, derive.InputFile]) -> dict[str, str]:"
+      , "    res = {}"
+      , "    for path, f in inputs.items():"
+      , "        name = path.split(\"/\")[-1].split(\".\")[0]"
+      , "        res[\"page.\" + name] = \"body: bytes = \" + derive.embed_call(path) + \"\\nsize = \" + str(f.size) + \"\\n\""
+      , "    return res"
+      ])
+  , ("src/shop.act", unlines
+      [ "import assets"
+      , "import page.app"
+      , "import page.index"
+      , ""
+      , "actor main(env):"
+      , "    proc def __startup__():"
+      , "        print(len(assets.files), page.index.size, page.index.body == assets.files[\"/index.html\"])"
+      , "        print(page.app.body.decode().strip())"
+      , "        env.exit(0)"
+      ])
+  ]
+
 -- | Bytes as hexadecimal digits.
 hex :: BS.ByteString -> String
 hex = concatMap (printf "%02x") . BS.unpack
@@ -1277,14 +1709,7 @@ typedFiles =
 -- input file: a module of part holds the size of its file.
 severalFiles :: [(FilePath, String)]
 severalFiles =
-  [ ("Build.act", buildAct "several"
-      [ "derived_modules = {"
-      , "    {part.b, part.a, names}: ("
-      , "        function=gen.modules,"
-      , "        inputs=[\"parts/\"]"
-      , "    )"
-      , "}"
-      ])
+  [ ("Build.act", severalBuildAct "{part.b, part.a, names}")
   , ("parts/a.txt", "1")
   , ("parts/b.txt", "22")
   , ("src/gen.act", deriveImport ++ unlines
@@ -1311,15 +1736,140 @@ severalFiles =
       ])
   ]
 
--- | A dependency with a function for derived modules and two derived
--- modules of its own: table, and maker, which has a function for derived
--- modules.
+-- | The Build.act of the project several with the names of its entry as
+-- they are written to the left of the colon.
+severalBuildAct :: String -> String
+severalBuildAct names = buildAct "several"
+  [ "derived_modules = {"
+  , "    " ++ names ++ ": ("
+  , "        function=gen.modules,"
+  , "        inputs=[\"parts/\"]"
+  , "    )"
+  , "}"
+  ]
+
+-- | A root module of the project several that imports names and part.a,
+-- and no other module that the function returns.
+severalWithoutB :: String
+severalWithoutB = unlines
+  [ "import names"
+  , "import part.a"
+  , ""
+  , "actor main(env):"
+  , "    proc def __startup__():"
+  , "        print(\" \".join(names.names))"
+  , "        print(part.a.size)"
+  , "        env.exit(0)"
+  ]
+
+-- | The project several with the given names for its entry and the root
+-- module that imports names and part.a.
+severalNamed :: String -> [(FilePath, String)]
+severalNamed names = overrideFiles severalFiles [("Build.act", severalBuildAct names), ("src/several.act", severalWithoutB)]
+
+-- | The source of a function that returns, for every input file, a module
+-- below the given name that holds the size of the file.  The function
+-- reads no input file.
+belowFunction :: String -> String -> String
+belowFunction function above = deriveImport ++ unlines
+  [ "def " ++ function ++ "(inputs: dict[str, derive.InputFile]) -> dict[str, str]:"
+  , "    res = {}"
+  , "    for path, f in inputs.items():"
+  , "        name = path.split(\"/\")[-1].split(\".\")[0]"
+  , "        res[\"" ++ above ++ ".\" + name] = \"size = \" + str(f.size) + \"\\n\""
+  , "    return res"
+  ]
+
+-- | A project with the one entry part.*, whose function returns a module
+-- below part for every file under parts.  Its root module imports no
+-- derived module.
+belowFiles :: [(FilePath, String)]
+belowFiles = belowNamed "part" ++
+  [ ("parts/a.txt", "1")
+  , ("parts/b.txt", "22")
+  , ("src/below.act", "actor main(env):\n    proc def __startup__():\n        print(\"alone\")\n        env.exit(0)\n")
+  ]
+
+-- | The Build.act and the function of the project below with the given
+-- name in place of part: the one entry is that name with .*, and the
+-- function returns a module below that name for every file under parts.
+belowNamed :: String -> [(FilePath, String)]
+belowNamed above =
+  [ ("Build.act", buildAct "below" ["derived_modules = {", "    " ++ above ++ ".*: (function=gen.parts, inputs=[\"parts/\"])", "}"])
+  , ("src/gen.act", belowFunction "parts" above)
+  ]
+
+-- | A root module of the project below that imports the module part and
+-- the module part.a below it.
+belowWithTop :: String
+belowWithTop = unlines
+  [ "import part"
+  , "import part.a"
+  , ""
+  , "actor main(env):"
+  , "    proc def __startup__():"
+  , "        print(part.kind, part.a.size)"
+  , "        env.exit(0)"
+  ]
+
+-- | A root module of the project below that imports the module with the
+-- given name below part.
+belowImports :: String -> String
+belowImports name = unlines
+  [ "import part." ++ name
+  , ""
+  , "actor main(env):"
+  , "    proc def __startup__():"
+  , "        print(part." ++ name ++ ".size)"
+  , "        env.exit(0)"
+  ]
+
+-- | A project with two entries of one function, for the modules a_top and
+-- b_top.  One of the two entries also has the name part.*, the input path
+-- and the argument that makes the function return a module below part for
+-- every file under parts: the entry of a_top when 'first' holds, else the
+-- entry of b_top.  The entry of b_top comes first in the table when
+-- 'reversed' holds.  The Build.act is the first file.
+movedFiles :: Bool -> Bool -> [(FilePath, String)]
+movedFiles reversed first =
+  [ ("Build.act", buildAct "moved" (["derived_modules = {"] ++ commas ((if reversed then reverse else id) [entry "a_top" first, entry "b_top" (not first)]) ++ ["}"]))
+  , ("parts/a.txt", "1")
+  , ("parts/b.txt", "22")
+  , ("src/gen.act", deriveImport ++ unlines
+      [ "def modules(inputs: dict[str, derive.InputFile], top: str, parts: bool) -> dict[str, str]:"
+      , "    res = {top: \"name = '\" + top + \"'\\n\"}"
+      , "    if parts:"
+      , "        for path, f in inputs.items():"
+      , "            name = path.split(\"/\")[-1].split(\".\")[0]"
+      , "            res[\"part.\" + name] = \"size = \" + str(f.size) + \"\\n\""
+      , "    return res"
+      ])
+  , ("src/moved.act", unlines
+      [ "import a_top"
+      , "import b_top"
+      , "import part.a"
+      , ""
+      , "actor main(env):"
+      , "    proc def __startup__():"
+      , "        print(a_top.name, b_top.name, part.a.size)"
+      , "        env.exit(0)"
+      ])
+  ]
+  where
+    entry top True  = "    {" ++ top ++ ", part.*}: (function=gen.modules, inputs=[\"parts/\"], args=(top=\"" ++ top ++ "\", parts=True))"
+    entry top False = "    " ++ top ++ ": (function=gen.modules, args=(top=\"" ++ top ++ "\", parts=False))"
+    commas entries  = map (++ ",") (init entries) ++ [last entries]
+
+-- | A dependency with a function for derived modules and derived modules
+-- of its own: table, maker, which has a function for derived modules, and
+-- the modules below parts, of which its function returns parts.a.
 libFiles :: String -> [(FilePath, String)]
 libFiles name =
   [ ("Build.act", buildAct name
       [ "derived_modules = {"
       , "    table: (function=gen.table, args=(owner=\"lib\")),"
-      , "    maker: (function=gen.maker)"
+      , "    maker: (function=gen.maker),"
+      , "    parts.*: (function=gen.parts)"
       , "}"
       ])
   , ("src/gen.act", deriveImport ++ unlines
@@ -1329,14 +1879,17 @@ libFiles name =
       , "def maker(inputs: dict[str, derive.InputFile]) -> str:"
       , "    return ('import gen\\nimport std.build.derive as derive\\n\\ndef made(inputs: dict[str, derive.InputFile]) -> str:\\n'"
       , "            + '    return gen.table(inputs, owner=\"a derived module of lib\")\\n')"
+      , ""
+      , "def parts(inputs: dict[str, derive.InputFile]) -> dict[str, str]:"
+      , "    return {\"parts.a\": \"size = 1\\n\"}"
       ])
   ]
 
--- | A project that imports the derived module table of its dependency lib,
--- and has three derived modules: one whose function is in a module of the
--- dependency, one whose function is in a module of the project that
--- imports a module and a derived module of the dependency, and one whose
--- function is in a derived module of the dependency.
+-- | A project that imports the derived modules table and parts.a of its
+-- dependency lib, and has three derived modules: one whose function is in
+-- a module of the dependency, one whose function is in a module of the
+-- project that imports a module and a derived module of the dependency,
+-- and one whose function is in a derived module of the dependency.
 appFiles :: String -> [(FilePath, String)]
 appFiles name =
   [ ("Build.act", buildAct name
@@ -1358,7 +1911,8 @@ appFiles name =
       , "    return lib.gen.table(inputs, owner=\"a function of app that read \" + lib.table.owner)"
       ])
   , ("src/app.act", unlines
-      [ "import lib.table"
+      [ "import lib.parts.a"
+      , "import lib.table"
       , "import local"
       , "import made"
       , "import wrapped"
@@ -1369,6 +1923,7 @@ appFiles name =
       , "        print(\"app:\" + local.owner)"
       , "        print(\"own:\" + wrapped.owner)"
       , "        print(\"made:\" + made.owner)"
+      , "        print(\"parts:\" + str(lib.parts.a.size))"
       , "        env.exit(0)"
       ])
   ]

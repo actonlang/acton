@@ -114,7 +114,7 @@ A build also stops for a file whose path `embed` refuses. With a file
 `web/a{b}.txt`, whose name has braces, the message is:
 
 ```console
-The function std.build.derive.embed_files of the derived module assets in /home/user/shop/Build.act failed:
+The function std.build.derive.embed_files of the entry assets of derived_modules in /home/user/shop/Build.act failed:
 ValueError: embed cannot name the file "web/a{b}.txt". A path of embed is relative, with / between its components. It has no empty component, no component . or .., no backslash, no double quote, no brace and no control character. Its first component is not out
 ```
 

@@ -5188,11 +5188,36 @@ main = do
               Right rendered -> do
                 rendered `shouldSatisfy` isInfixOf "# The modules that functions return\nderived_modules = {\n    schema: ("
                 fmap (\(s,_,_) -> BuildSpec.derived_modules s) (BuildSpec.parseBuildAct rendered) `shouldBe` Right expected
+        -- The parser of a Build.act reads a text without .* as the parser
+        -- of a module reads it.
+        asBuildFile <- P.parseBuildFile source
+        asModule <- P.parseModule (S.ModName []) "Build.act" source Nothing
+        S.mbody asBuildFile `shouldBe` S.mbody asModule
+
+      it "parses .* as an attribute in a Build.act and nowhere else" $ do
+        let refused label parse = do
+              result <- E.try parse :: IO (Either E.SomeException S.Module)
+              case result of
+                Left _  -> return ()
+                Right m -> expectationFailure (label ++ " should not parse, got " ++ show (S.mbody m))
+        -- The name * has the location of its one character, with or without
+        -- spaces after it.
+        forM_ ["x = a.b.*\n", "x = a.b.*   \n"] $ \text -> do
+          m <- P.parseBuildFile text
+          case S.mbody m of
+            [S.Assign _ _ (S.Dot _ (S.Dot _ (S.Var _ (S.NoQ a)) b) star)] -> do
+              map S.nstr [a, b, star] `shouldBe` ["a", "b", "*"]
+              S.nloc star `shouldBe` Loc 8 9
+            other -> expectationFailure ("Unexpected AST of " ++ show text ++ ": " ++ show other)
+        forM_ ["x = a.**\n", "x = a.b*\n"] $ \text ->
+          refused ("parseBuildFile " ++ show text) (P.parseBuildFile text)
+        refused "parseModule \"x = a.*\"" (P.parseModule (S.ModName []) "m.act" "x = a.*\n" Nothing)
+        refused "parseModuleSerial \"x = a.*\"" (P.parseModuleSerial (S.ModName []) "m.act" "x = a.*\n" Nothing)
 
       it "reads the module names of a derived module entry as a set" $ do
         let source names = "name = \"demo\"\nfingerprint = 0x1234abcd5678ef00\n\nderived_modules = {\n    " ++ names ++ ": (function=spec.modules)\n}\n"
-            json modules = BL.fromStrict (B8.pack ("{\"name\":\"demo\",\"fingerprint\":\"0x1234abcd5678ef00\",\"derived_modules\":[{\"modules\":"
-                                                   ++ modules ++ ",\"function\":\"spec.modules\"}]}"))
+            json names = BL.fromStrict (B8.pack ("{\"name\":\"demo\",\"fingerprint\":\"0x1234abcd5678ef00\",\"derived_modules\":[{\"names\":"
+                                                 ++ names ++ ",\"function\":\"spec.modules\"}]}"))
             expected = [BuildSpec.DerivedEntry (Set.fromList ["fleetmgr", "flotilla.layers"]) "spec.modules" [] M.empty]
         -- The names are read the same on one line and on several, with and
         -- without a comma after the last name.
@@ -5257,6 +5282,42 @@ main = do
                   -- the table as it is.
                   BuildSpec.updateBuildActFromJSON written (BuildSpec.encodeBuildSpecJSON spec) `shouldBe` Right written
 
+      it "reads names that end with .*" $ do
+        let source = "name = \"demo\"\nfingerprint = 0x1234abcd5678ef00\n\nderived_modules = {\n    {tables, layers.*}: (function=gen.modules)\n}\n"
+            expected = BuildSpec.DerivedEntry (Set.fromList ["layers.*", "tables"]) "gen.modules" [] M.empty
+        case BuildSpec.parseBuildAct source of
+          Left err -> expectationFailure err
+          Right (spec,_,_) -> do
+            BuildSpec.derived_modules spec `shouldBe` [expected]
+            BuildSpec.derivedLabel expected `shouldBe` "layers.*"
+            BuildSpec.derivedFileLabel expected `shouldBe` "layers.all"
+            BuildSpec.derivedModules expected `shouldBe` Set.singleton "tables"
+            BuildSpec.derivedBelow expected `shouldBe` ["layers"]
+            BuildSpec.renderBuildAct spec `shouldSatisfy` isInfixOf "    {\n        layers.*,\n        tables\n    }: ("
+            let json = BuildSpec.encodeBuildSpecJSON spec
+            BL.toStrict json `shouldSatisfy` B8.isInfixOf (B8.pack "\"names\":[\"layers.*\",\"tables\"]")
+            Ae.eitherDecode' json `shouldBe` Right spec
+            forM_ [Right (BuildSpec.renderBuildAct spec), BuildSpec.updateBuildActFromJSON source json] $ \result ->
+              case result of
+                Left err -> expectationFailure err
+                Right rendered -> case BuildSpec.parseBuildAct rendered of
+                  Left err -> expectationFailure (rendered ++ ": " ++ err)
+                  Right (spec2,_,_) -> spec2 `shouldBe` spec
+
+      it "accepts a module name next to the same name with .*" $ do
+        let header = "name = \"demo\"\nfingerprint = 0x1234abcd5678ef00\n\n"
+            names expr = fmap (\(spec,_,_) -> map (Set.toList . BuildSpec.derivedNames) (BuildSpec.derived_modules spec))
+                              (BuildSpec.parseBuildAct (header ++ "derived_modules = " ++ expr ++ "\n"))
+        names "{{a.b, a.b.*}: (function=gen.modules)}" `shouldBe` Right [["a.b", "a.b.*"]]
+        names "{a.b: (function=gen.one), a.b.*: (function=gen.modules)}" `shouldBe` Right [["a.b"], ["a.b.*"]]
+        names "{a.b.*: (function=gen.modules), a.bc.*: (function=gen.modules)}" `shouldBe` Right [["a.b.*"], ["a.bc.*"]]
+        -- A part in quotes is the part without quotes.
+        names "{devices.\"X1\": (function=gen.one)}" `shouldBe` Right [["devices.X1"]]
+
+      it "derivedCovers goes by the parts of a name" $ do
+        let entry = BuildSpec.DerivedEntry (Set.fromList ["a.b.*", "t"]) "gen.modules" [] M.empty
+        filter (BuildSpec.derivedCovers entry) ["a.b.c", "a.b.c.d", "t", "a.b", "a.bc", "a", "t.x"] `shouldBe` ["a.b.c", "a.b.c.d", "t"]
+
       it "defaults absent derived modules to no entries" $ do
         let source = "name = \"demo\"\nfingerprint = 0x1234abcd5678ef00\n"
         case BuildSpec.parseBuildAct source of
@@ -5268,7 +5329,7 @@ main = do
 
       it "rejects derived modules that are not written as the table expects" $ do
         let cases =
-              [ ("{\"schema\": (function=gen.schema)}", "to the left of its colon an entry has a module name, or several module names in braces")
+              [ ("{\"schema\": (function=gen.schema)}", "to the left of its colon an entry has a name, or several names in braces")
               , ("{schema: (function=\"gen.schema\")}", "function of the entry schema is a module name followed by the function's name, written without quotes")
               , ("{schema: (function=schema)}", "for example function=gen.schema, found schema")
               , ("{schema: (inputs=[\"a\"])}", "the entry schema has no function")
@@ -5281,12 +5342,12 @@ main = do
               , ("{schema: (function=gen.schema, args=(a=[f(1)]))}", "the argument a of the entry schema must be a literal")
               , ("{schema: (function=gen.schema, args=(a={1: 2}))}", "the argument a of the entry schema must be a literal")
               , ("{schema: (function=gen.schema, args=(a=-\"x\"))}", "the argument a of the entry schema must be a literal")
-              , ("{schema: (function=gen.schema), {other, schema}: (function=gen.schema)}", "the module schema is named by two entries")
+              , ("{schema: (function=gen.schema), {other, schema}: (function=gen.schema)}", "two entries name the module schema")
               , ("{{schema, other, schema}: (function=gen.schema)}", "the entry {other, schema} names the module schema twice")
-              , ("{(schema, other): (function=gen.schema)}", "to the left of its colon an entry has a module name, or several module names in braces")
-              , ("{(schema): (function=gen.schema)}", "to the left of its colon an entry has a module name, or several module names in braces")
-              , ("{{schema, *other}: (function=gen.schema)}", "to the left of its colon an entry has a module name, or several module names in braces")
-              , ("{f(x): (function=gen.schema)}", "to the left of its colon an entry has a module name, or several module names in braces")
+              , ("{(schema, other): (function=gen.schema)}", "to the left of its colon an entry has a name, or several names in braces")
+              , ("{(schema): (function=gen.schema)}", "to the left of its colon an entry has a name, or several names in braces")
+              , ("{{schema, *other}: (function=gen.schema)}", "to the left of its colon an entry has a name, or several names in braces")
+              , ("{f(x): (function=gen.schema)}", "to the left of its colon an entry has a name, or several names in braces")
               , ("{schema: gen.schema}", "the entry schema must be written as (function=..., inputs=[...], args=(...))")
               , ("{schema: (gen.schema, inputs=[\"a\"])}", "the entry schema must be written as (function=..., inputs=[...], args=(...))")
               , ("{**other}", "an entry must be written as name: (function=...)")
@@ -5299,6 +5360,31 @@ main = do
               , ("{schema: (function=gen.schema, inputs=[\"out\"])}", "is in out, which a build writes and which is not committed")
               , ("{schema: (function=gen.schema, inputs=[\"out//derived/\"])}", "is in out, which a build writes and which is not committed")
               , ("[schema]", "expected a dict of entries")
+              , ("{layers.\"*\": (function=gen.modules)}", "to the left of its colon an entry has a name, or several names in braces, written without quotes: "
+                                                          ++ "a module name such as schema, or a name such as layers.* for every module below layers. "
+                                                          ++ "For example schema: (function=gen.schema) or {tables, layers.*}: (function=gen.modules)")
+              , ("{a.\"b.c\": (function=gen.schema)}", "to the left of its colon an entry has a name, or several names in braces")
+              , ("{a.\"b c\": (function=gen.schema)}", "to the left of its colon an entry has a name, or several names in braces")
+              , ("{layers.*.types: (function=gen.modules)}", "\"layers.*.types\" is not a name of an entry: a * is written only as the .* at the end of a name, "
+                                                             ++ "as in layers.* for every module below layers")
+              , ("{layers.*.*: (function=gen.modules)}", "\"layers.*.*\" is not a name of an entry")
+              , ("{schema: (function=gen.*)}", "function of the entry schema must be a module name followed by the function's name, found \"gen.*\"")
+              , ("{{layers.*, layers.*}: (function=gen.modules)}", "the entry layers.* names the modules below layers twice")
+              , ("{{layers.*, layers.base}: (function=gen.modules)}",
+                 "the entry {layers.*, layers.base} names the module layers.base twice: layers.* stands for every module below layers, at any depth")
+              , ("{{layers.*, layers.core.*}: (function=gen.modules)}",
+                 "the entry {layers.*, layers.core.*} names the modules below layers.core twice: layers.* stands for every module below layers, at any depth")
+              , ("{layers.*: (function=gen.modules), layers.core.types: (function=gen.schema)}",
+                 "two entries name the module layers.core.types: layers.* stands for every module below layers, at any depth")
+              , ("{layers.core.*: (function=gen.modules), layers.*: (function=gen.modules)}",
+                 "two entries name the modules below layers.core: layers.* stands for every module below layers, at any depth")
+              , ("{layers.*: (function=gen.modules), {other, layers.*}: (function=gen.modules)}", "two entries name the modules below layers")
+              , ("{a.*: (function=gen.modules), a.all: (function=gen.schema)}", "two entries name the module a.all")
+              , ("{Layers.base: (function=gen.schema), layers.*: (function=gen.modules)}",
+                 "the names Layers.base and layers.* start with Layers and layers, which differ only in the case of letters. "
+                 ++ "A file system that ignores the case of letters has one file or directory for both.")
+              , ("{Foo: (function=gen.schema), foo: (function=gen.schema)}", "the names Foo and foo start with Foo and foo, which differ only in the case of letters")
+              , ("{{p.Foo.x, p.foo.*}: (function=gen.modules)}", "the names p.Foo.x and p.foo.* start with p.Foo and p.foo, which differ only in the case of letters")
               ]
             header = "name = \"demo\"\nfingerprint = 0x1234abcd5678ef00\n\n"
         forM_ cases $ \(expr, expected) ->
@@ -5314,12 +5400,18 @@ main = do
         -- These checks can fail only for an entry that is read from JSON.
         let decodeEntry entry = Ae.eitherDecode' (BL.fromStrict (B8.pack
               ("{\"name\":\"demo\",\"fingerprint\":\"0x1234abcd5678ef00\",\"derived_modules\":[" ++ entry ++ "]}"))) :: Either String BuildSpec.BuildSpec
-        forM_ [ ("{\"modules\":[],\"function\":\"gen.schema\"}", "an entry names at least one module")
-              , ("{\"modules\":[\"a/b\"],\"function\":\"gen.schema\"}", "\"a/b\" is not a module name")
-              , ("{\"modules\":[\"schema\"],\"function\":\"schema\"}", "function of the entry schema must be a module name followed by the function's name, found \"schema\"")
-              , ("{\"modules\":[\"schema\"],\"function\":\"gen.schema\",\"args\":{\"a-b\":1}}", "the argument name \"a-b\" of the entry schema is not a parameter name")
-              , ("{\"modules\":[\"schema\"],\"function\":\"gen.schema\",\"output\":\"x\"}", "the entry schema has the unknown field output. The fields are function, inputs and args")
-              , ("{\"modules\":[\"schema\"],\"function\":\"gen.schema\",\"inputs\":[\"out/x\"]}", "the input path \"out/x\" of the entry schema is in out")
+        forM_ [ ("{\"names\":[],\"function\":\"gen.schema\"}", "an entry has at least one name")
+              , ("{\"names\":[\"a/b\"],\"function\":\"gen.schema\"}", "\"a/b\" is not a module name")
+              , ("{\"names\":[\"*\"],\"function\":\"gen.schema\"}", "\"*\" is not a name of an entry")
+              , ("{\"names\":[\"a*\"],\"function\":\"gen.schema\"}", "\"a*\" is not a name of an entry")
+              , ("{\"names\":[\".*\"],\"function\":\"gen.schema\"}", "\".*\" is not a name of an entry")
+                -- The names of an entry are in its field names, and in no other field.
+              , ("{\"modules\":[\"schema\"],\"function\":\"gen.schema\"}", "names")
+              , ("{\"names\":[\"schema\"],\"modules\":[\"schema\"],\"function\":\"gen.schema\"}", "the entry schema has the unknown field modules")
+              , ("{\"names\":[\"schema\"],\"function\":\"schema\"}", "function of the entry schema must be a module name followed by the function's name, found \"schema\"")
+              , ("{\"names\":[\"schema\"],\"function\":\"gen.schema\",\"args\":{\"a-b\":1}}", "the argument name \"a-b\" of the entry schema is not a parameter name")
+              , ("{\"names\":[\"schema\"],\"function\":\"gen.schema\",\"output\":\"x\"}", "the entry schema has the unknown field output. The fields are function, inputs and args")
+              , ("{\"names\":[\"schema\"],\"function\":\"gen.schema\",\"inputs\":[\"out/x\"]}", "the input path \"out/x\" of the entry schema is in out")
               ] $ \(entry, expected) ->
           case decodeEntry entry of
             Left err -> err `shouldSatisfy` isInfixOf expected

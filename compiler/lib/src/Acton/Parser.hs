@@ -179,6 +179,16 @@ parseModuleSerial qn fileName fileContent mReportProgress = do
         Left err -> Control.Exception.throw err
         Right (i,mdoc,s) -> return $ S.Module qn i mdoc s
 
+-- | Parse the text of a Build.act.  It has the syntax of a module, and an
+-- attribute may also be written .*, which gives Dot with the name * at the
+-- location of that one character.
+parseBuildFile :: String -> IO S.Module
+parseBuildFile content = do
+    warmUpParser
+    case runParser (St.evalStateT file_input initState { psBuildAct = True }) "Build.act" (addFinalNewline content) of
+      Left err            -> Control.Exception.throwIO err
+      Right (is, mdoc, s) -> return (S.Module (S.ModName []) is mdoc s)
+
 parseModuleImports :: String -> String -> IO [S.Import]
 parseModuleImports fileName fileContent = fst <$> parseModuleHeader fileName fileContent
 
@@ -258,7 +268,7 @@ srcSpanAt (Loc l r) src = sp
 --
 -- The chunked parser makes this likely.  Its workers start together and
 -- apply the same parser CAFs for the first time at the same moment, in the
--- first parse of every process (Build.act).  -fno-full-laziness keeps parser
+-- first parse of a module in every process.  -fno-full-laziness keeps parser
 -- subexpressions out of CAFs, but the top-level parsers and the static
 -- operator tables remain CAFs.
 --
@@ -488,6 +498,7 @@ data ParserState = ParserState
   { psContexts :: [CTX]
   , psProgress :: Maybe ParseProgressReporter
   , psIndentation :: !Indentation
+  , psBuildAct :: Bool                  -- the text is a Build.act, where an attribute may be written .*
   }
 
 data ParseProgressReporter = ParseProgressReporter
@@ -502,7 +513,7 @@ pushCtx ctx st = st { psContexts = ctx : psContexts st }
 popCtx st      = st { psContexts = tail (psContexts st) }
 getCtxs        = psContexts
 
-initState        = ParserState [] Nothing noIndentation
+initState        = ParserState [] Nothing noIndentation False
 
 parserStateWithProgress :: String -> Maybe (Int -> Int -> IO ()) -> IO ParserState
 parserStateWithProgress contentWithNewline mReportProgress =
@@ -2841,7 +2852,7 @@ atom_expr = do
                         <|>
                          (do
                             dot
-                            f <- try intdot <|> iddot <|> strdot
+                            f <- try intdot <|> iddot <|> strdot <|> stardot
                             return (COther,f))
                         <?> "call arguments, slice/index expression")
                      return (l,kind,f)
@@ -2857,6 +2868,15 @@ atom_expr = do
                  strdot = do
                         (l,ss) <- withLoc plainstrLiteral
                         return (\a -> S.Dot (loc a `upto` l) a (S.Name l (S.packText (head ss))))
+                 -- The attribute .* of a Build.act.  In any other text it
+                 -- matches nothing.
+                 stardot = do
+                        ok <- St.gets psBuildAct
+                        if not ok then empty else do
+                          off <- getOffset
+                          _ <- singleStar
+                          let l = Loc off (off+1)
+                          return (\a -> S.Dot (loc a `upto` l) a (S.Name l (S.packText "*")))
 
                  -- Parse slice or index: try slice first since it can start with expr
                  sliceOrIndex = try sliceParser <|> indexParser

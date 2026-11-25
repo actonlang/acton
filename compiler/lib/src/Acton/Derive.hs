@@ -5,7 +5,9 @@ file under src.  An entry of the derived_modules table of Build.act names
 the modules, a function, input paths and arguments, and the function
 returns the source of the modules from a description of each input file
 and the arguments.  A description holds the path, the size and the SHA-256
-of a file, and the function reads the content of a file through it.
+of a file, and the function reads the content of a file through it.  An
+entry names a module with a module name, or with a name that ends with .*
+and stands for every module below it (BuildSpec.derivedCovers).
 The source is written under out/derived/src, from where a build discovers
 and compiles it like any other module (Acton.Project).
 
@@ -14,9 +16,9 @@ up to date, dependencies first, before the build discovers its modules.
 For a project it
 
   1. removes the record and the runner of each entry that is no longer in
-     the table, and each file under out/derived/src that no entry names,
-     except a --tydb copy, which a build writes beside the source file of a
-     module (isInterfaceCopy),
+     the table, and each file under out/derived/src that no entry names.
+     A --tydb copy, which a build writes beside the source file of a module
+     (isInterfaceCopy), is removed only with that source file,
   2. lists the input files of each entry and takes the SHA-256 of each,
   3. compiles the modules of the functions through the front passes, in
      the build's own context, and reads each function's type and
@@ -31,9 +33,11 @@ For a project it
      the SHA-256 of each input file, and runs the runner, which calls the
      function, reads an input file when the function asks for its content,
      and writes the returned modules to a temporary directory,
-  7. checks that the returned modules are exactly the modules that the
-     entry names, moves them into out/derived/src and writes the record.
-     A file whose source did not change is left alone.
+  7. checks that the function returned every module that the entry names
+     with a module name, and no module that the entry does not name,
+     removes the source files that the entry names and the run did not
+     return, moves the returned modules into out/derived/src and writes
+     the record.  A file whose source did not change is left alone.
 
 The driver is told each source file of a derived module that is written or
 removed, when that is done.  A build under --watch that fails or is
@@ -48,13 +52,15 @@ are brought up to date, and the build holds these locks to its end.  The
 build of a runner runs inside the build and takes no lock.
 
 An entry is up to date when its record has the same compiler version,
-function, implementation hash, result type, module names, arguments, input
-paths and input hashes, and the files that the record lists are in place
-with the recorded content.  A name's implementation hash covers its own
-implementation and that of every name it uses, in every module
-(Acton.Hashing).  So a change to code that the function neither calls nor
-reads does not run it again, and a change of a constant that it reads
-does.
+function, implementation hash, result type, names, arguments, input paths
+and input hashes, and the source files under out/derived/src that the
+entry names are the files that the record lists, with the recorded
+content.  A source file below a name that ends with .* that no run of the
+entry returned makes the entry out of date, and the run that follows
+removes it.  A name's implementation hash covers its own implementation
+and that of every name it uses, in every module (Acton.Hashing).  So a
+change to code that the function neither calls nor reads does not run it
+again, and a change of a constant that it reads does.
 
 The record also holds the stat of each input file and of each file that
 the entry wrote, taken before the read that gave the file's SHA-256.  A
@@ -73,10 +79,10 @@ most once, also one that is an input file of several entries or that a
 module embeds, and a later look that finds another stat stops the build:
 the file changed while the build ran.  The function of an entry reads an
 input file after the build took the SHA-256 of that file, so the build
-looks at each input file of the entry again after the run, before it moves
-a returned module into place (install).  The read of a description itself
-fails when the content does not have the size and the SHA-256 of the
-description (std.build.derive).
+looks at each input file of the entry again after the run, before it
+removes a source file or moves a returned module into place (install).
+The read of a description itself fails when the content does not have the
+size and the SHA-256 of the description (std.build.derive).
 
 The runners of a project are the root modules of a project of their own
 under out/derived/runner.  That project depends on the project and on
@@ -92,6 +98,17 @@ Files, for the entry schema of a project:
   out/derived/runner/src/runner/schema.act    the root actor of the runner
   out/derived/runner/out/bin/runner.schema    the runner
   out/derived/runner/schema.built             what the runner was built from
+
+The record and the files of the runner of an entry have its label in their
+names, the smallest of its names (BuildSpec.derivedLabel), with the * of a
+label written all (BuildSpec.derivedFileLabel).  The source file of a
+module has the name of the module.  For the entry layers.*:
+
+  out/derived/src/layers/base.act                the source of the module layers.base
+  out/derived/layers.all.json                    the record
+  out/derived/runner/src/runner/layers/all.act   the root actor of the runner
+  out/derived/runner/out/bin/runner.layers.all   the runner
+  out/derived/runner/layers.all.built            what the runner was built from
 -}
 module Acton.Derive
   ( Driver(..)
@@ -123,7 +140,7 @@ import qualified Data.Aeson as Aeson
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
 import Data.Char (GeneralCategory(Surrogate), generalCategory)
-import Data.List (intercalate, isPrefixOf, nub, sort, stripPrefix, zip4)
+import Data.List (intercalate, isPrefixOf, nub, partition, sort, stripPrefix, zip4)
 import qualified Data.Map as M
 import Data.Maybe (catMaybes, isJust, isNothing)
 import qualified Data.Set as Set
@@ -196,8 +213,9 @@ dependenciesFirst projects root = reverse (snd (visit (Set.empty, []) root))
 
 -- | An entry with what a run of it needs: the function, its result type,
 -- the record that the entry has when it is up to date, without outputs,
--- its input files, the record of its last run, and what that record tells
--- about files.
+-- its input files, the record of its last run, what that record tells
+-- about files, and the source files under out/derived/src that the entry
+-- names (namesFile), by path relative to the project root.
 data Job = Job
   { jobEntry    :: BuildSpec.DerivedEntry
   , jobFunction :: Function
@@ -206,29 +224,41 @@ data Job = Job
   , jobInputs   :: [Hashed]
   , jobStored   :: Maybe Record
   , jobKnown    :: Known
+  , jobPresent  :: Set.Set FilePath
   }
 
-jobLabel :: Job -> String
-jobLabel = BuildSpec.derivedLabel . jobEntry
+-- | An entry as a message names it: its label and where the entry is.
+entryText :: FilePath -> BuildSpec.DerivedEntry -> String
+entryText root entry = BuildSpec.derivedLabel entry ++ " of derived_modules in " ++ projectBuildAct root
+
+-- | The start of a message about the function of an entry.
+functionText :: FilePath -> BuildSpec.DerivedEntry -> String
+functionText root entry = "The function " ++ BuildSpec.derivedFunction entry ++ " of the entry " ++ entryText root entry
+
+-- | Whether an entry has one name, a module name.
+namesOneModule :: BuildSpec.DerivedEntry -> Bool
+namesOneModule entry = Set.size (BuildSpec.derivedNames entry) == 1 && null (BuildSpec.derivedBelow entry)
 
 updateProject :: Source.SourceProvider -> C.GlobalOptions -> CompileContext -> Driver -> M.Map FilePath ProjCtx -> ProjCtx -> IO ()
 updateProject sp gopts cctx driver projects ctx =
     if null entries then removeDerived >>= wrote else do
         removeRunnerOrphans root (runnerPackage projects ctx) entries
-        wrote =<< removeOrphans root entries
+        (removed, present) <- removeOrphans root entries
+        wrote removed
         mapM_ (checkNoSource root) entries
         mapM_ (checkNoDependency root (map fst (projDeps ctx))) entries
-        lasts     <- mapM (lastRun root . BuildSpec.derivedLabel) entries
+        lasts     <- mapM (lastRun root) entries
         inputs    <- zipWithM (listInputs facts root . snd) lasts entries
         local     <- enumerateProjectModules ctx { projDerived = Set.empty }
         functions <- mapM (resolveFunction projects ctx paths local) entries
         compileFunctions sp gopts cctx driver ctx (zip entries functions)
         jobs      <- forM (zip4 entries functions inputs lasts) $ \(entry, function, ins, (stored, known)) -> do
                        (result, impl) <- readFunction root (ccOpts cctx) paths entry function
-                       return (Job entry function result (wantedRecord (C.compilerIdentity gopts) entry result impl ins) ins stored known)
+                       return (Job entry function result (wantedRecord (C.compilerIdentity gopts) entry result impl ins) ins stored known
+                                   (Set.fromList (map (makeRelative root) (filter (namesFile root entry) present))))
         stale     <- filterM (fmap isJust . outOfDate driver root) jobs
         unless (null stale || driverRun driver) $
-          throwProjectError ("The derived module " ++ jobLabel (head stale) ++ " of " ++ root ++ " is out of date, and this build runs no function.\n"
+          throwProjectError ("The entry " ++ entryText root (jobEntry (head stale)) ++ " is out of date, and this build runs no function.\n"
                              ++ "Run acton build to bring it up to date.")
         made      <- forM stale $ \job -> do
                        start <- getTime Monotonic
@@ -236,16 +266,16 @@ updateProject sp gopts cctx driver projects ctx =
                        end   <- getTime Monotonic
                        return (job, files, fromIntegral (toNanoSecs (diffTimeSpec end start)) / 1e9 :: Double)
         forM_ made $ \(job, files, seconds) -> do
-          -- A cancel of the build does not come between the move of a file
-          -- and the call that tells the driver of it.
+          -- A cancel of the build does not come between the move or the
+          -- removal of a file and the call that tells the driver of it.
           mask_ (install facts root job files >>= wrote)
           -- The status takes 68 columns, the width that it has in the line
           -- of a module in the build log.  The label is not padded to the
           -- longest module label, since the build has no plan yet, and the
           -- line is not fitted to the width of the terminal, which only the
           -- CLI knows.
-          driverLog driver (printf "   %s  %-68s  %7.3f s" (jobLabel job)
-                                   (abbreviate 68 (derivedStatus (BuildSpec.derivedFunction (jobEntry job)) (length files))) seconds)
+          driverLog driver (printf "   %s  %-68s  %7.3f s" (BuildSpec.derivedLabel (jobEntry job))
+                                   (abbreviate 68 (derivedStatus (jobEntry job) (length files))) seconds)
         removePathForcibly (tmpDir root)
   where
     root    = projRoot ctx
@@ -259,11 +289,14 @@ updateProject sp gopts cctx driver projects ctx =
       removePathForcibly (projectDerivedDir root)
       return files
 
--- | What the line of a run says: the function, and how many modules it
--- returned when they are not just the one the line is labelled with.
-derivedStatus :: String -> Int -> String
-derivedStatus function 1     = "Derived by " ++ function
-derivedStatus function count = "Derived " ++ show count ++ " modules by " ++ function
+-- | What the line of a run says: the function, and the number of modules
+-- that it returned, unless the entry has one name, a module name.
+derivedStatus :: BuildSpec.DerivedEntry -> Int -> String
+derivedStatus entry count
+  | namesOneModule entry = "Derived by " ++ function
+  | count == 1           = "Derived 1 module by " ++ function
+  | otherwise            = "Derived " ++ show count ++ " modules by " ++ function
+  where function = BuildSpec.derivedFunction entry
 
 -- | A text cut to at most 'width' characters, the last three of them dots
 -- when it is cut.
@@ -284,43 +317,94 @@ derivedFiles root = do
 derivedSourceFile :: FilePath -> String -> FilePath
 derivedSourceFile root name = derivedModuleFile root (A.dottedModName name)
 
+-- | The name of the module whose source file is 'file' under the source
+-- directory 'dir', dotted as an import statement writes it.
+moduleOfFile :: FilePath -> FilePath -> String
+moduleOfFile dir file = intercalate "." (splitDirectories (dropExtension (makeRelative dir file)))
+
+-- | Whether an entry names a file under the derived source directory of
+-- the project at 'root': the file is the source file of a module that the
+-- entry names.  A file whose path is not the one of a source file of a
+-- module, such as a.b/c.act or notes.txt, is the file of no module.
+namesFile :: FilePath -> BuildSpec.DerivedEntry -> FilePath -> Bool
+namesFile root entry file = derivedSourceFile root name == file && BuildSpec.derivedCovers entry name
+  where name = moduleOfFile (projectDerivedSrcDir root) file
+
 -- | Remove the records of entries that are not in the table, and the files
 -- under the derived source directory that no entry names.  A --tydb copy
 -- stays: a build with --tydb writes it beside the source file of a module,
--- also of a derived module (isInterfaceCopy).  Returns the removed files.
-removeOrphans :: FilePath -> [BuildSpec.DerivedEntry] -> IO [FilePath]
+-- also of a derived module (isInterfaceCopy), and it goes when that source
+-- file is removed (removeBelow).  Returns the removed files, and the source
+-- files that stay.
+removeOrphans :: FilePath -> [BuildSpec.DerivedEntry] -> IO ([FilePath], [FilePath])
 removeOrphans root entries = do
     exists <- doesDirectoryExist dir
     stored <- if exists then filter ((== ".json") . takeExtension) <$> listDirectory dir else return []
-    mapM_ (removeFile . (dir </>)) (filter ((`notElem` map BuildSpec.derivedLabel entries) . dropExtension) stored)
-    orphans <- filter (\file -> Set.notMember file named && not (isInterfaceCopy file)) <$> derivedFiles root
-    mapM_ removeFile orphans
-    return orphans
+    mapM_ (removeFile . (dir </>)) (filter ((`notElem` map BuildSpec.derivedFileLabel entries) . dropExtension) stored)
+    (kept, rest) <- partition (\file -> any (\entry -> namesFile root entry file) entries) <$> derivedFiles root
+    let orphans = filter (not . isInterfaceCopy) rest
+    mapM_ (removeBelow (projectDerivedSrcDir root)) orphans
+    return (orphans, kept)
+  where dir = projectDerivedDir root
+
+-- | Remove a file below the directory 'top', with the --tydb copy of its
+-- module when it is a source file, and then each directory between the
+-- file and 'top' that holds nothing.  On a file system that ignores the
+-- case of letters, a directory that stayed would keep its name.  A source
+-- file that is written later to a directory whose name differs from that
+-- name only in the case of letters would then be in the directory that
+-- stayed, and its path would give the name of a module that no entry
+-- names, or the label of a runner that no entry has.
+removeBelow :: FilePath -> FilePath -> IO ()
+removeBelow top file = do
+    removeFile file
+    when (isActFile file) $ removePathForcibly (file -<.> InterfaceFiles.interfaceExt)
+    prune (takeDirectory (makeRelative top file))
   where
-    dir   = projectDerivedDir root
-    named = Set.fromList [ derivedSourceFile root name | entry <- entries, name <- Set.toList (BuildSpec.derivedModules entry) ]
+    -- 'dir' is relative to 'top', which is "."
+    prune dir = unless (dir == ".") $ do
+      left <- listDirectory (top </> dir)
+      when (null left) $ do
+        removeDirectory (top </> dir)
+        prune (takeDirectory dir)
 
--- | A module that an entry names has no source file under src.
+-- | A module that an entry names with a module name has no source file
+-- under src, and src has no source file below a name that ends with .*.
 checkNoSource :: FilePath -> BuildSpec.DerivedEntry -> IO ()
-checkNoSource root entry = forM_ (BuildSpec.derivedModules entry) $ \name -> do
-    let file = joinPath (projectSrcDir root : A.dottedNames name) <.> "act"
-    exists <- doesFileExist file
-    when exists $
-      throwProjectError ("The module " ++ name ++ " is a derived module in " ++ projectBuildAct root
-                         ++ " and has the source file " ++ file ++ ".\nTake the module out of derived_modules or remove the file.")
-
--- | No module that an entry names has the name of a dependency of the
--- project as the first name of its dotted name.  Such a name names a module
--- of the dependency.
-checkNoDependency :: FilePath -> [String] -> BuildSpec.DerivedEntry -> IO ()
-checkNoDependency root deps entry = forM_ (BuildSpec.derivedModules entry) $ \name ->
-    case A.dottedNames name of
-      dep : _ | dep `elem` deps ->
+checkNoSource root entry = do
+    forM_ (BuildSpec.derivedModules entry) $ \name -> do
+      let file = srcPath name <.> "act"
+      exists <- doesFileExist file
+      when exists $
         throwProjectError ("The module " ++ name ++ " is a derived module in " ++ projectBuildAct root
-                           ++ ", and " ++ dep ++ " is a dependency of the project.\n"
-                           ++ "The name " ++ name ++ " names a module of the dependency " ++ dep
-                           ++ ". Give the derived module another name.")
-      _ -> return ()
+                           ++ " and has the source file " ++ file ++ ".\nTake the module out of derived_modules or remove the file.")
+    forM_ (BuildSpec.derivedBelow entry) $ \name -> do
+      let dir = srcPath name
+      exists <- doesDirectoryExist dir
+      files  <- if exists then sort . filter isActFile <$> getFilesRecursive dir else return []
+      forM_ (take 1 files) $ \file ->
+        throwProjectError ("Every module below " ++ name ++ " is a derived module in " ++ projectBuildAct root ++ ", which names " ++ name ++ ".*"
+                           ++ ", and the project has the source file " ++ file ++ ".\nMove the file out of " ++ dir
+                           ++ ", or write names in place of " ++ name ++ ".* that leave out the module "
+                           ++ moduleOfFile (projectSrcDir root) file ++ ".")
+  where srcPath name = joinPath (projectSrcDir root : A.dottedNames name)
+
+-- | No name of an entry has the name of a dependency of the project as the
+-- first name of its dotted name.  Such a name names modules of the
+-- dependency.
+checkNoDependency :: FilePath -> [String] -> BuildSpec.DerivedEntry -> IO ()
+checkNoDependency root deps entry = do
+    forM_ (BuildSpec.derivedModules entry) $ \name -> forM_ (dependencyOf name) $ \dep ->
+      throwProjectError ("The module " ++ name ++ " is a derived module in " ++ projectBuildAct root
+                         ++ ", and " ++ dep ++ " is a dependency of the project.\n"
+                         ++ "The name " ++ name ++ " names a module of the dependency " ++ dep
+                         ++ ". Give the derived module another name.")
+    forM_ (BuildSpec.derivedBelow entry) $ \name -> forM_ (dependencyOf name) $ \dep ->
+      throwProjectError ("Every module below " ++ name ++ " is a derived module in " ++ projectBuildAct root ++ ", which names " ++ name ++ ".*"
+                         ++ ", and " ++ dep ++ " is a dependency of the project.\n"
+                         ++ "The name " ++ name ++ ".* stands for modules of the dependency " ++ dep
+                         ++ ". Give the derived modules another name.")
+  where dependencyOf name = filter (`elem` deps) (take 1 (A.dottedNames name))
 
 
 -- Input files --------------------------------------------------------------------------------------
@@ -358,7 +442,7 @@ listInputs facts root known entry = do
       sequence <$> mapM (inputFile facts known root) files
     expand input = do
       let path = normalise (dropTrailingPathSeparator input)
-          names what = "The input path " ++ BuildSpec.buildOptionString input ++ " of the derived module " ++ label ++ " names " ++ what ++ " in " ++ root
+          names what = "The input path " ++ BuildSpec.buildOptionString input ++ " of the entry " ++ entryText root entry ++ " names " ++ what ++ " in " ++ root
       listed <- Embed.listedPath (listedIn facts) root path
       isFile <- doesFileExist (root </> path)
       isDir  <- doesDirectoryExist (root </> path)
@@ -370,8 +454,7 @@ listInputs facts root known entry = do
           | otherwise              -> filter (standsFor path) . map (makeRelative root)
                                         <$> (filterM (fmap not . doesDirectoryExist) =<< getDirRecursive (root </> path))
     undecoded c = generalCategory c == Surrogate
-    label       = BuildSpec.derivedLabel entry
-    refuse why  = throwProjectError ("The derived module " ++ label ++ " in " ++ projectBuildAct root ++ " is not brought up to date: " ++ why ++ ".")
+    refuse why  = throwProjectError ("The entry " ++ entryText root entry ++ " is not brought up to date: " ++ why ++ ".")
 
 -- | Whether an input path that names the directory 'dir' stands for
 -- 'file', a file below it: for every file except one whose name starts with
@@ -412,8 +495,8 @@ type Known = M.Map FilePath Recorded
 -- that record tells about files.  The stat of the record's file is taken
 -- before the file is read, so that the time is never later than that of
 -- the record that is read.
-lastRun :: FilePath -> String -> IO (Maybe Record, Known)
-lastRun root label = do
+lastRun :: FilePath -> BuildSpec.DerivedEntry -> IO (Maybe Record, Known)
+lastRun root entry = do
     stat   <- try (readSourceFileMeta file) :: IO (Either IOException InterfaceFiles.SourceFileMeta)
     stored <- readRecord file
     return (stored, case (stored, stat) of
@@ -421,7 +504,7 @@ lastRun root label = do
                                          | (path, sha) <- recInputs r ++ recOutputs r
                                          , Just recorded <- [M.lookup path (recStats r)] ]
       _                    -> M.empty)
-  where file = recordFile root label
+  where file = recordFile root entry
 
 -- | The source file of a derived module of the project at 'root', relative
 -- to the project root.
@@ -489,7 +572,7 @@ resolveFunction projects ctx paths local entry
   | Just file <- sourceOf own local     = return (Function name own (modNameToString own) (Just file))
   | isJust (sourceOf (A.modName path) local)
                                         = refuse (" with the name of its own project in front.\nWrite function=" ++ intercalate "." (drop 1 names) ++ ".")
-  | any (`elem` derivedOwn) [written, moduleLabel paths (A.modName path)]
+  | any derivedOwn [written, moduleLabel paths (A.modName path)]
                                         = refuse (", which is a derived module of the same project.\nPut the function in a module of the project that has a file under src.")
   | dep : rest <- path
   , Just depRoot <- lookup dep (projDeps ctx)
@@ -514,11 +597,10 @@ resolveFunction projects ctx paths local entry
     name       = A.name (last names)
     written    = intercalate "." path
     own        = addProjPrefix paths (A.modName path)
-    derivedOwn = concatMap (Set.toList . BuildSpec.derivedModules) (BuildSpec.derived_modules (projBuildSpec ctx))
+    derivedOwn m = any (`BuildSpec.derivedCovers` m) (BuildSpec.derived_modules (projBuildSpec ctx))
     undeclared = [ BuildSpec.specName (projBuildSpec p) | p <- M.elems projects, projRoot p `notElem` projRoot ctx : map snd (projDeps ctx) ]
     sourceOf mn modules = lookup mn [ (m, file) | (file, m) <- modules ]
-    refuse why = throwProjectError ("The function " ++ BuildSpec.derivedFunction entry ++ " of the derived module " ++ BuildSpec.derivedLabel entry
-                                    ++ " in " ++ projectBuildAct (projRoot ctx) ++ " names the module " ++ written ++ why)
+    refuse why = throwProjectError (functionText (projRoot ctx) entry ++ " names the module " ++ written ++ why)
 
 -- | Compile the modules of the functions of a project's entries, and what
 -- they import, through the front passes.  The plan is one of the build:
@@ -536,8 +618,7 @@ compileFunctions sp gopts cctx driver ctx functions = unless (null sources) $ do
     forM_ (filter isOwnDerived (cpNeededTasks plan)) $ \t ->
       forM_ functions $ \(entry, function) ->
         forM_ (importChain (cpNeededTasks plan) (TaskKey root (fnModule function)) (gtKey t)) $ \chain ->
-          throwProjectError ("The function " ++ BuildSpec.derivedFunction entry ++ " of the derived module " ++ BuildSpec.derivedLabel entry
-                             ++ " in " ++ projectBuildAct root ++ " imports a derived module of its own project: "
+          throwProjectError (functionText root entry ++ " imports a derived module of its own project: "
                              ++ intercalate " imports " (map (moduleLabel (gtPaths t)) chain) ++ ".")
     result <- runStandalonePlan sp gopts plan (driverEvent driver)
     case result of
@@ -587,9 +668,10 @@ readFunction root opts paths entry function = do
     case (info, hash) of
       (Just (_, i), Just h) -> do
         result <- either (\why -> bad (why ++ "\n" ++ functionShape)) return (resultOf i)
-        when (result == One && length (BuildSpec.derivedModules entry) > 1) $
-          bad ("it returns str, the source of one module, and the entry names " ++ show (length (BuildSpec.derivedModules entry))
-               ++ " modules.\nA function for several modules returns dict[str, str], from module name to source.")
+        when (result == One && not (namesOneModule entry)) $
+          bad ("it returns str, the source of one module, and its entry names " ++ BuildSpec.derivedNamesText (BuildSpec.derivedNames entry)
+               ++ ".\nAn entry whose function returns str has one name, a module name. "
+               ++ "A function for several modules returns dict[str, str], from module name to source.")
         return (result, Hashing.hashHex (InterfaceFiles.nhImplHash h))
       _ -> bad ("the module " ++ written ++ " does not define " ++ A.nstr (fnName function) ++ ".")
   where
@@ -597,8 +679,7 @@ readFunction root opts paths entry function = do
     dirs    = case fnSource function of
                 Just _  -> searchPath paths
                 Nothing -> C.searchpath opts ++ systemTypePaths (sysPath paths)
-    bad msg = throwProjectError ("The function " ++ BuildSpec.derivedFunction entry ++ " of the derived module " ++ BuildSpec.derivedLabel entry
-                                 ++ " in " ++ projectBuildAct root ++ " cannot be used: " ++ msg)
+    bad msg = throwProjectError (functionText root entry ++ " cannot be used: " ++ msg)
 
 -- | What the function of an entry takes and returns.
 functionShape :: String
@@ -663,8 +744,9 @@ instance Aeson.FromJSON Record where
            <*> (M.map stat <$> o .: "stats")
     where stat (modified, changed, size, device, inode) = InterfaceFiles.SourceFileMeta modified changed size device inode
 
-recordFile :: FilePath -> String -> FilePath
-recordFile root label = projectDerivedDir root </> label <.> "json"
+-- | The file of the record of an entry of the project at 'root'.
+recordFile :: FilePath -> BuildSpec.DerivedEntry -> FilePath
+recordFile root entry = projectDerivedDir root </> BuildSpec.derivedFileLabel entry <.> "json"
 
 -- | The record in a file, Nothing when the file is missing or unreadable.
 readRecord :: FilePath -> IO (Maybe Record)
@@ -672,12 +754,12 @@ readRecord file = do
     content <- try (B.readFile file) :: IO (Either IOException B.ByteString)
     return (either (const Nothing) Aeson.decodeStrict' content)
 
--- | Write the record of an entry in place of the one it has.
-writeRecord :: FilePath -> String -> Record -> IO ()
-writeRecord root label record = do
+-- | Write a record in place of the one that its entry has.
+writeRecord :: FilePath -> Record -> IO ()
+writeRecord root record = do
     BL.writeFile (file ++ ".tmp") (Aeson.encode record)
     renameFile (file ++ ".tmp") file
-  where file = recordFile root label
+  where file = recordFile root (recEntry record)
 
 -- | The record of an entry that is up to date, without its outputs.
 wantedRecord :: String -> BuildSpec.DerivedEntry -> Result -> String -> [Hashed] -> Record
@@ -692,9 +774,12 @@ wantedRecord version entry result impl inputs = Record
     }
 
 -- | Why a job has to run, Nothing when its entry is up to date.  What was
--- found is reported under --verbose.  When the entry is up to date and a
--- file was read for its hash, the record is written again with the stats
--- of the files, so that the next build does not read them.
+-- found is reported under --verbose.  The files of an entry under
+-- out/derived/src are as its last run left them when the source files that
+-- the entry names (jobPresent) are the files that the record lists, and
+-- each has the recorded content.  When the entry is up to date and a file
+-- was read for its hash, the record is written again with the stats of the
+-- files, so that the next build does not read them.
 outOfDate :: Driver -> FilePath -> Job -> IO (Maybe String)
 outOfDate driver root job = do
     verdict <- case jobStored job of
@@ -705,9 +790,11 @@ outOfDate driver root job = do
         | recResult r   /= recResult wanted   -> return (Left "the result type of its function changed")
         | recImpl r     /= recImpl wanted     -> return (Left "the implementation of its function changed")
         | recInputs r   /= recInputs wanted   -> return (Left "its input files changed")
+        | Set.fromList (map fst (recOutputs r)) /= jobPresent job
+                                              -> return (Left notAsLeft)
         | otherwise                           -> do
             outputs <- mapM current (recOutputs r)
-            return (maybe (Left "its files under out/derived/src are not as its last run left them") (Right . (,) r) (sequence outputs))
+            return (maybe (Left notAsLeft) (Right . (,) r) (sequence outputs))
     case verdict of
       Left reason -> do
         info ("out of date, " ++ reason)
@@ -715,12 +802,13 @@ outOfDate driver root job = do
       Right (r, outputs) -> do
         let files = jobInputs job ++ outputs
             nread = length (filter hashedRead files)
-        when (nread > 0) $ writeRecord root (jobLabel job) r { recStats = statsOf files }
+        when (nread > 0) $ writeRecord root r { recStats = statsOf files }
         info ("up to date, " ++ show nread ++ " of " ++ show (length files) ++ " files read")
         return Nothing
   where
-    wanted = jobWanted job
-    info msg = driverInfo driver ("Derived module " ++ jobLabel job ++ " of " ++ root ++ ": " ++ msg)
+    wanted    = jobWanted job
+    notAsLeft = "its files under out/derived/src are not as its last run left them"
+    info msg  = driverInfo driver ("Entry " ++ entryText root (jobEntry job) ++ ": " ++ msg)
     -- A written file with the recorded content, Nothing when it is missing
     -- or holds something else.
     current (path, hash) = do
@@ -746,7 +834,7 @@ tmpDir root = projectDerivedDir root </> "tmp"
 -- the name of something else in the runner.
 runnerSource :: Job -> String
 runnerSource job = unlines
-    [ "# Written by acton build.  Calls the function of the derived module " ++ jobLabel job ++ "."
+    [ "# Written by acton build.  Calls the function of the entry " ++ BuildSpec.derivedLabel (jobEntry job) ++ " of derived_modules."
     , "import std.build.derive as runner"
     , "import " ++ fnImport (jobFunction job) ++ " as fn"
     , ""
@@ -784,10 +872,12 @@ runnerPackage :: M.Map FilePath ProjCtx -> ProjCtx -> String
 runnerPackage projects ctx = unusedName (M.keys (reachableProjects projects ctx)) "runner"
 
 -- | Remove the source, the .built file and the executable of each runner
--- of the project at 'root' whose label no entry has.  When the runner
--- project has a source under another directory than 'package', the whole
--- runner project is removed: that directory can have the name of a project
--- that the runner project depends on, and a build refuses such a source.
+-- of the project at 'root' whose label, as 'BuildSpec.derivedFileLabel'
+-- gives it, no entry has, and each directory above the source that then
+-- holds nothing.  When the runner project has a source under another
+-- directory than 'package', the whole runner project is removed: that
+-- directory can have the name of a project that the runner project
+-- depends on, and a build refuses such a source.
 removeRunnerOrphans :: FilePath -> String -> [BuildSpec.DerivedEntry] -> IO ()
 removeRunnerOrphans root package entries = do
     exists  <- doesDirectoryExist src
@@ -796,8 +886,9 @@ removeRunnerOrphans root package entries = do
       then removePathForcibly dir
       else forM_ sources $ \file -> do
              let label = intercalate "." (drop 1 (splitDirectories (dropExtension file)))
-             unless (label `elem` map BuildSpec.derivedLabel entries) $
-               mapM_ removePathForcibly [src </> file, dir </> label <.> "built", projectBinDir dir </> (package ++ "." ++ label)]
+             unless (label `elem` map BuildSpec.derivedFileLabel entries) $ do
+               removeBelow (src </> package) (src </> file)
+               mapM_ removePathForcibly [dir </> label <.> "built", projectBinDir dir </> (package ++ "." ++ label)]
   where
     dir = runnerDir root
     src = dir </> "src"
@@ -805,11 +896,12 @@ removeRunnerOrphans root package entries = do
 -- | Run the runner of a job, and return the modules it wrote to the
 -- temporary directory: for each, the source file that the module gets
 -- under out/derived/src, relative to the project root, and the file that
--- the runner wrote.  They are exactly the modules that the entry names, or
--- the run is an error.  The runner is built first, unless the runner in
--- place was built from the same source, the same implementation hash of the
--- function and the same compiler version, for example when only an input
--- file of the entry changed.
+-- the runner wrote.  They hold every module that the entry names with a
+-- module name, and no module that the entry does not name, or the run is
+-- an error.  The runner is built first, unless the runner in place was
+-- built from the same source, the same implementation hash of the function
+-- and the same compiler version, for example when only an input file of the
+-- entry changed.
 runJob :: Driver -> M.Map FilePath ProjCtx -> ProjCtx -> Job -> IO [(FilePath, FilePath)]
 runJob driver projects ctx job = do
     exists <- doesFileExist binary
@@ -821,8 +913,8 @@ runJob driver projects ctx job = do
       writeChanged source (runnerSource job)
       ok <- driverBuild driver source
       unless ok $
-        throwProjectError ("The derived module " ++ label ++ " in " ++ projectBuildAct root ++ " is not brought up to date: "
-                           ++ "the program that calls its function was not built.\nIts entry gives the call\n  "
+        throwProjectError ("The entry " ++ entryText root entry ++ " is not brought up to date: "
+                           ++ "the program that calls its function was not built.\nIt gives the call\n  "
                            ++ functionCall (BuildSpec.derivedFunction entry) job ++ "\n" ++ functionShape)
       B.writeFile stampFile stamp
     removePathForcibly out
@@ -836,36 +928,39 @@ runJob driver projects ctx job = do
       ]))
     (code, stdout, stderr) <- readCreateProcessWithExitCode (proc binary [manifest]) { cwd = Just root } ""
     when (code /= ExitSuccess) $
-      throwProjectError ("The function " ++ BuildSpec.derivedFunction entry ++ " of the derived module " ++ label
-                         ++ " in " ++ projectBuildAct root ++ " failed:\n" ++ stdout ++ stderr)
+      throwProjectError (functionText root entry ++ " failed:\n" ++ stdout ++ stderr)
     files <- filter isActFile <$> getFilesRecursive out
-    let modules  = sort [ (intercalate "." (splitDirectories (dropExtension (makeRelative out file))), file) | file <- files ]
+    let modules  = sort [ (moduleOfFile out file, file) | file <- files ]
         returned = Set.fromList (map fst modules)
-        named    = BuildSpec.derivedModules entry
+        extra    = Set.filter (not . BuildSpec.derivedCovers entry) returned
+        missing  = BuildSpec.derivedModules entry `Set.difference` returned
         listed title names = [ title ++ ": " ++ intercalate ", " (Set.toList names) | not (Set.null names) ]
-    unless (returned == named) $
+    unless (Set.null extra && Set.null missing) $
       throwProjectError (intercalate "\n" $
-        [ "The function " ++ BuildSpec.derivedFunction entry ++ " of the derived module " ++ label ++ " in " ++ projectBuildAct root
-          ++ " returned other modules than its entry names." ]
-        ++ listed "Returned and not named" (returned `Set.difference` named)
-        ++ listed "Named and not returned" (named `Set.difference` returned)
-        ++ [ "An entry names exactly the modules that its function returns. Change the names of the entry or the function." ])
+        [ functionText root entry ++ " returned other modules than the entry names." ]
+        ++ listed "Returned and not named" extra
+        ++ listed "Named and not returned" missing
+        ++ [ m ++ ".* stands for every module below " ++ m ++ ", and not for the module " ++ m
+             ++ ". To name both, write " ++ m ++ " and " ++ m ++ ".* in the entry."
+           | m <- Set.toList extra, m `elem` BuildSpec.derivedBelow entry ]
+        ++ [ "The function returns every module that its entry names with a module name, and no module that its entry does not name. "
+             ++ "Change the names of the entry or the function." ])
     return [ (moduleFile root name, file) | (name, file) <- modules ]
   where
     root      = projRoot ctx
     entry     = jobEntry job
-    label     = jobLabel job
+    fileLabel = BuildSpec.derivedFileLabel entry
     wanted    = jobWanted job
     stamp     = TE.encodeUtf8 (T.pack (unlines [recCompiler wanted, recImpl wanted] ++ runnerSource job))
-    stampFile = dir </> label <.> "built"
+    stampFile = dir </> fileLabel <.> "built"
     reachable = reachableProjects projects ctx
     package   = runnerPackage projects ctx
     name      = unusedName (M.keys reachable) "acton_derive"
     dir       = runnerDir root
-    source    = joinPath (dir : "src" : package : A.dottedNames label) <.> "act"
-    binary    = projectBinDir dir </> (package ++ "." ++ label)
-    out       = tmpDir root </> label </> "src"
-    manifest  = tmpDir root </> label </> "manifest.json"
+    source    = joinPath (dir : "src" : package : A.dottedNames fileLabel) <.> "act"
+    binary    = projectBinDir dir </> (package ++ "." ++ fileLabel)
+    out       = tmpDir root </> fileLabel </> "src"
+    manifest  = tmpDir root </> fileLabel </> "manifest.json"
     spec      = (scratchBuildSpec root)
       { BuildSpec.specName     = name
       , BuildSpec.fingerprint  = Fingerprint.formatFingerprint (Fingerprint.updateFingerprintPrefix (Fingerprint.fingerprintPrefixForName name)
@@ -886,16 +981,23 @@ writeChanged file content = do
 -- directory.  The function ran after the build took the SHA-256 of the
 -- input files.  So each input file is looked at again first (inputFile),
 -- and one that is not the file of the first look stops the build before a
--- module is moved: the function may have made the modules from other
--- content than its descriptions are of.  A module whose file holds the same
--- source already is left alone, so the modules that import it are not
--- compiled again.  A file that is moved into place is read once more for
--- its stat: the stat is taken before that read, and it is recorded when the
--- read gives the SHA-256 of the source that the function returned.
--- Returns the files written.
+-- file is removed or moved: the function may have made the modules from
+-- other content than its descriptions are of.  Then each source file that
+-- the entry names and the run did not return is removed (jobPresent): the
+-- function returned its module in an earlier run, or the file is there from
+-- something else.  It is removed before a module is moved, since on a file
+-- system that ignores the case of letters it is also the file of a returned
+-- module whose name differs from the name of its module only in the case
+-- of letters.  A module whose file holds the same source already is left
+-- alone, so the modules that import it are not compiled again.  A file that
+-- is moved into place is read once more for its stat: the stat is taken
+-- before that read, and it is recorded when the read gives the SHA-256 of
+-- the source that the function returned.  Returns the files written and
+-- the files removed.
 install :: FileFacts -> FilePath -> Job -> [(FilePath, FilePath)] -> IO [FilePath]
 install facts root job files = do
     mapM_ (inputFile facts (jobKnown job) root . hashedPath) (jobInputs job)
+    mapM_ (removeBelow (projectDerivedSrcDir root)) left
     done <- forM files $ \(path, file) -> do
       new <- hashOfFile file
       old <- try (writtenFile (jobKnown job) root path) :: IO (Either IOException Hashed)
@@ -906,8 +1008,9 @@ install facts root job files = do
           renameFile file (root </> path)
           placed <- writtenFile M.empty root path
           return ((path, new), statsOf [ placed | hashedHash placed == new ], [root </> path])
-    writeRecord root (jobLabel job) (jobWanted job)
+    writeRecord root (jobWanted job)
       { recOutputs = [ output | (output, _, _) <- done ]
       , recStats   = M.unions (statsOf (jobInputs job) : [ stats | (_, stats, _) <- done ])
       }
-    return (concat [ written | (_, _, written) <- done ])
+    return (concat [ written | (_, _, written) <- done ] ++ left)
+  where left = map (root </>) (Set.toList (jobPresent job `Set.difference` Set.fromList (map fst files)))

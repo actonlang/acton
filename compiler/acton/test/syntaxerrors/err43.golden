@@ -1,0 +1,12 @@
+Building file test/syntaxerrors/err43.act using temporary scratch directory
+[error Parse error]: unexpected "*<newline>"
+                     expecting """"", "'''", '"', ''', '~', identifier, or integer
+
+     +--> test/syntaxerrors/err43.act@1:7-1:8
+     |
+   1 | x = a.*
+     :       ^
+     :       `- unexpected "*<newline>"
+     :          expecting """"", "'''", '"', ''', '~', identifier, or integer
+     :          
+-----+

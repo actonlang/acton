@@ -1614,7 +1614,7 @@ derivedModuleNote :: M.Map FilePath ProjCtx -> GlobalTask -> Maybe String
 derivedModuleNote projects t = do
     ctx <- M.lookup (tkProj (gtKey t)) projects
     guard (Data.Set.member local (projDerived ctx))
-    entry <- find (Data.Set.member name . BuildSpec.derivedModules) (BuildSpec.derived_modules (projBuildSpec ctx))
+    entry <- find (`BuildSpec.derivedCovers` name) (BuildSpec.derived_modules (projBuildSpec ctx))
     return ("Note: " ++ name ++ " is a derived module. The function " ++ BuildSpec.derivedFunction entry
             ++ " returned its source (derived_modules in " ++ projectBuildAct (projRoot ctx) ++ ").")
   where

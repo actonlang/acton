@@ -1244,9 +1244,11 @@ selectRequested ctx g files = do
 -- changed module, every module on a dependency path from those to a DBP
 -- provider, and every dependent of the providers on those paths, because
 -- every consumer of a deferred provider can contribute selected-name
--- interest.  Changes that match no module select everything.  Safe on
--- import cycles, which the run reports later.  The selected tasks keep
--- their full provider maps, so unchanged imports still resolve through
+-- interest.  A changed file that is the source of no module selects
+-- everything: it can be the source file of a module that was removed, and
+-- the graph has no edge to that module from the modules that import it.
+-- Safe on import cycles, which the run reports later.  The selected tasks
+-- keep their full provider maps, so unchanged imports still resolve through
 -- cached interfaces.
 selectAffected :: CompileContext -> ModuleGraph -> Data.Set.Set TaskKey -> [FilePath] -> IO (Data.Set.Set TaskKey)
 selectAffected ctx g blocked files
@@ -1254,9 +1256,7 @@ selectAffected ctx g blocked files
   | otherwise  = do
       edited  <- mapM normalizePathSafe files
       sources <- M.fromList <$> forM (graphTasks g) (\t -> (\path -> (path, gtKey t)) <$> normalizePathSafe (taskSourceFile t))
-      return $ case mapMaybe (`M.lookup` sources) edited of
-        []      -> everything
-        changed -> affectedBy (graphImports g) isDbpProvider changed
+      return $ maybe everything (affectedBy (graphImports g) isDbpProvider) (mapM (`M.lookup` sources) edited)
   where
     everything = M.keysSet (graphIndex g)
     isDbpProvider k =
