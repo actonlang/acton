@@ -7,7 +7,7 @@ module DerivedTests (derivedModuleTests) where
 
 import Control.Concurrent (forkIO, threadDelay)
 import Control.Concurrent.MVar
-import Control.Exception (IOException, finally, try)
+import Control.Exception (IOException, catch, finally, throwIO, try)
 import Control.Monad
 import qualified Data.Aeson as Ae
 import qualified Data.ByteString as BS
@@ -2036,11 +2036,15 @@ awaitGeneration :: FilePath -> IO ()
 awaitGeneration = awaitGenerationWithin 900
 
 -- | Wait until the output of a process has 'count' lines that contain
--- 'text'.
+-- 'text'.  A wait that times out fails with the output so far.
 awaitLines :: IO String -> String -> String -> Int -> IO ()
-awaitLines output label text count = await label $ do
+awaitLines output label text count = await label found `catch` \(HUnitFailure loc reason) -> do
     logText <- output
-    return (if length (filter (text `isInfixOf`) (lines logText)) >= count then Just () else Nothing)
+    throwIO (HUnitFailure loc (reason ++ "\n" ++ logText))
+  where
+    found = do
+      logText <- output
+      return (if length (filter (text `isInfixOf`) (lines logText)) >= count then Just () else Nothing)
 
 readFileStrict :: FilePath -> IO String
 readFileStrict file = do
