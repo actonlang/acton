@@ -211,7 +211,9 @@ llSuite env (Decl l ds : ss)
                                              ss' <- llSuite env1 ss
                                              return $ Decl l (ds2++ds1) : ss'
   where env'                            = extConstConts env ds $ extFree funfree $ define (envOf ds) env
-        funfree                         = [ (n, vs \\ bound p) | (n,vs) <- funfree1, let p = [ pos d | d <- ds, dname d == n ] ]
+        -- Fix captures where the functions are defined. A later local binding
+        -- must not turn a global reference into an additional capture at a call.
+        funfree                         = [ (n, vs `intersect` dom (locals env) \\ bound p) | (n,vs) <- funfree1, let p = [ pos d | d <- ds, dname d == n ] ]
         funfree1                        = expand (freemap env) $ iterexpand funfree0
         funfree0                        = [ (dname d, nub $ free d) | d@Def{} <- ds ]
         fs                              = dom funfree0
