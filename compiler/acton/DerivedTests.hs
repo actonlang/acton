@@ -9,10 +9,13 @@ import Control.Concurrent.MVar
 import Control.Exception (IOException, finally, try)
 import Control.Monad
 import qualified Data.Aeson as Ae
+import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import Data.Either (isLeft, isRight)
-import Data.List (isInfixOf, isPrefixOf, isSuffixOf)
+import Data.List (isInfixOf, isPrefixOf, isSuffixOf, sort)
 import Data.Maybe (isJust)
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
 import GHC.IO.Encoding (getFileSystemEncoding)
 import System.Directory
 import System.Exit
@@ -20,6 +23,7 @@ import System.FilePath
 import System.IO.Temp (withSystemTempDirectory)
 import System.Posix.Files (createNamedPipe, ownerModes, setFileSize)
 import System.Process
+import Text.Printf (printf)
 
 import qualified Acton.Fingerprint as Fingerprint
 import Acton.Project (withProjectLock)
@@ -253,6 +257,110 @@ derivedModuleTests = testGroup "derived modules"
           out <- fails label acton proj ["build"]
           assertBool out ("data/big.bin has 2147483648 bytes, and embed takes a file of fewer than 2147483648 bytes" `isInfixOf` out)
           assertBool out (not ("changed while the build ran" `isInfixOf` out))
+
+  , testCase "std.build.derive.embed_files embeds the files below a directory" $
+      withProject "shop" shopFiles $ \acton proj -> do
+        utf8 <- (== "UTF-8") . show <$> getFileSystemEncoding
+        let web name = proj </> "web" </> name
+            source   = proj </> "out/derived/src/assets.act"
+            build label expectRun = do
+              out <- succeeds label acton proj ["build"]
+              assertEqual (label ++ ": whether the function ran\n" ++ out) expectRun ("Derived by std.build.derive.embed_files" `isInfixOf` out)
+            -- The derived module has one line for each of the files, and
+            -- the program prints the path and the content of each.  What it
+            -- prints is compared with the files.
+            serves label names = do
+              assertEqual (label ++ ": the source of the derived module") (assetsModule names) . T.unpack . TE.decodeUtf8 =<< BS.readFile source
+              contents <- mapM (BS.readFile . web) (sort names)
+              assertEqual (label ++ ": what the program prints")
+                          (unlines [ hex (TE.encodeUtf8 (T.pack ("/" ++ name))) ++ " " ++ hex content | (name, content) <- zip (sort names) contents ])
+                =<< runBinary (proj </> "out/bin/shop")
+            -- A file of every byte value below a directory, with a name that
+            -- has a space and an apostrophe, a file without content, and a
+            -- name with characters outside ASCII where file names are UTF-8.
+            first = ["app.js", "empty", "img/a b's.png", "index.html"] ++ [ "\229\8364.txt" | utf8 ]
+        createDirectory (web "img")
+        BS.writeFile (web "img/a b's.png") (BS.pack (concat (replicate 2 [0 .. 255])))
+        BS.writeFile (web "empty") BS.empty
+        when utf8 $ writeFile (web "\229\8364.txt") "x"
+        build "first build" True
+        serves "first build" first
+        build "nothing changed" False
+        -- The function returns the same source for new content of a file,
+        -- so the file of the derived module is not written.
+        written <- getModificationTime source
+        writeFile (web "app.js") "let a = 2\n"
+        build "a file has new content" True
+        assertEqual "a file has new content: the modification time of the derived module" written =<< getModificationTime source
+        serves "a file has new content" first
+        createDirectory (web "css")
+        writeFile (web "css/site.css") "body {}\n"
+        build "a file was added" True
+        serves "a file was added" ("css/site.css" : first)
+        removeFile (web "index.html")
+        build "a file was removed" True
+        serves "a file was removed" ("css/site.css" : filter (/= "index.html") first)
+        build "nothing changed at the end" False
+
+  , testCase "std.build.derive.embed_files stops the build for a path that does not start with strip and for a path that embed refuses" $
+      withProject "shop" (overrideFiles shopFiles
+          [ ("Build.act", shopBuildAct ["extra/", "web/"])
+          , ("extra/notes.txt", "notes\n")
+          , ("web/a{b}.txt", "x")
+          ]) $ \acton proj -> do
+        let stops label message = do
+              out <- fails label acton proj ["build"]
+              assertBool out ("The function std.build.derive.embed_files of the derived module assets in " `isInfixOf` out
+                              && ("Build.act failed:\nValueError: " ++ message ++ "\n") `isInfixOf` out)
+              assertBool "no module is moved into place" . not =<< doesPathExist (proj </> "out/derived/src/assets.act")
+        -- The paths are sorted, so the function meets the file below extra
+        -- first.
+        stops "a path that does not start with strip" "the path of the input file \"extra/notes.txt\" does not start with the prefix strip=\"web\""
+        removeFile (proj </> "extra/notes.txt")
+        stops "a path that embed refuses"
+          ("embed cannot name the file \"web/a{b}.txt\". A path of embed is relative, with / between its components. "
+           ++ "It has no empty component, no component . or .., no backslash, no double quote, no brace and no control character. "
+           ++ "Its first component is not out")
+        removeFile (proj </> "web/a{b}.txt")
+        _ <- succeeds "the build without the two files" acton proj ["build"]
+        assertEqual "the source of the derived module" (assetsModule ["app.js", "index.html"]) =<< readFile (proj </> "out/derived/src/assets.act")
+
+  , testCase "std.build.derive.embed_files and a file whose path embed takes and whose size it refuses" $
+      -- The file has 2^31 bytes, one more than embed takes.  The build
+      -- stops with the message of embed at the line of the file in the
+      -- derived module.
+      withProject "shop" shopFiles $ \acton proj -> do
+        writeFile (proj </> "web/big.bin") ""
+        setFileSize (proj </> "web/big.bin") 2147483648
+        out <- fails "build" acton proj ["build"]
+        assertBool out ("web/big.bin has 2147483648 bytes, and embed takes a file of fewer than 2147483648 bytes" `isInfixOf` out
+                        && "Note: assets is a derived module. The function std.build.derive.embed_files returned its source" `isInfixOf` out)
+        assertBool out (not ("changed while the build ran" `isInfixOf` out))
+
+  , testCase "std.build.derive.str_literal returns a str literal whose value is the text" $
+      -- The text has each character from 0 to 255 with the digit 0 after
+      -- it, so an escape that is read with a digit too few or too many
+      -- gives another text.  The derived module has the literal, and the
+      -- program prints the UTF-8 form of its value in hexadecimal digits.
+      withProject "literal"
+          [ ("Build.act", buildAct "literal" ["derived_modules = {", "    lit: (function=gen.lit)", "}"])
+          , ("src/gen.act", deriveImport ++ unlines
+              [ "def lit(inputs: dict[str, derive.InputFile]) -> str:"
+              , "    text = \"\".join([chr(c) + \"0\" for c in range(256)])"
+              , "    return \"text: str = \" + derive.str_literal(text) + \"\\n\""
+              ])
+          , ("src/literal.act", unlines
+              [ "import lit"
+              , ""
+              , "actor main(env):"
+              , "    proc def __startup__():"
+              , "        print(lit.text.encode().hex())"
+              , "        env.exit(0)"
+              ])
+          ] $ \acton proj -> do
+        _ <- succeeds "build" acton proj ["build"]
+        assertEqual "the text of the derived module" (hex (TE.encodeUtf8 (T.pack (concat [ [toEnum c, '0'] | c <- [0 .. 255] ]))) ++ "\n")
+          =<< runBinary (proj </> "out/bin/literal")
 
   , testCase "arguments of several types for a derived module in a package" $
       withProject "typed" typedFiles $ \acton proj -> do
@@ -1077,6 +1185,46 @@ putFile proj path content = do
 -- | The Build.act of the project described with the given input paths.
 described :: [String] -> String
 described inputs = buildAct "described" ["derived_modules = {", "    facts: (function=gen.facts, inputs=" ++ show inputs ++ ")", "}"]
+
+-- | A project whose derived module assets holds the content of each file
+-- below web, by the path of the file without web.  The function of its entry
+-- is embed_files of the standard library.  The program prints the path and
+-- the content of each file in hexadecimal digits, one file on a line.
+shopFiles :: [(FilePath, String)]
+shopFiles =
+  [ ("Build.act", shopBuildAct ["web/"])
+  , ("web/index.html", "<html></html>\n")
+  , ("web/app.js", "let a = 1\n")
+  , ("src/shop.act", unlines
+      [ "import assets"
+      , ""
+      , "actor main(env):"
+      , "    proc def __startup__():"
+      , "        for path, content in assets.files.items():"
+      , "            print(path.encode().hex(), content.hex())"
+      , "        env.exit(0)"
+      ])
+  ]
+
+-- | The Build.act of the project shop with the given input paths.
+shopBuildAct :: [String] -> String
+shopBuildAct inputs = buildAct "shop"
+  [ "derived_modules = {"
+  , "    assets: (function=std.build.derive.embed_files, inputs=" ++ show inputs ++ ", args=(strip=\"web\"))"
+  , "}"
+  ]
+
+-- | The source that embed_files returns for the files with the given names
+-- below web and the argument strip="web".
+assetsModule :: [String] -> String
+assetsModule names = unlines $
+    [ "# Derived by std.build.derive.embed_files.", "", "files: dict[str, bytes] = {" ]
+    ++ [ "    \"/" ++ name ++ "\": embed(\"web/" ++ name ++ "\")," | name <- sort names ]
+    ++ [ "}" ]
+
+-- | Bytes as hexadecimal digits.
+hex :: BS.ByteString -> String
+hex = concatMap (printf "%02x") . BS.unpack
 
 -- | A project whose function takes an argument of each kind of literal and
 -- has a parameter with a default.  The string holds the characters that a

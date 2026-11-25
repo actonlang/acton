@@ -31,6 +31,13 @@ access of a run.
 
 A test of a function needs no file: input_of returns the description of
 content that the test makes up.
+
+embed_files is a function for an entry.  It returns a module with one
+name, files, a dict[str, bytes] that holds the content of each input file
+by the path of the file.  The module has one embed expression for each
+input file, so the function reads no input file.  A function that returns
+another module for its input files writes the same expression with
+embed_call, and a str literal with str_literal.
 """
 
 import crypto.hash.sha256 as sha256
@@ -73,6 +80,64 @@ def input_of(path: str, content: bytes) -> InputFile:
     No file is read: read returns the given content.
     """
     return InputFile(path, len(content), sha256.hash(content).hex(), lambda: content)
+
+def str_literal(text: str) -> str:
+    """An Acton str literal whose value is text
+
+    A double quote and a backslash get a backslash in front, and a brace is
+    written twice.  A character below 32 and the character 127 are written
+    as \\xHH, where HH are the two hexadecimal digits of the character.
+    """
+    parts = []
+    for ch in text:
+        if ch == '"' or ch == "\\":
+            parts.append("\\" + ch)
+        elif ch == "{{" or ch == "}}":
+            parts.append(ch + ch)
+        elif ord(ch) < 32 or ord(ch) == 127:
+            parts.append("\\x%02x" % ord(ch))
+        else:
+            parts.append(ch)
+    return '"' + "".join(parts) + '"'
+
+def embed_call(path: str) -> str:
+    """The expression embed("path"), whose value is the content of the file at path
+
+    path is relative to the project root.  Raises ValueError for a path that
+    embed refuses.  embed takes a relative path with / between its
+    components, none of them empty, . or .., without a backslash, a double
+    quote, a brace or a control character, and with a first component other
+    than out.  The compiler has the same rule for the path that a module
+    writes in embed.
+    """
+    parts = path.split("/")
+    # Acton.Embed.pathProblem of the compiler holds the same rule.  The
+    # tests of both read the paths of test/stdlib_tests/data/embed_paths.json.
+    # The control characters are those below 32 and those from 127 to 159.
+    if (parts[0] == "out"
+            or any([part in ["", ".", ".."] for part in parts])
+            or any([ch in ["\\", '"', "{{", "}}"] or ord(ch) < 32 or (ord(ch) >= 127 and ord(ch) < 160) for ch in path])):
+        raise ValueError('embed cannot name the file "' + path + '". A path of embed is relative, with / between its components. '
+                         + "It has no empty component, no component . or .., no backslash, no double quote, no brace "
+                         + "and no control character. Its first component is not out")
+    return 'embed("' + path + '")'
+
+def embed_files(inputs: dict[str, InputFile], strip: str = "") -> str:
+    """The source of a module with one name, files: dict[str, bytes]
+
+    files holds the content of each input file by the path of the file
+    without the prefix strip.  The source has one embed expression for each
+    input file, and no input file is read.  strip is compared with the start
+    of a path character by character.  Raises ValueError when the path of an
+    input file does not start with strip, and for a path that embed refuses.
+    """
+    lines = ["# Derived by std.build.derive.embed_files.", "", "files: dict[str, bytes] = {{"]
+    for path in inputs.keys():
+        if not path.startswith(strip):
+            raise ValueError('the path of the input file "' + path + '" does not start with the prefix strip="' + strip + '"')
+        lines.append("    " + str_literal(path[len(strip):]) + ": " + embed_call(path) + ",")
+    lines.append("}}")
+    return "\n".join(lines) + "\n"
 
 
 class Manifest(object):

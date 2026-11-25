@@ -46,7 +46,10 @@ import System.Posix.Files (FileStatus, deviceID, fileID, fileSize, getFileStatus
 -- | Why embed cannot take a path as it is written, or Nothing for a path that
 -- it takes: a relative path with / between its components, none of them empty,
 -- . or .., without a backslash, a double quote, a brace or a control
--- character, and with a first component other than out.
+-- character, and with a first component other than out.  embed_call of
+-- std.build.derive has the same rule, written in Acton, for the path that a
+-- function of a derived module writes.  The tests of both read the paths of
+-- test/stdlib_tests/data/embed_paths.json.
 pathProblem :: String -> Maybe String
 pathProblem path
   | any (`elem` ["", ".", ".."]) parts || '\\' `elem` path
@@ -279,7 +282,8 @@ embeddedFileStatus names root path = handle (no Nothing . cannotBeRead path) $ d
             | isDoesNotExistError e -> missing
             | otherwise             -> throwIO e
           Right st
-            | isDirectory st          -> refuse (path ++ " is a directory, and embed takes one file")
+            | isDirectory st          -> refuse (path ++ " is a directory, and embed takes one file. For the files of a directory use a derived module, "
+                                                 ++ "for example with the function std.build.derive.embed_files")
             | named /= path           -> refuse ("the file is named " ++ named ++ ", and the path is written " ++ path)
             | not (isRegularFile st)  -> refuse (path ++ " is not a regular file")
             | size >= 2 ^ (31 :: Int) -> refuse (path ++ " has " ++ show size ++ " bytes, and embed takes a file of fewer than 2147483648 bytes")

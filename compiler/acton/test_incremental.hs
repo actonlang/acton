@@ -4633,7 +4633,7 @@ p85_recorded_file_no_longer_taken =
     removeFile fileData
     createDirectory fileData
     out3 <- failing "build after the file was replaced by a directory"
-    reported out3 "data/value.txt is a directory, and embed takes one file"
+    reported out3 "data/value.txt is a directory, and embed takes one file. For the files of a directory use a derived module"
 
 -- | A plan looks at an embedded file when it discovers the module and again
 -- when it checks the module. A file that is written between the two looks

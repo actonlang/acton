@@ -2495,6 +2495,15 @@ main = do
           Embed.pathProblem "out" `shouldBe`
             Just "\"out\" is in out, which a build writes and which is not committed"
 
+        it "takes and refuses the paths of the list that the test of std.build.derive.embed_call reads" $ do
+          -- embed_call writes an embed expression for a function of a
+          -- derived module and has the rule of pathProblem, written in
+          -- Acton.  Its test in test/stdlib_tests/src/test_build_derive.act
+          -- runs it on the same list.
+          Just paths <- Ae.decodeFileStrict "../../test/stdlib_tests/data/embed_paths.json" :: IO (Maybe (M.Map String [String]))
+          forM_ (paths M.! "taken") $ \path -> (path, Embed.pathProblem path) `shouldBe` (path, Nothing)
+          forM_ (paths M.! "refused") $ \path -> (path, Embed.pathProblem path) `shouldSatisfy` (isJust . snd)
+
         it "reads the form, prints it and reads it again" $
           forM_ ["web/index.html", "x", "web/a b.txt", "a*/b c.txt", "web/\229\8364\128512.txt"] $ \path -> do
             let src = "embed(\"" ++ path ++ "\")"
@@ -2694,8 +2703,10 @@ main = do
             size "web/dangling.html" `shouldReturn` Left ("no file web/dangling.html in " ++ dir)
             size "none/index.html" `shouldReturn` Left ("no file none/index.html in " ++ dir)
             size "web/index.html/x" `shouldReturn` Left ("no file web/index.html/x in " ++ dir)
-            size "web" `shouldReturn` Left "web is a directory, and embed takes one file"
-            size "web/a b*" `shouldReturn` Left "web/a b* is a directory, and embed takes one file"
+            let directory path = Left (path ++ " is a directory, and embed takes one file. For the files of a directory use a derived module, "
+                                       ++ "for example with the function std.build.derive.embed_files")
+            size "web" `shouldReturn` directory "web"
+            size "web/a b*" `shouldReturn` directory "web/a b*"
             size "web/pipe" `shouldReturn` Left "web/pipe is not a regular file"
             size "web/most" `shouldReturn` Right 2147483647
             size "web/over" `shouldReturn` Left "web/over has 2147483648 bytes, and embed takes a file of fewer than 2147483648 bytes"

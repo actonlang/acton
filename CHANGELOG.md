@@ -247,6 +247,19 @@
   `std.crypto`. `hash(data)` returns the 32-byte digest of a `bytes` value.
   A `Hasher` takes data in pieces with `update`; `finalize` returns the
   digest of the data given so far and does not change the hasher.
+- Add `std.build.derive.embed_files`, a function for an entry of
+  `derived_modules` that embeds the files of a directory, as in
+  `assets: (function=std.build.derive.embed_files, inputs=["web/"],
+  args=(strip="web"))`. The derived module has one name, `files`, a
+  `dict[str, bytes]` with the content of each file by its path without the
+  prefix `strip`: `assets.files["/index.html"]` is the content of
+  `web/index.html`. Its source has one `embed` for each file and no content,
+  so new content of a file compiles the module again and writes no source. A
+  build stops for a file whose path `embed` refuses. `embed_call` and
+  `str_literal` of `std.build.derive` return an `embed` expression and a str
+  literal, for a function of a project that returns another module for the
+  files. The guide page "Embedding files" has a section on the files of a
+  directory.
 - Use private CAs and client certificates with `net.TLSConnection` and
   `net.TLSListener` through `ca_pem`, `cert_pem`, and `key_pem`.
   Listeners request client certificates with `client_auth=True`. Set

@@ -32,8 +32,10 @@ derived_modules = {
   module. The module name is written as an `import` statement in the
   project writes it. `gen.schema` is the function `schema` in the module
   `gen` of the project. `tools.gen.schema` is the function `schema` in the
-  module `gen` of the dependency `tools`. The function of an entry cannot
-  be in a derived module of the same project.
+  module `gen` of the dependency `tools`. `std.build.derive.embed_files` is
+  the function `embed_files` in the module `std.build.derive` of the
+  standard library. The function of an entry cannot be in a derived module
+  of the same project.
 - `inputs` lists the input files of the function, as paths relative to
   the project root. A path names a file or a directory inside the project,
   and a directory stands for the files below it:
@@ -278,6 +280,44 @@ error.
 
 The result type of a function is `str` for one module or `dict[str, str]`
 for several.
+
+## The files of a directory
+
+The standard library has a function for an entry that embeds the files of a
+directory: `embed_files` of the module `std.build.derive`. The module that
+it returns has one name, `files`, a `dict[str, bytes]` with the content of
+each input file by the path of the file. This entry makes the module
+`assets` from the files below `web/`:
+
+```python
+derived_modules = {
+    assets: (function=std.build.derive.embed_files, inputs=["web/"],
+             args=(strip="web"))
+}
+```
+
+A module of the project imports `assets`, and `assets.files["/index.html"]`
+is the content of the file `web/index.html`. `strip` is a prefix that is
+left out of each key of `files`. Without `strip` the key is
+`web/index.html`.
+
+The source that `embed_files` returns has one [`embed`](embedding.md)
+expression for each input file and no content, so the function reads no
+file. What a build does depends on what changed below `web/`:
+
+- A file has new content: the build calls the function, since an input file
+  changed. The function returns the same source, and the build writes no
+  module. It compiles `assets` again because a file that the module embeds
+  has new content.
+- A file is added or removed: the function returns other source. The build
+  writes the module and compiles it.
+
+The section
+[The files of a directory](embedding.md#the-files-of-a-directory) of the
+page on `embed` shows the source of the module and says for which files a
+build stops. It also shows a function of a project that returns another
+module for the same files, with `embed_call` and `str_literal` of
+`std.build.derive`.
 
 ## In a build
 

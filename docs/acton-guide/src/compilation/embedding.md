@@ -53,6 +53,142 @@ A path follows these rules:
 A path that breaks a rule, or that names no file, is an error when the module
 is compiled.
 
+## The files of a directory
+
+`embed` takes one file, and a path that names a directory is an error. The
+files of a directory get into a program through a
+[derived module](derived_modules.md), a module whose source a function returns
+while the build runs. The function `embed_files` of the module
+`std.build.derive` returns a module with one `embed` for each file below a
+directory.
+
+The project `shop` has the files `web/index.html` and `web/app.js`. Its
+`Build.act` has one entry in the table `derived_modules`:
+
+```python
+derived_modules = {
+    assets: (function=std.build.derive.embed_files, inputs=["web/"],
+             args=(strip="web"))
+}
+```
+
+The entry makes `assets` a module of the project. A build calls the function
+and writes the source that it returns to `out/derived/src/assets.act`:
+
+```python
+# Derived by std.build.derive.embed_files.
+
+files: dict[str, bytes] = {
+    "/app.js": embed("web/app.js"),
+    "/index.html": embed("web/index.html"),
+}
+```
+
+A module of the project imports `assets` and takes the content of a file from
+the dictionary `files`:
+
+```python
+import assets
+
+actor main(env):
+    proc def __startup__():
+        print(len(assets.files["/index.html"]))
+        env.exit(0)
+```
+
+`inputs=["web/"]` names the files below `web/`, also those in the directories
+below it. The section [Input paths](derived_modules.md#input-paths) lists the
+files that are left out, such as a file whose name starts with a dot. A backup
+file such as `web/app.js~` is not among them, so it is embedded. A directory
+without input files gives an empty `files`. A build stops when the directory
+is not there.
+
+`strip` is a prefix that is left out of each key of `files`. With
+`strip="web"`, the content of `web/index.html` is
+`assets.files["/index.html"]`. Without `strip` it is
+`assets.files["web/index.html"]`. The prefix is compared with the start of a
+path character by character, so `strip="web/"` gives the key `index.html`. A
+build stops when the path of a file does not start with the prefix.
+
+A build also stops for a file whose path `embed` refuses. With a file
+`web/a{b}.txt`, whose name has braces, the message is:
+
+```console
+The function std.build.derive.embed_files of the derived module assets in /home/user/shop/Build.act failed:
+ValueError: embed cannot name the file "web/a{b}.txt". A path of embed is relative, with / between its components. It has no empty component, no component . or .., no backslash, no double quote, no brace and no control character. Its first component is not out
+```
+
+### When a file below the directory changes
+
+The source of the module `assets` holds the path of each file and no content,
+and `embed_files` reads no file. The compiler takes the content of each file
+as it does for every `embed`.
+
+- A file has new content: the build calls the function, which returns the
+  same source, so the build does not write `out/derived/src/assets.act`. It
+  compiles the module `assets` again because a file that the module embeds
+  has new content. The section
+  [When an embedded file changes](#when-an-embedded-file-changes) says what
+  else is compiled.
+- A file is added or removed: the function returns source with one line more
+  or one line fewer. The build writes `out/derived/src/assets.act` and
+  compiles the module.
+
+`acton build --watch` and `acton test --watch` build again in both cases.
+
+The language server calls no function. Until the next build it works with the
+source of `assets` as the last build wrote it: a file that was added is not in
+`files`, and a file that was removed is reported as missing at its line in
+`out/derived/src/assets.act`. That report goes when a build has written the
+module and the language server compiles it again, which an edit of a module
+that imports `assets` starts.
+
+### Another module for the same files
+
+The module that `embed_files` returns has a dictionary from path to content.
+A function of the project can return another module for the files of a
+directory, for example one that also has an entity tag for each file, which a
+web server sends in the header `ETag`. The module `std.build.derive` has two
+functions for the source that such a function returns:
+
+- `embed_call(path)` returns the expression `embed("path")` for a path. It
+  raises `ValueError`, with the message above, for a path that `embed`
+  refuses.
+- `str_literal(text)` returns a str literal whose value is `text`.
+
+The function `page_table` in `src/sitegen.act` uses both:
+
+```python
+import std.build.derive as derive
+
+def page_table(inputs: dict[str, derive.InputFile]) -> str:
+    lines = ["table: dict[str, (body: bytes, etag: str)] = {{"]
+    for path, f in inputs.items():
+        etag = derive.str_literal('"' + f.sha256[:32] + '"')
+        lines.append("    " + derive.str_literal(path)
+                     + ": (body=" + derive.embed_call(path) + ", etag=" + etag + "),")
+    lines.append("}}")
+    return "\n".join(lines) + "\n"
+```
+
+A brace in a str literal is written twice, so the function writes `{{` for
+the brace that opens the dictionary. With the entry
+`pages: (function=sitegen.page_table, inputs=["web/"])`, a build writes this
+source for the module `pages`:
+
+```python
+table: dict[str, (body: bytes, etag: str)] = {
+    "web/app.js": (body=embed("web/app.js"), etag="\"d6447d6f631d17aaf8b0db0adf147064\""),
+    "web/index.html": (body=embed("web/index.html"), etag="\"b0693dc92f76e08bf1485b3dd9b514a2\""),
+}
+```
+
+The function takes the SHA-256 of each file from the description of the file
+and reads no file. When a file has new content, the line of that file
+changes, and the build writes the source of the module again. The page
+[Derived modules](derived_modules.md) describes the function of an entry and
+the description of an input file.
+
 ## When an embedded file changes
 
 A build looks at each embedded file. It reads a file only when what the file
