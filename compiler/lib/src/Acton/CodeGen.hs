@@ -37,7 +37,9 @@ import Control.Monad.State.Lazy
 import Prelude hiding ((<>))
 import System.FilePath.Posix
 import Numeric
-import Data.Char (isSpace)
+import Data.Bits (shiftR, (.&.))
+import qualified Data.ByteString as BS
+import Data.Char (intToDigit, isSpace)
 import Data.Word (Word8)
 -- For fast SrcLoc offset->line lookup when emitting #line
 import qualified Data.IntMap.Strict as IM
@@ -106,21 +108,31 @@ embedName env m p                   = gen env (GName m (name ("embed$" ++ pathDi
 -- embeds and that has content, filled by the C compiler from the file itself
 -- (#embed).  'files' gives the path, the size and the SHA-256 of each embedded
 -- file, and 'prefix' leads from the directory of the data C file to the
--- directory that the paths count from.  The comment before an array holds the
--- SHA-256 of its file and not the path, which may hold */.  The assertion
--- stops the C compiler when the file has another size than the one that the
--- module was compiled with.
-genEmbedData                        :: Acton.Env.Env0 -> ModName -> FilePath -> [(FilePath,Integer,String)] -> String
-genEmbedData env0 m prefix files    = render $ text "#pragma clang diagnostic push" $+$
-                                               text "#pragma clang diagnostic ignored \"-Wc23-extensions\"" $+$
-                                               vcat [ array (embedName env m p) p size sha | (p,size,sha) <- files, size > 0 ] $+$
-                                               text "#pragma clang diagnostic pop"
+-- directory that the paths count from.  A file that the C compiler does not
+-- load comes with its content.  Its array is filled from string literals
+-- that hold each byte as an octal escape, 16 bytes a line, and has its size
+-- written out, so that no zero byte follows the content.  The comment before
+-- an array holds the SHA-256 of its file and not the path, which may hold
+-- */.  The assertion stops the C compiler when the file has another size
+-- than the one that the module was compiled with.  The text is made of lines
+-- and not of a Doc, so that a writer takes the string literals of a large
+-- file piece by piece.
+genEmbedData                        :: Acton.Env.Env0 -> ModName -> FilePath -> [((FilePath,Integer,String), Maybe BS.ByteString)] -> String
+genEmbedData env0 m prefix files    = Data.List.intercalate "\n" $
+                                        [ "#pragma clang diagnostic push"
+                                        , "#pragma clang diagnostic ignored \"-Wc23-extensions\"" ] ++
+                                        concat [ array (render (embedName env m p)) p size sha content | ((p,size,sha),content) <- files, size > 0 ] ++
+                                        [ "#pragma clang diagnostic pop" ]
   where env                         = genEnv env0
-        array n p size sha          = text "/*" <+> text sha <+> text "*/" $+$
-                                      text "const _Alignas(16) unsigned char" <+> n <> text "[] = {" $+$
-                                      text "#embed" <+> doubleQuotes (text (prefix ++ p)) $+$
-                                      text "};" $+$
-                                      text "_Static_assert" <> parens (text "sizeof" <+> n <+> text "==" <+> pretty size <> comma <+> doubleQuotes (text p)) <> semi
+        array n p size sha content  = [ "/* " ++ sha ++ " */"
+                                      , "const _Alignas(16) unsigned char " ++ n ++ "[" ++ maybe "" (show . BS.length) content ++ "] = {" ] ++
+                                      maybe [ "#embed \"" ++ prefix ++ p ++ "\"" ] literals content ++
+                                      [ "};"
+                                      , "_Static_assert(sizeof " ++ n ++ " == " ++ show size ++ ", \"" ++ p ++ "\");" ]
+        literals content
+          | BS.null content         = []
+          | otherwise               = ('"' : concatMap octalEscape (BS.unpack line) ++ "\"") : literals rest
+          where (line, rest)        = BS.splitAt 16 content
 
 
 
@@ -3211,8 +3223,11 @@ cLiteral bs                         = doubleQuotes (text (concatMap esc bs))
           | b == 0x0d               = "\\r"
           | b == 0x09               = "\\t"
           | b >= 0x20 && b < 0x7f   = [toEnum (fromIntegral b)]
-          | otherwise               = '\\' : pad (showOct b "")
-        pad ds                      = replicate (3 - length ds) '0' ++ ds
+          | otherwise               = octalEscape b
+
+-- A byte as an octal escape of three digits.
+octalEscape                         :: Word8 -> String
+octalEscape b                       = '\\' : [ intToDigit (fromIntegral (b `shiftR` s .&. 7)) | s <- [6, 3, 0] ]
 
 genBool env (Paren _ e)             = genBool env e
 genBool env e

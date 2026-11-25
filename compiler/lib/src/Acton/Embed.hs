@@ -2,8 +2,9 @@
 The expression embed("path"), whose value is the content of a file: the rule
 for a path as it is written (pathProblem), the name of a path in the generated
 C (pathDigits), the embed expressions of a piece of syntax (Embeds), the
-file that a path names below a directory (embeddedFileStatus), and where a
-watch looks for a change to that file (eventPaths, watchDirectories).
+file that a path names below a directory (embeddedFileStatus), the files that
+the C compiler does not load (startsWithRefusedMark), and where a watch looks
+for a change to a file (eventPaths, watchDirectories).
 -}
 module Acton.Embed
   ( pathProblem
@@ -13,6 +14,7 @@ module Acton.Embed
   , listedPath
   , embeddedFileStatus
   , cannotBeRead
+  , startsWithRefusedMark
   , eventPaths
   , watchesTrees
   , watchDirectories
@@ -24,6 +26,7 @@ import Acton.Syntax
 import Control.Exception (IOException, handle, throwIO, try)
 import Control.Monad (filterM, zipWithM)
 import qualified Crypto.Hash.SHA256 as SHA256
+import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Char8 as B
 import Data.Char (isControl)
@@ -36,6 +39,7 @@ import GHC.IO.Exception (IOErrorType(InappropriateType), ioe_description)
 import System.Directory (canonicalizePath, doesDirectoryExist, pathIsSymbolicLink)
 import System.FilePath.Posix (takeDirectory, (</>))
 import System.Info (os)
+import System.IO (IOMode(ReadMode), withBinaryFile)
 import System.IO.Error (ioeGetErrorType, isDoesNotExistError)
 import System.Posix.Files (FileStatus, deviceID, fileID, fileSize, getFileStatus, getSymbolicLinkStatus, isDirectory, isRegularFile)
 
@@ -287,6 +291,28 @@ embeddedFileStatus names root path = handle (no . cannotBeRead path) $ do
 -- the operating system gives.
 cannotBeRead :: FilePath -> IOException -> String
 cannotBeRead path e = path ++ " cannot be read: " ++ ioe_description e
+
+-- | The byte order marks that clang refuses at the start of a file it loads,
+-- also of a file that #embed names.  It takes the mark of UTF-8.  The C
+-- compiler of the toolchain is clang, so the list is to be looked at again
+-- when the toolchain changes.
+refusedMarks :: [BS.ByteString]
+refusedMarks = map BS.pack
+    [ [0xff, 0xfe], [0xfe, 0xff]                            -- UTF-16, little and big endian
+    , [0xff, 0xfe, 0x00, 0x00], [0x00, 0x00, 0xfe, 0xff]    -- UTF-32, little and big endian
+    , [0x2b, 0x2f, 0x76]                                    -- UTF-7
+    , [0xf7, 0x64, 0x4c]                                    -- UTF-1
+    , [0xdd, 0x73, 0x66, 0x73]                              -- UTF-EBCDIC
+    , [0x0e, 0xfe, 0xff]                                    -- SCSU
+    , [0xfb, 0xee, 0x28]                                    -- BOCU-1
+    , [0x84, 0x31, 0x95, 0x33]                              -- GB-18030
+    ]
+
+-- | Whether the first bytes of a file are one of the refusedMarks.
+startsWithRefusedMark :: FilePath -> IO Bool
+startsWithRefusedMark file = do
+    start <- withBinaryFile file ReadMode (`BS.hGet` maximum (map BS.length refusedMarks))
+    return (any (`BS.isPrefixOf` start) refusedMarks)
 
 
 -- Watching -----------------------------------------------------------------------------------------

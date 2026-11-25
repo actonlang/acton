@@ -74,6 +74,9 @@ embedded files (#embed) and which a back job writes from the recorded files
 (writeDataFile).  Its first line is tagged with dataTag, which does not
 cover the impl hash, so an edit of other code of the module leaves the file
 as it is and the C compiler does not read the embedded files again.  The C
+compiler refuses a file that starts with certain byte order marks, so the
+back job reads such a file and writes its bytes into the data C file as
+string literals, in place of an #embed line (markedContent).  The C
 compiler reads an embedded file after the plan looked at it, so the CLI asks
 after its Zig build which files are not the ones that the build took them
 for (changedEmbeds), and fails the build for any.  The watches of the CLI
@@ -372,6 +375,7 @@ module Acton.Compile
   , FileChanged(..)
   , fileFact
   , hashOfFile
+  , markedContent
   , changedEmbeds
   , embeddedPaths
   , docIndexEntry
@@ -1640,11 +1644,12 @@ listedIn facts dir = do
       names <- maybe (Data.Set.fromList <$> listDirectory dir) return listed
       return (Just names, names)
 
--- | A file whose stat at a later look of a plan is not the one of the plan's
--- first look at its path.
+-- | A file that is not the one of the plan's first look at its path: by its
+-- stat at a later look, or by its content when a back job reads it.
 newtype FileChanged = FileChanged FilePath deriving (Show)
 
-instance Exception FileChanged
+instance Exception FileChanged where
+  displayException (FileChanged path) = changedWhileBuilding path
 
 -- | The SHA-256 of the content of the file at a path, given the stat of the
 -- file or, where there is no file to read, the reason, which is returned as
@@ -4003,6 +4008,22 @@ dataTag mn prefix embeds =
 embeddedFile :: InterfaceFiles.EmbeddedFile -> (FilePath, Integer, String)
 embeddedFile f = (InterfaceFiles.embeddedPath f, InterfaceFiles.embeddedSize f, InterfaceFiles.embeddedSha256 f)
 
+-- | The content of an embedded file below a directory that the data C file
+-- holds as C text: of a file that starts with a byte order mark which the C
+-- compiler refuses (Embed.startsWithRefusedMark), and Nothing for any other
+-- file, which the C compiler loads itself.  The content has the recorded
+-- SHA-256, else the file changed while the build ran (FileChanged).
+markedContent :: FilePath -> InterfaceFiles.EmbeddedFile -> IO (Maybe B.ByteString)
+markedContent root f = do
+    marked <- Embed.startsWithRefusedMark file
+    if not marked then return Nothing else do
+      content <- B.readFile file
+      when (Hashing.hashHex (SHA256.hash content) /= InterfaceFiles.embeddedSha256 f) (throwIO (FileChanged path))
+      return (Just content)
+  where
+    path = InterfaceFiles.embeddedPath f
+    file = root </> path
+
 -- | The data C file of a module as one tagged output, which should carry
 -- the given tag (dataTag).
 dataFileOutput :: Paths -> A.ModName -> B.ByteString -> TaggedOutput
@@ -4021,9 +4042,10 @@ writeDataFile gopts job
       prefix <- embedPrefix paths mn
       let tag = dataTag mn prefix embeds
       status <- outputStatus gopts (bjOpts job) [dataFileOutput paths mn tag]
-      unless (outputsUpToDate status) $
+      unless (outputsUpToDate status) $ do
+        contents <- mapM (markedContent (embedRoot paths)) embeds
         writeFileUtf8Atomic file (Acton.CodeGen.tagged (stampedHex gopts tag)
-                                    (Acton.CodeGen.genEmbedData (bjTypeEnv job) mn prefix (map embeddedFile embeds)))
+                                    (Acton.CodeGen.genEmbedData (bjTypeEnv job) mn prefix (zip (map embeddedFile embeds) contents)))
   where
     embeds = bjEmbeds job
     paths  = bjPaths job

@@ -2572,7 +2572,7 @@ main = do
 
         it "generates a data C file with an array for each embedded file that has content" $
           Acton.CodeGen.tagged "7b0e" (Acton.CodeGen.genEmbedData env0 (S.modName ["shop", "assets"]) "../../../"
-              [("data/empty.bin", 0, "e3b0"), ("web/a b*/app.js", 3, "ba78"), ("web/app.js", 1234, "5c1f")])
+              (map (\file -> (file, Nothing)) [("data/empty.bin", 0, "e3b0"), ("web/a b*/app.js", 3, "ba78"), ("web/app.js", 1234, "5c1f")]))
             `shouldBe` init (unlines
               [ "/* Acton impl hash: 7b0e */"
               , "#pragma clang diagnostic push"
@@ -2589,6 +2589,45 @@ main = do
               , "_Static_assert(sizeof shopQ_assetsQ_embed$e24e4bd32090b0c400a70f02d1b844df == 1234, \"web/app.js\");"
               , "#pragma clang diagnostic pop"
               ])
+
+        it "writes the bytes of a file that starts with a byte order mark which the C compiler refuses" $
+          withSystemTempDirectory "acton-embed-marked" $ \dir -> do
+            -- The mark of UTF-16, the mark of UTF-8, which the C compiler
+            -- takes, and the mark of UTF-16 after another byte.
+            let contents  = [ ("utf16.txt", B8.pack ("\255\254" ++ ['a' .. 'p'])), ("utf8.txt", B8.pack "\239\187\191hi"), ("second.bin", B8.pack "a\255\254") ]
+                files     = [ InterfaceFiles.EmbeddedFile path (toInteger (B8.length content)) (Hashing.hashHex (SHA256.hash content)) (InterfaceFiles.SourceFileMeta 0 0 0 Nothing Nothing)
+                            | (path, content) <- contents ]
+                sha path  = head [ InterfaceFiles.embeddedSha256 f | f <- files, InterfaceFiles.embeddedPath f == path ]
+                array p   = "shopQ_assetsQ_embed$" ++ Embed.pathDigits p
+            forM_ contents $ \(path, content) -> B8.writeFile (dir </> path) content
+            marked <- mapM (Compile.markedContent dir) files
+            marked `shouldBe` [Just (snd (head contents)), Nothing, Nothing]
+            Acton.CodeGen.genEmbedData env0 (S.modName ["shop", "assets"]) "../../../"
+                (zip [ (InterfaceFiles.embeddedPath f, InterfaceFiles.embeddedSize f, InterfaceFiles.embeddedSha256 f) | f <- files ] marked)
+              `shouldBe` init (unlines
+                [ "#pragma clang diagnostic push"
+                , "#pragma clang diagnostic ignored \"-Wc23-extensions\""
+                , "/* " ++ sha "utf16.txt" ++ " */"
+                , "const _Alignas(16) unsigned char " ++ array "utf16.txt" ++ "[18] = {"
+                , "\"\\377\\376\\141\\142\\143\\144\\145\\146\\147\\150\\151\\152\\153\\154\\155\\156\""
+                , "\"\\157\\160\""
+                , "};"
+                , "_Static_assert(sizeof " ++ array "utf16.txt" ++ " == 18, \"utf16.txt\");"
+                , "/* " ++ sha "utf8.txt" ++ " */"
+                , "const _Alignas(16) unsigned char " ++ array "utf8.txt" ++ "[] = {"
+                , "#embed \"../../../utf8.txt\""
+                , "};"
+                , "_Static_assert(sizeof " ++ array "utf8.txt" ++ " == 5, \"utf8.txt\");"
+                , "/* " ++ sha "second.bin" ++ " */"
+                , "const _Alignas(16) unsigned char " ++ array "second.bin" ++ "[] = {"
+                , "#embed \"../../../second.bin\""
+                , "};"
+                , "_Static_assert(sizeof " ++ array "second.bin" ++ " == 3, \"second.bin\");"
+                , "#pragma clang diagnostic pop"
+                ])
+            -- The bytes are the ones that the .tydb records.
+            Compile.markedContent dir (head files) { InterfaceFiles.embeddedSha256 = sha "utf8.txt" }
+              `shouldThrow` (\e -> E.displayException (e :: Compile.FileChanged) == "utf16.txt changed while the build ran. Run the build again")
 
         it "generates a bytes value that borrows the array of the data C file" $ do
           let src    = unlines

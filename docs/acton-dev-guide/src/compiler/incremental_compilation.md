@@ -209,6 +209,13 @@ data C file that a back job would write reruns the back passes, as a `.c` or a
 whose name ends with `.embed.c` with `-fno-lto`, so that a build with link-time
 optimization gets the content as an object file and not as bitcode.
 
+The C compiler refuses a file that starts with one of ten byte order marks,
+those of UTF-16 and UTF-32 among them (`Embed.startsWithRefusedMark`), so the
+back job reads such a file, stops with `<path> changed while the build ran. Run
+the build again` when the content does not have the recorded SHA-256, and
+writes the bytes into the data C file as string literals in place of the
+`#embed` line (`markedContent`).
+
 The C compiler reads an embedded file when zig compiles the data C file, which
 is after the plan looked at the file. The `_Static_assert` of the data C file
 stops the C compile for a file of another size and for a file that is gone, and

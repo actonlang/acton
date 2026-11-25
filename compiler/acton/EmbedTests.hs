@@ -18,7 +18,7 @@ import Data.Bits (shiftR, (.&.))
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as LBS
-import Data.List (isInfixOf, isPrefixOf, isSuffixOf, sort)
+import Data.List (intercalate, isInfixOf, isPrefixOf, isSuffixOf, sort)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import Data.Time.Clock (addUTCTime, getCurrentTime)
@@ -31,6 +31,7 @@ import System.IO.Temp (withSystemTempDirectory)
 import System.Posix.Files (createNamedPipe, createSymbolicLink, nullFileMode, ownerModes, setFileMode, setFileSize)
 import System.Process
 import qualified System.Timeout as Timeout
+import Text.Printf (printf)
 
 import WatchTests (buildAct, writeExecutable)
 import Test.Tasty
@@ -247,6 +248,7 @@ embedProgramTests = testGroup "embed programs"
     , testCase "a project whose out is a symbolic link" linkedOutProgram
     , testCase "a file that is compiled without a project" looseProgram
     , testCase "a release build for Linux has the data C file as an object file" linuxDataObjects
+    , testCase "files that start with a byte order mark" markedProgram
     ]
 
 -- | Run acton in a directory and return what it prints.  The test fails
@@ -490,6 +492,36 @@ linuxDataObjects = withSystemTempDirectory "acton-embed-linux" $ \tmp -> do
   where
     elf     = "\DELELF"
     bitcode = "BC\192\222"
+
+-- | The C compiler refuses a file that starts with one of ten byte order
+-- marks, also for #embed.  A program embeds a file for each of them, the
+-- mark followed by other bytes, and a file that is the mark of UTF-16 and
+-- nothing more.  Its data C file has no #embed line, and each value is the
+-- bytes of its file.
+markedProgram :: IO ()
+markedProgram = withSystemTempDirectory "acton-embed-marked" $ \tmp -> do
+    root <- canonicalizePath tmp
+    let shop  = root </> "shop"
+        marks = [ [0xff, 0xfe], [0xfe, 0xff], [0xff, 0xfe, 0x00, 0x00], [0x00, 0x00, 0xfe, 0xff], [0x2b, 0x2f, 0x76]
+                , [0xf7, 0x64, 0x4c], [0xdd, 0x73, 0x66, 0x73], [0x0e, 0xfe, 0xff], [0xfb, 0xee, 0x28], [0x84, 0x31, 0x95, 0x33] ]
+        files = ("data/only.bin", [0xff, 0xfe])
+              : [ ("data/mark" ++ show n ++ ".bin", mark ++ [0x68, 0x00, 0x0a, 0x22, 0x5c, 0xff]) | (n, mark) <- zip [1 :: Int ..] marks ]
+    forM_ [shop </> "src", shop </> "data"] (createDirectoryIfMissing True)
+    writeFile (shop </> "Build.act") (buildAct "shop" [])
+    forM_ files $ \(path, content) -> BS.writeFile (shop </> path) (BS.pack content)
+    writeFile (shop </> "src" </> "main.act") $ unlines
+      [ "files = [" ++ intercalate ", " [ "embed(\"" ++ path ++ "\")" | (path, _) <- files ] ++ "]"
+      , ""
+      , "actor main(env):"
+      , "    proc def __startup__():"
+      , "        for file in files:"
+      , "            print(file.hex())"
+      , "        env.exit(0)"
+      ]
+    _ <- runActon shop ["build", "--color", "never"]
+    embedLines (shop </> "out" </> "types" </> "shop" </> "main.embed.c") >>= (@?= [])
+    out <- programOutput (shop </> "out" </> "bin" </> "main")
+    out @?= unlines [ concatMap (printf "%02x") content | (_, content) <- files ]
 
 
 -- After zig ----------------------------------------------------------------------------------------

@@ -4966,6 +4966,37 @@ p90_look_after_zig_in_each_project =
     B.writeFile (app </> "data" </> "b.txt") "more from the application, again\n"
     Compile.changedEmbeds plan2 >>= assertEqual "the look after two files of the application were written" (whileBuilding ++ ["data/b.txt changed while the build ran. Run the build again"])
 
+-- | An embedded file that starts with a byte order mark which the C compiler
+-- refuses in a file it loads has its bytes in the data C file, and any other
+-- file has an #embed line there. Content with a mark, then without one and
+-- then with one again gives the data C file the other form in each build,
+-- and the program the bytes of the file.
+p91_embedded_file_with_byte_order_mark :: TestTree
+p91_embedded_file_with_byte_order_mark =
+  testCase "91-an embedded file gets and loses a byte order mark" $ withSystemTempDirectory "embedded-mark" $ \tmp -> do
+    proj <- (</> "shop") <$> canonicalizePath tmp
+    let builds content hex loaded = do
+          B.writeFile (proj </> "data" </> "value.txt") (B.pack content)
+          _ <- buildOutIn proj
+          text <- T.readFile (proj </> "out" </> "types" </> "shop" </> "main.embed.c")
+          assertEqual ("an #embed line in the data C file for the content " ++ hex) loaded ("#embed" `T.isInfixOf` text)
+          out <- runBinaryIn proj "main"
+          out @?= T.pack hex <> "\n"
+    createDirectoryIfMissing True (proj </> "src")
+    createDirectoryIfMissing True (proj </> "data")
+    writeBuildAct proj "shop" []
+    writeFileUtf8 (proj </> "src" </> "main.act") $ T.unlines
+      [ "content = embed(\"data/value.txt\")"
+      , ""
+      , "actor main(env: Env):"
+      , "    proc def __startup__():"
+      , "        print(content.hex())"
+      , "        env.exit(0)"
+      ]
+    builds [0xff, 0xfe, 0x68, 0x00] "fffe6800" False
+    builds [0x68, 0xff, 0xfe, 0x00] "68fffe00" True
+    builds [0xfe, 0xff, 0x00, 0x68] "feff0068" False
+
 -- Source written during a read ------------------------------------------------
 
 -- | A disk source provider that writes new text to a source file right after
@@ -5399,6 +5430,7 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
       , p88_kept_module_takes_embedded_file_by_row
       , p89_look_after_zig
       , p90_look_after_zig_in_each_project
+      , p91_embedded_file_with_byte_order_mark
       ]
   , sequentialTestGroup "incremental-cache-cases" AllSucceed
       [ p41_stale_header_missing_import_reparses_source
