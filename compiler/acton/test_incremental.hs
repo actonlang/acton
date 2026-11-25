@@ -2381,8 +2381,7 @@ p36c_private_name_rechecks_dependent_on_one_scheduler =
               mapM_ (logLine reportedByB . renderDiagnostic) diags
         onEvent _ = return ()
         renderDiagnostic d = show (unAnnotate (prettyDiagnostic WithoutUnicode (TabSize 4) d))
-    -- The first build checks a and leaves a's name map in the scheduler's
-    -- module cache, where the second build finds it.
+    -- Both builds run on one scheduler, as the generations of a watch do.
     sched <- Compile.newCompileScheduler quietGlobalOptions
     let build = buildOnScheduler Source.diskSourceProvider quietGlobalOptions onEvent sched proj opts
     first <- build

@@ -357,6 +357,40 @@ watchProcessTests = testGroup "watch subprocesses"
           runs <- zigRuns proj
           assertEqual "no build should follow the first" 1 runs
           assertEqual "watch should remain running" Nothing =<< getProcessExitCode ph
+  , testCase "build watch reports the import of a removed module" $
+      withProcessProject $ \acton proj system -> do
+        let base      = proj </> "src/layers/base.act"
+            writeBase = writeFile base "def answer() -> int:\n    return 42\n"
+            missing   = "Type interface file not found or unreadable for watch_process.layers.base"
+            built     = "Final compilation done"
+        createDirectory (proj </> "src/layers")
+        writeBase
+        writeFile (proj </> "src/main.act") $ unlines
+          [ "import layers.base"
+          , "actor main(env):"
+          , "    proc def __startup__():"
+          , "        print(layers.base.answer())"
+          , "        env.exit(0)"
+          ]
+        withActon acton proj ["build", "--watch", "--syspath", system] $ \ph _ output -> do
+          -- What the log gains from a change made while no generation runs,
+          -- up to the end of the generation that prints one of the texts.
+          let logOf label change texts = do
+                awaitGeneration proj
+                before <- length <$> output
+                change
+                await label $ do
+                  added <- drop before <$> output
+                  return $ if any (`isInfixOf` added) texts then Just () else Nothing
+                awaitGeneration proj
+                drop before <$> output
+          _ <- logOf "the first build" (return ()) [built]
+          -- The generation ends at the import, or else with a Zig build.
+          removed <- logOf "the generation after the removal" (removeFile base) [missing, built]
+          assertBool ("the import of the removed module should be reported\n" ++ removed) (missing `isInfixOf` removed)
+          assertBool ("no Zig build should follow the report\n" ++ removed) (not (built `isInfixOf` removed))
+          _ <- logOf "the build with the module back" writeBase [built]
+          assertEqual "watch should remain running" Nothing =<< getProcessExitCode ph
   , testCase "build watch builds again when an embedded file has new content" $
       withProcessProject $ \acton proj system -> do
         let text = proj </> "data/text.txt"
