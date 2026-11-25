@@ -2,7 +2,7 @@
 module WatchTests (watchTriggerTests, watchProcessTests, buildAct, writeExecutable) where
 
 import Control.Concurrent (threadDelay)
-import Control.Exception (IOException, catch, finally, mask, onException, try)
+import Control.Exception (IOException, bracket, catch, finally, mask, onException, try)
 import Control.Monad
 import qualified Data.ByteString.Char8 as BS
 import Data.IORef
@@ -17,7 +17,8 @@ import System.FilePath
 import System.IO
 import System.IO.Temp (withSystemTempDirectory)
 import System.Info (os)
-import System.Posix.Files (createSymbolicLink, fileSize, getFileStatus, modificationTimeHiRes, nullFileMode, ownerModes, setFileMode, statusChangeTimeHiRes)
+import System.Posix.Files (createSymbolicLink, fileSize, getFileStatus, modificationTimeHiRes, nullFileMode, ownerModes, setFileMode, statusChangeTimeHiRes, stdFileMode)
+import qualified System.Posix.IO as Posix
 import System.Posix.Signals
 import System.Posix.Types (ProcessID)
 import System.Process
@@ -859,7 +860,13 @@ replaceFile path content = do
 writeExecutable :: FilePath -> [String] -> IO ()
 writeExecutable path body = do
     createDirectoryIfMissing True (takeDirectory path)
-    writeFile path (unlines ("#!/bin/sh" : body))
+    -- Concurrently spawned children must not retain this writable descriptor:
+    -- Linux then refuses to execute the script with ETXTBSY after we close it.
+    let open = do
+          fd <- Posix.openFd path Posix.WriteOnly Posix.defaultFileFlags
+            { Posix.creat = Just stdFileMode, Posix.trunc = True, Posix.cloexec = True }
+          Posix.fdToHandle fd `onException` Posix.closeFd fd
+    bracket open hClose $ \handle -> hPutStr handle (unlines ("#!/bin/sh" : body))
     permissions <- getPermissions path
     setPermissions path permissions { executable = True }
 
