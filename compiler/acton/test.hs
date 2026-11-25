@@ -2879,6 +2879,56 @@ actonProjTests =
         testBuild "" ExitSuccess False "test/project/simple"
         testBuild "" ExitSuccess False "test/project/simple"
 
+  , testCase "a diagnostic is written in one piece while other modules are compiled" $ do
+        withSystemTempDirectory "acton-diagnostic-one-piece" $ \tmp -> do
+          actonExe <- canonicalizePath "../../dist/bin/acton"
+          let proj = tmp </> "pieces"
+              mkFp name = Fingerprint.formatFingerprint
+                (Fingerprint.updateFingerprintPrefix
+                  (Fingerprint.fingerprintPrefixForName name) 1)
+              -- The diagnostic of the one module with a type error, as the
+              -- compiler writes it when no other thread writes.
+              diagnostic = unlines
+                [ "[error]: Constraint violation"
+                , "     +--> bad.act@1:17-1:20"
+                , "     |"
+                , "   1 | greeting: int = 'x'"
+                , "     :                 ^--"
+                , "     :                 `- The type of the indicated expression (inferred to be __builtin__.str) must be a subclass of __builtin__.int"
+                , "-----+"
+                ]
+          createDirectoryIfMissing True (proj </> "src")
+          writeFile (proj </> "Build.act") $ unlines
+            [ "name = \"pieces\""
+            , "fingerprint = " ++ mkFp "pieces"
+            ]
+          writeFile (proj </> "src" </> "pieces.act") $ unlines
+            [ "actor main(env: Env):"
+            , "    proc def __startup__():"
+            , "        env.exit(0)"
+            ]
+          writeFile (proj </> "src" </> "bad.act") "greeting: int = 'x'\n"
+          forM_ [1 .. 40 :: Int] $ \n ->
+            writeFile (proj </> "src" </> ("m" ++ show n ++ ".act")) $ unlines
+              [ "def f(x: int) -> int:"
+              , "    return x + " ++ show n
+              , ""
+              , "def g(xs: list[int]) -> int:"
+              , "    total = 0"
+              , "    for x in xs:"
+              , "        total += f(x)"
+              , "    return total"
+              ]
+          -- Stdout is a pipe here, so no progress is rendered.  The forty
+          -- modules log their lines while the diagnostic is written.  A
+          -- build that lets two threads write at the same time mixes them
+          -- in most runs, so five builds show it.
+          forM_ [1 .. 5 :: Int] $ \_ -> do
+            removePathForcibly (proj </> "out")
+            (code, out, err) <- readCreateProcessWithExitCode (proc actonExe ["build", "--color", "never"]) { cwd = Just proj } ""
+            assertBool ("the build should fail\n" ++ out ++ err) (code /= ExitSuccess)
+            assertBool ("expected the diagnostic in one piece in\n" ++ out ++ err) (diagnostic `isInfixOf` out)
+
   , testCase "project imports std.json" $ do
         withSystemTempDirectory "acton-std-json-import" $ \tmp -> do
           actonExe <- canonicalizePath "../../dist/bin/acton"
