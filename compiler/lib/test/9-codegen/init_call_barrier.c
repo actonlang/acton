@@ -1,11 +1,26 @@
 /* Acton impl hash: test-hash */
 #include "rts/common.h"
 #include "out/types/init_call_barrier.h"
-typedef struct $Cont_R2 *init_call_barrierQ_L_2Cont;
-$R init_call_barrierQ_L_1C_1cont (init_call_barrierQ_Later, $Cont, B_NoneType);
+typedef struct $Cont_R1 *init_call_barrierQ_L_2Cont;
+typedef struct $Cont_R1 *init_call_barrierQ_L_5Cont;
+typedef struct $Cont_R2 *init_call_barrierQ_L_6Cont;
+$R init_call_barrierQ_L_1C_1cont ($Cont, B_NoneType);
+$R init_call_barrierQ_L_4C_5cont ($Cont, B_NoneType);
+$R init_call_barrierQ_L_3C_3cont ($Cont, init_call_barrierQ_Later, B_NoneType);
 extern struct $ContClass init_call_barrierQ_L_2ContG_methods;
 $R init_call_barrierQ_L_2ContD___call__($Cont $closure, $WORD $result);
 $Cont init_call_barrierQ_L_2ContD___deserialize__($Cont self, $Serial$state state);
+extern struct $ContClass init_call_barrierQ_L_5ContG_methods;
+$R init_call_barrierQ_L_5ContD___call__($Cont $closure, $WORD $result);
+$Cont init_call_barrierQ_L_5ContD___deserialize__($Cont self, $Serial$state state);
+extern struct $ContClass init_call_barrierQ_L_6ContG_methods;
+$R init_call_barrierQ_L_6ContD___call__($Cont $closure, $WORD $result);
+$Cont init_call_barrierQ_L_6ContD___deserialize__($Cont self, $Serial$state state);
+typedef struct $Cont_R1 *init_call_barrierQ_L_8Cont;
+$R init_call_barrierQ_L_7C_7cont ($Cont, B_NoneType);
+extern struct $ContClass init_call_barrierQ_L_8ContG_methods;
+$R init_call_barrierQ_L_8ContD___call__($Cont $closure, $WORD $result);
+$Cont init_call_barrierQ_L_8ContD___deserialize__($Cont self, $Serial$state state);
 #line 8 "test/src/init_call_barrier.act"
 $R init_call_barrierQ_step ($Cont C_cont) {
     #line 9 "test/src/init_call_barrier.act"

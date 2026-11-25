@@ -1198,7 +1198,7 @@ actor TestExecutor(rts: EnvRTS, config: TestRunnerConfig, t: Test, report_comple
         except Exception as e:
             _report_error(e)
 
-    proc def __startup__():
+    def __startup__():
         log_handler.add_sink(logging.ConsoleSink())
         after 0: _run_test()
 
@@ -1899,7 +1899,7 @@ actor test_runner(env: Env,
             _cmd(args)
         else:
             env.exit(0)
-    proc def __startup__():
+    def __startup__():
         for name, t in unit_tests.items():
             all_tests[name] = t
         for name, t in simple_sync_tests.items():

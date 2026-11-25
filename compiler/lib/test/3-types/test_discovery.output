@@ -73,7 +73,7 @@ actor AsyncTester (t : testing.AsyncT):
         W_AsyncTester_30: __builtin__.Hashable[__builtin__.str] = __builtin__.HashableD_str()
         W_AsyncTester_60: __builtin__.Number[__builtin__.float] = __builtin__.RealFloatD_float()
         log: logging.Logger = logging.Logger(handler = t.log_handler)
-        proc def test () -> None:
+        com def test () -> None:
             log.info(msg = "AsyncTester.test()", data = $mkDict@[__builtin__.str, __builtin__.str](W_AsyncTester_30, {"data": "test"}))
             t.success(output = None)
         after W_AsyncTester_60.__fromatom__(0): test()
@@ -84,7 +84,7 @@ actor EnvTester (t : testing.EnvT):
         W_AsyncTester_169: __builtin__.Hashable[__builtin__.str] = __builtin__.HashableD_str()
         W_AsyncTester_231: __builtin__.Number[__builtin__.float] = __builtin__.RealFloatD_float()
         log: logging.Logger = logging.Logger(handler = t.log_handler)
-        proc def test () -> None:
+        com def test () -> None:
             log.info(msg = "EnvTester.test() wthreads:", data = $mkDict@[__builtin__.str, __builtin__.int](W_AsyncTester_169, {"nr_wthreads": t.env.nr_wthreads}))
             print@[(__builtin__.str, __builtin__.int)](*("EnvTester.test() wthreads:", t.env.nr_wthreads), sep = " ", end = "\\n", err = False, flush = False)
             t.success(output = None)

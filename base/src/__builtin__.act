@@ -1706,7 +1706,7 @@ actor _RTSWorkerMonitor(wthread_id: int):
 
     proc def _init():
         NotImplemented
-    proc def __startup__():
+    def __startup__():
         _init()
 
 pure def _rts_io_handles() -> dict[u64, (typ: str, act: u64)]:
@@ -2055,7 +2055,7 @@ actor Process(envcap: _EnvCap,
         terminate()
         after 1.0: kill()
 
-    proc def __startup__():
+    def __startup__():
         # Handle PATH inheritance for custom environments
         # When PATH is not explicitly set in the provided environment, inherit it
         # from the current environment (if set in the current environment).
@@ -2142,7 +2142,7 @@ actor RunProcess(envcap: _EnvCap,
         """
         _p.stop()
 
-    proc def __startup__():
+    def __startup__():
         _process = _p
 
 

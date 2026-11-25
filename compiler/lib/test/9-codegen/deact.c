@@ -1,6 +1,127 @@
 /* Acton impl hash: test-hash */
 #include "rts/common.h"
 #include "out/types/deact.h"
+struct deactQ_L_9proc;
+struct deactQ_L_11proc;
+struct deactQ_L_19proc;
+typedef struct $Cont_R2 *deactQ_L_2Cont;
+typedef struct $Cont_R1 *deactQ_L_4Cont;
+typedef struct $Action_R1 *deactQ_L_6action;
+typedef struct $Proc0_R2 *deactQ_L_7proc;
+typedef struct $Proc0_R2 *deactQ_L_8proc;
+typedef struct deactQ_L_9proc *deactQ_L_9proc;
+typedef struct $Proc0_R1 *deactQ_L_10proc;
+typedef struct deactQ_L_11proc *deactQ_L_11proc;
+typedef struct $Proc0_R1 *deactQ_L_12proc;
+typedef struct $Action_R1 *deactQ_L_15action;
+typedef struct $Action_R1 *deactQ_L_17action;
+typedef struct deactQ_L_19proc *deactQ_L_19proc;
+typedef struct $Action_R1 *deactQ_L_20action;
+typedef struct $Cont_R3 *deactQ_L_21Cont;
+typedef struct $Proc0_R1 *deactQ_L_22proc;
+$R deactQ_L_1C_2cont ($action, $Cont, int64_t);
+$R deactQ_L_3C_4cont ($Cont, B_NoneType);
+struct deactQ_L_9procG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (deactQ_L_9proc, deactQ_Apa, int64_t);
+    void (*__serialize__) (deactQ_L_9proc, $Serial$state);
+    deactQ_L_9proc (*__deserialize__) (deactQ_L_9proc, $Serial$state);
+    bool (*__bool__) (deactQ_L_9proc);
+    B_str (*__str__) (deactQ_L_9proc);
+    B_str (*__repr__) (deactQ_L_9proc);
+    $R (*__call__) (deactQ_L_9proc, $Cont);
+    $R (*__exec__) (deactQ_L_9proc, $Cont);
+};
+struct deactQ_L_9proc {
+    struct deactQ_L_9procG_class *$class;
+    deactQ_Apa self;
+    int64_t i;
+};
+struct deactQ_L_11procG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (deactQ_L_11proc, deactQ_Bepa, int64_t);
+    void (*__serialize__) (deactQ_L_11proc, $Serial$state);
+    deactQ_L_11proc (*__deserialize__) (deactQ_L_11proc, $Serial$state);
+    bool (*__bool__) (deactQ_L_11proc);
+    B_str (*__str__) (deactQ_L_11proc);
+    B_str (*__repr__) (deactQ_L_11proc);
+    $R (*__call__) (deactQ_L_11proc, $Cont);
+    $R (*__exec__) (deactQ_L_11proc, $Cont);
+};
+struct deactQ_L_11proc {
+    struct deactQ_L_11procG_class *$class;
+    deactQ_Bepa self;
+    int64_t i;
+};
+$R deactQ_L_13myproc (deactQ_main, $Cont, int64_t);
+struct deactQ_L_19procG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    B_NoneType (*__init__) (deactQ_L_19proc, int64_t, deactQ_main);
+    void (*__serialize__) (deactQ_L_19proc, $Serial$state);
+    deactQ_L_19proc (*__deserialize__) (deactQ_L_19proc, $Serial$state);
+    bool (*__bool__) (deactQ_L_19proc);
+    B_str (*__str__) (deactQ_L_19proc);
+    B_str (*__repr__) (deactQ_L_19proc);
+    $R (*__call__) (deactQ_L_19proc, $Cont);
+    $R (*__exec__) (deactQ_L_19proc, $Cont);
+};
+struct deactQ_L_19proc {
+    struct deactQ_L_19procG_class *$class;
+    int64_t G_1;
+    deactQ_main self;
+};
+$R deactQ_L_18C_6cont (deactQ_Apa, deactQ_main, $Cont, int64_t);
+extern struct $ContClass deactQ_L_2ContG_methods;
+$R deactQ_L_2ContD___call__($Cont $closure, $WORD $result);
+$Cont deactQ_L_2ContD___deserialize__($Cont self, $Serial$state state);
+extern struct $ContClass deactQ_L_4ContG_methods;
+$R deactQ_L_4ContD___call__($Cont $closure, $WORD $result);
+$Cont deactQ_L_4ContD___deserialize__($Cont self, $Serial$state state);
+extern struct $Action1G_class deactQ_L_6actionG_methods;
+B_Msg deactQ_L_6actionD___asyn__($action $closure, $WORD $arg1);
+$action deactQ_L_6actionD___deserialize__($action self, $Serial$state state);
+extern struct $Proc0Class deactQ_L_7procG_methods;
+$R deactQ_L_7procD___call__($proc $closure, $Cont $continuation);
+$proc deactQ_L_7procD___deserialize__($proc self, $Serial$state state);
+extern struct $Proc0Class deactQ_L_8procG_methods;
+$R deactQ_L_8procD___call__($proc $closure, $Cont $continuation);
+$proc deactQ_L_8procD___deserialize__($proc self, $Serial$state state);
+extern struct deactQ_L_9procG_class deactQ_L_9procG_methods;
+deactQ_L_9proc deactQ_L_9procG_new(deactQ_Apa, int64_t);
+$R deactQ_L_9procD___call__(deactQ_L_9proc L_self, $Cont C_cont);
+extern struct $Proc0Class deactQ_L_10procG_methods;
+$R deactQ_L_10procD___call__($proc $closure, $Cont $continuation);
+$proc deactQ_L_10procD___deserialize__($proc self, $Serial$state state);
+extern struct deactQ_L_11procG_class deactQ_L_11procG_methods;
+deactQ_L_11proc deactQ_L_11procG_new(deactQ_Bepa, int64_t);
+$R deactQ_L_11procD___call__(deactQ_L_11proc L_self, $Cont C_cont);
+extern struct $Proc0Class deactQ_L_12procG_methods;
+$R deactQ_L_12procD___call__($proc $closure, $Cont $continuation);
+$proc deactQ_L_12procD___deserialize__($proc self, $Serial$state state);
+extern struct $Action1G_class deactQ_L_15actionG_methods;
+B_Msg deactQ_L_15actionD___asyn__($action $closure, $WORD $arg1);
+$action deactQ_L_15actionD___deserialize__($action self, $Serial$state state);
+extern struct $Action1G_class deactQ_L_17actionG_methods;
+B_Msg deactQ_L_17actionD___asyn__($action $closure, $WORD $arg1);
+$action deactQ_L_17actionD___deserialize__($action self, $Serial$state state);
+extern struct deactQ_L_19procG_class deactQ_L_19procG_methods;
+deactQ_L_19proc deactQ_L_19procG_new(int64_t, deactQ_main);
+$R deactQ_L_19procD___call__(deactQ_L_19proc L_self, $Cont C_cont);
+extern struct $Action1G_class deactQ_L_20actionG_methods;
+B_Msg deactQ_L_20actionD___asyn__($action $closure, $WORD $arg1);
+$action deactQ_L_20actionD___deserialize__($action self, $Serial$state state);
+extern struct $ContClass deactQ_L_21ContG_methods;
+$R deactQ_L_21ContD___call__($Cont $closure, $WORD $result);
+$Cont deactQ_L_21ContD___deserialize__($Cont self, $Serial$state state);
+extern struct $Proc0Class deactQ_L_22procG_methods;
+$R deactQ_L_22procD___call__($proc $closure, $Cont $continuation);
+$proc deactQ_L_22procD___deserialize__($proc self, $Serial$state state);
 $R deactQ_L_1C_2cont ($action cb, $Cont C_cont, int64_t C_3res) {
     int64_t C_1pre = C_3res;
     #line 7 "test/src/deact.act"
