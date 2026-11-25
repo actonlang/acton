@@ -39,7 +39,7 @@ This shared cache stores loaded module interfaces in
 `modules :: Map ModName ModuleInfo`. It does not store the current module's
 local names, and it should not be thought of as "the current type-checker env".
 It is a shared cache of interfaces that later tasks start from. It is separate
-from the scheduler's `ModuleCache`, which remembers `.tydb` paths and module and
+from the run's `ModuleCache`, which remembers `.tydb` paths and module and
 name hashes, not interfaces.
 
 `ModuleInfo` is the only Env-side representation of dependency modules. A local

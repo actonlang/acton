@@ -6,7 +6,7 @@
 -- runs.  Programs that embed files, built through zig and run.  And builds
 -- in which an embedded file is not the one that its module was compiled with
 -- when zig has run.
-module EmbedTests (embedErrorTests, embedServerTests, embedProgramTests, embedChangedTests) where
+module EmbedTests (embedErrorTests, embedServerTests, embedProgramTests, embedChangedTests, withServer, opened, edited) where
 
 import Control.Concurrent (forkIO, killThread)
 import Control.Concurrent.Chan (newChan, readChan, writeChan)
