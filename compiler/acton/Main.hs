@@ -1540,7 +1540,7 @@ compileFilesChanged sp gopts opts derivedModules srcFiles scope mChangedPaths mW
                                  -- before every derived module is up to date.
                                  let wrote files = do modifyIORef written (++ files)
                                                       forM_ mWatch $ \(watch, _) -> keepPending watch files
-                                 updateDerivedModules sp gopts ctx (deriveDriver gopts opts logLine wrote)
+                                 updateDerivedModules sp gopts ctx (deriveDriver gopts opts (progressWithLog progressUI) wrote)
                                  logTiming gopts opts logLine "derived modules" start
                                  end     <- getTime Monotonic
                                  writeIORef derivedTime (diffTimeSpec end start)
@@ -1622,13 +1622,14 @@ derivedModuleNote projects t = do
     name  = modNameToString local
 
 -- | What updateDerivedModules needs from the CLI.  Under --skip-build no
--- executable is built, so no function runs.  'wrote' is called with the
--- source files of derived modules that were written or removed.
-deriveDriver :: C.GlobalOptions -> C.CompileOptions -> (String -> IO ()) -> ([FilePath] -> IO ()) -> Driver
-deriveDriver gopts opts logLine wrote = Driver
+-- executable is built, so no function runs.  'withLog' runs an action that
+-- writes to stdout, as the one writer.  'wrote' is called with the source
+-- files of derived modules that were written or removed.
+deriveDriver :: C.GlobalOptions -> C.CompileOptions -> (IO () -> IO ()) -> ([FilePath] -> IO ()) -> Driver
+deriveDriver gopts opts withLog wrote = Driver
     { driverRun     = not (C.skip_build opts)
     , driverEvent   = \event -> case event of
-                        Diagnostics _ diags -> printDiagnostics gopts diags
+                        Diagnostics _ diags -> withLog (printDiagnostics gopts diags)
                         Info msg            -> logLine msg
                         _                   -> return ()
     , driverBuild   = buildRunner gopts opts
@@ -1636,6 +1637,7 @@ deriveDriver gopts opts logLine wrote = Driver
     , driverLog     = \line -> unless (C.quiet gopts) (logLine line)
     , driverInfo    = \line -> when (C.verbose gopts) (logLine line)
     }
+  where logLine = withLog . putStrLn
 
 -- | Build the executable of a root module of a runner project, which runs
 -- the function of a derived module: for the machine the build runs on, in
@@ -3119,12 +3121,12 @@ newProgressState = do
     order <- newIORef []
     return ProgressState { psActive = active, psOrder = order }
 
--- | Serialize progress UI updates when rendering is enabled.
+-- | Serialize what the threads of a build write to stdout: the progress
+-- lines, the log lines and the diagnostics.  A diagnostic is written in
+-- many pieces, so without the lock a log line of another thread can land
+-- in the middle of it, also when no progress is rendered.
 withProgressLock :: ProgressUI -> IO a -> IO a
-withProgressLock ui action =
-    if not (puEnabled ui)
-      then action
-      else withMVar (puLock ui) (\_ -> action)
+withProgressLock ui action = withMVar (puLock ui) (\_ -> action)
 
 -- | Clear the progress area, run a log action, then redraw.
 progressWithLog :: ProgressUI -> IO () -> IO ()
