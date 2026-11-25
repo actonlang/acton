@@ -1089,9 +1089,7 @@ derivedModuleTests = testGroup "derived modules"
                , "        env.exit(0)"
                ])
            ] ++ [ (file, "x") | file <- files ])) $ \acton proj ->
-        -- With --verbose the output has a line for each event that the
-        -- watch acts on, which a failure of a wait shows.
-        withActon acton proj ["build", "--watch", "--verbose", "--color", "never"] $ \_ _ output -> do
+        withActon acton proj ["build", "--watch", "--color", "never"] $ \_ _ output -> do
           let count text = length . filter (text `isInfixOf`) . lines <$> output
               -- Wait for the build that an action starts.  The function
               -- runs in it the given number of times, and the program then

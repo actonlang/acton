@@ -41,7 +41,6 @@ import qualified Data.Scientific as Sci
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import Numeric (showHex)
-import qualified Control.Exception as E
 import System.IO.Unsafe (unsafePerformIO)
 import qualified System.FilePath.Posix as Posix
 import qualified System.FilePath.Windows as Windows
@@ -53,7 +52,7 @@ import qualified Acton.Parser as AP
 import qualified Acton.Syntax as S
 import qualified Data.Text.Short as TS
 import qualified Acton.Printer as Pr
-import Utils (SrcLoc(..))
+import Utils (SrcLoc(..), trySync)
 import qualified Data.Aeson.KeyMap as KM
 import qualified Data.Aeson.Key as K
 
@@ -600,10 +599,13 @@ findBodyOffsetsFromAST content varName (S.Module _ _ _ stmts) =
            then Just (s+1, e-1)
            else Nothing
     
--- Parse build.act using the real Acton parser
+-- Parse build.act using the real Acton parser.  What the parser throws is a
+-- parse error.  An asynchronous exception is not: a cancel that arrives
+-- during the parse must stop the thread, as it stops any other work of a
+-- run.
 parseModuleForSpec :: String -> Either String S.Module
 parseModuleForSpec content =
-  case unsafePerformIO (E.try (AP.parseBuildFile content) :: IO (Either E.SomeException S.Module)) of
+  case unsafePerformIO (trySync (AP.parseBuildFile content)) of
     Left e  -> Left (show e)
     Right m -> Right m
 
