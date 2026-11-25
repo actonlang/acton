@@ -432,11 +432,13 @@ watchProcessTests = testGroup "watch subprocesses"
         withActon acton proj ["build", "--watch", "--verbose", "--syspath", system] $ \ph _ output -> do
           awaitZigRuns proj 1
           awaitGeneration proj
-          replaceFile (proj </> text) "two two\n"
-          -- The watch is told of the file.  Without that, a build can still
-          -- take the new content, when the file changes before the watch
-          -- compares it with what the first build saw.
+          -- The watch is told of the file.  The watches of the directories
+          -- start after the first build, and a write before the watch of
+          -- its directory gives no event: the build then takes the new
+          -- content when the watch compares the file with what the first
+          -- build saw.  So the file is written until its event is there.
           await "the event for the file" $ do
+            replaceFile (proj </> text) "two two\n"
             logText <- output
             return $ if any (\line -> "watch event" `isInfixOf` line && text `isInfixOf` line) (lines logText) then Just () else Nothing
           awaitEmbeddedSize proj "watch_process" 8
