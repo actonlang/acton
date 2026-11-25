@@ -270,14 +270,14 @@ reach only its handler, and it prepares no deferred back job.
 Module cache
 ------------
 
-The scheduler owns one ModuleCache for its lifetime, and every run shares
-it: the .tydb path, the module hashes and the public name hashes of each
-module that a run read from disk or finished, and the single names it
-read.  It is keyed by module name, so the trees one scheduler builds
-share the entries of every module name they have in common.  A module
-that a run finishes replaces its own module hashes, and its name map when
+Every run has a ModuleCache of its own: the .tydb path, the module hashes
+and the public name hashes of each module that the run read from disk or
+finished, and the single names it read.  It starts empty, so a run knows
+of a module only what the module's .tydb holds now or what the run itself
+finished, and a module whose .tydb is gone has no hashes.  A module that
+the run finishes replaces its own module hashes, and its name map when
 its result carries its names, before it reports done, so every later read
-sees them.  A standalone build has a cache of its own.
+sees them.
 
 Invariants
 ----------
@@ -817,20 +817,12 @@ currentGeneration sched = do
 -- Scheduler, back queue and entry points -----------------------------------------------------------
 
 -- | A long-lived compiler. The back passes of every generation share one
--- pool of workers, and every run shares one module cache, so the interface
--- hashes a run reads from disk or finishes are remembered for the
--- scheduler's lifetime. The cache is keyed by module name, so it cannot
--- tell two source trees apart. Two trees that hold modules of the same
--- name, such as two checkouts of one project, need schedulers of their
--- own. Within one tree, a module that a run finishes replaces its own
--- module hashes, and its name map whenever its result carries its names,
--- an empty map included.
+-- pool of workers.
 data CompileScheduler = CompileScheduler
   { schedulerCounter   :: IORef Int                     -- the newest generation
   , schedulerRun       :: MVar (Maybe (Async ()))       -- the newest generation's run
   , schedulerBackQueue :: BackQueue
   , schedulerBuildSpec :: IORef (Maybe BuildSpecStamp)  -- Build.act at the last completed fetch
-  , schedulerCache     :: ModuleCache
   }
 
 -- | Back jobs waiting for a worker, with the state waitBackJobs reads.
@@ -843,17 +835,16 @@ data BackQueue = BackQueue
 -- | A back job with its generation and the sink its events go to.
 data QueuedJob = QueuedJob Generation (BuildEvent -> IO ()) BackJob
 
--- | Create a scheduler at generation 0 with an empty module cache. Its back
--- passes run on one worker per compileParallelism gopts, with the given
--- global options, which decide whether back passes report their time and
--- timing.
+-- | Create a scheduler at generation 0. Its back passes run on one worker
+-- per compileParallelism gopts, with the given global options, which decide
+-- whether back passes report their time and timing.
 newCompileScheduler :: C.GlobalOptions -> IO CompileScheduler
 newCompileScheduler gopts = do
   workers <- compileParallelism gopts
   counter <- newIORef 0
   queue <- BackQueue <$> newTChanIO <*> newTVarIO M.empty <*> newTVarIO M.empty
   replicateM_ workers (forkIO (backWorker gopts queue))
-  CompileScheduler counter <$> newMVar Nothing <*> pure queue <*> newIORef Nothing <*> newModuleCache
+  CompileScheduler counter <$> newMVar Nothing <*> pure queue <*> newIORef Nothing
 
 -- | How many modules compile at once: --jobs when given, else one per
 -- capability.
@@ -941,12 +932,13 @@ waitBackJobs sched gen = atomically $ do
     queue  = schedulerBackQueue sched
     number = generationNumber gen
 
--- | Compile a plan as a generation of the scheduler. Its back jobs run on
--- the scheduler's workers: wait for them with waitBackJobs. Each event is
--- recorded for analytics first, whatever the generation. A BackReady event
--- then queues its job, which enqueueBack refuses for a stale generation.
--- The handler sees the event last, and only if the generation is current
--- at that moment, so a handler needs no generation check of its own.
+-- | Compile a plan as a generation of the scheduler, with a module cache
+-- of its own. Its back jobs run on the scheduler's workers: wait for them
+-- with waitBackJobs. Each event is recorded for analytics first, whatever
+-- the generation. A BackReady event then queues its job, which enqueueBack
+-- refuses for a stale generation. The handler sees the event last, and
+-- only if the generation is current at that moment, so a handler needs no
+-- generation check of its own.
 runCompilePlan :: Source.SourceProvider
                -> C.GlobalOptions
                -> CompileScheduler
@@ -961,8 +953,9 @@ runCompilePlan sp gopts sched gen plan onEvent = withAnalytics $ \analytics -> d
           BackReady job -> enqueueBack (schedulerBackQueue sched) gen events job
           _             -> return ()
         whenCurrent gen (onEvent event)
+  cache <- newModuleCache
   outputs <- OutputJobs <$> newIORef []
-  compileModules (BuildEnv sp gopts gen events True (schedulerCache sched) outputs) plan
+  compileModules (BuildEnv sp gopts gen events True cache outputs) plan
 
 -- | The services of a run outside any scheduler: a generation that stays
 -- current, a module cache of its own, no back queue, so BackReady reaches
@@ -1915,7 +1908,7 @@ parseActFile opts sp mn actFile mOnProgress = do
 
 -- Module cache -------------------------------------------------------------------------------------
 
--- | What runs read from .tydb files or finished: each module's .tydb path,
+-- | What a run read from .tydb files or finished: each module's .tydb path,
 -- its pub and impl hashes (read together) and complete public name map,
 -- and single name reads.  Every table is read and written under its own
 -- lock.  A hash or name table is always locked before the path table,
