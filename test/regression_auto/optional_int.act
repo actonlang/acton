@@ -1,0 +1,130 @@
+# Inline optional storage must preserve the boxed generic/native ABI.
+class Slot(object):
+    item: ?int
+    def __init__(self, item: ?int):
+        self.item = item
+    def read(self) -> ?int:
+        return self.item
+    def write(self, item: ?int):
+        self.item = item
+
+class Native(object):
+    item: ?int
+    def __init__(self, item: ?int):
+        self.item = item
+    def read(self) -> ?int:
+        NotImplemented
+
+class Counter(object):
+    def __init__(self):
+        self.count = 1
+        self.slot = Slot(None)
+    def next(self) -> int:
+        self.count += 1
+        return self.count
+    def target(self) -> Slot:
+        self.count *= 10
+        return self.slot
+
+class Child(Slot):
+    other: ?int
+    def __init__(self, item: ?int, other: ?int):
+        Slot.__init__(self, item)
+        self.other = other
+
+class Generic[A](object):
+    item: A
+    def __init__(self, item: A):
+        self.item = item
+
+class Specialized(Generic[?int]):
+    other: ?int
+    def __init__(self, item: ?int):
+        Generic.__init__(self, item)
+        self.other = item
+
+def identity[A](item: A) -> A:
+    return item
+
+def native_identity(item: ?int) -> ?int:
+    NotImplemented
+
+def round_trip[A](item: A) -> A:
+    NotImplemented
+
+def native_checks() -> bool:
+    NotImplemented
+
+def choose(flag: bool) -> ?int:
+    result: ?int = None
+    if flag:
+        result = 1000
+    return result
+
+def captured(item: ?int) -> pure() -> ?int:
+    local = item
+    return lambda: local
+
+def changed_param(item: ?int) -> ?int:
+    item = 2000
+    return item
+
+def checked(item: ?int) -> int:
+    n = item
+    if n is not None:
+        return n
+    return -1
+
+def exception_local() -> int:
+    n: ?int = None
+    try:
+        n = 4000
+        raise ValueError("expected")
+    except ValueError:
+        if n is not None:
+            return n
+    return -1
+
+actor main(env):
+    proc def __startup__():
+        values: list[?int] = [None, 0, -1, 1000, -9223372036854775808, 9223372036854775807]
+        for original in values:
+            slot = Slot(original)
+            assert slot.item == original
+            assert slot.read() == original
+            child = Child(original, original)
+            assert child.item == original and child.other == original
+            restored = round_trip(child)
+            assert restored.item == original and restored.other == original
+            generic = Generic(original)
+            assert generic.item == original
+            derived = Specialized(original)
+            assert derived.item == original and derived.other == original
+            assert round_trip(derived).item == original
+            assert identity(original) == original
+            assert native_identity(original) == original
+            assert Native(original).read() == original
+            assert captured(original)() == original
+            reflected = slot.__get_attr__("item")
+            if original is None:
+                assert reflected is None
+            else:
+                if isinstance(reflected, int):
+                    assert reflected == original
+                else:
+                    raise ValueError("reflection lost the int")
+            slot.write(None)
+            assert slot.item is None
+            slot.write(3000)
+            assert slot.item == 3000
+        assert choose(False) is None
+        assert choose(True) == 1000
+        assert checked(None) == -1 and checked(1000) == 1000
+        assert changed_param(None) == 2000
+        assert exception_local() == 4000
+        counter = Counter()
+        counter.target().item = counter.next()
+        assert counter.count == 11 and counter.slot.item == 11
+        assert native_checks()
+        print("optional int OK")
+        env.exit(0)
