@@ -262,6 +262,7 @@ struct $ConstCont {
 };
 $Cont $CONSTCONT($WORD, $Cont);
 
+B_Msg $COMPLETED($WORD);
 B_Msg $ASYNC($Actor, $Cont);
 B_Msg $AFTER(B_float, $Cont);
 B_Msg $AFTER_NOW(B_float, $Cont);

@@ -829,7 +829,9 @@ tmpDir root = projectDerivedDir root </> "tmp"
 
 -- | The source of the root module of a job's runner: its root actor has
 -- std.build.derive call the function with the descriptions of the input
--- files and the arguments of the entry.  The runner imports the two
+-- files and the arguments of the entry.  The call is in a function with
+-- the types that std.build.derive asks for, so that the compiler reports
+-- a function of another type at the call.  The runner imports the two
 -- modules under names of its own, so that no module name of a project is
 -- the name of something else in the runner.
 runnerSource :: Job -> String
@@ -838,9 +840,16 @@ runnerSource job = unlines
     , "import std.build.derive as runner"
     , "import " ++ fnImport (jobFunction job) ++ " as fn"
     , ""
+    , "proc def call(inputs: dict[str, runner.InputFile]) -> " ++ result ++ ":"
+    , "    return " ++ functionCall ("fn." ++ A.nstr (fnName (jobFunction job))) job
+    , ""
     , "actor main(env: Env):"
-    , "    run = runner." ++ show (jobResult job) ++ "(env, lambda inputs: " ++ functionCall ("fn." ++ A.nstr (fnName (jobFunction job))) job ++ ")"
+    , "    proc def __startup__():"
+    , "        runner." ++ run ++ "(env, call)"
     ]
+  where (run, result) = case jobResult job of
+                          One  -> ("run_one", "str")
+                          Many -> ("run_many", "dict[str, str]")
 
 -- | The call of a job's function, written with 'function' for the function:
 -- the descriptions of the input files, then the arguments of the entry as

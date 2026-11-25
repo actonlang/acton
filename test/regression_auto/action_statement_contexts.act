@@ -1,0 +1,49 @@
+# Only the discarded outer call sends. Parent stays blocked while Sender
+# exercises parentheses, forced unwrap, optional calls and conditional branches.
+com def send_forms(f: action(int) -> int, optional: ?action(int) -> int, flag: bool):
+    f(1)
+    (f(2))
+    optional!(4)
+    optional?(8)
+    f(16) if flag else f(32)
+    f(64) if not flag else f(128)
+
+com def send_optional(f: ?action(int) -> int):
+    f?(256)
+
+actor Parent():
+    var total = 0
+
+    def add(n: int) -> int:
+        total += n
+        return total
+
+    def exercise(sender: Sender):
+        return sender.run(add)
+
+    def count() -> int:
+        return total
+
+actor Sender():
+    def run(f: action(int) -> int):
+        send_forms(f, f, True)
+        send_optional(None)
+        queued: com(int) -> Msg[int] = async f
+        queued(512)
+
+actor Watchdog(env: Env):
+    def timeout():
+        env.exit(1)
+
+    def __startup__():
+        after 5.0: timeout()
+
+actor main(env):
+    parent = Parent()
+    sender = Sender()
+    watchdog = Watchdog(env)
+
+    def __startup__():
+        done = parent.exercise(sender)
+        assert parent.count() == 671
+        env.exit(0)

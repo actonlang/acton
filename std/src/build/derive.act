@@ -6,11 +6,16 @@ arguments.  The function returns the source of the module from a
 description of each input file and the arguments.  acton build writes a
 program for the entry and runs it when the module is out of date.  The
 program imports this module as runner and the module of the function as fn.
-Its root actor passes One or Many a function that calls the function of the
-entry.  For an entry with the function gen.schema and the argument
-prefix="S", the root actor has the line:
+Its root actor passes run_one or run_many a function that calls the function
+of the entry.  For an entry with the function gen.schema and the argument
+prefix="S", the program has the lines:
 
-    run = runner.One(env, lambda inputs: fn.schema(inputs, prefix="S"))
+    proc def call(inputs: dict[str, runner.InputFile]) -> str:
+        return fn.schema(inputs, prefix="S")
+
+    actor main(env: Env):
+        proc def __startup__():
+            runner.run_one(env, call)
 
 The first parameter of the function of an entry is a dict[str, InputFile].
 It holds the description of each input file by the file's path, relative to
@@ -18,9 +23,9 @@ the project root, with / between the components.  A description has the
 path, the size and the SHA-256 of the file, and its method read returns the
 content.  The other parameters of the function take the arguments of the
 entry.  A function that returns str returns the source of the one module
-that its entry names, and One runs it.  A function that returns a
+that its entry names, and run_one runs it.  A function that returns a
 dict[str, str] returns the source of several modules by module name, as an
-import statement writes the name, and Many runs it.  After the run acton
+import statement writes the name, and run_many runs it.  After the run acton
 build checks that the function returned every module that its entry names
 with a module name, and no module that its entry does not name.
 
@@ -56,7 +61,7 @@ class InputFile(object):
     size: int
     sha256: str
 
-    def __init__(self, path: str, size: int, sha256: str, reader: proc() -> bytes):
+    def __init__(self, path: str, size: int, sha256: str, reader: action() -> bytes):
         """reader returns the content of the file, and read calls it"""
         self.path = path
         self.size = size
@@ -307,36 +312,34 @@ def input_files(files: Files, m: Manifest) -> dict[str, InputFile]:
     return inputs
 
 
-actor One(env: Env, fn: proc(dict[str, InputFile]) -> str):
+proc def run_one(env: Env, fn: proc(dict[str, InputFile]) -> str):
     """Run a function that returns the source of the one module that its entry names
 
-    fn gets the descriptions of the input files.
+    fn gets the descriptions of the input files.  The root actor of a runner
+    calls this, and the function runs in that actor.
     """
     files = Files(env)
+    try:
+        m = files.manifest()
+        if len(m.modules) != 1:
+            raise ValueError("the function returns the source of one module, and its entry names " + str(len(m.modules)))
+        await async files.write_modules(m, {m.modules[0]: fn(input_files(files, m))})
+        env.exit(0)
+    except Exception as exc:
+        print(str(exc), err=True)
+        env.exit(1)
 
-    proc def __startup__():
-        try:
-            m = files.manifest()
-            if len(m.modules) != 1:
-                raise ValueError("the function returns the source of one module, and its entry names " + str(len(m.modules)))
-            await async files.write_modules(m, {m.modules[0]: fn(input_files(files, m))})
-            env.exit(0)
-        except Exception as exc:
-            print(str(exc), err=True)
-            env.exit(1)
-
-actor Many(env: Env, fn: proc(dict[str, InputFile]) -> dict[str, str]):
+proc def run_many(env: Env, fn: proc(dict[str, InputFile]) -> dict[str, str]):
     """Run a function that returns the sources of several modules by module name
 
-    fn gets the descriptions of the input files.
+    fn gets the descriptions of the input files.  The root actor of a runner
+    calls this, and the function runs in that actor.
     """
     files = Files(env)
-
-    proc def __startup__():
-        try:
-            m = files.manifest()
-            await async files.write_modules(m, fn(input_files(files, m)))
-            env.exit(0)
-        except Exception as exc:
-            print(str(exc), err=True)
-            env.exit(1)
+    try:
+        m = files.manifest()
+        await async files.write_modules(m, fn(input_files(files, m)))
+        env.exit(0)
+    except Exception as exc:
+        print(str(exc), err=True)
+        env.exit(1)

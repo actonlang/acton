@@ -29,7 +29,6 @@ proc def ret_inner (C_cont : proc(__builtin__.int) -> $R, x : __builtin__.int) -
                     proc def C_7cont (C_8res : None) -> $R:
                         $DROP_C()
                         $RAISE@[None]($SEQ())
-                        return $R_CONTc@[None](C_1cont, None)
                     return force_cps($SKIPRESc@[__builtin__.int](C_7cont), x)
                 else:
                     N_2x: __builtin__.BaseException = $POP_C()
@@ -38,7 +37,6 @@ proc def ret_inner (C_cont : proc(__builtin__.int) -> $R, x : __builtin__.int) -
                     else:
                         $RAISE@[None](N_2x)
                     $RAISE@[None]($SEQ())
-                    return $R_CONTc@[None](C_1cont, None)
             return $PUSH_Cc(C_5try)
         else:
             N_3xx: __builtin__.BaseException = $POP_C()
@@ -51,7 +49,6 @@ proc def ret_inner (C_cont : proc(__builtin__.int) -> $R, x : __builtin__.int) -
                 return $R_CONTc@[None](C_1cont, None)
             else:
                 $RAISE@[None](N_3xx)
-                return $R_CONTc@[None](C_1cont, None)
     return $PUSHF_Cc(C_3try)
 
 W_ret_else_5: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
@@ -82,7 +79,6 @@ proc def ret_else (C_cont : proc(__builtin__.int) -> $R, x : __builtin__.int) ->
                     proc def C_15cont (C_16res : None) -> $R:
                         $DROP_C()
                         $RAISE@[None]($SEQ())
-                        return $R_CONTc@[None](C_9cont, None)
                     return force_cps($SKIPRESc@[__builtin__.int](C_15cont), x)
                 else:
                     N_7x: __builtin__.BaseException = $POP_C()
@@ -91,7 +87,6 @@ proc def ret_else (C_cont : proc(__builtin__.int) -> $R, x : __builtin__.int) ->
                     else:
                         $RAISE@[None](N_7x)
                     $RAISE@[None]($SEQ())
-                    return $R_CONTc@[None](C_9cont, None)
             return $PUSH_Cc(C_13try)
         else:
             N_8xx: __builtin__.BaseException = $POP_C()
@@ -104,5 +99,4 @@ proc def ret_else (C_cont : proc(__builtin__.int) -> $R, x : __builtin__.int) ->
                 return $R_CONTc@[None](C_9cont, None)
             else:
                 $RAISE@[None](N_8xx)
-                return $R_CONTc@[None](C_9cont, None)
     return $PUSHF_Cc(C_11try)
