@@ -295,7 +295,8 @@ cannotBeRead path e = path ++ " cannot be read: " ++ ioe_description e
 -- | The byte order marks that clang refuses at the start of a file it loads,
 -- also of a file that #embed names.  It takes the mark of UTF-8.  The C
 -- compiler of the toolchain is clang, so the list is to be looked at again
--- when the toolchain changes.
+-- when the toolchain changes.  https://github.com/actonlang/acton/issues/3464
+-- tracks the bug of clang and lists what to remove when clang has the fix.
 refusedMarks :: [BS.ByteString]
 refusedMarks = map BS.pack
     [ [0xff, 0xfe], [0xfe, 0xff]                            -- UTF-16, little and big endian
