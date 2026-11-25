@@ -48,6 +48,7 @@ import qualified Repl
 import qualified WatchTests
 import qualified EmbedTests
 import qualified DerivedTests
+import qualified ServerTests
 import qualified PerfTests
 import qualified TestOutputTests
 import qualified ZigProgressTests
@@ -107,6 +108,7 @@ main = do
       , WatchTests.watchTriggerTests
       , WatchTests.watchProcessTests
       , DerivedTests.derivedModuleTests
+      , ServerTests.serverTests
       , PerfTests.perfTests
       , TestOutputTests.testOutputTests
       , ZigProgressTests.zigProgressTests
