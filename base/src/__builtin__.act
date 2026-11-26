@@ -1994,7 +1994,8 @@ actor Process(envcap: _EnvCap,
               on_error: action(Process, str) -> None,
               workdir: ?str=None,
               env: ?dict[str, str]=None,
-              timeout: ?float=None):
+              timeout: ?float=None,
+              terminate_on_exit: bool=False):
     """A child process, started through env.process"""
     var _p: int = 0
     var new_env = env
@@ -2079,7 +2080,8 @@ actor RunProcess(envcap: _EnvCap,
                  on_error: action(Process, str) -> None,
                  workdir: ?str=None,
                  env: ?dict[str, str]=None,
-                 timeout: ?float=None):
+                 timeout: ?float=None,
+                 terminate_on_exit: bool=False):
     """Run a process and wait for it to finish
     """
     var out_buf = b""
@@ -2117,7 +2119,7 @@ actor RunProcess(envcap: _EnvCap,
             if _out_done and _err_done and _exited:
                 on_exit(_process, _exit_code, _signal, out_buf, err_buf)
 
-    _p = Process(envcap, vars, cmd, _on_stdout, _on_stderr, _on_exit, on_error, workdir, env, timeout)
+    _p = Process(envcap, vars, cmd, _on_stdout, _on_stderr, _on_exit, on_error, workdir, env, timeout, terminate_on_exit)
 
     def signal(sig: int):
         """Send signal to process"""
@@ -2156,7 +2158,8 @@ actor EnvProcess(envcap: _EnvCap, vars: EnvVar):
               on_error: action(Process, str) -> None,
               workdir: ?str=None,
               env: ?dict[str, str]=None,
-              timeout: ?float=None) -> Process:
+              timeout: ?float=None,
+              terminate_on_exit: bool=False) -> Process:
         """Start a child process
 
         - cmd: the command to run
@@ -2174,15 +2177,18 @@ actor EnvProcess(envcap: _EnvCap, vars: EnvVar):
           regardless if the new env is inherited or provided, is used to find the
           executable specified by cmd (unless cmd is a path).
         - timeout: time in seconds before process is stopped
+        - terminate_on_exit: when this program exits and the process still
+          runs, send SIGTERM to the process.
         """
-        return Process(envcap, vars, cmd, on_stdout, on_stderr, on_exit, on_error, workdir, env, timeout)
+        return Process(envcap, vars, cmd, on_stdout, on_stderr, on_exit, on_error, workdir, env, timeout, terminate_on_exit)
 
     def run(cmd: list[str],
             on_exit: action(Process, int, int, bytes, bytes) -> None,
             on_error: action(Process, str) -> None,
             workdir: ?str=None,
             env: ?dict[str, str]=None,
-            timeout: ?float=None) -> RunProcess:
+            timeout: ?float=None,
+            terminate_on_exit: bool=False) -> RunProcess:
         """Start a child process and report when it has finished
 
         The arguments are as for spawn, except that there are no on_stdout and
@@ -2190,4 +2196,4 @@ actor EnvProcess(envcap: _EnvCap, vars: EnvVar):
         to stdout and stderr, once the process has exited and both streams are
         closed.
         """
-        return RunProcess(envcap, vars, cmd, on_exit, on_error, workdir, env, timeout)
+        return RunProcess(envcap, vars, cmd, on_exit, on_error, workdir, env, timeout, terminate_on_exit)

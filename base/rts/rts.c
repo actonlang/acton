@@ -3461,6 +3461,9 @@ void rts_shutdown() {
     }
 }
 
+// Defined in __builtin__.ext.c, next to the code that starts processes
+void terminate_child_processes(void);
+
 
 #ifndef _WIN32
 // Keep path resolution out of crash signal handlers.
@@ -3547,6 +3550,8 @@ void crash_handler(int signum) {
     fprintf(stderr, "NOTE: https://github.com/actonlang/acton/issues/new\n");
     fprintf(stderr, "NOTE: include the backtrace printed above between -- 8< -- lines\n");
 
+    terminate_child_processes();
+
     // Restore every crash handler before re-raising the original signal.
     sa_abrt.sa_handler = SIG_DFL;
     if (sigaction(SIGABRT, &sa_abrt, NULL) == -1) {
@@ -3588,9 +3593,11 @@ void sigterm_handler(int signum) {
 }
 
 // SIGHUP and SIGQUIT end the process as they do without a handler, after the
-// terminal settings of stdin are restored.
+// terminal settings of stdin are restored and the children started with
+// terminate_on_exit get SIGTERM.
 void sighup_sigquit_handler(int signum) {
     restore_stdin_attr();
+    terminate_child_processes();
     signal(signum, SIG_DFL);
     kill(getpid(), signum);
 }
@@ -4335,6 +4342,7 @@ int main(int argc, char **argv) {
     // workers have stopped, and every exit() run the atexit handlers.
     atexit(restore_stdin_attr);
 #endif
+    atexit(terminate_child_processes);
 
     // RTS startup and module is static stuff, in particular module constants
     // which are created during module init are static and do not need to be

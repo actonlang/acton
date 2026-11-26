@@ -118,11 +118,52 @@ $R B_StdioD_stderr_is_ttyG_local (B_Stdio self, $Cont C_cont) {
     return $R_CONT(C_cont, toB_bool(isatty(2)));
 }
 
+struct terminate_slot {
+    // pid of child process started with terminate_on_exit=True, or 0 when unoccupied
+    _Atomic int pid;
+    struct terminate_slot *next;
+};
+
+// Only grows and never frees a slot, so signal handlers can read it without a lock
+static _Atomic(struct terminate_slot *) terminate_slots = NULL;
+
+// Put pid in the first slot with pid 0 (unoccupied) or create a new one
+static struct terminate_slot *add_terminate_slot(int pid) {
+    for (struct terminate_slot *s = atomic_load(&terminate_slots); s; s = s->next) {
+        int expected = 0;
+        if (atomic_compare_exchange_strong(&s->pid, &expected, pid))
+            return s;
+    }
+    struct terminate_slot *s = malloc(sizeof(struct terminate_slot));
+    if (s == NULL) {
+        log_warn("Out of memory, process %d will not get SIGTERM at exit", pid);
+        return NULL;
+    }
+    atomic_init(&s->pid, pid);
+    s->next = atomic_load(&terminate_slots);
+    // A failed exchange loads the new head into s->next
+    while (!atomic_compare_exchange_weak(&terminate_slots, &s->next, s))
+        ;
+    return s;
+}
+
+// Send SIGTERM to the children that env.process started with
+// terminate_on_exit and that still run. It uses only atomic loads and kill,
+// so signal handlers can call it.
+void terminate_child_processes(void) {
+    for (struct terminate_slot *s = atomic_load(&terminate_slots); s; s = s->next) {
+        int pid = atomic_load(&s->pid);
+        if (pid > 0)
+            uv_kill(pid, SIGTERM);
+    }
+}
+
 struct child_process_data {
     B_Process process;
     $action on_stdout;
     $action on_stderr;
     $action on_exit;
+    struct terminate_slot *terminate_slot;
     uv_pipe_t stdin_pipe;
     uv_pipe_t stdout_pipe;
     uv_pipe_t stderr_pipe;
@@ -130,6 +171,8 @@ struct child_process_data {
 
 static void child_process_exit_handler(uv_process_t *req, int64_t exit_status, int term_signal) {
     struct child_process_data *process_data = req->data;
+    if (process_data->terminate_slot)
+        atomic_store(&process_data->terminate_slot->pid, 0);
     uv_handle_t *stdin_handle = (uv_handle_t *)&process_data->stdin_pipe;
     // Ensure stdin is closed properly. stdin might be closed already from
     // done_writing, so check if it's closing first
@@ -207,6 +250,7 @@ $R B_ProcessD__create_processG_local(B_Process self, $Cont c$cont) {
     process_data->on_stdout = self->on_stdout;
     process_data->on_stderr = self->on_stderr;
     process_data->on_exit = self->on_exit;
+    process_data->terminate_slot = NULL;
 
     uv_process_options_t *options = acton_calloc(1, sizeof(uv_process_options_t));
 
@@ -300,6 +344,9 @@ $R B_ProcessD__create_processG_local(B_Process self, $Cont c$cont) {
         f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
         return $R_CONT(c$cont, B_None);
     }
+    // The exit handler runs on this loop, after this returns, and frees the slot
+    if (self->terminate_on_exit)
+        process_data->terminate_slot = add_terminate_slot(req->pid);
     // TODO: do we need to do some magic to read any data produced before this
     // callback is installed?
 

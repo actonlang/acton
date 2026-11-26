@@ -12,7 +12,7 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString.Lazy.Char8 as LBS
 
-import Control.Exception (catch, onException, IOException)
+import Control.Exception (bracket, catch, finally, onException, IOException)
 import System.Directory
 import System.Directory.Recursive
 import System.Environment (getEnvironment, lookupEnv)
@@ -24,6 +24,7 @@ import System.Process
 import System.TimeIt
 import Control.Concurrent (threadDelay)
 import qualified System.IO as IO
+import qualified System.Posix.Files as PF
 import qualified System.Posix.IO as PIO
 import qualified System.Posix.IO.ByteString as PIOB
 import qualified System.Posix.Signals as PS
@@ -4444,15 +4445,9 @@ stdioTerminalTests = testGroup "stdio terminal" $
         `onException` (terminateProcess ph >> IO.hGetContents hErr >>= IO.hPutStr IO.stderr)
       mapM_ IO.hClose [hOut, hErr]
       mapM_ PIO.closeFd [master, slave]
-    readLineWithin h = do
-      r <- System.Timeout.timeout (30*1000000) (IO.hGetLine h)
-      maybe (assertFailure "the program printed no line within 30 s") return r
     expectReady h = do
       line <- readLineWithin h
       assertEqual "program output" "ready" line
-    waitWithin ph = do
-      r <- System.Timeout.timeout (30*1000000) (waitForProcess ph)
-      maybe (assertFailure "the program did not exit within 30 s") return r
     -- The modes that raw mode turns off, and the output modes that it keeps
     cookedModes = [ ("ISIG", PT.KeyboardInterrupts), ("IXON", PT.StartStopOutput)
                   , ("IEXTEN", PT.ExtendedFunctions), ("ICRNL", PT.MapCRtoLF)
@@ -4472,6 +4467,54 @@ stdioTerminalTests = testGroup "stdio terminal" $
                   [ (n, True) | (n, _) <- cookedModes ++ outputModes ] ms
     assertCookedMode = assertCookedModeAfter "in cooked mode"
 
+readLineWithin :: IO.Handle -> IO String
+readLineWithin h = do
+  r <- System.Timeout.timeout (30*1000000) (IO.hGetLine h)
+  maybe (assertFailure "the program printed no line within 30 s") return r
+
+waitWithin :: ProcessHandle -> IO ExitCode
+waitWithin ph = do
+  r <- System.Timeout.timeout (30*1000000) (waitForProcess ph)
+  maybe (assertFailure "the program did not exit within 30 s") return r
+
+-- test/rts/spawn_exit_terminates_child starts sh, which writes TERM to a FIFO
+-- when it gets SIGTERM. The program runs in a new session, so it leads a
+-- process group of its own, which sh and its sleep join.
+childProcessExitTests = testGroup "child processes at exit" $
+  if System.Info.os `notElem` ["darwin", "linux"] then [] else
+  [ testCase "terminate_on_exit sends SIGTERM to a child when its program exits" $ do
+      testBuildThing "" ExitSuccess False "../../test/rts/spawn_exit_terminates_child.act"
+      exe <- canonicalizePath "../../test/rts/spawn_exit_terminates_child"
+      -- In mode busy, the first SIGTERM starts a graceful shutdown that never
+      -- ends, and the second one ends the program. Without terminate_on_exit,
+      -- the test waits 1 s for a TERM that must not come.
+      forM_ [ ("env.exit", "exit", "terminate", Just "TERM", 10)
+            , ("a second SIGTERM", "busy", "terminate", Just "TERM", 10)
+            , ("env.exit without terminate_on_exit", "exit", "keep", Nothing, 1)
+            ] $ \(what, mode, flag, expected, secs) ->
+        withSystemTempDirectory "spawn-exit" $ \dir -> do
+          let fifo = dir </> "fifo"
+          PF.createNamedPipe fifo 0o600
+          -- Open the read end first, because sh waits for a reader when it
+          -- opens the write end
+          bracket (PIO.openFd fifo PIO.ReadOnly PIO.defaultFileFlags { PIO.nonBlock = True }
+                     >>= PIO.fdToHandle) IO.hClose $ \hFifo ->
+            withCreateProcess (proc exe [fifo, mode, flag]) { std_out = CreatePipe, new_session = True }
+              $ \_ (Just hOut) _ ph -> do
+              Just pid <- getPid ph
+              -- Remove the process group also when a check fails
+              flip finally (PS.signalProcessGroup PS.sigKILL pid
+                              `catch` \(_ :: IOException) -> return ()) $ do
+                ready <- readLineWithin hOut
+                assertEqual ("program output before " ++ what) "ready" ready
+                when (mode == "busy") $
+                  replicateM_ 2 (PS.signalProcess PS.sigTERM pid >> threadDelay 200000)
+                code <- waitWithin ph
+                assertEqual ("exit code after " ++ what) ExitSuccess code
+                got <- System.Timeout.timeout (secs*1000000) (IO.hGetLine hFifo)
+                assertEqual ("child signal after " ++ what) expected got
+  ]
+
 rtsTests =
   testGroup "RTS"
   [
@@ -4480,6 +4523,7 @@ rtsTests =
 
   ,   workerStackTests
   ,   stdioTerminalTests
+  ,   childProcessExitTests
 
   ,   testCase "arg parsing: --rts-verbose --rts-wthreads 7 foo --bar" $ do
           testBuildAndRun "" "--rts-verbose --rts-wthreads 7 foo --bar" ExitSuccess False "../../test/rts/argv2.act"

@@ -50,7 +50,7 @@ actor main(env):
     p.done_writing()
 ```
 
-Both take three optional arguments:
+Both take four optional arguments:
 
 - `workdir`, the working directory of the program, by default the
   current one
@@ -58,10 +58,16 @@ Both take three optional arguments:
   default the current environment. When it has no `PATH`, the program
   gets the current `PATH`.
 - `timeout`, the number of seconds after which the program is stopped
+- `terminate_on_exit`, `True` to send SIGTERM to the program if it still
+  runs when your Acton program exits. By default, it keeps running.
 
 A running `Process` also has `pid()`, `signal(n)`, `terminate()`, which
 sends SIGTERM, `kill()`, which sends SIGKILL, and `stop()`, which sends
 SIGTERM and, one second later, SIGKILL.
+
+On Unix, after Ctrl-C in a terminal, a program started with
+`terminate_on_exit` gets SIGINT from the terminal and then SIGTERM when
+your Acton program exits.
 
 ## Common patterns
 
