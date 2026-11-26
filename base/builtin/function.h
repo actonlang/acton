@@ -35,7 +35,6 @@ struct $procG_class {
     B_str (*__str__)($proc);
     B_str (*__repr__)($proc);
     $R (*__call__)($proc, $Cont, $WORD);
-    $R (*__exec__)($proc, $Cont, $WORD);
 };
 struct $proc {
     struct $procG_class *$class;
@@ -53,8 +52,6 @@ struct $actionG_class {
     bool (*__bool__)($action);
     B_str (*__str__)($action);
     B_str (*__repr__)($action);
-    $R (*__call__)($action, $Cont, $WORD);
-    $R (*__exec__)($action, $Cont, $WORD);
     B_Msg (*__asyn__)($action, $WORD);
 };
 struct $action {
@@ -74,7 +71,6 @@ struct $mutG_class {
     B_str (*__str__)($mut);
     B_str (*__repr__)($mut);
     $R (*__call__)($mut, $Cont, $WORD);
-    $R (*__exec__)($mut, $Cont, $WORD);
     $WORD (*__eval__)($mut, $WORD);
 };
 struct $mut {
@@ -94,7 +90,6 @@ struct $pureG_class {
     B_str (*__str__)($pure);
     B_str (*__repr__)($pure);
     $R (*__call__)($pure, $Cont, $WORD);
-    $R (*__exec__)($pure, $Cont, $WORD);
     $WORD (*__eval__)($pure, $WORD);
 };
 struct $pure {
@@ -116,8 +111,6 @@ struct $action2G_class {
     bool (*__bool__)($action2);
     B_str (*__str__)($action2);
     B_str (*__repr__)($action2);
-    $R (*__call__)($action2, $Cont, $WORD, $WORD);
-    $R (*__exec__)($action2, $Cont, $WORD, $WORD);
     B_Msg (*__asyn__)($action2, $WORD, $WORD);
 };
 struct $action2 {
@@ -136,8 +129,6 @@ struct $action3G_class {
     bool (*__bool__)($action3);
     B_str (*__str__)($action3);
     B_str (*__repr__)($action3);
-    $R (*__call__)($action3, $Cont, $WORD, $WORD, $WORD);
-    $R (*__exec__)($action3, $WORD, $WORD, $WORD);
     B_Msg (*__asyn__)($action3, $WORD, $WORD, $WORD);
 };
 struct $action3 {
@@ -328,7 +319,7 @@ static inline $Cont $Cont_R8_new(struct $ContClass *cls,
 }
 
 // Zero-argument Procs still receive the continuation supplied by their caller.
-// Their table has the ordinary Proc prefix and both invocation slots. Keep a
+// Their table has the ordinary Proc prefix and invocation slot. Keep a
 // separate descriptor: the shape follows a different table size than in Cont.
 struct $Proc0G_class {
     char *$GCINFO;
@@ -341,7 +332,6 @@ struct $Proc0G_class {
     B_str (*__str__)($proc);
     B_str (*__repr__)($proc);
     $R (*__call__)($proc, $Cont);
-    $R (*__exec__)($proc, $Cont);
 };
 struct $Proc0Class {
     struct $Proc0G_class methods;
@@ -440,8 +430,6 @@ struct $Action0G_class {
     bool (*__bool__)($action);
     B_str (*__str__)($action);
     B_str (*__repr__)($action);
-    $R (*__call__)($action, $Cont);
-    $R (*__exec__)($action, $Cont);
     B_Msg (*__asyn__)($action);
 };
 void $action0_class_init(struct $Action0G_class *methods, char *name,
@@ -458,8 +446,6 @@ struct $Action1G_class {
     bool (*__bool__)($action);
     B_str (*__str__)($action);
     B_str (*__repr__)($action);
-    $R (*__call__)($action, $Cont, $WORD);
-    $R (*__exec__)($action, $Cont, $WORD);
     B_Msg (*__asyn__)($action, $WORD);
 };
 void $action1_class_init(struct $Action1G_class *methods, char *name,
@@ -476,8 +462,6 @@ struct $Action2G_class {
     bool (*__bool__)($action);
     B_str (*__str__)($action);
     B_str (*__repr__)($action);
-    $R (*__call__)($action, $Cont, $WORD, $WORD);
-    $R (*__exec__)($action, $Cont, $WORD, $WORD);
     B_Msg (*__asyn__)($action, $WORD, $WORD);
 };
 void $action2_class_init(struct $Action2G_class *methods, char *name,
@@ -494,8 +478,6 @@ struct $Action3G_class {
     bool (*__bool__)($action);
     B_str (*__str__)($action);
     B_str (*__repr__)($action);
-    $R (*__call__)($action, $Cont, $WORD, $WORD, $WORD);
-    $R (*__exec__)($action, $Cont, $WORD, $WORD, $WORD);
     B_Msg (*__asyn__)($action, $WORD, $WORD, $WORD);
 };
 void $action3_class_init(struct $Action3G_class *methods, char *name,

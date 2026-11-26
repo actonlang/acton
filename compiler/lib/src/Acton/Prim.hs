@@ -38,7 +38,6 @@ cMut r t            = TC primMut [r,t]
 cPure r t           = TC primPure [r,t]
 
 attr_call_          = name "__call__"
-attr_exec_          = name "__exec__"
 attr_asyn_          = name "__asyn__"
 attr_eval_          = name "__eval__"
 
@@ -742,18 +741,14 @@ clCont              = NClass [qbind t] (leftpath [cValue]) te Nothing
 
 --  class $proc[R,T] (value):
 --      __call__    : proc($Cont[T], *R) -> $R
---      __exec__    : proc($Cont[value], *R) -> $R
 clProc              = NClass [qbind r, qbind t] (leftpath [cValue]) te Nothing
-  where te          = [ (attr_call_, NSig (monotype $ tFun fxProc (posRow (tVar t) (tVar r)) kwdNil tR) NoDec Nothing),
-                        (attr_exec_, NSig (monotype $ tFun fxProc (posRow tValue (tVar r)) kwdNil tR) NoDec Nothing) ]
+  where te          = [ (attr_call_, NSig (monotype $ tFun fxProc (posRow (tVar t) (tVar r)) kwdNil tR) NoDec Nothing) ]
         r           = TV PRow (name "R")
         t           = TV KType (name "T")
 
---  class $action[R,T] ($proc[R,T], value):
+--  class $action[R,T] (value):
 --      __asyn__    : action(*R) -> T
--- The shared closure representation does not imply action < proc in the
--- source effect hierarchy.
-clAction            = NClass [qbind r, qbind t] (leftpath [ cProc (tVar r) (tVar t), cValue]) te Nothing
+clAction            = NClass [qbind r, qbind t] (leftpath [cValue]) te Nothing
   where te          = [ (attr_asyn_, NSig (monotype $ tFun fxAction (tVar r) kwdNil (tVar t)) NoDec Nothing) ]
         r           = TV PRow (name "R")
         t           = TV KType (name "T")

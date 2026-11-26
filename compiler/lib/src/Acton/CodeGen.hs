@@ -421,37 +421,27 @@ storageType env t                   = rawType env t
 isClosureName (Internal LLiftPass s _) = s `elem` map packText ["Cont", "proc", "action", "mut", "pure"]
 isClosureName _                     = False
 
--- Proc.__exec__ is an exact forwarding adapter. Reuse __call__ only when its
--- actual C slot signature agrees, including the representation of all args.
-closureMethod env c q n
-  | Internal LLiftPass s _ <- c, s == packText "proc",
-    n == attr_exec_,
-    render (methodCast env c q attr_call_) == render (methodCast env c q attr_exec_)
-                                    = attr_call_
-  | otherwise                       = n
-
-emitClosureMethod env c q n         = n /= initKW && closureMethod env c q n == n &&
-                                      Map.notMember (c,n) (closureAdaptersX $ envX env)
+emitClosureMethod env c n         = n /= initKW && Map.notMember (c,n) (closureAdaptersX $ envX env)
 
 -- These adapters never inspect captures. Give their receiver the instantiated
 -- primitive base type and canonical parameter names. Boxed pointers use the
 -- RTS's existing $WORD calling convention; raw values keep their exact types.
 -- Share only identical emitted signatures AND bodies. This retains result
--- conversions, effect families, and Action's AWAIT/R_CONT distinction.
+-- conversions and effect families.
 closureAdapter                     :: GenEnv -> Name -> QBinds -> Decl -> Maybe Decl
 closureAdapter env c q d@Def{dname=n, pos=p@(PosPar receiver _ Nothing (PosPar cont _ Nothing _)),
                             dbody=[Return _ (Just (Call l f (PosArg (Var _ (NoQ k)) (PosArg result PosNil)) KwdNil))]}
-  | n `elem` [attr_call_,attr_exec_], k == cont, adapterPars p,
+  | n == attr_call_, k == cont, adapterPars p,
     Just baseName <- adapterBase c,
     Just (_,TC _ [_,_]) <- findAncestor env tc baseName,
     Just primitive <- adapterPrimitive f,
-    primitive == (if baseName == primAction && n == attr_call_ then primAWAIT else primRCont),
+    primitive == primRCont,
     adapterResult receiver target (drop 2 $ bound p) result,
     all (`elem` bound p) (free result)
                                     = Just d{ dloc=NoLoc, dname=methodname c n, pos=p',
                                         dbody=[sReturn (termsubst ren (Call l f (PosArg (eVar cont) (PosArg result' PosNil)) KwdNil))] }
   where tc                          = TC (NoQ c) (map tVar $ qbound q)
-        target                      = if adapterBase c == Just primAction then attr_asyn_ else attr_eval_
+        target                      = attr_eval_
         names                       = map (Internal Tempvar (packText "adapter")) [0..]
         ren                         = zip (bound p) (map eVar names)
         targetABI                   = B.rtypeOf env tc target
@@ -483,7 +473,6 @@ adapterRow row                      = row
 adapterBase (Internal LLiftPass s _)
   | s == packText "pure"            = Just primPure
   | s == packText "mut"             = Just primMut
-  | s == packText "action"          = Just primAction
 adapterBase _                       = Nothing
 
 adapterPrimitive (TApp _ (Var _ n) _) = Just n
@@ -543,16 +532,12 @@ shareClosureLayouts env stmts       = modX env $ \x -> x{ sharedClosuresX = Map.
                                        let captures = concat [ drop 1 (bound p) | Decl _ ds <- b,
                                                                Def{dname=i,pos=p} <- ds, i == initKW ],
                                        captures == map fst props,
-                                       Just family <- [select n q s b (length props)],
-                                       family /= SharedProc0 || closureMethod env n q attr_exec_ == attr_call_ ]
+                                       Just family <- [select n q s b (length props)] ]
         select n q s b k
           | s == packText "action", k == 1,
             [Def{pos=PosPar _ _ Nothing args}] <- methods attr_asyn_ b',
             let ts = parTypes args, length ts <= 3,
-            adapterPars args, all (not . isRaw) ts,
-            -- Only the known AWAIT/R_CONT delegates may use runtime adapters.
-            let delegates = concatMap (`methods` b') [attr_call_,attr_exec_],
-            length delegates == 2, all (isJust . closureAdapter env1 n q) delegates
+            adapterPars args, all (not . isRaw) ts
                                     = Just (SharedAction $ length ts)
           | [Def{pos=PosPar _ _ Nothing (PosPar _ (Just t) Nothing PosNIL)}] <- methods attr_call_ b,
             s == packText "Cont", k <= 8, not (isRaw t) = Just SharedCont
@@ -560,8 +545,7 @@ shareClosureLayouts env stmts       = modX env $ \x -> x{ sharedClosuresX = Map.
             s == packText "proc", k <= 4,
             TCon _ (TC c [_]) <- t, c == primCont = Just SharedProc0
           | otherwise             = Nothing
-          where env1              = defineTVars q env
-                b'                = vsubst [(tvSelf,tCon (TC (NoQ n) (map tVar $ qbound q)))] b
+          where b'                = vsubst [(tvSelf,tCon (TC (NoQ n) (map tVar $ qbound q)))] b
         methods i b               = [d | Decl _ ds <- b, d@Def{dname=n} <- ds, n == i]
         isRaw TUnboxed{}           = True
         isRaw _                    = False
@@ -686,7 +670,7 @@ methstub env (Class _ n q a b ddoc)
   | otherwise                       = text "extern" <+> text "struct" <+> classname env n <+> methodtable env n <> semi $+$
                                       constub env t n r b $+$
                                       vcat [ methodDefStub env1 d{ dname = methodname n (dname d) } | Decl _ ds <- b', d@Def{} <- ds,
-                                             not (isClosureName n) || emitClosureMethod env1 n q (dname d) ]
+                                             not (isClosureName n) || emitClosureMethod env1 n (dname d) ]
   where TFun _ _ r _ t              = sctype $ fst $ schemaOf env (eVar n)
         b'                          = vsubst [(tvSelf, tCon c)] b
         c                           = TC (NoQ n) (map tVar $ qbound q)
@@ -1060,7 +1044,7 @@ declSharedClosure env n q b family  = resume $+$ restore $+$
 -- serialization walk and effect adapters; invocation has no extra indirection or
 -- per-instance descriptor pointer.
 declClosure env n q b               = vcat [ declDecl env d{ dname = methodname n (dname d) }
-                                            | Decl _ ds <- b, d@Def{} <- ds, emitClosureMethod env n q (dname d) ] $+$
+                                            | Decl _ ds <- b, d@Def{} <- ds, emitClosureMethod env n (dname d) ] $+$
                                       adapterGuard $+$ layout $+$ serializer $+$ deserializer $+$ constructor $+$
                                       text "struct" <+> classname env n <+> methodtable env n <> semi
   where tc                          = TC (NoQ n) (map tVar $ qbound q)
@@ -1075,7 +1059,7 @@ declClosure env n q b               = vcat [ declDecl env d{ dname = methodname 
                                          slotSize (genTopName env n) ==: slotSize (gen env base) <> comma <+>
                                          doubleQuotes (text "Closure adapter slot mismatch")) <> semi
           | otherwise               = empty
-        target                      = if adapterBase n == Just primAction then attr_asyn_ else attr_eval_
+        target                      = attr_eval_
         slotOffset c                = text "offsetof" <> parens (text "struct" <+> c <> text "G_class" <> comma <+> gen env target)
         slotSize c                  = text "sizeof" <> parens (parens (parens c <> text "0") <> text "->$class->" <> gen env target)
         a ==: b                     = a <+> text "==" <+> b
@@ -1295,8 +1279,7 @@ methodAssign env c q n
   | isClosureName c, n == initKW    = methodtable env c <> dot <> gen env n <+> text "= NULL;"
   | Just helper <- Map.lookup (c,n) (closureAdaptersX $ envX env)
                                     = methodtable env c <> dot <> gen env n <+> equals <+> methodCast env c q n <> genTopName env helper <> semi
-  | otherwise                       = methodtable env c <> dot <> gen env n <+> equals <+> methodCast env c q n <> genTopName env (methodname c impl) <> semi
-  where impl                        = if isClosureName c then closureMethod env c q n else n
+  | otherwise                       = methodtable env c <> dot <> gen env n <+> equals <+> methodCast env c q n <> genTopName env (methodname c n) <> semi
 
 methodCast env c q n                = case lookup n (fullAttrEnv env tc) of
                                         Just (NDef _ Static _) -> parens (funsig2 env Nothing rt)
@@ -2605,10 +2588,10 @@ dotCast env ent ts e n
 
 needsPrimCallableCast (TCon _ (TC q _)) n
   | q == primCont                   = n == attr_call_
-  | q == primProc                   = n `elem` [attr_call_, attr_exec_]
-  | q == primAction                 = n `elem` [attr_call_, attr_exec_, attr_asyn_]
-  | q == primMut                    = n `elem` [attr_call_, attr_exec_, attr_eval_]
-  | q == primPure                   = n `elem` [attr_call_, attr_exec_, attr_eval_]
+  | q == primProc                   = n == attr_call_
+  | q == primAction                 = n == attr_asyn_
+  | q == primMut                    = n `elem` [attr_call_, attr_eval_]
+  | q == primPure                   = n `elem` [attr_call_, attr_eval_]
 needsPrimCallableCast _ _           = False
                                         
 classCallableType env ts x q n      = vsubst fullsubst $ addSelf (B.rtypeOf env tc n) dec

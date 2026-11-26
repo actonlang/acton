@@ -1,6 +1,6 @@
 # Calls of a proc-typed parameter. CPS turns
 # each call into a tail call with a continuation, and the lambda lifter calls
-# the closure through __call__ or __exec__. The result is used in assign, tail
+# the closure through __call__. The result is used in assign, tail
 # and mutate, and discarded in discard, discard_last, discard_live,
 # discard_bang, discard_cond and discard_none. In discard_live, z is live after
 # the if statement, so the continuation of the call is a lambda that passes z

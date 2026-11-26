@@ -80,8 +80,7 @@ struct $procG_class $procG_methods = {
     $procD___bool__,
     $procD___str__,
     $procD___str__,
-    NULL,               /* __call__ */
-    NULL                /* __exec__ */
+    NULL                /* __call__ */
 };
 struct $actionG_class $actionG_methods = {
     "$action",
@@ -93,8 +92,6 @@ struct $actionG_class $actionG_methods = {
     $actionD___bool__,
     $actionD___str__,
     $actionD___str__,
-    NULL,               /* __call__ */
-    NULL,               /* __exec__ */
     NULL                /* __asyn__ */
 };
 struct $mutG_class $mutG_methods = {
@@ -108,7 +105,6 @@ struct $mutG_class $mutG_methods = {
     $mutD___str__,
     $mutD___str__,
     NULL,               /* __call__ */
-    NULL,               /* __exec__ */
     NULL                /* __eval__ */
 };
 struct $pureG_class $pureG_methods = {
@@ -122,7 +118,6 @@ struct $pureG_class $pureG_methods = {
     $pureD___str__,
     $pureD___str__,
     NULL,               /* __call__ */
-    NULL,               /* __exec__ */
     NULL                /* __eval__ */
 };
 
@@ -261,8 +256,6 @@ const struct $ClosureShape $Cont_R8_shape = {
 // Proc0 R1-R4 use the same field codec as Cont, with a Proc-specific descriptor.
 _Static_assert(offsetof(struct $Proc0G_class, __call__) == offsetof(struct $procG_class, __call__),
                "Proc0 call slot mismatch");
-_Static_assert(offsetof(struct $Proc0G_class, __exec__) == offsetof(struct $procG_class, __exec__),
-               "Proc0 exec slot mismatch");
 
 void $proc0_class_init(struct $Proc0Class *cls, char *name,
                        const struct $ClosureShape *shape,
@@ -279,8 +272,7 @@ void $proc0_class_init(struct $Proc0Class *cls, char *name,
         .__bool__ = (bool (*)($proc))B_valueG_methods.__bool__,
         .__str__ = (B_str (*)($proc))B_valueG_methods.__str__,
         .__repr__ = (B_str (*)($proc))B_valueG_methods.__repr__,
-        .__call__ = call,
-        .__exec__ = call
+        .__call__ = call
     };
     $register(&cls->methods);
 }
@@ -340,7 +332,6 @@ const struct $ClosureShape $Proc0_R4_shape = {
 };
 
 // Shared fixed R1 codec. Method-table arity affects invocation, not storage.
-// __call__ returns $AWAIT's single R_WAIT step; __exec__ returns the message.
 static const struct $ClosureField $Action_R1_fields[] = {
     {offsetof(struct $Action_R1, ref0), sizeof($WORD), $CLOSURE_REF},
 };
@@ -363,12 +354,6 @@ $action $action_r1_restore(const void *methods, $action self, $Serial$state stat
 
 _Static_assert(offsetof(struct $Action0G_class, __asyn__) == offsetof(struct $actionG_class, __asyn__),
                "Action0 async slot mismatch");
-static $R $action0_call($action self, $Cont cont) {
-    return $R_WAIT(cont, ((struct $Action0G_class *)self->$class)->__asyn__(self));
-}
-static $R $action0_exec($action self, $Cont cont) {
-    return $R_CONT(cont, ((struct $Action0G_class *)self->$class)->__asyn__(self));
-}
 void $action0_class_init(struct $Action0G_class *methods, char *name,
                          B_Msg (*asyn)($action),
                          $action (*restore)($action, $Serial$state)) {
@@ -382,8 +367,6 @@ void $action0_class_init(struct $Action0G_class *methods, char *name,
         .__bool__ = (bool (*)($action))B_valueG_methods.__bool__,
         .__str__ = (B_str (*)($action))B_valueG_methods.__str__,
         .__repr__ = (B_str (*)($action))B_valueG_methods.__repr__,
-        .__call__ = $action0_call,
-        .__exec__ = $action0_exec,
         .__asyn__ = asyn
     };
     $register(methods);
@@ -391,12 +374,6 @@ void $action0_class_init(struct $Action0G_class *methods, char *name,
 
 _Static_assert(offsetof(struct $Action1G_class, __asyn__) == offsetof(struct $actionG_class, __asyn__),
                "Action1 async slot mismatch");
-static $R $action1_call($action self, $Cont cont, $WORD arg1) {
-    return $R_WAIT(cont, ((struct $Action1G_class *)self->$class)->__asyn__(self, arg1));
-}
-static $R $action1_exec($action self, $Cont cont, $WORD arg1) {
-    return $R_CONT(cont, ((struct $Action1G_class *)self->$class)->__asyn__(self, arg1));
-}
 void $action1_class_init(struct $Action1G_class *methods, char *name,
                          B_Msg (*asyn)($action, $WORD),
                          $action (*restore)($action, $Serial$state)) {
@@ -410,8 +387,6 @@ void $action1_class_init(struct $Action1G_class *methods, char *name,
         .__bool__ = (bool (*)($action))B_valueG_methods.__bool__,
         .__str__ = (B_str (*)($action))B_valueG_methods.__str__,
         .__repr__ = (B_str (*)($action))B_valueG_methods.__repr__,
-        .__call__ = $action1_call,
-        .__exec__ = $action1_exec,
         .__asyn__ = asyn
     };
     $register(methods);
@@ -419,12 +394,6 @@ void $action1_class_init(struct $Action1G_class *methods, char *name,
 
 _Static_assert(offsetof(struct $Action2G_class, __asyn__) == offsetof(struct $actionG_class, __asyn__),
                "Action2 async slot mismatch");
-static $R $action2_call($action self, $Cont cont, $WORD arg1, $WORD arg2) {
-    return $R_WAIT(cont, ((struct $Action2G_class *)self->$class)->__asyn__(self, arg1, arg2));
-}
-static $R $action2_exec($action self, $Cont cont, $WORD arg1, $WORD arg2) {
-    return $R_CONT(cont, ((struct $Action2G_class *)self->$class)->__asyn__(self, arg1, arg2));
-}
 void $action2_class_init(struct $Action2G_class *methods, char *name,
                          B_Msg (*asyn)($action, $WORD, $WORD),
                          $action (*restore)($action, $Serial$state)) {
@@ -438,8 +407,6 @@ void $action2_class_init(struct $Action2G_class *methods, char *name,
         .__bool__ = (bool (*)($action))B_valueG_methods.__bool__,
         .__str__ = (B_str (*)($action))B_valueG_methods.__str__,
         .__repr__ = (B_str (*)($action))B_valueG_methods.__repr__,
-        .__call__ = $action2_call,
-        .__exec__ = $action2_exec,
         .__asyn__ = asyn
     };
     $register(methods);
@@ -447,12 +414,6 @@ void $action2_class_init(struct $Action2G_class *methods, char *name,
 
 _Static_assert(offsetof(struct $Action3G_class, __asyn__) == offsetof(struct $actionG_class, __asyn__),
                "Action3 async slot mismatch");
-static $R $action3_call($action self, $Cont cont, $WORD arg1, $WORD arg2, $WORD arg3) {
-    return $R_WAIT(cont, ((struct $Action3G_class *)self->$class)->__asyn__(self, arg1, arg2, arg3));
-}
-static $R $action3_exec($action self, $Cont cont, $WORD arg1, $WORD arg2, $WORD arg3) {
-    return $R_CONT(cont, ((struct $Action3G_class *)self->$class)->__asyn__(self, arg1, arg2, arg3));
-}
 void $action3_class_init(struct $Action3G_class *methods, char *name,
                          B_Msg (*asyn)($action, $WORD, $WORD, $WORD),
                          $action (*restore)($action, $Serial$state)) {
@@ -466,8 +427,6 @@ void $action3_class_init(struct $Action3G_class *methods, char *name,
         .__bool__ = (bool (*)($action))B_valueG_methods.__bool__,
         .__str__ = (B_str (*)($action))B_valueG_methods.__str__,
         .__repr__ = (B_str (*)($action))B_valueG_methods.__repr__,
-        .__call__ = $action3_call,
-        .__exec__ = $action3_exec,
         .__asyn__ = asyn
     };
     $register(methods);

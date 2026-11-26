@@ -34,7 +34,6 @@ struct linesQ_L_9procG_class {
     B_str (*__str__) (linesQ_L_9proc);
     B_str (*__repr__) (linesQ_L_9proc);
     $R (*__call__) (linesQ_L_9proc, $Cont);
-    $R (*__exec__) (linesQ_L_9proc, $Cont);
 };
 struct linesQ_L_9proc {
     struct linesQ_L_9procG_class *$class;
@@ -52,7 +51,6 @@ struct linesQ_L_11procG_class {
     B_str (*__str__) (linesQ_L_11proc);
     B_str (*__repr__) (linesQ_L_11proc);
     $R (*__call__) (linesQ_L_11proc, $Cont);
-    $R (*__exec__) (linesQ_L_11proc, $Cont);
 };
 struct linesQ_L_11proc {
     struct linesQ_L_11procG_class *$class;
@@ -71,7 +69,6 @@ struct linesQ_L_19procG_class {
     B_str (*__str__) (linesQ_L_19proc);
     B_str (*__repr__) (linesQ_L_19proc);
     $R (*__call__) (linesQ_L_19proc, $Cont);
-    $R (*__exec__) (linesQ_L_19proc, $Cont);
 };
 struct linesQ_L_19proc {
     struct linesQ_L_19procG_class *$class;
@@ -797,7 +794,6 @@ void linesQ___init__ () {
         linesQ_L_9procG_methods.__repr__ = (B_str (*) (linesQ_L_9proc))B_valueG_methods.__repr__;
         linesQ_L_9procG_methods.__init__ = NULL;
         linesQ_L_9procG_methods.__call__ = ($R (*) (linesQ_L_9proc, $Cont))linesQ_L_9procD___call__;
-        linesQ_L_9procG_methods.__exec__ = ($R (*) (linesQ_L_9proc, $Cont))linesQ_L_9procD___call__;
         linesQ_L_9procG_methods.__serialize__ = linesQ_L_9procD___serialize__;
         linesQ_L_9procG_methods.__deserialize__ = linesQ_L_9procD___deserialize__;
         $register(&linesQ_L_9procG_methods);
@@ -811,7 +807,6 @@ void linesQ___init__ () {
         linesQ_L_11procG_methods.__repr__ = (B_str (*) (linesQ_L_11proc))B_valueG_methods.__repr__;
         linesQ_L_11procG_methods.__init__ = NULL;
         linesQ_L_11procG_methods.__call__ = ($R (*) (linesQ_L_11proc, $Cont))linesQ_L_11procD___call__;
-        linesQ_L_11procG_methods.__exec__ = ($R (*) (linesQ_L_11proc, $Cont))linesQ_L_11procD___call__;
         linesQ_L_11procG_methods.__serialize__ = linesQ_L_11procD___serialize__;
         linesQ_L_11procG_methods.__deserialize__ = linesQ_L_11procD___deserialize__;
         $register(&linesQ_L_11procG_methods);
@@ -827,7 +822,6 @@ void linesQ___init__ () {
         linesQ_L_19procG_methods.__repr__ = (B_str (*) (linesQ_L_19proc))B_valueG_methods.__repr__;
         linesQ_L_19procG_methods.__init__ = NULL;
         linesQ_L_19procG_methods.__call__ = ($R (*) (linesQ_L_19proc, $Cont))linesQ_L_19procD___call__;
-        linesQ_L_19procG_methods.__exec__ = ($R (*) (linesQ_L_19proc, $Cont))linesQ_L_19procD___call__;
         linesQ_L_19procG_methods.__serialize__ = linesQ_L_19procD___serialize__;
         linesQ_L_19procG_methods.__deserialize__ = linesQ_L_19procD___deserialize__;
         $register(&linesQ_L_19procG_methods);

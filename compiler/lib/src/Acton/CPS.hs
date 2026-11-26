@@ -339,9 +339,7 @@ kDef env k nts x t b                    = sDef k (conv env $ pospar $ (x,t):nts)
 kRef env k [] x t                       = eVar k
 kRef env k ns x t                       = eLambda' [(x, conv env t)] $ eCall (eVar k) (map eVar (x:ns))
 
--- The continuation of a call in statement position discards the result. The
--- lambda lifter recognizes the $SKIPRESc wrapper and calls a proc closure via
--- __exec__, which does not await an action's result.
+-- Adapt the statement continuation to accept and discard the call's result.
 skipRes env t c                         = eCall (tApp (eQVar primSKIPRESc) [conv env t]) [c]
 
 fxCall env test (Call _ Async{} p k)    = False
