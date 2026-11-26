@@ -1,0 +1,56 @@
+pure def constant() -> int:
+    return 44
+
+pure def capture[A](value: A) -> action() -> A:
+    return lambda: value
+
+proc def invoke(f: action() -> int) -> int:
+    return f()
+
+actor Counter():
+    var count = 0
+
+    def next() -> int:
+        count += 1
+        return count
+
+actor Watchdog(env: Env):
+    def timeout():
+        print("FAIL: action lambda did not return its result")
+        env.exit(1)
+
+    def __startup__():
+        after 5.0: timeout()
+
+actor main(env):
+    counter = Counter()
+    watchdog = Watchdog(env)
+
+    def __startup__():
+        inferred: action() -> int = lambda: 42
+        explicit = action lambda: 43
+        called = action lambda: constant()
+        parameter = action lambda n: n + 1
+        combined = action lambda: constant() + 2
+        no_result: action() -> None = lambda: None
+        assert inferred() == 42
+        assert explicit() == 43
+        assert called() == 44
+        assert parameter(44) == 45
+        assert combined() == 46
+        assert invoke(lambda: 46) == 46
+        assert await async explicit() == 43
+        assert capture("captured")() == "captured"
+        assert no_result() is None
+
+        # Forwarding an action must preserve its message, not complete it again.
+        forwarded = action lambda: counter.next()
+        inferred_forward: action() -> int = lambda: counter.next()
+        awaited = proc lambda: counter.next()
+        assert forwarded() == 1
+        assert inferred_forward() == 2
+        assert awaited() == 3
+        identity = pure lambda n: n
+        awaited_argument = proc lambda: identity(counter.next())
+        assert awaited_argument() == 4
+        env.exit(0)
