@@ -3,6 +3,13 @@ const std = @import("std");
 const acton = @import("acton.zig");
 const gc = @import("rts/gc.zig");
 
+// A stripped executable can still have unwind information and function names.
+pub const std_options: std.Options = .{ .allow_stack_tracing = true };
+
+comptime {
+    _ = @import("rts/traceback.zig");
+}
+
 // Both base64 functions build their result with acton.new_bytes so that it
 // looks exactly like bytes built by the C runtime, with a real (non-dangling)
 // buffer even when the output is empty.

@@ -68,6 +68,25 @@ finally:
 `try` block completed without raising. `finally` runs whether the `try`
 block succeeded or failed.
 
+## Unhandled actor exceptions
+
+When an exception escapes an actor message and nobody is waiting for its
+result, Acton prints it to standard error. The actor can process its next
+message. Where the platform supports stack unwinding, the report includes
+the native calls still on the worker's stack when the raise reached the
+runtime, starting with the most recent call. The worker captures up to
+32 return addresses. If a handler re-raises after unwinding the original
+calls, the trace starts at that raise. An optimized build can omit frames.
+
+Acton shows source lines when it can resolve them, and addresses
+otherwise. On Linux, you can look up an address in the matching binary
+with debug information using `addr2line -f -e ./my_program 0xADDRESS`.
+
+An actor awaiting a failed message can catch the exception. If that actor
+also leaves the exception unhandled, its report can show the original
+native stack. Calls from earlier continuations have already returned by
+the time the worker captures the stack.
+
 <div class="beginner-content">
 <p>Keep <code>try</code> blocks narrow so it stays obvious which
 operation can fail.</p>
