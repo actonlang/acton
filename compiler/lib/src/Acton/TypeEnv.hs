@@ -169,7 +169,7 @@ addconinfo                      :: (Name -> QName) -> TypeX -> (Name,NameInfo) -
 addconinfo f x (n,i)
   | NClass q us te _ <- i       = addcon n q us te addclass x
   | NProto q us te _ <- i       = addcon n q us te addproto x
-  | NAct q _ _ te _ <- i        = addcon n q [] (notHidden te) addactor x
+  | NAct q _ _ us te _ <- i        = addcon n q us (notHidden te) addactor x
   | otherwise                   = x
   where addclass tid info x     = x{ tycons = IntSet.insert tid (tycons x),
                                      tyconAttrs = addTyAttrs tid (tyattrs info) (tyconAttrs x) }
@@ -864,7 +864,7 @@ instance USubst KwdPar where
 
 instance USubst Decl where
     usubstWith s (Def l n q p k a ss de fx doc)   = Def l n (usubstWith s q) (usubstWith s p) (usubstWith s k) (usubstWith s a) (usubstWith s ss) de (usubstWith s fx) doc
-    usubstWith s (Actor l n q p k ss doc)         = Actor l n (usubstWith s q) (usubstWith s p) (usubstWith s k) (usubstWith s ss) doc
+    usubstWith s (Actor l n q p k us ss doc)         = Actor l n (usubstWith s q) (usubstWith s p) (usubstWith s k) (usubstWith s us) (usubstWith s ss) doc
     usubstWith s (Class l n q bs ss doc)          = Class l n (usubstWith s q) (usubstWith s bs) (usubstWith s ss) doc
     usubstWith s (Protocol l n q bs ss doc)       = Protocol l n (usubstWith s q) (usubstWith s bs) (usubstWith s ss) doc
     usubstWith s (Typedef l n q t doc)            = Typedef l n (usubstWith s q) (usubstWith s t) doc
@@ -982,7 +982,7 @@ instance USubst NameInfo where
     usubstWith s (NSVar t)            = NSVar (usubstWith s t)
     usubstWith s (NDef t d doc)       = NDef (usubstWith s t) d doc
     usubstWith s (NSig t d doc)       = NSig (usubstWith s t) d doc
-    usubstWith s (NAct q p k te doc)  = NAct (usubstWith s q) (usubstWith s p) (usubstWith s k) (usubstWith s te) doc
+    usubstWith s (NAct q p k us te doc)  = NAct (usubstWith s q) (usubstWith s p) (usubstWith s k) (usubstWith s us) (usubstWith s te) doc
     usubstWith s (NClass q us te doc) = NClass (usubstWith s q) (usubstWith s us) (usubstWith s te) doc
     usubstWith s (NProto q us te doc) = NProto (usubstWith s q) (usubstWith s us) (usubstWith s te) doc
     usubstWith s (NType q t doc)       = NType (usubstWith s q) (usubstWith s t) doc
@@ -1028,7 +1028,7 @@ instance (WellFormed a) => WellFormed [a] where
 instance WellFormed TCon where
     wf env (TC n ts)        = wf env ts ++ [ constr (vsubst s u) (vsubst s $ tVar v) | QBind v us <- q, u <- us ]
       where q               = case findQName n env of
-                                NAct q p k te _ -> q
+                                NAct q p k us te _ -> q
                                 NClass q us te _ -> q
                                 NProto q us te _ -> q
                                 NType q _ _ -> q

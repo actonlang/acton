@@ -143,7 +143,7 @@ instance Transform Decl where
     trans env (Def l n q p k t b d fx doc)
                                         = Def l n q (trans env1 p) (trans env1 k) t (wtrans env1 b) d fx doc
       where env1                        = bindscope (bound p ++ bound k) (typescope q env)
-    trans env (Actor l n q p k b doc)   = Actor l n q (trans env1 p) (trans env1 k) (wtrans env1 b) doc
+    trans env (Actor l n q p k us b doc)   = Actor l n q (trans env1 p) (trans env1 k) us (wtrans env1 b) doc
       where env1                        = bindscope (bound p ++ bound k) (typescope q env)
     trans env (Class l n q us b doc)    = Class l n q us (wtrans (checkscope [nSelf] (typescope q env)) b) doc
     trans env (Protocol l n q us b doc) = Protocol l n q us (wtrans (checkscope [nSelf] (typescope q env)) b) doc

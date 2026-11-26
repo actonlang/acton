@@ -328,7 +328,7 @@ B_Msg linesQ_L_20actionD___asyn__($action $closure, $WORD $arg1) {
     linesQ_L_20action L_self = (linesQ_L_20action)$closure;
     B_int G_1 = (B_int)$arg1;
     linesQ_main self = (linesQ_main)(((linesQ_L_20action)(L_self))->ref0);
-    return ((B_Msg)$ASYNC((($Actor)self), (($Cont)linesQ_L_19procG_new(((B_int)G_1)->val, self))));
+    return ((B_Msg)$ASYNC(((B_Actor)self), (($Cont)linesQ_L_19procG_new(((B_int)G_1)->val, self))));
 }
 $action linesQ_L_20actionD___deserialize__($action self, $Serial$state state) {
     return $action_r1_restore(&linesQ_L_20actionG_methods, self, state);
@@ -561,19 +561,19 @@ $R linesQ_ApaD___startup__G_local (linesQ_Apa self, $Cont C_cont) {
     return (($R (*) ($WORD, $Cont, $action))((linesQ_Apa)(self))->$class->setupG_local)(self, $SKIPRES((($Cont)((linesQ_L_4Cont)$Cont_R1_new(&linesQ_L_4ContG_methods, C_cont)))), (($action)((linesQ_L_6action)$Action_R1_new(&linesQ_L_6actionG_methods, self))));
 }
 B_Msg linesQ_ApaD_setup (linesQ_Apa self, $action cb) {
-    return $ASYNC((($Actor)self), (($Cont)((linesQ_L_7proc)$Proc0_R2_new(&linesQ_L_7procG_methods, self, cb))));
+    return $ASYNC(((B_Actor)self), (($Cont)((linesQ_L_7proc)$Proc0_R2_new(&linesQ_L_7procG_methods, self, cb))));
 }
 B_Msg linesQ_ApaD_compute (linesQ_Apa self, $action cb) {
-    return ((B_Msg)$ASYNC((($Actor)self), (($Cont)((linesQ_L_8proc)$Proc0_R2_new(&linesQ_L_8procG_methods, self, cb)))));
+    return ((B_Msg)$ASYNC(((B_Actor)self), (($Cont)((linesQ_L_8proc)$Proc0_R2_new(&linesQ_L_8procG_methods, self, cb)))));
 }
 B_Msg linesQ_ApaD_notice (linesQ_Apa self, int64_t i) {
-    return ((B_Msg)$ASYNC((($Actor)self), (($Cont)linesQ_L_9procG_new(self, i))));
+    return ((B_Msg)$ASYNC(((B_Actor)self), (($Cont)linesQ_L_9procG_new(self, i))));
 }
 B_Msg linesQ_ApaD___startup__ (linesQ_Apa self) {
-    return $ASYNC((($Actor)self), (($Cont)((linesQ_L_10proc)$Proc0_R1_new(&linesQ_L_10procG_methods, self))));
+    return $ASYNC(((B_Actor)self), (($Cont)((linesQ_L_10proc)$Proc0_R1_new(&linesQ_L_10procG_methods, self))));
 }
 void linesQ_ApaD___serialize__ (linesQ_Apa self, $Serial$state state) {
-    $ActorG_methods.__serialize__(($Actor)self, state);
+    B_ActorG_methods.__serialize__((B_Actor)self, state);
     $val_serialize(I64_ID, &self->apa, state);
     $val_serialize(I64_ID, &self->apb, state);
     $val_serialize(I64_ID, &self->y, state);
@@ -588,7 +588,7 @@ linesQ_Apa linesQ_ApaD___deserialize__ (linesQ_Apa self, $Serial$state state) {
         }
         self = $DNEW(linesQ_Apa, state);
     }
-    $ActorG_methods.__deserialize__(($Actor)self, state);
+    B_ActorG_methods.__deserialize__((B_Actor)self, state);
     $tmp = $val_deserialize(state);
     memcpy(&self->apa, &$tmp, sizeof(self->apa));
     $tmp = $val_deserialize(state);
@@ -626,13 +626,13 @@ $R linesQ_BepaD___startup__G_local (linesQ_Bepa self, $Cont C_cont) {
     return $R_CONT(C_cont, B_None);
 }
 B_Msg linesQ_BepaD_callback (linesQ_Bepa self, int64_t i) {
-    return ((B_Msg)$ASYNC((($Actor)self), (($Cont)linesQ_L_11procG_new(self, i))));
+    return ((B_Msg)$ASYNC(((B_Actor)self), (($Cont)linesQ_L_11procG_new(self, i))));
 }
 B_Msg linesQ_BepaD___startup__ (linesQ_Bepa self) {
-    return $ASYNC((($Actor)self), (($Cont)((linesQ_L_12proc)$Proc0_R1_new(&linesQ_L_12procG_methods, self))));
+    return $ASYNC(((B_Actor)self), (($Cont)((linesQ_L_12proc)$Proc0_R1_new(&linesQ_L_12procG_methods, self))));
 }
 void linesQ_BepaD___serialize__ (linesQ_Bepa self, $Serial$state state) {
-    $ActorG_methods.__serialize__(($Actor)self, state);
+    B_ActorG_methods.__serialize__((B_Actor)self, state);
 }
 linesQ_Bepa linesQ_BepaD___deserialize__ (linesQ_Bepa self, $Serial$state state) {
     $WORD $tmp;
@@ -644,7 +644,7 @@ linesQ_Bepa linesQ_BepaD___deserialize__ (linesQ_Bepa self, $Serial$state state)
         }
         self = $DNEW(linesQ_Bepa, state);
     }
-    $ActorG_methods.__deserialize__(($Actor)self, state);
+    B_ActorG_methods.__deserialize__((B_Actor)self, state);
     return self;
 }
 void linesQ_BepaD_GCfinalizer (void *obj, void *cdata) {
@@ -680,10 +680,10 @@ $R linesQ_mainD___startup__G_local (linesQ_main self, $Cont C_cont) {
     return $AWAIT((($Cont)((linesQ_L_25Cont)$Cont_R5_new(&linesQ_L_25ContG_methods, a, self, W_Apa_851, W_Apa_925, C_cont))), x);
 }
 B_Msg linesQ_mainD___startup__ (linesQ_main self) {
-    return $ASYNC((($Actor)self), (($Cont)((linesQ_L_26proc)$Proc0_R1_new(&linesQ_L_26procG_methods, self))));
+    return $ASYNC(((B_Actor)self), (($Cont)((linesQ_L_26proc)$Proc0_R1_new(&linesQ_L_26procG_methods, self))));
 }
 void linesQ_mainD___serialize__ (linesQ_main self, $Serial$state state) {
-    $ActorG_methods.__serialize__(($Actor)self, state);
+    B_ActorG_methods.__serialize__((B_Actor)self, state);
     $step_serialize(self->env, state);
 }
 linesQ_main linesQ_mainD___deserialize__ (linesQ_main self, $Serial$state state) {
@@ -696,7 +696,7 @@ linesQ_main linesQ_mainD___deserialize__ (linesQ_main self, $Serial$state state)
         }
         self = $DNEW(linesQ_main, state);
     }
-    $ActorG_methods.__deserialize__(($Actor)self, state);
+    B_ActorG_methods.__deserialize__((B_Actor)self, state);
     ACTON_STORE_ATTR(self, env, $step_deserialize(state));
     return self;
 }
@@ -712,14 +712,14 @@ linesQ_main linesQ_mainG_new(B_Env G_1) {
 }
 struct linesQ_mainG_class linesQ_mainG_methods;
 linesQ_Apa linesQ_ApaG_newact () {
-    $Actor N_construction_parent = $ConstructionBegin();
+    B_Actor N_construction_parent = $ConstructionBegin();
     linesQ_Apa G_act;
     {
         struct JumpBuf $frame;
         if ($PUSH(&$frame)) {
             G_act = $NEWACTOR(linesQ_Apa);
-            $ConstructionEnter((($Actor)G_act));
-            if ((void*)G_act->$class->__cleanup__ != (void*)$ActorD___cleanup__) $InstallFinalizer(G_act, linesQ_ApaD_GCfinalizer);
+            $ConstructionEnter(((B_Actor)G_act));
+            if ((void*)G_act->$class->__cleanup__ != (void*)B_ActorD___cleanup__) $InstallFinalizer(G_act, linesQ_ApaD_GCfinalizer);
             ((B_NoneType (*) ($WORD))((linesQ_Apa)(G_act))->$class->__init__)(G_act);
             $DROP();
         }
@@ -734,14 +734,14 @@ linesQ_Apa linesQ_ApaG_newact () {
     return G_act;
 }
 linesQ_Bepa linesQ_BepaG_newact () {
-    $Actor N_construction_parent = $ConstructionBegin();
+    B_Actor N_construction_parent = $ConstructionBegin();
     linesQ_Bepa G_act;
     {
         struct JumpBuf $frame;
         if ($PUSH(&$frame)) {
             G_act = $NEWACTOR(linesQ_Bepa);
-            $ConstructionEnter((($Actor)G_act));
-            if ((void*)G_act->$class->__cleanup__ != (void*)$ActorD___cleanup__) $InstallFinalizer(G_act, linesQ_BepaD_GCfinalizer);
+            $ConstructionEnter(((B_Actor)G_act));
+            if ((void*)G_act->$class->__cleanup__ != (void*)B_ActorD___cleanup__) $InstallFinalizer(G_act, linesQ_BepaD_GCfinalizer);
             ((B_NoneType (*) ($WORD))((linesQ_Bepa)(G_act))->$class->__init__)(G_act);
             $DROP();
         }
@@ -756,14 +756,14 @@ linesQ_Bepa linesQ_BepaG_newact () {
     return G_act;
 }
 linesQ_main linesQ_mainG_newact (B_Env env) {
-    $Actor N_construction_parent = $ConstructionBegin();
+    B_Actor N_construction_parent = $ConstructionBegin();
     linesQ_main G_act;
     {
         struct JumpBuf $frame;
         if ($PUSH(&$frame)) {
             G_act = $NEWACTOR(linesQ_main);
-            $ConstructionEnter((($Actor)G_act));
-            if ((void*)G_act->$class->__cleanup__ != (void*)$ActorD___cleanup__) $InstallFinalizer(G_act, linesQ_mainD_GCfinalizer);
+            $ConstructionEnter(((B_Actor)G_act));
+            if ((void*)G_act->$class->__cleanup__ != (void*)B_ActorD___cleanup__) $InstallFinalizer(G_act, linesQ_mainD_GCfinalizer);
             ((B_NoneType (*) ($WORD, B_Env))((linesQ_main)(G_act))->$class->__init__)(G_act, env);
             $DROP();
         }
@@ -833,12 +833,12 @@ void linesQ___init__ () {
     $proc0_class_init(&linesQ_L_26procG_methods, "linesQ_L_26proc", &$Proc0_R1_shape, linesQ_L_26procD___call__, linesQ_L_26procD___deserialize__);
     {
         linesQ_ApaG_methods.$GCINFO = "linesQ_Apa";
-        linesQ_ApaG_methods.$superclass = ($SuperG_class)&$ActorG_methods;
-        linesQ_ApaG_methods.__bool__ = (bool (*) (linesQ_Apa))$ActorG_methods.__bool__;
-        linesQ_ApaG_methods.__str__ = (B_str (*) (linesQ_Apa))$ActorG_methods.__str__;
-        linesQ_ApaG_methods.__repr__ = (B_str (*) (linesQ_Apa))$ActorG_methods.__repr__;
-        linesQ_ApaG_methods.__resume__ = (B_NoneType (*) (linesQ_Apa))$ActorG_methods.__resume__;
-        linesQ_ApaG_methods.__cleanup__ = (B_NoneType (*) (linesQ_Apa))$ActorG_methods.__cleanup__;
+        linesQ_ApaG_methods.$superclass = ($SuperG_class)&B_ActorG_methods;
+        linesQ_ApaG_methods.__bool__ = (bool (*) (linesQ_Apa))B_ActorG_methods.__bool__;
+        linesQ_ApaG_methods.__str__ = (B_str (*) (linesQ_Apa))B_ActorG_methods.__str__;
+        linesQ_ApaG_methods.__repr__ = (B_str (*) (linesQ_Apa))B_ActorG_methods.__repr__;
+        linesQ_ApaG_methods.__resume__ = (B_NoneType (*) (linesQ_Apa))B_ActorG_methods.__resume__;
+        linesQ_ApaG_methods.__cleanup__ = (B_NoneType (*) (linesQ_Apa))B_ActorG_methods.__cleanup__;
         linesQ_ApaG_methods.__init__ = (B_NoneType (*) (linesQ_Apa))linesQ_ApaD___init__;
         linesQ_ApaG_methods.setupG_local = ($R (*) (linesQ_Apa, $Cont, $action))linesQ_ApaD_setupG_local;
         linesQ_ApaG_methods.computeG_local = ($R (*) (linesQ_Apa, $Cont, $action))linesQ_ApaD_computeG_local;
@@ -854,12 +854,12 @@ void linesQ___init__ () {
     }
     {
         linesQ_BepaG_methods.$GCINFO = "linesQ_Bepa";
-        linesQ_BepaG_methods.$superclass = ($SuperG_class)&$ActorG_methods;
-        linesQ_BepaG_methods.__bool__ = (bool (*) (linesQ_Bepa))$ActorG_methods.__bool__;
-        linesQ_BepaG_methods.__str__ = (B_str (*) (linesQ_Bepa))$ActorG_methods.__str__;
-        linesQ_BepaG_methods.__repr__ = (B_str (*) (linesQ_Bepa))$ActorG_methods.__repr__;
-        linesQ_BepaG_methods.__resume__ = (B_NoneType (*) (linesQ_Bepa))$ActorG_methods.__resume__;
-        linesQ_BepaG_methods.__cleanup__ = (B_NoneType (*) (linesQ_Bepa))$ActorG_methods.__cleanup__;
+        linesQ_BepaG_methods.$superclass = ($SuperG_class)&B_ActorG_methods;
+        linesQ_BepaG_methods.__bool__ = (bool (*) (linesQ_Bepa))B_ActorG_methods.__bool__;
+        linesQ_BepaG_methods.__str__ = (B_str (*) (linesQ_Bepa))B_ActorG_methods.__str__;
+        linesQ_BepaG_methods.__repr__ = (B_str (*) (linesQ_Bepa))B_ActorG_methods.__repr__;
+        linesQ_BepaG_methods.__resume__ = (B_NoneType (*) (linesQ_Bepa))B_ActorG_methods.__resume__;
+        linesQ_BepaG_methods.__cleanup__ = (B_NoneType (*) (linesQ_Bepa))B_ActorG_methods.__cleanup__;
         linesQ_BepaG_methods.__init__ = (B_NoneType (*) (linesQ_Bepa))linesQ_BepaD___init__;
         linesQ_BepaG_methods.callbackG_local = ($R (*) (linesQ_Bepa, $Cont, int64_t))linesQ_BepaD_callbackG_local;
         linesQ_BepaG_methods.__startup__G_local = ($R (*) (linesQ_Bepa, $Cont))linesQ_BepaD___startup__G_local;
@@ -871,12 +871,12 @@ void linesQ___init__ () {
     }
     {
         linesQ_mainG_methods.$GCINFO = "linesQ_main";
-        linesQ_mainG_methods.$superclass = ($SuperG_class)&$ActorG_methods;
-        linesQ_mainG_methods.__bool__ = (bool (*) (linesQ_main))$ActorG_methods.__bool__;
-        linesQ_mainG_methods.__str__ = (B_str (*) (linesQ_main))$ActorG_methods.__str__;
-        linesQ_mainG_methods.__repr__ = (B_str (*) (linesQ_main))$ActorG_methods.__repr__;
-        linesQ_mainG_methods.__resume__ = (B_NoneType (*) (linesQ_main))$ActorG_methods.__resume__;
-        linesQ_mainG_methods.__cleanup__ = (B_NoneType (*) (linesQ_main))$ActorG_methods.__cleanup__;
+        linesQ_mainG_methods.$superclass = ($SuperG_class)&B_ActorG_methods;
+        linesQ_mainG_methods.__bool__ = (bool (*) (linesQ_main))B_ActorG_methods.__bool__;
+        linesQ_mainG_methods.__str__ = (B_str (*) (linesQ_main))B_ActorG_methods.__str__;
+        linesQ_mainG_methods.__repr__ = (B_str (*) (linesQ_main))B_ActorG_methods.__repr__;
+        linesQ_mainG_methods.__resume__ = (B_NoneType (*) (linesQ_main))B_ActorG_methods.__resume__;
+        linesQ_mainG_methods.__cleanup__ = (B_NoneType (*) (linesQ_main))B_ActorG_methods.__cleanup__;
         linesQ_mainG_methods.__init__ = (B_NoneType (*) (linesQ_main, B_Env))linesQ_mainD___init__;
         linesQ_mainG_methods.__startup__G_local = ($R (*) (linesQ_main, $Cont))linesQ_mainD___startup__G_local;
         linesQ_mainG_methods.__startup__ = (B_Msg (*) (linesQ_main))linesQ_mainD___startup__;

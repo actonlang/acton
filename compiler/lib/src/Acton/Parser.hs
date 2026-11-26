@@ -2145,7 +2145,7 @@ actor_stmt parent = try ((:[]) <$> (signature <* newline1))
                 <?> "actor binding, signature or method"
 
 actor_declaration :: Parser S.Stmt
-actor_declaration = var_binding <|> binding_stmt <|> pass_stmt
+actor_declaration = var_binding <|> binding_stmt <|> class_small_stmt
   where var_binding = addLoc $ rword "var" *> (S.VarAssign NoLoc <$> some (try assign) <*> exprlist)
 
 -- Transitional tail, deliberately separate from actor_declaration. Looking
@@ -2354,7 +2354,7 @@ actordef = addLoc $ do
                 (ppar,kpar) <- params
                 (ss, docstring) <- actor_suite s
                 checkActorBindings ss
-                return $ S.Actor NoLoc nm q ppar kpar ss docstring
+                return $ S.Actor NoLoc nm q ppar kpar [] ss docstring
 
 -- classdef: 'class' NAME ['(' [arglist] ')'] ':' suite
 -- protodef: 'class' NAME ['(' [arglist] ')'] ':' suite

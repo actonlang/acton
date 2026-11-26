@@ -271,6 +271,48 @@ main = do
   env0 <- Acton.Env.initEnv sysTypesPath False
 
   sydTest $ do
+    describe "Actor ancestry" $ do
+      let source = "actor Child(initial: int):\n    pass\n"
+          checked = do
+            parsed <- P.parseModule (S.modName ["actor_ancestry"]) "<actor_ancestry>" source Nothing
+            env <- Acton.Env.mkEnv systemTypes env0 parsed
+            kinds <- Acton.Kinds.check env parsed
+            (I.NModule imports iface doc, typed, typedEnv, _) <- Acton.Types.reconstruct Nothing Nothing env kinds Nothing
+            return (typed, Acton.Env.addModuleInfo (S.modname typed)
+                      (Acton.Env.mkModuleInfo (S.modname typed) imports iface doc) typedEnv)
+      it "exposes Actor as an actor rooted in value with a startup action" $ do
+        (_, env) <- checked
+        case Acton.Env.findQName Builtin.qnActor env of
+          I.NAct [] p k as members _ -> do
+            p `shouldBe` S.posNil
+            k `shouldBe` S.kwdNil
+            map snd as `shouldBe` [Builtin.cValue]
+            map fst members `shouldBe` [S.name "__startup__"]
+          _ -> expectationFailure "Expected the built-in root actor"
+        case Acton.Env.findAttr env Builtin.cActor (S.name "__startup__") of
+          Just (_, sc, _) -> S.sctype sc `shouldBe` S.tFun S.fxAction S.posNil S.kwdNil S.tNone
+          _ -> expectationFailure "Expected the inherited startup contract"
+      it "records the root without changing a concrete actor's constructor rows" $ do
+        (typed, env) <- checked
+        let child = S.name "Child"
+        case Acton.Env.findQName (S.GName (S.modName ["actor_ancestry"]) child) env of
+          I.NAct [] p k as _ _ -> do
+            p `shouldBe` S.posNil
+            k `shouldBe` S.kwdRow (S.name "initial") Builtin.tInt S.kwdNil
+            map snd as `shouldBe` [Builtin.cActor, Builtin.cValue]
+          _ -> expectationFailure "Expected a concrete actor"
+        [ S.bounds d | S.Decl _ ds <- S.mbody typed, d@S.Actor{} <- ds ]
+          `shouldBe` [[Builtin.cActor, Builtin.cValue]]
+      it "lowers the public root to the existing runtime actor class" $ do
+        (typed, env) <- checked
+        (normalized, normEnv) <- Acton.Normalizer.normalize env typed
+        (_, deactEnv) <- Acton.Deactorizer.deactorize normEnv normalized
+        case Acton.Env.findQName Builtin.qnActor deactEnv of
+          I.NClass [] as members _ -> do
+            map snd as `shouldBe` [Builtin.cValue]
+            map fst members `shouldContain` [S.name "$next"]
+          _ -> expectationFailure "Expected the runtime representation of Actor"
+
     describe "Communication effects" $ do
       let hierarchy =
             [ (S.FXPure, [S.FXPure,S.FXMut,S.FXCom,S.FXProc,S.FXAction])
@@ -1617,7 +1659,7 @@ main = do
                 [ (clsName, I.NClass [] [] [(classAttr, I.NVar S.tWild)] Nothing)
                 , (parentName, I.NClass [] [] [] Nothing)
                 , (childName, I.NClass [] [([], parentTC)] [] Nothing)
-                , (actorName, I.NAct [] S.posNil S.kwdNil [(actorAttr, I.NVar S.tWild)] Nothing)
+                , (actorName, I.NAct [] S.posNil S.kwdNil (S.leftpath [Builtin.cActor]) [(actorAttr, I.NVar S.tWild)] Nothing)
                 , (protoName, I.NProto [] [] [(protoAttr, I.NVar S.tWild)] Nothing)
                 , (subProtoName, I.NProto [] [([], protoTC)] [] Nothing)
                 , (extName, I.NExt [] clsTC [([], protoTC)] [] [] Nothing)
@@ -1632,6 +1674,11 @@ main = do
               InterfaceFiles.readInterfaceDBPublicNames db `shouldReturn` map fst iface
               names <$> InterfaceFiles.readInterfaceDBConstructors db `shouldReturn` sort [actorName, childName, clsName, parentName, protoName, subProtoName]
               names <$> InterfaceFiles.readInterfaceDBActors db `shouldReturn` [actorName]
+              names <$> InterfaceFiles.readInterfaceDBDescendants db Builtin.qnActor `shouldReturn` [actorName]
+              map S.tcname (Acton.Env.moduleDescendants (Acton.Env.mkModuleInfo mn [] iface Nothing) Builtin.qnActor)
+                `shouldBe` [S.GName mn actorName]
+              map S.tcname (Acton.Env.moduleDescendants (Acton.Env.mkTyFileModuleInfo mn [] Nothing db) Builtin.qnActor)
+                `shouldBe` [S.GName mn actorName]
               names <$> InterfaceFiles.readInterfaceDBConAttr db classAttr `shouldReturn` [clsName]
               names <$> InterfaceFiles.readInterfaceDBConAttr db actorAttr `shouldReturn` [actorName]
               names <$> InterfaceFiles.readInterfaceDBProtoAttr db protoAttr `shouldReturn` [protoName]
@@ -4541,6 +4588,13 @@ main = do
           , "actor Parent(probe):", "    child = Inherited(self)" ]
         expect report ["Native"] "p" False
         selfSafe report ["Parent"] `shouldBe` Just False
+      it "leaves native actor bodies opaque and their parameter contracts conservative" $ do
+        report <- analyze
+          [ "actor Native(p):", "    NotImplemented"
+          , "actor Parent(probe):", "    child = Native(self)" ]
+        expect report ["Native"] "p" False
+        selfSafe report ["Native"] `shouldBe` Nothing
+        selfSafe report ["Parent"] `shouldBe` Just False
       it "uses imported constructor contracts" $ do
         provider <- liftIO $ P.parseModuleSerial (S.modName ["provider"]) "provider.act" (unlines box) Nothing
         consumer <- liftIO $ P.parseModuleSerial (S.modName ["consumer"]) "consumer.act"
@@ -7405,7 +7459,7 @@ testDocstrings env0 testname = do
 
       extractDocFromDecl (S.Def _ n _ _ _ _ _ _ _ ddoc) = [(S.nstr n, ddoc)]
       extractDocFromDecl (S.Class _ n _ _ _ ddoc) = [(S.nstr n, ddoc)]
-      extractDocFromDecl (S.Actor _ n _ _ _ _ ddoc) = [(S.nstr n, ddoc)]
+      extractDocFromDecl (S.Actor _ n _ _ _ us _ ddoc) = [(S.nstr n, ddoc)]
       extractDocFromDecl (S.Protocol _ n _ _ _ ddoc) = [(S.nstr n, ddoc)]
       extractDocFromDecl (S.Extension _ _ _ _ _ ddoc) = [("extension", ddoc)]
 

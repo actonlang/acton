@@ -35,6 +35,8 @@ spec = describe "Declarative body grammars" $ do
       ]
   forM_ [ "actor Example(): pass"
         , "actor Example(): \"doc\"; var state = 0; value = 1"
+        , "actor Example(): NotImplemented"
+        , "actor Example():\n    NotImplemented\n    def method(): NotImplemented"
         , "actor Example(): value = 1; __startup__()"
         , "actor Example(): \"doc\"; __startup__(); # trailing comment"
         , "actor Example():\n    def __startup__(): pass\n    __startup__();\n\n# comment\nclass Following(object): pass"

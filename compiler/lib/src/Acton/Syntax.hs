@@ -34,7 +34,7 @@ import Control.DeepSeq
 import Prelude hiding((<>))
 
 version :: [Int]
-version = [0,44]
+version = [0,45]
 
 data Module     = Module        { modname::ModName, imps::[Import], mdoc::Maybe String, mbody::Suite } deriving (Eq,Show,Generic,NFData)
 
@@ -68,7 +68,7 @@ data Stmt       = Expr          { sloc::SrcLoc, expr::Expr }
                 deriving (Show,Read,NFData,Generic)
 
 data Decl       = Def           { dloc::SrcLoc, dname:: Name, qbinds::QBinds, pos::PosPar, kwd::KwdPar, ann::Maybe Type, dbody::Suite, deco::Deco, dfx::TFX, ddoc::Maybe String }
-                | Actor         { dloc::SrcLoc, dname:: Name, qbinds::QBinds, pos::PosPar, kwd::KwdPar, dbody::Suite, ddoc::Maybe String }
+                | Actor         { dloc::SrcLoc, dname:: Name, qbinds::QBinds, pos::PosPar, kwd::KwdPar, bounds::[TCon], dbody::Suite, ddoc::Maybe String }
                 | Class         { dloc::SrcLoc, dname:: Name, qbinds::QBinds, bounds::[TCon], dbody::Suite, ddoc::Maybe String }
                 | Protocol      { dloc::SrcLoc, dname:: Name, qbinds::QBinds, bounds::[PCon], dbody::Suite, ddoc::Maybe String }
                 | Typedef       { dloc::SrcLoc, dname:: Name, qbinds::QBinds, texp::Type, ddoc::Maybe String }
@@ -773,7 +773,7 @@ instance Eq Stmt where
 instance Eq Decl where
     Def _ n1 q1 p1 k1 a1 b1 m1 d1 doc1   ==  Def _ n2 q2 p2 k2 a2 b2 m2 d2 doc2
                                                                     = n1==n2 && q1==q2 && p1==p2 && k1==k2 && a1==a2 && b1==b2 && d1==d2 && m1==m2 && doc1==doc2
-    Actor _ n1 q1 p1 k1 b1 doc1          ==  Actor _ n2 q2 p2 k2 b2 doc2      = n1 == n2 && q1 == q2 && p1 == p2 && k1 == k2 && b1 == b2 && doc1 == doc2
+    Actor _ n1 q1 p1 k1 us1 b1 doc1          ==  Actor _ n2 q2 p2 k2 us2 b2 doc2      = n1 == n2 && q1 == q2 && p1 == p2 && k1 == k2 && us1 == us2 && b1 == b2 && doc1 == doc2
     Class _ n1 q1 a1 b1 doc1             ==  Class _ n2 q2 a2 b2 doc2         = n1 == n2 && q1 == q2 && a1 == a2 && b1 == b2 && doc1 == doc2
     Protocol _ n1 q1 a1 b1 doc1          ==  Protocol _ n2 q2 a2 b2 doc2      = n1 == n2 && q1 == q2 && a1 == a2 && b1 == b2 && doc1 == doc2
     Typedef _ n1 q1 t1 doc1              ==  Typedef _ n2 q2 t2 doc2          = n1 == n2 && q1 == q2 && t1 == t2 && doc1 == doc2

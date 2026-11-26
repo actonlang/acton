@@ -308,7 +308,7 @@ static void rts_io_handles_walk_cb (uv_handle_t *handle, void *arg) {
     struct rts_io_handles_walk_res *walk_res = (struct rts_io_handles_walk_res *)arg;
     B_tuple val;
     if (uv_handle_get_type(handle) == UV_TCP) {
-        $Actor hactor = handle->data;
+        B_Actor hactor = handle->data;
         val = (B_tuple)$NEWTUPLE(2,
                                 actStrFromCString(uv_handle_type_name(uv_handle_get_type(handle))),
                                 toB_u64((uint64_t)(uintptr_t)hactor)

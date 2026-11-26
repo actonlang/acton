@@ -29,7 +29,7 @@ analyzeModule m = analyzeModules [(m,id)]
 
 analyzeModules :: [(Module, QName -> QName)] -> Safety
 analyzeModules inputs = Safety (M.map result cs)
-    (M.map (\c -> S.notMember (Self $ cname c) unsafe) $ M.filter (\c -> actor c || sourceInitializer c && not (unavailable c)) cs)
+    (M.map (\c -> S.notMember (Self $ cname c) unsafe) $ M.filter (\c -> (actor c || sourceInitializer c) && not (unavailable c)) cs)
   where
     cs = M.map unique $ M.fromListWith (++)
         [(cname c,[c]) | (m,r) <- inputs, c <- collect m r (mbody m)]

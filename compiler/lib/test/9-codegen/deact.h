@@ -20,6 +20,7 @@ struct deactQ_ApaG_class {
     B_str (*__repr__) (deactQ_Apa);
     B_NoneType (*__resume__) (deactQ_Apa);
     B_NoneType (*__cleanup__) (deactQ_Apa);
+    B_Msg (*__startup__) (deactQ_Apa);
     $R (*setupG_local) (deactQ_Apa, $Cont, $action);
     $R (*computeG_local) (deactQ_Apa, $Cont, $action);
     $R (*noticeG_local) (deactQ_Apa, $Cont, int64_t);
@@ -27,11 +28,10 @@ struct deactQ_ApaG_class {
     B_Msg (*setup) (deactQ_Apa, $action);
     B_Msg (*compute) (deactQ_Apa, $action);
     B_Msg (*notice) (deactQ_Apa, int64_t);
-    B_Msg (*__startup__) (deactQ_Apa);
 };
 struct deactQ_Apa {
     struct deactQ_ApaG_class *$class;
-    $Actor $next;
+    B_Actor $next;
     B_Msg $msg;
     B_Msg $msg_tail;
     $Lock $msg_lock;
@@ -55,14 +55,14 @@ struct deactQ_BepaG_class {
     B_str (*__repr__) (deactQ_Bepa);
     B_NoneType (*__resume__) (deactQ_Bepa);
     B_NoneType (*__cleanup__) (deactQ_Bepa);
+    B_Msg (*__startup__) (deactQ_Bepa);
     $R (*callbackG_local) (deactQ_Bepa, $Cont, int64_t);
     $R (*__startup__G_local) (deactQ_Bepa, $Cont);
     B_Msg (*callback) (deactQ_Bepa, int64_t);
-    B_Msg (*__startup__) (deactQ_Bepa);
 };
 struct deactQ_Bepa {
     struct deactQ_BepaG_class *$class;
-    $Actor $next;
+    B_Actor $next;
     B_Msg $msg;
     B_Msg $msg_tail;
     $Lock $msg_lock;
@@ -86,12 +86,12 @@ struct deactQ_mainG_class {
     B_str (*__repr__) (deactQ_main);
     B_NoneType (*__resume__) (deactQ_main);
     B_NoneType (*__cleanup__) (deactQ_main);
-    $R (*__startup__G_local) (deactQ_main, $Cont);
     B_Msg (*__startup__) (deactQ_main);
+    $R (*__startup__G_local) (deactQ_main, $Cont);
 };
 struct deactQ_main {
     struct deactQ_mainG_class *$class;
-    $Actor $next;
+    B_Actor $next;
     B_Msg $msg;
     B_Msg $msg_tail;
     $Lock $msg_lock;

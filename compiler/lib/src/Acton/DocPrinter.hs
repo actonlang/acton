@@ -108,7 +108,7 @@ extractTopLevelWithTypes _ _ = []
 extractNameDocstring :: NameInfo -> Maybe String
 extractNameDocstring (NDef _ _ mdoc) = mdoc
 extractNameDocstring (NSig _ _ mdoc) = mdoc
-extractNameDocstring (NAct _ _ _ _ mdoc) = mdoc
+extractNameDocstring (NAct _ _ _ _ _ mdoc) = mdoc
 extractNameDocstring (NClass _ _ _ mdoc) = mdoc
 extractNameDocstring (NProto _ _ _ mdoc) = mdoc
 extractNameDocstring (NType _ _ mdoc) = mdoc
@@ -216,7 +216,7 @@ docDeclWithTypes tenv (Def _ n q p k a b d x ddoc) =
     advanceRow (TRow _ _ _ _ _ rest) = rest
     advanceRow t = t
 
-docDeclWithTypes tenv (Actor _ n q p k b ddoc) =
+docDeclWithTypes tenv (Actor _ n q p k us b ddoc) =
     let mdocstring = case lookup n tenv of
             Just info -> extractNameDocstring info
             _ -> Nothing
@@ -751,9 +751,9 @@ docDeclUnified useStyle tenv decl@(Def _ n q p k a b d x ddoc) =
                      then param
                      else param <> comma <+> nextParams
 
-docDeclUnified useStyle tenv (Actor _ n q p k b ddoc) =
+docDeclUnified useStyle tenv (Actor _ n q p k us b ddoc) =
     let (paramsWithTypes, docstringFromTEnv) = case lookup n tenv of
-            Just info@(NAct _ posRow kwdRow _ mdoc) ->
+            Just info@(NAct _ posRow kwdRow us _ mdoc) ->
                 (enrichParamsStyledAsciiActr useStyle posRow kwdRow p k, mdoc)
             _ -> (docParamsStyledAscii useStyle useStyle p k, Nothing)
         -- Use docstring from AST declaration
@@ -2512,7 +2512,7 @@ docDeclHtmlWithTypesAndClassesAndModule tenv currentModule classNames decl =
     -- Update all type rendering to use the module-aware version
     case decl of
         Def _ n q p k a b d x ddoc -> docDefHtmlWithModule tenv currentModule classNames n q p k a b d ddoc
-        Actor _ n q p k b ddoc -> docActorHtmlWithModule tenv currentModule classNames n q p k b ddoc
+        Actor _ n q p k us b ddoc -> docActorHtmlWithModule tenv currentModule classNames n q p k b ddoc
         Class _ n q a b ddoc ->
             let wtcons = map (\tc -> ([], tc)) a  -- PCon is just a type alias for TCon
             in docClassHtmlWithModule tenv currentModule classNames n q wtcons b ddoc
@@ -2594,7 +2594,7 @@ docDeclHtmlWithTypesAndClassesAndModule tenv currentModule classNames decl =
         let explicitGenerics = extractGenerics q
             -- Look up inferred type information for actors
             (paramsWithTypes, allGenerics, constraints) = case Map.lookup n tenv of
-                Just (NAct qConstraints posRow kwdRow _ _) ->
+                Just (NAct qConstraints posRow kwdRow us _ _) ->
                     let inferredGenerics = extractGenerics qConstraints
                         combinedGenerics = Set.union explicitGenerics inferredGenerics
                     in (enrichParamsWithTypesHtmlAndClassesModule curMod combinedGenerics qConstraints classNames posRow kwdRow p k, combinedGenerics, qConstraints)
@@ -2727,11 +2727,11 @@ docDeclHtmlWithTypesAndClasses tenv classNames (Def _ n q p k a b d x ddoc) =
   where
     nl2br = intercalate "<br>" . lines
 
-docDeclHtmlWithTypesAndClasses tenv classNames (Actor _ n q p k b ddoc) =
+docDeclHtmlWithTypesAndClasses tenv classNames (Actor _ n q p k us b ddoc) =
     let explicitGenerics = extractGenerics q
         -- Look up inferred type information for actors
         (paramsWithTypes, allGenerics, constraints) = case lookup n tenv of
-            Just (NAct qConstraints posRow kwdRow _ _) ->
+            Just (NAct qConstraints posRow kwdRow us _ _) ->
                 let inferredGenerics = extractGenerics qConstraints
                     combinedGenerics = Set.union explicitGenerics inferredGenerics
                 in (enrichParamsWithTypesHtmlAndClasses combinedGenerics qConstraints classNames posRow kwdRow p k, combinedGenerics, qConstraints)

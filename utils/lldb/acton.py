@@ -73,7 +73,7 @@ CFG = Config()
 # ------------------------------
 
 _re_q_sep = re.compile(r"Q_")
-_re_d_magic = re.compile(r"D___")  # e.g. $ActorD___init__
+_re_d_magic = re.compile(r"D___")  # e.g. B_ActorD___init__
 _re_d_sep = re.compile(r"D_")      # general Derived separator, e.g. mainD_foo -> main.foo
 _re_g_sep = re.compile(r"G_")
 
@@ -1577,10 +1577,10 @@ def cmd_outgoing(debugger: lldb.SBDebugger, command: str, exe_ctx: lldb.SBExecut
     target = debugger.GetSelectedTarget()
     if not _is_stopped(target, result):
         return
-    actor_type = target.FindFirstType("struct $Actor")
+    actor_type = target.FindFirstType("struct B_Actor")
     msg_type = target.FindFirstType("struct B_Msg")
     if not actor_type.IsValid() or not msg_type.IsValid():
-        result.PutCString("No debug info for struct $Actor and struct B_Msg: is this a debug build of an Acton program?")
+        result.PutCString("No debug info for struct B_Actor and struct B_Msg: is this a debug build of an Acton program?")
         result.SetStatus(lldb.eReturnStatusFailed)
         return
 

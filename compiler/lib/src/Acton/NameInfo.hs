@@ -53,7 +53,7 @@ data NameInfo           = NVar      Type
                         | NSVar     Type
                         | NDef      TSchema Deco (Maybe String)
                         | NSig      TSchema Deco (Maybe String)
-                        | NAct      QBinds PosRow KwdRow TEnv (Maybe String)
+                        | NAct      QBinds PosRow KwdRow [WTCon] TEnv (Maybe String)
                         | NClass    QBinds [WTCon] TEnv (Maybe String)
                         | NProto    QBinds [WTCon] TEnv (Maybe String)
                         | NType     QBinds Type (Maybe String)
@@ -83,7 +83,7 @@ instance Persist NameInfo
 -- documentation-only edits do not cause dependents to rebuild.
 stripDocsNI :: NameInfo -> NameInfo
 stripDocsNI ni = case ni of
-  NAct q p k te _     -> NAct q p k (map stripBind te) Nothing
+  NAct q p k us te _     -> NAct q p k us (map stripBind te) Nothing
   NClass q cs te _    -> NClass q cs (map stripBind te) Nothing
   NProto q ps te _    -> NProto q ps (map stripBind te) Nothing
   NType q t _         -> NType q t Nothing
@@ -108,7 +108,7 @@ stripLocsNI ni = case ni of
   NSVar t            -> NSVar (stripLocsType t)
   NDef sc dec doc    -> NDef (stripLocsTSchema sc) dec doc
   NSig sc dec doc    -> NSig (stripLocsTSchema sc) dec doc
-  NAct q p k te doc  -> NAct (stripLocsQBinds q) (stripLocsType p) (stripLocsType k) (stripLocsTEnv te) doc
+  NAct q p k us te doc  -> NAct (stripLocsQBinds q) (stripLocsType p) (stripLocsType k) (map stripLocsWTCon us) (stripLocsTEnv te) doc
   NClass q cs te doc -> NClass (stripLocsQBinds q) (map stripLocsWTCon cs) (stripLocsTEnv te) doc
   NProto q ps te doc -> NProto (stripLocsQBinds q) (map stripLocsWTCon ps) (stripLocsTEnv te) doc
   NType q t doc      -> NType (stripLocsQBinds q) (stripLocsType t) doc
@@ -201,7 +201,7 @@ instance Pretty (Name,NameInfo) where
     pretty (n, NSVar t)         = text "var" <+> pretty n <+> colon <+> pretty t
     pretty (n, NDef t d doc)    = prettyDec d $ pretty n <+> colon <+> pretty t $+$ nest 4 (prettyDocstring doc)
     pretty (n, NSig t d doc)    = prettyDec d $ pretty n <+> colon <+> pretty t $+$ nest 4 (prettyDocstring doc)
-    pretty (n, NAct q p k te doc)
+    pretty (n, NAct q p k us te doc)
                                 = text "actor" <+> pretty n <> nonEmpty brackets commaList q <+>
                                   parens (prettyFunRow p k) <> colon $+$ nest 4 (prettyDocstring doc) $+$ (nest 4 $ prettyOrPass te)
     pretty (n, NClass q us te doc)
@@ -237,7 +237,7 @@ instance VFree NameInfo where
     vfree (NSVar t)             = vfree t
     vfree (NDef t d _)          = vfree t
     vfree (NSig t d _)          = vfree t
-    vfree (NAct q p k te _)     = (vfree q ++ vfree p ++ vfree k ++ vfree te) \\ (tvSelf : qbound q)
+    vfree (NAct q p k us te _)     = (vfree q ++ vfree p ++ vfree k ++ vfree us ++ vfree te) \\ (tvSelf : qbound q)
     vfree (NClass q us te _)    = (vfree q ++ vfree us ++ vfree te) \\ (tvSelf : qbound q)
     vfree (NProto q us te _)    = (vfree q ++ vfree us ++ vfree te) \\ (tvSelf : qbound q)
     vfree (NType q t _)         = (vfree q ++ vfree t) \\ qbound q
@@ -251,7 +251,7 @@ instance VSubst NameInfo where
     vsubst s (NSVar t)          = NSVar (vsubst s t)
     vsubst s (NDef t d x)       = NDef (vsubst s t) d x
     vsubst s (NSig t d x)       = NSig (vsubst s t) d x
-    vsubst s (NAct q p k te x)  = NAct (vsubst s q) (vsubst s p) (vsubst s k) (vsubst s te) x
+    vsubst s (NAct q p k us te x)  = NAct (vsubst s q) (vsubst s p) (vsubst s k) (vsubst s us) (vsubst s te) x
     vsubst s (NClass q us te x) = NClass (vsubst s q) (vsubst s us) (vsubst s te) x
     vsubst s (NProto q us te x) = NProto (vsubst s q) (vsubst s us) (vsubst s te) x
     vsubst s (NType q t x)      = NType (vsubst s q) (vsubst s t) x
@@ -265,7 +265,7 @@ instance UFree NameInfo where
     ufree (NSVar t)             = ufree t
     ufree (NDef t d _)          = ufree t
     ufree (NSig t d _)          = ufree t
-    ufree (NAct q p k te _)     = ufree q ++ ufree p ++ ufree k ++ ufree te
+    ufree (NAct q p k us te _)     = ufree q ++ ufree p ++ ufree k ++ ufree us ++ ufree te
     ufree (NClass q us te _)    = ufree q ++ ufree us ++ ufree te
     ufree (NProto q us te _)    = ufree q ++ ufree us ++ ufree te
     ufree (NType q t _)         = ufree q ++ ufree t
@@ -282,7 +282,7 @@ instance Polarity NameInfo where
     polvars (NSVar t)           = invvars t
     polvars (NDef t d _)        = polvars t
     polvars (NSig t d _)        = polvars t
-    polvars (NAct q p k te _)   = polvars q `polcat` polneg (polvars p `polcat` polvars k) `polcat` polvars te
+    polvars (NAct q p k us te _)   = polvars q `polcat` polneg (polvars p `polcat` polvars k) `polcat` polvars us `polcat` polvars te
     polvars (NClass q us te _)  = polvars q `polcat` polvars us `polcat` polvars te
     polvars (NProto q us te _)  = polvars q `polcat` polvars us `polcat` polvars te
     polvars (NType q t _)       = polvars q `polcat` polvars t
@@ -298,7 +298,7 @@ instance Tailvars (Name, NameInfo) where
 
 wildargs i                      = [ tWild | _ <- nbinds i ]
   where
-    nbinds (NAct q _ _ _ _)     = q
+    nbinds (NAct q _ _ _ _ _)     = q
     nbinds (NClass q _ _ _)     = q
     nbinds (NProto q _ _ _)     = q
     nbinds (NType q _ _)        = q
@@ -398,7 +398,7 @@ instance Vars NameInfo where
       NSVar t -> freeQ t
       NDef sc _ _ -> freeQ sc
       NSig sc _ _ -> freeQ sc
-      NAct q p k te _ -> freeQ q ++ freeQ p ++ freeQ k ++ freeQ te
+      NAct q p k us te _ -> freeQ q ++ freeQ p ++ freeQ k ++ freeQ us ++ freeQ te
       NClass q ws te _ -> freeQ q ++ freeQ ws ++ freeQ te
       NProto q ws te _ -> freeQ q ++ freeQ ws ++ freeQ te
       NType q t _ -> freeQ q ++ freeQ t
@@ -411,7 +411,7 @@ instance Vars NameInfo where
     nmap f (NSVar t)            = NSVar (nmap f t)
     nmap f (NDef sc d s)        = NDef (nmap f sc) d s
     nmap f (NSig sc d s)        = NSig (nmap f sc) d s
-    nmap f (NAct q p k te s)    = NAct (nmap f q) (nmap f p) (nmap f k) (nmap f te) s
+    nmap f (NAct q p k us te s)    = NAct (nmap f q) (nmap f p) (nmap f k) (nmap f us) (nmap f te) s
     nmap f (NClass q ws te s)   = NClass (nmap f q) (nmap f ws) (nmap f te) s
     nmap f (NProto q ws te s)   = NProto (nmap f q) (nmap f ws) (nmap f te) s
     nmap f (NType q t s)        = NType (nmap f q) (nmap f t) s

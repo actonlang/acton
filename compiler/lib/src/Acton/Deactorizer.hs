@@ -23,6 +23,7 @@ import Acton.NameInfo
 import Acton.QuickType
 import Acton.Env
 import Acton.Transform
+import Acton.Converter (fromTEnv)
 import Utils
 import Pretty
 import Control.Monad.State.Strict
@@ -121,18 +122,20 @@ instance Deact Stmt where
             t                       = tFun fxProc posNil kwdNil t2
             prim                    = if now then primAFTER_NOWf else primAFTERf
     deact env (Decl l ds)           = do ds1 <- deact env1 ds
-                                         return $ Decl l $ ds1 ++ [ newact env1 n q p Nothing | Actor _ n q p _ _ _ <- ds, not $ abstractActor env1 (NoQ n) ]
+                                         return $ Decl l $ ds1 ++ [ newact env1 n q p Nothing | Actor _ n q p _ _ _ _ <- ds, not $ abstractActor env1 (NoQ n) ]
       where env1                    = define (envOf ds) env
     deact env (Signature l ns t d)  = return $ Signature l ns t d
     deact env s                     = error ("deact unexpected stmt: " ++ prstr s)
 
 instance Deact Decl where
-    deact env (Actor l n q params KwdNIL body ddoc)
-                                    = do inits1 <- deactSuite (define (envOf decls) env1) inits
+    deact env (Actor l n q params KwdNIL us body ddoc)
+      | inBuiltin env, n == nActor,
+        notImplBody body            = return $ Class l n q us (fromTEnv actorRuntimeEnv ++ [sNotImpl]) ddoc
+      | otherwise                   = do inits1 <- deactSuite (define (envOf decls) env1) inits
                                          decls1 <- deactSuite (define (envOf inits) env1) decls
                                          let _init_ = Def l0 initKW [] (addSelfPar params) KwdNIL (Just tNone) (copies++inits1++[sReturn eNone]) NoDec fxCom Nothing
                                              decls2 = [ Decl l $ map deactMeth ds | Decl l ds <- decls1 ]
-                                         return $ Class l n q [TC primActor [], cValue] (propsigs ++ [Decl l0 [_init_]] ++ decls2 ++ wraps) ddoc
+                                         return $ Class l n q us (propsigs ++ [Decl l0 [_init_]] ++ decls2 ++ wraps) ddoc
       where env1                    = setActor wrapped stvars locals $ define (envOf params) $ define [(selfKW, NVar t0)] $ defineTVars q env
             t0                      = tCon $ TC (NoQ n) (map tVar $ qbound q)
 
@@ -199,10 +202,10 @@ newact env n q p ddoc               = Def l0 (newactName n) q p KwdNIL (Just t) 
                                         sExpr $ call primConstructionEnd [eVar parent],
                                         sReturn x ]
         initialize                  = [ sAssign (pVar g_act t) (eCall (tApp (eQVar primNEWACTOR) [t]) []),
-                                        sExpr $ call primConstructionEnter [x],
-                                        sExpr $ eCall (tApp (eQVar primInstallFinalizer) [t]) [x],
-                                        sExpr $ Call l0 (eDot x initKW) (pArg p) KwdNil,
-                                        sExpr $ call primDROP [] ]
+                                        sExpr $ call primConstructionEnter [x] ] ++
+                                      [ sExpr $ eCall (tApp (eQVar primInstallFinalizer) [t]) [x] | not (inBuiltin env && n == nActor) ] ++
+                                      [ sExpr $ Call l0 (eDot x initKW) (pArg p) KwdNil | not (inBuiltin env && n == nActor) ] ++
+                                      [ sExpr $ call primDROP [] ]
         failed                      = [ sAssign (pVar exception tBaseException) (call primPOP []),
                                         sExpr $ call primConstructionAbort [eVar parent, eVar exception],
                                         sExpr $ eCall (tApp (eQVar primRAISE) [tNone]) [eVar exception] ]
@@ -222,7 +225,7 @@ addSelfPar p                        = PosPar selfKW (Just tSelf) Nothing p
 selfRef n                           = Dot l0 (Var l0 (NoQ selfKW)) n
 
 
--- $ASYNCf : [A] => action($Actor, proc()->A) -> Msg[A]
+-- $ASYNCf : [A] => action(B_Actor, proc()->A) -> Msg[A]
 -- $AFTERf : [A] => proc(int,      proc()->A) -> Msg[A]
 -- $AWAITf : [A] => proc(Msg[A])              -> A
 
@@ -370,12 +373,38 @@ instance LambdaFree Elem where
     lamfree (Elem e)                = lamfree e
 
 
+-- Runtime fields and native methods, added only after source type checking.
+actorClass                         = NClass [] (leftpath [cValue]) actorRuntimeEnv Nothing
+
+actorRuntimeEnv                    = [ (initKW,              NDef (monotype $ tFun fxPure posNil kwdNil tNone) NoDec Nothing),
+                                      (primKW "next",       NSig (monotype tActor) Property Nothing),
+                                      (primKW "msg",        NSig (monotype (tMsg tWild)) Property Nothing),
+                                      (primKW "msg_tail",   NSig (monotype (tMsg tWild)) Property Nothing),
+                                      (primKW "msg_lock",   NSig (monotype $ tCon $ TC (gPrim "Lock") []) Property Nothing),
+                                      (primKW "affinity",   NSig (monotype $ tCon $ TC (gPrim "int64") []) Property Nothing),
+                                      (primKW "outgoing",   NSig (monotype (tMsg tWild)) Property Nothing),
+                                      (primKW "newborns",   NSig (monotype (tList tActor)) Property Nothing),
+                                      (primKW "waitsfor",   NSig (monotype (tMsg tWild)) Property Nothing),
+                                      (primKW "consume_hd", NSig (monotype $ tCon $ TC (gPrim "int64") []) Property Nothing),
+                                      (primKW "catcher",    NSig (monotype $ tCon $ TC (gPrim "Catcher") []) Property Nothing),
+                                      (primKW "globkey",    NSig (monotype $ tCon $ TC (gPrim "int64") []) Property Nothing),
+                                      (boolKW,              NDef (monotype $ tFun fxPure posNil kwdNil tBool) NoDec Nothing),
+                                      (strKW,               NDef (monotype $ tFun fxPure posNil kwdNil tStr) NoDec Nothing),
+                                      (reprKW,              NDef (monotype $ tFun fxPure posNil kwdNil tStr) NoDec Nothing),
+                                      (resumeKW,            NDef (monotype $ tFun fxMut posNil kwdNil tNone) NoDec Nothing),
+                                      (cleanupKW,           NDef (monotype $ tFun fxMut posNil kwdNil tNone) NoDec Nothing),
+                                      (name "__startup__",   NDef (monotype $ tFun fxAction posNil kwdNil tNone) NoDec Nothing)
+                                      ]
+
 -- Convert types and environments -----------------------------------------------------------------------
 
-conv m (n, NAct q p k te' doc)      = (n, NClass q (leftpath [TC primActor [], cValue]) (convActorEnv q p k te') doc) :
+conv m (n, NAct q p k us te' doc)      = (n, representation) :
                                       (newactName n, NDef (tSchema q (tFun fxCom p k t)) NoDec Nothing) :
                                       []
-  where convActorEnv q0 p k te'     = (initKW, NDef t0 NoDec Nothing) : te'
+  where representation
+          | m == mBuiltin && n == nActor = actorClass
+          | otherwise = NClass q us (convActorEnv q p k te') doc
+        convActorEnv q0 p k te'      = (initKW, NDef t0 NoDec Nothing) : te'
           where t0                  = tSchema q0 (tFun fxCom p k tNone)
         t                           = tCon $ TC (GName m n) (map tVar $ qbound q)
 conv m ni                           = [ni]

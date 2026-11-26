@@ -94,7 +94,7 @@ instance VFree KwdPar where
 
 instance VFree Decl where
     vfree (Def _ n q p k a ss de fx doc) = vfree q ++ vfree p ++ vfree k ++ vfree a ++ vfree ss ++ vfree fx
-    vfree (Actor _ n q p k ss doc)       = vfree q ++ vfree p ++ vfree k ++ vfree ss
+    vfree (Actor _ n q p k us ss doc)       = vfree q ++ vfree p ++ vfree k ++ vfree us ++ vfree ss
     vfree (Class _ n q bs ss doc)        = vfree q ++ vfree bs ++ vfree ss
     vfree (Protocol _ n q bs ss doc)     = vfree q ++ vfree bs ++ vfree ss
     vfree (Typedef _ n q t doc)          = vfree q ++ vfree t
@@ -278,8 +278,8 @@ instance VSubst KwdPar where
 instance VSubst Decl where
     vsubst s (Def l n q p k a ss de fx doc) = Def l n (vsubst r q) (vsubst r p) (vsubst r k) (vsubst r a) (vsubst r ss) de (vsubst r fx) doc
       where r                               = quantsubst s q (vfree p ++ vfree k ++ vfree a ++ vfree ss ++ vfree fx)
-    vsubst s (Actor l n q p k ss doc)       = Actor l n (vsubst r q) (vsubst r p) (vsubst r k) (vsubst r ss) doc
-      where r                               = quantsubst s q (vfree p ++ vfree k ++ vfree ss)
+    vsubst s (Actor l n q p k us ss doc)       = Actor l n (vsubst r q) (vsubst r p) (vsubst r k) (vsubst r us) (vsubst r ss) doc
+      where r                               = quantsubst s q (vfree p ++ vfree k ++ vfree us ++ vfree ss)
     vsubst s (Class l n q bs ss doc)        = Class l n (vsubst s q) (vsubst s bs) (vsubst s ss) doc
       where r                               = quantsubst s q (vfree bs ++ vfree ss)
     vsubst s (Protocol l n q bs ss doc)     = Protocol l n (vsubst s q) (vsubst s bs) (vsubst s ss) doc
@@ -457,7 +457,7 @@ instance UFree KwdPar where
 
 instance UFree Decl where
     ufree (Def _ n q p k a ss de fx _)  = ufree q ++ ufree p ++ ufree k ++ ufree a ++ ufree ss ++ ufree fx
-    ufree (Actor _ n q p k ss _)        = ufree q ++ ufree p ++ ufree k ++ ufree ss
+    ufree (Actor _ n q p k us ss _)        = ufree q ++ ufree p ++ ufree k ++ ufree us ++ ufree ss
     ufree (Class _ n q bs ss _)         = ufree q ++ ufree bs ++ ufree ss
     ufree (Protocol _ n q bs ss _)      = ufree q ++ ufree bs ++ ufree ss
     ufree (Typedef _ n q t _)           = ufree q ++ ufree t

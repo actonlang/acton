@@ -148,14 +148,13 @@ extern pthread_cond_t work_to_do;
 #ifndef ACTON_THREADS
 // The actor whose continuation the program is running, or NULL when it runs
 // none
-extern $Actor self_actor;
+extern B_Actor self_actor;
 #endif
 
 typedef struct B_Msg *B_Msg;
 typedef struct $ConstCont *$ConstCont;
 
 extern struct B_MsgG_class B_MsgG_methods;
-extern struct $ActorG_class $ActorG_methods;
 extern struct $CatcherG_class $CatcherG_methods;
 extern struct $ContG_class $DoneG_methods;
 extern struct $ContG_class $FailG_methods;
@@ -171,7 +170,7 @@ struct B_MsgG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    void (*__init__)(B_Msg, $Actor, $Cont, time_t, $WORD);
+    void (*__init__)(B_Msg, B_Actor, $Cont, time_t, $WORD);
     void (*__serialize__)(B_Msg, $Serial$state);
     B_Msg (*__deserialize__)(B_Msg, $Serial$state);
     B_bool (*__bool__)(B_Msg);
@@ -182,9 +181,9 @@ struct B_MsgG_class {
 struct B_Msg {
     struct B_MsgG_class *$class;
     B_Msg $next;
-    $Actor $to;
+    B_Actor $to;
     $Cont $cont;
-    $Actor $waiting;
+    B_Actor $waiting;
     time_t $baseline;
     $Lock $wait_lock;
     // Ready stamp (stamp_us in rts.c), in the padding after $wait_lock: the
@@ -196,22 +195,9 @@ struct B_Msg {
     $int64 $globkey;
 };
 
-struct $ActorG_class {
-    char *$GCINFO;
-    int $class_id;
-    $SuperG_class $superclass;
-    void (*__init__)($Actor);
-    void (*__serialize__)($Actor, $Serial$state);
-    $Actor (*__deserialize__)($Actor, $Serial$state);
-    bool (*__bool__)($Actor);
-    B_str (*__str__)($Actor);
-    B_str (*__repr__)($Actor);
-    B_NoneType (*__resume__)($Actor);
-    B_NoneType (*__cleanup__)($Actor);
-};
-struct $Actor {
-    struct $ActorG_class *$class;
-    $Actor $next;
+struct B_Actor {
+    struct B_ActorG_class *$class;
+    B_Actor $next;
     B_Msg B_Msg;
     B_Msg B_Msg_tail;
     $Lock B_Msg_lock;
@@ -263,7 +249,7 @@ struct $ConstCont {
 $Cont $CONSTCONT($WORD, $Cont);
 
 B_Msg $COMPLETED($WORD);
-B_Msg $ASYNC($Actor, $Cont);
+B_Msg $ASYNC(B_Actor, $Cont);
 B_Msg $AFTER(B_float, $Cont);
 B_Msg $AFTER_NOW(B_float, $Cont);
 $R $AWAIT($Cont, B_Msg);
@@ -281,17 +267,17 @@ void register_actor(int64_t key);
 
 #define $NEWACTOR($T)       ({ $T $t = GC_malloc(sizeof(struct $T)); \
                                $t->$class = &$T ## G_methods; \
-                               $ActorG_methods.__init__(($Actor)$t); \
+                               B_ActorG_methods.__init__((B_Actor)$t); \
                                $t->$affinity = SHARED_RQ; \
-                               $ConstructionRegister(($Actor)$t); \
+                               $ConstructionRegister((B_Actor)$t); \
                                $t; })
 
-void $ConstructionRegister($Actor actor);
+void $ConstructionRegister(B_Actor actor);
 void $InstallFinalizer(void *actor, GC_finalization_proc fn);
-$Actor $ConstructionBegin(void);
-B_NoneType $ConstructionEnter($Actor actor);
-B_NoneType $ConstructionEnd($Actor parent);
-B_NoneType $ConstructionAbort($Actor parent, B_BaseException exception);
+B_Actor $ConstructionBegin(void);
+B_NoneType $ConstructionEnter(B_Actor actor);
+B_NoneType $ConstructionEnd(B_Actor parent);
+B_NoneType $ConstructionAbort(B_Actor parent, B_BaseException exception);
 B_NoneType $MarkStartup(B_Msg message);
 
 #ifdef ACTON_THREADS
@@ -322,7 +308,7 @@ struct WorkerCtx {
     // runs none. It is not a thread-local of its own: macOS keeps the
     // thread-locals of each thread in a small heap block, and the blocks of
     // several threads can share a cache line.
-    $Actor actor;
+    B_Actor actor;
     struct ConstructionContext *construction;
     // The next key this worker hands out, and the distance to the one after
     // it (see get_next_key())
@@ -366,9 +352,8 @@ void set_actor_affinity(int wthread_id);
 
 //typedef B_int B_Env;
 
-void $Actor$serialize($Actor, B_NoneType);
-void $Actor$deserialize($Actor, B_NoneType);
-B_NoneType $ActorD___cleanup__($Actor);
+void B_Actor$serialize(B_Actor, B_NoneType);
+void B_Actor$deserialize(B_Actor, B_NoneType);
 
 bool B_MsgD___bool__(B_Msg self);
 B_str B_MsgD___str__(B_Msg self);

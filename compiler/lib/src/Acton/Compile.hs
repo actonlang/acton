@@ -3165,7 +3165,7 @@ rootEligible = isNothing . rootActorProblem id
 -- | Why a name cannot be a program's root, or Nothing when it can (see
 -- rootEligible). The explanation prints types through display.
 rootActorProblem :: (A.Type -> A.Type) -> I.NameInfo -> Maybe String
-rootActorProblem display (I.NAct q p k _ _)
+rootActorProblem display (I.NAct q p k us _ _)
                                     = case (p,k) of
                                         (A.TNil{}, A.TRow _ _ x t _ A.TNil{})
                                           | prstr t `notElem` envTypes ->

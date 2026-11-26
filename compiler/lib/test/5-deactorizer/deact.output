@@ -7,7 +7,7 @@ W_Apa_101: __builtin__.Times[__builtin__.int, __builtin__.int] = __builtin__.Int
 W_Apa_395: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
 
 # recursive group:
-class Apa ($Actor, __builtin__.value):
+class Apa (__builtin__.Actor, __builtin__.value):
     com def __init__ (self : Self) -> None:
         $MarkStartup((async self.__startup__)())
         return None
@@ -39,7 +39,7 @@ class Apa ($Actor, __builtin__.value):
         return $ASYNCf@[__builtin__.int](self, proc lambda: self.noticeG_local(i))
     action def __startup__ (self : Self) -> None:
         return $ASYNCf@[None](self, proc lambda: self.__startup__G_local())
-class Bepa ($Actor, __builtin__.value):
+class Bepa (__builtin__.Actor, __builtin__.value):
     com def __init__ (self : Self) -> None:
         $MarkStartup((async self.__startup__)())
         return None
@@ -54,7 +54,7 @@ class Bepa ($Actor, __builtin__.value):
         return $ASYNCf@[__builtin__.int](self, proc lambda: self.callbackG_local(i))
     action def __startup__ (self : Self) -> None:
         return $ASYNCf@[None](self, proc lambda: self.__startup__G_local())
-class main ($Actor, __builtin__.value):
+class main (__builtin__.Actor, __builtin__.value):
     @property
     env : __builtin__.Env
     com def __init__ (self : Self, env : __builtin__.Env) -> None:
@@ -80,7 +80,7 @@ class main ($Actor, __builtin__.value):
     action def __startup__ (self : Self) -> None:
         return $ASYNCf@[None](self, proc lambda: self.__startup__G_local())
 com def ApaG_newact () -> Apa:
-    N_construction_parent: $Actor = $ConstructionBegin()
+    N_construction_parent: __builtin__.Actor = $ConstructionBegin()
     if $PUSH():
         G_act: Apa = $NEWACTOR@[Apa]()
         $ConstructionEnter(G_act)
@@ -94,7 +94,7 @@ com def ApaG_newact () -> Apa:
     $ConstructionEnd(N_construction_parent)
     return G_act
 com def BepaG_newact () -> Bepa:
-    N_construction_parent: $Actor = $ConstructionBegin()
+    N_construction_parent: __builtin__.Actor = $ConstructionBegin()
     if $PUSH():
         G_act: Bepa = $NEWACTOR@[Bepa]()
         $ConstructionEnter(G_act)
@@ -108,7 +108,7 @@ com def BepaG_newact () -> Bepa:
     $ConstructionEnd(N_construction_parent)
     return G_act
 com def mainG_newact (env : __builtin__.Env) -> main:
-    N_construction_parent: $Actor = $ConstructionBegin()
+    N_construction_parent: __builtin__.Actor = $ConstructionBegin()
     if $PUSH():
         G_act: main = $NEWACTOR@[main]()
         $ConstructionEnter(G_act)

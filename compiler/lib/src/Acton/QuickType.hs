@@ -122,7 +122,7 @@ qSchema env f e@(Var _ n)           = case findQName n env of
                                                 (TSchema _ q' t, _) = findAttr' env tc initKW
                                                 t' = if restype t == tR then t else t{ restype = tSelf }
                                             in (tSchema (q++q') $ vsubst [(tvSelf,tCon tc)] t', fxPure, Just NoDec, e)
-                                        NAct q p k _ _ ->
+                                        NAct q p k us _ _ ->
                                             (tSchema q (tFun fxCom p k (tCon0 n q)), fxPure, Just NoDec, e)
                                         i -> error ("### qSchema Var unexpected " ++ prstr (noq n,i))
 qSchema env f e@(Dot _ (Var _ x) n)
@@ -459,7 +459,7 @@ instance EnvOf Decl where
     envOf (Class _ n q as ss doc)   = [(n, NClass q (leftpath as) (map dropDefSelf $ envOf ss) doc)]
     envOf (Typedef _ n q t doc)     = [(n, NType q t doc)]
 
-    envOf (Actor _ n q p k ss doc)  = [(n, NAct q (prowOf p) (krowOf k) (map wrap te) doc)]
+    envOf (Actor _ n q p k us ss doc)  = [(n, NAct q (prowOf p) (krowOf k) (leftpath us) (map wrap te) doc)]
       where te                      = filter (not . isHidden . fst) $ envOf ss `exclude` statevars ss
             wrap (n, NDef sc dec doc) = (n, NDef (wrapFX sc) dec doc)
             wrap (n, i)             = (n, i)

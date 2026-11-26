@@ -18,7 +18,7 @@ proc def maybe_log (c : ?Cls) -> None:
     return None
 
 # recursive group:
-class Logger ($Actor, __builtin__.value):
+class Logger (__builtin__.Actor, __builtin__.value):
     com def __init__ (self : Self) -> None:
         return None
     proc def logG_local (self : Self, msg : __builtin__.str) -> None:
@@ -27,7 +27,7 @@ class Logger ($Actor, __builtin__.value):
     action def log (self : Self, msg : __builtin__.str) -> None:
         return $ASYNCf@[None](self, proc lambda: self.logG_local(msg))
 com def LoggerG_newact () -> Logger:
-    N_construction_parent: $Actor = $ConstructionBegin()
+    N_construction_parent: __builtin__.Actor = $ConstructionBegin()
     if $PUSH():
         G_act: Logger = $NEWACTOR@[Logger]()
         $ConstructionEnter(G_act)

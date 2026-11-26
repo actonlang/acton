@@ -240,14 +240,15 @@ assigned stmts                      = concatMap assig stmts
 instance Vars Decl where
     freeQ (Def _ n q ps ks t b d fx _)
                                     = (freeQ ps ++ freeQ ks ++ freeQ b ++ freeQ fx) `diffQ` (bound q ++ bound ps ++ bound ks ++ assigned b)
-    freeQ (Actor _ n q ps ks b _)   = (freeQ ps ++ freeQ ks ++ freeQ b) `diffQ` (self : bound q ++ bound ps ++ bound ks ++ assigned b)
+    freeQ (Actor _ n q ps ks us b _)   = (freeQ bases ++ freeQ ps ++ freeQ ks ++ freeQ b) `diffQ` (self : bound q ++ bound ps ++ bound ks ++ assigned b)
+      where bases = if null us then [if n == nActor then cValue else cActor] else us
     freeQ (Class _ n q cs b _)      = (freeQ cs ++ freeQ b) `diffQ` (bound q ++ assigned b)
     freeQ (Protocol _ n q ps b _)   = (freeQ ps ++ freeQ b) `diffQ` (bound q ++ assigned b)
     freeQ (Typedef _ n q t _)       = freeQ t `diffQ` bound q
     freeQ (Extension _ q c ps b _)  = (freeQ c ++ freeQ ps ++ freeQ b) `diffQ` (bound q ++ assigned b)
 
     bound (Def _ n _ _ _ _ _ _ _ _) = [n]
-    bound (Actor _ n _ _ _ _ _)     = [n]
+    bound (Actor _ n _ _ _ us _ _)     = [n]
     bound (Class _ n _ _ _ _)       = [n]
     bound (Protocol _ n _ _ _ _)    = [n]
     bound (Typedef _ n _ _ _)       = [n]

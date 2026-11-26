@@ -93,7 +93,7 @@ reconstruct progressCb inferredCb env0 (Module m i mdoc ss) bareMod = do --trace
         rmTests (Assign _ [PVar _ n _] _ : ss)
           | nstr n `elem` ["__unit_tests","__simple_sync_tests","__sync_tests","__async_tests","__env_tests"]
                                         = rmTests ss
-        rmTests (Decl _ [Actor _ n _ _ _ _ _] : ss)
+        rmTests (Decl _ [Actor _ n _ _ _ us _ _] : ss)
           | nstr n == "test_main"       = rmTests ss
         rmTests (s : ss)                = s : rmTests ss
         rmTests []                      = []
@@ -105,7 +105,7 @@ qualifyInterfaceDefaults env          = map qualifyBinding
         qualifyInfo (NSVar t)          = NSVar (qualifyType t)
         qualifyInfo (NDef sc d doc)    = NDef (qualifySchema sc) d doc
         qualifyInfo (NSig sc d doc)    = NSig (qualifySchema sc) d doc
-        qualifyInfo (NAct q p k te doc)= NAct (map qualifyQBind q) (qualifyTypeIn q p) (qualifyTypeIn q k)
+        qualifyInfo (NAct q p k us te doc)= NAct (map qualifyQBind q) (qualifyTypeIn q p) (qualifyTypeIn q k) (map qualifyWTCon us)
                                                (qualifyInterfaceDefaults env te) doc
         qualifyInfo (NClass q cs te doc)
                                         = NClass (map qualifyQBind q) (map qualifyWTCon cs)
@@ -612,7 +612,7 @@ defaultRefSubst                         = concatMap refsBinding
                                             = refsType t
         refsInfo (NSig (TSchema _ _ t) _ _)
                                             = refsType t
-        refsInfo (NAct _ p k te _)      = refsType p ++ refsType k ++ defaultRefSubst te
+        refsInfo (NAct _ p k us te _)      = refsType p ++ refsType k ++ defaultRefSubst te
         refsInfo (NClass _ _ te _)      = defaultRefSubst te
         refsInfo (NProto _ _ te _)      = defaultRefSubst te
         refsInfo (NType _ t _)          = refsType t
@@ -646,7 +646,7 @@ updateDefaultRefs clear refs           = map clearBinding
         clearInfo (NSVar t)             = NSVar (clearType t)
         clearInfo (NDef sc d doc)       = NDef (clearSchema sc) d doc
         clearInfo (NSig sc d doc)       = NSig (clearSchema sc) d doc
-        clearInfo (NAct q p k te doc)   = NAct q (clearType p) (clearType k) (updateDefaultRefs clear refs te) doc
+        clearInfo (NAct q p k us te doc)   = NAct q (clearType p) (clearType k) us (updateDefaultRefs clear refs te) doc
         clearInfo (NClass q cs te doc)  = NClass q cs (updateDefaultRefs clear refs te) doc
         clearInfo (NProto q ps te doc)  = NProto q ps (updateDefaultRefs clear refs te) doc
         clearInfo (NType q t doc)       = NType q (clearType t) doc
@@ -682,9 +682,9 @@ refreshDefaults te stmt                = map refresh te
                                             = NDef (refreshSchema p k sc) dec doc
         refreshInfo Def{pos=p,kwd=k} (NSig sc dec doc)
                                             = NSig (refreshSchema p k sc) dec doc
-        refreshInfo Actor{pos=p,kwd=k,dbody=b} (NAct q pr kr members doc)
+        refreshInfo Actor{pos=p,kwd=k,dbody=b} (NAct q pr kr us members doc)
                                             = NAct q (refreshPosRow p k pr' kr')
-                                                     kr'
+                                                     kr' us
                                                      (refreshMembers members b) doc
           where defs                    = parameterDefaults p k
                 pr'                     = refreshRow defs pr
@@ -949,7 +949,7 @@ qualifyDefaultExprExcept env excluded e
         qkwdpat KwdPatNil                 = KwdPatNil
         qdecl d@Def{}                    = d{ pos = qpospar (pos d), kwd = qkwdpar (kwd d),
                                                ann = unalias env (ann d), dbody = map qstmt (dbody d) }
-        qdecl d@Actor{}                  = d{ pos = qpospar (pos d), kwd = qkwdpar (kwd d),
+        qdecl d@Actor{}                  = d{ bounds = unalias env (bounds d), pos = qpospar (pos d), kwd = qkwdpar (kwd d),
                                                dbody = map qstmt (dbody d) }
         qdecl d@Class{}                  = d{ bounds = unalias env (bounds d), dbody = map qstmt (dbody d) }
         qdecl d@Protocol{}               = d{ bounds = unalias env (bounds d), dbody = map qstmt (dbody d) }
@@ -1564,15 +1564,16 @@ instance InfEnv Decl where
                                                  illegalRedef n
 
 
-    infEnv env d@(Actor _ n q p k b ddoc)
+    infEnv env d@(Actor _ n q p k us b ddoc)
       | nodup (p,k)                     = case findName n env of
                                              NReserved -> do
-                                                 let b' = actorBaseSignatures b
+                                                 let as = actorAncestry env n us
+                                                     b' = actorBaseSignatures env as b
                                                  te <- infActorEnv env b'
                                                  prow <- deferDefaultRow (prowOf p)
                                                  krow <- deferDefaultRow (krowOf k)
                                                  --traceM ("\n## infEnv actor " ++ prstr (n, NAct q prow krow te ddoc))
-                                                 return ([], [(n, NAct q prow krow te ddoc)], d{dbody = b'})
+                                                 return ([], [(n, NAct q prow krow as te ddoc)], d{dbody = b'})
                                              _ ->
                                                  illegalRedef n
 
@@ -1808,10 +1809,12 @@ instance (Check a) => Check [a] where
 
 ------------------
 
--- These contracts will come from the base actor when actors support inheritance.
-actorBaseSignatures ss =
-    [Signature (loc n) [n] (monotype $ tFun fxAction posNil kwdNil tNone) NoDec
-    | n <- methods ss, n == name "__startup__"] ++ ss
+-- Inherited startup supplies its overriding contract, just as a class base does.
+actorBaseSignatures env as ss =
+    [Signature (loc n) [n] sc dec
+    | cActor `elem` map snd as,
+      n <- methods ss, n == name "__startup__",
+      Just (_,sc,Just dec) <- [findAttr env cActor n]] ++ ss
 
 infActorEnv env ss                      = do dsigs <- mapM mkNDef ddefs                                 -- exposed defs without sigs
                                              bsigs <- mapM mkNVar pvars                                 -- exposed assigns without sigs
@@ -1882,7 +1885,7 @@ matchActorAssumption env n0 p k te      = do --traceM ("## matchActorAssumption 
                                                        Seal (locinfo p 112) env p0, Seal (locinfo k 113) env k0]
                                              (cs,eq) <- oldSimplify env obs (cs ++ concat css)
                                              return (cs, eq ++ concat eqs)
-  where NAct q p0 k0 te0 _              = findName n0 env
+  where NAct q p0 k0 us te0 _              = findName n0 env
         ns                              = dom te0
         obs                             = te0 ++ te
         te1                             = nTerms $ te `restrict` ns
@@ -2239,7 +2242,7 @@ checkNoSelfReference self seen expr = checkExpr expr
 checkDeclNoSelfReference :: Name -> [Name] -> Decl -> Bool
 checkDeclNoSelfReference self seen decl = case decl of
     Def _ _ _ _ _ _ body _ _ _ -> checkNoSelfReferenceInSuite self [] body  -- Pass empty list to disallow ANY self reference
-    Actor _ _ _ _ _ body _     -> checkNoSelfReferenceInSuite self [] body  -- Pass empty list to disallow ANY self reference
+    Actor _ _ _ _ _ _ body _     -> checkNoSelfReferenceInSuite self [] body  -- Pass empty list to disallow ANY self reference
     Class _ _ _ _ body _       -> True  -- Nested classes don't capture self by default
     Protocol _ _ _ _ body _    -> True  -- Nested protocols don't capture self
     Typedef _ _ _ _ _          -> True  -- Type aliases don't capture self
@@ -2386,7 +2389,7 @@ instance Check Decl where
       where env1                        = reserve (bound (p,k) ++ assigned b \\ stateScope env) $ tydefineVars q env
             fx'                         = fxUnwrap env fx
 
-    checkEnv env (Actor l n q p k b ddoc)
+    checkEnv env (Actor l n q p k us b ddoc)
                                         = do --traceM ("## checkEnv actor " ++ prstr n)
                                              checkIndependentDefaults (withDefaultLocalNames (assigned b) env) p k
                                              pushFX fxCom tNone
@@ -2404,9 +2407,10 @@ instance Check Decl where
                                              let body = bindWits (eq1++eq0) ++ b'
                                                  p'' = inlineDefaultsP (eq1++eq0) p'
                                                  k'' = inlineDefaultsK (eq1++eq0) k'
-                                                 act = Actor l n (noqual env q) (qualWPar env q p'') k'' body ddoc
+                                                 act = Actor l n (noqual env q) (qualWPar env q p'') k'' (map snd as) body ddoc
                                              return (cs1, act)
-      where startup = name "__startup__"
+      where NAct _ _ _ as _ _ = findName n env
+            startup = name "__startup__"
             -- Accept the migration-era terminal call, but schedule startup
             -- exactly once regardless of whether that call was written.
             bindings = case reverse b of
@@ -2640,7 +2644,7 @@ instance Infer Expr where
                                                         let t0 = tCon $ TC (unalias env n) ts
                                                             t' = vsubst [(tvSelf,t0)] t{ restype = tSelf }
                                                         return (cs0++cs1, t', app t' (tApp x (ts++tvs)) $ protoWitsOf (cs0++cs1))
-                                            NAct q p k _ _ -> do
+                                            NAct q p k us _ _ -> do
 --                                                when (abstractActor env n) (err1 n "Abstract actor cannot be instantiated:")
                                                 (cs,tvs,t) <- instantiateDefaults env (tSchema q (tFun fxCom p k (tCon0 (unalias env n) q)))
                                                 return (cs, t, app t (tApp x tvs) $ protoWitsOf cs)
@@ -3369,7 +3373,7 @@ testStmts env m ss                      = (stmts, tests)
         assocName _                     = Nothing
 
 testEnv                                 = [ (name n, NVar (tDict tStr (testing cl))) | (n,cl) <- testDicts ] ++
-                                          [ (name "test_main", NAct [] posNil (kwdRow (name "env") tEnv kwdNil) [] Nothing) ]
+                                          [ (name "test_main", NAct [] posNil (kwdRow (name "env") tEnv kwdNil) (leftpath [cActor, cValue]) [] Nothing) ]
 
 gname ns n                              = GName (ModName ns) n
 dername a b                             = Derived (name a) (name b)
@@ -3382,7 +3386,7 @@ mkDict cl as                            = eCall (tApp (eQVar primMkDict) [tStr, 
     where w                             = eCall (eQVar (gname [name "__builtin__"] (dername "Hashable" "str"))) []
 
 testActor                               = sDecl [Actor NoLoc (name "test_main") []
-                                                 PosNIL (KwdPar (name "env")  (Just tEnv) Nothing KwdNIL)
+                                                 PosNIL (KwdPar (name "env")  (Just tEnv) Nothing KwdNIL) [cActor, cValue]
                                              [sExpr (eCall (eQVar (GName mTestRunner (name "test_runner")))
                                                            (map (eVar . name) ["env","__unit_tests","__simple_sync_tests","__sync_tests","__async_tests","__env_tests"]))] Nothing]
 
@@ -3400,7 +3404,7 @@ mkAssoc d testType modName =
   where comment (Expr _ s@(Strings _ ss) : _) = s
         comment _ = Strings NoLoc [""]
 
-mkAssocActor (Actor _ n _ _ _ body _) testType modName =
+mkAssocActor (Actor _ n _ _ _ us body _) testType modName =
     Assoc (Strings NoLoc [nstr n])
           (eCall (eQVar (GName mTesting testType))
                  [ eVar n
@@ -3457,7 +3461,7 @@ genTestActorWrappers ss =
             go actors (ss ++ rest)
         go actors (_ : rest) = go actors rest
 
-    isTestActor (Actor _ n _ ppar kpar _ _) =
+    isTestActor (Actor _ n _ ppar kpar us _ _) =
         checkTestActorParams ppar kpar || (isTestName n && ppar == PosNIL && kpar == KwdNIL)
     isTestActor _ = False
 
@@ -3483,7 +3487,7 @@ genTestActorWrappers ss =
 
     -- Generate a wrapper function for a test actor if needed
     genWrapper :: [Name] -> Decl -> Maybe ((Name,NameInfo), Stmt)
-    genWrapper existingFuncs (Actor _ actorName _ ppar kpar _ _) =
+    genWrapper existingFuncs (Actor _ actorName _ ppar kpar us _ _) =
         let tParam = name "t"
             paramType = getActorParamType ppar kpar
             -- actor Foo(t: testing.AsyncT)           -> _test_Foo
