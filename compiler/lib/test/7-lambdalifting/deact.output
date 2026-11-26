@@ -38,21 +38,15 @@ class L_4Cont ($Cont[None], __builtin__.value):
     proc def __call__ (L_self : Self, G_1 : None) -> $R:
         C_cont: $Cont[None] = L_self.C_cont
         return L_3C_4cont(C_cont, G_1)
-class L_6action ($action[(__builtin__.int,), __builtin__.int], $proc[(__builtin__.int,), __builtin__.int], __builtin__.value):
+class L_6action ($action[(__builtin__.int,), __builtin__.int], __builtin__.value):
     @property
     L_5obj : Apa
     pure def __init__ (L_self : Self, L_5obj : Apa) -> None:
         L_self.L_5obj = L_5obj
         return None
-    # recursive group:
-    proc def __call__ (L_self : Self, L_cont : $Cont[__builtin__.int], G_1 : __builtin__.int) -> $R:
-        return $AWAIT@[__builtin__.int](L_cont, L_self.__asyn__(G_1))
-    proc def __exec__ (L_self : Self, L_cont : $Cont[__builtin__.value], G_1 : __builtin__.int) -> $R:
-        return $R_CONT@[__builtin__.value](L_cont, L_self.__asyn__(G_1))
     action def __asyn__ (L_self : Self, G_1 : __builtin__.int) -> __builtin__.int:
         L_5obj: Apa = L_self.L_5obj
         return L_5obj.notice(G_1)
-    # (recursive group)
 class L_7proc ($proc[(), None], __builtin__.value):
     @property
     self : Apa
@@ -62,14 +56,10 @@ class L_7proc ($proc[(), None], __builtin__.value):
         L_self.self = self
         L_self.cb = cb
         return None
-    # recursive group:
     proc def __call__ (L_self : Self, C_cont : $Cont[None]) -> $R:
         self: Apa = L_self.self
         cb: $action[(__builtin__.int,), __builtin__.int] = L_self.cb
         return self.setupG_local(C_cont, cb)
-    proc def __exec__ (L_self : Self, C_cont : $Cont[None]) -> $R:
-        return L_self.__call__(C_cont)
-    # (recursive group)
 class L_8proc ($proc[(), __builtin__.int], __builtin__.value):
     @property
     self : Apa
@@ -79,14 +69,10 @@ class L_8proc ($proc[(), __builtin__.int], __builtin__.value):
         L_self.self = self
         L_self.cb = cb
         return None
-    # recursive group:
     proc def __call__ (L_self : Self, C_cont : $Cont[__builtin__.int]) -> $R:
         self: Apa = L_self.self
         cb: $action[(__builtin__.int,), __builtin__.int] = L_self.cb
         return self.computeG_local(C_cont, cb)
-    proc def __exec__ (L_self : Self, C_cont : $Cont[__builtin__.int]) -> $R:
-        return L_self.__call__(C_cont)
-    # (recursive group)
 class L_9proc ($proc[(), __builtin__.int], __builtin__.value):
     @property
     self : Apa
@@ -96,27 +82,19 @@ class L_9proc ($proc[(), __builtin__.int], __builtin__.value):
         L_self.self = self
         L_self.i = i
         return None
-    # recursive group:
     proc def __call__ (L_self : Self, C_cont : $Cont[__builtin__.int]) -> $R:
         self: Apa = L_self.self
         i: __builtin__.int = L_self.i
         return self.noticeG_local(C_cont, i)
-    proc def __exec__ (L_self : Self, C_cont : $Cont[__builtin__.int]) -> $R:
-        return L_self.__call__(C_cont)
-    # (recursive group)
 class L_10proc ($proc[(), None], __builtin__.value):
     @property
     self : Apa
     pure def __init__ (L_self : Self, self : Apa) -> None:
         L_self.self = self
         return None
-    # recursive group:
     proc def __call__ (L_self : Self, C_cont : $Cont[None]) -> $R:
         self: Apa = L_self.self
         return self.__startup__G_local(C_cont)
-    proc def __exec__ (L_self : Self, C_cont : $Cont[None]) -> $R:
-        return L_self.__call__(C_cont)
-    # (recursive group)
 class L_11proc ($proc[(), __builtin__.int], __builtin__.value):
     @property
     self : Bepa
@@ -126,62 +104,42 @@ class L_11proc ($proc[(), __builtin__.int], __builtin__.value):
         L_self.self = self
         L_self.i = i
         return None
-    # recursive group:
     proc def __call__ (L_self : Self, C_cont : $Cont[__builtin__.int]) -> $R:
         self: Bepa = L_self.self
         i: __builtin__.int = L_self.i
         return self.callbackG_local(C_cont, i)
-    proc def __exec__ (L_self : Self, C_cont : $Cont[__builtin__.int]) -> $R:
-        return L_self.__call__(C_cont)
-    # (recursive group)
 class L_12proc ($proc[(), None], __builtin__.value):
     @property
     self : Bepa
     pure def __init__ (L_self : Self, self : Bepa) -> None:
         L_self.self = self
         return None
-    # recursive group:
     proc def __call__ (L_self : Self, C_cont : $Cont[None]) -> $R:
         self: Bepa = L_self.self
         return self.__startup__G_local(C_cont)
-    proc def __exec__ (L_self : Self, C_cont : $Cont[None]) -> $R:
-        return L_self.__call__(C_cont)
-    # (recursive group)
 proc def L_13myproc (self : main, C_cont : $Cont[__builtin__.int], i : __builtin__.int) -> $R:
     print@[(__builtin__.str, __builtin__.int)](("\"myproc\"", i), "\" \"", "\"\\n\"", False, False)
     if W_Apa_395.__eq__(i, W_Apa_32.__fromatom__(2)):
         (async self.env.exit)(W_Apa_32.__fromatom__(0))
     return $R_CONT@[__builtin__.int](C_cont, i)
-class L_15action ($action[(__builtin__.int,), __builtin__.int], $proc[(__builtin__.int,), __builtin__.int], __builtin__.value):
+class L_15action ($action[(__builtin__.int,), __builtin__.int], __builtin__.value):
     @property
     L_14obj : Apa
     pure def __init__ (L_self : Self, L_14obj : Apa) -> None:
         L_self.L_14obj = L_14obj
         return None
-    # recursive group:
-    proc def __call__ (L_self : Self, L_cont : $Cont[__builtin__.int], G_1 : __builtin__.int) -> $R:
-        return $AWAIT@[__builtin__.int](L_cont, L_self.__asyn__(G_1))
-    proc def __exec__ (L_self : Self, L_cont : $Cont[__builtin__.value], G_1 : __builtin__.int) -> $R:
-        return $R_CONT@[__builtin__.value](L_cont, L_self.__asyn__(G_1))
     action def __asyn__ (L_self : Self, G_1 : __builtin__.int) -> __builtin__.int:
         L_14obj: Apa = L_self.L_14obj
         return L_14obj.notice(G_1)
-    # (recursive group)
-class L_17action ($action[(__builtin__.int,), __builtin__.int], $proc[(__builtin__.int,), __builtin__.int], __builtin__.value):
+class L_17action ($action[(__builtin__.int,), __builtin__.int], __builtin__.value):
     @property
     L_16obj : Bepa
     pure def __init__ (L_self : Self, L_16obj : Bepa) -> None:
         L_self.L_16obj = L_16obj
         return None
-    # recursive group:
-    proc def __call__ (L_self : Self, L_cont : $Cont[__builtin__.int], G_1 : __builtin__.int) -> $R:
-        return $AWAIT@[__builtin__.int](L_cont, L_self.__asyn__(G_1))
-    proc def __exec__ (L_self : Self, L_cont : $Cont[__builtin__.value], G_1 : __builtin__.int) -> $R:
-        return $R_CONT@[__builtin__.value](L_cont, L_self.__asyn__(G_1))
     action def __asyn__ (L_self : Self, G_1 : __builtin__.int) -> __builtin__.int:
         L_16obj: Bepa = L_self.L_16obj
         return L_16obj.callback(G_1)
-    # (recursive group)
 class L_19proc ($proc[(), __builtin__.int], __builtin__.value):
     @property
     G_1 : __builtin__.int
@@ -191,29 +149,19 @@ class L_19proc ($proc[(), __builtin__.int], __builtin__.value):
         L_self.G_1 = G_1
         L_self.self = self
         return None
-    # recursive group:
     proc def __call__ (L_self : Self, C_cont : $Cont[__builtin__.int]) -> $R:
         G_1: __builtin__.int = L_self.G_1
         self: main = L_self.self
         return L_13myproc(self, C_cont, G_1)
-    proc def __exec__ (L_self : Self, C_cont : $Cont[__builtin__.int]) -> $R:
-        return L_self.__call__(C_cont)
-    # (recursive group)
-class L_20action ($action[(__builtin__.int,), __builtin__.int], $proc[(__builtin__.int,), __builtin__.int], __builtin__.value):
+class L_20action ($action[(__builtin__.int,), __builtin__.int], __builtin__.value):
     @property
     self : main
     pure def __init__ (L_self : Self, self : main) -> None:
         L_self.self = self
         return None
-    # recursive group:
-    proc def __call__ (L_self : Self, L_cont : $Cont[__builtin__.int], G_1 : __builtin__.int) -> $R:
-        return $AWAIT@[__builtin__.int](L_cont, L_self.__asyn__(G_1))
-    proc def __exec__ (L_self : Self, L_cont : $Cont[__builtin__.value], G_1 : __builtin__.int) -> $R:
-        return $R_CONT@[__builtin__.value](L_cont, L_self.__asyn__(G_1))
     action def __asyn__ (L_self : Self, G_1 : __builtin__.int) -> __builtin__.int:
         self: main = L_self.self
         return $ASYNC@[__builtin__.int](self, L_19proc(G_1, self))
-    # (recursive group)
 proc def L_18C_6cont (a : Apa, self : main, C_cont : $Cont[None], C_7res : __builtin__.int) -> $R:
     r: __builtin__.int = C_7res
     print@[(__builtin__.str, __builtin__.int)](("\"r =\"", r), "\" \"", "\"\\n\"", False, False)
@@ -243,13 +191,9 @@ class L_22proc ($proc[(), None], __builtin__.value):
     pure def __init__ (L_self : Self, self : main) -> None:
         L_self.self = self
         return None
-    # recursive group:
     proc def __call__ (L_self : Self, C_cont : $Cont[None]) -> $R:
         self: main = L_self.self
         return self.__startup__G_local(C_cont)
-    proc def __exec__ (L_self : Self, C_cont : $Cont[None]) -> $R:
-        return L_self.__call__(C_cont)
-    # (recursive group)
 class Apa ($Actor, __builtin__.value):
     com def __init__ (self : Self) -> None:
         $MarkStartup((async self.__startup__)())

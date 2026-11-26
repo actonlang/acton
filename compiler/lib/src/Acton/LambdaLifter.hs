@@ -229,14 +229,6 @@ llSuite env (s : ss)
 
 
 instance Lift Stmt where
-    ll env (Return l (Just (Call _ e p@(PosArg c _) KwdNil)))
-      | closedType env e,
-        effect t == fxProc,
-        not (isCont t),
-        skipsResult c                   = do e' <- llSub env e                                  -- A CPS-converted proc, but not a $Cont,
-                                             p' <- ll env p                                     -- called in statement position
-                                             return $ Return l $ Just $ Call l (eDot e' attr_exec_) p' KwdNil
-      where t                           = typeOf env e
     ll env (Expr l e)                   = Expr l <$> ll env e
     ll env (Assign l pats e)            = Assign l <$> ll env pats <*> ll env e
     ll env (MutAssign l t e)            = MutAssign l <$> ll env t <*> ll env e
@@ -312,22 +304,16 @@ closureConvert env lambda t0 vts0 es    = do (_,_,closures) <- get
         parsC tc                        = conv $ addSelfPar $ addContPar tc p
         mainBody                        = [ sAssign (pVar v t) (eDot (eVar llSelf) v) | (v,t) <- vts ] ++ [sReturn e]
         callDef                         = mainDef attr_call_
-        execDef                         = Def l0 attr_exec_ [] pars KwdNIL (Just t1) [ sReturn (methCall attr_call_) ] NoDec fxProc Nothing
         asynDef                         = mainDef attr_asyn_
-        callDefA                        = Def l0 attr_call_ [] (parsC t1) KwdNIL (Just tR) callBodyA NoDec fxProc Nothing
-        callBodyA                       = [ sReturn $ eCall (tApp (eQVar primAWAIT) [t1]) [eVar llCont, methCall attr_asyn_] ]
-        execDefA                        = delegate attr_exec_ attr_asyn_ tValue
         evalDef                         = mainDef attr_eval_
-        callDefF                        = delegate attr_call_ attr_eval_ t1
-        execDefF                        = delegate attr_exec_ attr_eval_ tValue
-        delegate name to tc             = Def l0 name [] (parsC tc) KwdNIL (Just tR) (delegateBody to tc) NoDec fxProc Nothing
-        delegateBody to tc              = [ sReturn $ eCall (tApp (eQVar primRCont) [tValue]) [eVar llCont, methCall to] ]
+        callDefF                        = Def l0 attr_call_ [] (parsC t1) KwdNIL (Just tR) callBodyF NoDec fxProc Nothing
+        callBodyF                       = [ sReturn $ eCall (tApp (eQVar primRCont) [tValue]) [eVar llCont, methCall attr_eval_] ]
         defs
           | basename == primCont        = [callDef]
-          | basename == primProc        = [callDef, execDef]
-          | basename == primAction      = [callDefA, execDefA, asynDef]
-          | basename == primMut         = [callDefF, execDefF, evalDef]
-          | basename == primPure        = [callDefF, execDefF, evalDef]
+          | basename == primProc        = [callDef]
+          | basename == primAction      = [asynDef]
+          | basename == primMut         = [callDefF, evalDef]
+          | basename == primPure        = [callDefF, evalDef]
 
 addSelfPar p                            = PosPar llSelf (Just tSelf) Nothing p
 
@@ -346,11 +332,6 @@ closureCon fx p t
 
 isCont (TFun _ fx p@TRow{} _ r)         = fx == fxProc && r == tR && rtail p == posNil && not (isCont $ rtype p)
 isCont _                                = False
-
-skipsResult (Call _ (TApp _ (Var _ n) _) _ KwdNil)
-                                        = n == primSKIPRESc
-skipsResult _                           = False
-
 
 instance Lift Expr where
     ll env e@(Var l (NoQ n))

@@ -69,16 +69,16 @@ bool closure_serializationQ_identity_probe($pure callback, $WORD value) {
     return (($WORD (*)(void *, $WORD))callback->$class->__eval__)(callback, value) == value;
 }
 
-$R closure_serializationQ_exec_proc($Cont cont, $proc callback, int64_t value) {
-    return (($R (*)(void *, $Cont, B_int))callback->$class->__exec__)(callback, cont, toB_int(value));
+$R closure_serializationQ_call_proc($Cont cont, $proc callback, int64_t value) {
+    return (($R (*)(void *, $Cont, B_int))callback->$class->__call__)(callback, cont, toB_int(value));
 }
 
-$R closure_serializationQ_exec_pure($Cont cont, $pure callback, int64_t value) {
-    return (($R (*)(void *, $Cont, B_int))callback->$class->__exec__)(callback, cont, toB_int(value));
+$R closure_serializationQ_call_pure($Cont cont, $pure callback, int64_t value) {
+    return (($R (*)(void *, $Cont, B_int))callback->$class->__call__)(callback, cont, toB_int(value));
 }
 
-$R closure_serializationQ_exec_mut($Cont cont, $mut callback, int64_t value) {
-    return (($R (*)(void *, $Cont, B_int))callback->$class->__exec__)(callback, cont, toB_int(value));
+$R closure_serializationQ_call_mut($Cont cont, $mut callback, int64_t value) {
+    return (($R (*)(void *, $Cont, B_int))callback->$class->__call__)(callback, cont, toB_int(value));
 }
 
 // Invoke genuine restored adapters with controlled virtual targets. Besides
@@ -113,9 +113,9 @@ static $WORD closure_serialization_probe3(void *receiver, $WORD a, $WORD b, $WOR
 }
 
 static bool closure_serialization_probe_result(struct closure_serialization_probe *probe,
-                                               $Cont cont, $R call, $R exec, $RTAG tag) {
-    return call.tag == tag && exec.tag == $RCONT && call.cont == cont && exec.cont == cont &&
-           call.value == probe->result && exec.value == probe->result && probe->calls == 2 && probe->args_ok;
+                                               $Cont cont, $R call) {
+    return call.tag == $RCONT && call.cont == cont &&
+           call.value == probe->result && probe->calls == 1 && probe->args_ok;
 }
 
 bool closure_serializationQ_pure_adapter_probe($pure callback) {
@@ -123,8 +123,7 @@ bool closure_serializationQ_pure_adapter_probe($pure callback) {
     struct closure_serialization_probe probe = { .methods = &methods, .result = toB_int(1729), .args_ok = true };
     $Cont cont = ($Cont)callback;
     $R call = (($R (*)(void *, $Cont))callback->$class->__call__)(&probe, cont);
-    $R exec = (($R (*)(void *, $Cont))callback->$class->__exec__)(&probe, cont);
-    return closure_serialization_probe_result(&probe, cont, call, exec, $RCONT);
+    return closure_serialization_probe_result(&probe, cont, call);
 }
 
 bool closure_serializationQ_pure_three_probe($pure callback) {
@@ -134,9 +133,7 @@ bool closure_serializationQ_pure_three_probe($pure callback) {
     $Cont cont = ($Cont)callback;
     $R call = (($R (*)(void *, $Cont, $WORD, $WORD, $WORD))callback->$class->__call__)
                   (&probe, cont, probe.args[0], probe.args[1], probe.args[2]);
-    $R exec = (($R (*)(void *, $Cont, $WORD, $WORD, $WORD))callback->$class->__exec__)
-                  (&probe, cont, probe.args[0], probe.args[1], probe.args[2]);
-    return closure_serialization_probe_result(&probe, cont, call, exec, $RCONT);
+    return closure_serialization_probe_result(&probe, cont, call);
 }
 
 bool closure_serializationQ_mut_two_probe($mut callback) {
@@ -146,21 +143,7 @@ bool closure_serializationQ_mut_two_probe($mut callback) {
     $Cont cont = ($Cont)callback;
     $R call = (($R (*)(void *, $Cont, $WORD, $WORD))callback->$class->__call__)
                   (&probe, cont, probe.args[0], probe.args[1]);
-    $R exec = (($R (*)(void *, $Cont, $WORD, $WORD))callback->$class->__exec__)
-                  (&probe, cont, probe.args[0], probe.args[1]);
-    return closure_serialization_probe_result(&probe, cont, call, exec, $RCONT);
-}
-
-bool closure_serializationQ_action_three_probe($action callback) {
-    struct $actionG_class methods = { .__asyn__ = (void *)closure_serialization_probe3 };
-    struct closure_serialization_probe probe = { .methods = &methods, .result = acton_calloc(1, sizeof(struct B_Msg)),
-        .args = {toB_int(9), actStrFromCString("probe"), toB_float(2.5)}, .args_ok = true };
-    $Cont cont = ($Cont)callback;
-    $R call = (($R (*)(void *, $Cont, $WORD, $WORD, $WORD))callback->$class->__call__)
-                  (&probe, cont, probe.args[0], probe.args[1], probe.args[2]);
-    $R exec = (($R (*)(void *, $Cont, $WORD, $WORD, $WORD))callback->$class->__exec__)
-                  (&probe, cont, probe.args[0], probe.args[1], probe.args[2]);
-    return closure_serialization_probe_result(&probe, cont, call, exec, $RWAIT);
+    return closure_serialization_probe_result(&probe, cont, call);
 }
 
 // A ConstCont invocation must return one trampoline step without invoking the
@@ -261,7 +244,7 @@ int64_t closure_serializationQ_cont_many(int64_t x,
     return x;
 }
 
-// Require the real selected family/shape, then exercise both invocation slots.
+// Require the real selected family/shape before invoking the restored closure.
 // A back edge through a captured box must point to this restored Proc itself.
 bool closure_serializationQ_proc0_shape($proc callback, int64_t arity, bool cyclic) {
     bool shared = callback->$class->__serialize__ == $proc0_serialize;
@@ -271,16 +254,14 @@ bool closure_serializationQ_proc0_shape($proc callback, int64_t arity, bool cycl
     if (arity < 1 || arity > 4) return !shared;
     if (!shared || ((struct $Proc0Class *)callback->$class)->shape != shapes[arity])
         return false;
-    const struct $Proc0G_class *methods = &((struct $Proc0Class *)callback->$class)->methods;
-    if (methods->__call__ != methods->__exec__) return false;
     if (arity >= 3 && ((struct $Proc0_R3 *)callback)->ref0 != ((struct $Proc0_R3 *)callback)->ref1)
         return false; // repeated references survive as one object
     closure_serializationQ_ContBox a = ((struct $Proc0_R1 *)callback)->ref0;
     return !cyclic || (a->next == a && a->callback == callback);
 }
 
-$R closure_serializationQ_exec_proc0($Cont cont, $proc callback) {
-    return (($R (*)(void *, $Cont))callback->$class->__exec__)(callback, cont);
+$R closure_serializationQ_call_proc0($Cont cont, $proc callback) {
+    return (($R (*)(void *, $Cont))callback->$class->__call__)(callback, cont);
 }
 
 // Replace the continuation in a real queued message before the actor yields.
@@ -349,45 +330,8 @@ bool closure_serializationQ_action_graph($action callback) {
     return box->next == box && box->callback == callback;
 }
 
-$R closure_serializationQ_exec_action_one($Cont cont, $action callback, int64_t x) {
-    return (($R (*)(void *, $Cont, $WORD))callback->$class->__exec__)(callback, cont, toB_int(x));
-}
-
-static $WORD closure_serialization_probe1(void *receiver, $WORD a) {
-    struct closure_serialization_probe *probe = receiver;
-    probe->calls++;
-    probe->args_ok &= a == probe->args[0];
-    return probe->result;
-}
-
-bool closure_serializationQ_action_one_probe($action callback) {
-    struct $actionG_class methods = { .__asyn__ = (void *)closure_serialization_probe1 };
-    struct closure_serialization_probe probe = { .methods = &methods, .result = acton_calloc(1, sizeof(struct B_Msg)),
-        .args = {toB_int(9), actStrFromCString("probe")}, .args_ok = true };
-    $Cont cont = ($Cont)callback;
-    $R call = (($R (*)(void *, $Cont, $WORD))callback->$class->__call__)(&probe, cont, probe.args[0]);
-    $R exec = (($R (*)(void *, $Cont, $WORD))callback->$class->__exec__)(&probe, cont, probe.args[0]);
-    return closure_serialization_probe_result(&probe, cont, call, exec, $RWAIT);
-}
-
-bool closure_serializationQ_action_two_probe($action callback) {
-    struct $actionG_class methods = { .__asyn__ = (void *)closure_serialization_probe2 };
-    struct closure_serialization_probe probe = { .methods = &methods, .result = acton_calloc(1, sizeof(struct B_Msg)),
-        .args = {toB_int(9), actStrFromCString("probe")}, .args_ok = true };
-    $Cont cont = ($Cont)callback;
-    $R call = (($R (*)(void *, $Cont, $WORD, $WORD))callback->$class->__call__)(&probe, cont, probe.args[0], probe.args[1]);
-    $R exec = (($R (*)(void *, $Cont, $WORD, $WORD))callback->$class->__exec__)(&probe, cont, probe.args[0], probe.args[1]);
-    return closure_serialization_probe_result(&probe, cont, call, exec, $RWAIT);
-}
-
-bool closure_serializationQ_action_zero_probe($action callback) {
-    struct $actionG_class methods = { .__asyn__ = (void *)closure_serialization_probe0 };
-    struct closure_serialization_probe probe = { .methods = &methods, .result = acton_calloc(1, sizeof(struct B_Msg)),
-        .args_ok = true };
-    $Cont cont = ($Cont)callback;
-    $R call = (($R (*)(void *, $Cont))callback->$class->__call__)(&probe, cont);
-    $R exec = (($R (*)(void *, $Cont))callback->$class->__exec__)(&probe, cont);
-    return closure_serialization_probe_result(&probe, cont, call, exec, $RWAIT);
+B_Msg closure_serializationQ_send_action_one($action callback, int64_t x) {
+    return callback->$class->__asyn__(callback, toB_int(x));
 }
 
 B_Msg closure_serializationQ_ActionBoxD_invoke(closure_serializationQ_ActionBox self, int64_t x) {

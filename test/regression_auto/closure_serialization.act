@@ -6,7 +6,7 @@ def round_trip[A](value: A) -> A:
 def round_trip_alloc[A](value: A) -> A:
     NotImplemented
 
-proc def exec_proc(callback: proc(int) -> int, value: int) -> int:
+proc def call_proc(callback: proc(int) -> int, value: int) -> int:
     NotImplemented
 
 def pure_adapter_probe(callback: pure() -> int) -> bool:
@@ -21,22 +21,10 @@ def pure_three_probe(callback: pure(int, str, float) -> (int, str, float)) -> bo
 def mut_two_probe(callback: mut(str, float) -> float) -> bool:
     NotImplemented
 
-def action_zero_probe(callback: action() -> int) -> bool:
+proc def call_pure(callback: pure(int) -> int, value: int) -> int:
     NotImplemented
 
-def action_one_probe(callback: action(int) -> int) -> bool:
-    NotImplemented
-
-def action_two_probe(callback: action(str, float) -> int) -> bool:
-    NotImplemented
-
-def action_three_probe(callback: action(int, str, float) -> int) -> bool:
-    NotImplemented
-
-proc def exec_pure(callback: pure(int) -> int, value: int) -> int:
-    NotImplemented
-
-proc def exec_mut(callback: mut(int) -> int, value: int) -> int:
+proc def call_mut(callback: mut(int) -> int, value: int) -> int:
     NotImplemented
 
 proc def snapshot(value: int) -> int:
@@ -146,7 +134,7 @@ def round_trip_actor[A](value: A, actor_ref: Sample) -> A:
 def action_round_trip[A](value: A, actor_ref: Sample, arity: int, allocation_only: bool) -> A:
     NotImplemented
 
-proc def exec_action_one(callback: action(int) -> int, x: int) -> Msg[int]:
+com def send_action_one(callback: action(int) -> int, x: int) -> Msg[int]:
     NotImplemented
 
 class ActionBox(object):
@@ -253,7 +241,7 @@ def proc0_shape(callback: proc() -> int, arity: int, cyclic: bool) -> bool:
 def proc0_same_class(first: proc() -> int, second: proc() -> int) -> bool:
     NotImplemented
 
-proc def exec_proc0(callback: proc() -> int) -> int:
+proc def call_proc0(callback: proc() -> int) -> int:
     NotImplemented
 
 proc def cont_r1(allocation_only: bool) -> int:
@@ -355,7 +343,7 @@ actor main(env):
                     assert proc0_shape(restored, arity, cyclic)
                     assert proc0_same_class(original, restored)
                     assert restored() == expected
-                    assert exec_proc0(restored) == expected
+                    assert call_proc0(restored) == expected
             assert constcont_step_probe()
             assert saved_result(23) == 23
             assert round_trip(mixed(10, i8(-3), u16(258), u64(7), 2.5, True, "ab"))(4) == 281
@@ -417,11 +405,11 @@ actor main(env):
             restored: mut(int) -> int = round_trip(original)
             assert restored(3) == 3
             assert restored(4) == 7
-            assert exec_mut(restored, 5) == 12
-            assert exec_pure(round_trip(add(10)), 9) == 19
+            assert call_mut(restored, 5) == 12
+            assert call_pure(round_trip(add(10)), 9) == 19
             assert original(1) == 1
             assert round_trip(procedural(20))(5) == 25
-            assert exec_proc(round_trip(procedural(20)), 7) == 27
+            assert call_proc(round_trip(procedural(20)), 7) == 27
             sample = Sample(30)
             for allocation_only in [False, True]:
                 assert proc0_message(sample, ContBox(12), allocation_only, False) == 42
@@ -434,19 +422,15 @@ actor main(env):
                 one: action(int) -> int = action_round_trip(sample.plus, sample, 1, allocation_only)
                 two: action(str, float) -> int = action_round_trip(sample.two, sample, 2, allocation_only)
                 three_action: action(int, str, float) -> int = action_round_trip(sample.three, sample, 3, allocation_only)
-                assert action_one_probe(one)
-                assert action_two_probe(two)
-                assert action_three_probe(three_action)
                 assert one(6) == 36
                 assert two("abc", 2.5) == 35
                 assert three_action(5, "abc", 2.5) == 40
-                future = exec_action_one(one, 7)
+                future = send_action_one(one, 7)
                 assert await future == 37
                 future3 = async three_action(5, "abc", 2.5)
                 assert await future3 == 40
                 zero = action_round_trip(sample.zero, sample, 0, allocation_only)
                 four = action_round_trip(sample.four, sample, 4, allocation_only)
-                assert action_zero_probe(zero)
                 assert zero() == 30
                 future0 = async zero()
                 assert await future0 == 30
@@ -473,7 +457,6 @@ actor main(env):
             assert mut_two_probe(restored_pair)
             assert restored_pair("abc", 2.5) == 2.5
             three: action(int, str, float) -> int = round_trip_actor(sample.three, sample)
-            assert action_three_probe(three)
             assert three(5, "abc", 2.5) == 40
             assert snapshot(7) + 1 == 8
             env.exit(0)
