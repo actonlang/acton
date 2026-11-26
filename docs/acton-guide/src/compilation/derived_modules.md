@@ -27,7 +27,9 @@ derived_modules = {
 - The name to the left of the colon is the name of the module, written as
   an `import` statement writes it. `schema` is the module that
   `src/schema.act` would be, and `model.schema` the module that
-  `src/model/schema.act` would be.
+  `src/model/schema.act` would be. A name can also end with `.*` and stand
+  for every module below it: see
+  [Every module below a name](#every-module-below-a-name).
 - `function` is a module name followed by the name of a function in that
   module. The module name is written as an `import` statement in the
   project writes it. `gen.schema` is the function `schema` in the module
@@ -54,11 +56,12 @@ derived_modules = {
 The module name and the value of `function` are written as names, without
 quotes. Each path in `inputs` is a string.
 
-A module that the table lists cannot have a file under `src/`, and the
-table cannot list a module twice. With a dependency named `tools`, the
-table cannot list the module `tools` or a module such as `tools.schema`:
-an `import` statement in the project takes these names for modules of the
-dependency. A build stops in each of these cases.
+A module cannot be both a derived module and a file under `src/`, and a
+name that ends with `.*` has no `.act` file under `src/` below it. The
+table cannot name a module twice. With a dependency named `tools`, the
+table cannot name the module `tools` or a module such as `tools.schema`:
+an `import` statement in the project takes these names for modules of
+the dependency. A build stops in each of these cases.
 
 ## Input paths
 
@@ -189,7 +192,7 @@ and shows the exception. With `raise ValueError("data/schema.txt is empty")`
 in the function `gen.schema`, the message is:
 
 ```console
-The function gen.schema of the derived module schema in /home/user/app/Build.act failed:
+The function gen.schema of the entry schema of derived_modules in /home/user/app/Build.act failed:
 ValueError: data/schema.txt is empty
 ```
 
@@ -257,29 +260,123 @@ With `base.txt` and `top.txt` as the only files below `data/layers/`, the
 function returns the modules `tables`, `layers.base` and `layers.top`. It
 takes the size of each file from the description and reads no file.
 
-The names of an entry are exactly the modules that its function returns. A
-name stands for one module: `layers` does not stand for `layers.base` and
-`layers.top`. A build stops when the function returns a module that its
-entry does not name, or does not return a module that its entry names.
-With a file `data/layers/extra.txt` in place of `data/layers/top.txt`, the
-build stops with this message:
+A module name stands for one module, and not for the modules below it. A
+build stops when the function returns a module that its entry does not
+name, or does not return a module that its entry names. The message lists
+those modules. With a file `data/layers/extra.txt` in place of
+`data/layers/top.txt`, the message is:
 
 ```console
-The function gen.modules of the derived module layers.base in /home/user/app/Build.act returned other modules than its entry names.
+The function gen.modules of the entry layers.base of derived_modules in /home/user/app/Build.act returned other modules than the entry names.
 Returned and not named: layers.extra
 Named and not returned: layers.top
-An entry names exactly the modules that its function returns. Change the names of the entry or the function.
+The function returns every module that its entry names with a module name, and no module that its entry does not name. Change the names of the entry or the function.
 ```
 
-The message calls the entry `the derived module layers.base`. Where a
-message of the build says `the derived module` and a name, the name is the
-first of the names of an entry in sorted order.
+The message calls the entry `the entry layers.base of derived_modules`.
+Where a message of the build says `the entry`, one name and
+`of derived_modules`, the name is the first of the names of the entry in
+sorted order.
 
 The order of the names has no meaning. A name that is written twice is an
 error.
 
-The result type of a function is `str` for one module or `dict[str, str]`
-for several.
+A function whose result type is `str` has an entry with one name, a module
+name. A function for any other entry has the result type `dict[str, str]`.
+
+Two names are an error when they differ only in the case of letters, or
+start with names that do: `Foo` and `foo`, or `Layers.base` and
+`layers.top`, which start with `Layers` and `layers`. This holds in the
+table and among the modules that a function returns: a file system that
+ignores the case of letters has one file or directory for two such names.
+
+## Every module below a name
+
+The modules that a function returns can follow from its input files: one
+module for each file of a directory, or three for each layer of a model.
+`Build.act` cannot list such modules by name. For them, a name of an entry
+can end with `.*`.
+
+`layers.*` stands for every module below `layers`. A module is below
+`layers` when its name starts with `layers.`: `layers.base` is below
+`layers`, and so is `layers.core.types`. These are the modules whose files
+would be in `src/layers/` or in a directory below it. `layers.*` does not
+stand for the module `layers` itself, the module that `src/layers.act`
+would be.
+
+In `Build.act`:
+
+```python
+derived_modules = {
+    {
+        layers.*,
+        tables
+    }: (
+        function=gen.modules,
+        inputs=["data/"]
+    )
+}
+```
+
+The function is `gen.modules` of the section above. With the files
+`data/base.txt` and `data/top.txt` it returns the modules `tables`,
+`layers.base` and `layers.top`. When the file `data/edge.txt` is added, it
+also returns `layers.edge`, and `Build.act` stays as it is. When
+`data/top.txt` is removed, the module `layers.top` is removed.
+
+An entry with one such name is written without braces. In `Build.act`:
+
+```python
+derived_modules = {
+    layers.*: (
+        function=gen.layers,
+        inputs=["data/"]
+    )
+}
+```
+
+The function, in `src/gen.act`:
+
+```python
+import std.build.derive as derive
+
+def layers(inputs: dict[str, derive.InputFile]) -> dict[str, str]:
+    res = {}
+    for path, f in inputs.items():
+        name = path.split("/")[-1].split(".")[0]
+        res["layers." + name] = "size = " + str(f.size) + "\n"
+    return res
+```
+
+For a name that ends with `.*`:
+
+- The function returns any number of modules below `layers`, also none. A
+  module that it returned in the last build and does not return in this
+  build is removed.
+- The function still returns every module that its entry names with a
+  module name, `tables` above, and no module that its entry does not name.
+  Otherwise the build stops with the message of the section above. Write a
+  module name for a module that the function always returns: the build
+  then checks that it is returned.
+- The result type of the function is `dict[str, str]`.
+- Every module below `layers` is a derived module. The project has no
+  `.act` file under `src/layers/`, and a build that finds one stops before
+  it runs the function of any entry of the project.
+- `src/layers.act` can be a file that is written by hand, since `layers.*`
+  does not stand for the module `layers`. For a function that returns the
+  module `layers` too, write both names, `layers` and `layers.*`.
+- No module is named twice in the table, in one entry or in two.
+  `layers.*` and `layers.base` name the module `layers.base` twice.
+  `layers.*` and `layers.core.*` name the modules below `layers.core`
+  twice.
+- `.*` is written once, at the end of a name and without quotes.
+  `layers.*.types` and `layers.b*` are not names.
+- `.*` is read only in a name to the left of the colon. A path in `inputs`
+  is taken as it is written, and a `*` in it is not a pattern.
+
+The modules that the function returned in the last build are the `.act`
+files under `out/derived/src/layers/`. A build removes a `.act` file there
+that the function did not return.
 
 ## The files of a directory
 
@@ -299,7 +396,8 @@ derived_modules = {
 A module of the project imports `assets`, and `assets.files["/index.html"]`
 is the content of the file `web/index.html`. `strip` is a prefix that is
 left out of each key of `files`. Without `strip` the key is
-`web/index.html`.
+`web/index.html`. The result type of `embed_files` is `str`, so the name
+of its entry is a module name, and not a name that ends with `.*`.
 
 The source that `embed_files` returns has one [`embed`](embedding.md)
 expression for each input file and no content, so the function reads no
@@ -335,7 +433,10 @@ build that finds the file edited runs the function and writes the file
 again. An error in a derived module points to this file, and a note after
 the error names the function that returned the source. A build removes
 every file under `out/derived/src/` that no entry names, except a `--tydb`
-copy, and what was compiled from a module that no entry names any more.
+copy, and the source file of a module below a name that ends with `.*`
+that the function did not return. With the source file of a module, it
+removes what was compiled from the module and the `--tydb` copy of the
+module.
 
 The derived modules of an entry are out of date when the function has not
 run for the entry yet, or when one of these changed since the function last
@@ -345,12 +446,13 @@ ran:
   an input path that names a directory. This holds for every input file,
   also for one that the function does not read: its description holds the
   SHA-256 of its content,
-- the entry in `Build.act`: its module names, its function, its input
-  paths or its arguments,
+- the entry in `Build.act`: its names, its function, its input paths or
+  its arguments,
 - the function, or anything that the function uses, in any module,
 - the compiler version,
 - the file of one of these modules under `out/derived/src/`: it was edited
-  or removed.
+  or removed, or a file was added for a module below a name that ends with
+  `.*`.
 
 A change to other code leaves the modules up to date, even code in the
 function's own module: another function, a constant that the function does
@@ -388,11 +490,12 @@ A line in the build log shows each function that ran:
    schema  Derived by gen.schema                                                   0.412 s
 ```
 
-The line of an entry with several modules starts with the first of its
-names in sorted order, and says how many modules the function returned:
+The line of an entry starts with the first of its names in sorted order.
+When the entry is not one module name, the line gives the number of
+modules that the function returned:
 
 ```console
-   layers.base  Derived 3 modules by gen.modules                                        0.538 s
+   layers.*  Derived 3 modules by gen.modules                                        0.398 s
 ```
 
 To call the function of an entry, a build writes a program under

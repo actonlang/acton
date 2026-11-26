@@ -26,8 +26,8 @@ entry.  A function that returns str returns the source of the one module
 that its entry names, and run_one runs it.  A function that returns a
 dict[str, str] returns the source of several modules by module name, as an
 import statement writes the name, and run_many runs it.  After the run acton
-build checks that the function returned exactly the modules that its entry
-names.
+build checks that the function returned every module that its entry names
+with a module name, and no module that its entry does not name.
 
 The function gets no Env, so it reaches no network and no process, and no
 file but the input files, through their descriptions.  It may create actors
@@ -150,7 +150,7 @@ class Manifest(object):
 
     - root is the project root
     - out is the directory that the sources of the modules are written to
-    - modules are the modules that the entry names
+    - modules are the module names of the entry
     - inputs are the input files in sorted order: the path of each, relative
       to root, with the size and the SHA-256 of its content
     """
@@ -223,16 +223,37 @@ def is_module_name(name: str) -> bool:
     return True
 
 def check_names(modules: dict[str, str]) -> None:
-    """Raise ValueError unless every returned name has the form of a module name
+    """Raise ValueError unless each returned name gets a file of its own
 
-    write_modules makes the path of a module's file from the components of
-    its name, and acton build reads the names of the returned modules from
-    the paths of the written files.  Without this check a name such as a..b
-    would be written to the file of the module a.b.
+    Every returned name has the form of a module name.  write_modules makes
+    the path of a module's file from the components of its name, and acton
+    build reads the names of the returned modules from the paths of the
+    written files.  Without this check a name such as a..b would be written
+    to the file of the module a.b.
+
+    No two returned names have leading names that differ only in the case
+    of letters.  The leading names of a.b.c are a, a.b and a.b.c.  A file
+    system that ignores the case of letters has one file or directory for
+    p.Foo and p.foo.  Without this check the file of one of two such
+    modules would take the place of the file of the other.
     """
+    # By its lower-case form, each leading name so far with the returned
+    # name that it is from
+    seen = {}
     for name in modules.keys():
         if not is_module_name(name):
             raise ValueError('the function returned "' + name + '", which is not a module name')
+        parts = name.split(".")
+        for i in range(len(parts)):
+            leading = ".".join(parts[:i + 1])
+            key = leading.lower()
+            if key in seen:
+                other_leading, other_name = seen[key]
+                if other_leading != leading:
+                    raise ValueError('the function returned "' + other_name + '" and "' + name + '": ' + other_leading + " and " + leading
+                                     + " differ only in the case of letters")
+            else:
+                seen[key] = (leading, name)
 
 
 actor Files(env: Env):

@@ -6,6 +6,11 @@ module Acton.BuildSpec
   , Library(..)
   , DerivedEntry(..)
   , derivedLabel
+  , derivedFileLabel
+  , derivedNamesText
+  , derivedModules
+  , derivedBelow
+  , derivedCovers
   , derivedArgLiteral
   , buildOptionString
   , BuildSpec(..)
@@ -28,7 +33,7 @@ import qualified Data.ByteString as BS
 import qualified Data.Map as Map
 import Data.Map (Map)
 import qualified Data.Set as Set
-import Data.Char (ord, isAlpha, isAlphaNum, isAscii, isSpace)
+import Data.Char (ord, isAlpha, isAlphaNum, isAscii, isSpace, toLower)
 import Data.Maybe (catMaybes, fromMaybe, isNothing, mapMaybe)
 import qualified Data.List as L
 import Data.Foldable (toList)
@@ -148,19 +153,21 @@ instance ToJSON Library where
     , "linkage" .= link
     ]
 
--- | An entry of the derived_modules table: the modules that its function
--- gives, the function, the input paths and the arguments.  Module names are
--- dotted, as an import statement writes them, and the order in which they
--- are written has no meaning.  The function is a dotted module name
--- followed by the function's name.  Input paths are relative to the project
--- root, with / between the components.  The arguments are the keyword
--- arguments of the call of the function, by parameter name.  Each is a
--- literal: a string, a number, a bool, None, a list, or a dict with strings
--- as keys, held as the JSON value of the same kind.  A JSON object has no
--- order of its keys, and 'derivedArgLiteral' writes the keys of a dict in
--- sorted order.
+-- | An entry of the derived_modules table: its names, as they are written,
+-- the function, the input paths and the arguments.  The names say which
+-- modules the function gives.  A name is a module name, dotted as an import
+-- statement writes it, or a dotted name followed by .*, which stands for
+-- every module below that name: a.b.* stands for a.b.c and a.b.c.d, and not
+-- for a.b.  The order in which the names are written has no meaning.  The
+-- function is a dotted module name followed by the function's name.  Input
+-- paths are relative to the project root, with / between the components.
+-- The arguments are the keyword arguments of the call of the function, by
+-- parameter name.  Each is a literal: a string, a number, a bool, None, a
+-- list, or a dict with strings as keys, held as the JSON value of the same
+-- kind.  A JSON object has no order of its keys, and 'derivedArgLiteral'
+-- writes the keys of a dict in sorted order.
 data DerivedEntry = DerivedEntry
-  { derivedModules  :: Set.Set String
+  { derivedNames    :: Set.Set String
   , derivedFunction :: String
   , derivedInputs   :: [String]
   , derivedArgs     :: Map String Ae.Value
@@ -168,41 +175,120 @@ data DerivedEntry = DerivedEntry
 
 instance FromJSON DerivedEntry where
   parseJSON = Ae.withObject "DerivedEntry" $ \o -> do
-    mods  <- either fail pure . derivedNames =<< o .: "modules"
-    either fail pure (checkEntryFields (derivedNamesText mods) (filter (/= "modules") (map K.toString (KM.keys o))))
-    entry <- DerivedEntry mods <$> o .: "function"
-                               <*> (o .:? "inputs" Ae..!= [])
-                               <*> (o .:? "args" Ae..!= Map.empty)
+    names <- either fail pure . derivedNameSet =<< o .: "names"
+    either fail pure (checkEntryFields (derivedNamesText names) (filter (/= "names") (map K.toString (KM.keys o))))
+    entry <- DerivedEntry names <$> o .: "function"
+                                <*> (o .:? "inputs" Ae..!= [])
+                                <*> (o .:? "args" Ae..!= Map.empty)
     either fail (const (pure entry)) (checkDerivedEntry entry)
 
 instance ToJSON DerivedEntry where
-  toJSON (DerivedEntry mods fn ins args) = Ae.object
-    [ "modules"  .= mods
+  toJSON (DerivedEntry names fn ins args) = Ae.object
+    [ "names"    .= names
     , "function" .= fn
     , "inputs"   .= ins
     , "args"     .= args
     ]
 
--- | The name of an entry in the lines and messages of Acton.Derive and in
--- the names of its files: the smallest of its module names.
+-- | The name of an entry in the lines and messages of Acton.Derive: the
+-- smallest of its names as written, compared by code point, so a.b comes
+-- before a.b.* and a.b.* before a.b.c.
 derivedLabel :: DerivedEntry -> String
-derivedLabel = Set.findMin . derivedModules
+derivedLabel = Set.findMin . derivedNames
 
--- | The module names of an entry on one line: one name as it is, several
--- in braces, in sorted order.  The messages about the derived_modules
--- table name an entry this way.
+-- | The label of an entry in the name of a file or of a module: a final *
+-- is written all.  No two entries have the same, since 'checkDerivedEntries'
+-- refuses a.b.all next to a.b.*.
+derivedFileLabel :: DerivedEntry -> String
+derivedFileLabel entry = maybe label (++ ".all") (belowName label)
+  where label = derivedLabel entry
+
+-- | The names of an entry on one line: one name as it is, several in
+-- braces, in sorted order.  The messages about the derived_modules table
+-- name an entry this way.
 derivedNamesText :: Set.Set String -> String
-derivedNamesText mods = case Set.toList mods of
-  [m] -> m
-  ms  -> "{" ++ L.intercalate ", " ms ++ "}"
+derivedNamesText names = case Set.toList names of
+  [n] -> n
+  ns  -> "{" ++ L.intercalate ", " ns ++ "}"
 
--- | The module names of an entry as they are written, as a set.  A name
--- that is written twice is an error.
-derivedNames :: [String] -> Either String (Set.Set String)
-derivedNames names
-  | m : _ <- names L.\\ Set.toList set = Left ("the entry " ++ derivedNamesText set ++ " names the module " ++ m ++ " twice")
+-- | The names of an entry as they are written, as a set.  A name that is
+-- written twice is an error.
+derivedNameSet :: [String] -> Either String (Set.Set String)
+derivedNameSet names
+  | n : _ <- names L.\\ Set.toList set = Left ("the entry " ++ derivedNamesText set ++ " names " ++ namedText n ++ " twice")
   | otherwise                         = Right set
   where set = Set.fromList names
+
+-- | The name before the .* of a name that ends with .*, Nothing for a
+-- module name.
+belowName :: String -> Maybe String
+belowName name = reverse <$> L.stripPrefix "*." (reverse name)
+
+-- | A name of an entry without the .* that it may end with.
+withoutStar :: String -> String
+withoutStar name = fromMaybe name (belowName name)
+
+-- | The module names of an entry.
+derivedModules :: DerivedEntry -> Set.Set String
+derivedModules = Set.filter (isNothing . belowName) . derivedNames
+
+-- | The names that an entry has with .*, without the .*.
+derivedBelow :: DerivedEntry -> [String]
+derivedBelow = mapMaybe belowName . Set.toList . derivedNames
+
+-- | Whether the module 'name' is below 'above': a.b.c is below a.b, and
+-- a.b and a.bc are not.
+isBelow :: String -> String -> Bool
+isBelow name above = S.dottedNames above `L.isPrefixOf` init (S.dottedNames name)
+
+-- | Whether an entry names a module: with a module name, or with a name
+-- that ends with .* and that the module is below.
+derivedCovers :: DerivedEntry -> String -> Bool
+derivedCovers entry name = Set.member name (derivedNames entry) || any (name `isBelow`) (derivedBelow entry)
+
+-- | What a name of an entry names, as a message writes it.
+namedText :: String -> String
+namedText name = maybe ("the module " ++ name) ("the modules below " ++) (belowName name)
+
+-- | What two names both name, Nothing when no module is named by both.
+-- Two names name twice when they are equal, when one is p.* and the other
+-- is a module name below p, or when one is p.* and the other is q.* with q
+-- below p.  a.b and a.b.* name no module twice.  The second text is the
+-- reason, which a message puts last, and is empty for equal names.
+namedTwice :: String -> String -> Maybe (String, String)
+namedTwice a b
+  | a == b                                           = Just (namedText a, "")
+  | Just p <- belowName a, withoutStar b `isBelow` p = Just (namedText b, standsFor a p)
+  | Just p <- belowName b, withoutStar a `isBelow` p = Just (namedText a, standsFor b p)
+  | otherwise                                        = Nothing
+  where standsFor name p = ": " ++ name ++ " stands for every module below " ++ p ++ ", at any depth"
+
+-- | The leading names of a name of an entry: a, a.b and a.b.c for a.b.c,
+-- and a and a.b for a.b.*.
+leadingNames :: String -> [String]
+leadingNames = map (L.intercalate ".") . drop 1 . L.inits . S.dottedNames . withoutStar
+
+-- | The names that end with .* and name what a name names: a.* for a.b and
+-- for a.b.*, and a.* and a.b.* for a.b.c.
+coveringNames :: String -> [String]
+coveringNames name = [ p ++ ".*" | p <- leadingNames name, withoutStar name `isBelow` p ]
+
+-- | The first two names with leading names that differ and are equal when
+-- the case of letters is ignored, each followed by its leading name.  A
+-- file system that ignores the case of letters has one file or directory
+-- for both leading names.
+caseClash :: [String] -> Maybe ((String, String), (String, String))
+caseClash = go Map.empty
+  where
+    -- 'seen' has the leading names of the names so far by their lower-case
+    -- form, each with the first name that it is from.
+    go _ []                = Nothing
+    go seen (name : rest)  =
+      case [ (earlier, (name, leading)) | leading <- leadings, Just earlier <- [Map.lookup (lower leading) seen], snd earlier /= leading ] of
+        clash : _ -> Just clash
+        []        -> go (Map.union seen (Map.fromList [ (lower leading, (name, leading)) | leading <- leadings ])) rest
+      where leadings = leadingNames name
+    lower = map toLower
 
 -- | An argument of an entry as an Acton literal.  A number without a
 -- fraction is an integer literal, which a float parameter accepts too.
@@ -519,10 +605,9 @@ findBodyOffsetsFromAST content varName (S.Module _ _ _ stmts) =
 -- run.
 parseModuleForSpec :: String -> Either String S.Module
 parseModuleForSpec content =
-  let qn = S.ModName []  -- anonymous module
-  in case unsafePerformIO (trySync (AP.parseModule qn "Build.act" content Nothing)) of
-       Left e  -> Left (show e)
-       Right m -> Right m
+  case unsafePerformIO (trySync (AP.parseBuildFile content)) of
+    Left e  -> Left (show e)
+    Right m -> Right m
 
 -- Extract the build configuration from the AST of the Build.act text
 -- 'content', which gives an error its line.
@@ -792,17 +877,17 @@ renderDerivedBlock :: [DerivedEntry] -> String
 renderDerivedBlock entries =
   unlines (["derived_modules = {"] ++ renderDerivedLines entries ++ ["}"])
 
--- The lines of the derived_modules table between its braces.  A module name
--- and the function are written as names, a path as a string, and the
--- arguments as the keyword arguments of a call.  An entry with one module
--- name has the name on the line of its colon.  An entry with several names
--- has them in braces, one name per line, in sorted order: an entry can have
--- many names.  A table that is added to Build.act gets the same lines as a
--- table that Build.act has, so a command that writes a table a second time
+-- The lines of the derived_modules table between its braces.  A name of an
+-- entry and the function are written as names, a path as a string, and the
+-- arguments as the keyword arguments of a call.  An entry with one name has
+-- the name on the line of its colon.  An entry with several names has them
+-- in braces, one name per line, in sorted order: an entry can have many
+-- names.  A table that is added to Build.act gets the same lines as a table
+-- that Build.act has, so a command that writes a table a second time
 -- changes nothing.
 renderDerivedLines :: [DerivedEntry] -> [String]
 renderDerivedLines entries =
-  [ "    " ++ names (Set.toList (derivedModules e)) ++ ": " ++ tuple e ++ (if i < length entries then "," else "")
+  [ "    " ++ names (Set.toList (derivedNames e)) ++ ": " ++ tuple e ++ (if i < length entries then "," else "")
   | (i, e) <- zip [1..] entries ]
   where
     names [n] = n
@@ -891,15 +976,13 @@ checkSubdir dir
 
 checkFollows :: String -> [String] -> Either String ()
 checkFollows ref fields
-  | length names < 2 || not (all validName names) =
+  | length names < 2 || not (all validIdent names) =
       Left "follows must name a dependency through another dependency, for example \"stratoweave.yang\""
   | any (`elem` fields) ["url", "hash", "path", "repo_url", "repo_ref", "subdir"] =
       Left "follows cannot be combined with url, hash, path, repo_url, repo_ref or subdir"
   | otherwise = Right ()
   where
     names = S.dottedNames ref
-    validName (c:cs) = (isAlpha c || c == '_') && all (\c -> isAlphaNum c || c == '_') cs
-    validName [] = False
 
 exprToZigDeps :: S.Expr -> Either BuildSpecParseError (Maybe (Map.Map String ZigDep))
 exprToZigDeps (S.Dict _ assocs) = Just . Map.fromList . catMaybes <$> traverse assocToZig assocs
@@ -941,10 +1024,12 @@ tupleToLibrary (S.Tuple _ _ kargs) =
 tupleToLibrary (S.Paren _ e) = tupleToLibrary e
 tupleToLibrary _ = Nothing
 
--- The derived_modules table.  To the left of its colon an entry has a
--- module name or several in braces, and function is a module name followed
--- by the function's name, all written without quotes.  args holds keyword
--- arguments with literal values.  'lineOf' gives the line of a location.
+-- The derived_modules table.  To the left of its colon an entry has a name
+-- or several in braces.  A name is a module name, or a dotted name followed
+-- by .* for every module below it.  function is a module name followed by
+-- the function's name.  The names and the function are written without
+-- quotes.  args holds keyword arguments with literal values.  'lineOf'
+-- gives the line of a location.
 exprToDerivedModules :: (SrcLoc -> Int) -> S.Expr -> Either BuildSpecParseError [DerivedEntry]
 exprToDerivedModules lineOf (S.Dict l assocs) = do
   entries <- traverse entry assocs
@@ -952,10 +1037,13 @@ exprToDerivedModules lineOf (S.Dict l assocs) = do
   where
     entry (S.Assoc k v) = do
       let bad msg = Left (InvalidDerivedModules (lineOf (S.eloc k)) msg)
-      mods <- maybe (bad ("to the left of its colon an entry has a module name, or several module names in braces, written without quotes, "
-                          ++ "for example schema: (function=gen.schema) or {tables, layers}: (function=gen.modules), found " ++ renderExpr k))
-                    (either bad Right . derivedNames) (moduleNames k)
-      let label = derivedNamesText mods
+      -- The message does not show the key as it is read: the printer writes
+      -- the * of .* in quotes.
+      names <- maybe (bad ("to the left of its colon an entry has a name, or several names in braces, written without quotes: "
+                           ++ "a module name such as schema, or a name such as layers.* for every module below layers. "
+                           ++ "For example schema: (function=gen.schema) or {tables, layers.*}: (function=gen.modules)"))
+                     (either bad Right . derivedNameSet) (entryNames k)
+      let label = derivedNamesText names
       fields <- case unparen v of
                   S.Tuple _ S.PosNil kargs -> Right (kwdToMap kargs)
                   _ -> bad ("the entry " ++ label ++ " must be written as (function=..., inputs=[...], args=(...))")
@@ -977,20 +1065,33 @@ exprToDerivedModules lineOf (S.Dict l assocs) = do
                 Just (S.Tuple _ S.PosNil kargs) -> Map.traverseWithKey argument (kwdToMap kargs)
                 Just _ -> bad ("args of the entry " ++ label ++ " are the keyword arguments of its function, "
                                ++ "written as args=(name=value, ...), for example args=(prefix=\"S\", depth=3)")
-      let e = DerivedEntry mods fn ins args
+      let e = DerivedEntry names fn ins args
       either bad (const (Right e)) (checkDerivedEntry e)
     entry (S.StarStar e) = Left (InvalidDerivedModules (lineOf (S.eloc e)) "an entry must be written as name: (function=...)")
 
     unparen (S.Paren _ e) = unparen e
     unparen e             = e
 
-    moduleNames (S.Set _ elems) = traverse (\el -> case el of { S.Elem e -> moduleName e; _ -> Nothing }) elems
-    moduleNames e               = (: []) <$> moduleName e
-    moduleName                  = fmap (L.intercalate ".") . dotted
+    entryNames (S.Set _ elems) = traverse (\el -> case el of { S.Elem e -> entryName e; _ -> Nothing }) elems
+    entryNames e               = (: []) <$> entryName e
+    entryName                  = fmap (L.intercalate ".") . dotted
 
-    dotted (S.Var _ (S.NoQ n)) = Just [S.nstr n]
-    dotted (S.Dot _ e n)       = (++ [S.nstr n]) <$> dotted e
+    -- The parts of a dotted name.  A part in quotes is read as the part
+    -- without quotes, which a part that is a keyword needs.  A * is a part
+    -- wherever it is written, and 'checkDerivedEntry' refuses the names and
+    -- the functions that may not have one.
+    dotted (S.Var _ (S.NoQ n)) = (: []) <$> part n
+    dotted (S.Dot _ e n)       = (\ps p -> ps ++ [p]) <$> dotted e <*> part n
     dotted _                   = Nothing
+
+    part n
+      | star n || validIdent (S.nstr n) = Just (S.nstr n)
+      | otherwise                       = Nothing
+
+    -- The * of .* has the location of its one character (Parser.stardot),
+    -- and a * in quotes has the location of the string with its quotes.
+    star (S.Name (Loc start end) n) = TS.toString n == "*" && end == start + 1
+    star _                          = False
 
     plainStrings (S.List _ elems) = traverse (\el -> case el of { S.Elem e -> buildOptionLiteral e; _ -> Nothing }) elems
     plainStrings _                = Nothing
@@ -1013,24 +1114,37 @@ exprToDerivedModules lineOf (S.Dict l assocs) = do
 exprToDerivedModules lineOf e =
   Left (InvalidDerivedModules (lineOf (S.eloc e)) "expected a dict of entries, for example {schema: (function=gen.schema)}")
 
--- | The fields that an entry of derived_modules may have besides its module
--- names, whether it is read from Build.act or from JSON.  'label' names the
--- entry in the message.
+-- | The fields that an entry of derived_modules may have besides its names,
+-- whether it is read from Build.act or from JSON.  'label' names the entry
+-- in the message.
 checkEntryFields :: String -> [String] -> Either String ()
 checkEntryFields label fields = case filter (`notElem` ["function", "inputs", "args"]) fields of
   []          -> Right ()
   unknown : _ -> Left ("the entry " ++ label ++ " has the unknown field " ++ unknown ++ ". The fields are function, inputs and args")
 
+-- | Whether a text has the form of one part of a dotted name: letters,
+-- digits and underscores, and no digit first.
+validIdent :: String -> Bool
+validIdent (c:cs) = (isAlpha c || c == '_') && all (\x -> isAlphaNum x || x == '_') cs
+validIdent []     = False
+
 -- | What an entry of derived_modules must fulfil, whether it is read from
--- Build.act or from JSON.  An input path is a relative path inside the
--- project and outside out: a build writes out, so a file there is no input
--- of a build.
+-- Build.act or from JSON: it has a name, each name is a module name or a
+-- dotted name followed by .*, no module is named twice, and the function,
+-- the input paths and the argument names have their forms.  An input path
+-- is a relative path inside the project and outside out: a build writes
+-- out, so a file there is no input of a build.
 checkDerivedEntry :: DerivedEntry -> Either String ()
-checkDerivedEntry (DerivedEntry mods fn ins args)
-  | null mods =
-      Left "an entry names at least one module"
-  | bad : _ <- filter (not . validDotted) (Set.toList mods) =
-      Left (show bad ++ " is not a module name")
+checkDerivedEntry (DerivedEntry names fn ins args)
+  | null names =
+      Left "an entry has at least one name"
+  | bad : _ <- filter (not . validDotted . withoutStar) (Set.toList names) =
+      Left (show bad ++ if '*' `elem` bad
+                          then " is not a name of an entry: a * is written only as the .* at the end of a name, "
+                               ++ "as in layers.* for every module below layers"
+                          else " is not a module name")
+  | (what, why) : _ <- [ twice | n <- Set.toList names, a <- coveringNames n, Set.member a names, Just twice <- [namedTwice a n] ] =
+      Left ("the entry " ++ label ++ " names " ++ what ++ " twice" ++ why)
   | not (validDotted fn) || length (S.dottedNames fn) < 2 =
       Left ("function of the entry " ++ label ++ " must be a module name followed by the function's name, found " ++ show fn)
   | bad : _ <- filter (not . validInput) ins =
@@ -1041,23 +1155,34 @@ checkDerivedEntry (DerivedEntry mods fn ins args)
       Left ("the argument name " ++ show bad ++ " of the entry " ++ label ++ " is not a parameter name")
   | otherwise = Right ()
   where
-    label = derivedNamesText mods
+    label = derivedNamesText names
     inputPath p = "the input path " ++ buildOptionString p ++ " of the entry " ++ label
     validDotted name = let parts = S.dottedNames name in not (null name) && all validIdent parts
-    validIdent (c:cs) = (isAlpha c || c == '_') && all (\x -> isAlphaNum x || x == '_') cs
-    validIdent []     = False
     pathParts = Posix.splitDirectories . Posix.dropTrailingPathSeparator
     validInput p = not (null (pathParts p)) && not (Posix.isAbsolute p) && not (Windows.hasDrive p)
                    && '\\' `notElem` p && '\0' `notElem` p && '\n' `notElem` p
                    && all (`notElem` [".", ".."]) (pathParts p)
 
--- | Every entry is valid and no module is named by two entries.
+-- | Every entry is valid, no module is named by two entries, and no two
+-- names of the table have leading names that differ only in the case of
+-- letters.
 checkDerivedEntries :: [DerivedEntry] -> Either String ()
 checkDerivedEntries entries = do
   mapM_ checkDerivedEntry entries
-  case [ m | (m : _ : _) <- L.group (L.sort (concatMap (Set.toList . derivedModules) entries)) ] of
-    []    -> Right ()
-    m : _ -> Left ("the module " ++ m ++ " is named by two entries")
+  case [ twice | (i, e) <- numbered, n <- names e, a <- n : coveringNames n
+               , any (/= i) (Map.findWithDefault [] a owners), Just twice <- [namedTwice a n] ] of
+    (what, why) : _ -> Left ("two entries name " ++ what ++ why)
+    []              -> Right ()
+  case caseClash (concatMap names entries) of
+    Just ((a, x), (b, y)) -> Left ("the names " ++ a ++ " and " ++ b ++ " start with " ++ x ++ " and " ++ y
+                                   ++ ", which differ only in the case of letters. "
+                                   ++ "A file system that ignores the case of letters has one file or directory for both.")
+    Nothing               -> Right ()
+  where
+    names    = Set.toList . derivedNames
+    numbered = zip [0 :: Int ..] entries
+    -- The entries that have a name, by the name.
+    owners   = Map.fromListWith (++) [ (n, [i]) | (i, e) <- numbered, n <- names e ]
 
 kwdToMap :: S.KwdArg -> Map.Map String S.Expr
 kwdToMap S.KwdNil = Map.empty
