@@ -46,7 +46,10 @@ import System.Posix.Files (FileStatus, deviceID, fileID, fileSize, getFileStatus
 -- | Why embed cannot take a path as it is written, or Nothing for a path that
 -- it takes: a relative path with / between its components, none of them empty,
 -- . or .., without a backslash, a double quote, a brace or a control
--- character, and with a first component other than out.
+-- character, and with a first component other than out.  embed_call of
+-- std.build.derive has the same rule, written in Acton, for the path that a
+-- function of a derived module writes.  The tests of both read the paths of
+-- test/stdlib_tests/data/embed_paths.json.
 pathProblem :: String -> Maybe String
 pathProblem path
   | any (`elem` ["", ".", ".."]) parts || '\\' `elem` path
@@ -264,9 +267,11 @@ listedPath names root path = fmap (intercalate "/") <$> listed root (components 
 -- | The stat of the file that a path names below a directory, or why embed
 -- cannot take it.  The path names a regular file of fewer than 2^31 bytes,
 -- and each component is spelled as its directory lists it.  A symbolic link
--- is followed.  The path is one that pathProblem accepts.
-embeddedFileStatus :: (FilePath -> IO (S.Set FilePath)) -> FilePath -> FilePath -> IO (Either String FileStatus)
-embeddedFileStatus names root path = handle (no . cannotBeRead path) $ do
+-- is followed.  The path is one that pathProblem accepts.  The reason comes
+-- with the stat of what the path names, Nothing when it names nothing or
+-- cannot be read.
+embeddedFileStatus :: (FilePath -> IO (S.Set FilePath)) -> FilePath -> FilePath -> IO (Either (String, Maybe FileStatus) FileStatus)
+embeddedFileStatus names root path = handle (no Nothing . cannotBeRead path) $ do
     listed <- listedPath names root path
     case listed of
       Nothing    -> missing
@@ -277,15 +282,17 @@ embeddedFileStatus names root path = handle (no . cannotBeRead path) $ do
             | isDoesNotExistError e -> missing
             | otherwise             -> throwIO e
           Right st
-            | isDirectory st          -> no (path ++ " is a directory, and embed takes one file")
-            | named /= path           -> no ("the file is named " ++ named ++ ", and the path is written " ++ path)
-            | not (isRegularFile st)  -> no (path ++ " is not a regular file")
-            | size >= 2 ^ (31 :: Int) -> no (path ++ " has " ++ show size ++ " bytes, and embed takes a file of fewer than 2147483648 bytes")
+            | isDirectory st          -> refuse (path ++ " is a directory, and embed takes one file. For the files of a directory use a derived module, "
+                                                 ++ "for example with the function std.build.derive.embed_files")
+            | named /= path           -> refuse ("the file is named " ++ named ++ ", and the path is written " ++ path)
+            | not (isRegularFile st)  -> refuse (path ++ " is not a regular file")
+            | size >= 2 ^ (31 :: Int) -> refuse (path ++ " has " ++ show size ++ " bytes, and embed takes a file of fewer than 2147483648 bytes")
             | otherwise               -> return (Right st)
-            where size = toInteger (fileSize st)
+            where size   = toInteger (fileSize st)
+                  refuse = no (Just st)
   where
-    no      = return . Left
-    missing = no ("no file " ++ path ++ " in " ++ root)
+    no st why = return (Left (why, st))
+    missing   = no Nothing ("no file " ++ path ++ " in " ++ root)
 
 -- | The message for a path whose file cannot be read, with the reason that
 -- the operating system gives.

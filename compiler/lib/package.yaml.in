@@ -75,6 +75,7 @@ library:
     - Acton.Compile
     - Acton.CommandLineParser
     - Acton.Deactorizer
+    - Acton.Derive
     - Acton.Diagnostics
     - Acton.DocPrinter
     - Acton.Embed

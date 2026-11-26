@@ -4,7 +4,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeOperators #-}
 
-import Control.Exception (AsyncException, SomeException, displayException, evaluate, finally, fromException, throwIO, try)
+import Control.Exception (AsyncException, IOException, SomeException, displayException, evaluate, finally, fromException, throwIO, try)
 import Control.Concurrent (ThreadId, forkIO, killThread, threadDelay)
 import Control.Concurrent.MVar (MVar, newEmptyMVar, takeMVar, tryPutMVar)
 import Control.Monad (forM, forM_, forever, void, when)
@@ -15,7 +15,7 @@ import Data.List (find)
 import Data.IORef
 import qualified Data.HashMap.Strict as HM
 import qualified Data.Map.Strict as M
-import Data.Maybe (fromMaybe, listToMaybe)
+import Data.Maybe (catMaybes, fromMaybe, listToMaybe)
 import Data.Sequence (Seq, ViewL(..), (|>))
 import Data.Version (showVersion)
 import qualified Data.Sequence as Seq
@@ -41,6 +41,7 @@ import qualified Acton.Env as Env
 import qualified Acton.Project as Project
 import qualified Acton.SourceProvider as Source
 import qualified Acton.Syntax as S
+import qualified InterfaceFiles
 import qualified Paths_lsp_server_acton
 
 import Error.Diagnose (Diagnostic)
@@ -76,6 +77,7 @@ data ProjectBuildCache = ProjectBuildCache
   { cachedCompileContext :: Compile.CompileContext
   , cachedProjectMap :: M.Map FilePath Project.ProjCtx
   , cachedGlobalTasks :: [Compile.GlobalTask]
+  , cachedDerivedSources :: M.Map FilePath InterfaceFiles.SourceFileMeta  -- derivedSources of the projects when the cache was made
   }
 
 data PlanOrigin = PlanFromCache | PlanFromDiscovery deriving (Eq, Show)
@@ -286,10 +288,12 @@ cacheCompilePlan :: Compile.CompilePlan -> IO ()
 cacheCompilePlan plan = do
   let ctx = Compile.cpContext plan
       rootProj = Compile.ccRootProj ctx
-      cache = ProjectBuildCache
+  derived <- derivedSources ctx (Compile.cpProjMap plan)
+  let cache = ProjectBuildCache
         { cachedCompileContext = ctx
         , cachedProjectMap = Compile.cpProjMap plan
         , cachedGlobalTasks = Compile.cpGlobalTasks plan
+        , cachedDerivedSources = derived
         }
   atomicModifyIORef' projectBuildCachesRef $ \m ->
     (HM.insert rootProj cache m, ())
@@ -364,6 +368,26 @@ ensureEmbeddedWatchers plan = do
     forget dir = atomicModifyIORef' embeddedWatchesRef $ \m ->
       (HM.adjust (\(known, watched) -> (known, Set.delete dir watched)) rootProj m, ())
 
+-- | The stat of the source file of every derived module of the projects of
+-- a build.  A scratch build has no derived modules, and its root is the
+-- working directory of the server, which can be a project that has some.
+-- A file that is gone when it is looked at is left out.
+derivedSources :: Compile.CompileContext -> M.Map FilePath Project.ProjCtx -> IO (M.Map FilePath InterfaceFiles.SourceFileMeta)
+derivedSources ctx projects
+  | Project.isTmp (Compile.ccPathsRoot ctx) = return M.empty
+  | otherwise = M.fromList . concat <$> forM (M.keys projects) (\root -> do
+      names <- Project.derivedModuleNames root
+      catMaybes <$> forM (map (Project.derivedModuleFile root) (Set.toList names)) (\file ->
+        either (const Nothing) (Just . (,) file) <$> (try (Compile.readSourceFileMeta file) :: IO (Either IOException InterfaceFiles.SourceFileMeta))))
+
+-- | Whether the source file of every derived module of the projects of the
+-- cache is the file that was there when the cache was made.  A build adds,
+-- removes and writes source files under out/derived/src, and no watch
+-- tells of it.
+derivedModulesAsCached :: ProjectBuildCache -> IO Bool
+derivedModulesAsCached cache =
+  (== cachedDerivedSources cache) <$> derivedSources (cachedCompileContext cache) (cachedProjectMap cache)
+
 prepareLspCompilePlan
   :: Source.SourceProvider
   -> C.GlobalOptions
@@ -380,7 +404,8 @@ prepareLspCompilePlan sp gopts opts lockDependencies path = do
     case mcache of
       Just cache
         | Compile.ccBuildStamp (cachedCompileContext cache) == Compile.ccBuildStamp ctx -> do
-            mplan <- compilePlanFromCache ctx request path' cache
+            asCached <- derivedModulesAsCached cache
+            mplan <- if asCached then compilePlanFromCache ctx request path' cache else return Nothing
             case mplan of
               Just plan -> return (PlanFromCache, plan)
               Nothing -> freshPlan ctx

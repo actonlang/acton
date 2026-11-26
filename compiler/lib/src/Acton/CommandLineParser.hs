@@ -442,7 +442,7 @@ compileOptionsWith optimization = CompileOptions
         <*> switch (long "no-dbp"      <> help "Disable deferred back passes")
         <*> optimization
         <*> switch (long "only-build"   <> help "Only perform final build of .c files, do not compile .act files")
-        <*> switch (long "skip-build"   <> help "Skip final bulid of .c files")
+        <*> switch (long "skip-build"   <> help "Skip final build of .c files and run no function of a derived module")
         <*> switch (long "watch"        <> help "Rebuild on file changes")
         <*> switch (long "no-threads"   <> help "Don't use threads")
         <*> switch (long "parse-serial" <> help "Use the serial whole-file parser")

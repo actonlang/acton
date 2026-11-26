@@ -4,6 +4,10 @@ module Acton.BuildSpec
   ( PkgDep(..)
   , ZigDep(..)
   , Library(..)
+  , DerivedEntry(..)
+  , derivedLabel
+  , derivedArgLiteral
+  , buildOptionString
   , BuildSpec(..)
   , concreteDependencies
   , checkSubdir
@@ -23,13 +27,15 @@ import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString as BS
 import qualified Data.Map as Map
 import Data.Map (Map)
+import qualified Data.Set as Set
 import Data.Char (ord, isAlpha, isAlphaNum, isAscii, isSpace)
 import Data.Maybe (catMaybes, fromMaybe, isNothing, mapMaybe)
 import qualified Data.List as L
+import Data.Foldable (toList)
+import qualified Data.Scientific as Sci
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import Numeric (showHex)
-import qualified Control.Exception as E
 import System.IO.Unsafe (unsafePerformIO)
 import qualified System.FilePath.Posix as Posix
 import qualified System.FilePath.Windows as Windows
@@ -41,7 +47,7 @@ import qualified Acton.Parser as AP
 import qualified Acton.Syntax as S
 import qualified Data.Text.Short as TS
 import qualified Acton.Printer as Pr
-import Utils (SrcLoc(..))
+import Utils (SrcLoc(..), trySync)
 import qualified Data.Aeson.KeyMap as KM
 import qualified Data.Aeson.Key as K
 
@@ -142,6 +148,73 @@ instance ToJSON Library where
     , "linkage" .= link
     ]
 
+-- | An entry of the derived_modules table: the modules that its function
+-- gives, the function, the input paths and the arguments.  Module names are
+-- dotted, as an import statement writes them, and the order in which they
+-- are written has no meaning.  The function is a dotted module name
+-- followed by the function's name.  Input paths are relative to the project
+-- root, with / between the components.  The arguments are the keyword
+-- arguments of the call of the function, by parameter name.  Each is a
+-- literal: a string, a number, a bool, None, a list, or a dict with strings
+-- as keys, held as the JSON value of the same kind.  A JSON object has no
+-- order of its keys, and 'derivedArgLiteral' writes the keys of a dict in
+-- sorted order.
+data DerivedEntry = DerivedEntry
+  { derivedModules  :: Set.Set String
+  , derivedFunction :: String
+  , derivedInputs   :: [String]
+  , derivedArgs     :: Map String Ae.Value
+  } deriving (Eq, Show, Generic)
+
+instance FromJSON DerivedEntry where
+  parseJSON = Ae.withObject "DerivedEntry" $ \o -> do
+    mods  <- either fail pure . derivedNames =<< o .: "modules"
+    either fail pure (checkEntryFields (derivedNamesText mods) (filter (/= "modules") (map K.toString (KM.keys o))))
+    entry <- DerivedEntry mods <$> o .: "function"
+                               <*> (o .:? "inputs" Ae..!= [])
+                               <*> (o .:? "args" Ae..!= Map.empty)
+    either fail (const (pure entry)) (checkDerivedEntry entry)
+
+instance ToJSON DerivedEntry where
+  toJSON (DerivedEntry mods fn ins args) = Ae.object
+    [ "modules"  .= mods
+    , "function" .= fn
+    , "inputs"   .= ins
+    , "args"     .= args
+    ]
+
+-- | The name of an entry in the lines and messages of Acton.Derive and in
+-- the names of its files: the smallest of its module names.
+derivedLabel :: DerivedEntry -> String
+derivedLabel = Set.findMin . derivedModules
+
+-- | The module names of an entry on one line: one name as it is, several
+-- in braces, in sorted order.  The messages about the derived_modules
+-- table name an entry this way.
+derivedNamesText :: Set.Set String -> String
+derivedNamesText mods = case Set.toList mods of
+  [m] -> m
+  ms  -> "{" ++ L.intercalate ", " ms ++ "}"
+
+-- | The module names of an entry as they are written, as a set.  A name
+-- that is written twice is an error.
+derivedNames :: [String] -> Either String (Set.Set String)
+derivedNames names
+  | m : _ <- names L.\\ Set.toList set = Left ("the entry " ++ derivedNamesText set ++ " names the module " ++ m ++ " twice")
+  | otherwise                         = Right set
+  where set = Set.fromList names
+
+-- | An argument of an entry as an Acton literal.  A number without a
+-- fraction is an integer literal, which a float parameter accepts too.
+derivedArgLiteral :: Ae.Value -> String
+derivedArgLiteral (Ae.String s) = buildOptionString (T.unpack s)
+derivedArgLiteral (Ae.Number n) = either show show (Sci.floatingOrInteger n :: Either Double Integer)
+derivedArgLiteral (Ae.Bool b)   = if b then "True" else "False"
+derivedArgLiteral Ae.Null       = "None"
+derivedArgLiteral (Ae.Array vs) = "[" ++ L.intercalate ", " (map derivedArgLiteral (toList vs)) ++ "]"
+derivedArgLiteral (Ae.Object o) =
+  "{" ++ L.intercalate ", " [ buildOptionString (K.toString k) ++ ": " ++ derivedArgLiteral v | (k, v) <- KM.toAscList o ] ++ "}"
+
 data BuildSpec = BuildSpec
   { specName         :: String
   , specDescription  :: Maybe String
@@ -150,6 +223,7 @@ data BuildSpec = BuildSpec
   , zig_dependencies :: Map String ZigDep
   , libraries        :: Map String Library
   , build_options    :: Map String String
+  , derived_modules  :: [DerivedEntry]         -- in the order of the table
   } deriving (Eq, Show, Generic)
 
 -- | Dependencies that contribute a source to project selection.
@@ -166,6 +240,7 @@ data BuildSpecParseError
   | UnsupportedOptionValue String String
   | InvalidBuildOptions
   | InvalidBuildOption String String
+  | InvalidDerivedModules Int String      -- the line in Build.act, 0 when unknown
   deriving (Eq, Show)
 
 renderBuildSpecParseError :: BuildSpecParseError -> String
@@ -191,6 +266,8 @@ renderBuildSpecParseError err =
       "Invalid build_options. Expected a dict of plain string literals"
     InvalidBuildOption key msg ->
       "Invalid build option " ++ show key ++ ": " ++ msg
+    InvalidDerivedModules line msg ->
+      "Invalid derived_modules" ++ (if line > 0 then " at line " ++ show line else "") ++ ": " ++ msg
 
 instance FromJSON BuildSpec where
   parseJSON = Ae.withObject "BuildSpec" $ \o -> do
@@ -202,16 +279,19 @@ instance FromJSON BuildSpec where
     libs <- o .:? "libraries"        Ae..!= Map.empty
     opts <- if KM.member "build_options" o then o .: "build_options" else pure Map.empty
     checkedOpts <- either (fail . renderBuildSpecParseError) pure (checkBuildOptions opts)
-    return (BuildSpec nm desc fp deps zig libs checkedOpts)
+    derived <- o .:? "derived_modules" Ae..!= []
+    either fail pure (checkDerivedEntries derived)
+    return (BuildSpec nm desc fp deps zig libs checkedOpts derived)
 
 instance ToJSON BuildSpec where
-  toJSON (BuildSpec nm desc fp deps zig libs opts) = Ae.object $
+  toJSON (BuildSpec nm desc fp deps zig libs opts derived) = Ae.object $
     [ "name"            .= nm
     , "fingerprint"     .= fp
     , "dependencies"    .= deps
     , "zig_dependencies" .= zig
     , "libraries"       .= libs
     , "build_options"   .= opts
+    , "derived_modules" .= derived
     ] ++ catMaybes [ ("description" .=) <$> desc ]
 
 -- Render an Acton Build.act file from BuildSpec
@@ -224,7 +304,7 @@ instance ToJSON BuildSpec where
 -- }
 
 renderBuildAct :: BuildSpec -> String
-renderBuildAct (BuildSpec nm mdesc fp deps zdeps libs opts) = unlines $
+renderBuildAct (BuildSpec nm mdesc fp deps zdeps libs opts derived) = unlines $
   [ "# Autogenerated from BuildSpec (acton)"
   , "# Edit this file to update your project configuration."
   , ""
@@ -242,12 +322,13 @@ renderBuildAct (BuildSpec nm mdesc fp deps zdeps libs opts) = unlines $
      , renderBlockText "zig_dependencies" zdeps (Map.keys zdeps) renderZigTuple
      , ""
      ]
-  ++ if Map.null opts then [] else [renderBlockText "build_options" opts (Map.keys opts) buildOptionString, ""]
+  ++ (if Map.null opts then [] else [renderBlockText "build_options" opts (Map.keys opts) buildOptionString, ""])
+  ++ (if null derived then [] else [renderDerivedBlock derived, ""])
 
 updateBuildActFromJSON :: String -> BL.ByteString -> Either String String
 updateBuildActFromJSON content json = do
   modAST <- parseModuleForSpec content
-  currSpec <- case extractSpecFromModule modAST of
+  currSpec <- case extractSpecFromModule content modAST of
                 Left err -> Left (renderBuildSpecParseError err)
                 Right spec -> Right spec
   val <- Ae.eitherDecode' json
@@ -260,6 +341,7 @@ updateBuildActFromJSON content json = do
           zigPresent  = KM.member "zig_dependencies" obj
           libsPresent = KM.member "libraries" obj
           optsPresent = KM.member "build_options" obj
+          derivedPresent = KM.member "derived_modules" obj
           namePresent = KM.member "name" obj
           descPresent = KM.member "description" obj
           fpPresent   = KM.member "fingerprint" obj
@@ -274,20 +356,21 @@ updateBuildActFromJSON content json = do
           zigs' = if zigPresent  then patchZigDependencies patch else zig_dependencies currSpec
           libs' = if libsPresent then patchLibraries patch else libraries currSpec
           opts' = if optsPresent then patchBuildOptions patch else build_options currSpec
+          derived' = if derivedPresent then patchDerivedModules patch else derived_modules currSpec
           merged = currSpec { specName = name'
                             , specDescription = desc'
                             , fingerprint = fp'
                             , dependencies = deps'
                             , zig_dependencies = zigs'
                             , libraries = libs'
-                            , build_options = opts' }
+                            , build_options = opts'
+                            , derived_modules = derived' }
       content1 <- applyTopLevelPatches content modAST merged namePresent descPresent fpPresent
       modAST1 <- parseModuleForSpec content1
-      let bodyOffsets = Map.fromList $ catMaybes
-            [ fmap (\off -> ("dependencies", off)) (findBodyOffsetsFromAST content1 "dependencies" modAST1)
-            , fmap (\off -> ("libraries", off)) (findBodyOffsetsFromAST content1 "libraries" modAST1)
-            , fmap (\off -> ("zig_dependencies", off)) (findBodyOffsetsFromAST content1 "zig_dependencies" modAST1)
-            , fmap (\off -> ("build_options", off)) (findBodyOffsetsFromAST content1 "build_options" modAST1)
+      let bodyOffsets = Map.fromList
+            [ (lbl, off)
+            | (lbl, _, _) <- blockRenderers
+            , Just off <- [findBodyOffsetsFromAST content1 lbl modAST1]
             ]
           content2 = spliceManyWithBodyOffsets content1 blockRenderers merged bodyOffsets
       Right content2
@@ -369,7 +452,7 @@ parseBuildActDetailed content = do
   modAST <- case parseModuleForSpec content of
               Left err -> Left (ParseError err)
               Right m -> Right m
-  specFromAST <- extractSpecFromModule modAST
+  specFromAST <- extractSpecFromModule content modAST
   -- Compute body offsets using AST locations
   let mDepsOff = findBodyOffsetsFromAST content "dependencies" modAST
       mZigsOff = findBodyOffsetsFromAST content "zig_dependencies" modAST
@@ -430,19 +513,23 @@ findBodyOffsetsFromAST content varName (S.Module _ _ _ stmts) =
            then Just (s+1, e-1)
            else Nothing
     
--- Parse build.act using the real Acton parser
+-- Parse build.act using the real Acton parser.  What the parser throws is a
+-- parse error.  An asynchronous exception is not: a cancel that arrives
+-- during the parse must stop the thread, as it stops any other work of a
+-- run.
 parseModuleForSpec :: String -> Either String S.Module
 parseModuleForSpec content =
   let qn = S.ModName []  -- anonymous module
-  in case unsafePerformIO (E.try (AP.parseModule qn "Build.act" content Nothing) :: IO (Either E.SomeException S.Module)) of
+  in case unsafePerformIO (trySync (AP.parseModule qn "Build.act" content Nothing)) of
        Left e  -> Left (show e)
        Right m -> Right m
 
--- Extract the build configuration from the AST.
-extractSpecFromModule :: S.Module -> Either BuildSpecParseError BuildSpec
-extractSpecFromModule (S.Module _ _ _ stmts) = do
-  (mname, mdesc, mfp, mfpErr, deps, zigs, libs, opts) <-
-        foldM step (Nothing, Nothing, Nothing, Nothing, Map.empty, Map.empty, Map.empty, Map.empty) stmts
+-- Extract the build configuration from the AST of the Build.act text
+-- 'content', which gives an error its line.
+extractSpecFromModule :: String -> S.Module -> Either BuildSpecParseError BuildSpec
+extractSpecFromModule content (S.Module _ _ _ stmts) = do
+  (mname, mdesc, mfp, mfpErr, deps, zigs, libs, opts, derived) <-
+        foldM step (Nothing, Nothing, Nothing, Nothing, Map.empty, Map.empty, Map.empty, Map.empty, []) stmts
   case (mname, mfp, mfpErr) of
        (Nothing, _, _) -> Left MissingProjectName
        (Just name, Nothing, Just raw) -> Left (InvalidFingerprint name raw)
@@ -455,9 +542,12 @@ extractSpecFromModule (S.Module _ _ _ stmts) = do
                          , zig_dependencies = zigs
                          , libraries = libs
                          , build_options = opts
+                         , derived_modules = derived
                          }
   where
-    step (mname, mdesc, mfp, mfpErr, deps, zigs, libs, opts) stmt = case stmt of
+    lineOf (Loc start _) = 1 + length (filter (== '\n') (take start content))
+    lineOf NoLoc         = 0
+    step (mname, mdesc, mfp, mfpErr, deps, zigs, libs, opts, derived) stmt = case stmt of
       S.Assign _ pats expr -> do
         let names = mapMaybe patternVarName pats
             mname' = if "name" `elem` names
@@ -486,8 +576,11 @@ extractSpecFromModule (S.Module _ _ _ stmts) = do
         opts' <- if "build_options" `elem` names
                    then exprToBuildOptions expr
                    else Right opts
-        Right (mname', mdesc', mfp', mfpErr', deps', zigs', libs', opts')
-      _ -> Right (mname, mdesc, mfp, mfpErr, deps, zigs, libs, opts)
+        derived' <- if "derived_modules" `elem` names
+                      then exprToDerivedModules lineOf expr
+                      else Right derived
+        Right (mname', mdesc', mfp', mfpErr', deps', zigs', libs', opts', derived')
+      _ -> Right (mname, mdesc, mfp, mfpErr, deps, zigs, libs, opts, derived)
 
 
 data BuildSpecPatch = BuildSpecPatch
@@ -498,6 +591,7 @@ data BuildSpecPatch = BuildSpecPatch
   , patchZigDependencies :: Map.Map String ZigDep
   , patchLibraries :: Map.Map String Library
   , patchBuildOptions :: Map.Map String String
+  , patchDerivedModules :: [DerivedEntry]
   } deriving (Eq, Show)
 
 instance FromJSON BuildSpecPatch where
@@ -513,7 +607,9 @@ instance FromJSON BuildSpecPatch where
     libs <- o .:? "libraries"        Ae..!= Map.empty
     opts <- if KM.member "build_options" o then o .: "build_options" else pure Map.empty
     checkedOpts <- either (fail . renderBuildSpecParseError) pure (checkBuildOptions opts)
-    pure (BuildSpecPatch name desc fp deps zigs libs checkedOpts)
+    derived <- o .:? "derived_modules" Ae..!= []
+    either fail pure (checkDerivedEntries derived)
+    pure (BuildSpecPatch name desc fp deps zigs libs checkedOpts derived)
 
 
 
@@ -539,6 +635,10 @@ blockRenderers =
   , ( "build_options"
     , \spec -> Map.keys (build_options spec)
     , \spec -> renderBlockText "build_options" (build_options spec) (Map.keys (build_options spec)) buildOptionString
+    )
+  , ( "derived_modules"
+    , \spec -> map derivedLabel (derived_modules spec)
+    , \spec -> renderDerivedBlock (derived_modules spec)
     )
   ]
 
@@ -571,6 +671,7 @@ spliceManyWithBodyOffsets content defs spec bodyOffsets =
       | lbl == "libraries"        = renderInnerText (libraries spec) keys renderLibraryTuple
       | lbl == "zig_dependencies" = renderInnerText (zig_dependencies spec) keys renderZigTuple
       | lbl == "build_options"     = renderInnerText (build_options spec) keys buildOptionString
+      | lbl == "derived_modules"   = unlines (renderDerivedLines (derived_modules spec))
       | otherwise = ""
 
 -- Render only the inner lines of a dict block, no label/braces
@@ -630,22 +731,26 @@ renderExpr e = Pr.render (Pr.pretty e)
 --     key1="val1",
 --     key2="val2"
 -- )
+--
+-- A value is written with buildOptionString, so that a character outside
+-- ASCII is written as itself.  tupleToPkg reads path back with
+-- buildOptionLiteral, which gives the path that was written.
 renderPkgTuple :: PkgDep -> String
 renderPkgTuple (PkgDep u h p ru rr f s) =
   let fields = catMaybes
-        [ fmap (\x -> ("repo_url", mkStr x)) ru
-        , fmap (\x -> ("repo_ref", mkStr x)) rr
-        , fmap (\x -> ("url", mkStr x)) u
-        , fmap (\x -> ("hash", mkStr x)) h
-        , fmap (\x -> ("subdir", mkStr x)) s
-        , fmap (\x -> ("path", mkStr x)) p
-        , fmap (\x -> ("follows", mkStr x)) f
+        [ (,) "repo_url" <$> ru
+        , (,) "repo_ref" <$> rr
+        , (,) "url" <$> u
+        , (,) "hash" <$> h
+        , (,) "subdir" <$> s
+        , (,) "path" <$> p
+        , (,) "follows" <$> f
         ]
   in case fields of
        [] -> "()"
        _  ->
          let total = length fields
-             fieldLines = [ "        " ++ k ++ "=" ++ renderExpr v ++ comma i
+             fieldLines = [ "        " ++ k ++ "=" ++ buildOptionString v ++ comma i
                           | (i, (k,v)) <- zip [1..] fields ]
              comma i = if i < total then "," else ""
          in "(\n" ++ L.intercalate "\n" fieldLines ++ "\n    )"
@@ -681,6 +786,33 @@ renderLibraryTuple (Library mods link) =
                    | (i, (k,v)) <- zip [1..] fields ]
       comma i = if i < total then "," else ""
   in "(\n" ++ L.intercalate "\n" fieldLines ++ "\n    )"
+
+-- The derived_modules table with its label and braces.
+renderDerivedBlock :: [DerivedEntry] -> String
+renderDerivedBlock entries =
+  unlines (["derived_modules = {"] ++ renderDerivedLines entries ++ ["}"])
+
+-- The lines of the derived_modules table between its braces.  A module name
+-- and the function are written as names, a path as a string, and the
+-- arguments as the keyword arguments of a call.  An entry with one module
+-- name has the name on the line of its colon.  An entry with several names
+-- has them in braces, one name per line, in sorted order: an entry can have
+-- many names.  A table that is added to Build.act gets the same lines as a
+-- table that Build.act has, so a command that writes a table a second time
+-- changes nothing.
+renderDerivedLines :: [DerivedEntry] -> [String]
+renderDerivedLines entries =
+  [ "    " ++ names (Set.toList (derivedModules e)) ++ ": " ++ tuple e ++ (if i < length entries then "," else "")
+  | (i, e) <- zip [1..] entries ]
+  where
+    names [n] = n
+    names ns  = "{\n" ++ L.intercalate ",\n" (map ("        " ++) ns) ++ "\n    }"
+    tuple (DerivedEntry _ fn ins args) =
+      let fields = [ "function=" ++ fn ]
+                   ++ [ "inputs=[" ++ L.intercalate ", " (map buildOptionString ins) ++ "]" | not (null ins) ]
+                   ++ [ "args=(" ++ L.intercalate ", " [ k ++ "=" ++ derivedArgLiteral v | (k, v) <- Map.toList args ] ++ ")"
+                      | not (Map.null args) ]
+      in "(\n" ++ L.intercalate ",\n" (map ("        " ++) fields) ++ "\n    )"
 
 -- Minimal Expr builders used for value rendering only (never type checked).
 -- Braces are escaped here since the printer renders sval verbatim via show.
@@ -739,7 +871,7 @@ tupleToPkg dep (S.Tuple _ _ kargs) = do
              Right () -> Right (Just dir)
   Right $ Just PkgDep { url = Map.lookup "url" m >>= exprToSimpleString
                      , hash = Map.lookup "hash" m >>= exprToSimpleString
-                     , path = Map.lookup "path" m >>= exprToSimpleString
+                     , path = Map.lookup "path" m >>= buildOptionLiteral
                      , repo_url = Map.lookup "repo_url" m >>= exprToSimpleString
                      , repo_ref = Map.lookup "repo_ref" m >>= exprToSimpleString
                      , follows = f
@@ -808,6 +940,124 @@ tupleToLibrary (S.Tuple _ _ kargs) =
                   }
 tupleToLibrary (S.Paren _ e) = tupleToLibrary e
 tupleToLibrary _ = Nothing
+
+-- The derived_modules table.  To the left of its colon an entry has a
+-- module name or several in braces, and function is a module name followed
+-- by the function's name, all written without quotes.  args holds keyword
+-- arguments with literal values.  'lineOf' gives the line of a location.
+exprToDerivedModules :: (SrcLoc -> Int) -> S.Expr -> Either BuildSpecParseError [DerivedEntry]
+exprToDerivedModules lineOf (S.Dict l assocs) = do
+  entries <- traverse entry assocs
+  either (Left . InvalidDerivedModules (lineOf l)) (const (Right entries)) (checkDerivedEntries entries)
+  where
+    entry (S.Assoc k v) = do
+      let bad msg = Left (InvalidDerivedModules (lineOf (S.eloc k)) msg)
+      mods <- maybe (bad ("to the left of its colon an entry has a module name, or several module names in braces, written without quotes, "
+                          ++ "for example schema: (function=gen.schema) or {tables, layers}: (function=gen.modules), found " ++ renderExpr k))
+                    (either bad Right . derivedNames) (moduleNames k)
+      let label = derivedNamesText mods
+      fields <- case unparen v of
+                  S.Tuple _ S.PosNil kargs -> Right (kwdToMap kargs)
+                  _ -> bad ("the entry " ++ label ++ " must be written as (function=..., inputs=[...], args=(...))")
+      either bad Right (checkEntryFields label (Map.keys fields))
+      fn <- case Map.lookup "function" fields of
+              Nothing -> bad ("the entry " ++ label ++ " has no function")
+              Just e  -> case dotted e of
+                           Just parts@(_ : _ : _) -> Right (L.intercalate "." parts)
+                           _ -> bad ("function of the entry " ++ label ++ " is a module name followed by the function's name, "
+                                     ++ "written without quotes, for example function=gen.schema, found " ++ renderExpr e)
+      ins <- case Map.lookup "inputs" fields of
+               Nothing -> Right []
+               Just e  -> maybe (bad ("inputs of the entry " ++ label ++ " must be a list of plain string literals")) Right (plainStrings e)
+      let argument name e = maybe (bad ("the argument " ++ name ++ " of the entry " ++ label ++ " must be a literal: a string, a number, "
+                                        ++ "True, False, None, a list, or a dict with strings as keys, found " ++ renderExpr e))
+                                  Right (argValue e)
+      args <- case unparen <$> Map.lookup "args" fields of
+                Nothing -> Right Map.empty
+                Just (S.Tuple _ S.PosNil kargs) -> Map.traverseWithKey argument (kwdToMap kargs)
+                Just _ -> bad ("args of the entry " ++ label ++ " are the keyword arguments of its function, "
+                               ++ "written as args=(name=value, ...), for example args=(prefix=\"S\", depth=3)")
+      let e = DerivedEntry mods fn ins args
+      either bad (const (Right e)) (checkDerivedEntry e)
+    entry (S.StarStar e) = Left (InvalidDerivedModules (lineOf (S.eloc e)) "an entry must be written as name: (function=...)")
+
+    unparen (S.Paren _ e) = unparen e
+    unparen e             = e
+
+    moduleNames (S.Set _ elems) = traverse (\el -> case el of { S.Elem e -> moduleName e; _ -> Nothing }) elems
+    moduleNames e               = (: []) <$> moduleName e
+    moduleName                  = fmap (L.intercalate ".") . dotted
+
+    dotted (S.Var _ (S.NoQ n)) = Just [S.nstr n]
+    dotted (S.Dot _ e n)       = (++ [S.nstr n]) <$> dotted e
+    dotted _                   = Nothing
+
+    plainStrings (S.List _ elems) = traverse (\el -> case el of { S.Elem e -> buildOptionLiteral e; _ -> Nothing }) elems
+    plainStrings _                = Nothing
+
+    argValue e = case e of
+      S.Paren _ e'         -> argValue e'
+      S.Strings{}          -> Ae.String . T.pack <$> buildOptionLiteral e
+      S.Int _ i _          -> Just (Ae.toJSON i)
+      S.Float _ d _        -> Just (Ae.Number (Sci.fromFloatDigits d))
+      S.UnOp _ S.UMinus e' -> case argValue e' of
+                                Just (Ae.Number n) -> Just (Ae.Number (negate n))
+                                _                  -> Nothing
+      S.Bool _ b           -> Just (Ae.Bool b)
+      S.None _             -> Just Ae.Null
+      S.List _ elems       -> Ae.toJSON <$> traverse (\el -> case el of { S.Elem x -> argValue x; _ -> Nothing }) elems
+      S.Dict _ assocs      -> Ae.object <$> traverse (\a -> case a of
+                                                              S.Assoc k v -> (,) <$> (K.fromString <$> buildOptionLiteral k) <*> argValue v
+                                                              _           -> Nothing) assocs
+      _                    -> Nothing
+exprToDerivedModules lineOf e =
+  Left (InvalidDerivedModules (lineOf (S.eloc e)) "expected a dict of entries, for example {schema: (function=gen.schema)}")
+
+-- | The fields that an entry of derived_modules may have besides its module
+-- names, whether it is read from Build.act or from JSON.  'label' names the
+-- entry in the message.
+checkEntryFields :: String -> [String] -> Either String ()
+checkEntryFields label fields = case filter (`notElem` ["function", "inputs", "args"]) fields of
+  []          -> Right ()
+  unknown : _ -> Left ("the entry " ++ label ++ " has the unknown field " ++ unknown ++ ". The fields are function, inputs and args")
+
+-- | What an entry of derived_modules must fulfil, whether it is read from
+-- Build.act or from JSON.  An input path is a relative path inside the
+-- project and outside out: a build writes out, so a file there is no input
+-- of a build.
+checkDerivedEntry :: DerivedEntry -> Either String ()
+checkDerivedEntry (DerivedEntry mods fn ins args)
+  | null mods =
+      Left "an entry names at least one module"
+  | bad : _ <- filter (not . validDotted) (Set.toList mods) =
+      Left (show bad ++ " is not a module name")
+  | not (validDotted fn) || length (S.dottedNames fn) < 2 =
+      Left ("function of the entry " ++ label ++ " must be a module name followed by the function's name, found " ++ show fn)
+  | bad : _ <- filter (not . validInput) ins =
+      Left (inputPath bad ++ " must be a relative path inside the project, using / and without . or .. components")
+  | bad : _ <- filter ((== ["out"]) . take 1 . pathParts) ins =
+      Left (inputPath bad ++ " is in out, which a build writes and which is not committed")
+  | bad : _ <- filter (not . validIdent) (Map.keys args) =
+      Left ("the argument name " ++ show bad ++ " of the entry " ++ label ++ " is not a parameter name")
+  | otherwise = Right ()
+  where
+    label = derivedNamesText mods
+    inputPath p = "the input path " ++ buildOptionString p ++ " of the entry " ++ label
+    validDotted name = let parts = S.dottedNames name in not (null name) && all validIdent parts
+    validIdent (c:cs) = (isAlpha c || c == '_') && all (\x -> isAlphaNum x || x == '_') cs
+    validIdent []     = False
+    pathParts = Posix.splitDirectories . Posix.dropTrailingPathSeparator
+    validInput p = not (null (pathParts p)) && not (Posix.isAbsolute p) && not (Windows.hasDrive p)
+                   && '\\' `notElem` p && '\0' `notElem` p && '\n' `notElem` p
+                   && all (`notElem` [".", ".."]) (pathParts p)
+
+-- | Every entry is valid and no module is named by two entries.
+checkDerivedEntries :: [DerivedEntry] -> Either String ()
+checkDerivedEntries entries = do
+  mapM_ checkDerivedEntry entries
+  case [ m | (m : _ : _) <- L.group (L.sort (concatMap (Set.toList . derivedModules) entries)) ] of
+    []    -> Right ()
+    m : _ -> Left ("the module " ++ m ++ " is named by two entries")
 
 kwdToMap :: S.KwdArg -> Map.Map String S.Expr
 kwdToMap S.KwdNil = Map.empty
