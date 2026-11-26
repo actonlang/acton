@@ -126,7 +126,7 @@ class Message():
     msg: ?str
     data: ?dict[str, ?value]
 
-    def __init__(self, level: int, path: list[str], name: ?str=None, msg: ?str=None, data: ?dict[str, ?value]=None):
+    pure def __init__(self, level: int, path: list[str], name: ?str=None, msg: ?str=None, data: ?dict[str, ?value]=None):
         self.ts = time.now()
         self.level = level
         self.name = name
@@ -254,21 +254,11 @@ class Logger(object):
     """A logger"""
     name: ?str
     handler: ?Handler
-    output_level: int
-    last_check: time.Stopwatch
 
     # TODO: Default name to actor type and ID
     def __init__(self, handler: ?Handler=None):
         self.name = None
         self.handler = handler
-        self.output_level = UNSET
-        # TODO: enable, but it currently crashes?
-#        if handler is not None:
-#            self.output_level = handler.get_level()
-        self.last_check = time.Stopwatch()
-
-    def _set_level(self, level: int):
-        self.output_level = level
 
     def log(self, level, msg: ?str=None, data: ?dict[str, ?value]=None):
         handler = self.handler
@@ -278,13 +268,7 @@ class Logger(object):
             if n is not None:
                 path = [n]
             m = Message(level, path, self.name, msg, data)
-            # TODO: remove async here. It is an async call, but removing it leads to invalid AWAIT call, see
-            if self.output_level == UNSET or self.last_check.elapsed().to_float() > 0.1:
-                # TODO: do this async with a callback instead to avoid blocking
-                self.output_level = handler.get_level()
-                self.last_check = time.Stopwatch()
-            if level <= self.output_level:
-                async handler.handle(m)
+            handler.handle(m)
 
     def emergency(self, msg: ?str=None, data: ?dict[str, ?value]=None):
         self.log(EMERGENCY, msg, data)

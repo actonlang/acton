@@ -41,6 +41,7 @@ import Acton.Transform
 import Acton.Converter
 import Acton.TypeEnv
 import Acton.WitKnots
+import Acton.Embed (embedExprs)
 import qualified InterfaceFiles
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Base16 as Base16
@@ -192,6 +193,10 @@ freshDefaultWits s (Let l ss e)         = do ws <- mapM (const newWitness) ns
         rebind r (Assign l [PVar l' n t] e)
                                         = Assign l [PVar l' (rename r n) t] e
         rebind r (Signature l ns sc d)  = Signature l (map (rename r) ns) sc d
+        rebind r (Decl l ds)           = Decl l (map (rebindDef r) ds)
+        rebind _ stmt                 = stmt
+        rebindDef r d@Def{dname=n}     = d{ dname = rename r n }
+        rebindDef _ d                  = d
 freshDefaultWits s e                    = return (termsubst s e)
 
 
@@ -963,13 +968,14 @@ inlineWitnessExpr eq e                 = case allEqs of
         -- Boxing can then recognize their static implementations and lower
         -- numeric defaults without allocation.
         e'                              = inlineAll e
-        kept                            = [ Eqn level w t (inlineAll rhs)
-                                          | Eqn level w t rhs <- allEqs, not (inlineEq t rhs) ]
+        kept                            = [ Eqn level w sc (inlineAll rhs)
+                                          | Eqn level w sc rhs <- allEqs, not (inlineEq sc rhs) ]
         allEqs                          = witnessEquations (filter isWitness $ free e) []
-        inlineEqs                       = [ q | q@(Eqn _ _ t rhs) <- allEqs, inlineEq t rhs ]
-        inlineEq TFun{} _               = True
-        inlineEq _ rhs                  = wrapperRoot rhs `elem`
-                                              [primWrapProc, primWrapAction, primWrapMut, primWrapPure]
+        inlineEqs                       = [ q | q@(Eqn _ _ sc rhs) <- allEqs, inlineEq sc rhs ]
+        inlineEq (TSchema _ [] TFun{}) _ = True
+        inlineEq (TSchema _ [] _) rhs   = wrapperRoot rhs `elem`
+                                              callWitnesses
+        inlineEq _ _                    = False
         wrapperRoot (Var _ n)           = n
         wrapperRoot (TApp _ f _)        = wrapperRoot f
         wrapperRoot _                   = NoQ nWild
@@ -1217,6 +1223,15 @@ liveCombine te Nothing                  = Nothing
 liveCombine Nothing te'                 = Nothing
 liveCombine (Just te) (Just te')        = Just $ te++te'
 
+-- Ambient effect requirements use semantic subtyping. The witness is proof
+-- only: no function value is being converted at these sites.
+-- Until local mutation can be distinguished from observable mutation, an
+-- explicitly pure body also permits mut operations, matching the temporary
+-- mut-to-pure cast without adding it to the semantic effect hierarchy.
+requireEffect env info required         = do fx <- currFX
+                                             w <- newWitness
+                                             return $ Sub info env w required (if fx == fxPure then fxMut else fx)
+
 fxUnwrapSc env sc                       = sc{ sctype = fxUnwrap env $ sctype sc }
 
 fxUnwrap env (TFun l fx p k t)          = TFun l (fxUnwrap env fx) p k t
@@ -1225,13 +1240,12 @@ fxUnwrap env (TFX l FXAction)
 fxUnwrap env t                          = t
 
 wrap env t@TFun{}                       = do tvx <- newUnivarOfKind KFX env
-                                             tvy <- newUnivarOfKind KFX env
                                              w <- newWitness
-                                             return (Proto (locinfo t 28) env w tvx (pWrapped (effect t) tvy), t{ effect = tvx })
+                                             return (Proto (locinfo t 28) env w tvx (pWrapped (effect t)), t{ effect = tvx })
 
 wrapped l kw env cs ts args             = do tvx <- newUnivarOfKind KFX env
-                                             tvy <- newUnivarOfKind KFX env
-                                             let p = pWrapped tvx tvy
+                                             let p = (if kw == attrWrap then pWrapped
+                                                      else if kw == attrUnwrap then pUnwrapped else pUnwrapped_) tvx
                                                  Just (_, sc, Just Static) = findAttr env p kw
                                              (_,tvs,t0) <- instantiateDefaults env sc
                                              fx <- newUnivarOfKind KFX env
@@ -1261,7 +1275,7 @@ instance (InfEnv a) => InfEnv [a] where
 instance InfEnv Stmt where
     infEnv env (Expr l e)
       | e == eNotImpl                   = return ([], [], Expr l e)
-      | otherwise                       = do (cs,_,e') <- infer env e
+      | otherwise                       = do (cs,e') <- inferStmtExpr env e
                                              return (cs, [], Expr l e')
 
     infEnv env (Assign l pats e)
@@ -1323,8 +1337,8 @@ instance InfEnv Stmt where
     infEnv env (After l now e1 e2)      = do (cs1,e1') <- inferSub env tFloat e1
                                              (cs2,t,e2') <- infer env e2
                                              -- TODO: constrain t
-                                             fx <- currFX
-                                             return (Cast (locinfo l 34) env fxProc fx :
+                                             requirement <- requireEffect env (locinfo l 34) fxProc
+                                             return (requirement :
                                                      cs1++cs2, [], After l now e1' e2')
 
     infEnv env (Signature l ns sc@(TSchema _ q t) dec)
@@ -1447,19 +1461,19 @@ infTarg env e@(Var l (NoQ n))           = case findName n env of
                                              NVar t ->
                                                  return ([], t, e, TgVar n)
                                              NSVar t -> do
-                                                 fx <- currFX
-                                                 return ([Cast (locinfo l 51) env fxProc fx], t, e, TgVar n)
+                                                 requirement <- requireEffect env (locinfo l 51) fxProc
+                                                 return ([requirement], t, e, TgVar n)
                                              _ ->
                                                  err1 n "Variable not assignable:"
 infTarg env (Index l e ix)              = do (cs,t,e) <- infer env e
-                                             fx <- currFX
-                                             return (Cast (locinfo l 52) env fxMut fx : Cast (locinfo' l 53 e) env t tObject : cs, t, e, TgIndex ix)
+                                             requirement <- requireEffect env (locinfo l 52) fxMut
+                                             return (requirement : Cast (locinfo' l 53 e) env t tObject : cs, t, e, TgIndex ix)
 infTarg env (Slice l e sl)              = do (cs,t,e) <- infer env e
-                                             fx <- currFX
-                                             return (Cast (locinfo l 54) env fxMut fx : Cast (locinfo' l 55 e) env t tObject : cs, t, e, TgSlice sl)
+                                             requirement <- requireEffect env (locinfo l 54) fxMut
+                                             return (requirement : Cast (locinfo' l 55 e) env t tObject : cs, t, e, TgSlice sl)
 infTarg env (Dot l e n)                 = do (cs,t,e) <- infer env e
-                                             fx <- currFX
-                                             return (Cast (locinfo l 56) env fxMut fx : Cast (locinfo' l 57 e) env t tObject : cs, t, e, TgDot n)
+                                             requirement <- requireEffect env (locinfo l 56) fxMut
+                                             return (requirement : Cast (locinfo' l 57 e) env t tObject : cs, t, e, TgDot n)
 
 sliz2exp (Sliz _ e1 e2 e3)              = eCall (eQVar qnSlice) $ map (maybe eNone id) [e1,e2,e3]
 
@@ -1872,7 +1886,7 @@ matchActorAssumption env n0 p k te      = do --traceM ("## matchActorAssumption 
         ns                              = dom te0
         obs                             = te0 ++ te
         te1                             = nTerms $ te `restrict` ns
-        check1 (n, NSig _ _ _)          = return ([], [])
+        check1 (n, NSig sc _ _)         = return (maybeSeal (tydefineVars (scbind sc) env) n [sctype sc], [])
         check1 (n, NVar t0)             = do --traceM ("## matchActorAssumption for attribute " ++ prstr n)
                                              return (Cast (locinfo n 62) env t t0 : maybeSeal env n [t0], [])
           where Just (NVar t)           = lookup n te1
@@ -1883,20 +1897,15 @@ matchActorAssumption env n0 p k te      = do --traceM ("## matchActorAssumption 
           | TUni{} <- sctype sc0        = do (cs0,_,t0) <- instantiateDefaults env sc
                                              (c0,t') <- wrap env t0
                                              let c1 = Cast (locinfo n 63) env t' (sctype sc0)
-                                                 cs1 = maybeSeal env n (leaves sc0)
+                                                 cs1 = maybeSeal env n [sctype sc0]
                                              (cs2,eq) <- markScoped env n0 (scbind sc0) obs
                                                                   (c0:c1:cs0++cs1)
                                              return (cs2, eq)
           | otherwise                   = do (c0,t') <- wrap env0 t
                                              let c1 = Cast (locinfo n 63) env0 t' (sctype sc0)
+                                                 cs1 = maybeSeal env0 n [sctype sc0]
                                              --traceM ("## matchActorAssumption for method " ++ prstr n ++ ": " ++ prstr c1)
-                                             -- A structured provisional interface retains
-                                             -- defaults or an explicit quantified scope.  Do
-                                             -- not seal each still-unknown leaf here: method-body
-                                             -- constraints are combined only by the enclosing
-                                             -- actor solve, and early sealing prevents those
-                                             -- constraints from completing inference.
-                                             (cs2,eq) <- markScoped env n0 q0 obs [c0,c1]
+                                             (cs2,eq) <- markScoped env n0 q0 obs (c0:c1:cs1)
                                              return (cs2, eq)
           where Just (NDef sc _ _)      = lookup n te1
                 q0                      = scbind sc0
@@ -2516,6 +2525,7 @@ checkIndependentDefaults env p k        = checkP [] p
                                             = err (loc e) ("Default value may not depend on parameter " ++ prstr n)
           | n:_ <- free e `intersect` defaultLocalNames env
                                             = err (loc e) ("Default value may not capture enclosing name " ++ prstr n)
+          | e':_ <- embedExprs e            = err (loc e') "embed cannot be the default value of a parameter. Give the content a name at the top level of the module and use the name"
           | not (liftableDefault env e)     = err (loc e) "Default value must be a literal, constructor expression, or module-level name"
           | otherwise                       = return ()
 
@@ -2608,8 +2618,8 @@ instance Infer Expr where
     infer env x@(Var l n)               = case findQName n env of
                                             NVar t -> return ([], t, x)
                                             NSVar t -> do
-                                                fx <- currFX
-                                                return ([Cast info env fxProc fx], t, x)
+                                                requirement <- requireEffect env info fxProc
+                                                return ([requirement], t, x)
                                               where info = Simple l ("State variable may only be accessed in a proc")
                                             NDef sc d _ -> do
                                                 (cs,tvs,t) <- instantiateDefaults env sc
@@ -2655,6 +2665,7 @@ instance Infer Expr where
     infer env e@(Ellipsis _)            = notYetExpr e
     infer env e@(Strings _ ss)          = return ([], tStr, e)
     infer env e@(BStrings _ ss)         = return ([], tBytes, e)
+    infer env e@Embed{}                 = return ([], tBytes, e)
     infer env (Call l e ps ks)          = inferCall env True l e ps ks
     infer env (TApp l e ts)             = internal l "Unexpected TApp in infer"
     infer env (Let l ss e)              = do (cs1, te, ss') <- infEnv env ss
@@ -2664,13 +2675,14 @@ instance Infer Expr where
                                              prow <- newUnivarOfKind PRow env
                                              krow <- newUnivarOfKind KRow env
                                              t' <- newUnivar env
+                                             w <- newWitness
                                              let tf fx = tFun fx prow krow
-                                             return (Cast (locinfo2 74 e) env t (tf fxAction t') :
-                                                     cs, tf fxCom (tMsg t'), Async l e)     -- enqueue without waiting
+                                             return (Sub (locinfo2 74 e) env w t (tf fxAction t') :
+                                                     cs, tf fxCom (tMsg t'), Async l (eCallVar w [e]))    -- enqueue without waiting
     infer env (Await l e)               = do t0 <- newUnivar env
                                              (cs1,e') <- inferSub env (tMsg t0) e
-                                             fx <- currFX
-                                             return (Cast (locinfo2 75 e) env fxProc fx :
+                                             requirement <- requireEffect env (locinfo2 75 e) fxProc
+                                             return (requirement :
                                                      cs1, t0, Await l e')
     infer env (Index l e ix)            = do (cs2,t,e') <- infer env e
                                              ti <- newUnivar env
@@ -2884,32 +2896,7 @@ instance Infer Expr where
                                          -- The parser inserts Opt nodes only within OptChain nodes (which each contains exactly one Opt node).
                                          -- The Opt nodes are handled and eliminated by infer on an OptChain node.
                                          -- e is an atomic expression (atom_expr in the parser) which contains exactly one ? in its sequence of trailers
-    infer env (OptChain l e)           = do x <- newTmp                                                                                      -- Example: a s1 s2 ? t1 t2
-                                            let (b,e1,e2) = split x e                                                                          -- e1 = a s1 s2, e2 = x t1 t2
-                                            te <- newUnivar env
-                                            (cs1,e1') <- inferSub env (tOpt te) e1
-                                            let env1 = define [(x,NVar te)] env
-                                            (cs2,t,e2') <- infer env1 e2
-                                            y <- newTmp
-                                            (cs3,t',e3) <- alt t b
-                                            return (cs1++cs2++cs3,
-                                                     t', eLet [sAssign (pVar y (tOpt te)) e1']
-                                                                           (eCond (termsubst [(x,eCAST (tOpt te) te (eVar y))] e2')
-                                                                                  (eCall (tApp (eQVar primISNOTNONE) [te]) [eVar y])
-                                                                                  e3))
-      where split x (Opt l e b)         = (b, e, eVar x)
-            split x (Dot l e n)         = (b, e1,Dot l e2 n) where (b,e1,e2) = split x e
-            split x (DotI l e i)        = (b, e1,DotI l e2 i) where (b,e1,e2) = split x e
-            split x (Rest l e n)        = (b, e1,Rest l e2 n) where (b,e1,e2) = split x e
-            split x (RestI l e i)       = (b, e1,RestI l e2 i) where (b,e1,e2) = split x e
-            split x (Call l f ps ks)    = (b, e1,Call l e2 ps ks) where (b,e1,e2) = split x f
-            split x (Index l e ix)      = (b, e1,Index l e2 ix) where (b,e1,e2) = split x e
-            split x (Slice l e sz)      = (b, e1,Slice l e2 sz) where (b,e1,e2) = split x e
-            alt t True                  = do w <- newWitness
-                                             w1 <- newWitness
-                                             t1 <- newUnivar env
-                                             return ([Sub (noinfo 444) env w tNone t1, Sub (noinfo 555) env w1 t t1],t1,eNone)
-            alt t False                 = return ([],t,eCall (tApp (eQVar primRaiseValueError) [t]) [Strings NoLoc ["Forced unwrapping applied to None"]] )
+    infer env (OptChain l e)           = inferOptChain infer env l e
 
     infer env e@(Rest _ _ _)            = notYetExpr e
 --    infer env (Rest l e n)              = do p <- newUnivarOfKind PRow env
@@ -2933,8 +2920,10 @@ instance Infer Expr where
                                              (cs0,te0,p') <- infEnv env1 p
                                              (cs1,te1,k') <- infEnv (define te0 env1) k
                                              let env2 = define te1 $ define te0 env1
+                                             -- Inferred lambdas can forward an action directly;
+                                             -- an explicit proc lambda must unwrap the call.
                                              (cs2,t,e') <- case e of
-                                                             Call l' e' ps ks -> inferCall env2 False l' e' ps ks
+                                                             Call l' e' ps ks -> inferCall env2 (fx == fxProc) l' e' ps ks
                                                              _ -> infer env2 e
                                              popFX
                                              return (cs0++cs1++cs2, tFun fx (prowOf p') (krowOf k') t, Lambda l (noDefaultsP p') (noDefaultsK k') e' fx)
@@ -2992,22 +2981,88 @@ instance Infer Expr where
     infer env (Paren l e)               = do (cs,t,e') <- infer env e
                                              return (cs, t, Paren l e')
 
-inferCall env unwrap l e ps ks          = do (cs1,t,e') <- infer env e{eloc = l}
-                                             (cs1,t,e') <- if unwrap && actorSelf env then wrapped l attrUnwrap env cs1 [t] [e'] else pure (cs1,t,e')
-                                             (cs2,prow,ps') <- infer env ps
-                                             (cs3,krow,ks') <- infer env ks
-                                             t0 <- newUnivar env
-                                             fx <- currFX
-                                             w <- newWitness
-                                             let i = case e of
-                                                        Var _ n@(NoQ n')
-                                                          | NDef sc _ _ <- findQName n env,
-                                                            Just l2 <- findDefLoc n' env ->
-                                                                   DeclInfo l l2 n' sc ("Type incompatibility between definition of and call of "++Pretty.print n')
-                                                        _ -> DfltInfo l 837 (Just (Call l e ps ks)) []
-                                             return (Sub i env w t (tFun fx prow krow t0)  :
-                                            -- return (Sub (DfltInfo l 837 (Just (Call l e ps ks)) []) w [] t (tFun fx prow krow t0) :
-                                                     cs1++cs2++cs3, t0, Call l (eCall (eVar w) [e']) ps' ks')
+inferOptChain result env l e = do
+    x <- newTmp
+    let (b,e1,e2) = split x e
+    te <- newUnivar env
+    (cs1,e1') <- inferSub env (tOpt te) e1
+    let env1 = define [(x,NVar te)] env
+    (cs2,t,e2') <- result env1 e2
+    y <- newTmp
+    (cs3,t',e3) <- alt t b
+    return (cs1++cs2++cs3,
+             t', eLet [sAssign (pVar y (tOpt te)) e1']
+                                   (eCond (termsubst [(x,eCAST (tOpt te) te (eVar y))] e2')
+                                          (eCall (tApp (eQVar primISNOTNONE) [te]) [eVar y])
+                                          e3))
+  where split x (Opt l e b)         = (b, e, eVar x)
+        split x (Dot l e n)         = (b, e1,Dot l e2 n) where (b,e1,e2) = split x e
+        split x (DotI l e i)        = (b, e1,DotI l e2 i) where (b,e1,e2) = split x e
+        split x (Rest l e n)        = (b, e1,Rest l e2 n) where (b,e1,e2) = split x e
+        split x (RestI l e i)       = (b, e1,RestI l e2 i) where (b,e1,e2) = split x e
+        split x (Call l f ps ks)    = (b, e1,Call l e2 ps ks) where (b,e1,e2) = split x f
+        split x (Index l e ix)      = (b, e1,Index l e2 ix) where (b,e1,e2) = split x e
+        split x (Slice l e sz)      = (b, e1,Slice l e2 sz) where (b,e1,e2) = split x e
+        alt t True                  = do w <- newWitness
+                                         w1 <- newWitness
+                                         t1 <- newUnivar env
+                                         return ([Sub (noinfo 444) env w tNone t1, Sub (noinfo 555) env w1 t t1],t1,eNone)
+        alt t False                 = return ([],t,eCall (tApp (eQVar primRaiseValueError) [t]) [Strings NoLoc ["Forced unwrapping applied to None"]] )
+
+-- Only the result positions of a statement use unwrap_. Nested arguments and
+-- conditions still use value inference and therefore await action replies.
+inferStmtExpr env (Call l f ps ks) = do
+    (cs,_,e) <- inferCallWith env (Just attrUnwrap_) l f ps ks
+    return (cs,e)
+inferStmtExpr env (Paren l e) = do
+    (cs,e') <- inferStmtExpr env e
+    return (cs,Paren l e')
+inferStmtExpr env (Cond l yes test no) = do
+    (cs0,env',s,_,test') <- inferTest env test
+    (cs1,yes') <- inferStmtExpr env' yes
+    (cs2,no') <- inferStmtExpr env no
+    return (cs0++cs1++cs2, Cond l (discard $ termsubst s yes') test' (discard no'))
+inferStmtExpr env (Let l ss e) = do
+    (cs1,te,ss') <- infEnv env ss
+    (cs2,e') <- inferStmtExpr (define te env) e
+    return (cs1++cs2,Let l ss' (discard e'))
+inferStmtExpr env (OptChain l e) = do
+    (cs,_,e') <- inferOptChain result env l e
+    return (cs,e')
+  where result env e = do
+            (cs,e') <- inferStmtExpr env e
+            return (cs,tNone,discard e')
+inferStmtExpr env e = do
+    (cs,_,e') <- infer env e
+    return (cs,e')
+
+discard e                              = eLet [sExpr e] eNone
+
+-- Adapting arguments is separate from permission to perform the call. In
+-- particular, a pure call in an action must still produce its ordinary result.
+inferCall env unwrap                   = inferCallWith env (if unwrap then Just attrUnwrap else Nothing)
+
+inferCallWith env operation l e ps ks = do
+    (cs1,t,e') <- infer env e{eloc = l}
+    (cs1,t,e') <- case operation of
+                      Just op -> wrapped l op env cs1 [t] [e']
+                      Nothing -> pure (cs1,t,e')
+    (cs2,prow,ps') <- infer env ps
+    (cs3,krow,ks') <- infer env ks
+    t0 <- newUnivar env
+    fx <- case t of
+              TFun{effect=fx} -> return fx
+              _ -> newUnivarOfKind KFX env
+    w <- newWitness
+    let i = case e of
+               Var _ n@(NoQ n')
+                 | NDef sc _ _ <- findQName n env,
+                   Just l2 <- findDefLoc n' env ->
+                          DeclInfo l l2 n' sc ("Type incompatibility between definition of and call of "++Pretty.print n')
+               _ -> DfltInfo l 837 (Just (Call l e ps ks)) []
+    requirement <- requireEffect env i fx
+    return (Sub i env w t (tFun fx prow krow t0) : requirement :
+            cs1++cs2++cs3, t0, Call l (eCall (eVar w) [e']) ps' ks')
 
 
 
@@ -3244,8 +3299,8 @@ instance InfEnvT Pattern where
                                                    | otherwise ->
                                                      return ([], t', PVar l n Nothing)
                                                  NSVar t' -> do
-                                                     fx <- currFX
-                                                     solveAll env [(n,NVar t)] [Cast (locinfo l 106) env fxProc fx, Cast (locinfo l 107) env t t']
+                                                     requirement <- requireEffect env (locinfo l 106) fxProc
+                                                     solveAll env [(n,NVar t)] [requirement, Cast (locinfo l 107) env t t']
                                                      return ([], t', PVar l n Nothing)
                                                  _ ->
                                                      err1 n "Variable not assignable:"

@@ -157,16 +157,16 @@ spec = describe "Declarative body grammars" $ do
 
   describe "Communication effect" $ do
     let hierarchy =
-          [ (S.FXPure, [S.FXPure,S.FXMut,S.FXCom,S.FXProc])
+          [ (S.FXPure, [S.FXPure,S.FXMut,S.FXCom,S.FXProc,S.FXAction])
           , (S.FXMut, [S.FXMut,S.FXProc])
           , (S.FXProc, [S.FXProc])
-          , (S.FXAction, [S.FXAction,S.FXProc])
+          , (S.FXAction, [S.FXAction])
           , (S.FXCom, [S.FXCom,S.FXProc])
           ]
     forM_ hierarchy $ \(a,above) -> forM_ hierarchy $ \(b,_) ->
       it ("compares " ++ show a ++ " with " ++ show b) $ do
         Env.subeffect a b `shouldBe` (b `elem` above)
-        Env.castEffect a b `shouldBe` (b `elem` above || (a == S.FXMut && b == S.FXPure))
+        Env.castEffect a b `shouldBe` ((b `elem` above && (a,b) /= (S.FXPure,S.FXAction)) || (a == S.FXMut && b == S.FXPure))
     it "accepts com annotations and contextual names" $
       accepted "com def com(send: int, spawn: int) -> int: return send + spawn"
     forM_ ["send", "spawn"] $ \word -> do

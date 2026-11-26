@@ -10,6 +10,10 @@ module Acton.Project
   , projectBinDir
   , projectDocDir
   , projectSrcDir
+  , projectDerivedDir
+  , projectDerivedSrcDir
+  , derivedModuleNames
+  , derivedModuleFile
   , projectBuildAct
   , systemTypePaths
   , zigExecutable
@@ -32,6 +36,7 @@ module Acton.Project
   , headerFile
   , closureSupportFile
   , generatedFiles
+  , dataFile
   , generatedPath
   , rootStubPath
   , rootBinaryName
@@ -39,11 +44,13 @@ module Acton.Project
   , isScratchFile
   , isInterfaceCopy
   , modNameToFilename
+  , moduleDisplayFile
   , addProjPrefix
   , dropProjPrefix
   , moduleLabel
   , dropProjPrefixOrLib
   , moduleNameFromFile
+  , moduleOfSource
   , enumerateProjectModules
   , pruneMissingModuleOutputs
   , pruneMissingChangedModuleOutputs
@@ -66,6 +73,7 @@ module Acton.Project
   , existingDependencyDir
   , discoverProjects
   , discoverBuildProjects
+  , localProjects
   , BackgroundCompilerLock
   , tryBackgroundCompilerLock
   , releaseBackgroundCompilerLock
@@ -146,6 +154,39 @@ projectDocDir root = joinPath [projectOutDir root, "doc"]
 projectSrcDir :: FilePath -> FilePath
 projectSrcDir root = joinPath [root, "src"]
 
+-- | The directory of the derived modules of the project rooted at 'root':
+-- their sources, in its subdirectory src (projectDerivedSrcDir), and what
+-- the build keeps about each entry of derived_modules.
+projectDerivedDir :: FilePath -> FilePath
+projectDerivedDir root = joinPath [projectOutDir root, "derived"]
+
+-- | The source directory of the derived modules of the project rooted at
+-- 'root'.  A module's file has the same path under it as a hand-written
+-- module's has under src.
+projectDerivedSrcDir :: FilePath -> FilePath
+projectDerivedSrcDir root = joinPath [projectDerivedDir root, "src"]
+
+-- | The derived modules of the project rooted at 'root', by their names
+-- without the project's name in front: the modules with a source file under
+-- projectDerivedSrcDir and none under src.  A file under src takes the
+-- place of a derived module of the same name.
+derivedModuleNames :: FilePath -> IO (Data.Set.Set A.ModName)
+derivedModuleNames root = do
+    exists <- doesDirectoryExist dir
+    if not exists
+      then return Data.Set.empty
+      else do
+        files <- filter isActFile <$> getFilesRecursive dir
+        let names = map (splitDirectories . dropExtension . makeRelative dir) files
+        derived <- filterM (\ns -> not <$> doesFileExist (joinPath (projectSrcDir root : ns) <.> "act")) names
+        return (Data.Set.fromList (map A.modName derived))
+  where dir = projectDerivedSrcDir root
+
+-- | The source file of the derived module 'mn', named without the project's
+-- name in front, of the project rooted at 'root'.
+derivedModuleFile :: FilePath -> A.ModName -> FilePath
+derivedModuleFile root mn = joinPath (projectDerivedSrcDir root : A.modPath mn) <.> "act"
+
 -- | The Build.act of the project rooted at 'root'.
 projectBuildAct :: FilePath -> FilePath
 projectBuildAct root = joinPath [root, "Build.act"]
@@ -214,6 +255,7 @@ scratchBuildSpec projRoot =
          , BuildSpec.zig_dependencies = M.empty
          , BuildSpec.build_options = M.empty
          , BuildSpec.libraries = M.empty
+         , BuildSpec.derived_modules = []
          }
 
 
@@ -231,6 +273,7 @@ data Paths = Paths
   , projTypes  :: FilePath      -- types under projOut
   , binDir     :: FilePath      -- bin under projOut, or the source file's directory for a scratch build
   , srcDir     :: FilePath      -- src under projPath, or the source file's directory for a scratch build
+  , derived    :: Data.Set.Set A.ModName    -- the modules whose source is under projectDerivedSrcDir, as derivedModuleNames gives them
   , isTmp      :: Bool          -- a scratch build
   , projName   :: String        -- the name in Build.act, empty for a scratch build
   }
@@ -241,6 +284,7 @@ data Paths = Paths
 data ProjCtx = ProjCtx
   { projRoot      :: FilePath
   , projSrcDir    :: FilePath               -- src under projRoot, or the source file's directory for a scratch build
+  , projDerived   :: Data.Set.Set A.ModName -- the derived modules, as derivedModuleNames gave them when the project was discovered
   , projSysPath   :: FilePath               -- the system directory
   , projBuildSpec :: BuildSpec.BuildSpec
   , projDeps      :: [(String, FilePath)]   -- each dependency's name and absolute root
@@ -249,12 +293,13 @@ data ProjCtx = ProjCtx
 -- | The paths of the project of a source file, and the file's module: its
 -- path under src/ without the extension, prefixed with the project name.  A
 -- file at the project root names a module at the top of src/, and a file
--- under out/types the module at the same place under src/.  A file anywhere
--- else in a project is an error.  A file outside any project builds as a
--- scratch build, and its module has no prefix.  The dependencies' types
--- directories are those collectDepTypePaths reads from the Build.act files,
--- which leaves out dependencies fetched by hash that are not fetched yet.
--- Creates the module's output directories.
+-- under out/types or under out/derived/src the module at the same place
+-- under src/.  A file anywhere else in a project is an error.  A file
+-- outside any project builds as a scratch build, and its module has no
+-- prefix.  The dependencies' types directories are those
+-- collectDepTypePaths reads from the Build.act files, which leaves out
+-- dependencies fetched by hash that are not fetched yet.  Creates the
+-- module's output directories.
 findPaths               :: FilePath -> C.CompileOptions -> IO (Paths, A.ModName)
 findPaths actFile opts  = do execDir <- takeDirectory <$> getExecutablePath
                              sysPath <- canonicalizePath (if null $ C.syspath opts then execDir ++ "/.." else C.syspath opts)
@@ -264,6 +309,7 @@ findPaths actFile opts  = do execDir <- takeDirectory <$> getExecutablePath
                                  projOut = projectOutDir projPath
                              depOverrides <- normalizeDepOverrides projPath (C.dep_overrides opts)
                              (projName,depTypePaths) <- if isTmp then return ("",[]) else collectDepTypePaths projPath depOverrides
+                             derived <- if isTmp then return Data.Set.empty else derivedModuleNames projPath
                              let paths = Paths { searchPath = interfaceSearchPath opts sysPath (projectTypesDir projPath) depTypePaths
                                                , sysPath    = sysPath
                                                , sysTypes   = sysTypesDir sysPath
@@ -272,6 +318,7 @@ findPaths actFile opts  = do execDir <- takeDirectory <$> getExecutablePath
                                                , projTypes  = projectTypesDir projPath
                                                , binDir     = if isTmp then srcDir else projectBinDir projPath
                                                , srcDir     = srcDir
+                                               , derived    = derived
                                                , isTmp      = isTmp
                                                , projName   = projName
                                                }
@@ -286,6 +333,7 @@ findPaths actFile opts  = do execDir <- takeDirectory <$> getExecutablePath
                                     [] -> return $ (False, pre, [])
                                     "src":dirs -> return $ (False, pre, dirs)
                                     "out":"types":dirs -> return $ (False, pre, dirs)
+                                    "out":"derived":"src":dirs -> return $ (False, pre, dirs)
                                     _ -> throwProjectError ("Source file is not in a valid project directory: " ++ joinPath ds)
                                 else analyze (takeDirectory pre) (takeFileName pre : ds)
 
@@ -310,6 +358,7 @@ projectPaths opts projMap ctx =
           , projTypes  = projectTypesDir root
           , binDir     = projectBinDir root
           , srcDir     = projSrcDir ctx
+          , derived    = projDerived ctx
           , isTmp      = False
           , projName   = BuildSpec.specName (projBuildSpec ctx)
           }
@@ -333,14 +382,18 @@ createModuleDirectories paths mn = do
 
 -- Module files -------------------------------------------------------------------------------------
 
--- | Compute the source file path for a module under its project src dir.
+-- | The source file of a module: under the project's src dir, or under
+-- its derived source dir for a derived module.
 srcFile                 :: Paths -> A.ModName -> FilePath
 srcFile paths mn        = srcBase paths mn ++ ".act"
 
--- | Compute the module path without extension under the project's src dir.
--- Used to derive the .act path or related per-module files.
+-- | The path of a module's source file without the extension.  Used to
+-- derive the .act path or related per-module files.
 srcBase                 :: Paths -> A.ModName -> FilePath
-srcBase paths mn        = joinPath (srcDir paths : A.modPath (dropProjPrefix paths mn))
+srcBase paths mn        = joinPath (dir : A.modPath local)
+  where local           = dropProjPrefix paths mn
+        dir | Data.Set.member local (derived paths) = projectDerivedSrcDir (projPath paths)
+            | otherwise                             = srcDir paths
 
 -- | The output path of a module without extension, under the project's
 -- types directory.  The paths of its .tydb, its generated files and its
@@ -366,9 +419,14 @@ cFile                   = GeneratedFile "c"       ".c"
 headerFile              = GeneratedFile "h"       ".h"
 closureSupportFile      = GeneratedFile "support" ".closures.inc"
 
--- | Every file the back passes generate for a module.
+-- | The files the back passes generate for every module.
 generatedFiles          :: [GeneratedFile]
 generatedFiles          = [cFile, headerFile, closureSupportFile]
+
+-- | The data C file of a module that embeds files: it holds their content.
+-- A module that embeds no file has none.
+dataFile                :: GeneratedFile
+dataFile                = GeneratedFile "data"    ".embed.c"
 
 -- | The path of a module's generated file.
 generatedPath           :: Paths -> A.ModName -> GeneratedFile -> FilePath
@@ -386,7 +444,7 @@ rootBinaryName paths test mn = (if test then ".test_" else "") ++ moduleLabel pa
 
 -- | All files generated for a module.
 moduleOutputs           :: Paths -> A.ModName -> [FilePath]
-moduleOutputs paths mn  = tyDbPath paths mn : map (generatedPath paths mn) generatedFiles ++
+moduleOutputs paths mn  = tyDbPath paths mn : map (generatedPath paths mn) (dataFile : generatedFiles) ++
                           [ rootStubPath paths test mn | test <- [False, True] ]
 
 -- | Whether 'file' names an Acton source file.
@@ -421,6 +479,15 @@ isInterfaceCopy path = takeExtension p == InterfaceFiles.interfaceExt
 -- This is used for diagnostics and display output.
 modNameToFilename :: A.ModName -> String
 modNameToFilename mn = joinPath (A.modPath mn) ++ ".act"
+
+-- | A module's source file as the diagnostics of its code name it: its path
+-- below the project's source directory, or, for a derived module, its path
+-- below the project root, which shows where its source is.
+moduleDisplayFile :: Paths -> A.ModName -> FilePath
+moduleDisplayFile paths mn
+  | Data.Set.member local (derived paths) = makeRelative (projPath paths) (derivedModuleFile (projPath paths) local)
+  | otherwise                             = modNameToFilename local
+  where local = dropProjPrefix paths mn
 
 -- | The module of the path 'ns' in the project named 'proj': the path with
 -- the project's name in front, except in a special project.
@@ -465,8 +532,21 @@ moduleNameFromFile srcRoot proj actFile = do
         names = splitDirectories rel
     return (projectModName proj names)
 
--- | Enumerate all .act files in a project and pair them with module names.
--- Used to seed the project module index for graph construction.
+-- | The module of the source file 'file' of the project of 'paths': the
+-- file's path under the project's derived source dir or else under its src
+-- dir, as 'moduleNameFromFile' names it.
+moduleOfSource :: Paths -> FilePath -> IO A.ModName
+moduleOfSource paths file = do
+    derivedRoot <- normalizePathSafe (projectDerivedSrcDir (projPath paths))
+    absolute    <- normalizePathSafe file
+    moduleNameFromFile (if absolute `isUnder` derivedRoot then derivedRoot else srcDir paths) (projName paths) file
+
+-- | Enumerate the modules of a project, each with its source file: the
+-- .act files under its src dir, and the files of its derived modules under
+-- its derived source dir.  Used to seed the project module index for graph
+-- construction.  Two modules whose generated files have a path in common
+-- are an error: the data C file of the module of tool.act is the generated
+-- .c of the module of tool.embed.act.
 enumerateProjectModules :: ProjCtx -> IO [(FilePath, A.ModName)]
 enumerateProjectModules ctx = do
     exists <- doesDirectoryExist (projSrcDir ctx)
@@ -479,14 +559,29 @@ enumerateProjectModules ctx = do
             rootName = head . splitDirectories . makeRelative (projSrcDir ctx) . dropExtension
             depNames = map fst $ projDeps ctx
             depOverlaps = filter ((`elem` depNames) . rootName) actFiles
+                          ++ [ derivedFile mn | mn <- derivedMods, head (A.modPath mn) `elem` depNames ]
+            derivedMods = Data.Set.toList (projDerived ctx)
+            derivedFile = derivedModuleFile (projRoot ctx)
 
         when (not $ null depOverlaps) $
             throwProjectError ("Source files in project " ++ projRoot ctx ++ " overlap with declared dependencies:\n" ++
                                concat ["    " ++ makeRelative (projRoot ctx) f ++ "\n" | f <- depOverlaps])
 
-        forM actFiles $ \f -> do
+        hand <- forM actFiles $ \f -> do
           mn <- moduleNameFromFile (projSrcDir ctx) proj f
           return (f, mn)
+
+        let mods = hand ++ [ (derivedFile mn, projectModName proj (A.modPath mn)) | mn <- derivedMods ]
+            -- The generated files of a module, as paths under the types directory.
+            generated mn = [ joinPath (A.modPath mn) ++ generatedSuffix file | file <- dataFile : generatedFiles ]
+            shared = M.filter ((> 1) . length) (M.fromListWith (++) [ (path, [f]) | (f, mn) <- mods, path <- generated mn ])
+
+        unless (M.null shared) $
+            throwProjectError ("Source files in project " ++ projRoot ctx ++ " whose modules have a generated file in common:\n" ++
+                               concat [ "    " ++ intercalate " and " (map (makeRelative (projRoot ctx)) (sort fs)) ++ ": " ++ path ++ "\n"
+                                      | (path, fs) <- M.toList shared ])
+
+        return mods
 
 -- | Remove the generated outputs under a project's types directory that
 -- belong to no module the project declares, so that a cached header cannot
@@ -507,17 +602,21 @@ pruneMissingModuleOutputs ctx paths = do
   where extensions = map (takeExtension . generatedSuffix) generatedFiles
 
 -- | Remove the outputs of every changed .act path that no longer exists,
--- from each project whose source directory holds it.
+-- from each project whose source directory or derived source directory
+-- holds it.  The outputs of a module that still has a source file in the
+-- other of the two directories stay.
 pruneMissingChangedModuleOutputs :: [(ProjCtx, Paths)] -> [FilePath] -> IO ()
 pruneMissingChangedModuleOutputs projects changedPaths = do
     absChanged <- mapM normalizePathSafe changedPaths
     forM_ (filter isActFile absChanged) $ \actPath -> do
       exists <- doesFileExist actPath
-      unless exists $ forM_ projects $ \(ctx, paths) -> do
-        srcRoot <- normalizePathSafe (projSrcDir ctx)
-        when (actPath `isUnder` srcRoot) $ do
-          mn <- moduleNameFromFile srcRoot (BuildSpec.specName (projBuildSpec ctx)) actPath
-          mapM_ removePathForcibly (moduleOutputs paths mn)
+      unless exists $ forM_ projects $ \(ctx, paths) ->
+        forM_ [projSrcDir ctx, projectDerivedSrcDir (projRoot ctx)] $ \dir -> do
+          srcRoot <- normalizePathSafe dir
+          when (actPath `isUnder` srcRoot) $ do
+            mn <- moduleNameFromFile srcRoot (BuildSpec.specName (projBuildSpec ctx)) actPath
+            replaced <- doesFileExist (srcFile paths mn)
+            unless replaced $ mapM_ removePathForcibly (moduleOutputs paths mn)
 
 
 -- Build.act ----------------------------------------------------------------------------------------
@@ -840,6 +939,20 @@ discoverBuildProjects gopts opts paths = do
     overrides <- normalizeDepOverrides root (C.dep_overrides opts)
     either (const Nothing) Just <$> trySync (discoverProjects gopts sys root overrides)
 
+-- | The projects among those of a build, keyed by their roots, whose files
+-- can change while a watch runs: the root project and its local
+-- dependencies, which a path dependency or a --dep override names.  A
+-- dependency fetched by hash lives in the dependency cache, whose entries
+-- never change, and std and base belong to the compiler.
+localProjects :: FilePath -> FilePath -> M.Map FilePath ProjCtx -> IO (M.Map FilePath ProjCtx)
+localProjects sys root projects = do
+    cache  <- normalizePathSafe . depCacheDir =<< getHomeDirectory
+    -- The system directory and std and base inside it, each with its links
+    -- resolved, as the discovered roots are.
+    system <- mapM normalizePathSafe [sys, sys </> "std", sys </> "base"]
+    let compilers dir = any (\s -> dir == s || dir `isUnder` s) system
+    return (M.filterWithKey (\dir _ -> dir == root || not (dir `isUnder` cache || compilers dir)) projects)
+
 discoverProjects :: C.GlobalOptions -> FilePath -> FilePath -> [(String, FilePath)] -> IO (M.Map FilePath ProjCtx)
 discoverProjects gopts sysAbs rootProj depOverrides = do
     rootAbs <- normalizePathSafe rootProj
@@ -856,8 +969,10 @@ discoverProjects gopts sysAbs rootProj depOverrides = do
           spec <- maybe (loadOverriddenSpec depOverrides dir) return mSpec
           let fpMap1 = registerFingerprint dir spec fpMap
           (deps, fpMap2) <- foldM (collectDep pins dir) ([], fpMap1) (M.toList (BuildSpec.concreteDependencies spec))
+          derivedMods <- derivedModuleNames dir
           let ctx = ProjCtx { projRoot      = dir
                             , projSrcDir    = projectSrcDir dir
+                            , projDerived   = derivedMods
                             , projSysPath   = sysAbs
                             , projBuildSpec = spec
                             , projDeps      = [ (n, p) | (n, p, _) <- reverse deps ]

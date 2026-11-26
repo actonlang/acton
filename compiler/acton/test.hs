@@ -46,6 +46,9 @@ import qualified Options.Applicative as OA
 import qualified Paths_acton
 import qualified Repl
 import qualified WatchTests
+import qualified EmbedTests
+import qualified DerivedTests
+import qualified ServerTests
 import qualified PerfTests
 import qualified TestOutputTests
 import qualified ZigProgressTests
@@ -77,6 +80,7 @@ main = do
     -- Root actor errors come after type checking, so --quiet keeps the
     -- progress lines of the passes that ran out of the golden output.
     rootErrorAutoTests <- createGoldenErrorAutoTests "root actor errors" "test/rooterrors" "--quiet"
+    embedErrorTests <- EmbedTests.embedErrorTests
     defaultMain $ localOption timeout $ testGroup "Tests" $
       [ builtinsAutoTests
       , coreLangAutoTests
@@ -96,9 +100,15 @@ main = do
       , syntaxErrorAutoTests
       , typeErrorAutoTests
       , rootErrorAutoTests
+      , embedErrorTests
+      , EmbedTests.embedServerTests
+      , EmbedTests.embedProgramTests
+      , EmbedTests.embedChangedTests
       , parseFlagTests
       , WatchTests.watchTriggerTests
       , WatchTests.watchProcessTests
+      , DerivedTests.derivedModuleTests
+      , ServerTests.serverTests
       , PerfTests.perfTests
       , TestOutputTests.testOutputTests
       , ZigProgressTests.zigProgressTests
@@ -813,6 +823,45 @@ compilerTests =
           "<empty>\n" (Repl.renderReplState Repl.emptyReplState)
         assertBool "repl reset should rewrite session source"
           (not ("def gone()" `isInfixOf` Repl.renderReplSessionSource Repl.emptyReplState))
+
+    , testCase "finds an embed expression in an input of every kind" $ do
+        forM_ [ "embed(\"web/a.txt\")"
+              , "len(embed(\"web/a.txt\"))"
+              , "page = embed(\"web/a.txt\")"
+              , "def page() -> bytes:\n    return embed(\"web/a.txt\")"
+              , "class Page(object):\n    def body(self) -> bytes:\n        return embed(\"web/a.txt\")"
+              , "for part in [embed(\"web/a.txt\")]:\n    print(part)"
+              ] $ \input -> do
+          found <- Repl.replHasEmbed input
+          assertBool ("repl should find the embed expression in: " ++ input) found
+        forM_ [ "\"embed(web/a.txt)\"", "embedded = 3", "2 + 2", "import std.math", "print(\"embed\")", "x = (" ] $ \input -> do
+          found <- Repl.replHasEmbed input
+          assertBool ("repl should find no embed expression in: " ++ input) (not found)
+
+    , testCase "refuses embed at the prompt" $ do
+        withSystemTempDirectory "acton-repl-embed" $ \tmp -> do
+          actonExe <- canonicalizePath "../../dist/bin/acton"
+          writeFile (tmp </> "a.txt") "abc"
+          let input = unlines
+                [ "embed(\"a.txt\")"
+                , "page = embed(\"a.txt\")"
+                , "def page() -> bytes:"
+                , "    return embed(\"a.txt\")"
+                , ""
+                , "2 + 2"
+                , ":show"
+                , ":q"
+                ]
+              refusal = "embed is not available at the prompt. Write it in a module\n"
+          (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode
+            (proc actonExe ["repl", "--color", "never", "--tempdir", tmp]) { cwd = Just tmp } input
+          assertEqual ("acton repl should exit successfully: " ++ cmdErr) ExitSuccess returnCode
+          assertEqual ("repl should refuse each input that holds embed: " ++ cmdErr)
+            3 (length (splitOn refusal cmdErr) - 1)
+          assertBool ("repl should evaluate the input after a refusal: " ++ cmdOut)
+            ("4\n" `isInfixOf` cmdOut)
+          assertBool ("repl should keep no refused input: " ++ cmdOut)
+            ("<empty>\n" `isInfixOf` cmdOut)
 
     , testCase "retains definitions, resets, and rejects failed setup" $ do
         actonExe <- canonicalizePath "../../dist/bin/acton"
@@ -1962,6 +2011,36 @@ parseFlagTests =
             { cwd = Just rootProj, env = Just envWithHome } ""
         assertBool ("cached private import should fail, stderr:\n" ++ cachedImportErr)
           (cachedImportCode /= ExitSuccess)
+  , testCase "sig prepares no back job" $ do
+      withSystemTempDirectory "acton-sig-no-back-job" $ \tmp -> do
+        actonExe <- canonicalizePath "../../dist/bin/acton"
+        sysPath <- canonicalizePath "../../dist"
+        env0 <- getEnvironment
+        let proj = tmp </> "proj"
+            envWithHome = ("HOME", tmp </> "home") : filter ((/= "HOME") . fst) env0
+            fp = Fingerprint.formatFingerprint
+              (Fingerprint.updateFingerprintPrefix
+                (Fingerprint.fingerprintPrefixForName "sig_back") 1)
+        createDirectoryIfMissing True (tmp </> "home")
+        createDirectoryIfMissing True (proj </> "src")
+        writeFile (proj </> "Build.act") $ unlines
+          [ "name = \"sig_back\""
+          , "fingerprint = " ++ fp
+          ]
+        writeFile (proj </> "src" </> "provider.act") "def one() -> int:\n    return 1\n"
+        writeFile (proj </> "src" </> "user.act") "import provider\n\ndef two() -> int:\n    return provider.one() + 1\n"
+        -- The first run checks both modules and the second finds them
+        -- cached.  Under --verbose a module that is checked prints a Stale
+        -- line and a cached module a Fresh line.  A DBP line reports a back
+        -- job that was prepared.
+        forM_ [("first", "  Stale user: "), ("second", "  Fresh user: ")] $ \(run, line) -> do
+          (code, out, err) <- readCreateProcessWithExitCode
+            (proc actonExe ["sig", "--syspath", sysPath, "--verbose", "user"])
+              { cwd = Just proj, env = Just envWithHome } ""
+          assertEqual (run ++ " acton sig failed:\n" ++ out ++ err) ExitSuccess code
+          assertBool (run ++ " acton sig prints the signature:\n" ++ out) ("two : () -> int" `isInfixOf` out)
+          assertBool (run ++ " acton sig prints the --verbose line of the module:\n" ++ out) (line `isInfixOf` out)
+          assertBool (run ++ " acton sig prepares no back job:\n" ++ out) (not ("  DBP " `isInfixOf` out))
   , testCase "acton test --help includes --no-cache and --tag" $ do
       acton <- canonicalizePath "../../dist/bin/acton"
       (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc acton ["test", "--help"]) ""
@@ -2799,6 +2878,56 @@ actonProjTests =
   , testCase "simple project" $ do
         testBuild "" ExitSuccess False "test/project/simple"
         testBuild "" ExitSuccess False "test/project/simple"
+
+  , testCase "a diagnostic is written in one piece while other modules are compiled" $ do
+        withSystemTempDirectory "acton-diagnostic-one-piece" $ \tmp -> do
+          actonExe <- canonicalizePath "../../dist/bin/acton"
+          let proj = tmp </> "pieces"
+              mkFp name = Fingerprint.formatFingerprint
+                (Fingerprint.updateFingerprintPrefix
+                  (Fingerprint.fingerprintPrefixForName name) 1)
+              -- The diagnostic of the one module with a type error, as the
+              -- compiler writes it when no other thread writes.
+              diagnostic = unlines
+                [ "[error]: Constraint violation"
+                , "     +--> bad.act@1:17-1:20"
+                , "     |"
+                , "   1 | greeting: int = 'x'"
+                , "     :                 ^--"
+                , "     :                 `- The type of the indicated expression (inferred to be __builtin__.str) must be a subclass of __builtin__.int"
+                , "-----+"
+                ]
+          createDirectoryIfMissing True (proj </> "src")
+          writeFile (proj </> "Build.act") $ unlines
+            [ "name = \"pieces\""
+            , "fingerprint = " ++ mkFp "pieces"
+            ]
+          writeFile (proj </> "src" </> "pieces.act") $ unlines
+            [ "actor main(env: Env):"
+            , "    proc def __startup__():"
+            , "        env.exit(0)"
+            ]
+          writeFile (proj </> "src" </> "bad.act") "greeting: int = 'x'\n"
+          forM_ [1 .. 40 :: Int] $ \n ->
+            writeFile (proj </> "src" </> ("m" ++ show n ++ ".act")) $ unlines
+              [ "def f(x: int) -> int:"
+              , "    return x + " ++ show n
+              , ""
+              , "def g(xs: list[int]) -> int:"
+              , "    total = 0"
+              , "    for x in xs:"
+              , "        total += f(x)"
+              , "    return total"
+              ]
+          -- Stdout is a pipe here, so no progress is rendered.  The forty
+          -- modules log their lines while the diagnostic is written.  A
+          -- build that lets two threads write at the same time mixes them
+          -- in most runs, so five builds show it.
+          forM_ [1 .. 5 :: Int] $ \_ -> do
+            removePathForcibly (proj </> "out")
+            (code, out, err) <- readCreateProcessWithExitCode (proc actonExe ["build", "--color", "never"]) { cwd = Just proj } ""
+            assertBool ("the build should fail\n" ++ out ++ err) (code /= ExitSuccess)
+            assertBool ("expected the diagnostic in one piece in\n" ++ out ++ err) (diagnostic `isInfixOf` out)
 
   , testCase "project imports std.json" $ do
         withSystemTempDirectory "acton-std-json-import" $ \tmp -> do

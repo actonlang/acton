@@ -16,9 +16,13 @@ actor main (env : __builtin__.Env):
     __startup__ : action() -> None
     proc def __startup__ () -> None:
         mgr: Manager = Manager()
-        decoder: __builtin__.StringDecoder = mgr.create_decoder()
-        apa: deact.Apa = mgr.create_apa()
-        env.exit(W_Manager_122.__fromatom__(0))
+        decoder: __builtin__.StringDecoder = let:
+                                                 N_function: action() -> __builtin__.StringDecoder = mgr.create_decoder
+                                             in await (async N_function)()
+        apa: deact.Apa = let:
+                             N_1function: action() -> deact.Apa = mgr.create_apa
+                         in await (async N_1function)()
+        (async env.exit)(W_Manager_122.__fromatom__(0))
         return None
     $MarkStartup((async $WRAP@[(), (), None](self, __startup__))())
 # (recursive group)

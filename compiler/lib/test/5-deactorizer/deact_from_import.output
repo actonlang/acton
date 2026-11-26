@@ -29,8 +29,12 @@ class main ($Actor, __builtin__.value):
         return None
     proc def __startup__G_local (self : Self) -> None:
         mgr: Manager = ManagerG_newact()
-        decoder: __builtin__.StringDecoder = $AWAITf@[__builtin__.StringDecoder]((async mgr.create_decoder)())
-        apa: deact.Apa = $AWAITf@[deact.Apa]((async mgr.create_apa)())
+        decoder: __builtin__.StringDecoder = let:
+                                                 N_function: action() -> __builtin__.StringDecoder = mgr.create_decoder
+                                             in $AWAITf@[__builtin__.StringDecoder]((async N_function)())
+        apa: deact.Apa = let:
+                             N_1function: action() -> deact.Apa = mgr.create_apa
+                         in $AWAITf@[deact.Apa]((async N_1function)())
         (async self.env.exit)(W_Manager_122.__fromatom__(0))
         return None
     action def __startup__ (self : Self) -> None:

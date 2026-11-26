@@ -3,6 +3,18 @@
 ## Unreleased
 
 ### Language
+- Add `embed("path")`, an expression of type `bytes` whose value is the
+  content of a file, as in `banner = embed("data/banner.png")`. The content is
+  part of the executable, so the program needs no file when it runs. The path
+  counts from the project root, or from the directory of a file that is
+  compiled without a project. A build compiles the module again when the file
+  has new content, and stops when the file changes while the build runs.
+  `acton build --watch` and `acton test --watch` build again when an embedded
+  file is saved or created.
+  `embed` is now a reserved word: a variable, a function, a parameter or a
+  class with this name needs another name, and an attribute is written
+  `x."embed"`. The guide page "Embedding files" has the rules for a path and
+  the limits.
 - Reject files that mix tabs and spaces in block indentation, even on separate
   lines or in separate functions. Use one style throughout each file;
   whitespace inside strings, comments, and continuation alignment does not
@@ -25,6 +37,23 @@
   UTF-8 decoding during program startup. [#3301]
 
 ### Compiler & Build
+- Add derived modules: the table `derived_modules` in `Build.act` names
+  modules whose source a function of the project returns while the build
+  runs, as in `schema: (function=gen.schema, inputs=["data/schema.txt"],
+  args=(prefix="S"))`. The module has no file under `src/`, and other modules
+  import it like any other module. The function gets a description of each
+  input file, a `std.build.derive.InputFile` with the path, the size and the
+  SHA-256 of the file and a method `read()` that returns its content, and
+  returns the source of one module as a `str` or of several modules as a
+  `dict[str, str]`. A name of an entry can end with `.*` and stand for every
+  module below it, as in `layers.*: (function=gen.layers, inputs=["data/"])`:
+  the function returns a module below `layers` for each input file, and
+  `Build.act` stays as it is when a file is added or removed. A build runs the
+  function again when an input file, the entry, the function or anything that
+  the function uses changed, and stops when an input file changes while the
+  build runs. `acton build --watch` and `acton test --watch` build again when
+  an input file is saved, added or removed. The guide page "Derived modules"
+  has the rules for the table, the function and the input paths.
 - Speed up compilation of large generated modules through compact name
   storage, cheaper name comparisons, and concurrent content hashing. On an
   M4 Pro, compact name storage reduced Acton compilation of half the generated
@@ -221,6 +250,19 @@
   `std.crypto`. `hash(data)` returns the 32-byte digest of a `bytes` value.
   A `Hasher` takes data in pieces with `update`; `finalize` returns the
   digest of the data given so far and does not change the hasher.
+- Add `std.build.derive.embed_files`, a function for an entry of
+  `derived_modules` that embeds the files of a directory, as in
+  `assets: (function=std.build.derive.embed_files, inputs=["web/"],
+  args=(strip="web"))`. The derived module has one name, `files`, a
+  `dict[str, bytes]` with the content of each file by its path without the
+  prefix `strip`: `assets.files["/index.html"]` is the content of
+  `web/index.html`. Its source has one `embed` for each file and no content,
+  so new content of a file compiles the module again and writes no source. A
+  build stops for a file whose path `embed` refuses. `embed_call` and
+  `str_literal` of `std.build.derive` return an `embed` expression and a str
+  literal, for a function of a project that returns another module for the
+  files. The guide page "Embedding files" has a section on the files of a
+  directory.
 - Use private CAs and client certificates with `net.TLSConnection` and
   `net.TLSListener` through `ca_pem`, `cert_pem`, and `key_pem`.
   Listeners request client certificates with `client_auth=True`. Set

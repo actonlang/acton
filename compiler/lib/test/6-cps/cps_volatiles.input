@@ -2,12 +2,12 @@ proc def force_cps (arg : __builtin__.int) -> __builtin__.int:
     return arg
 
 proc def compute (aa : __builtin__.int) -> __builtin__.int:
-    W_compute_19: __builtin__.Plus[__builtin__.int] = __builtin__.IntegralD_int()
+    W_compute_35: __builtin__.Plus[__builtin__.int] = __builtin__.IntegralD_int()
     W_compute_4: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
     xx: __builtin__.int = W_compute_4.__fromatom__(1)
     if $PUSH():
-        xx = W_compute_19.__iadd__(xx, force_cps(W_compute_4.__fromatom__(1)))
-        aa = W_compute_19.__iadd__(aa, force_cps(W_compute_4.__fromatom__(1)))
+        xx = W_compute_35.__iadd__(xx, force_cps(W_compute_4.__fromatom__(1)))
+        aa = W_compute_35.__iadd__(aa, force_cps(W_compute_4.__fromatom__(1)))
         $DROP()
     else:
         N_x: __builtin__.BaseException = $POP()
@@ -15,12 +15,12 @@ proc def compute (aa : __builtin__.int) -> __builtin__.int:
             pass
         else:
             $RAISE@[None](N_x)
-    N_1tmp: __builtin__.int = W_compute_19.__add__(xx, aa)
+    N_1tmp: __builtin__.int = W_compute_35.__add__(xx, aa)
     return N_1tmp
 
-W_main_74: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+W_main_71: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
 
-W_main_29: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
+W_main_28: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
 
 # recursive group:
 class main ($Actor, __builtin__.value):
@@ -31,12 +31,12 @@ class main ($Actor, __builtin__.value):
         $MarkStartup((async self.__startup__)())
         return None
     proc def __startup__G_local (self : Self) -> None:
-        v: __builtin__.int = compute(W_main_74.__fromatom__(10))
-        if W_main_29.__eq__(v, W_main_74.__fromatom__(13)):
-            (async self.env.exit)(W_main_74.__fromatom__(0))
+        v: __builtin__.int = compute(W_main_71.__fromatom__(10))
+        if W_main_28.__eq__(v, W_main_71.__fromatom__(13)):
+            (async self.env.exit)(W_main_71.__fromatom__(0))
         else:
             print@[(__builtin__.str, __builtin__.int)](("\"Excpected 13, got\"", v), "\" \"", "\"\\n\"", False, False)
-            (async self.env.exit)(W_main_74.__fromatom__(1))
+            (async self.env.exit)(W_main_71.__fromatom__(1))
         return None
     action def __startup__ (self : Self) -> None:
         return $ASYNCf@[None](self, proc lambda: self.__startup__G_local())

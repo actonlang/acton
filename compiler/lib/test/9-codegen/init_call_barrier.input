@@ -3,22 +3,43 @@ proc def step (C_cont : $Cont[None]) -> $R:
     return $R_CONT@[None](C_cont, None)
 
 # recursive group:
-proc def L_1C_1cont (self : Later, C_cont : $Cont[None], C_2res : None) -> $R:
-    Base.__init__(self)
+proc def L_1C_1cont (C_cont : $Cont[None], C_2res : None) -> $R:
     return $R_CONT@[None](C_cont, None)
 class L_2Cont ($Cont[None], __builtin__.value):
     @property
-    self : Later
-    @property
     C_cont : $Cont[None]
-    pure def __init__ (L_self : L_2Cont, self : Later, C_cont : $Cont[None]) -> None:
-        L_self.self = self
+    pure def __init__ (L_self : L_2Cont, C_cont : $Cont[None]) -> None:
         L_self.C_cont = C_cont
         return None
     proc def __call__ (L_self : L_2Cont, G_1 : None) -> $R:
-        self: Later = L_self.self
         C_cont: $Cont[None] = L_self.C_cont
-        return L_1C_1cont(self, C_cont, G_1)
+        return L_1C_1cont(C_cont, G_1)
+proc def L_4C_5cont (C_cont : $Cont[None], C_6res : None) -> $R:
+    return $R_CONT@[None](C_cont, None)
+class L_5Cont ($Cont[None], __builtin__.value):
+    @property
+    C_cont : $Cont[None]
+    pure def __init__ (L_self : L_5Cont, C_cont : $Cont[None]) -> None:
+        L_self.C_cont = C_cont
+        return None
+    proc def __call__ (L_self : L_5Cont, G_1 : None) -> $R:
+        C_cont: $Cont[None] = L_self.C_cont
+        return L_4C_5cont(C_cont, G_1)
+proc def L_3C_3cont (C_cont : $Cont[None], self : Later, C_4res : None) -> $R:
+    return Base.__init__(self, $SKIPRES@[None](L_5Cont(C_cont)))
+class L_6Cont ($Cont[None], __builtin__.value):
+    @property
+    C_cont : $Cont[None]
+    @property
+    self : Later
+    pure def __init__ (L_self : L_6Cont, C_cont : $Cont[None], self : Later) -> None:
+        L_self.C_cont = C_cont
+        L_self.self = self
+        return None
+    proc def __call__ (L_self : L_6Cont, G_1 : None) -> $R:
+        C_cont: $Cont[None] = L_self.C_cont
+        self: Later = L_self.self
+        return L_3C_3cont(C_cont, self, G_1)
 class Base (__builtin__.object, __builtin__.value):
     @property
     items : __builtin__.list[__builtin__.int]
@@ -27,18 +48,17 @@ class Base (__builtin__.object, __builtin__.value):
     pure def G_init (self : Base) -> None:
         pass
         return None
-    pure def __init__ (self : Base) -> None:
+    proc def __init__ (self : Base, C_cont : $Cont[None]) -> $R:
         self.items = [(BOX __builtin__.int (UNBOX __builtin__.int 1))]
-        return None
+        return $R_CONT@[None](C_cont, None)
 class Derived (Base, __builtin__.object, __builtin__.value):
     pure def __get_attr__ (self : Derived, name : __builtin__.str) -> ?__builtin__.value:
         return None
     pure def G_init (self : Derived) -> None:
         Base.G_init(self)
         return None
-    pure def __init__ (self : Derived) -> None:
-        Base.__init__(self)
-        return None
+    proc def __init__ (self : Derived, C_cont : $Cont[None]) -> $R:
+        return Base.__init__(self, $SKIPRES@[None](L_2Cont(C_cont)))
 class Later (Base, __builtin__.object, __builtin__.value):
     pure def __get_attr__ (self : Later, name : __builtin__.str) -> ?__builtin__.value:
         return None
@@ -46,7 +66,7 @@ class Later (Base, __builtin__.object, __builtin__.value):
         Base.G_init(self)
         return None
     proc def __init__ (self : Later, C_cont : $Cont[None]) -> $R:
-        return step($SKIPRES@[None](L_2Cont(self, C_cont)))
+        return step($SKIPRES@[None](L_6Cont(C_cont, self)))
 class Renew (__builtin__.object, __builtin__.value):
     @property
     items : None
@@ -62,9 +82,21 @@ class Renew (__builtin__.object, __builtin__.value):
         return None
 # (recursive group)
 
-pure def reinit (b : Base) -> None:
-    Base.__init__(b)
-    return None
+# recursive group:
+proc def L_7C_7cont (C_cont : $Cont[None], C_8res : None) -> $R:
+    return $R_CONT@[None](C_cont, None)
+class L_8Cont ($Cont[None], __builtin__.value):
+    @property
+    C_cont : $Cont[None]
+    pure def __init__ (L_self : L_8Cont, C_cont : $Cont[None]) -> None:
+        L_self.C_cont = C_cont
+        return None
+    proc def __call__ (L_self : L_8Cont, G_1 : None) -> $R:
+        C_cont: $Cont[None] = L_self.C_cont
+        return L_7C_7cont(C_cont, G_1)
+proc def reinit (C_cont : $Cont[None], b : Base) -> $R:
+    return Base.__init__(b, $SKIPRES@[None](L_8Cont(C_cont)))
+# (recursive group)
 
 pure def renew (b : Base) -> None:
     Renew.__init__(b)

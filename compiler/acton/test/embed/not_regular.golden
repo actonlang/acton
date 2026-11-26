@@ -1,0 +1,7 @@
+[error Compilation error]: web/pipe is not a regular file
+     +--> page.act@2:15-2:32
+     |
+   2 | page: bytes = embed("web/pipe")
+     :               ^----------------
+     :               `- web/pipe is not a regular file
+-----+

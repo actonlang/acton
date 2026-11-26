@@ -1,0 +1,2 @@
+# Two paths between the parentheses of embed
+page = embed("web/a.html", "web/b.html")

@@ -1164,6 +1164,12 @@ jobs:
     with:
       repo_url: "actonlang/acton-http2"
 
+  test-app-http-router:
+    needs: build-debs
+    uses: "./.github/workflows/test-app.yml"
+    with:
+      repo_url: "stratoweave/http-router"
+
   test-app-textfsm:
     needs: build-debs
     uses: "./.github/workflows/test-app.yml"

@@ -1,0 +1,7 @@
+[error Compilation error]: no file web/index.html in /home/user/shop
+     +--> page.act@2:15-2:38
+     |
+   2 | page: bytes = embed("web/index.html")
+     :               ^----------------------
+     :               `- no file web/index.html in /home/user/shop
+-----+

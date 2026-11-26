@@ -272,6 +272,7 @@ instance Vars Expr where
     freeQ (Ellipsis _)              = []
     freeQ (Strings _ ss)            = []
     freeQ (BStrings _ ss)           = []
+    freeQ Embed{}                   = []
     freeQ (Raise _ e _)             = freeQ e
     freeQ (Call _ e ps ks)          = freeQ e ++ freeQ ps ++ freeQ ks
     freeQ (TApp _ e ts)             = freeQ e ++ freeQ ts

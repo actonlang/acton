@@ -1,0 +1,1 @@
+src/page.act 1:14-1:26: web is a directory, and embed takes one file. For the files of a directory use a derived module, for example with the function std.build.derive.embed_files

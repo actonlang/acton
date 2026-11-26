@@ -374,6 +374,7 @@ instance KCheck Expr where
     kchk env (Ellipsis l)           = return $ Ellipsis l
     kchk env (Strings l ss)         = return $ Strings l ss
     kchk env (BStrings l ss)        = return $ BStrings l ss
+    kchk env e@Embed{}              = return e
     kchk env (Call l e ps ks)       = Call l <$> kchk env e <*> kchk env ps <*> kchk env ks
     kchk env (TApp l e ts)          = internal l "Unexpected TApp in kchk"
     kchk env (Let l ss e)           = Let l <$> kchk env ss <*> kchk env e
@@ -700,6 +701,7 @@ instance KSubst Expr where
     ksubst g (Ellipsis l)           = return $ Ellipsis l
     ksubst g (Strings l ss)         = return $ Strings l ss
     ksubst g (BStrings l ss)        = return $ BStrings l ss
+    ksubst g e@Embed{}              = return e
     ksubst g (Call l e ps ks)       = Call l <$> ksubst g e <*> ksubst g ps <*> ksubst g ks
     ksubst g (TApp l e ts)          = TApp l <$> ksubst g e <*> ksubst g ts
     ksubst g (Let l ss e)           = Let l <$> ksubst g ss <*> ksubst g e

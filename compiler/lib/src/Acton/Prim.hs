@@ -46,6 +46,9 @@ primActor           = gPrim "Actor"
 primR               = gPrim "R"
 primCont            = gPrim "Cont"
 
+primPureToAction    = gPrim "PURE_TO_ACTION"
+primCompleted       = gPrim "COMPLETED"
+
 primASYNCf          = gPrim "ASYNCf"
 primAFTERf          = gPrim "AFTERf"
 primAFTER_NOWf      = gPrim "AFTER_NOWf"
@@ -141,20 +144,44 @@ tR                  = tCon $ TC primR []
 tCont t             = tCon $ TC primCont [t]
 
 primWrappedP        = gPrim "Wrapped"
-pWrapped x y        = TC primWrappedP [x,y]
+pWrapped x          = TC primWrappedP [x]
+primUnwrappedP      = gPrim "Unwrapped"
+pUnwrapped x        = TC primUnwrappedP [x]
+primUnwrapped_P     = gPrim "Unwrapped_"
+pUnwrapped_ x       = TC primUnwrapped_P [x]
+
+callProtocols       = [primWrappedP, primUnwrappedP, primUnwrapped_P]
 
 primWrappedC        = gPrim "WrappedC"
-tWrapped s x y      = tCon $ TC primWrappedC [s,x,y]
+tWrapped s x        = tCon $ TC primWrappedC [s,x]
 
 attrVal             = name "val"
 attrWrap            = name "wrap"
 attrUnwrap          = name "unwrap"
+attrUnwrap_         = name "unwrap_"
 
 primWrapProc        = gPrim "wWrapProc"
 primWrapAction      = gPrim "wWrapAction"
 primWrapMut         = gPrim "wWrapMut"
 primWrapPure        = gPrim "wWrapPure"
 primWrapCom         = gPrim "wWrapCom"
+
+primUnwrapProc      = gPrim "wUnwrapProc"
+primUnwrapAction    = gPrim "wUnwrapAction"
+primUnwrapMut       = gPrim "wUnwrapMut"
+primUnwrapCom       = gPrim "wUnwrapCom"
+primUnwrapPure      = gPrim "wUnwrapPure"
+
+primUnwrap_Proc     = gPrim "wUnwrap_Proc"
+primUnwrap_Action   = gPrim "wUnwrap_Action"
+primUnwrap_Mut      = gPrim "wUnwrap_Mut"
+primUnwrap_Com      = gPrim "wUnwrap_Com"
+primUnwrap_Pure     = gPrim "wUnwrap_Pure"
+
+wrapWitnesses       = [primWrapAction, primWrapProc, primWrapMut, primWrapCom, primWrapPure]
+unwrapWitnesses     = [primUnwrapAction, primUnwrapProc, primUnwrapMut, primUnwrapCom, primUnwrapPure]
+unwrap_Witnesses    = [primUnwrap_Action, primUnwrap_Proc, primUnwrap_Mut, primUnwrap_Com, primUnwrap_Pure]
+callWitnesses       = wrapWitnesses ++ unwrapWitnesses ++ unwrap_Witnesses
 
 primWRAP            = gPrim "WRAP"
 
@@ -592,7 +619,9 @@ hashContainerWorkers = dictWorkers qnDict tDict True ++ dictWorkers qnIDict tIDi
                         ("__isub__","B_set_base_isub"), ("__ixor__","B_set_base_ixor")]]
 
 primEnv             = [ (noq (bwName w), NDef (bwSchema w) NoDec Nothing) | w <- builtinCallWorkers ] ++
-                      [     (noq primASYNCf,        NDef scASYNCf NoDec Nothing),
+                      [     (noq primPureToAction, NDef scPureToAction NoDec Nothing),
+                            (noq primCompleted,    NDef scCompleted NoDec Nothing),
+                            (noq primASYNCf,        NDef scASYNCf NoDec Nothing),
                             (noq primAFTERf,        NDef scAFTERf NoDec Nothing),
                             (noq primAFTER_NOWf,    NDef scAFTERf NoDec Nothing),
                             (noq primAWAITf,        NDef scAWAITf NoDec Nothing),
@@ -674,10 +703,10 @@ primEnv             = [ (noq (bwName w), NDef (bwSchema w) NoDec Nothing) | w <-
                             (noq primSKIPRESc,      NDef scSKIPRESc NoDec Nothing),
                             (noq primSKIPRES,       NDef scSKIPRES NoDec Nothing),
 
-                            (noq primWrappedP,      proWrapped),
+                            (noq primWrappedP,      callProtocol attrWrap),
+                            (noq primUnwrappedP,    callProtocol attrUnwrap),
+                            (noq primUnwrapped_P,   callProtocol attrUnwrap_),
                             (noq primWrappedC,      clWrapped),
---                            (noq primWrapProc,      NVar $ tWrapped fxProc fxProc fxProc),
---                            (noq primWrapAction,    NVar $ tWrapped fxAction fxProc fxProc),
 
                             (noq primWRAP,          NDef scWRAP NoDec Nothing),
 
@@ -722,6 +751,8 @@ clProc              = NClass [qbind r, qbind t] (leftpath [cValue]) te Nothing
 
 --  class $action[R,T] ($proc[R,T], value):
 --      __asyn__    : action(*R) -> T
+-- The shared closure representation does not imply action < proc in the
+-- source effect hierarchy.
 clAction            = NClass [qbind r, qbind t] (leftpath [ cProc (tVar r) (tVar t), cValue]) te Nothing
   where te          = [ (attr_asyn_, NSig (monotype $ tFun fxAction (tVar r) kwdNil (tVar t)) NoDec Nothing) ]
         r           = TV PRow (name "R")
@@ -797,6 +828,18 @@ clRET               = NClass [] (leftpath [cBaseException, cValue]) te Nothing
 
 --  class $R (): pass
 clR                 = NClass [] [] [] Nothing
+
+-- Generic function adapter, eliminated by Transform before code generation.
+scPureToAction      = tSchema (map qbind [a,b,c]) $ tFun0 [fun fxPure] (fun fxAction)
+  where fun fx      = tFun fx (tVar a) (tVar b) (tVar c)
+        a           = TV PRow (name "A")
+        b           = TV KRow (name "B")
+        c           = TV KType (name "C")
+
+-- $COMPLETED : [C] => action(C) -> C
+-- The source result is C; the action calling convention returns Msg[C].
+scCompleted         = tSchema [qbind c] $ tFun fxAction (posRow (tVar c) posNil) kwdNil (tVar c)
+  where c           = TV KType (name "C")
 
 --  $ASYNCf         : [A] => action($Actor, proc()->A) -> A
 scASYNCf            = tSchema [qbind a] tASYNC
@@ -1310,55 +1353,36 @@ scWRAP              = tSchema [qbind a, qbind b, qbind c] tWRAP
         b           = TV KType (name "B")
         c           = TV KType (name "C")
 
---  protocol $Wrapped[X,Y]:
---      @static
---      wrap        : [A,B,C] => ($Actor, X(*A,**B)->C) -> Self(*A,**B)->C
---      @static
---      unwrap      : [A,B,C] => (Self(*A,**B)->C) -> Y(*A,**B)->C
-proWrapped          = NProto [qbind x, qbind y] [] te Nothing
-  where te          = [(attrWrap,scWrap), (attrUnwrap,scUnwrap)]
-        scWrap      = NSig (tSchema q (tFun0 [tActor, fxFun tX] (fxFun tSelf)))  Static Nothing
-        scUnwrap    = NSig (tSchema q (tFun0 [fxFun tSelf] (fxFun tY))) Static Nothing
-        fxFun fx    = tFun fx (tVar a) (tVar b) (tVar c)
-        tX          = tVar x
-        tY          = tVar y
-        tSelf       = tVar fxSelf
-        q           = [qbind a, qbind b, qbind c]
-        x           = TV KFX (name "X")
-        y           = TV KFX (name "Y")
+-- Each operation has its own relation between the source and target effects.
+-- unwrap_ promises Msg[C] for every instance. Transform may erase that promise
+-- for non-actions, since the compiler only introduces it at discarded calls.
+callProtocol op     = NProto [qbind x] [] [(op, NSig (callSchema op (tVar fxSelf) (tVar x)) Static Nothing)] Nothing
+  where x           = TV KFX (name "X")
+
+callSchema op self x = tSchema [qbind a, qbind b, qbind c] $ tFun0 args result
+  where fun fx r    = tFun fx (tVar a) (tVar b) r
+        args        = if op == attrWrap then [tActor, fun x (tVar c)] else [fun self (tVar c)]
+        result      = if op == attrWrap then fun self (tVar c)
+                      else fun x (if op == attrUnwrap_ then tMsg (tVar c) else tVar c)
         a           = TV PRow (name "A")
         b           = TV KRow (name "B")
         c           = TV KType (name "C")
 
---  class $WrappedC[S,X,Y]: pass
---      wrap        : [A,B,C] => ($Actor, X(*A,**B)->C) -> S(*A,**B)->C
---      unwrap      : [A,B,C] => (S(*A,**B)->C) -> X(*A,**B)->C
-clWrapped           = NClass [qbind s, qbind x, qbind y] [] te Nothing
-  where te          = [(attrWrap,scWrap), (attrUnwrap,scUnwrap)]
-        scWrap      = NDef (tSchema q (tFun0 [tActor, fxFun tX] (fxFun tS))) NoDec Nothing
-        scUnwrap    = NDef (tSchema q (tFun0 [fxFun tS] (fxFun tY))) NoDec Nothing
-        fxFun fx    = tFun fx (tVar a) (tVar b) (tVar c)
-        tS          = tVar s
-        tX          = tVar x
-        tY          = tVar y
-        q           = [qbind a, qbind b, qbind c]
-        s           = TV KFX (name "S")
+clWrapped           = NClass [qbind s, qbind x] []
+                        [(attrWrap, NDef (callSchema attrWrap (tVar s) (tVar x)) NoDec Nothing)] Nothing
+  where s           = TV KFX (name "S")
         x           = TV KFX (name "X")
-        y           = TV KFX (name "Y")
-        a           = TV PRow (name "A")
-        b           = TV KRow (name "B")
-        c           = TV KType (name "C")
 
+primWits            = concat
+    [ witnesses pWrapped   wrapWitnesses    fxProc
+    , witnesses pUnwrapped unwrapWitnesses  fxProc
+    , witnesses pUnwrapped_ unwrap_Witnesses fxCom
+    ]
+  where witnesses p names actionTarget =
+            [ WInst [] source (p target) w [Left (noQ "_")]
+            | (source,w) <- zip [fxAction,fxProc,fxMut,fxCom,fxPure] names
+            , let target = if source == fxAction then actionTarget else source ]
 
-
-primWits            = [ WInst []        fxAction (pWrapped fxProc fxProc)   primWrapAction path,
-                        WInst []        fxProc   (pWrapped fxProc fxProc)   primWrapProc path,
-                        WInst []        fxMut    (pWrapped fxMut  fxMut)    primWrapMut path,
-                        WInst []        fxCom    (pWrapped fxCom   fxCom)   primWrapCom path,
-                        WInst [qbind y] fxPure   (pWrapped fxPure (tVar y)) primWrapPure path
-                      ]
-  where path        = [Left (noQ "_")]
-        y           = TV KFX (name "Y")
 
 isPUSH (Call _ (Var _ x) _ _)   = x `elem` [primPUSH,primPUSHF]
 isPUSH _                        = False

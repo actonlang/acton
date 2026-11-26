@@ -1110,11 +1110,13 @@ wvars cs                    = [ eVar v | Proto _ _ v _ _ <- cs ]
 
 -- Equations -----------------------------------------------------------------------------------------------------------------------
 
-data Equation                           = Eqn Int Name Type Expr
+data Equation                           = Eqn Int Name TSchema Expr
 
 type Equations                          = [Equation]
 
-mkEqn env                               = Eqn (qlevel env)
+mkEqn env w t e                         = mkPolyEqn env w (monotype t) e
+
+mkPolyEqn env                           = Eqn (qlevel env)
 
 instance Pretty Equations where
     pretty eqs                          = vcat $ map pretty eqs
@@ -1138,7 +1140,14 @@ bindWits eqs
   | null sigws                          = binds
   | otherwise                           = Signature NoLoc sigws (monotype tWild) NoDec : binds
   where sigws                           = [ w | Eqn _ w _ (NotImplemented _) <- eqs ]
-        binds                           = [ sAssign (pVar w t) e | Eqn _ w t e <- eqs, w `notElem` sigws ]
+        binds                           = [ bind w sc e | Eqn _ w sc e <- eqs, w `notElem` sigws ]
+        bind w (TSchema _ [] t) e       = sAssign (pVar w t) e
+        bind w (TSchema _ q t) e        = sDecl [Def NoLoc w q p k (Just $ restype t) [sReturn body] NoDec (effect t) Nothing]
+          where (p,k,body)              = case e of
+                                            Lambda _ p k body _ -> (p,k,body)
+                                            _ -> (p0,k0,Call NoLoc e (pArg p0) (kArg k0))
+                p0                      = pPar pNames (posrow t)
+                k0                      = kPar attrKW (kwdrow t)
 
 scopedWits env0 q cs                    = scoped cs
   where level1                          = qlevel env0 + length q

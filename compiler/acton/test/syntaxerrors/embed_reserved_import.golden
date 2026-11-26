@@ -1,0 +1,9 @@
+Building file test/syntaxerrors/embed_reserved_import.act using temporary scratch directory
+[error Parse error]: embed is a reserved word and cannot be a name
+
+     +--> test/syntaxerrors/embed_reserved_import.act@2:8-2:9
+     |
+   2 | import embed.files
+     :        ^ 
+     :        `- embed is a reserved word and cannot be a name
+-----+

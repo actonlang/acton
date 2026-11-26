@@ -1,0 +1,7 @@
+[error Compilation error]: web/app.js cannot be read: Permission denied
+     +--> page.act@2:15-2:34
+     |
+   2 | page: bytes = embed("web/app.js")
+     :               ^------------------
+     :               `- web/app.js cannot be read: Permission denied
+-----+

@@ -17,7 +17,7 @@ module Acton.Transform where
 import qualified Data.HashMap.Strict as M
 import qualified Data.IntMap.Strict as IM
 import qualified Data.HashSet as HS
-import Acton.Subst (vfree)
+import Acton.Subst (vfree, vsubst)
 import Acton.WitnessSharing (witnessHash)
 
 import Utils
@@ -45,19 +45,22 @@ type TSubst                             = M.HashMap Name (Maybe Expr)
 
 data TransEnv                           = TransEnv {
                                             eqns     :: Equations,                  -- Top-level constraint solutions
+                                            trpoly   :: M.HashMap Name (QBinds, Expr), -- Generic witness definitions
                                             trsubst  :: TSubst,                     -- Inlineable assignments and scope blockers
                                             witscope :: IM.IntMap [(Name,Type,Expr)], -- Preserved witness bindings in scope, for the purpose of duplicate removals
                                             witnames :: HS.HashSet Name,            -- Names whose shadowing invalidates the witness index
                                             final    :: Bool
                                           }
 
-env0                                    = TransEnv{ eqns = [], trsubst = M.empty, witscope = IM.empty, witnames = HS.empty, final = False }
+env0                                    = TransEnv{ eqns = [], trsubst = M.empty, trpoly = M.empty, witscope = IM.empty, witnames = HS.empty, final = False }
 
-blockscope ns env                       = env{ trsubst = foldr (`M.insert` Nothing) (trsubst env) ns }
+blockscope ns env                       = env{ trsubst = foldr (`M.insert` Nothing) (trsubst env) ns,
+                                              trpoly = foldr M.delete (trpoly env) ns }
 
 extsubst ns env                         = env{ trsubst = foldr (\(n,e) -> M.insert n (Just e)) (trsubst env) ns }
 
-limsubst ns env                         = env{ trsubst = foldr M.delete (trsubst env) ns }
+limsubst ns env                         = env{ trsubst = foldr M.delete (trsubst env) ns,
+                                              trpoly = foldr M.delete (trpoly env) ns }
 
 trfind n env                            = case M.lookup n (trsubst env) of
                                             Just (Just e) -> Just e
@@ -95,6 +98,8 @@ wtrans env ss
 wtrans env (Signature _ ws (TSchema _ [] (TWild _)) NoDec : ss)
                                         = wtrans env (bindWits eq ++ ss)
   where eq                              = findeqns ws (eqns env)
+wtrans env (Decl _ [Def _ w q p k _ [Return _ (Just e)] _ fx _] : ss)
+  | isWitness w, not (null q)          = wtrans env{ trpoly = M.insert w (q, Lambda NoLoc p k e fx) (trpoly env) } ss
 wtrans env (s@(Assign l p@[PVar _ w (Just t)] e) : ss)
   | not (isWitness w)                   = trans env s : wtrans env ss
   | Lambda{} <- e1                      = wtrans (extsubst [(w,e1)] env) ss
@@ -145,18 +150,33 @@ instance Transform Decl where
     trans env (Typedef l n q t doc)     = Typedef l n q t doc
     trans env (Extension l q c us b doc)= Extension l q c us (wtrans (checkscope [nSelf] (typescope q env)) b) doc
 
+transCall (Var _ n) [p,k,r] [f]
+  | n == primPureToAction             = Just $ Let NoLoc [sAssign (pVar captured source) f] adapter
+  where source                       = tFun fxPure p k r
+        captured                     = head $ xNames \\ free f
+        pp                           = pPar (pNames \\ [captured]) p
+        kp                           = kPar attrKW k
+        result                       = Call NoLoc (eVar captured) (pArg pp) (kArg kp)
+        adapter                      = Lambda NoLoc pp kp (eCall (tApp (eQVar primCompleted) [r]) [result]) fxAction
 transCall (Dot _ (Var _ n) m) ts [e1,e2]
   | n == primWrapProc,  m == attrWrap   = Just e2
   | n == primWrapAction,m == attrWrap   = Just $ eCall (tApp (eQVar primWRAP) ts) [e1,e2]
   | n == primWrapMut,   m == attrWrap   = Just e2
   | n == primWrapPure,  m == attrWrap   = Just e2
   | n == primWrapCom, m == attrWrap = Just e2
-transCall (Dot _ (Var _ n) m) ts [e1]
-  | n == primWrapProc,  m == attrUnwrap = Just e1
-  | n == primWrapAction,m == attrUnwrap = Just e1
-  | n == primWrapMut,   m == attrUnwrap = Just e1
-  | n == primWrapPure,  m == attrUnwrap = Just e1
-  | n == primWrapCom, m == attrUnwrap = Just e1
+transCall (Dot _ (Var _ n) m) [p,k,r] [f]
+  | n == primUnwrapAction, m == attrUnwrap
+                                     = Just $ Let NoLoc [sAssign (pVar captured source) f] adapter
+  | n == primUnwrap_Action, m == attrUnwrap_
+                                     = Just $ eAsync f
+  | n `elem` unwrapWitnesses, m == attrUnwrap = Just f
+  | n `elem` unwrap_Witnesses, m == attrUnwrap_ = Just f
+  where source                       = tFun fxAction p k r
+        captured                     = head $ xNames \\ free f
+        pp                           = pPar (pNames \\ [captured]) p
+        kp                           = kPar attrKW k
+        result                       = Call NoLoc (eAsync $ eVar captured) (pArg pp) (kArg kp)
+        adapter                      = Lambda NoLoc pp kp (eAwait result) fxProc
 transCall _ _ _                         = Nothing
 
 instance Transform Expr where
@@ -165,6 +185,9 @@ instance Transform Expr where
       | Just e <- trfind n env          = if final env then e else trans (blockscope [n] env) e
 
     trans env ee@(Call l e p k)
+      | Let l' ss body <- e',
+        null (bound ss `intersect` (free p' ++ free k'))
+                                        = trans env (Let l' ss (Call l body p' k'))
       | Lambda{} <- e',
         Just s1 <- pzip (ppar e') p',
         Just s2 <- kzip (kpar e') k'    = termsubst (s1++s2) (exp1 e')     -- TODO: check that e' is linear in all its parameters!
@@ -175,10 +198,33 @@ instance Transform Expr where
             p'                          = trans env p
             k'                          = trans env k
             es                          = posargs p'
+    trans env (TApp _ (Var _ (NoQ w)) ts)
+      | Just (q,e) <- M.lookup w (trpoly env), length q == length ts
+                                        = trans (blockscope [w] env) (vsubst (qbound q `zip` ts) e)
     trans env (TApp l e ts)             = TApp l (trans env e) ts
     trans env (Async l e)               = Async l (trans env e)
     trans env (Await l e)               = Await l (trans env e)
-    trans env (Let l ss e)              = Let l (trans env ss) (trans env e)
+    trans env (Let l [Assign l' [p@(PVar _ n _)] value] e)
+      | Var _ (NoQ n') <- e', n == n'  = value'
+      | Call cl (Var _ (NoQ n')) ap ak <- e', n == n',
+        n `notElem` (free ap ++ free ak)
+                                        = trans env (Call cl value' ap ak)
+      -- An eagerly captured function followed by a forwarding adapter is an
+      -- identity only when the adapter and the captured function have the same
+      -- effect. Standalone lambdas do not carry that proof.
+      | PVar _ _ (Just TFun{effect=fx}) <- p,
+        Lambda{efx=fx'} <- e', fx == fx',
+        Just callee <- forwarding e', callee == eVar n
+                                        = value'
+      | otherwise                     = Let l [Assign l' [p] value'] e'
+      where value'                    = trans env value
+            e'                        = trans (blockscope [n] env) e
+    -- Defaults can bind generic effect witnesses inside a Let. Process the
+    -- bindings and result together so their type applications are specialized.
+    trans env (Let l ss e)              = case reverse $ wtrans (bindscope (bound ss) env) (ss ++ [sReturn e]) of
+                                            Return _ (Just e') : [] -> e'
+                                            Return _ (Just e') : ss' -> Let l (reverse ss') e'
+                                            _ -> error "Transform: missing Let result"
     trans env (Index l e is)            = Index l (trans env e) (trans env is)
     trans env (Slice l e sl)            = Slice l (trans env e) (trans env sl)
     trans env (Cond l e1 e2 e3)         = Cond l (trans env e1) (trans env e2) (trans env e3)
@@ -231,8 +277,9 @@ instance Transform Expr where
     trans env (Paren l e)               = trans env e
     trans env e                         = e
 
-eta (Lambda _ p k (Call _ e p' k') fx)
-  | eq1 p p' && eq2 k k'                = e
+-- Recognize forwarding syntax; callers check whether its effect permits reduction.
+forwarding (Lambda _ p k (Call _ e p' k') _)
+  | eq1 p p' && eq2 k k'                = Just e
   where
     eq1 (PosPar n _ _ p) (PosArg e p')  = eVar n == e && eq1 p p'
     eq1 (PosSTAR n _) (PosStar e)       = eVar n == e
@@ -242,6 +289,10 @@ eta (Lambda _ p k (Call _ e p' k') fx)
     eq2 (KwdSTAR n _) (KwdStar e)       = eVar n == e
     eq2 KwdNIL KwdNil                   = True
     eq2 _ _                             = False
+forwarding _                            = Nothing
+
+eta e@Lambda{efx=fx}
+  | fx == fxPure, Just f <- forwarding e = f
 eta ee@(Lambda _ (PosPar n (Just t) Nothing PosNIL) KwdNIL (Tuple _ p k) (TFX _ FXPure))
   | idtup t p k                         = eLambda [(n,t)] (eVar n)
   where idtup (TTuple _ prow krow) p k  = ptup (eVar n) 0 prow p && ktup (eVar n) krow k

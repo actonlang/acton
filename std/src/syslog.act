@@ -203,7 +203,7 @@ class Sink(logging.Sink):
                                procid=self.procid, msgid=self.msgid))
 
 
-def check_ascii(text: str, limit: int, field: str, sd_name: bool=False) -> None:
+pure def check_ascii(text: str, limit: int, field: str, sd_name: bool=False) -> None:
     data = text.encode()
     if len(data) == 0 or len(data) > limit:
         raise ValueError("Invalid syslog {field} length")
@@ -238,7 +238,7 @@ def decimal(text: str, field: str) -> int:
     return int(text)
 
 
-def check_timestamp(value: str) -> None:
+pure def check_timestamp(value: str) -> None:
     if len(value) < 20 or value[4] != "-" or value[7] != "-" or value[10] != "T" or value[13] != ":" or value[16] != ":":
         raise invalid_timestamp_error
     year = decimal(value[:4], "timestamp year")
@@ -277,7 +277,7 @@ def check_message(message: ?bytes) -> None:
         message[3:].decode()
 
 
-def encode_structured_data(elements: dict[str, list[(name: str, value: str)]]) -> bytes:
+pure def encode_structured_data(elements: dict[str, list[(name: str, value: str)]]) -> bytes:
     if len(elements) == 0:
         return b"-"
     parts: list[bytes] = []
@@ -323,7 +323,7 @@ def encode(message: Message) -> bytes:
     return result
 
 
-def read_structured_data(data: bytes) -> (dict[str, list[(name: str, value: str)]], int):
+pure def read_structured_data(data: bytes) -> (dict[str, list[(name: str, value: str)]], int):
     if data.startswith(b"-"):
         return {}, 1
     elements: dict[str, list[(name: str, value: str)]] = {}
@@ -549,7 +549,7 @@ actor Client(cap: net.UDPConnectCap, address: str, port: int,
         if c is not None:
             c.close()
 
-    proc def __startup__():
+    def __startup__():
         after 0: start()
 
 
@@ -619,7 +619,7 @@ actor Server(cap: net.UDPListenCap, address: str, port: int,
         if listener is not None:
             listener.close()
 
-    proc def __startup__():
+    def __startup__():
         after 0: start()
 
 
@@ -865,7 +865,7 @@ actor StreamClient(cap: net.TCPConnectCap, address: str, port: int,
         """Close the connection and discard startup messages. Idempotent."""
         close_connection()
 
-    proc def __startup__():
+    def __startup__():
         after 0: start()
 
 
@@ -1054,5 +1054,5 @@ actor StreamServer(cap: net.TCPListenCap, address: str, port: int,
             close_connection()
         _connections = {}
 
-    proc def __startup__():
+    def __startup__():
         after 0: start()

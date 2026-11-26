@@ -5,5 +5,5 @@ Building file test/typeerrors/ex24.act using temporary scratch directory
      |
    5 |     b: dict[str, str] = {}
      :             ^-- 
-     :             `- Incompatible types __builtin__.str and ?T_12
+     :             `- Incompatible types __builtin__.str and ?T_13
 -----+

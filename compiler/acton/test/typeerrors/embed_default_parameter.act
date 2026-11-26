@@ -1,0 +1,3 @@
+# An embed expression as the default value of a parameter
+def page(body: bytes = embed("embed_default_parameter.txt")) -> bytes:
+    return body

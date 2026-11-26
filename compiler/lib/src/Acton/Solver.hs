@@ -20,6 +20,7 @@ import qualified Data.Map.Strict as Map
 import Data.Map.Strict (Map)
 import qualified Data.IntSet as IntSet
 import qualified Data.Set as Set
+import qualified Data.IntMap.Strict as IntMap
 import qualified Control.Exception
 import Control.DeepSeq
 
@@ -369,8 +370,9 @@ solve' env select hist te eq cs
                 cond (RTry v as r : rs)     = RTry v (if rev' then subrev ts' else ts') rev'
                   where ts                  = foldr (typeIntersect env) as $ map alts rs
                         ts'                 = if v `elem` optvs then typeDiff env ts [tOpt tWild] else ts
---                        rev'                = (or $ r : map rev rs) || v `elem` posvs       -- (new, matches new solver but picks bad order for lower None)
-                        rev'                = (and $ r : map rev rs) || v `elem` posvs ||
+                        -- Prefer smaller candidates whenever a lower bound exists,
+                        -- or the variable occurs positively.
+                        rev'                = (or $ r : map rev rs) || v `elem` posvs ||
                                                 v `Set.member` protocolReceivers
                 cond (RVar v as : rs)       = RVar v (foldr (typeUnion env) as $ map alts rs)
                 cond (RSkip : rs)           = RSkip
@@ -381,6 +383,7 @@ solve' env select hist te eq cs
                   where (ts1,ts2)           = partition (\t' -> castable' t' t) ts
 
                 -- Interim: the env above is a simplification, it won't necessarily contain all TVars
+                castable' (TFX _ fx1) (TFX _ fx2) = subeffect fx1 fx2
                 castable' t'@TVar{} t       = True      -- But a TVar is less than any of its bounds anyway
                 castable' t' t@TVar{}       = False     -- And vice versa
                 castable' t' t              = castable env t' t
@@ -614,8 +617,8 @@ allBelow env (TFun _ _ _ _ _)       = [tFun tWild tWild tWild tWild]
 allBelow env (TTuple _ _ _)         = [tTuple tWild tWild]
 allBelow env (TFX _ fx)             = [tTFX candidate | candidate <- effectsInProgramOrder, subeffect candidate fx]
 
-allBelowProto env (TC n [t@TFX{},_])
-  | n == primWrappedP               = [ schematic (wtype w) | w <- witsByPName env n, t == (head $ tcargs $ proto w) ]
+allBelowProto env (TC n [t@TFX{}])
+  | n `elem` callProtocols               = [ schematic (wtype w) | w <- witsByPName env n, t == (head $ tcargs $ proto w) ]
 allBelowProto env p
   | p == pIdentity                  = ts ++ [ schematic $ tCon tc | tc <- tyactorsAll env ++ importedActors env ]
   | p == pEq                        = ts ++ [tTuple tWild tWild, tOpt tWild]
@@ -727,7 +730,7 @@ reduce' eq c@(Sel info env w t1@(TTuple _ _ r) n t2)
                                                  select r
   where select (TRow _ _ n' t _ r)
           | n == n'                         = do w' <- newWitness
-                                                 let e = eLambda [(px0,t1)] (eDot (eCallVar w' [eVar px0]) n)
+                                                 let e = eLambda [(px0,t1)] (eCallVar w' [eDot (eVar px0) n])
                                                  reduce (mkEqn env w (wFun t1 t2) e : eq) [Sub info env w' t t2]
           | otherwise                       = select r
         select (TStar _ _ r)                = do w' <- newWitness
@@ -760,8 +763,7 @@ reduce' eq (Seal info env t@(TCon _ tc))
 --  | castable env t tObject                  = tyerr t "Leaking actor seal:"                       -- when we start prohibit sharing of mutable data
   | otherwise                               = reduce eq (map (Seal info env) $ tcargs tc)
 reduce' eq (Seal _ env t@(TFX _ fx))
---  | fx `elem` [FXMut,FXProc]                = tyerr t "Leaking actor seal:"
---  | fx `elem` [FXProc]                      = tyerr t "Leaking actor seal:"
+  | fx `elem` [FXMut,FXProc]                = tyerr t "Leaking actor seal:"
   | otherwise                               = return eq
 reduce' eq (Seal info env t)                = reduce eq (map (Seal info env) ts)
   where ts                                  = leaves t
@@ -1115,6 +1117,18 @@ sub env info eq w t1 t2                     = do t1' <- usubst t1
 
 sub'                                        :: Env -> ErrInfo -> Equations -> Name -> Type -> Type ->TypeM Equations
 
+sub' env info eq w t1 t2
+  | t1 == fxPure, t2 == fxAction           = do let sc = effectWitnessSchema t1 t2
+                                                    e = tApp (eQVar primPureToAction) (map tVar $ qbound $ scbind sc)
+                                                return (mkPolyEqn env w sc e : eq)
+  | effectType t1 && effectType t2,
+    t1 /= t2 && (isUnivar t1 || isUnivar t2)
+                                            = do defer [Sub info env w t1 t2]; return eq
+  | effectType t1 && effectType t2          = do cast env info t1 t2
+                                                 let sc = effectWitnessSchema t1 t2
+                                                     source = rtype $ posrow $ sctype sc
+                                                 return (mkPolyEqn env w sc (eLambda [(px0,source)] (eVar px0)) : eq)
+
 sub' env _ eq w t1@TWild{} t2               = return (idwit env w t1 t2 : eq)
 sub' env _ eq w t1 t2@TWild{}               = return (idwit env w t1 t2 : eq)
 
@@ -1130,10 +1144,14 @@ sub' env info eq w t1@(TFun _ fx1 p1 k1 t1') t2@(TFun _ fx2 p2 k2 t2')
                                                  t1 <- usubst t1
                                                  t2 <- usubst t2
                                                  w' <- newWitness
+                                                 wfx <- newWitness
                                                  let (TFun _ fx1 p1 k1 t1', TFun _ fx2 p2 k2 t2') = (t1, t2)
                                                      (pp,pk) = (pPar pNames p2, kPar attrKW k2)
-                                                     lambda = eLambda [(px0,t1)] $ Lambda l0 pp pk (eCallVar w' [Call l0 (eVar px0) ap ak]) fx1
-                                                 reduce (mkEqn env w (wFun t1 t2) lambda : eq) (Cast info env fx1 fx2 : Sub info env w' t1' t2':cs1++cs2)
+                                                     captured = head $ xNames \\ (px0 : free ap ++ free ak)
+                                                     adapter = Lambda l0 pp pk (eCallVar w' [Call l0 (eVar captured) ap ak]) fx1
+                                                     conversion = tApp (eVar wfx) [p2,k2,t2']
+                                                     lambda = eLambda [(px0,t1)] $ Let l0 [sAssign (pVar captured t1) (eVar px0)] (eCall conversion [adapter])
+                                                 reduce (mkEqn env w (wFun t1 t2) lambda : eq) (Sub info env wfx fx1 fx2 : Sub info env w' t1' t2':cs1++cs2)
 
 --                     existing            expected
 sub' env info eq w t1@(TTuple _ p1 k1) t2@(TTuple _ p2 k2)
@@ -1172,6 +1190,7 @@ sub' env info eq w t1@(TUni _ tv1) t2@(TUni _ tv2)
 
 sub' env info eq w t1@TUni{} t2@TCon{}      = do defer [Sub info env w t1 t2]; return eq
 sub' env info eq w t1@TCon{} t2@TUni{}      = do defer [Sub info env w t1 t2]; return eq
+
 
 sub' env info eq w t1 t2                    = do cast env info t1 t2
                                                  return (idwit env w t1 t2 : eq)
@@ -1627,35 +1646,48 @@ varinfo cs                                  = f cs (VInfo [] [] [] Map.empty Map
     f []                                    = Just
     f (_ : cs)                              = \_ -> Nothing
 
-varclose xys                                = clos [] xys
-  where clos cl []                          = Right cl
-        clos cl ((x,y):xys)
-          | (x,y) `elem` cl                 = clos cl xys
+-- Keep adjacency lists in closure insertion order. The indexes avoid repeated
+-- scans without changing the first cycle found or the returned edge order.
+varclose xys                                = clos [] IntMap.empty IntMap.empty IntMap.empty xys
+  where clos cl _ _ _ []                    = Right cl
+        clos cl seen down up ((x,y):xys)
+          | uvid y `IntSet.member` outgoing = clos cl seen down up xys
           | not $ null common               = Left (x,y:common)
-          | otherwise                       = clos ((x,y):cl)  (new_below++new_above++xys)
-          where below_x                     = below x cl
-                above_y                     = above y cl
-                common                      = below_x `intersect` above_y
+          | otherwise                       = clos ((x,y):cl) seen' down' up' (new_below++new_above++xys)
+          where outgoing                    = IntMap.findWithDefault IntSet.empty (uvid x) seen
+                below_x                     = IntMap.findWithDefault [] (uvid x) down
+                above_y                     = IntMap.findWithDefault [] (uvid y) up
+                above_y_set                 = IntMap.findWithDefault IntSet.empty (uvid y) seen
+                common                      = filter (\v -> uvid v `IntSet.member` above_y_set) below_x
                 new_below                   = [ (w,y) | w <- below_x ]
                 new_above                   = [ (x,v) | v <- above_y ]
+                seen'                       = IntMap.insert (uvid x) (IntSet.insert (uvid y) outgoing) seen
+                down'                       = IntMap.insertWith (++) (uvid y) [x] down
+                up'                         = IntMap.insertWith (++) (uvid x) [y] up
 
 below x cl                                  = [ v | (v,w) <- cl, w==x ]
 above y cl                                  = [ w | (v,w) <- cl, v==y ]
 
-gsimp vi cl obs []                      = []
-gsimp vi cl obs ((x,y):xys)
-  | not subsumed                        = gsimp vi cl obs xys
-  | x_obs && y_obs                      = gsimp vi cl obs xys
-  | x_obs                               = (x,y) : gsimp vi cl (y:obs) xys
-  | y_obs                               = (x,y) : gsimp vi cl (x:obs) xys
-  | otherwise                           = (x,y) : gsimp vi cl obs xys
-  where subsumed                        = (above x cl \\ [y]) `eq` above y cl && (below y cl \\ [x]) `eq` below x cl &&
-                                          lookup' x (ubounds vi) `subset` lookup' y (ubounds vi) && lookup' y (lbounds vi) `subset` lookup' x (lbounds vi) &&
-                                          rng (lookup' x (pbounds vi)) `eq` rng (lookup' y (pbounds vi))
-        a `eq` b                        = a `subset` b && b `subset` a
-        a `subset` b                    = all (`elem` b) a
-        x_obs                           = x `elem` obs
-        y_obs                           = y `elem` obs
+-- Reuse ordered adjacency lists throughout this simplification pass.
+gsimp vi cl obs xys                         = go (IntSet.fromList $ map uvid obs) xys
+  where ups                                 = foldr (\(x,y) -> IntMap.insertWith (++) (uvid x) [y]) IntMap.empty cl
+        downs                               = foldr (\(x,y) -> IntMap.insertWith (++) (uvid y) [x]) IntMap.empty cl
+        above' x                            = IntMap.findWithDefault [] (uvid x) ups
+        below' x                            = IntMap.findWithDefault [] (uvid x) downs
+        go obs []                           = []
+        go obs ((x,y):xys)
+          | not subsumed                    = go obs xys
+          | x_obs && y_obs                  = go obs xys
+          | x_obs                           = (x,y) : go (IntSet.insert (uvid y) obs) xys
+          | y_obs                           = (x,y) : go (IntSet.insert (uvid x) obs) xys
+          | otherwise                       = (x,y) : go (IntSet.insert (uvid x) obs) xys
+          where subsumed                    = (above' x \\ [y]) `eq` above' y && (below' y \\ [x]) `eq` below' x &&
+                                              lookup' x (ubounds vi) `subset` lookup' y (ubounds vi) && lookup' y (lbounds vi) `subset` lookup' x (lbounds vi) &&
+                                              rng (lookup' x (pbounds vi)) `eq` rng (lookup' y (pbounds vi))
+                x_obs                       = uvid x `IntSet.member` obs
+                y_obs                       = uvid y `IntSet.member` obs
+        a `eq` b                            = a `subset` b && b `subset` a
+        a `subset` b                        = all (`elem` b) a
 
 instwild env k (TWild _)                = newUnivarOfKind k env
 instwild env _ (TFun l e p k t)         = TFun l <$> instwild env KFX e <*> instwild env PRow p <*> instwild env KRow k <*> instwild env KType t
@@ -1835,7 +1867,6 @@ multiLBounds cs                         = Map.assocs $ Map.map deEnv $ Map.filte
 
 dnClosed env (TCon _ c)                 = isActor env (tcname c)
 dnClosed env (TFX _ FXPure)             = True
-dnClosed env (TFX _ FXAction)           = True
 dnClosed env (TNone _)                  = True
 dnClosed env (TNil _ _)                 = True
 dnClosed env _                          = False
@@ -1911,7 +1942,7 @@ ctxtRed env multiPBnds                  = (concat eqs, concat unis)
         red (v,wps)                     = imp v [] [] [] wps
         imp v eq uni wps ((w,p,i):wps')
           | (e,p',j):_ <- hits          = --trace ("  *" ++ prstr w ++ " (level " ++ show i ++ ") covered by " ++ prstr e ++ " (level " ++ show j ++ ")") $
-                                          imp v (Eqn (min i j) w (proto2type (tUni v) p) e : eq) ((tcargs p `zip` tcargs p') ++ uni) wps wps'
+                                          imp v (Eqn (min i j) w (monotype $ proto2type (tUni v) p) e : eq) ((tcargs p `zip` tcargs p') ++ uni) wps wps'
           | otherwise                   = --trace ("   (Not covered: " ++ prstr p ++ " in context " ++ prstrs [ w | (w,_,_) <- wps++wps' ] ++ ")") $
                                           imp v eq uni ((w,p,i):wps) wps'
           where hits                    = [ (wf $ eVar w', vsubst s p', j) | (w',p0,j) <- wps++wps', j <= i, Just (wf,p') <- [findAncestor env p0 (tcname p)] ]
@@ -1948,6 +1979,20 @@ app2nd _ tx e es                        = Lambda NoLoc p' k' (Call NoLoc e (PosA
   where TFun _ fx p k _                 = tx                    -- If it already takes a first argument, it must be a function!
         (p',k')                         = (pPar pNames p, kPar attrKW k)
         PosArg pSelf pArgs              = pArg p'
+
+-- An effect witness transforms functions and is generic in both argument
+-- rows and the result. Effects themselves are never passed as runtime values.
+effectType TFX{} = True
+effectType (TVar _ v) = tvkind v == KFX
+effectType (TUni _ v) = uvkind v == KFX
+effectType _ = False
+
+effectWitnessSchema fx1 fx2 = tSchema (map qbind [a,b,c]) $ wFun (fun fx1) (fun fx2)
+  where fun fx = tFun fx (tVar a) (tVar b) (tVar c)
+        a0:b0:c0:_ = tvarSupply \\ vfree [fx1,fx2]
+        a = a0{ tvkind = PRow }
+        b = b0{ tvkind = KRow }
+        c = c0{ tvkind = KType }
 
 idwit env w t1 t2                       = mkEqn env w (wFun t1 t2) (eLambda [(px0,t1)] (eVar px0))
 

@@ -1,0 +1,7 @@
+[error Compilation error]: web is a directory, and embed takes one file. For the files of a directory use a derived module, for example with the function std.build.derive.embed_files
+     +--> page.act@2:15-2:27
+     |
+   2 | page: bytes = embed("web")
+     :               ^-----------
+     :               `- web is a directory, and embed takes one file. For the files of a directory use a derived module, for example with the function std.build.derive.embed_files
+-----+

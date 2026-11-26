@@ -12,9 +12,9 @@ actor MathTester ():
 pure def _test_foo () -> None:
     pass
 
-W__test_SimpleSyncTester_362: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+W__test_SimpleSyncTester_373: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
 
-W__test_SimpleSyncTester_328: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
+W__test_SimpleSyncTester_341: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
 
 # recursive group:
 actor _test_SimpleSyncTester ():
@@ -22,7 +22,11 @@ actor _test_SimpleSyncTester ():
     proc def __startup__ () -> None:
         m: MathTester = MathTester()
         print@[(__builtin__.str,)](*("SimpleSyncTester.test()",), sep = " ", end = "\\n", err = False, flush = False)
-        testing.assertEqual@[__builtin__.int](W__test_SimpleSyncTester_328, a = m.add(a = W__test_SimpleSyncTester_362.__fromatom__(1), b = W__test_SimpleSyncTester_362.__fromatom__(2)), b = W__test_SimpleSyncTester_362.__fromatom__(3), msg = "1 + 2 = 3", print_vals = True, print_diff = True)
+        testing.assertEqual@[__builtin__.int](W__test_SimpleSyncTester_341, a = let:
+                                                                                    G_1x: action(__builtin__.int, __builtin__.int) -> __builtin__.int = let:
+                                                                                                                                                            G_2x: action(a: __builtin__.int, b: __builtin__.int) -> __builtin__.int = m.add
+                                                                                                                                                        in action lambda (G_1p : __builtin__.int, G_2p : __builtin__.int): G_2x(a = G_1p, b = G_2p)
+                                                                                in await (async G_1x)(W__test_SimpleSyncTester_373.__fromatom__(1), W__test_SimpleSyncTester_373.__fromatom__(2)), b = W__test_SimpleSyncTester_373.__fromatom__(3), msg = "1 + 2 = 3", print_vals = True, print_diff = True)
     $MarkStartup((async $WRAP@[(), (), None](self, __startup__))())
 actor _SyncTester (t : testing.SyncT):
     __startup__ : action() -> None
@@ -31,14 +35,22 @@ actor _SyncTester (t : testing.SyncT):
         m: MathTester = MathTester()
         log.info(msg = "SyncTester.test()", data = None)
         print@[(__builtin__.str,)](*("SyncTester.test()",), sep = " ", end = "\\n", err = False, flush = False)
-        testing.assertEqual@[__builtin__.int](W__test_SimpleSyncTester_328, a = m.add(a = W__test_SimpleSyncTester_362.__fromatom__(1), b = W__test_SimpleSyncTester_362.__fromatom__(2)), b = W__test_SimpleSyncTester_362.__fromatom__(3), msg = "1 + 2 = 3", print_vals = True, print_diff = True)
+        testing.assertEqual@[__builtin__.int](W__test_SimpleSyncTester_341, a = let:
+                                                                                    G_1x: action(__builtin__.int, __builtin__.int) -> __builtin__.int = let:
+                                                                                                                                                            G_2x: action(a: __builtin__.int, b: __builtin__.int) -> __builtin__.int = m.add
+                                                                                                                                                        in action lambda (G_1p : __builtin__.int, G_2p : __builtin__.int): G_2x(a = G_1p, b = G_2p)
+                                                                                in await (async G_1x)(W__test_SimpleSyncTester_373.__fromatom__(1), W__test_SimpleSyncTester_373.__fromatom__(2)), b = W__test_SimpleSyncTester_373.__fromatom__(3), msg = "1 + 2 = 3", print_vals = True, print_diff = True)
     $MarkStartup((async $WRAP@[(), (), None](self, __startup__))())
 actor _SyncTesterCore ():
     __startup__ : action() -> None
     proc def __startup__ () -> None:
         m: MathTester = MathTester()
         print@[(__builtin__.str,)](*("SimpleSyncTester.test()",), sep = " ", end = "\\n", err = False, flush = False)
-        testing.assertEqual@[__builtin__.int](W__test_SimpleSyncTester_328, a = m.add(a = W__test_SimpleSyncTester_362.__fromatom__(1), b = W__test_SimpleSyncTester_362.__fromatom__(2)), b = W__test_SimpleSyncTester_362.__fromatom__(3), msg = "1 + 2 = 3", print_vals = True, print_diff = True)
+        testing.assertEqual@[__builtin__.int](W__test_SimpleSyncTester_341, a = let:
+                                                                                    G_1x: action(__builtin__.int, __builtin__.int) -> __builtin__.int = let:
+                                                                                                                                                            G_2x: action(a: __builtin__.int, b: __builtin__.int) -> __builtin__.int = m.add
+                                                                                                                                                        in action lambda (G_1p : __builtin__.int, G_2p : __builtin__.int): G_2x(a = G_1p, b = G_2p)
+                                                                                in await (async G_1x)(W__test_SimpleSyncTester_373.__fromatom__(1), W__test_SimpleSyncTester_373.__fromatom__(2)), b = W__test_SimpleSyncTester_373.__fromatom__(3), msg = "1 + 2 = 3", print_vals = True, print_diff = True)
     $MarkStartup((async $WRAP@[(), (), None](self, __startup__))())
 # (recursive group)
 
@@ -46,33 +58,37 @@ com def _test_simple_sync () -> None:
     s: _SyncTesterCore = _SyncTesterCore()
 
 proc def _test_sync (t : testing.SyncT) -> __builtin__.str:
-    W__test_sync_11: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+    W__test_sync_33: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
     m: MathTester = MathTester()
-    return str(val = m.add(a = W__test_sync_11.__fromatom__(1), b = W__test_sync_11.__fromatom__(2)))
+    return str(val = let:
+                         G_1x: action(__builtin__.int, __builtin__.int) -> __builtin__.int = let:
+                                                                                                 G_2x: action(a: __builtin__.int, b: __builtin__.int) -> __builtin__.int = m.add
+                                                                                             in action lambda (G_1p : __builtin__.int, G_2p : __builtin__.int): G_2x(a = G_1p, b = G_2p)
+                     in await (async G_1x)(W__test_sync_33.__fromatom__(1), W__test_sync_33.__fromatom__(2)))
 
 # recursive group:
 actor AsyncTester (t : testing.AsyncT):
     __startup__ : action() -> None
     proc def __startup__ () -> None:
-        W_AsyncTester_31: __builtin__.Hashable[__builtin__.str] = __builtin__.HashableD_str()
-        W_AsyncTester_57: __builtin__.Number[__builtin__.float] = __builtin__.RealFloatD_float()
+        W_AsyncTester_30: __builtin__.Hashable[__builtin__.str] = __builtin__.HashableD_str()
+        W_AsyncTester_60: __builtin__.Number[__builtin__.float] = __builtin__.RealFloatD_float()
         log: logging.Logger = logging.Logger(handler = t.log_handler)
-        proc def test () -> None:
-            log.info(msg = "AsyncTester.test()", data = $mkDict@[__builtin__.str, __builtin__.str](W_AsyncTester_31, {"data": "test"}))
+        com def test () -> None:
+            log.info(msg = "AsyncTester.test()", data = $mkDict@[__builtin__.str, __builtin__.str](W_AsyncTester_30, {"data": "test"}))
             t.success(output = None)
-        after W_AsyncTester_57.__fromatom__(0): test()
+        after W_AsyncTester_60.__fromatom__(0): test()
     $MarkStartup((async $WRAP@[(), (), None](self, __startup__))())
 actor EnvTester (t : testing.EnvT):
     __startup__ : action() -> None
     proc def __startup__ () -> None:
-        W_AsyncTester_162: __builtin__.Hashable[__builtin__.str] = __builtin__.HashableD_str()
-        W_AsyncTester_220: __builtin__.Number[__builtin__.float] = __builtin__.RealFloatD_float()
+        W_AsyncTester_169: __builtin__.Hashable[__builtin__.str] = __builtin__.HashableD_str()
+        W_AsyncTester_231: __builtin__.Number[__builtin__.float] = __builtin__.RealFloatD_float()
         log: logging.Logger = logging.Logger(handler = t.log_handler)
-        proc def test () -> None:
-            log.info(msg = "EnvTester.test() wthreads:", data = $mkDict@[__builtin__.str, __builtin__.int](W_AsyncTester_162, {"nr_wthreads": t.env.nr_wthreads}))
+        com def test () -> None:
+            log.info(msg = "EnvTester.test() wthreads:", data = $mkDict@[__builtin__.str, __builtin__.int](W_AsyncTester_169, {"nr_wthreads": t.env.nr_wthreads}))
             print@[(__builtin__.str, __builtin__.int)](*("EnvTester.test() wthreads:", t.env.nr_wthreads), sep = " ", end = "\\n", err = False, flush = False)
             t.success(output = None)
-        after W_AsyncTester_220.__fromatom__(0): test()
+        after W_AsyncTester_231.__fromatom__(0): test()
     $MarkStartup((async $WRAP@[(), (), None](self, __startup__))())
 # (recursive group)
 

@@ -50,6 +50,7 @@ import qualified Text.Megaparsec.Debug as D
 import qualified Data.List.NonEmpty
 import qualified Acton.Syntax as S
 import qualified Acton.Builtin as Builtin
+import Acton.Embed (pathProblem)
 import qualified Acton.Names as Names
 import Utils
 import Debug.Trace
@@ -57,6 +58,9 @@ import System.IO.Unsafe
 
 -- Custom error types for better structured error handling
 data CustomParseError = TypeVariableNameError String  -- Name that looks like type variable
+                      | EmbedAsName  -- The reserved word embed in the place of a name
+                      | EmbedForm  -- The word embed before parentheses that hold other than one path in double quotes
+                      | EmbedPath String  -- A path that embed cannot take, with the message of Acton.Embed.pathProblem
                       | InvalidFormatSpecifier String
                       | MissingClosingQuote String  -- String is the quote type (e.g., "\"\"\"" or "'")
                       | TooManyQuotesError String
@@ -92,6 +96,9 @@ data CustomParseError = TypeVariableNameError String  -- Name that looks like ty
 
 instance ShowErrorComponent CustomParseError where
   showErrorComponent (TypeVariableNameError name) = "Invalid name (reserved for type variables)"
+  showErrorComponent EmbedAsName = "embed is a reserved word and cannot be a name"
+  showErrorComponent EmbedForm = "embed takes one path in double quotes, as in embed(\"web/index.html\")"
+  showErrorComponent (EmbedPath problem) = problem
   showErrorComponent (InvalidFormatSpecifier spec) = "Invalid format specifier" ++ if null spec then "" else ": " ++ spec
   showErrorComponent (MissingClosingQuote quote) = "missing closing " ++ quote
   showErrorComponent (TooManyQuotesError quote) = "too many quote characters"
@@ -172,6 +179,16 @@ parseModuleSerial qn fileName fileContent mReportProgress = do
         Left err -> Control.Exception.throw err
         Right (i,mdoc,s) -> return $ S.Module qn i mdoc s
 
+-- | Parse the text of a Build.act.  It has the syntax of a module, and an
+-- attribute may also be written .*, which gives Dot with the name * at the
+-- location of that one character.
+parseBuildFile :: String -> IO S.Module
+parseBuildFile content = do
+    warmUpParser
+    case runParser (St.evalStateT file_input initState { psBuildAct = True }) "Build.act" (addFinalNewline content) of
+      Left err            -> Control.Exception.throwIO err
+      Right (is, mdoc, s) -> return (S.Module (S.ModName []) is mdoc s)
+
 parseModuleImports :: String -> String -> IO [S.Import]
 parseModuleImports fileName fileContent = fst <$> parseModuleHeader fileName fileContent
 
@@ -251,7 +268,7 @@ srcSpanAt (Loc l r) src = sp
 --
 -- The chunked parser makes this likely.  Its workers start together and
 -- apply the same parser CAFs for the first time at the same moment, in the
--- first parse of every process (Build.act).  -fno-full-laziness keeps parser
+-- first parse of a module in every process.  -fno-full-laziness keeps parser
 -- subexpressions out of CAFs, but the top-level parsers and the static
 -- operator tables remain CAFs.
 --
@@ -481,6 +498,7 @@ data ParserState = ParserState
   { psContexts :: [CTX]
   , psProgress :: Maybe ParseProgressReporter
   , psIndentation :: !Indentation
+  , psBuildAct :: Bool                  -- the text is a Build.act, where an attribute may be written .*
   }
 
 data ParseProgressReporter = ParseProgressReporter
@@ -495,7 +513,7 @@ pushCtx ctx st = st { psContexts = ctx : psContexts st }
 popCtx st      = st { psContexts = tail (psContexts st) }
 getCtxs        = psContexts
 
-initState        = ParserState [] Nothing noIndentation
+initState        = ParserState [] Nothing noIndentation False
 
 parserStateWithProgress :: String -> Maybe (Int -> Int -> IO ()) -> IO ParserState
 parserStateWithProgress contentWithNewline mReportProgress =
@@ -1464,9 +1482,15 @@ identifier = (lexeme . try) $ do
     c <-  satisfy (\c -> isAlpha c || c=='_') <?> "identifier"
     cs <- hidden (takeWhileP Nothing (\c -> isAlphaNum c || c=='_'))
     let x = c:cs
-    if S.isKeyword x
-      then parseError (TrivialError off (Just (Tokens (N.fromList x))) (Set.fromList [Label (N.fromList "identifier")]))
-      else return x
+    -- embed is read as a name, and the error is kept with the parse state. An
+    -- alternative of the grammar that fails takes the error back with it, and
+    -- a parse that keeps the name reports it. Each other reserved word fails
+    -- here, on the way to its own statement or expression.
+    if x == "embed"
+      then x <$ registerParseError (FancyError off (Set.fromList [ErrorCustom EmbedAsName]))
+      else if S.isKeyword x
+        then parseError (TrivialError off (Just (Tokens (N.fromList x))) (Set.fromList [Label (N.fromList "identifier")]))
+        else return x
 
 name, escname, tvarname :: Parser S.Name
 name = do off <- getOffset
@@ -2674,6 +2698,24 @@ isinstance = addLoc $ do
                 (e,c) <- parens ((,) <$> expr <* comma <*> qual_name)
                 return $ S.IsInstance NoLoc e c
 
+-- embed("path"): the word and, in parentheses, one path in double quotes. The
+-- characters between the quotes are the path as written, on one line. The
+-- word before anything but a parenthesis is left to the parser of a name,
+-- which reports it.
+embed :: Parser S.Expr
+embed = do
+          off <- getOffset
+          try (rword "embed" *> lookAhead (char '('))
+          form <- optional (try (withCtx PAR (L.symbol sc2 "(" *> withLoc path <* sc2 <* char ')')))
+          end <- getOffset
+          currSC
+          case form of
+            Nothing -> parseException (Loc off (off + length "embed")) EmbedForm
+            Just (l,p) -> case pathProblem p of
+                            Just problem -> parseException l (EmbedPath problem)
+                            Nothing -> return $ S.Embed (Loc off end) p Nothing
+  where path = char '"' *> takeWhileP Nothing (\c -> c /= '"' && c /= '\n') <* char '"'
+
 -- recurring pattern below
 commaList p = many (try (comma *> p)) <* optional comma
 
@@ -2720,7 +2762,9 @@ atom_expr = do
                 finish (Nothing,_,outerOpt,e) = (outerOpt,e)
         
         atom :: Parser S.Expr
-        atom =  addLoc (try strings
+        atom =  embed
+               <|>
+                addLoc (try strings
                <|>
                  ((try . parens) $ return $ S.Paren NoLoc (S.Tuple NoLoc S.PosNil S.KwdNil))
                <|>
@@ -2808,7 +2852,7 @@ atom_expr = do
                         <|>
                          (do
                             dot
-                            f <- try intdot <|> iddot <|> strdot
+                            f <- try intdot <|> iddot <|> strdot <|> stardot
                             return (COther,f))
                         <?> "call arguments, slice/index expression")
                      return (l,kind,f)
@@ -2824,6 +2868,15 @@ atom_expr = do
                  strdot = do
                         (l,ss) <- withLoc plainstrLiteral
                         return (\a -> S.Dot (loc a `upto` l) a (S.Name l (S.packText (head ss))))
+                 -- The attribute .* of a Build.act.  In any other text it
+                 -- matches nothing.
+                 stardot = do
+                        ok <- St.gets psBuildAct
+                        if not ok then empty else do
+                          off <- getOffset
+                          _ <- singleStar
+                          let l = Loc off (off+1)
+                          return (\a -> S.Dot (loc a `upto` l) a (S.Name l (S.packText "*")))
 
                  -- Parse slice or index: try slice first since it can start with expr
                  sliceOrIndex = try sliceParser <|> indexParser

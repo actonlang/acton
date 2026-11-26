@@ -1236,5 +1236,5 @@ actor Client(cap: net.TCPConnectCap, address: str, on_connect: action(Client) ->
         _log.debug("Sending request", {"method": "DELETE", "path": path})
         _send_request("DELETE", req, on_response)
 
-    proc def __startup__():
+    def __startup__():
         _connect()

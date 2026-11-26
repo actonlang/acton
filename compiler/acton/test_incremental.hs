@@ -21,6 +21,7 @@ import           Data.Maybe (isJust, isNothing)
 import           System.Directory
 import           System.Environment (getEnvironment)
 import           System.Exit
+import           GHC.IO.Encoding (getFileSystemEncoding)
 import           System.FilePath
 import           System.IO (Handle, IOMode(ReadWriteMode), hSetFileSize, withFile)
 import           System.IO.Temp (withSystemTempDirectory)
@@ -576,7 +577,7 @@ rewriteTy version tyPath change = do
   let updated = change stored { InterfaceFiles.storedNames = nameHashes }
   InterfaceFiles.writeFileWithVersion version (InterfaceFiles.storedCompiler updated) tyPath
     (InterfaceFiles.storedSourceHash updated) (InterfaceFiles.storedPubHash updated) (InterfaceFiles.storedImplHash updated)
-    (InterfaceFiles.storedSourceMeta updated) (InterfaceFiles.storedImports updated) (InterfaceFiles.storedDepModules updated)
+    (InterfaceFiles.storedSourceMeta updated) (InterfaceFiles.storedEmbeds updated) (InterfaceFiles.storedImports updated) (InterfaceFiles.storedDepModules updated)
     (InterfaceFiles.storedNames updated) escapeSummaries (InterfaceFiles.storedRoots updated) (InterfaceFiles.storedTests updated)
     (InterfaceFiles.storedDoc updated) (InterfaceFiles.storedInterface updated) (InterfaceFiles.storedTyped updated)
 
@@ -634,6 +635,18 @@ sourceFileMetaForPath path = do
     , InterfaceFiles.sfmDevice = Just (fromIntegral (deviceID st))
     , InterfaceFiles.sfmInode = Just (fromIntegral (fileID st))
     }
+
+-- | The embedded files that a .tydb records.
+readTyEmbeds :: FilePath -> IO [InterfaceFiles.EmbeddedFile]
+readTyEmbeds tyPath = InterfaceFiles.summaryEmbeds <$> InterfaceFiles.readHeaderSummary tyPath
+
+-- | A file below a project root as a .tydb records an embedded file: its
+-- path with the size, the SHA-256 and the stat that the file has now.
+embeddedNow :: FilePath -> FilePath -> IO InterfaceFiles.EmbeddedFile
+embeddedNow proj path = do
+  stat <- sourceFileMetaForPath (proj </> path)
+  sha <- Compile.hashOfFile (proj </> path)
+  pure (InterfaceFiles.EmbeddedFile path (InterfaceFiles.sfmSize stat) sha stat)
 
 setFileMTimeNs :: FilePath -> Integer -> IO ()
 setFileMTimeNs path mtimeNs =
@@ -1716,7 +1729,8 @@ p27_overlay_source_provider = testCase "27-overlay snapshots drive readModuleTas
       -- than this test program, which reads it.
       readOpts = C.defaultCompileOptions { C.ignore_compiler_version = True }
   (paths, moduleA) <- Project.findPaths actAAbs C.defaultCompileOptions
-  taskSame <- Compile.readModuleTask spSame quietGlobalOptions readOpts paths moduleA actAAbs
+  facts <- Compile.newFileFacts
+  taskSame <- Compile.readModuleTask spSame quietGlobalOptions readOpts facts paths moduleA actAAbs
   case taskSame of
     Compile.TyTask _ -> pure ()
     _ -> assertFailure "expected TyTask when overlay matches header"
@@ -1727,7 +1741,7 @@ p27_overlay_source_provider = testCase "27-overlay snapshots drive readModuleTas
         , Source.ssBytes = bytesDiff
         }
       spDiff = disk { Source.spReadOverlay = \path -> return (if path == actAAbs then Just snapDiff else Nothing) }
-  taskDiff <- Compile.readModuleTask spDiff quietGlobalOptions readOpts paths moduleA actAAbs
+  taskDiff <- Compile.readModuleTask spDiff quietGlobalOptions readOpts facts paths moduleA actAAbs
   case taskDiff of
     Compile.ParseTask source _ doc -> do
       Compile.sourceText source @?= textDiff
@@ -2367,8 +2381,7 @@ p36c_private_name_rechecks_dependent_on_one_scheduler =
               mapM_ (logLine reportedByB . renderDiagnostic) diags
         onEvent _ = return ()
         renderDiagnostic d = show (unAnnotate (prettyDiagnostic WithoutUnicode (TabSize 4) d))
-    -- The first build checks a and leaves a's name map in the scheduler's
-    -- module cache, where the second build finds it.
+    -- Both builds run on one scheduler, as the generations of a watch do.
     sched <- Compile.newCompileScheduler quietGlobalOptions
     let build = buildOnScheduler Source.diskSourceProvider quietGlobalOptions onEvent sched proj opts
     first <- build
@@ -4156,6 +4169,833 @@ p78_build_waits_for_dependency_lock =
     requirePipe label =
       maybe (error ("missing " ++ label ++ " pipe for dependency lock test")) id
 
+-- | A module that embeds two files of its project, one of them twice. Its
+-- .tydb records each file once, sorted by path, with its size, its SHA-256
+-- and its stat.
+-- The same content written again leaves the module as it is, new content
+-- checks the module again and changes the impl hash of the names that hold
+-- the file, and a file that is gone fails the build at the expression. A
+-- path has a space, the characters */ and, where file names are UTF-8, a
+-- letter outside ASCII.
+p79_embedded_file_checks_module_again :: TestTree
+p79_embedded_file_checks_module_again =
+  testCase "79-new content of an embedded file checks its module again" $ withSystemTempDirectory "embedded-file" $ \tmp -> do
+    proj <- (</> "shop") <$> canonicalizePath tmp
+    utf8 <- (== "UTF-8") . show <$> getFileSystemEncoding
+    let actPage  = proj </> "src" </> "page.act"
+        tyPage   = proj </> "out" </> "types" </> "shop" </> "page.tydb"
+        modPage  = modLabel proj "page"
+        pathPage = "web/a b/" ++ (if utf8 then "\252" else "u") ++ "*/index.html"
+        filePage = proj </> pathPage
+        fileData = proj </> "data.bin"
+        implHashes = do
+          names <- InterfaceFiles.readNameHashes tyPage
+          return (M.fromList [ (A.nstr (InterfaceFiles.nhName nh), InterfaceFiles.nhImplHash nh) | nh <- names ])
+        build = buildOutInArgs proj ["--skip-build"]
+    createDirectoryIfMissing True (proj </> "src")
+    createDirectoryIfMissing True (takeDirectory filePage)
+    writeBuildAct proj "shop" []
+    writeFileUtf8 actPage $ T.unlines
+      [ "page: bytes = embed(\"" <> T.pack pathPage <> "\")"
+      , "data = embed(\"data.bin\")"
+      , "again = embed(\"data.bin\")"
+      , "size = 3"
+      ]
+    B.writeFile filePage "<html></html>\n"
+    B.writeFile fileData (B.pack [0 .. 255])
+    out1 <- build
+    assertBool "expected page.act to type check in the first build" (typechecked out1 modPage)
+    row1 <- mapM (embeddedNow proj) ["data.bin", pathPage]
+    InterfaceFiles.embeddedSize (head row1) @?= 256
+    readTyEmbeds tyPage >>= (@?= row1)
+    hashes1 <- implHashes
+    (paths, mn) <- Project.findPaths actPage C.defaultCompileOptions
+    -- The acton binary wrote the .tydb, a build of the compiler other than
+    -- this test program, which reads it. Each discovery is a plan of its own.
+    let readOpts = C.defaultCompileOptions { C.ignore_compiler_version = True }
+        discovered = do
+          facts <- Compile.newFileFacts
+          Compile.readModuleTask Source.diskSourceProvider quietGlobalOptions readOpts facts paths mn actPage
+        isTyTask task = case task of { Compile.TyTask _ -> True; _ -> False }
+        isParseTask task = case task of { Compile.ParseTask{} -> True; _ -> False }
+    discovered >>= assertBool "expected the .tydb header while no embedded file changed" . isTyTask
+    B.writeFile fileData (B.pack [0 .. 255])
+    discovered >>= assertBool "expected the .tydb header after the same content was written again" . isTyTask
+    out2 <- build
+    assertBool "did not expect page.act to type check after the same content was written again" (not (typechecked out2 modPage))
+    B.writeFile fileData "new content\n"
+    discovered >>= assertBool "expected the source of page.act after new content of data.bin" . isParseTask
+    out3 <- build
+    assertBool "expected page.act to type check after new content of data.bin" (typechecked out3 modPage)
+    row3 <- mapM (embeddedNow proj) ["data.bin", pathPage]
+    assertBool "expected another SHA-256 for the new content" (map InterfaceFiles.embeddedSha256 row3 /= map InterfaceFiles.embeddedSha256 row1)
+    readTyEmbeds tyPage >>= (@?= row3)
+    hashes3 <- implHashes
+    forM_ ["data", "again"] $ \n ->
+      assertBool ("expected another impl hash for " ++ n) (hashes3 M.! n /= hashes1 M.! n)
+    forM_ ["page", "size"] $ \n ->
+      assertBool ("expected the same impl hash for " ++ n) (hashes3 M.! n == hashes1 M.! n)
+    out4 <- build
+    assertBool "did not expect page.act to type check again" (not (typechecked out4 modPage))
+    removeFile filePage
+    discovered >>= assertBool "expected the source of page.act after an embedded file was removed" . isParseTask
+    res@(_, out5) <- runActonIn proj ["build", "--color", "never", "--skip-build"]
+    assertExitFailure "build without an embedded file" 1 res
+    assertBool ("expected the message for the missing file:\n" ++ T.unpack out5)
+      (T.pack ("no file " ++ pathPage ++ " in " ++ proj) `T.isInfixOf` out5)
+
+-- | The path of an embed expression counts from the root of the project of
+-- its module. A module of a dependency and a module of the project that
+-- depends on it embed the same path, and each gets the file of its own
+-- project. A file that is compiled without a project counts from its own
+-- directory, whatever the working directory is, and each expression whose
+-- path names no file gets a message. The absolute path of that directory is
+-- written into the #embed lines, so embed is refused in a directory whose
+-- name has a double quote.
+p80_embed_path_counts_from_project :: TestTree
+p80_embed_path_counts_from_project =
+  testCase "80-the path of embed counts from the project of its module" $ withSystemTempDirectory "embed-root" $ \tmp -> do
+    root <- canonicalizePath tmp
+    let app   = root </> "app"
+        lib   = root </> "lib"
+        loose = root </> "loose"
+        recorded proj name = do
+          row <- readTyEmbeds (proj </> "out" </> "types" </> takeFileName proj </> name <.> "tydb")
+          file <- embeddedNow proj "data/a.txt"
+          row @?= [file]
+          return (InterfaceFiles.embeddedSha256 file)
+    forM_ [app </> "src", app </> "data", lib </> "src", lib </> "data", loose] (createDirectoryIfMissing True)
+    writeBuildAct lib "lib" []
+    writeBuildAct app "app" [("lib", "../lib")]
+    writeFileUtf8 (lib </> "src" </> "text.act") $ T.unlines
+      [ "data = embed(\"data/a.txt\")"
+      , "size = 3"
+      ]
+    writeFileUtf8 (app </> "src" </> "main.act") $ T.unlines
+      [ "import lib.text"
+      , ""
+      , "data = embed(\"data/a.txt\")"
+      , ""
+      , "actor main(env: Env):"
+      , "    proc def __startup__():"
+      , "        print(lib.text.size)"
+      , "        env.exit(0)"
+      ]
+    B.writeFile (lib </> "data" </> "a.txt") "from the library\n"
+    B.writeFile (app </> "data" </> "a.txt") "from the application\n"
+    _ <- buildOutInArgs app ["--skip-build"]
+    libSha <- recorded lib "text"
+    appSha <- recorded app "main"
+    assertBool "expected the two projects to embed files with different content" (libSha /= appSha)
+    removeFile (lib </> "data" </> "a.txt")
+    res@(_, out) <- runActonIn app ["build", "--color", "never", "--skip-build"]
+    assertExitFailure "build without the file of the dependency" 1 res
+    assertBool ("expected the message for the file of the dependency:\n" ++ T.unpack out)
+      (T.pack ("no file data/a.txt in " ++ lib) `T.isInfixOf` out)
+    writeFileUtf8 (loose </> "page.act") $ T.unlines
+      [ "page = embed(\"page.txt\")"
+      , "none = embed(\"none.txt\")"
+      , "gone = embed(\"gone.txt\")"
+      ]
+    B.writeFile (loose </> "page.txt") "beside the source file\n"
+    res'@(_, out') <- runActonIn root ["loose/page.act", "--color", "never", "--skip-build"]
+    assertExitFailure "build of a file without a project" 1 res'
+    forM_ ["none.txt", "gone.txt"] $ \name ->
+      assertBool ("expected the message for the missing file " ++ name ++ " beside the source file:\n" ++ T.unpack out')
+        (T.pack ("no file " ++ name ++ " in " ++ loose) `T.isInfixOf` out')
+    assertBool ("did not expect a message for the file beside the source file:\n" ++ T.unpack out')
+      (not ("page.txt" `T.isInfixOf` out'))
+    let quoted = root </> "a\"dir"
+    createDirectory quoted
+    writeFileUtf8 (quoted </> "page.act") "page = embed(\"page.txt\")\n"
+    B.writeFile (quoted </> "page.txt") "beside the source file\n"
+    res''@(_, out'') <- runActonIn root ["a\"dir/page.act", "--color", "never", "--skip-build"]
+    assertExitFailure "build of a file in a directory with a double quote in its name" 1 res''
+    assertBool ("expected the message for the directory with a double quote in its name:\n" ++ T.unpack out'')
+      (T.pack (quoted ++ " has a double quote or a control character, and embed cannot name a file below it") `T.isInfixOf` out'')
+
+-- | Case 70 for an embedded file: the program of a project whose module
+-- asset81 embeds a file, which main prints. New content of the file checks
+-- asset81 again, refreshes the impl hashes of main without a type check,
+-- reaches the executable and leaves the header of asset81 as it is. The same
+-- content written again compiles nothing. A data C file that another build
+-- of the compiler wrote, that is gone or that is older than the compiler
+-- binary is written again. A module whose code is generated whole checks its
+-- data C file too. An edit of other code of asset81 leaves its data C file
+-- as it is. A module that embeds no file any more has no data C file.
+p81_embedded_file_reaches_executable :: TestTree
+p81_embedded_file_reaches_executable =
+  testCase "81-new content of an embedded file reaches the executable" $ withSystemTempDirectory "embedded-program" $ \tmp -> do
+    proj <- (</> "shop") <$> canonicalizePath tmp
+    let src = proj </> "src"
+        modAsset = modLabel proj "asset81"
+        modMain = modLabel proj "main"
+        fileValue = proj </> "data" </> "value.txt"
+        generated ext = proj </> "out" </> "types" </> "shop" </> "asset81" <.> ext
+        stamp p = (\st -> (fileID st, modificationTimeHiRes st)) <$> getFileStatus p
+        assetAct :: T.Text -> T.Text -> T.Text
+        assetAct content other = T.unlines
+          [ "content = " <> content
+          , ""
+          , "def other() -> int:"
+          , "    return " <> other
+          ]
+        mainAct :: T.Text -> T.Text
+        mainAct label = T.unlines
+          [ "import asset81"
+          , ""
+          , "actor main(env: Env):"
+          , "    proc def __startup__():"
+          , "        print(\"" <> label <> "\", asset81.content.decode().strip(), asset81.other())"
+          , "        env.exit(0)"
+          ]
+    createDirectoryIfMissing True src
+    createDirectoryIfMissing True (takeDirectory fileValue)
+    writeBuildAct proj "shop" []
+    writeFileUtf8 (src </> "asset81.act") (assetAct "embed(\"data/value.txt\")" "1")
+    writeFileUtf8 (src </> "main.act") (mainAct "a")
+    B.writeFile fileValue "1\n"
+    _ <- buildOutIn proj
+    out1 <- runBinaryIn proj "main"
+    out1 @?= "a 1 1\n"
+    -- As in case 64, this build compiles only the C of main and reuses the
+    -- objects of asset81.
+    writeFileUtf8 (src </> "main.act") (mainAct "b")
+    _ <- buildOutIn proj
+    out2 <- runBinaryIn proj "main"
+    out2 @?= "b 1 1\n"
+    header2 <- T.readFile (generated "h")
+    headerStamp2 <- stamp (generated "h")
+    B.writeFile fileValue "2\n"
+    out3 <- buildOutIn proj
+    assertBool ("expected asset81 to type check after new content of the embedded file\n" ++ T.unpack out3) (typechecked out3 modAsset)
+    assertBool ("did not expect main to type check\n" ++ T.unpack out3) (not (typechecked out3 modMain))
+    assertBool ("expected an impl refresh of main\n" ++ T.unpack out3)
+      ("Stale main: impl changes in shop.asset81.content" `T.isInfixOf` out3 && compiled out3 modMain)
+    out3run <- runBinaryIn proj "main"
+    out3run @?= "b 2 1\n"
+    -- The header of asset81 holds nothing of the content of the file.
+    header3 <- T.readFile (generated "h")
+    header3 @?= header2
+    headerStamp3 <- stamp (generated "h")
+    assertEqual "expected the header of asset81 to stay as it was after new content of the embedded file" headerStamp2 headerStamp3
+    B.writeFile fileValue "2\n"
+    out4 <- buildOutIn proj
+    forM_ [modAsset, modMain] $ \m -> do
+      assertBool ("expected " ++ T.unpack m ++ " fresh after the same content was written again\n" ++ T.unpack out4) (fresh out4 m)
+      assertBool ("did not expect " ++ T.unpack m ++ " to compile again\n" ++ T.unpack out4) (not (compiled out4 m))
+    -- The stamp of another build of the compiler on the data C file.
+    tagLine <- T.takeWhile (/= '\n') <$> T.readFile (generated "embed.c")
+    rewriteFirstLine (generated "embed.c") (T.unpack (T.unwords (take 5 (T.words tagLine))) ++ " 0123456789abcdef */")
+    _ <- buildOutIn proj
+    stamped <- T.takeWhile (/= '\n') <$> T.readFile (generated "embed.c")
+    assertEqual "expected the data C file to be written again by this build of the compiler" tagLine stamped
+    -- A data C file that is gone, and one that is older than the compiler
+    -- binary.
+    removeFile (generated "embed.c")
+    _ <- buildOutInArgs proj ["--skip-build"]
+    restored <- T.takeWhile (/= '\n') <$> T.readFile (generated "embed.c")
+    assertEqual "expected a data C file that is gone to be written again" tagLine restored
+    setModificationTime (generated "embed.c") (posixSecondsToUTCTime 946684800)
+    agedStamp <- stamp (generated "embed.c")
+    _ <- buildOutInArgs proj ["--skip-build"]
+    agedStamp' <- stamp (generated "embed.c")
+    assertBool "expected a data C file older than the compiler binary to be written again" (agedStamp' /= agedStamp)
+    -- A cached module whose code is generated whole checks its data C file
+    -- too, and the verbose line names only that file.
+    _ <- buildOutInArgs proj ["--no-dbp", "--skip-build"]
+    rewriteFirstLine (generated "embed.c") "/* Acton impl hash: deadbeef */"
+    outWhole <- buildOutInArgs proj ["--no-dbp", "--skip-build"]
+    assertBool ("expected only the data C file to be named\n" ++ T.unpack outWhole)
+      (any ("{codegen data deadbeef ->" `T.isInfixOf`) (filter (T.isInfixOf "generated code out of date") (T.lines outWhole)))
+    assertBool ("expected asset81 to compile for its data C file\n" ++ T.unpack outWhole) (compiled outWhole modAsset)
+    assertBool ("did not expect asset81 to type check for its data C file\n" ++ T.unpack outWhole) (not (typechecked outWhole modAsset))
+    whole <- T.takeWhile (/= '\n') <$> T.readFile (generated "embed.c")
+    assertEqual "expected the data C file of a module whose code is generated whole to be written again" tagLine whole
+    dataStamp <- stamp (generated "embed.c")
+    codeStamp <- stamp (generated "c")
+    writeFileUtf8 (src </> "asset81.act") (assetAct "embed(\"data/value.txt\")" "3")
+    out5 <- buildOutIn proj
+    assertBool ("expected asset81 to compile after an edit of other code\n" ++ T.unpack out5) (compiled out5 modAsset)
+    out5run <- runBinaryIn proj "main"
+    out5run @?= "b 2 3\n"
+    codeStamp' <- stamp (generated "c")
+    assertBool "expected the C file of asset81 to be written again" (codeStamp' /= codeStamp)
+    dataStamp' <- stamp (generated "embed.c")
+    assertEqual "expected the data C file of asset81 to stay as it was" dataStamp dataStamp'
+    -- A file that is gone is a change too: the build checks asset81 again
+    -- and fails at the expression.
+    removeFile fileValue
+    res@(_, out6) <- runActonIn proj ["build", "--color", "never", "--verbose"]
+    assertExitFailure "build without the embedded file" 1 res
+    assertBool ("expected the message for the missing file:\n" ++ T.unpack out6)
+      (T.pack ("no file data/value.txt in " ++ proj) `T.isInfixOf` out6)
+    writeFileUtf8 (src </> "asset81.act") (assetAct "b\"4\\n\"" "3")
+    _ <- buildOutIn proj
+    out7run <- runBinaryIn proj "main"
+    out7run @?= "b 4 3\n"
+    assertArtifactsGone [generated "embed.c"]
+
+-- | acton test keeps the result of a test with the impl hash of the test's
+-- name. A test that uses a name whose value is the content of an embedded
+-- file runs again after the content changed.
+p82_embedded_file_runs_cached_test_again :: TestTree
+p82_embedded_file_runs_cached_test_again =
+  testCase "82-new content of an embedded file runs a cached test again" $ withSystemTempDirectory "embedded-test" $ \tmp -> do
+    proj <- (</> "shop") <$> canonicalizePath tmp
+    let src = proj </> "src"
+        fileValue = proj </> "data" </> "value.txt"
+        cachedResult = "Using cached results for 1 tests"
+        test = runActonIn proj ["test", "--iter", "1", "--show-cached"]
+    createDirectoryIfMissing True src
+    createDirectoryIfMissing True (takeDirectory fileValue)
+    writeBuildAct proj "shop" []
+    writeFileUtf8 (src </> "asset.act") "content = embed(\"data/value.txt\")\n"
+    -- The test reaches the embedded file only through a name of another module.
+    writeFileUtf8 (src </> "test_asset.act") $ T.unlines
+      [ "import testing"
+      , "import asset"
+      , ""
+      , "def _test_content():"
+      , "    testing.assertEqual(asset.content, b\"1\\n\")"
+      ]
+    B.writeFile fileValue "1\n"
+    res1 <- test
+    assertExitSuccess "first acton test" res1
+    res2@(_, out2) <- test
+    assertExitSuccess "acton test with a cached result" res2
+    assertBool ("expected the second run to use the cached result\n" ++ T.unpack out2) (cachedResult `T.isInfixOf` out2)
+    B.writeFile fileValue "2\n"
+    res3@(_, out3) <- test
+    assertExitFailure "acton test after new content of the embedded file" 1 res3
+    assertBool ("did not expect the cached result after new content of the embedded file\n" ++ T.unpack out3)
+      (not (cachedResult `T.isInfixOf` out3))
+
+-- | The data C file of the module of src/tool.act has the path of the
+-- generated .c of the module of src/tool.embed.act. A project with both
+-- source files does not build, whether or not a module embeds a file. Each
+-- of the two files alone builds.
+p83_source_files_share_generated_file :: TestTree
+p83_source_files_share_generated_file =
+  testCase "83-two source files whose modules share a generated file are refused" $ withSystemTempDirectory "embed-pair" $ \tmp -> do
+    proj <- (</> "shop") <$> canonicalizePath tmp
+    let src = proj </> "src"
+    createDirectoryIfMissing True src
+    writeBuildAct proj "shop" []
+    writeFileUtf8 (src </> "tool.act") "a = 1\n"
+    _ <- buildOutInArgs proj ["--skip-build"]
+    writeFileUtf8 (src </> "tool.embed.act") "b = 2\n"
+    res@(_, out) <- runActonIn proj ["build", "--color", "never", "--skip-build"]
+    assertExitFailure "build of a project with tool.act and tool.embed.act" 1 res
+    assertBool ("expected the message for the two source files:\n" ++ T.unpack out)
+      (T.pack ("Source files in project " ++ proj ++ " whose modules have a generated file in common:\n"
+               ++ "    src/tool.act and src/tool.embed.act: shop/tool.embed.c\n") `T.isInfixOf` out)
+    removeFile (src </> "tool.act")
+    _ <- buildOutInArgs proj ["--skip-build"]
+    return ()
+
+-- | A project "shop" whose module page embeds data/value.txt.
+writeEmbedProject :: FilePath -> B.ByteString -> IO ()
+writeEmbedProject proj content = do
+  createDirectoryIfMissing True (proj </> "src")
+  createDirectoryIfMissing True (proj </> "data")
+  writeBuildAct proj "shop" []
+  writeFileUtf8 (proj </> "src" </> "page.act") "value = embed(\"data/value.txt\")\n"
+  B.writeFile (proj </> "data" </> "value.txt") content
+
+-- | The stat rule for an embedded file. The .tydb records the stat of the
+-- file beside its SHA-256, and a build takes the recorded SHA-256 for a file
+-- whose stat is the recorded one: content that is replaced while the recorded
+-- stat is kept goes unseen, so the file is not read. A build with no change
+-- writes nothing to the .tydb. An edit of other code of the module checks
+-- the module again and does not read the file. A file whose stat differs is
+-- hashed: the same content written again records the new stat and checks
+-- nothing, and new content checks the module again. A file with its recorded
+-- stat that is not older than the .tydb is hashed too.
+p84_embedded_file_trusted_by_stat :: TestTree
+p84_embedded_file_trusted_by_stat =
+  testCase "84-an embedded file with its recorded stat is not read" $ withSystemTempDirectory "embedded-stat" $ \tmp -> do
+    proj <- (</> "shop") <$> canonicalizePath tmp
+    let tyPage   = proj </> "out" </> "types" </> "shop" </> "page.tydb"
+        modPage  = modLabel proj "page"
+        fileData = proj </> "data" </> "value.txt"
+        written  = InterfaceFiles.interfaceModifiedTimeNs tyPage
+        build    = buildOutInArgs proj ["--skip-build"]
+        -- Write the file with a modification time that many seconds ago, so
+        -- that each version has a stat of its own and is older than the .tydb.
+        writeAged seconds content = do
+          B.writeFile fileData content
+          now <- getCurrentTime
+          setModificationTime fileData (addUTCTime (negate seconds) now)
+    writeEmbedProject proj "one\n"
+    out1 <- build
+    assertBool "expected page.act to type check in the first build" (typechecked out1 modPage)
+    file1 <- embeddedNow proj "data/value.txt"
+    readTyEmbeds tyPage >>= (@?= [file1])
+    written1 <- written
+    out2 <- build
+    assertBool "did not expect page.act to type check in a build with no change" (not (typechecked out2 modPage))
+    written >>= assertEqual "expected a build with no change to write nothing to the .tydb" written1
+    -- Other content of the same size, and the stat of the file as the
+    -- recorded one: a build that read the file would find another SHA-256
+    -- and check the module again.
+    writeAged 30 "two\n"
+    stat2 <- sourceFileMetaForPath fileData
+    let kept = [file1 { InterfaceFiles.embeddedStat = stat2 }]
+    InterfaceFiles.updateEmbeds tyPage kept
+    out3 <- build
+    assertBool "did not expect page.act to type check for a file with its recorded stat" (not (typechecked out3 modPage))
+    readTyEmbeds tyPage >>= (@?= kept)
+    -- An edit of other code of the module: its front passes run and take the
+    -- recorded SHA-256, so the file is not read.
+    writeFileUtf8 (proj </> "src" </> "page.act") "value = embed(\"data/value.txt\")\nother = 3\n"
+    outEdit <- build
+    assertBool "expected page.act to type check after an edit of other code" (typechecked outEdit modPage)
+    readTyEmbeds tyPage >>= (@?= kept)
+    -- Another stat: the file is hashed, and its content is not the recorded one.
+    writeAged 20 "two\n"
+    out4 <- build
+    assertBool "expected page.act to type check after the file got another stat" (typechecked out4 modPage)
+    file4 <- embeddedNow proj "data/value.txt"
+    assertBool "expected another SHA-256 for the replaced content" (InterfaceFiles.embeddedSha256 file4 /= InterfaceFiles.embeddedSha256 file1)
+    readTyEmbeds tyPage >>= (@?= [file4])
+    -- The same content written again: the new stat is recorded, and nothing is checked.
+    writeAged 10 "two\n"
+    file5 <- embeddedNow proj "data/value.txt"
+    assertBool "expected another stat after the file was written again" (file5 /= file4)
+    out5 <- build
+    assertBool "did not expect page.act to type check after the same content was written again" (not (typechecked out5 modPage))
+    readTyEmbeds tyPage >>= (@?= [file5])
+    written5 <- written
+    out6 <- build
+    assertBool "did not expect page.act to type check after its recorded stat was refreshed" (not (typechecked out6 modPage))
+    written >>= assertEqual "expected the build after the refresh to write nothing to the .tydb" written5
+    B.writeFile fileData "three\n"
+    out7 <- build
+    assertBool "expected page.act to type check after new content" (typechecked out7 modPage)
+    file7 <- embeddedNow proj "data/value.txt"
+    InterfaceFiles.embeddedSize file7 @?= 6
+    readTyEmbeds tyPage >>= (@?= [file7])
+    -- Other content with the recorded stat and the modification time of the
+    -- .tydb: the file is not older than the .tydb, so it is hashed.
+    B.writeFile fileData "four!\n"
+    tyTime <- written
+    setFileMTimeNs fileData tyTime
+    stat8 <- sourceFileMetaForPath fileData
+    InterfaceFiles.updateEmbeds tyPage [file7 { InterfaceFiles.embeddedStat = stat8 }]
+    setFileMTimeNs (tyPage </> "data.mdb") tyTime
+    out8 <- build
+    assertBool "expected page.act to type check for a file that is not older than the .tydb" (typechecked out8 modPage)
+
+-- | A recorded embedded file that embed cannot take is found at
+-- discovery, without a change of the module's source, and its module is
+-- checked again, so that the build reports the file at its expression: a
+-- file that is renamed by case only, where the file system takes one
+-- spelling for another, a directory of the path that is renamed by case
+-- only, which leaves the file with its recorded stat, and a file that is
+-- replaced by a directory.
+p85_recorded_file_no_longer_taken :: TestTree
+p85_recorded_file_no_longer_taken =
+  testCase "85-a recorded embedded file that embed cannot take is reported at the expression" $ withSystemTempDirectory "embedded-gone" $ \tmp -> do
+    proj <- (</> "shop") <$> canonicalizePath tmp
+    let tyPage    = proj </> "out" </> "types" </> "shop" </> "page.tydb"
+        fileData  = proj </> "data" </> "value.txt"
+        fileUpper = proj </> "data" </> "Value.txt"
+        failing label = do
+          res@(_, out) <- runActonIn proj ["build", "--color", "never", "--skip-build"]
+          assertExitFailure label 1 res
+          return out
+        reported out message =
+          assertBool ("expected the message at the expression: " ++ message ++ "\n" ++ T.unpack out)
+            (T.pack message `T.isInfixOf` out && "page.act@1:9-" `T.isInfixOf` out)
+    writeEmbedProject proj "one\n"
+    _ <- buildOutInArgs proj ["--skip-build"]
+    renameFile fileData fileUpper
+    folds <- doesFileExist fileData
+    out1 <- failing "build after the file was renamed by case only"
+    reported out1 $ if folds
+      then "the file is named data/Value.txt, and the path is written data/value.txt"
+      else "no file data/value.txt in " ++ proj
+    renameFile fileUpper fileData
+    _ <- buildOutInArgs proj ["--skip-build"]
+    -- A directory of the path renamed by case only. The file keeps its
+    -- recorded stat, so only the listing of the directories shows it.
+    recorded <- map InterfaceFiles.embeddedStat <$> readTyEmbeds tyPage
+    renameDirectory (proj </> "data") (proj </> "Data")
+    renamed <- sourceFileMetaForPath (proj </> "Data" </> "value.txt")
+    assertEqual "expected the file to keep its recorded stat when its directory is renamed" recorded [renamed]
+    out2 <- failing "build after a directory of the path was renamed by case only"
+    reported out2 $ if folds
+      then "the file is named Data/value.txt, and the path is written data/value.txt"
+      else "no file data/value.txt in " ++ proj
+    renameDirectory (proj </> "Data") (proj </> "data")
+    removeFile fileData
+    createDirectory fileData
+    out3 <- failing "build after the file was replaced by a directory"
+    reported out3 "data/value.txt is a directory, and embed takes one file. For the files of a directory use a derived module"
+
+-- | A plan looks at an embedded file when it discovers the module and again
+-- when it checks the module. A file that is written between the two looks
+-- has another stat at the second one, and the module fails with a message
+-- at the expression. Here the file is written while discovery reads the
+-- edited source of the module, after it looked at the file.
+p86_embedded_file_changes_during_plan :: TestTree
+p86_embedded_file_changes_during_plan =
+  testCase "86-an embedded file that changes between two looks of a plan stops the build" $ withSystemTempDirectory "embedded-changed" $ \tmp -> do
+    proj <- (</> "shop") <$> canonicalizePath tmp
+    opts <- inProcessCompileOptions
+    let actPage  = proj </> "src" </> "page.act"
+        fileData = proj </> "data" </> "value.txt"
+        renderDiagnostic d = show (unAnnotate (prettyDiagnostic WithoutUnicode (TabSize 4) d))
+    writeEmbedProject proj "one\n"
+    reported <- newIORef []
+    wrote <- newIORef False
+    let onEvent (Compile.Diagnostics _ diags) = mapM_ (logLine reported . renderDiagnostic) diags
+        onEvent _ = return ()
+        disk = Source.diskSourceProvider
+        writing = disk { Source.spReadFile = \path -> do
+                           snap <- Source.spReadFile disk path
+                           pathAbs <- canonicalizePath path
+                           first <- atomicModifyIORef' wrote (\done -> (done || pathAbs == actPage, not done && pathAbs == actPage))
+                           when first (B.writeFile fileData "another version\n")
+                           return snap }
+    sched <- Compile.newCompileScheduler quietGlobalOptions
+    first <- buildOnScheduler disk quietGlobalOptions onEvent sched proj opts
+    assertEqual "first build" "result ok" first
+    writeFileUtf8 actPage "value = embed(\"data/value.txt\")\nsize = 3\n"
+    second <- buildOnScheduler writing quietGlobalOptions onEvent sched proj opts
+    readIORef wrote >>= assertBool "expected the build to read page.act"
+    diagnostics <- takeLines reported
+    assertEqual ("second build\n" ++ unlines diagnostics) "result errors" second
+    assertBool ("expected the message for the changed file at the expression\n" ++ unlines diagnostics)
+      (any (\d -> "]: data/value.txt changed while the build ran. Run the build again\n" `isInfixOf` d
+                  && "page.act@1:9-1:32\n" `isInfixOf` d) diagnostics)
+    third <- buildOnScheduler disk quietGlobalOptions onEvent sched proj opts
+    assertEqual "third build" "result ok" third
+    file <- embeddedNow proj "data/value.txt"
+    readTyEmbeds (proj </> "out" </> "types" </> "shop" </> "page.tydb") >>= (@?= [file])
+
+-- | The language server keeps the modules of a plan and, for an edit, reads
+-- only the edited module again. A kept module whose front passes run for a
+-- changed dependency was not looked at by the discovery of the new plan, and
+-- takes each embedded file by the stat that its .tydb records. Here the
+-- content of the file is replaced while its recorded stat is kept, so a read
+-- of the file would record another SHA-256. The plan takes page by the stat
+-- of its source and does not read it.
+p87_kept_module_takes_embedded_file_by_stat :: TestTree
+p87_kept_module_takes_embedded_file_by_stat =
+  testCase "87-a kept module takes an embedded file by its recorded stat" $ withSystemTempDirectory "embedded-kept" $ \tmp -> do
+    proj <- (</> "shop") <$> canonicalizePath tmp
+    opts <- inProcessCompileOptions
+    let actBase  = proj </> "src" </> "base.act"
+        actPage  = proj </> "src" </> "page.act"
+        tyPage   = proj </> "out" </> "types" </> "shop" </> "page.tydb"
+        fileData = proj </> "data" </> "value.txt"
+        disk     = Source.diskSourceProvider
+        gopts    = quietGlobalOptions
+        named n t = Compile.tkMod (Compile.gtKey t) == A.modName ["shop", n]
+        pubHash  = InterfaceFiles.summaryPubHash <$> InterfaceFiles.readHeaderSummary tyPage
+    writeEmbedProject proj "one\n"
+    writeFileUtf8 actBase "def size():\n    return 3\n"
+    writeFileUtf8 actPage "import base\n\nvalue = embed(\"data/value.txt\")\nsize = base.size()\n"
+    -- Older than any .tydb, so that the recorded stat of page.act is trusted
+    -- however coarse the file system's timestamps are.
+    now <- getCurrentTime
+    setModificationTime actPage (addUTCTime (-30) now)
+    sched <- Compile.newCompileScheduler gopts
+    first <- buildOnScheduler disk gopts (\_ -> return ()) sched proj opts
+    assertEqual "first build" "result ok" first
+    file1 <- embeddedNow proj "data/value.txt"
+    B.writeFile fileData "two\n"
+    setModificationTime fileData (addUTCTime (-30) now)
+    stat2 <- sourceFileMetaForPath fileData
+    let kept = [file1 { InterfaceFiles.embeddedStat = stat2 }]
+    InterfaceFiles.updateEmbeds tyPage kept
+    pub1 <- pubHash
+    readPaths <- newIORef []
+    let noting = disk { Source.spReadFile = \path -> do
+                          canonicalizePath path >>= logLine readPaths
+                          Source.spReadFile disk path }
+    plan1 <- planBuild noting gopts sched opts (Compile.PlanRequest [actBase, actPage] Compile.WholeProject Nothing)
+    case [ Compile.gtTask t | t <- Compile.cpGlobalTasks plan1, named "page" t ] of
+      [Compile.TyTask _] -> return ()
+      _                  -> assertFailure "expected the kept plan to hold page as its .tydb header"
+    takeLines readPaths >>= \paths ->
+      assertBool ("did not expect the plan to read page.act: " ++ show paths) (actPage `notElem` paths)
+    -- An edit of base changes the type of a name that page uses.
+    writeFileUtf8 actBase "def size():\n    return \"3\"\n"
+    ctx <- Compile.prepareCompileContext opts [actBase]
+    tasks <- forM (Compile.cpGlobalTasks plan1) $ \t ->
+      if not (named "base" t) then return t else do
+        task <- Compile.readModuleTask disk gopts (Compile.ccOpts ctx) (Compile.ccFiles ctx) (Compile.gtPaths t) (Compile.tkMod (Compile.gtKey t)) actBase
+        return t { Compile.gtTask = task }
+    plan2 <- Compile.selectPlan ctx (Compile.cpProjMap plan1) tasks (Compile.PlanRequest [actBase] Compile.SelectedFiles (Just [actBase]))
+    gen <- Compile.currentGeneration sched
+    res <- Compile.runCompilePlan disk gopts sched gen plan2 (\_ -> return ())
+    backFailure <- Compile.waitBackJobs sched gen
+    assertEqual "build of the kept plan" "result ok" (buildResult res backFailure)
+    pubHash >>= assertBool "expected the front passes of page to run after the edit of base" . (/= pub1)
+    readTyEmbeds tyPage >>= (@?= kept)
+
+-- | The language server plans an edit from the modules that it kept, and
+-- reads only the edited module again. A kept module can be older than the
+-- row of its .tydb: it was read from its source before the .tydb was
+-- written, or its header was read before a front pass wrote the row again.
+-- The front passes of a kept module take each embedded file by the stat that
+-- the row holds when they run. Here the content of the file is replaced and
+-- the row is given the stat that the file has then, with the SHA-256 that it
+-- had, so a read of the file would record another SHA-256.
+p88_kept_module_takes_embedded_file_by_row :: TestTree
+p88_kept_module_takes_embedded_file_by_row =
+  testCase "88-a kept module takes an embedded file by the stat of its row" $ withSystemTempDirectory "embedded-kept-row" $ \tmp -> do
+    proj <- (</> "shop") <$> canonicalizePath tmp
+    opts <- inProcessCompileOptions
+    sched <- Compile.newCompileScheduler quietGlobalOptions
+    now <- getCurrentTime
+    let actBase  = proj </> "src" </> "base.act"
+        actPage  = proj </> "src" </> "page.act"
+        tyPage   = proj </> "out" </> "types" </> "shop" </> "page.tydb"
+        fileData = proj </> "data" </> "value.txt"
+        disk     = Source.diskSourceProvider
+        gopts    = quietGlobalOptions
+        named n t = Compile.tkMod (Compile.gtKey t) == A.modName ["shop", n]
+        pageOf plan = [ Compile.gtTask t | t <- Compile.cpGlobalTasks plan, named "page" t ]
+        pubHash  = InterfaceFiles.summaryPubHash <$> InterfaceFiles.readHeaderSummary tyPage
+        run plan = do
+          gen <- Compile.currentGeneration sched
+          res <- Compile.runCompilePlan disk gopts sched gen plan (\_ -> return ())
+          backFailure <- Compile.waitBackJobs sched gen
+          return (buildResult res backFailure)
+        -- New text of base, and the build of a plan from the modules of the
+        -- given plan with only base read again. The new text changes the
+        -- type of a name that page uses, so the front passes of page run.
+        editBase label plan text = do
+          pub <- pubHash
+          writeFileUtf8 actBase text
+          ctx <- Compile.prepareCompileContext opts [actBase]
+          tasks <- forM (Compile.cpGlobalTasks plan) $ \t ->
+            if not (named "base" t) then return t else do
+              task <- Compile.readModuleTask disk gopts (Compile.ccOpts ctx) (Compile.ccFiles ctx) (Compile.gtPaths t) (Compile.tkMod (Compile.gtKey t)) actBase
+              return t { Compile.gtTask = task }
+          result <- Compile.selectPlan ctx (Compile.cpProjMap plan) tasks (Compile.PlanRequest [actBase] Compile.SelectedFiles (Just [actBase])) >>= run
+          assertEqual label "result ok" result
+          pubHash >>= assertBool "expected the front passes of page to run after the edit of base" . (/= pub)
+        -- New content in the file, with a modification time older than any
+        -- .tydb.
+        replace content = do
+          B.writeFile fileData content
+          setModificationTime fileData (addUTCTime (-30) now)
+        -- New content in the file, and the row with the stat that the file
+        -- has then and the SHA-256 that the row had.
+        replaceKeepingRow content = do
+          replace content
+          stat <- sourceFileMetaForPath fileData
+          kept <- map (\f -> f { InterfaceFiles.embeddedStat = stat }) <$> readTyEmbeds tyPage
+          InterfaceFiles.updateEmbeds tyPage kept
+          return kept
+    writeEmbedProject proj "one\n"
+    writeFileUtf8 actBase "def size():\n    return 3\n"
+    writeFileUtf8 actPage "import base\n\nvalue = embed(\"data/value.txt\")\nsize = base.size()\n"
+    setModificationTime actPage (addUTCTime (-30) now)
+    -- The project has no out/, so the plan holds page as its source, read
+    -- before its .tydb was written.
+    plan1 <- planBuild disk gopts sched opts (Compile.PlanRequest [actBase, actPage] Compile.WholeProject Nothing)
+    case pageOf plan1 of
+      [Compile.ParseTask{}] -> return ()
+      _                     -> assertFailure "expected the first plan to hold page as its source"
+    run plan1 >>= assertEqual "first build" "result ok"
+    kept1 <- replaceKeepingRow "two\n"
+    editBase "build of the plan that holds page as its source" plan1 "def size():\n    return \"3\"\n"
+    readTyEmbeds tyPage >>= (@?= kept1)
+    -- A plan that holds page as its header. The file then gets another stat,
+    -- and the first build from the kept modules reads it and writes the row.
+    plan2 <- planBuild disk gopts sched opts (Compile.PlanRequest [actBase, actPage] Compile.WholeProject Nothing)
+    case pageOf plan2 of
+      [Compile.TyTask _] -> return ()
+      _                  -> assertFailure "expected the second plan to hold page as its .tydb header"
+    replace "thr\n"
+    editBase "build after the file got another stat" plan2 "def size():\n    return True\n"
+    file3 <- embeddedNow proj "data/value.txt"
+    readTyEmbeds tyPage >>= (@?= [file3])
+    -- The kept header is older than the row.
+    kept3 <- replaceKeepingRow "fou\n"
+    editBase "build of the plan that holds page as an older header" plan2 "def size():\n    return 3\n"
+    readTyEmbeds tyPage >>= (@?= kept3)
+
+-- | Plan a build of the given source files of a project on a scheduler and
+-- run it in process, with the given compile options, then wait for its back
+-- jobs. Returns the plan and the result line.
+runPlanOf :: Compile.CompileScheduler -> C.CompileOptions -> [FilePath] -> IO (Compile.CompilePlan, String)
+runPlanOf sched opts srcFiles = do
+  let disk = Source.diskSourceProvider
+  plan <- planBuild disk quietGlobalOptions sched opts (Compile.PlanRequest srcFiles Compile.WholeProject Nothing)
+  gen <- Compile.currentGeneration sched
+  res <- Compile.runCompilePlan disk quietGlobalOptions sched gen plan (\_ -> return ())
+  backFailure <- Compile.waitBackJobs sched gen
+  return (plan, buildResult res backFailure)
+
+-- | The look at the embedded files after zig (Compile.changedEmbeds), on the
+-- plan of a build that ran in process. A file that the plan looked at is
+-- taken by its stat and not read. Here the content of the file is replaced
+-- and the row is given the stat that the file has then, with the SHA-256
+-- that it had, which the plan takes by the stat rule: a look that read the
+-- file would find another SHA-256 than the row holds. A file that is
+-- written or removed after the plan looked at it changed while the build
+-- ran. A row whose stat is not the stat of the file is no error, since the
+-- look compares with the stat that the plan saw. A build with --only-build
+-- runs no front pass, so the row keeps the SHA-256 of the content that the
+-- module was compiled with, and a file with other content, or no file,
+-- changed since then. Such a build by a compiler binary that is newer than
+-- the .tydb does not look at the file before zig, so the look after zig is
+-- the first look of its plan at the file, and takes the file by the stat
+-- rule.
+p89_look_after_zig :: TestTree
+p89_look_after_zig =
+  testCase "89-the look after zig takes an embedded file by its stat" $ withSystemTempDirectory "embedded-after-zig" $ \tmp -> do
+    proj <- (</> "shop") <$> canonicalizePath tmp
+    opts <- inProcessCompileOptions
+    sched <- Compile.newCompileScheduler quietGlobalOptions
+    now <- getCurrentTime
+    let actPage  = proj </> "src" </> "page.act"
+        tyPage   = proj </> "out" </> "types" </> "shop" </> "page.tydb"
+        fileData = proj </> "data" </> "value.txt"
+        whileBuilding = ["data/value.txt changed while the build ran. Run the build again"]
+        sinceCompiled = ["data/value.txt changed since its module was compiled. Run the build without --only-build"]
+        built label options = do
+          (plan, result) <- runPlanOf sched options [actPage]
+          assertEqual label "result ok" result
+          return plan
+    writeEmbedProject proj "one\n"
+    plan1 <- built "first build" opts
+    Compile.changedEmbeds plan1 >>= assertEqual "the look after the first build" []
+    B.writeFile fileData "two\n"
+    setModificationTime fileData (addUTCTime (-30) now)
+    stat2 <- sourceFileMetaForPath fileData
+    kept <- map (\f -> f { InterfaceFiles.embeddedStat = stat2 }) <$> readTyEmbeds tyPage
+    InterfaceFiles.updateEmbeds tyPage kept
+    plan2 <- built "build with the recorded stat" opts
+    -- The .tydb gets a modification time before that of the file, so the
+    -- stat rule does not hold at the look either.
+    setModificationTime (tyPage </> "data.mdb") (addUTCTime (-60) now)
+    Compile.changedEmbeds plan2 >>= assertEqual "the look at a file with the stat that the plan saw" []
+    -- A row whose stat could not be refreshed holds another stat than the
+    -- file has. The look takes the stat that the plan saw, so it is no error.
+    InterfaceFiles.updateEmbeds tyPage (map (\f -> f { InterfaceFiles.embeddedStat = stat2 { InterfaceFiles.sfmMTimeNs = InterfaceFiles.sfmMTimeNs stat2 + 1 } }) kept)
+    Compile.changedEmbeds plan2 >>= assertEqual "the look at a file whose recorded stat is not the stat of the file" []
+    InterfaceFiles.updateEmbeds tyPage kept
+    readTyEmbeds tyPage >>= (@?= kept)
+    B.writeFile fileData "thr\n"
+    Compile.changedEmbeds plan2 >>= assertEqual "the look at a file that was written after the plan looked at it" whileBuilding
+    removeFile fileData
+    Compile.changedEmbeds plan2 >>= assertEqual "the look at a file that was removed after the plan looked at it" whileBuilding
+    B.writeFile fileData "fou\n"
+    plan3 <- built "build with --only-build after new content" opts { C.only_build = True }
+    Compile.changedEmbeds plan3 >>= assertEqual "the look of a build with --only-build after new content" sinceCompiled
+    removeFile fileData
+    plan4 <- built "build with --only-build without the file" opts { C.only_build = True }
+    Compile.changedEmbeds plan4 >>= assertEqual "the look of a build with --only-build without the file" sinceCompiled
+    B.writeFile fileData "fiv\n"
+    plan5 <- built "build after the builds with --only-build" opts
+    Compile.changedEmbeds plan5 >>= assertEqual "the look after the front passes ran" []
+    file5 <- embeddedNow proj "data/value.txt"
+    readTyEmbeds tyPage >>= (@?= [file5])
+    -- A compiler binary that is newer than the .tydb does not use the header
+    -- at discovery, and a build with --only-build runs no front pass, so the
+    -- look is the first look of the plan at the file. The content of the
+    -- file is replaced and the row is given the stat that the file has then:
+    -- the look takes the file by the stat rule and does not read it.
+    let old = posixSecondsToUTCTime 946684800
+        byNewerCompiler = opts { C.only_build = True, C.ignore_compiler_version = False }
+        heldAsSource plan = case map Compile.gtTask (Compile.cpGlobalTasks plan) of
+          [Compile.ParseTask{}] -> return ()
+          _                     -> assertFailure "expected the plan to hold page as its source"
+    B.writeFile fileData "six\n"
+    setModificationTime fileData (addUTCTime (-60) old)
+    stat6 <- sourceFileMetaForPath fileData
+    kept6 <- map (\f -> f { InterfaceFiles.embeddedStat = stat6 }) <$> readTyEmbeds tyPage
+    InterfaceFiles.updateEmbeds tyPage kept6
+    setModificationTime (tyPage </> "data.mdb") old
+    plan6 <- built "build with --only-build by a compiler that is newer than the .tydb" byNewerCompiler
+    heldAsSource plan6
+    Compile.changedEmbeds plan6 >>= assertEqual "the first look of a plan at a file with its recorded stat" []
+    readTyEmbeds tyPage >>= (@?= kept6)
+    B.writeFile fileData "sev\n"
+    plan7 <- built "build with --only-build by a newer compiler after new content" byNewerCompiler
+    heldAsSource plan7
+    Compile.changedEmbeds plan7 >>= assertEqual "the first look of a plan at a file with other content" sinceCompiled
+
+-- | The look after zig takes the embedded files of every module of the
+-- plan, each below the root of the project of its module. A module of a
+-- dependency and a module of the project that depends on it embed the same
+-- path. A change of the file of either project is reported, and a change of
+-- both is reported once, since the message names the path as it is written.
+-- Two changed files of one module are both reported, in the order of their
+-- paths.
+p90_look_after_zig_in_each_project :: TestTree
+p90_look_after_zig_in_each_project =
+  testCase "90-the look after zig takes the files of each project" $ withSystemTempDirectory "embedded-after-zig-projects" $ \tmp -> do
+    root <- canonicalizePath tmp
+    opts <- inProcessCompileOptions
+    sched <- Compile.newCompileScheduler quietGlobalOptions
+    let app = root </> "app"
+        lib = root </> "lib"
+        whileBuilding = ["data/a.txt changed while the build ran. Run the build again"]
+        built = do
+          (plan, result) <- runPlanOf sched opts [app </> "src" </> "main.act"]
+          assertEqual "build of the application" "result ok" result
+          return plan
+    forM_ [app </> "src", app </> "data", lib </> "src", lib </> "data"] (createDirectoryIfMissing True)
+    writeBuildAct lib "lib" []
+    writeBuildAct app "app" [("lib", "../lib")]
+    writeFileUtf8 (lib </> "src" </> "text.act") "data = embed(\"data/a.txt\")\n"
+    writeFileUtf8 (app </> "src" </> "main.act") "import lib.text\n\ndata = embed(\"data/a.txt\")\nmore = embed(\"data/b.txt\")\ntexts = [data, more, lib.text.data]\n"
+    B.writeFile (lib </> "data" </> "a.txt") "from the library\n"
+    B.writeFile (app </> "data" </> "a.txt") "from the application\n"
+    B.writeFile (app </> "data" </> "b.txt") "more from the application\n"
+    plan1 <- built
+    Compile.changedEmbeds plan1 >>= assertEqual "the look after the first build" []
+    B.writeFile (lib </> "data" </> "a.txt") "from the library, again\n"
+    Compile.changedEmbeds plan1 >>= assertEqual "the look after the file of the dependency was written" whileBuilding
+    plan2 <- built
+    Compile.changedEmbeds plan2 >>= assertEqual "the look after the second build" []
+    B.writeFile (app </> "data" </> "a.txt") "from the application, again\n"
+    Compile.changedEmbeds plan2 >>= assertEqual "the look after the file of the application was written" whileBuilding
+    B.writeFile (lib </> "data" </> "a.txt") "from the library, once more\n"
+    Compile.changedEmbeds plan2 >>= assertEqual "the look after the files of both projects were written" whileBuilding
+    B.writeFile (app </> "data" </> "b.txt") "more from the application, again\n"
+    Compile.changedEmbeds plan2 >>= assertEqual "the look after two files of the application were written" (whileBuilding ++ ["data/b.txt changed while the build ran. Run the build again"])
+
+-- | An embedded file that starts with a byte order mark which the C compiler
+-- refuses in a file it loads has its bytes in the data C file, and any other
+-- file has an #embed line there. Content with a mark, then without one and
+-- then with one again gives the data C file the other form in each build,
+-- and the program the bytes of the file.
+p91_embedded_file_with_byte_order_mark :: TestTree
+p91_embedded_file_with_byte_order_mark =
+  testCase "91-an embedded file gets and loses a byte order mark" $ withSystemTempDirectory "embedded-mark" $ \tmp -> do
+    proj <- (</> "shop") <$> canonicalizePath tmp
+    let builds content hex loaded = do
+          B.writeFile (proj </> "data" </> "value.txt") (B.pack content)
+          _ <- buildOutIn proj
+          text <- T.readFile (proj </> "out" </> "types" </> "shop" </> "main.embed.c")
+          assertEqual ("an #embed line in the data C file for the content " ++ hex) loaded ("#embed" `T.isInfixOf` text)
+          out <- runBinaryIn proj "main"
+          out @?= T.pack hex <> "\n"
+    createDirectoryIfMissing True (proj </> "src")
+    createDirectoryIfMissing True (proj </> "data")
+    writeBuildAct proj "shop" []
+    writeFileUtf8 (proj </> "src" </> "main.act") $ T.unlines
+      [ "content = embed(\"data/value.txt\")"
+      , ""
+      , "actor main(env: Env):"
+      , "    proc def __startup__():"
+      , "        print(content.hex())"
+      , "        env.exit(0)"
+      ]
+    builds [0xff, 0xfe, 0x68, 0x00] "fffe6800" False
+    builds [0x68, 0xff, 0xfe, 0x00] "68fffe00" True
+    builds [0xfe, 0xff, 0x00, 0x68] "feff0068" False
+
 -- Source written during a read ------------------------------------------------
 
 -- | A disk source provider that writes new text to a source file right after
@@ -4198,7 +5038,8 @@ assertNextPlanReadsWrittenSource opts act text written = do
   assertBool ("expected the build to read " ++ act) wrote
   actAbs <- canonicalizePath act
   (paths, mn) <- Project.findPaths actAbs opts
-  task <- Compile.readModuleTask Source.diskSourceProvider quietGlobalOptions opts paths mn actAbs
+  facts <- Compile.newFileFacts
+  task <- Compile.readModuleTask Source.diskSourceProvider quietGlobalOptions opts facts paths mn actAbs
   case task of
     Compile.ParseTask source _ _ -> Compile.sourceText source @?= T.unpack text
     Compile.TyTask _ -> assertFailure ("the next plan trusts the .tydb of " ++ act ++ " although the file was written after the build read it")
@@ -4576,6 +5417,19 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
       , p76_unchanged_base_build_checks_nothing
       , p77_body_and_ext_c_edits_keep_header
       , p78_build_waits_for_dependency_lock
+      , p79_embedded_file_checks_module_again
+      , p80_embed_path_counts_from_project
+      , p81_embedded_file_reaches_executable
+      , p82_embedded_file_runs_cached_test_again
+      , p83_source_files_share_generated_file
+      , p84_embedded_file_trusted_by_stat
+      , p85_recorded_file_no_longer_taken
+      , p86_embedded_file_changes_during_plan
+      , p87_kept_module_takes_embedded_file_by_stat
+      , p88_kept_module_takes_embedded_file_by_row
+      , p89_look_after_zig
+      , p90_look_after_zig_in_each_project
+      , p91_embedded_file_with_byte_order_mark
       ]
   , sequentialTestGroup "incremental-cache-cases" AllSucceed
       [ p41_stale_header_missing_import_reparses_source

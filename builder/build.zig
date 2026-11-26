@@ -59,6 +59,12 @@ fn selectedSourceExists(b: *std.Build, project_dir: std.Io.Dir, project_path: st
     return true;
 }
 
+// The flags that a C source of a module is compiled with: those of a data C
+// file for a source whose name ends with .embed.c, else those of the code.
+fn moduleSourceFlags(source: []const u8, code_flags: []const []const u8, data_flags: []const []const u8) []const []const u8 {
+    return if (std.mem.endsWith(u8, source, ".embed.c")) data_flags else code_flags;
+}
+
 pub fn build(b: *std.Build) void {
     const io = b.graph.io;
     // Normalize the serialized package root so C inputs and prefix maps agree.
@@ -311,8 +317,17 @@ pub fn build(b: *std.Build) void {
         "-Wno-error=incompatible-pointer-types",
     }) catch unreachable;
 
+    // A data C file (.embed.c) holds the content of the files that a module
+    // embeds. It is compiled to an object file also in a library with
+    // link-time optimization: as bitcode, the content would take several
+    // times its size in memory when the executable is linked.
+    var data_flags = std.ArrayList([]const u8).empty;
+    defer data_flags.deinit(b.allocator);
+    data_flags.appendSlice(b.allocator, flags.items) catch unreachable;
+    data_flags.append(b.allocator, "-fno-lto") catch unreachable;
+
     for (c_files.items) |entry| {
-        libActonProject.root_module.addCSourceFile(.{ .file = project_path.path(b, entry), .flags = flags.items });
+        libActonProject.root_module.addCSourceFile(.{ .file = project_path.path(b, entry), .flags = moduleSourceFlags(entry, flags.items, data_flags.items) });
     }
 
     libActonProject.root_module.addIncludePath(project_path.path(b, "."));
@@ -371,7 +386,7 @@ pub fn build(b: *std.Build) void {
         while (source_it.next()) |raw_source| {
             const source = std.mem.trim(u8, raw_source, " \t\r");
             if (source.len == 0) continue;
-            libActonExplicit.root_module.addCSourceFile(.{ .file = project_path.path(b, source), .flags = flags.items });
+            libActonExplicit.root_module.addCSourceFile(.{ .file = project_path.path(b, source), .flags = moduleSourceFlags(source, flags.items, data_flags.items) });
         }
         libActonExplicit.root_module.addIncludePath(project_path.path(b, "."));
         libActonExplicit.root_module.include_dirs.append(b.allocator, .{ .other_step = actonbase_dep.artifact("Acton") }) catch |err| {

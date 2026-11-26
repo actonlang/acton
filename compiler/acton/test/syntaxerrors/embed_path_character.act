@@ -1,0 +1,2 @@
+# A path of embed with braces
+page = embed("a{b}.txt")

@@ -58,22 +58,58 @@ includes only when it compiles that file, and the cache of a whole library
 forgets them when a build reuses the object, so a later edit of only the
 .ext.c would reuse the old library.
 
+An expression embed("path") has the content of a file as its value.  The
+path counts from the root of the module's project, or from the directory of
+a file that is compiled without a project (embedRoot).  The first front
+pass (embedPass) writes the size and the SHA-256 of each such file into its
+expression, so the content is part of the impl hash of every name that
+holds the expression.  The .tydb records the embedded files, each with its
+stat, and the recorded source hash covers their SHA-256.  A file whose stat
+is the recorded one is not read: its recorded SHA-256 stands for its content
+(fileFact).  A plan reads each file at most once and lists each directory
+once, and a file whose stat differs between two looks of one plan fails the
+module that embeds it, since it changed while the build ran.  The content
+itself is in the module's data C file, which the C compiler fills from the
+embedded files (#embed) and which a back job writes from the recorded files
+(writeDataFile).  Its first line is tagged with dataTag, which does not
+cover the impl hash, so an edit of other code of the module leaves the file
+as it is and the C compiler does not read the embedded files again.  The C
+compiler refuses a file that starts with certain byte order marks, so the
+back job reads such a file and writes its bytes into the data C file as
+string literals, in place of an #embed line (markedContent).  The C
+compiler reads an embedded file after the plan looked at it, so the CLI asks
+after its Zig build which files are not the ones that the build took them
+for (changedEmbeds), and fails the build for any.  The watches of the CLI
+and the LSP server look for file system events at the paths that a plan
+looked at for embed (embeddedPaths).
+
 Plan
 ----
 
 prepareCompileContext finds the paths of the file that roots a build and
 makes the --dep overrides absolute.  prepareCompilePlan fetches the
 dependencies unless the scheduler's last completed fetch was of the same
-Build.act.  It discovers the projects (buildProjects), locks the
-dependency projects through the context's ccLockDependencies, and prunes
-the outputs of their deleted sources, so that a cached header cannot bring
-a deleted module back.  It then discovers their modules (buildGlobalTasks)
-and selects the modules to compile (selectPlan): the requested modules
-with everything they import or, for an incremental plan, the modules
-that the changed files affect.  A declared build library is compiled
-whole.  The LSP server plans an edit of a project it already discovered
-by reading the edited module again (readModuleTask) and selecting from
-the modules it keeps.
+Build.act (fetchPlanDependencies) and plans (planFetched).  The acton CLI
+calls the two steps itself and brings the derived modules of the build up
+to date in between.  planFetched discovers the projects (buildProjects),
+locks the dependency projects through the context's ccLockDependencies,
+and prunes the outputs of their deleted sources, so that a cached header
+cannot bring a deleted module back.  It then discovers their modules
+(buildGlobalTasks) and selects the modules to compile (selectPlan): the
+requested modules with everything they import or, for an incremental
+plan, the modules that the changed files affect.  A declared build
+library is compiled whole.  The LSP server plans an edit of a project it
+already discovered by reading the edited module again (readModuleTask)
+and selecting from the modules it keeps.
+
+A project's modules are the source files under its src directory and the
+derived modules under out/derived/src, which a function named in the
+derived_modules table of Build.act returns the source of.  A derived
+module is discovered and compiled like any other module.  Only the acton
+CLI runs the functions.  It looks at the input files of a function through
+the file facts of the build (fileFact), so a file that is an input file and
+an embedded file is read once, and it stops the build when such a file
+changes while the build runs.
 
 A build holds its root project's work lock, and from planning to its
 final build the locks of the dependency projects whose outputs it reads
@@ -102,15 +138,21 @@ build of the compiler wrote it and the compiler binary is not newer than
 the .tydb (--ignore-compiler-version skips the last two checks).  It is
 trusted without reading the source when the module has no .ext.c, the
 source's stat (device, inode, size, mtime, ctime) equals the recorded one
-and its mtime is strictly older than the .tydb's.  Strictly, because on a file system with coarse timestamps a
-changed source and the .tydb written from its previous version can show
-the same time.  Otherwise it is trusted when the content hash of the
-source, with that of its .ext.c, equals the recorded one, and
-the recorded stat is then refreshed in place.  An editor overlay is
+and its mtime is strictly older than the .tydb's, and every embedded file
+that the header records is found as it is recorded.
+Strictly, because on a file system with coarse timestamps a changed source
+and the .tydb written from its previous version can show the same time.
+Otherwise it is trusted when the content hash of the source, with that of
+its .ext.c and of the files it embeds, equals the recorded one, and the
+recorded stats are then refreshed in place.  An embedded file is read for
+this only when its stat is not the recorded one or its mtime is not strictly
+older than the .tydb's.  An editor overlay is
 compared by content hash only.  So is a module whose .tydb was written
-while it had an .ext.c: such a .tydb records no stat, since the stat of
-the source would not show that the .ext.c was deleted.  A module whose
-header is not trusted is read from its source.
+while it had an .ext.c: such a .tydb records no stat of the source, since
+that stat would not show that the .ext.c was deleted.  A module whose
+header is not trusted is read from its source, and so is one with a recorded
+embedded file that embed cannot take: its front passes report the
+file at the expression.
 
 The stat that a .tydb records is taken before the source is read, and one
 read gives both the text that is compiled and the bytes that are hashed.
@@ -149,10 +191,11 @@ runs the front passes (compileModule).  A TyTask is checked in this order:
      needs is unavailable.
   4. A module whose code is generated whole, in a build without
      alternative output, compares the tags of its .c and closure support
-     file with its codegen tag and the tag of its header with the one its
-     .c records, and generates its code again from the stored typed module
-     when they differ, another build of the compiler wrote a file or the .c
-     or the support file is older than the compiler binary
+     file with its codegen tag, the tag of its header with the one its .c
+     records and the tag of its data C file, when it embeds files, with
+     dataTag.  It generates its code again from the stored typed module
+     when they differ, another build of the compiler wrote a file or a
+     file other than the header is older than the compiler binary
      (refreshCodegen).  A build that wrote the .tydb but not the code, such
      as acton build --sigs or an interrupted build, thus leaves no stale
      code behind.  __builtin__, which only the base library compiles,
@@ -220,20 +263,21 @@ The scheduler's workers run the back jobs of every generation, one job at
 a time each.  waitBackJobs waits for a generation's jobs, or returns its
 first failure.  The CLI waits before its Zig build.  The LSP server
 reports completion first and waits after.  A run outside any scheduler
-(runStandalonePlan for acton sig, standaloneBuild for the benchmarks) has
-no back queue: its BackReady events reach only its handler.
+(runStandalonePlan for acton sig and for the functions of derived modules,
+standaloneBuild for the benchmarks) has no back queue: its BackReady events
+reach only its handler, and it prepares no deferred back job.
 
 Module cache
 ------------
 
-The scheduler owns one ModuleCache for its lifetime, and every run shares
-it: the .tydb path, the module hashes and the public name hashes of each
-module that a run read from disk or finished, and the single names it
-read.  It is keyed by module name, so the trees one scheduler builds
-share the entries of every module name they have in common.  A module
-that a run finishes replaces its own module hashes, and its name map when
+Every run has a ModuleCache of its own: the .tydb path, the module hashes
+and the public name hashes of each module that the run read from disk or
+finished, and the single names it read.  It starts empty, so a run knows
+of a module only what the module's .tydb holds now or what the run itself
+finished, and a module whose .tydb is gone has no hashes.  A module that
+the run finishes replaces its own module hashes, and its name map when
 its result carries its names, before it reports done, so every later read
-sees them.  A standalone build has a cache of its own.
+sees them.
 
 Invariants
 ----------
@@ -332,11 +376,26 @@ module Acton.Compile
   , PlanRequest(..)
   , CompilePlan(..)
   , prepareCompilePlan
+  , fetchPlanDependencies
   , planFetched
   , dependencyDirs
   , planDependencyDirs
   , selectPlan
   , readModuleTask
+  , FileFacts
+  , newFileFacts
+  , listedIn
+  , Recorded(..)
+  , statRule
+  , FileChanged(..)
+  , changedWhileBuilding
+  , fileFact
+  , hashOfFile
+  , markedContent
+  , changedEmbeds
+  , embeddedPaths
+  , readSourceFileMeta
+  , fileMeta
   , docIndexEntry
   , parseActSource
   , parseActFile
@@ -381,21 +440,25 @@ import Acton.Fetch
 import Acton.Graph
 import Acton.Project
 import Acton.ExtSource (readExtSourceHash)
+import qualified Acton.Embed as Embed
 import qualified Acton.Diagnostics as Diag
 import qualified Acton.SourceProvider as Source
 import Utils
 import Pretty hiding ((<>))
 import qualified InterfaceFiles
 
+import Control.Applicative ((<|>))
 import Control.Concurrent.Async
 import Control.Concurrent.MVar
 import Control.Concurrent (forkIO, threadDelay)
 import Control.Concurrent.STM (TChan, TVar, atomically, check, modifyTVar', newTChanIO, newTVarIO, readTChan, readTVar, readTVarIO, writeTChan, writeTVar)
 import Control.DeepSeq (NFData, force, rnf)
-import Control.Exception (Exception, Handler(..), SomeException, catch, catches, displayException, evaluate, finally, mask_, throwIO, try)
+import Control.Exception (Exception, Handler(..), SomeException, catch, catches, displayException, evaluate, finally, handle, mask_, throwIO, try)
 import Control.Monad
+import Data.Bifunctor (bimap, first)
 import Data.Binary (encode)
-import Data.Char (isHexDigit, isSpace)
+import Data.Char (isControl, isHexDigit, isSpace)
+import Data.Functor.Identity (Identity(..))
 import qualified Data.List
 import Data.IORef
 import qualified Data.Map as M
@@ -410,7 +473,7 @@ import System.Environment (getExecutablePath)
 import System.FilePath.Posix
 import System.IO
 import System.IO.Error (isDoesNotExistError)
-import System.Posix.Files (deviceID, fileID, fileSize, getFileStatus, modificationTimeHiRes, statusChangeTimeHiRes)
+import System.Posix.Files (FileStatus, deviceID, fileID, fileSize, getFileStatus, modificationTimeHiRes, statusChangeTimeHiRes)
 import Text.Show.Pretty (ppDoc)
 
 import qualified Data.ByteString.Char8 as B
@@ -482,6 +545,7 @@ data BackJob = BackJob
   , bjModule      :: A.Module           -- typed; only the selected names for a deferred module
   , bjSource      :: String             -- for #line directives
   , bjCodegenTag  :: B.ByteString       -- tagged into the first line of the .c and the closure support file
+  , bjEmbeds      :: [InterfaceFiles.EmbeddedFile]   -- the files the whole module embeds, as its .tydb records them
   }
 
 -- | Back work that waits for every dependent's interest.  It keeps only
@@ -653,7 +717,7 @@ frontOutputKindName FrontOutputDoc      = "doc"
 -- | Where a module's front passes spent their time, collected with
 -- --timing.
 data FrontTiming = FrontTiming
-  { ftEnv               :: TimeSpec             -- the parse dumps and building the environment the module is checked in
+  { ftEnv               :: TimeSpec             -- the parse dumps, the embedded files and building the environment the module is checked in
   , ftKinds             :: TimeSpec             -- the kinds check and its dump
   , ftTypes             :: TimeSpec             -- from the end of the kinds check to the end of the type dumps
   , ftTypeReconstruct   :: TimeSpec             -- the type check
@@ -704,6 +768,7 @@ data BuildEnv = BuildEnv
   , buildOptions    :: C.GlobalOptions
   , buildGeneration :: Generation                       -- front outputs are written only while it is current
   , emit            :: BuildEvent -> IO ()
+  , buildBackQueue  :: Bool                             -- whether the job of a BackReady event is queued
   , buildCache      :: ModuleCache
   , buildOutputs    :: OutputJobs                       -- the background outputs started so far
   }
@@ -752,20 +817,12 @@ currentGeneration sched = do
 -- Scheduler, back queue and entry points -----------------------------------------------------------
 
 -- | A long-lived compiler. The back passes of every generation share one
--- pool of workers, and every run shares one module cache, so the interface
--- hashes a run reads from disk or finishes are remembered for the
--- scheduler's lifetime. The cache is keyed by module name, so it cannot
--- tell two source trees apart. Two trees that hold modules of the same
--- name, such as two checkouts of one project, need schedulers of their
--- own. Within one tree, a module that a run finishes replaces its own
--- module hashes, and its name map whenever its result carries its names,
--- an empty map included.
+-- pool of workers.
 data CompileScheduler = CompileScheduler
   { schedulerCounter   :: IORef Int                     -- the newest generation
   , schedulerRun       :: MVar (Maybe (Async ()))       -- the newest generation's run
   , schedulerBackQueue :: BackQueue
   , schedulerBuildSpec :: IORef (Maybe BuildSpecStamp)  -- Build.act at the last completed fetch
-  , schedulerCache     :: ModuleCache
   }
 
 -- | Back jobs waiting for a worker, with the state waitBackJobs reads.
@@ -778,17 +835,16 @@ data BackQueue = BackQueue
 -- | A back job with its generation and the sink its events go to.
 data QueuedJob = QueuedJob Generation (BuildEvent -> IO ()) BackJob
 
--- | Create a scheduler at generation 0 with an empty module cache. Its back
--- passes run on one worker per compileParallelism gopts, with the given
--- global options, which decide whether back passes report their time and
--- timing.
+-- | Create a scheduler at generation 0. Its back passes run on one worker
+-- per compileParallelism gopts, with the given global options, which decide
+-- whether back passes report their time and timing.
 newCompileScheduler :: C.GlobalOptions -> IO CompileScheduler
 newCompileScheduler gopts = do
   workers <- compileParallelism gopts
   counter <- newIORef 0
   queue <- BackQueue <$> newTChanIO <*> newTVarIO M.empty <*> newTVarIO M.empty
   replicateM_ workers (forkIO (backWorker gopts queue))
-  CompileScheduler counter <$> newMVar Nothing <*> pure queue <*> newIORef Nothing <*> newModuleCache
+  CompileScheduler counter <$> newMVar Nothing <*> pure queue <*> newIORef Nothing
 
 -- | How many modules compile at once: --jobs when given, else one per
 -- capability.
@@ -876,12 +932,13 @@ waitBackJobs sched gen = atomically $ do
     queue  = schedulerBackQueue sched
     number = generationNumber gen
 
--- | Compile a plan as a generation of the scheduler. Its back jobs run on
--- the scheduler's workers: wait for them with waitBackJobs. Each event is
--- recorded for analytics first, whatever the generation. A BackReady event
--- then queues its job, which enqueueBack refuses for a stale generation.
--- The handler sees the event last, and only if the generation is current
--- at that moment, so a handler needs no generation check of its own.
+-- | Compile a plan as a generation of the scheduler, with a module cache
+-- of its own. Its back jobs run on the scheduler's workers: wait for them
+-- with waitBackJobs. Each event is recorded for analytics first, whatever
+-- the generation. A BackReady event then queues its job, which enqueueBack
+-- refuses for a stale generation. The handler sees the event last, and
+-- only if the generation is current at that moment, so a handler needs no
+-- generation check of its own.
 runCompilePlan :: Source.SourceProvider
                -> C.GlobalOptions
                -> CompileScheduler
@@ -896,19 +953,20 @@ runCompilePlan sp gopts sched gen plan onEvent = withAnalytics $ \analytics -> d
           BackReady job -> enqueueBack (schedulerBackQueue sched) gen events job
           _             -> return ()
         whenCurrent gen (onEvent event)
+  cache <- newModuleCache
   outputs <- OutputJobs <$> newIORef []
-  compileModules (BuildEnv sp gopts gen events (schedulerCache sched) outputs) plan
+  compileModules (BuildEnv sp gopts gen events True cache outputs) plan
 
 -- | The services of a run outside any scheduler: a generation that stays
 -- current, a module cache of its own, no back queue, so BackReady reaches
--- only the handler, and a record of its own background outputs, which
--- awaitOutputs waits for.
+-- only the handler and no deferred back job is prepared, and a record of
+-- its own background outputs, which awaitOutputs waits for.
 standaloneBuild :: Source.SourceProvider -> C.GlobalOptions -> (BuildEvent -> IO ()) -> IO BuildEnv
 standaloneBuild sp gopts onEvent = do
   counter <- newIORef 0
   cache <- newModuleCache
   outputs <- OutputJobs <$> newIORef []
-  return (BuildEnv sp gopts (Generation 0 counter) onEvent cache outputs)
+  return (BuildEnv sp gopts (Generation 0 counter) onEvent False cache outputs)
 
 -- | Compile a plan outside any scheduler, as acton sig does. Analytics do
 -- not sample it.
@@ -943,6 +1001,7 @@ data CompileContext = CompileContext
   , ccSysAbs     :: FilePath             -- the system directory, normalized
   , ccBuildStamp :: BuildSpecStamp       -- the root project's Build.act when the context was made
   , ccLockDependencies :: [FilePath] -> IO ()  -- locks the given dependency project directories (dependencyDirs)
+  , ccFiles      :: FileFacts            -- what the plan of this context has seen of the files it looked at
   }
 
 -- | A module's options: dependency projects build neither their tests nor a
@@ -966,7 +1025,10 @@ hasParseStage ctx t                     = case gtTask t of
 -- are found, so that the paths and discovery see absolute overrides.  The
 -- Build.act stamp is read at the project path as the paths give it.  The
 -- context locks no dependency: a caller that holds dependency locks sets
--- ccLockDependencies.
+-- ccLockDependencies.  A context serves one build, which has looked at no
+-- file yet (ccFiles): its plan and, before that, the look at the input
+-- files of its derived modules and the plans that compile the modules of
+-- their functions (Acton.Derive).
 prepareCompileContext :: C.CompileOptions -> [FilePath] -> IO CompileContext
 prepareCompileContext _ []              = throwProjectError "No source files found"
 prepareCompileContext opts (first : _)  = do
@@ -978,8 +1040,9 @@ prepareCompileContext opts (first : _)  = do
     root        <- normalizePathSafe (projPath paths)
     sys         <- normalizePathSafe (sysPath paths)
     stamp       <- readBuildSpecStamp (projPath paths)
+    files       <- newFileFacts
     return CompileContext { ccOpts = opts', ccPathsRoot = paths, ccRootModule = mn, ccRootProj = root, ccSysAbs = sys, ccBuildStamp = stamp
-                          , ccLockDependencies = \_ -> return () }
+                          , ccLockDependencies = \_ -> return (), ccFiles = files }
 
 -- | How much of a project a build asks for.  A whole-project build seeds
 -- discovery with every module and lets the final build prune stale
@@ -1005,20 +1068,26 @@ data CompilePlan = CompilePlan
   , cpSourceSizes :: M.Map TaskKey Integer    -- each needed module's source size, 0 when missing
   }
 
--- | Plan a build.  A plan fetches dependencies and plans in full (the
--- request's changed paths are dropped) unless the scheduler's last
--- completed fetch was of the same Build.act.  The stamp is recorded once
--- the fetch completes, so the next plan fetches again after a fetch that
--- failed or was cancelled.  The plans of one scheduler never overlap:
--- startCompile awaits the cancelled run before it starts the next, and a
--- one-shot build plans once.
+-- | Plan a build.  A plan that fetches dependencies plans in full: the
+-- request's changed paths are dropped.  The plans of one scheduler never
+-- overlap: startCompile awaits the cancelled run before it starts the
+-- next, and a one-shot build plans once.
 prepareCompilePlan :: Source.SourceProvider -> C.GlobalOptions -> CompileScheduler -> CompileContext -> PlanRequest -> IO CompilePlan
 prepareCompilePlan sp gopts sched ctx request = do
+    fetched <- fetchPlanDependencies gopts sched ctx
+    planFetched sp gopts ctx (if fetched then request { requestChanged = Nothing } else request)
+
+-- | Fetch the dependencies of a build unless the scheduler's last completed
+-- fetch was of the same Build.act, and say whether it fetched.  The stamp
+-- is recorded once the fetch completes, so the next call fetches again
+-- after a fetch that failed or was cancelled.
+fetchPlanDependencies :: C.GlobalOptions -> CompileScheduler -> CompileContext -> IO Bool
+fetchPlanDependencies gopts sched ctx = do
     specChanged <- (/= stamp) <$> readIORef (schedulerBuildSpec sched)
     when specChanged $ do
       fetchDependencies gopts (ccPathsRoot ctx) (C.dep_overrides (ccOpts ctx))
       writeIORef (schedulerBuildSpec sched) stamp
-    planFetched sp gopts ctx (if specChanged then request { requestChanged = Nothing } else request)
+    return specChanged
   where
     stamp = Just (ccBuildStamp ctx)
 
@@ -1037,7 +1106,7 @@ planFetched sp gopts ctx request = do
     case requestChanged request of
       Nothing      -> mapM_ (uncurry pruneMissingModuleOutputs) withPaths
       Just changed -> pruneMissingChangedModuleOutputs withPaths changed
-    tasks    <- buildGlobalTasks sp gopts opts projects paths (seeds projects)
+    tasks    <- buildGlobalTasks sp gopts opts (ccFiles ctx) projects paths (seeds projects)
     selectPlan ctx projects tasks request
   where
     opts = ccOpts ctx
@@ -1067,7 +1136,7 @@ buildProjects gopts ctx = withoutTestLibraries <$> projects
     projects
       | isTmp paths = return (M.singleton root scratch)
       | otherwise   = discoverProjects gopts sys root (C.dep_overrides opts)
-    scratch = ProjCtx { projRoot = root, projSrcDir = srcDir paths, projSysPath = sys, projBuildSpec = scratchBuildSpec root, projDeps = [] }
+    scratch = ProjCtx { projRoot = root, projSrcDir = srcDir paths, projDerived = Data.Set.empty, projSysPath = sys, projBuildSpec = scratchBuildSpec root, projDeps = [] }
     withoutTestLibraries
       | C.test opts = M.adjust (\p -> p { projBuildSpec = (projBuildSpec p) { BuildSpec.libraries = M.empty } }) root
       | otherwise   = id
@@ -1161,16 +1230,18 @@ selectRequested ctx g files = do
       absolute <- canonicalizePath file
       case [ gtKey t | t <- graphTasks g, taskSourceFile t == absolute ] of
         k : _ -> return (Just k)
-        []    -> do mn <- moduleNameFromFile (srcDir paths) (projName paths) absolute
+        []    -> do mn <- moduleOfSource paths absolute
                     return (gtKey <$> M.lookup (TaskKey (ccRootProj ctx) mn) (graphIndex g))
 
 -- | The modules an edit of the changed files affects: every dependent of a
 -- changed module, every module on a dependency path from those to a DBP
 -- provider, and every dependent of the providers on those paths, because
 -- every consumer of a deferred provider can contribute selected-name
--- interest.  Changes that match no module select everything.  Safe on
--- import cycles, which the run reports later.  The selected tasks keep
--- their full provider maps, so unchanged imports still resolve through
+-- interest.  A changed file that is the source of no module selects
+-- everything: it can be the source file of a module that was removed, and
+-- the graph has no edge to that module from the modules that import it.
+-- Safe on import cycles, which the run reports later.  The selected tasks
+-- keep their full provider maps, so unchanged imports still resolve through
 -- cached interfaces.
 selectAffected :: CompileContext -> ModuleGraph -> Data.Set.Set TaskKey -> [FilePath] -> IO (Data.Set.Set TaskKey)
 selectAffected ctx g blocked files
@@ -1178,9 +1249,7 @@ selectAffected ctx g blocked files
   | otherwise  = do
       edited  <- mapM normalizePathSafe files
       sources <- M.fromList <$> forM (graphTasks g) (\t -> (\path -> (path, gtKey t)) <$> normalizePathSafe (taskSourceFile t))
-      return $ case mapMaybe (`M.lookup` sources) edited of
-        []      -> everything
-        changed -> affectedBy (graphImports g) isDbpProvider changed
+      return $ maybe everything (affectedBy (graphImports g) isDbpProvider) (mapM (`M.lookup` sources) edited)
   where
     everything = M.keysSet (graphIndex g)
     isDbpProvider k =
@@ -1338,11 +1407,12 @@ resolveProviders index paths imports = M.fromList (concatMap provide spellings)
 buildGlobalTasks :: Source.SourceProvider
                  -> C.GlobalOptions
                  -> C.CompileOptions
+                 -> FileFacts                       -- what the plan has seen of the files it looked at
                  -> M.Map FilePath ProjCtx
                  -> M.Map FilePath Paths            -- each project's paths
                  -> Maybe [FilePath]                -- seed source files; Nothing seeds every module
                  -> IO [GlobalTask]
-buildGlobalTasks sp gopts opts projects pathsByProject seedFiles = do
+buildGlobalTasks sp gopts opts facts projects pathsByProject seedFiles = do
     modules <- concat <$> mapM projectModules (M.elems projects)
     seeds   <- maybe (return []) (mapM canonicalizePath) seedFiles
     let index    = ModuleIndex { indexProjects = projects, indexSources = M.fromList modules }
@@ -1366,7 +1436,7 @@ buildGlobalTasks sp gopts opts projects pathsByProject seedFiles = do
 
     discover index key = do
         createModuleDirectories paths (tkMod key)
-        discovered <- readModuleTask sp gopts opts paths (tkMod key) file
+        discovered <- readModuleTask sp gopts opts facts paths (tkMod key) file
         -- A cached header stores canonical imports, which spell a bare
         -- dependency import as dep.lib.  When such a namespace has become
         -- local, the source is parsed again, so that its spelling resolves to
@@ -1383,41 +1453,49 @@ buildGlobalTasks sp gopts opts projects pathsByProject seedFiles = do
 
 -- | A module in the cheapest form discovery can use.  Its .tydb header is
 -- reused when this build of the compiler wrote the .tydb and its binary is
--- not newer than the .tydb (reusableHeader), and the source is unchanged: by
--- recorded stat with the source older than the .tydb, else by content hash
--- (then the recorded stat is refreshed in place).  An editor overlay is
--- compared by content only, and so is a module with an .ext.c,
--- whose content hash the recorded one covers, or one that had an .ext.c
--- when its .tydb was written (recordedSourceMeta).  Otherwise only the
--- source header is parsed.  Reading can write: the stat refresh.
-readModuleTask :: Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -> Paths -> A.ModName -> FilePath -> IO CompileTask
-readModuleTask sp gopts opts paths mn file = do
+-- not newer than the .tydb (reusableHeader), and the source and the embedded
+-- files that the header records are unchanged: by recorded stat with the
+-- source older than the .tydb, else by content hash (then the recorded stats
+-- are refreshed in place).  An editor overlay is compared by content only,
+-- and so is a module with an .ext.c, whose content hash the recorded one
+-- covers, or one that had an .ext.c when its .tydb was written
+-- (recordedSourceMeta).  The embedded files are looked at before the source
+-- is read, each by the stat rule (embedFacts).  A recorded file that embed
+-- cannot take leaves the header unused, so that embedPass reports
+-- the file at its expression.  A module whose header is not reused has only
+-- its source header parsed.  Reading can write: the stat refresh.
+readModuleTask :: Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -> FileFacts -> Paths -> A.ModName -> FilePath -> IO CompileTask
+readModuleTask sp gopts opts facts paths mn file = do
     reusable <- reusableHeader gopts opts tydb
     case reusable of
-      Nothing               -> fromSource =<< readModuleSource sp paths mn file
-      Just (header, tydbNs) -> do
+      Nothing     -> fromSource =<< readModuleSource sp paths mn file
+      Just header -> do
+        let records = recordedEmbeds header
         extHash <- readExtSourceHash paths mn file
+        embeds  <- sequence <$> embedFacts facts (embedRoot paths) records (M.keys records)
         overlay <- Source.spReadOverlay sp file
         case overlay of
-          Just snap -> verify header (snapshotSource Nothing extHash snap)
+          Just snap -> verify header embeds (snapshotSource Nothing extHash snap)
           Nothing   -> do
             meta <- readSourceFileMeta file
-            if isNothing extHash && InterfaceFiles.summarySourceMeta header == Just meta && InterfaceFiles.sfmMTimeNs meta < tydbNs
+            if isNothing extHash && embeds == Right (InterfaceFiles.summaryEmbeds header)
+               && InterfaceFiles.summarySourceMeta header == Just meta && InterfaceFiles.sfmMTimeNs meta < InterfaceFiles.summaryModified header
               then return (TyTask header)
-              else verify header =<< readSourceFile sp file extHash meta
+              else verify header embeds =<< readSourceFile sp file extHash meta
   where
     tydb = tyDbPath paths mn
 
     fromSource source = either ParseErrorTask (\(imps, doc) -> ParseTask source imps doc)
                           <$> parseSourceHeader mn file (sourceText source)
 
-    -- The stat refresh updates one row, failures ignored.  Rewriting the
+    -- The stat refresh updates one row for the source and one for the
+    -- embedded files, failures ignored.  Rewriting the
     -- whole .tydb would re-derive its dependency rows from the stored
     -- per-name hashes, whose external dependencies are stripped, and so lose
     -- their users and hashes.
-    verify header source = do
-      let hash = moduleSourceHash (sourceBytes source) (sourceExtHash source)
-          same = hash == InterfaceFiles.summarySourceHash header
+    verify header embeds source = do
+      let hash = moduleSourceHash (sourceBytes source) (sourceExtHash source) <$> embeds
+          same = hash == Right (InterfaceFiles.summarySourceHash header)
           meta = sourceMeta source
       when (C.verbose gopts && isNothing meta) $ do
         actTime <- Source.spGetModTime sp file
@@ -1425,31 +1503,33 @@ readModuleTask sp gopts opts paths mn file = do
         putStrLn ("[debug] readModuleTask " ++ modNameToString mn
                   ++ " act=" ++ show actTime
                   ++ " ty=" ++ show tyTime
-                  ++ " hash=" ++ Hashing.shortHash hash
+                  ++ " hash=" ++ either id Hashing.shortHash hash
                   ++ " header=" ++ Hashing.shortHash (InterfaceFiles.summarySourceHash header)
                   ++ " len=" ++ show (B.length (sourceBytes source))
                   ++ if same then " (match)" else " (diff)")
-      if not same then fromSource source else do
-        -- An overlay has no stat to record.  A module with an .ext.c must
-        -- not keep one, which a .tydb from an earlier compiler can hold.
-        let recorded = recordedSourceMeta source
-        when (recorded /= InterfaceFiles.summarySourceMeta header
-              && (isJust recorded || isJust (sourceExtHash source))) $
-          void (trySync (InterfaceFiles.updateSourceMeta tydb recorded))
-        return (TyTask header)
+      case embeds of
+        Right row | same -> do
+          -- An overlay has no stat to record.  A module with an .ext.c must
+          -- not keep one, which a .tydb from an earlier compiler can hold.
+          let recorded = recordedSourceMeta source
+          when (recorded /= InterfaceFiles.summarySourceMeta header
+                && (isJust recorded || isJust (sourceExtHash source))) $
+            void (trySync (InterfaceFiles.updateSourceMeta tydb recorded))
+          when (row /= InterfaceFiles.summaryEmbeds header) $
+            void (trySync (InterfaceFiles.updateEmbeds tydb row))
+          return (TyTask header)
+        _ -> fromSource source
 
--- | The .tydb header and the .tydb's modification time, unless the .tydb is
--- missing, its header unreadable, another build of the compiler wrote it or
--- the compiler binary is newer.  A failure to stat the .tydb itself
--- propagates.
-reusableHeader :: C.GlobalOptions -> C.CompileOptions -> FilePath -> IO (Maybe (InterfaceFiles.HeaderSummary, Integer))
+-- | The .tydb header, unless the .tydb is missing, its header unreadable,
+-- another build of the compiler wrote it or the compiler binary is newer
+-- than the .tydb.
+reusableHeader :: C.GlobalOptions -> C.CompileOptions -> FilePath -> IO (Maybe InterfaceFiles.HeaderSummary)
 reusableHeader gopts opts tydb = do
     header <- InterfaceFiles.tryReadHeaderSummary tydb
     case header of
       Just h | trustsCompiler gopts opts (InterfaceFiles.summaryCompiler h) -> do
-        tydbNs <- InterfaceFiles.interfaceModifiedTimeNs tydb
-        newer  <- compilerNewerThan opts tydbNs
-        return (if newer then Nothing else Just (h, tydbNs))
+        newer <- compilerNewerThan opts (InterfaceFiles.summaryModified h)
+        return (if newer then Nothing else Just h)
       _ -> return Nothing
 
 -- | Whether an output that the given build of the compiler wrote (a .tydb,
@@ -1498,10 +1578,10 @@ readSourceFile sp file extHash meta = snapshotSource (Just meta) extHash <$> Sou
 snapshotSource :: Maybe InterfaceFiles.SourceFileMeta -> Maybe B.ByteString -> Source.SourceSnapshot -> ModuleSource
 snapshotSource meta extHash snap = ModuleSource (Source.ssText snap) (Source.ssBytes snap) meta extHash
 
--- | The stat that a module's .tydb records: none for a module with an
--- .ext.c.  The stat covers only the source, so a recorded one would let a
--- later plan trust the .tydb after the .ext.c is deleted and the source is
--- left alone.  Without one, the header is checked by content hash.
+-- | The stat of the source that a module's .tydb records: none for a module
+-- with an .ext.c.  The stat covers only the source, so a recorded one would
+-- let a later plan trust the .tydb after the .ext.c is deleted and the source
+-- is left alone.  Without one, the header is checked by content hash.
 recordedSourceMeta :: ModuleSource -> Maybe InterfaceFiles.SourceFileMeta
 recordedSourceMeta source
   | isJust (sourceExtHash source) = Nothing
@@ -1509,20 +1589,218 @@ recordedSourceMeta source
 
 -- | The source hash a module's .tydb records: of the source bytes, combined
 -- with the content hash of the module's .ext.c, which covers the project
--- files it includes, when it has one.  The C compiler sees an .ext.c only
--- through the generated .c, so an edit of the .ext.c or of a file it
--- includes must count as a change of the module.
-moduleSourceHash :: B.ByteString -> Maybe B.ByteString -> B.ByteString
-moduleSourceHash bytes Nothing        = SHA256.hash bytes
-moduleSourceHash bytes (Just extHash) = SHA256.hash (B.concat [SHA256.hash bytes, B.pack "ext.c:", extHash])
+-- files it includes, when it has one, and with the path and the SHA-256 of
+-- each file it embeds.  The C compiler sees an .ext.c only through the
+-- generated .c, so an edit of the .ext.c or of a file it includes must count
+-- as a change of the module.  The content of an embedded file is the value
+-- of an expression, so new content must count as one too.
+moduleSourceHash :: B.ByteString -> Maybe B.ByteString -> [InterfaceFiles.EmbeddedFile] -> B.ByteString
+moduleSourceHash bytes extHash embeds = withEmbeds (maybe source withExt extHash)
+  where
+    source      = SHA256.hash bytes
+    withExt ext = SHA256.hash (B.concat [source, B.pack "ext.c:", ext])
+    withEmbeds hash
+      | null embeds = hash
+      | otherwise   = SHA256.hash (BL.toStrict (encode ("embeds" :: String, hash, [ (InterfaceFiles.embeddedPath f, InterfaceFiles.embeddedSha256 f) | f <- embeds ])))
+
+-- | The directory that the path of an embed expression counts from: the
+-- root of the module's project, or the directory of a file that is compiled
+-- without a project.
+embedRoot :: Paths -> FilePath
+embedRoot paths = if isTmp paths then srcDir paths else projPath paths
+
+-- | The SHA-256 of a file's content, as 64 hexadecimal digits.  The file is
+-- read in pieces.
+hashOfFile :: FilePath -> IO String
+hashOfFile path = withBinaryFile path ReadMode $ \h ->
+    Hashing.hashHex <$> (evaluate . SHA256.hashlazy =<< BL.hGetContents h)
+
+-- | What a build recorded of a file: its stat, taken before its content was
+-- read, the SHA-256 of that content, and the modification time of the file
+-- that holds the record, in POSIX nanoseconds.
+data Recorded = Recorded
+  { recordedStat    :: InterfaceFiles.SourceFileMeta
+  , recordedSha256  :: String
+  , recordedWritten :: Integer
+  }
+
+-- | What a .tydb header records of each file that its module embeds, by
+-- embedded path.
+recordedEmbeds :: InterfaceFiles.HeaderSummary -> M.Map FilePath Recorded
+recordedEmbeds header = M.fromList
+    [ (InterfaceFiles.embeddedPath f, Recorded (InterfaceFiles.embeddedStat f) (InterfaceFiles.embeddedSha256 f) (InterfaceFiles.summaryModified header))
+    | f <- InterfaceFiles.summaryEmbeds header ]
+
+-- | What a plan saw at a path: the stat of what the path names, Nothing
+-- where it names nothing or cannot be read, and the SHA-256 of the content
+-- of a file, Nothing where no look found a file to read.
+type Seen = (Maybe InterfaceFiles.SourceFileMeta, Maybe String)
+
+-- | What one plan has seen of the files it looked at, by path, and the names
+-- that each directory it listed holds.  A path that no look has completed
+-- for holds Nothing.  The looks at one path run one at a time, so a plan
+-- reads a file once however many of its modules embed it, and lists a
+-- directory once.
+data FileFacts = FileFacts
+  { seenFiles   :: IORef (M.Map FilePath (MVar (Maybe Seen)))
+  , listedNames :: IORef (M.Map FilePath (MVar (Maybe (Data.Set.Set FilePath))))
+  }
+
+-- | The maps of a plan that has looked at no file and listed no directory.
+newFileFacts :: IO FileFacts
+newFileFacts = FileFacts <$> newIORef M.empty <*> newIORef M.empty
+
+-- | The cell of a path in a map of a plan.  The first look at the path
+-- makes it.
+cellOf :: IORef (M.Map FilePath (MVar (Maybe a))) -> FilePath -> IO (MVar (Maybe a))
+cellOf ref path = do
+    fresh <- newMVar Nothing
+    atomicModifyIORef' ref (\cells -> let c = M.findWithDefault fresh path cells in (M.insert path c cells, c))
+
+-- | The names that a directory lists, as the first look of a plan found
+-- them.
+listedIn :: FileFacts -> FilePath -> IO (Data.Set.Set FilePath)
+listedIn facts dir = do
+    cell <- cellOf (listedNames facts) dir
+    modifyMVar cell $ \listed -> do
+      names <- maybe (Data.Set.fromList <$> listDirectory dir) return listed
+      return (Just names, names)
+
+-- | A file that is not the one of the plan's first look at its path: by its
+-- stat at a later look, or by its content when a back job reads it.
+newtype FileChanged = FileChanged FilePath deriving (Show)
+
+instance Exception FileChanged where
+  displayException (FileChanged path) = changedWhileBuilding path
+
+-- | The stat rule: the recorded SHA-256 stands for the content of a file
+-- with the given stat when the stat is the recorded one and the
+-- modification time is older than the file that holds the record.  Strictly
+-- older, since a file system with coarse timestamps can show the time of
+-- that file for content written after it.  Nothing for a file that has to
+-- be read.
+statRule :: Maybe Recorded -> InterfaceFiles.SourceFileMeta -> Maybe String
+statRule (Just r) meta
+  | recordedStat r == meta && InterfaceFiles.sfmMTimeNs meta < recordedWritten r = Just (recordedSha256 r)
+statRule _ _ = Nothing
+
+-- | The SHA-256 of the content of the file at a path, given the stat of the
+-- file or, where there is no file to read, the reason, which is returned as
+-- it is, with the stat of what the path names, if any.  A file that the
+-- record stands for is not read (statRule).  Any other file is read
+-- (hashOfFile).  The first look of a plan at a path keeps what it found, and
+-- a later look returns that without a read.  A look that finds no file to
+-- read leaves the SHA-256 of an earlier look in place.  A later look that
+-- brings another stat means that the file changed while the plan ran
+-- (FileChanged).
+fileFact :: FileFacts -> Maybe Recorded -> FilePath -> Either (e, Maybe InterfaceFiles.SourceFileMeta) InterfaceFiles.SourceFileMeta -> IO (Either e String)
+fileFact facts recorded path status = do
+    cell <- cellOf (seenFiles facts) path
+    modifyMVar cell $ \seen -> do
+      when (any ((/= stat) . fst) seen) (throwIO (FileChanged path))
+      let known = seen >>= snd
+      sha <- traverse (\meta -> maybe (content meta) return known) status
+      return (Just (stat, either (const known) Just sha), first fst sha)
+  where
+    stat = either snd Just status
+    content meta = maybe (hashOfFile path) return (statRule recorded meta)
+
+-- | An embedded path below a directory, as a plan sees it: the file as a
+-- .tydb records it, or why embed cannot take it.  A path names a regular
+-- file of fewer than 2^31 bytes whose components are spelled as their
+-- directories list them (Embed.embeddedFileStatus), each directory listed
+-- once in a plan.  The SHA-256 follows the stat rule with the given records
+-- (fileFact), and the stat is taken before the content is read.  The look
+-- throws FileChanged for a file that changed since the plan first looked at
+-- it.
+embedFact :: FileFacts -> FilePath -> M.Map FilePath Recorded -> FilePath -> IO (Either String InterfaceFiles.EmbeddedFile)
+embedFact facts root records path = handle (return . Left . Embed.cannotBeRead path) $ do
+    status <- bimap (fmap (fmap fileMeta)) fileMeta <$> Embed.embeddedFileStatus (listedIn facts) root path
+    sha    <- fileFact facts (M.lookup path records) (root </> path) status
+    return (file <$> first fst status <*> sha)
+  where
+    file meta sha = InterfaceFiles.EmbeddedFile path (InterfaceFiles.sfmSize meta) sha meta
+
+-- | The message for a path whose file changed since the plan first looked
+-- at it.  The path is the embedded path, or the path of an input file of a
+-- derived module below its project root.
+changedWhileBuilding :: FilePath -> String
+changedWhileBuilding path = path ++ " changed while the build ran. Run the build again"
+
+-- | Each of the given embedded paths below a directory, as a plan sees it
+-- (embedFact).  Embed cannot take a file that changed since the plan first
+-- looked at it.
+embedFacts :: FileFacts -> FilePath -> M.Map FilePath Recorded -> [FilePath] -> IO [Either String InterfaceFiles.EmbeddedFile]
+embedFacts facts root records = mapM fact
+  where
+    fact path = handle (\(FileChanged _) -> return (Left (changedWhileBuilding path))) (embedFact facts root records path)
+
+-- | The messages for the embedded files of a plan's modules that are not the
+-- files that the build took them for, each message once.  The C compiler
+-- reads the embedded files of a module when Zig compiles its data C file,
+-- which is after the plan looked at them.  So this look comes after Zig, and
+-- takes each file that the .tydb of a module with a data C file records.
+-- The stat of the file is the one that the plan saw, else the file changed
+-- while the build ran.  And the SHA-256 that the plan has for the file is
+-- the recorded one, else the file changed since its module was compiled,
+-- which only a build that runs no front passes (--only-build) leaves so.  A
+-- file that the plan looked at is not read: it costs one stat.
+changedEmbeds :: CompilePlan -> IO [String]
+changedEmbeds plan = Data.List.nub . concat <$> mapM changed (cpNeededTasks plan)
+  where
+    changed t = do
+      let paths = gtPaths t
+          mn    = tkMod (gtKey t)
+      hasData <- doesFileExist (generatedPath paths mn dataFile)
+      header  <- if hasData then InterfaceFiles.tryReadHeaderSummary (tyDbPath paths mn) else return Nothing
+      let records = maybe M.empty recordedEmbeds header
+      concat <$> mapM (look (embedRoot paths) records) (M.toList records)
+    look root records (path, recorded) = handle (\(FileChanged _) -> return [changedWhileBuilding path]) $ do
+      file <- embedFact (ccFiles (cpContext plan)) root records path
+      return [ path ++ " changed since its module was compiled. Run the build without --only-build"
+             | fmap InterfaceFiles.embeddedSha256 file /= Right (recordedSha256 recorded) ]
+
+-- | What a plan saw at each path that it looked at for embed in the root
+-- project and in its local dependencies (localProjects), whether it found a
+-- file there or not: the stat of the file, or Nothing where it found no file
+-- to read.  A watch looks for file system events at these paths and at the
+-- directories on the way to them from the directory that they count from,
+-- which are here with Nothing.  Each path is named as an event names it, and
+-- a path that is a symbolic link is here also as the file that it links to
+-- (Embed.eventPaths).  A build that brought derived modules up to date
+-- looked at their input files through the same facts (Acton.Derive), so
+-- they are here too.
+embeddedPaths :: CompilePlan -> IO (M.Map FilePath (Maybe InterfaceFiles.SourceFileMeta))
+embeddedPaths plan = do
+    local <- localProjects (ccSysAbs ctx) (ccRootProj ctx) (cpProjMap plan)
+    cells <- readIORef (seenFiles (ccFiles ctx))
+    known <- newIORef M.empty
+    -- The links of a directory are resolved once, however many paths have
+    -- the directory on their way.
+    let resolved dir = do
+          found <- M.lookup dir <$> readIORef known
+          maybe (do real <- canonicalizePath dir
+                    modifyIORef' known (M.insert dir real)
+                    return real) return found
+    M.fromListWith (<|>) . concat <$> sequence
+      [ do seen           <- readMVar cell
+           (above, files) <- Embed.eventPaths resolved root (makeRelative root path)
+           -- A stat with a SHA-256 is that of a file to read.  A stat
+           -- without one is that of something that embed cannot take.
+           return ([ (place, Nothing) | place <- above ] ++ [ (place, (\(stat, sha) -> stat <* sha) =<< seen) | place <- files ])
+      | root <- map embedRoot (M.elems (M.intersection (buildPaths ctx (cpProjMap plan)) local))
+      , (path, cell) <- M.toList cells, path `isUnder` root ]
+  where ctx = cpContext plan
 
 -- | Read stable source metadata used for quick .tydb reuse checks.
+readSourceFileMeta :: FilePath -> IO InterfaceFiles.SourceFileMeta
+readSourceFileMeta path = fileMeta <$> getFileStatus path
+
+-- | The stat of a file as a .tydb records it.
 -- Device/inode act as file identity on POSIX so metadata drift from copies or
 -- restores falls back to content hashing instead of blindly trusting mtimes.
-readSourceFileMeta :: FilePath -> IO InterfaceFiles.SourceFileMeta
-readSourceFileMeta path = do
-  st <- getFileStatus path
-  return InterfaceFiles.SourceFileMeta
+fileMeta :: FileStatus -> InterfaceFiles.SourceFileMeta
+fileMeta st = InterfaceFiles.SourceFileMeta
     { InterfaceFiles.sfmMTimeNs = InterfaceFiles.posixNanoseconds (modificationTimeHiRes st)
     , InterfaceFiles.sfmCTimeNs = InterfaceFiles.posixNanoseconds (statusChangeTimeHiRes st)
     , InterfaceFiles.sfmSize = fromIntegral (fileSize st)
@@ -1630,7 +1908,7 @@ parseActFile opts sp mn actFile mOnProgress = do
 
 -- Module cache -------------------------------------------------------------------------------------
 
--- | What runs read from .tydb files or finished: each module's .tydb path,
+-- | What a run read from .tydb files or finished: each module's .tydb path,
 -- its pub and impl hashes (read together) and complete public name map,
 -- and single name reads.  Every table is read and written under its own
 -- lock.  A hash or name table is always locked before the path table,
@@ -1738,6 +2016,7 @@ publicNameMap names = M.fromList [ (InterfaceFiles.nhName i, i) | i <- names, Na
 -- never by the coordinator.
 data ModuleEnv = ModuleEnv
   { moduleBuild    :: BuildEnv
+  , moduleFiles    :: FileFacts                         -- what the plan has seen of the files it looked at
   , moduleTask     :: GlobalTask
   , moduleCurrent  :: CompileTask                       -- the parse stage's result, else the discovered task
   , moduleOptions  :: C.CompileOptions                  -- root or dependency options
@@ -1764,10 +2043,9 @@ tydbOf env                              = tyDbPath (pathsOf env) (nameOf env)
 labelOf                                 :: ModuleEnv -> String
 labelOf env                             = moduleLabel (pathsOf env) (nameOf env)
 
--- | The module's file without its project prefix, as the diagnostics of its
--- code name it.
+-- | The module's file as the diagnostics of its code name it.
 labelFileOf                             :: ModuleEnv -> FilePath
-labelFileOf env                         = modNameToFilename (dropProjPrefix (pathsOf env) (nameOf env))
+labelFileOf env                         = moduleDisplayFile (pathsOf env) (nameOf env)
 
 -- | The current hashes of the modules a module imports.
 data Resolver = Resolver
@@ -1889,6 +2167,7 @@ data ModuleError
   | MissingDependencyHash HashKind A.Name SrcLoc A.QName    -- the kind, the module's name using it, its location, the name
   | InterfaceWriteFailed  String                            -- the module's own .tydb
   | InterfaceChanged      String                            -- a .tydb that turned unreadable after the plan read it
+  | EmbedProblem          SrcLoc String                     -- an embed expression, and why embedPass refuses it
   deriving (Show)
 
 newtype ModuleErrors = ModuleErrors [ModuleError] deriving (Show)
@@ -1909,6 +2188,7 @@ explainError env src err = case err of
     MissingNameHash qn                    -> compilationError labelFile src NoLoc ("Hash info missing for " ++ prstr qn)
     MissingDependencyHash kind owner l qn -> compilationError labelFile src l
                                                (hashKindName kind ++ " hash missing for " ++ prstr qn ++ " (used by " ++ A.nstr owner ++ ")")
+    EmbedProblem l problem                -> compilationError labelFile src l problem
   where
     fullFile  = modNameToFilename (nameOf env)
     labelFile = labelFileOf env
@@ -2084,6 +2364,7 @@ assess env header = do
             let opts = moduleOptions env
             status <- codegenStatus (buildOptions (moduleBuild env)) opts (pathsOf env) (nameOf env)
                         (headerCodegenTag opts (pathsOf env) (nameOf env) header hasNotImpl (InterfaceFiles.summaryImplHash header) WholeModule)
+                        (InterfaceFiles.summaryEmbeds header)
             return (if outputsUpToDate status then Reuse header deferred else RefreshCodegen header status)
 
 -- | The action a cached module's dependency changes call for, if any.  A
@@ -2478,7 +2759,8 @@ readInterfaceShell env pubHash = do
 -- the environment of the modules checked before it, with the given codegen
 -- tag.
 storedBackJob :: ModuleEnv -> InterfaceFiles.StoredModule -> B.ByteString -> IO BackJob
-storedBackJob env module' = loadBackJob (moduleBuild env) (moduleBase env) (keyOf env) (pathsOf env) (moduleOptions env) (InterfaceFiles.storedTyped module')
+storedBackJob env module' = loadBackJob (moduleBuild env) (moduleBase env) (keyOf env) (pathsOf env) (moduleOptions env)
+                                        (InterfaceFiles.storedEmbeds module') (InterfaceFiles.storedTyped module')
 
 -- | The codegen tag of a whole module that its own .tydb stores, with the
 -- given impl hash: an impl refresh computes the new one before it writes.
@@ -2488,35 +2770,39 @@ storedCodegenTag env module' implHash =
                (InterfaceFiles.storedSourceHash module') implHash
                (map fst (InterfaceFiles.storedImports module')) WholeModule
 
--- | A back job for a typed module read back from a .tydb: its source read
--- again, its environment rebuilt with protocols converted.
-loadBackJob :: BuildEnv -> Acton.Env.Env0 -> TaskKey -> Paths -> C.CompileOptions -> A.Module -> B.ByteString -> IO BackJob
-loadBackJob build base key paths opts typed tag = do
+-- | A back job for a typed module read back from a .tydb, with the embedded
+-- files that the .tydb records: its source read again, its environment
+-- rebuilt with protocols converted.
+loadBackJob :: BuildEnv -> Acton.Env.Env0 -> TaskKey -> Paths -> C.CompileOptions -> [InterfaceFiles.EmbeddedFile] -> A.Module -> B.ByteString -> IO BackJob
+loadBackJob build base key paths opts embeds typed tag = do
     snap  <- Source.readSource (buildSources build) (srcFile paths (tkMod key))
     scope <- Acton.Env.mkEnv (searchPath paths) base typed
     return BackJob { bjKey = key, bjPaths = paths, bjOpts = opts, bjTypeEnv = Converter.convEnvProtos scope
-                   , bjModule = typed, bjSource = Source.ssText snap, bjCodegenTag = tag }
+                   , bjModule = typed, bjSource = Source.ssText snap, bjCodegenTag = tag, bjEmbeds = embeds }
 
 
 -- Front passes -------------------------------------------------------------------------------------
 
--- | Check one module outside a stage graph (__builtin__, benchmarks): its
--- imports resolve through the module cache, and it is checked in the given
--- environment.
+-- | Check one module outside a stage graph and outside a plan (benchmarks):
+-- its imports resolve through the module cache, it is checked in the given
+-- environment, and no file has been looked at before.
 checkModule :: BuildEnv -> GlobalTask -> C.CompileOptions -> Acton.Env.Env0 -> ModuleSource -> A.Module -> IO (Either [Diagnostic String] FrontResult)
-checkModule = checkModuleWithDump False
+checkModule build t opts base source parsed = do
+    files <- newFileFacts
+    checkModuleWithDump False files build t opts base source parsed
 
 -- Builtin compilation also runs outside the stage graph, but may itself be
 -- the module explicitly requested for alternative output.
-checkModuleWithDump :: Bool -> BuildEnv -> GlobalTask -> C.CompileOptions -> Acton.Env.Env0 -> ModuleSource -> A.Module -> IO (Either [Diagnostic String] FrontResult)
-checkModuleWithDump requested build t opts base = runFrontPasses ModuleEnv
-    { moduleBuild = build, moduleTask = t, moduleCurrent = gtTask t, moduleOptions = opts
+checkModuleWithDump :: Bool -> FileFacts -> BuildEnv -> GlobalTask -> C.CompileOptions -> Acton.Env.Env0 -> ModuleSource -> A.Module -> IO (Either [Diagnostic String] FrontResult)
+checkModuleWithDump requested files build t opts base = runFrontPasses ModuleEnv
+    { moduleBuild = build, moduleFiles = files, moduleTask = t, moduleCurrent = gtTask t, moduleOptions = opts
     , moduleResolver = cacheResolver (buildCache build) (gtPaths t), moduleBase = base
     , moduleBlocked = False, moduleDump = requested }
 
--- | A module after its kinds, types and escape analysis.
+-- | A module after its embedded files, kinds, types and escape analysis.
 data Checked = Checked
-  { checkedScope     :: Acton.Env.Env0                   -- the environment it was checked in
+  { checkedEmbeds    :: [InterfaceFiles.EmbeddedFile]    -- the files its embed expressions name
+  , checkedScope     :: Acton.Env.Env0                   -- the environment it was checked in
   , checkedInterface :: I.NModule
   , checkedModule    :: A.Module                         -- typed
   , checkedTypeEnv   :: Acton.Env.Env0                   -- reconstruct's, protocols converted
@@ -2560,10 +2846,12 @@ runFrontPasses env source parsed = do
       start           <- now
       dumpWhen opts mn C.parse     "parse"     (Pretty.print parsed)
       dumpWhen opts mn C.parse_ast "parse-ast" (renderStyle astStyle (ppDoc parsed))
+      (embedded, embeds)
+                      <- embedPass env parsed
       observer        <- newTypeObserver env
-      scope           <- Acton.Env.mkEnv (searchPath (pathsOf env)) (moduleBase env) parsed
+      scope           <- Acton.Env.mkEnv (searchPath (pathsOf env)) (moduleBase env) embedded
       envDone         <- now
-      kinded          <- kindsPass env scope parsed
+      kinded          <- kindsPass env scope embedded
       kindsDone       <- now
       (interface, typed, typeEnv, tests)
                       <- Acton.Types.reconstruct (Just (typeProgress observer)) (typeSignatures observer) scope kinded (Just (labelOf env))
@@ -2573,10 +2861,10 @@ runFrontPasses env source parsed = do
       escapes         <- escapePass env scope typed
       initializationPass env scope typed
       escapeDone      <- now
-      let checked = Checked { checkedScope = scope, checkedInterface = interface, checkedModule = typed
+      let checked = Checked { checkedEmbeds = embeds, checkedScope = scope, checkedInterface = interface, checkedModule = typed
                             , checkedTypeEnv = typeEnv, checkedTests = tests, checkedEscapes = escapes }
           I.NModule imports iface _ = interface
-      hashed          <- hashPass env source parsed checked
+      hashed          <- hashPass env source embedded checked
       hashDone        <- now
       dumpWhen opts mn C.types "types" (Pretty.print typed)
       dumpWhen opts mn C.sigs  "sigs"  (Acton.Types.prettySigs scope mn imports iface)
@@ -2587,7 +2875,7 @@ runFrontPasses env source parsed = do
       -- --tydb copy are never read back within this build, so they are
       -- written in the background.
       commitTydb env (writeTydb env source checked hashed)
-      startOutputs (moduleBuild env) (keyOf env) (docOutputs env parsed checked hashed ++ tydbCopy env)
+      startOutputs (moduleBuild env) (keyOf env) (docOutputs env embedded checked hashed ++ tydbCopy env)
       let names  = hashedNames hashed
           -- reconstruct's typeEnv is already protocol-converted.
           -- Tagged with the hashes and imports the .tydb records, so that a
@@ -2595,7 +2883,8 @@ runFrontPasses env source parsed = do
           job    = BackJob { bjKey = keyOf env, bjPaths = pathsOf env, bjOpts = opts, bjTypeEnv = typeEnv
                            , bjModule = typed, bjSource = sourceText source
                            , bjCodegenTag = codegenTag opts (pathsOf env) mn (A.hasNotImpl (A.mbody typed)) (hashedSource hashed) (hashedImpl hashed)
-                                                       (map fst (hashedImports hashed)) WholeModule }
+                                                       (map fst (hashedImports hashed)) WholeModule
+                           , bjEmbeds = embeds }
           timing = FrontTiming
             { ftEnv               = envDone - start
             , ftKinds             = kindsDone - envDone
@@ -2625,6 +2914,44 @@ forceTypeResult interface typed typeEnv tests = do
     evaluate (rnf typed)
     evaluate (I.forceHTEnv (Acton.Env.hnames typeEnv))
     evaluate (rnf tests)
+
+-- | The first front pass: each embed expression of a parsed module gets the
+-- size and the SHA-256 of the file that its path names below embedRoot.  A
+-- path that names no file as embed takes it fails the module, with a
+-- diagnostic at each expression that has such a path, and so do a file that
+-- changed since the plan first looked at it, two paths that the generated C
+-- names alike (Embed.pathDigits) and a prefix of the #embed lines that
+-- cannot stand between double quotes.  A file that the plan looked at
+-- before, or whose stat is the one that the module's .tydb records, is not
+-- read (embedFacts).  The records are read from the .tydb here and not
+-- taken from the task: the language server keeps a discovered task over
+-- many compiles, and each run of the module's front passes writes the row
+-- again.  Returns the module and the files that it embeds, each once and
+-- sorted by path, as its .tydb records them.  A module without an embed
+-- expression is returned as it is, so that its tree is not built a second
+-- time.
+embedPass :: ModuleEnv -> A.Module -> IO (A.Module, [InterfaceFiles.EmbeddedFile])
+embedPass env parsed
+  | null exprs = return (parsed, [])
+  | otherwise  = do
+      records <- maybe M.empty recordedEmbeds <$> reusableHeader (buildOptions (moduleBuild env)) (moduleOptions env) (tydbOf env)
+      files   <- M.fromList . zip paths <$> embedFacts (moduleFiles env) (embedRoot (pathsOf env)) records paths
+      prefix  <- embedPrefix (pathsOf env) (nameOf env)
+      failOnAny ([ EmbedProblem (A.eloc e) problem | e <- exprs, Left problem <- [files M.! A.epath e] ] ++ clashes ++ unquotable prefix)
+      let found = M.mapMaybe (either (const Nothing) Just) files
+          content f = (InterfaceFiles.embeddedSize f, InterfaceFiles.embeddedSha256 f)
+      return ( runIdentity (Embed.embeds (\e -> Identity e { A.efile = content <$> M.lookup (A.epath e) found }) parsed)
+             , M.elems found )
+  where
+    exprs   = Embed.embedExprs parsed
+    paths   = Data.Set.toAscList (Data.Set.fromList (map A.epath exprs))
+    alike   = M.fromListWith (++) [ (Embed.pathDigits path, [path]) | path <- paths ]
+    clashes = [ EmbedProblem (A.eloc e) (A.epath e ++ " and " ++ other ++ " cannot be embedded in one module. The SHA-256 of both paths starts with " ++ digits)
+              | e <- exprs, let digits = Embed.pathDigits (A.epath e), other : _ <- [filter (/= A.epath e) (alike M.! digits)] ]
+    -- An #embed line holds the prefix as it is, between double quotes.  Only
+    -- a prefix that is an absolute path can have such a character.
+    unquotable prefix = [ EmbedProblem (A.eloc e) (dropTrailingPathSeparator prefix ++ " has a double quote or a control character, and embed cannot name a file below it")
+                        | any (\c -> c == '"' || isControl c) prefix, e <- exprs ]
 
 -- | The kinds check, reported as one step: 0/1 before it, 1/1 after.
 kindsPass :: ModuleEnv -> Acton.Env.Env0 -> A.Module -> IO A.Module
@@ -2763,9 +3090,9 @@ hashPass env source parsed checked = do
         step base done = when ((base + done) `rem` stride == 0) (report False (base + done))
     _            <- evaluate afterImplDeps
     report True 0
-    -- Of the raw bytes and the .ext.c, so any edit of either counts as a
-    -- change.
-    sourceHash   <- forced (moduleSourceHash (sourceBytes source) (sourceExtHash source))
+    -- Of the raw bytes, the .ext.c and the embedded files, so an edit of any
+    -- of them counts as a change.
+    sourceHash   <- forced (moduleSourceHash (sourceBytes source) (sourceExtHash source) (checkedEmbeds checked))
     imports      <- resolveAll (\m -> fmap ((,) m) <$> resolveModule resolver Pub m) MissingInterface headerImports
     srcHashes    <- forced =<< Hashing.nameHashesFromItemsWithProgress (step 0) srcItems
     -- The .ext.c is the implementation of the NotImplemented names.
@@ -2856,7 +3183,7 @@ rootActorProblem _ _ = Just "it is not an actor"
 writeTydb :: ModuleEnv -> ModuleSource -> Checked -> Hashed -> (InterfaceFiles.TyDbWriteProgress -> IO ()) -> IO ()
 writeTydb env source checked hashed onProgress =
     InterfaceFiles.writeFileWithProgress onProgress A.version (C.compilerIdentity (buildOptions (moduleBuild env))) (tydbOf env)
-      (hashedSource hashed) (hashedPub hashed) (hashedImpl hashed) (recordedSourceMeta source) (hashedImports hashed)
+      (hashedSource hashed) (hashedPub hashed) (hashedImpl hashed) (recordedSourceMeta source) (checkedEmbeds checked) (hashedImports hashed)
       (hashedDependencies hashed) (hashedNames hashed) (checkedEscapes checked) (hashedRoots hashed) (checkedTests checked)
       doc (checkedInterface checked) (checkedModule checked)
   where I.NModule _ _ doc = checkedInterface checked
@@ -3075,7 +3402,7 @@ prepareDeferredBackJob build base interestMap job = do
                             , interestedNames = Data.Set.size interested
                             , rootNames       = Data.Set.size roots
                             , selectedClosure = Data.Set.size names }
-    status   <- codegenStatus (buildOptions build) (deferredOptions job) paths mn expected
+    status   <- codegenStatus (buildOptions build) (deferredOptions job) paths mn expected (InterfaceFiles.summaryEmbeds header)
     if outputsUpToDate status
       then Nothing <$ info build (describeDbp label stats True)
       else do
@@ -3084,7 +3411,7 @@ prepareDeferredBackJob build base interestMap job = do
         -- whole-module read would mask that, and read gigabytes doing it.
         typed <- InterfaceFiles.readSelectedModule tydb (M.elems selected) names
                    >>= maybe (error ("Internal error: missing statement rows in " ++ tydb)) return
-        back  <- loadBackJob build base (deferredKey job) paths (deferredOptions job) (pruneModule names typed) expected
+        back  <- loadBackJob build base (deferredKey job) paths (deferredOptions job) (InterfaceFiles.summaryEmbeds header) (pruneModule names typed) expected
         info build (describeDbp label stats False)
         return (Just back)
   where paths = deferredPaths job
@@ -3256,8 +3583,9 @@ backPassDump _                  = Nothing
 -- The passes return lazily: their work happens in Render, or earlier in a
 -- dump, so a pass's failure surfaces after Render has started.  Nothing is
 -- forced between passes.  A dump prints inside its pass.  shouldWrite is
--- asked once, right before writing, and the closure support file, the .h,
--- unless its text is unchanged, and the .c are written in that order.
+-- asked once, right before writing, and the data C file, unless it is up to
+-- date, the closure support file, the .h, unless its text is unchanged, and
+-- the .c are written in that order.
 -- The elapsed time is Nothing when quiet, and the timing is collected only
 -- with --timing.
 runBackPasses :: C.GlobalOptions -> BackJob -> IO Bool -> (BackPassProgress -> IO ()) -> IO (Maybe TimeSpec, Maybe BackTiming)
@@ -3303,7 +3631,8 @@ runBackPasses gopts job shouldWrite onProgress = do
           pass BackPassRender (render h >> render c >> render support)
           current <- shouldWrite
           if current
-            then pass BackPassWrite (do writeGenerated closureSupportFile support
+            then pass BackPassWrite (do writeDataFile gopts job
+                                        writeGenerated closureSupportFile support
                                         writeHeader h
                                         writeGenerated cFile c)
             else report BackPassWrite (fromEnum BackPassWrite + 1) BackPassSkipped
@@ -3460,7 +3789,7 @@ compileBuiltin build ctx t
         Right (source, m) -> do
           emit build (FrontStarted t)
           base   <- Acton.Env.initEnv (projTypes (gtPaths t)) True
-          result <- checkModuleWithDump (altOutputFor ctx k) build t opts base source m
+          result <- checkModuleWithDump (altOutputFor ctx k) (ccFiles ctx) build t opts base source m
           case result of
             Left diags -> Left BuiltinFailed <$ reportFrontFailure build t diags
             Right fr   -> do
@@ -3482,6 +3811,7 @@ staleBuiltinOutputs build opts t header = do
     checked <- trySync $ do
       hasNotImpl <- InterfaceFiles.readStmtHasNotImpl (tyDbPath paths mn)
       code       <- codegenStatus gopts opts paths mn (headerCodegenTag opts paths mn header hasNotImpl (InterfaceFiles.summaryImplHash header) WholeModule)
+                                  (InterfaceFiles.summaryEmbeds header)
       page       <- docPageStatus gopts opts paths mn header
       return ([ "generated code out of date" ++ formatOutputDelta "codegen" "generated code" code | not (outputsUpToDate code) ]
               ++ [ "doc page out of date" ++ formatOutputDelta "doc" "doc page" status | Just status <- [page], not (outputsUpToDate status) ])
@@ -3591,7 +3921,9 @@ parseDone run k task state              = (stageCompleted run (ParseStage k) sta
 
 -- | A module's front stage succeeded: later stages see its hashes, its
 -- interface and the names it uses, and its deferred back job waits for
--- every module depending on it.
+-- every module depending on it.  A run without a back queue drops the job:
+-- preparing it selects names and reads statements for a job that nothing
+-- runs.
 frontSucceeded :: Run -> TaskKey -> FrontResult -> BuildState -> BuildState
 frontSucceeded run k fr state = (stageCompleted run (FrontStage k) state)
     { finishedModules = M.insert k (frHashes fr) (finishedModules state)
@@ -3599,7 +3931,8 @@ frontSucceeded run k fr state = (stageCompleted run (FrontStage k) state)
     , accumulatedEnv  = Acton.Env.addModuleInfo (tkMod k) (frModuleInfo fr) (accumulatedEnv state)
     , interest        = addInterestDeps (frInterest fr) (interest state)
     , deferredBacks   = case frBack fr of
-                          DeferredBack job -> M.insert k (job, strictDependents (runModuleGraph run) k) (deferredBacks state)
+                          DeferredBack job | buildBackQueue (runBuild run)
+                                           -> M.insert k (job, strictDependents (runModuleGraph run) k) (deferredBacks state)
                           _                -> deferredBacks state
     }
 
@@ -3658,6 +3991,7 @@ flushDeferred run state = do
 moduleEnv :: Run -> BuildState -> TaskKey -> ModuleEnv
 moduleEnv run state k = ModuleEnv
     { moduleBuild    = runBuild run
+    , moduleFiles    = ccFiles (runContext run)
     , moduleTask     = t
     , moduleCurrent  = M.findWithDefault (gtTask t) k (parsedModules state)
     , moduleOptions  = opts
@@ -3682,6 +4016,81 @@ parseStage build opts t = do
     return $ case parsed of
       Left diags        -> (ParseErrorTask diags, Nothing)
       Right (source, m) -> (ActonTask source m, reportedTime (buildOptions build) opts elapsed)
+
+
+-- The data C file ----------------------------------------------------------------------------------
+
+-- | The prefix that the #embed lines of a module's data C file are written
+-- with.  It leads from the real directory of that file to the directory that
+-- the embedded paths count from (embedRoot): the C compiler looks for a
+-- quoted path first in the real directory of the C file, so no other file
+-- can take the place of an embedded one.  The prefix is ../ once per level,
+-- which is the same text on every machine, while the data C file lies below
+-- that directory.  Otherwise it is the absolute path of that directory: for
+-- a file that is compiled without a project, and for a project whose out
+-- directory is a symbolic link.
+embedPrefix :: Paths -> A.ModName -> IO FilePath
+embedPrefix paths mn = do
+    root <- canonicalizePath (embedRoot paths)
+    dir  <- canonicalizePath (takeDirectory (generatedPath paths mn dataFile))
+    return (if dir `isUnder` root
+              then concatMap (const "../") (splitDirectories (makeRelative root dir))
+              else addTrailingPathSeparator root)
+
+-- | The tag of a module's data C file: a hash of what its text is written
+-- from, which is the module's name, the prefix of its #embed lines and the
+-- path, size and SHA-256 of each file that the module embeds.
+dataTag :: A.ModName -> FilePath -> [InterfaceFiles.EmbeddedFile] -> B.ByteString
+dataTag mn prefix embeds =
+    SHA256.hash (BL.toStrict (encode ("data" :: String, modNameToString mn, prefix, map embeddedFile embeds)))
+
+-- | The path, the size and the SHA-256 of an embedded file.
+embeddedFile :: InterfaceFiles.EmbeddedFile -> (FilePath, Integer, String)
+embeddedFile f = (InterfaceFiles.embeddedPath f, InterfaceFiles.embeddedSize f, InterfaceFiles.embeddedSha256 f)
+
+-- | The content of an embedded file below a directory that the data C file
+-- holds as C text: of a file that starts with a byte order mark which the C
+-- compiler refuses (Embed.startsWithRefusedMark), and Nothing for any other
+-- file, which the C compiler loads itself.  The content has the recorded
+-- SHA-256, else the file changed while the build ran (FileChanged).
+markedContent :: FilePath -> InterfaceFiles.EmbeddedFile -> IO (Maybe B.ByteString)
+markedContent root f = do
+    marked <- Embed.startsWithRefusedMark file
+    if not marked then return Nothing else do
+      content <- B.readFile file
+      when (Hashing.hashHex (SHA256.hash content) /= InterfaceFiles.embeddedSha256 f) (throwIO (FileChanged path))
+      return (Just content)
+  where
+    path = InterfaceFiles.embeddedPath f
+    file = root </> path
+
+-- | The data C file of a module as one tagged output, which should carry
+-- the given tag (dataTag).
+dataFileOutput :: Paths -> A.ModName -> B.ByteString -> TaggedOutput
+dataFileOutput paths mn tag =
+    TaggedOutput (generatedLabel dataFile) (generatedPath paths mn dataFile) Acton.CodeGen.implHashTag (Just (Hashing.hashHex tag)) True
+
+-- | Bring a module's data C file up to date with the files that the module
+-- embeds.  A module that embeds no file has no data C file.  The file is
+-- written from what dataTag covers, so a file that carries dataTag, that
+-- this build of the compiler wrote and that is not older than the compiler
+-- binary has its text already and is left as it is.
+writeDataFile :: C.GlobalOptions -> BackJob -> IO ()
+writeDataFile gopts job
+  | null embeds = removePathForcibly file
+  | otherwise   = do
+      prefix <- embedPrefix paths mn
+      let tag = dataTag mn prefix embeds
+      status <- outputStatus gopts (bjOpts job) [dataFileOutput paths mn tag]
+      unless (outputsUpToDate status) $ do
+        contents <- mapM (markedContent (embedRoot paths)) embeds
+        writeFileUtf8Atomic file (Acton.CodeGen.tagged (stampedHex gopts tag)
+                                    (Acton.CodeGen.genEmbedData (bjTypeEnv job) mn prefix (zip (map embeddedFile embeds) contents)))
+  where
+    embeds = bjEmbeds job
+    paths  = bjPaths job
+    mn     = tkMod (bjKey job)
+    file   = generatedPath paths mn dataFile
 
 
 -- Output status ------------------------------------------------------------------------------------
@@ -3761,11 +4170,15 @@ outputStatus gopts opts outputs = do
 -- so a header older than the compiler binary is not out of date.  When the
 -- .c records no header, as a missing .c or one that another build of the
 -- compiler wrote does not, the .c decides, and the header only has to
--- carry a tag.
-codegenStatus :: C.GlobalOptions -> C.CompileOptions -> Paths -> A.ModName -> B.ByteString -> IO OutputStatus
-codegenStatus gopts opts paths mn code = do
+-- carry a tag.  A module that embeds files has one more file, its data C
+-- file, which should carry dataTag.
+codegenStatus :: C.GlobalOptions -> C.CompileOptions -> Paths -> A.ModName -> B.ByteString -> [InterfaceFiles.EmbeddedFile] -> IO OutputStatus
+codegenStatus gopts opts paths mn code embeds = do
     recorded <- recordedHeaderTag (generatedPath paths mn cFile)
-    outputStatus gopts opts [ outputOf file recorded | file <- generatedFiles ]
+    dataFiles <- if null embeds then return []
+                 else do prefix <- embedPrefix paths mn
+                         return [dataFileOutput paths mn (dataTag mn prefix embeds)]
+    outputStatus gopts opts ([ outputOf file recorded | file <- generatedFiles ] ++ dataFiles)
   where
     outputOf file recorded
       | generatedLabel file == generatedLabel headerFile = output file recorded False

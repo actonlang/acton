@@ -3,7 +3,7 @@
 module Main (main) where
 
 import Control.Concurrent (newEmptyMVar, putMVar, takeMVar, threadDelay)
-import Control.Concurrent.Async (async, mapConcurrently_, wait)
+import Control.Concurrent.Async (AsyncCancelled(..), async, cancel, mapConcurrently_, wait, waitCatch)
 import Data.Char (toLower, isAlphaNum)
 
 import qualified Acton.Parser as P
@@ -21,6 +21,7 @@ import qualified Acton.InitializationAnalysis as Init
 import Acton.Env (CompilationError(..))
 import qualified Acton.Kinds
 import qualified Acton.Types
+import qualified Acton.TypeEnv as TE
 import Acton.TypeEnv (TypeError(..),typeReport,initTypeEnv)
 import qualified Acton.Normalizer
 import qualified Acton.Deactorizer
@@ -31,7 +32,9 @@ import qualified Acton.QuickType as QuickType
 import qualified Acton.CodeGen
 import qualified Acton.Diagnostics as Diag
 import qualified Acton.Compile as Compile
+import qualified Acton.Derive as Derive
 import qualified Acton.ExtSource as ExtSource
+import qualified Acton.Embed as Embed
 import qualified Acton.Graph as Graph
 import qualified Acton.Project as Project
 import qualified Acton.Zon as Zon
@@ -51,27 +54,31 @@ import Test.Syd
 import Test.Syd.Modify (sequential)
 import Test.Syd.Def.Golden (goldenTextFile)
 import qualified Control.Monad.Trans.State.Strict as St
-import Text.Megaparsec (ParseErrorBundle, PosState(..), bundleErrors, bundlePosState, errorOffset, reachOffset, runParser, errorBundlePretty, ShowErrorComponent(..))
+import Text.Megaparsec (ParseErrorBundle, ParseError(..), ErrorFancy(..), PosState(..), bundleErrors, bundlePosState, errorOffset, reachOffset, runParser, errorBundlePretty, ShowErrorComponent(..))
 import Text.Megaparsec.Pos (sourceLine, unPos)
 import qualified Data.Text as T
 import qualified Data.Text.Short as TS
-import Data.List (foldl', isInfixOf, isPrefixOf, nub, sort, subsequences)
-import Data.Maybe (listToMaybe)
+import Data.List (foldl', isInfixOf, isPrefixOf, nub, sort, subsequences, permutations, intersect, (\\))
+import Data.Maybe (isJust, listToMaybe)
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as M
 import qualified Data.Set as Set
 import Data.IORef
+import Data.Bifunctor (bimap)
 import Data.Bits (shiftL, (.|.))
 import qualified Data.ByteString.Base16 as Base16
+import qualified Crypto.Hash.SHA256 as SHA256
 import qualified Data.Binary
 import Error.Diagnose (printDiagnostic, prettyDiagnostic, WithUnicode(..), TabSize(..), defaultStyle, addReport, addFile)
 import Error.Diagnose.Report (Report(..))
 import Prettyprinter (unAnnotate, layoutPretty, defaultLayoutOptions)
 import Prettyprinter.Render.Text (renderStrict)
 import System.FilePath ((</>), joinPath, takeFileName, takeBaseName, takeDirectory, splitDirectories)
-import System.Directory (createDirectoryIfMissing, createDirectoryLink, getCurrentDirectory, getFileSize, setCurrentDirectory, listDirectory, doesDirectoryExist, doesFileExist, removeFile)
+import System.Directory (canonicalizePath, createDirectoryIfMissing, createDirectoryLink, createFileLink, getCurrentDirectory, getFileSize, setCurrentDirectory, listDirectory, doesDirectoryExist, doesFileExist, removeFile)
 import System.IO (IOMode(ReadWriteMode), hSetFileSize, withFile)
 import System.IO.Temp (withSystemTempDirectory)
+import GHC.IO.Encoding (getFileSystemEncoding)
+import System.Posix.Files (createNamedPipe, fileSize, nullFileMode, ownerModes, setFileMode, setFileSize)
 import qualified System.IO.Unsafe
 import System.Timeout (timeout)
 import Control.Monad (forM_, when, foldM)
@@ -232,6 +239,31 @@ hashDecl l doc =
 -- | The interface directories that tests type check against: std's, then base's.
 systemTypes :: [FilePath]
 systemTypes = Project.systemTypePaths (".." </> ".." </> "dist")
+-- Reference implementations retain the original list traversal so indexing
+-- changes must preserve both cycle selection and simplification order.
+referenceVarclose xys = clos [] xys
+  where clos cl [] = Right cl
+        clos cl ((x,y):rest)
+          | (x,y) `elem` cl = clos cl rest
+          | not (null common) = Left (x,y:common)
+          | otherwise = clos ((x,y):cl) ([(w,y) | w <- belowX] ++ [(x,v) | v <- aboveY] ++ rest)
+          where belowX = Solver.below x cl
+                aboveY = Solver.above y cl
+                common = belowX `intersect` aboveY
+
+referenceGsimp vi cl obs [] = []
+referenceGsimp vi cl obs ((x,y):rest)
+  | not subsumed = referenceGsimp vi cl obs rest
+  | x `elem` obs && y `elem` obs = referenceGsimp vi cl obs rest
+  | x `elem` obs = (x,y) : referenceGsimp vi cl (y:obs) rest
+  | otherwise = (x,y) : referenceGsimp vi cl (x:obs) rest
+  where subsumed = (Solver.above x cl \\ [y]) `eq` Solver.above y cl &&
+                   (Solver.below y cl \\ [x]) `eq` Solver.below x cl &&
+                   Solver.lookup' x (Solver.ubounds vi) `subset` Solver.lookup' y (Solver.ubounds vi) &&
+                   Solver.lookup' y (Solver.lbounds vi) `subset` Solver.lookup' x (Solver.lbounds vi) &&
+                   map snd (Solver.lookup' x $ Solver.pbounds vi) `eq` map snd (Solver.lookup' y $ Solver.pbounds vi)
+        a `eq` b = a `subset` b && b `subset` a
+        a `subset` b = all (`elem` b) a
 
 main :: IO ()
 main = do
@@ -241,10 +273,10 @@ main = do
   sydTest $ do
     describe "Communication effects" $ do
       let hierarchy =
-            [ (S.FXPure, [S.FXPure,S.FXMut,S.FXCom,S.FXProc])
+            [ (S.FXPure, [S.FXPure,S.FXMut,S.FXCom,S.FXProc,S.FXAction])
             , (S.FXMut, [S.FXMut,S.FXProc])
             , (S.FXProc, [S.FXProc])
-            , (S.FXAction, [S.FXAction,S.FXProc])
+            , (S.FXAction, [S.FXAction])
             , (S.FXCom, [S.FXCom,S.FXProc])
             ]
           effects = map fst hierarchy
@@ -268,7 +300,7 @@ main = do
           it ("compares and combines " ++ show a ++ " with " ++ show b) $ do
             Acton.Env.subeffect a b `shouldBe` included a b
             Acton.Env.castable env0 (S.tTFX a) (S.tTFX b) `shouldBe`
-              (included a b || (a == S.FXMut && b == S.FXPure))
+              ((included a b && (a,b) /= (S.FXPure,S.FXAction)) || (a == S.FXMut && b == S.FXPure))
             let lower = [c | c <- effects, included c a, included c b]
                 upper = [c | c <- effects, included a c, included b c]
                 greatest = [c | c <- lower, all (`included` c) lower]
@@ -318,6 +350,442 @@ main = do
           case result of
             Left (_ :: TypeError) -> pure ()
             Right _ -> expectationFailure "Unexpectedly accepted incompatible effects"
+    describe "Constraint variable graph indexes" $ do
+      let vs = [S.UV S.KType 0 n | n <- [5,11,29]]
+          graphs = [ordered | edges <- subsequences [(x,y) | x <- vs, y <- vs],
+                              ordered <- [edges,reverse edges,edges ++ take 1 edges]]
+          env = TE.initTypeEnv env0
+          info = TE.noinfo 0
+      it "preserves closure order and the first reported cycle" $
+        forM_ graphs $ \edges ->
+          Solver.varclose edges `shouldBe` referenceVarclose edges
+      it "preserves simplifications for every observable subset" $
+        forM_ graphs $ \edges -> case referenceVarclose edges of
+          Left _ -> pure ()
+          Right cl -> do
+            let Just vi = Solver.varinfo $
+                  [TE.Cast info env (S.tUni x) (S.tUni y) | (x,y) <- edges] ++
+                  [TE.Cast info env (S.tUni $ head vs) Builtin.tInt,
+                   TE.Cast info env Builtin.tInt (S.tUni $ last vs)]
+            forM_ (subsequences vs) $ \obs ->
+              Solver.gsimp vi cl obs edges `shouldBe` referenceGsimp vi cl obs edges
+    describe "Effect inference" $ do
+      let env = TE.initTypeEnv env0
+          info = TE.noinfo 0
+          solve te cs = fst <$> Solver.solve env (const True) te [] cs
+      forM_ ["pure", "action", "mut", "proc"] $ \fx ->
+        forM_ ["inferred", "defaults", "signature"] $ \form -> do
+          let label = fx ++ " (" ++ form ++ ")"
+              source method = unlines $ ["actor Worker():"] ++
+                ["    " ++ method ++ ": action(" ++ fx ++ "() -> None) -> None" | form == "signature"] ++
+                [ "    def " ++ method ++ "(cb" ++
+                    (if form == "signature" then "" else ": " ++ fx ++ "() -> None") ++
+                    (if form == "defaults" then ", count: int = 1" else "") ++ "):"
+                , "        cb()"
+                ]
+          it ("seals public actor callback effects: " ++ label) $ do
+            result <- E.try (do
+              typed <- typecheckSource env0 "actor_callback_seal" (source "apply")
+              E.evaluate (rnf typed)) :: IO (Either TypeError ())
+            case result of
+              Right _ | fx `elem` ["pure", "action"] -> pure ()
+              Left (TypeError _ message) | fx `elem` ["mut", "proc"] ->
+                message `shouldSatisfy` isPrefixOf "Leaking actor seal:"
+              Left err -> expectationFailure (show err)
+              Right _ -> expectationFailure "Expected the callback effect to leak the actor seal"
+          it ("allows private actor callback effects: " ++ label) $ do
+            typed <- typecheckSource env0 "private_actor_callback" (source "_apply")
+            E.evaluate (rnf typed)
+      it "keeps the temporary mut-to-pure cast out of effect bounds" $ do
+        Acton.Env.castable env S.fxMut S.fxPure `shouldBe` True
+        Solver.allAbove env S.fxMut `shouldSatisfy` notElem S.fxPure
+        Solver.allBelow env S.fxPure `shouldSatisfy` notElem S.fxMut
+      forM_ [("mut_callback_in_pure", unlines
+                [ "pure def apply(cb: mut() -> int) -> int:"
+                , "    return cb()" ])
+            , ("nested_sum_comprehension",
+                "values = [sum([i * i for i in range(k)]) for k in range(1, 4)]\n")
+            , ("local_initialization", unlines
+                [ "def finish(values: list[int], n: int):"
+                , "    values.append(n)"
+                , "    if n > 0:"
+                , "        parse(n - 1)"
+                , "pure def parse(n: int) -> list[int]:"
+                , "    values: list[int] = []"
+                , "    finish(values, n)"
+                , "    return values" ])
+            , ("local_initialization_result", unlines
+                [ "def finish(values: list[int], n: int) -> int:"
+                , "    values.append(n)"
+                , "    return parse(n - 1) if n > 0 else len(values)"
+                , "pure def parse(n: int) -> int:"
+                , "    values: list[int] = []"
+                , "    return finish(values, n)" ])] $ \(label,src) ->
+        it ("retains temporary mut-to-pure compatibility for " ++ label) $ do
+          typed <- typecheckSource env0 label src
+          E.evaluate (rnf typed)
+          when (label `elem` ["local_initialization", "local_initialization_result"]) $ do
+            fmap S.dfx (findTypedDef "finish" typed) `shouldBe` Just S.fxMut
+            fmap S.dfx (findTypedDef "parse" typed) `shouldBe` Just S.fxPure
+      forM_ [("pure",S.fxPure,S.fxPure), ("mut",S.fxMut,S.fxMut),
+             ("proc",S.fxProc,S.fxProc), ("action",S.fxAction,S.fxProc)] $ \(label,source,expected) ->
+        it ("resolves the value-unwrapping effect for " ++ label ++ " without contextual bounds") $ do
+          let (remaining, inferred) = TE.runTypeM $ do
+                fx <- TE.newUnivarOfKind S.KFX env
+                w <- TE.newWitness
+                let wrapped = S.TC (S.GName (S.modName ["$"]) (S.name "Unwrapped")) [fx]
+                _ <- Solver.reduce [] [TE.Proto info env w source wrapped]
+                remaining <- TE.collectDeferred
+                inferred <- TE.usubst fx
+                return (remaining,inferred)
+          length remaining `shouldBe` 0
+          inferred `shouldBe` expected
+      it "infers com for a discarded action call" $ do
+        typed <- typecheckSource env0 "discarded_action" $ unlines
+          [ "def send(cb: action(int) -> int):", "    cb(1)" ]
+        fmap S.dfx (findTypedDef "send" typed) `shouldBe` Just S.fxCom
+      forM_ [("value", "    return cb(1)"),
+             ("nested", "    sink(cb(1))")] $ \(label,body) ->
+        it ("requires proc for an action result in " ++ label ++ " position") $ do
+          let src = unlines
+                [ "com def invalid(cb: action(int) -> int, sink: action(int) -> None):", body ]
+          result <- E.try (typecheckSource env0 "action_result" src >>= E.evaluate . rnf) :: IO (Either TypeError ())
+          case result of
+            Left _ -> pure ()
+            Right _ -> expectationFailure "Expected awaiting an action reply to require proc"
+      it "finds wrapped effects using the single shared effect parameter" $ do
+        forM_ [(S.fxPure,[S.fxPure]), (S.fxMut,[S.fxMut]),
+               (S.fxProc,[S.fxProc,S.fxAction]), (S.fxAction,[])] $ \(fx,expected) -> do
+          let wrapped = S.TC (S.GName (S.modName ["$"]) (S.name "Wrapped")) [fx]
+              candidates = Solver.allBelowProto env wrapped
+          length candidates `shouldBe` length expected
+          forM_ expected $ \candidate -> candidates `shouldSatisfy` elem candidate
+      it "prefers pure across an Unwrapped bound in every constraint order" $ do
+        forM_ (permutations [0,1,2,3]) $ \order -> do
+          let (remaining, inferred) = TE.runTypeM $ do
+                signature <- TE.newUnivarOfKind S.KFX env
+                body <- TE.newUnivarOfKind S.KFX env
+                selected <- TE.newUnivarOfKind S.KFX env
+                unwrapped <- TE.newUnivarOfKind S.KFX env
+                selectW <- TE.newWitness
+                unwrapW <- TE.newWitness
+                callW <- TE.newWitness
+                let wrapped = S.TC (S.GName (S.modName ["$"]) (S.name "Unwrapped")) [unwrapped]
+                    cs = [ TE.Sub info env selectW S.fxPure selected
+                         , TE.Proto info env unwrapW selected wrapped
+                         , TE.Sub info env callW unwrapped body
+                         , TE.Cast info env body signature ]
+                    te = [(S.name "method", I.NVar (S.tFun signature S.posNil S.kwdNil S.tNone))]
+                remaining <- solve te [cs !! i | i <- order]
+                inferred <- TE.usubst [signature,body,selected,unwrapped]
+                return (remaining,inferred)
+          length remaining `shouldBe` 0
+          inferred `shouldBe` replicate 4 S.fxPure
+      it "infers optional int when None lower bounds meet integer results" $ do
+        typed <- typecheckSource env0 "none_lower_bounds" $ unlines
+          [ "pure def choose(flag: bool, n: int):"
+          , "    return None if flag else n"
+          , "def last(items: list[int]):"
+          , "    result = None"
+          , "    for item in items:"
+          , "        result = item"
+          , "    return result"
+          ]
+        forM_ ["choose","last"] $ \function ->
+          case lookup (S.name function) (QuickType.envOf $ S.mbody typed) of
+            Just (I.NDef sc _ _) -> S.restype (S.sctype sc) `shouldBe` S.tOpt Builtin.tInt
+            _ -> expectationFailure ("Expected the inferred signature of " ++ function)
+      it "places pure below action while keeping action separate from proc" $ do
+        Acton.Env.subeffect S.FXPure S.FXAction `shouldBe` True
+        Acton.Env.castable env S.fxPure S.fxAction `shouldBe` False
+        Acton.Env.subeffect S.FXAction S.FXProc `shouldBe` False
+        Acton.Env.castable env S.fxAction S.fxProc `shouldBe` False
+        Acton.Env.castable env S.fxAction S.fxPure `shouldBe` False
+        Solver.allAbove env S.fxPure `shouldSatisfy` elem S.fxAction
+        Solver.allBelow env S.fxAction `shouldSatisfy` elem S.fxPure
+        Solver.allAbove env S.fxAction `shouldBe` [S.fxAction]
+        Solver.allBelow env S.fxProc `shouldSatisfy` notElem S.fxAction
+        Solver.dnClosed env S.fxAction `shouldBe` False
+      it "joins pure with action but has no join of action with mut or proc" $ do
+        forM_ [(S.fxPure, Just S.fxAction), (S.fxMut, Nothing), (S.fxProc, Nothing)] $ \(a,expected) -> do
+          Acton.Env.lub env a S.fxAction `shouldBe` expected
+          Acton.Env.lub env S.fxAction a `shouldBe` expected
+          Acton.Env.glb env a S.fxAction `shouldBe` Just S.fxPure
+          Acton.Env.glb env S.fxAction a `shouldBe` Just S.fxPure
+      it "keeps action calls distinct from explicit sends and awaits" $ do
+        let callback = S.name "callback"
+            fn = S.tFun S.fxAction S.posNil S.kwdNil Builtin.tInt
+            callEnv = Acton.Env.define [(callback,I.NVar fn)] env
+        QuickType.typeOf callEnv (S.eCall (S.eVar callback) []) `shouldBe` Builtin.tInt
+        QuickType.fxOf callEnv (S.eCall (S.eVar callback) []) `shouldBe` S.fxAction
+        let sent = S.eCall (S.eAsync $ S.eVar callback) []
+        QuickType.fxOf callEnv sent `shouldBe` S.fxCom
+        QuickType.fxOf callEnv (S.eAwait sent) `shouldBe` S.fxProc
+      forM_ [("action_as_proc", unlines
+                [ "pure def as_proc(a: action() -> int) -> proc() -> int:"
+                , "    return a" ])
+            , ("action_proc_join", unlines
+                [ "pure def choose(flag: bool, a: action() -> int, p: proc() -> int):"
+                , "    return a if flag else p" ])] $ \(label,src) ->
+        it ("rejects " ++ label ++ " without an explicit adapter") $ do
+          result <- E.try (do
+            typed <- typecheckSource env0 label src
+            E.evaluate (rnf typed)) :: IO (Either TypeError ())
+          case result of
+            Left _ -> pure ()
+            Right _ -> expectationFailure "Expected incompatible action and proc effects"
+      it "accepts pure functions and lambdas as action callbacks" $ do
+        typed <- typecheckSource env0 "pure_action_callback" $ unlines
+          [ "pure def pure_value() -> int:"
+          , "    return 1"
+          , "pure def accept(cb: action() -> int) -> None:"
+          , "    pass"
+          , "pure def use() -> None:"
+          , "    accept(pure_value)"
+          , "    accept(lambda: 1)"
+          ]
+        typed `shouldSatisfy` const True
+      it "exposes a stateful actor method with defaults as an action" $ do
+        typed <- typecheckSource env0 "default_actor_effect" $ unlines
+          [ "actor Counter():"
+          , "    var count = 0"
+          , "    def add(n: int = 1) -> int:"
+          , "        count += n"
+          , "        return count"
+          , "pure def callback(counter: Counter):"
+          , "    return counter.add"
+          ]
+        case lookup (S.name "callback") (QuickType.envOf $ S.mbody typed) of
+          Just (I.NDef sc _ _) -> S.effect (S.restype $ S.sctype sc) `shouldBe` S.fxAction
+          _ -> expectationFailure "Expected the inferred signature of callback"
+      it "infers action when a pure argument computation precedes a tail action call" $ do
+        typed <- typecheckSource env0 "pure_action_lambda" $ unlines
+          [ "pure def combine(p: pure(int) -> int, a: action(int) -> int):"
+          , "    return lambda x: a(p(x))"
+          ]
+        case lookup (S.name "combine") (QuickType.envOf $ S.mbody typed) of
+          Just (I.NDef sc _ _) -> S.effect (S.restype $ S.sctype sc) `shouldBe` S.fxAction
+          _ -> expectationFailure "Expected the inferred signature of combine"
+
+      it "infers proc for a non-tail action call outside an actor" $ do
+        typed <- typecheckSource env0 "non_tail_action_lambda" $ unlines
+          [ "pure def combine(p: pure() -> int, a: action() -> bool):"
+          , "    return lambda: p() if a() else p()"
+          ]
+        case lookup (S.name "combine") (QuickType.envOf $ S.mbody typed) of
+          Just (I.NDef sc _ _) -> S.effect (S.restype $ S.sctype sc) `shouldBe` S.fxProc
+          _ -> expectationFailure "Expected the inferred signature of combine"
+
+      it "keeps str calls pure outside an actor" $ do
+        typed <- typecheckSource env0 "pure_string_conversion" $ unlines
+          [ "pure def stringify(value: int) -> str:"
+          , "    return str(value)"
+          ]
+        case lookup (S.name "stringify") (QuickType.envOf $ S.mbody typed) of
+          Just (I.NDef sc _ _) -> S.effect (S.sctype sc) `shouldBe` S.fxPure
+          _ -> expectationFailure "Expected the inferred signature of stringify"
+
+      it "keeps native value formatting pure outside an actor" $ do
+        typed <- typecheckSource env0 "pure_value_formatting" $ unlines
+          [ "pure def show(item: value) -> str:"
+          , "    return item.__str__() + item.__repr__() + repr(item)"
+          ]
+        case lookup (S.name "show") (QuickType.envOf $ S.mbody typed) of
+          Just (I.NDef sc _ _) -> S.effect (S.sctype sc) `shouldBe` S.fxPure
+          _ -> expectationFailure "Expected the inferred signature of show"
+
+      it "joins pure and action function values at action" $ do
+        typed <- typecheckSource env0 "pure_action_choice" $ unlines
+          [ "pure def choose(flag: bool, p: pure(int) -> int, a: action(int) -> int):"
+          , "    return p if flag else a"
+          ]
+        case lookup (S.name "choose") (QuickType.envOf $ S.mbody typed) of
+          Just (I.NDef sc _ _) -> S.effect (S.restype $ S.sctype sc) `shouldBe` S.fxAction
+          _ -> expectationFailure "Expected the inferred signature of choose"
+      it "keeps callback effects general under a proc upper bound" $ do
+        let (remaining, inferred) = TE.runTypeM $ do
+              fx <- TE.newUnivarOfKind S.KFX env
+              let callback = S.tFun fx S.posNil S.kwdNil S.tNone
+                  consumer = S.tFun S.fxPure (S.posRow callback S.posNil) S.kwdNil S.tNone
+              remaining <- solve [(S.name "consumer", I.NVar consumer)] [TE.Cast info env fx S.fxProc]
+              inferred <- TE.usubst fx
+              return (remaining, inferred)
+        length remaining `shouldBe` 0
+        inferred `shouldBe` S.fxProc
+      forM_ [ ("prefers pure under a proc upper bound", \fx -> [TE.Cast info env fx S.fxProc], S.fxPure)
+            , ("requires action under a Cast action upper bound", \fx -> [TE.Cast info env fx S.fxAction], S.fxAction)
+            , ("preserves a mut lower bound", \fx -> [TE.Cast info env S.fxMut fx], S.fxMut)
+            , ("preserves an action lower bound", \fx -> [TE.Cast info env S.fxAction fx], S.fxAction)
+            ] $ \(name, constraints, expected) -> it name $ do
+        let (remaining, inferred) = TE.runTypeM $ do
+              fx <- TE.newUnivarOfKind S.KFX env
+              remaining <- solve [(S.name "effect", I.NVar fx)] (constraints fx)
+              inferred <- TE.usubst fx
+              return (remaining, inferred)
+        length remaining `shouldBe` 0
+        inferred `shouldBe` expected
+
+      it "prefers pure under a witnessed action upper bound" $ do
+        let (remaining, inferred) = TE.runTypeM $ do
+              fx <- TE.newUnivarOfKind S.KFX env
+              w <- TE.newWitness
+              remaining <- solve [(S.name "effect", I.NVar fx)] [TE.Sub info env w fx S.fxAction]
+              inferred <- TE.usubst fx
+              return (remaining,inferred)
+        length remaining `shouldBe` 0
+        inferred `shouldBe` S.fxPure
+
+    describe "Effect-preserving eta reduction" $ do
+      let f = S.eVar (S.name "callee")
+          x = S.name "argument"
+          forwarded fx = S.Lambda NoLoc (S.pospar [(x,Builtin.tInt)]) S.KwdNIL
+                           (S.eCall f [S.eVar x]) fx
+      forM_ [("Transform", Transform.eta), ("Normalizer", Acton.Normalizer.eta)] $ \(label, eta) ->
+        describe label $ do
+          it "reduces a pure forwarding lambda" $
+            eta (forwarded S.fxPure) `shouldBe` f
+          forM_ [("mut",S.fxMut),("proc",S.fxProc),("action",S.fxAction)] $ \(effect,fx) ->
+            it ("preserves the " ++ effect ++ " calling convention") $
+              eta (forwarded fx) `shouldBe` forwarded fx
+
+      let captured = S.name "captured"
+          producer = S.eCall (S.eVar $ S.name "producer") []
+          capturedAdapter sourceFX targetFX =
+            S.Let NoLoc [S.sAssign (S.pVar captured $ S.tFun sourceFX
+                            (S.posRow Builtin.tInt S.posNil) S.kwdNil Builtin.tInt) producer]
+              (S.Lambda NoLoc (S.pospar [(x,Builtin.tInt)]) S.KwdNIL
+                (S.eCall (S.eVar captured) [S.eVar x]) targetFX)
+      forM_ [("mut",S.fxMut),("proc",S.fxProc),("action",S.fxAction)] $ \(effect,fx) ->
+        it ("eliminates an identity " ++ effect ++ " adapter without delaying its producer") $
+          Transform.trans Transform.env0 (capturedAdapter fx fx) `shouldBe` producer
+      it "keeps an adapter whose effect differs from its captured function" $
+        Transform.trans Transform.env0 (capturedAdapter S.fxAction S.fxProc)
+          `shouldBe` capturedAdapter S.fxAction S.fxProc
+
+    describe "Tuple field conversions" $ do
+      it "converts the selected callback rather than its containing tuple" $ do
+        let env = TE.initTypeEnv env0
+            info = TE.noinfo 0
+            field = S.name "callback"
+            callback = S.tFun S.fxProc (S.posRow Builtin.tInt S.posNil) S.kwdNil Builtin.tInt
+            tuple = S.tTupleK (S.kwdRow field callback S.kwdNil)
+            (w, eqs) = TE.runTypeM $ do
+              w <- TE.newWitness
+              eqs <- Solver.reduce [] [TE.Sel info env w tuple field callback]
+              return (w,eqs)
+            value = S.eVar (S.name "callbacks")
+            use = S.eCall (S.eVar w) [value]
+            reduced = Transform.wtrans Transform.env0 (TE.bindWits eqs ++ [S.sExpr use])
+            valueEnv = Acton.Env.define [(S.name "callbacks",I.NVar tuple)] env
+        case reduced of
+          [S.Expr _ e] -> QuickType.typeOf valueEnv e `shouldBe` callback
+          _ -> expectationFailure "Expected a selected callback expression"
+
+    describe "Generic effect witnesses" $ do
+      let env = TE.initTypeEnv env0
+          info = TE.noinfo 0
+          solveEffect from to = TE.runTypeM $ do
+            w <- TE.newWitness
+            (remaining, eqs) <- Solver.solve env (const True) [] [] [TE.Sub info env w from to]
+            return (w, remaining, eqs)
+          shapes = [ (S.posNil, S.kwdNil, Builtin.tInt)
+                   , (S.posRow Builtin.tStr S.posNil,
+                      S.kwdRow (S.name "flag") Builtin.tBool S.kwdNil, Builtin.tStr)
+                   ]
+      it "gives one effect witness a generic function-transforming signature" $ do
+        let (w, remaining, eqs) = solveEffect S.fxPure S.fxMut
+        length remaining `shouldBe` 0
+        case eqs of
+          [TE.Eqn _ _ sc _] -> do
+            map S.tvkind (S.qbound $ S.scbind sc) `shouldBe` [S.PRow, S.KRow, S.KType]
+            let witnessEnv = Acton.Env.define [(w,I.NDef sc S.NoDec Nothing)] env
+            forM_ shapes $ \(p,k,r) -> do
+              let expected = S.tFun S.fxPure (S.posRow (S.tFun S.fxPure p k r) S.posNil)
+                                   S.kwdNil (S.tFun S.fxMut p k r)
+              QuickType.typeOf witnessEnv (S.tApp (S.eVar w) [p,k,r]) `shouldBe` expected
+          _ -> expectationFailure "Expected a single generic witness equation"
+      it "types function-subtyping adapters before reducing their effect witnesses" $ do
+        forM_ shapes $ \(p,k,r) -> do
+          let source = S.tFun S.fxPure p k r
+              target = S.tFun S.fxMut p k Builtin.tValue
+              (w, remaining, eqs) = TE.runTypeM $ do
+                w <- TE.newWitness
+                (remaining, eqs) <- Solver.solve env (const True) [] [] [TE.Sub info env w source target]
+                return (w, remaining, eqs)
+              f = S.name "function"
+              witnessEnv = Acton.Env.define ((f,I.NVar source) :
+                [(n,I.NDef sc S.NoDec Nothing) | TE.Eqn _ n sc _ <- eqs]) env
+              expressions = [e | TE.Eqn _ n _ e <- eqs, n == w]
+          length remaining `shouldBe` 0
+          length [() | TE.Eqn _ _ sc _ <- eqs, not (null $ S.scbind sc)] `shouldBe` 1
+          case expressions of
+            [e] -> QuickType.typeOf witnessEnv e `shouldBe`
+              S.tFun S.fxPure (S.posRow source S.posNil) S.kwdNil target
+            _ -> expectationFailure "Expected the function-subtyping adapter"
+          let use = S.sExpr $ S.eCall (S.eVar w) [S.eVar f]
+              reduced = Transform.wtrans Transform.env0 (TE.bindWits eqs ++ [use])
+          reduced `shouldBe` [S.sExpr (S.eVar f)]
+      it "types pure-to-action conversion before and after reduction and captures its argument" $ do
+        Acton.Env.castable env S.fxPure S.fxAction `shouldBe` False
+        forM_ shapes $ \(p,k,r) -> do
+          let (w, remaining, eqs) = solveEffect S.fxPure S.fxAction
+              source = S.tFun S.fxPure p k r
+              target = S.tFun S.fxAction p k r
+              factory = S.name "factory"
+              factoryType = S.tFun S.fxProc S.posNil S.kwdNil source
+              expression = S.eCall (S.eVar factory) []
+              witnessEnv = Acton.Env.define ((factory,I.NVar factoryType) :
+                [(n,I.NDef sc S.NoDec Nothing) | TE.Eqn _ n sc _ <- eqs]) env
+              use = S.eCall (S.tApp (S.eVar w) [p,k,r]) [expression]
+              reduced = Transform.wtrans Transform.env0 (TE.bindWits eqs ++ [S.sExpr use])
+          length remaining `shouldBe` 0
+          QuickType.typeOf witnessEnv use `shouldBe` target
+          QuickType.fxOf witnessEnv use `shouldBe` S.fxProc
+          case reduced of
+            [S.Expr _ e@(S.Let _ [S.Assign _ [_] captured] S.Lambda{})] -> do
+              captured `shouldBe` expression
+              QuickType.typeOf witnessEnv e `shouldBe` target
+              QuickType.fxOf witnessEnv e `shouldBe` S.fxProc
+            _ -> expectationFailure "Expected eager capture followed by an action adapter"
+      it "does not capture effect variables named A, B, or C" $ do
+        forM_ [("A","B"), ("B","C"), ("C","A")] $ \(from,to) -> do
+          let fx1 = S.tVar $ S.TV S.KFX (S.name from)
+              fx2 = S.tVar $ S.TV S.KFX (S.name to)
+              sc = Solver.effectWitnessSchema fx1 fx2
+              w = S.Internal S.Witness "fresh" 0
+              witnessEnv = Acton.Env.define [(w,I.NDef sc S.NoDec Nothing)] env
+          map S.tvkind (S.qbound $ S.scbind sc) `shouldBe` [S.PRow, S.KRow, S.KType]
+          forM_ shapes $ \(p,k,r) -> do
+            let expected = S.tFun S.fxPure (S.posRow (S.tFun fx1 p k r) S.posNil)
+                                 S.kwdNil (S.tFun fx2 p k r)
+            QuickType.typeOf witnessEnv (S.tApp (S.eVar w) [p,k,r]) `shouldBe` expected
+      it "reduces two differently instantiated uses of the same witness to identities" $ do
+        let (w, _, eqs) = solveEffect S.fxPure S.fxMut
+            args = zip shapes [S.eVar (S.name "first"), S.eVar (S.name "second")]
+            uses = [ S.sExpr $ S.eCall (S.tApp (S.eVar w) [p,k,r]) [f]
+                   | ((p,k,r),f) <- args ]
+        Transform.wtrans Transform.env0 (TE.bindWits eqs ++ uses)
+          `shouldBe` map (S.sExpr . snd) args
+      it "keeps unresolved effect subtyping until a typed witness can be selected" $ do
+        let (remaining, eqs, inferred) = TE.runTypeM $ do
+              fx <- TE.newUnivarOfKind S.KFX env
+              w <- TE.newWitness
+              (remaining, eqs) <- Solver.solve env (const True) [(S.name "effect", I.NVar fx)] []
+                [TE.Sub info env w S.fxMut fx]
+              inferred <- TE.usubst fx
+              return (remaining, eqs, inferred)
+        length remaining `shouldBe` 0
+        inferred `shouldBe` S.fxMut
+        case eqs of
+          [TE.Eqn _ _ sc _] -> length (S.scbind sc) `shouldBe` 3
+          _ -> expectationFailure "Expected a generic effect witness after inference"
+      it "retains monomorphic bindings for ordinary value witnesses" $ do
+        let eqs = TE.runTypeM $ do
+              w <- TE.newWitness
+              snd <$> Solver.solve env (const True) [] [] [TE.Sub info env w Builtin.tInt Builtin.tValue]
+        case TE.bindWits eqs of
+          [S.Assign{}] -> return ()
+          _ -> expectationFailure "Expected an ordinary witness assignment"
 
     describe "Raw operator result types" $ do
       let raw t n = S.UnBox t (S.eInt n)
@@ -995,7 +1463,7 @@ main = do
                 ]
               nmod = I.NModule [] iface (Just "module docs")
               tmod = S.Module mn [] (Just "typed docs") []
-          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] nameHashes escapeSummaries roots tests (Just "module docs") nmod tmod
+          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] [] nameHashes escapeSummaries roots tests (Just "module docs") nmod tmod
           InterfaceFiles.keyNameInfo firstName `shouldBe` "name-info/p/first"
           InterfaceFiles.keyNameInfo firstName `shouldNotBe` InterfaceFiles.keyNameInfo firstishName
           InterfaceFiles.keyNameHash secondName `shouldBe` "name-hash/p/second"
@@ -1062,7 +1530,7 @@ main = do
               lookupSummary env = do
                 mi <- Acton.Env.lookupModuleInfo mn env
                 Acton.Env.moduleEscapeSummary mi [fName]
-          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] [] summaries [] [] Nothing nmod tmod
+          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] [] [] summaries [] [] Nothing nmod tmod
           ordinaryEnv <- Acton.Env.initEnv dir False
           escapeEnv <- Acton.Env.initEnvWithEscapeSummaries True dir False
           lookupSummary ordinaryEnv `shouldBe` Nothing
@@ -1097,7 +1565,7 @@ main = do
               nmod = I.NModule [] iface Nothing
               tmod = S.Module mn [] Nothing []
               names = sort . map fst
-          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] [] [] [] [] Nothing nmod tmod
+          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] [] [] [] [] [] Nothing nmod tmod
           db <- InterfaceFiles.openInterfaceDB tyPath
           (do InterfaceFiles.readInterfaceDBNameInfoMaybe db clsName `shouldReturn` Just (clsName, I.NClass [] [] [(classAttr, I.NVar S.tWild)] Nothing)
               InterfaceFiles.readInterfaceDBNameInfoMaybe db (S.name "missing") `shouldReturn` Nothing
@@ -1119,7 +1587,7 @@ main = do
           let tyPath = dir </> "lockfmt.tydb"
               nmod = I.NModule [] [] Nothing
               tmod = S.Module (S.modName ["lockfmt"]) [] Nothing []
-          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] [] [] [] [] Nothing nmod tmod
+          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] [] [] [] [] [] Nothing nmod tmod
           -- liblmdb's lock table must use process-shared mutexes, which live
           -- inside lock.mdb, on every platform. Its POSIX-semaphore variant
           -- (upstream's default on macOS) stores "/MDB[rw]..." names here
@@ -1136,7 +1604,7 @@ main = do
               tyPath = dir </> "iface_rewrite.tydb"
               vName = S.name "v"
               wName = S.name "w"
-              write iface = InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] [] [] [] [] Nothing (I.NModule [] iface Nothing) (S.Module mn [] Nothing [])
+              write iface = InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] [] [] [] [] [] Nothing (I.NModule [] iface Nothing) (S.Module mn [] Nothing [])
           write [(vName, I.NVar S.tWild)]
           db <- InterfaceFiles.openInterfaceDB tyPath
           fmap fst <$> InterfaceFiles.readInterfaceDBNameInfoMaybe db vName `shouldReturn` Just vName
@@ -1159,7 +1627,7 @@ main = do
               nameHashes0 = [ nameHash n "s" "p" "i" | n <- [aName, bName, cName] ]
               nmod = I.NModule [] iface Nothing
               tmod = S.Module mn [] Nothing body
-          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] nameHashes0 [] [] [] Nothing nmod tmod
+          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] [] nameHashes0 [] [] [] Nothing nmod tmod
           nameHashesH <- InterfaceFiles.readNameHashes tyPath
           [ InterfaceFiles.nhStmtIndices nh | nh <- nameHashesH, InterfaceFiles.nhName nh == bName ]
             `shouldBe` [[1]]
@@ -1179,7 +1647,7 @@ main = do
               nameHashes = [nameHash firstName "src1" "pub1" "impl1"]
               nmod = I.NModule [] iface Nothing
               tmod = S.Module mn [] Nothing []
-          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] nameHashes [] [] [] Nothing nmod tmod
+          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] [] nameHashes [] [] [] Nothing nmod tmod
           mapConcurrently_
             (\_ -> do
                 moduleHashes <$> InterfaceFiles.readHeaderSummary tyPath `shouldReturn` ("src", "pub", "impl")
@@ -1196,7 +1664,7 @@ main = do
               nameHashes = [nameHash firstName "src1" "pub1" "impl1"]
               nmod = I.NModule [] iface Nothing
               tmod = S.Module mn [] Nothing []
-          InterfaceFiles.writeFile srcPath "src" "pub" "impl" Nothing [] [] nameHashes [] [] [] Nothing nmod tmod
+          InterfaceFiles.writeFile srcPath "src" "pub" "impl" Nothing [] [] [] nameHashes [] [] [] Nothing nmod tmod
           InterfaceFiles.copyInterface srcPath dstPath
           doesFileExist (dstPath </> "data.mdb") `shouldReturn` True
           doesFileExist (dstPath </> "lock.mdb") `shouldReturn` False
@@ -1214,7 +1682,7 @@ main = do
               nameHashes = [nameHash firstName "src1" "pub1" "impl1"]
               nmod = I.NModule [] iface Nothing
               tmod = S.Module mn [] Nothing []
-          InterfaceFiles.writeFile srcPath "src" "pub" "impl" Nothing [] [] nameHashes [] [] [] Nothing nmod tmod
+          InterfaceFiles.writeFile srcPath "src" "pub" "impl" Nothing [] [] [] nameHashes [] [] [] Nothing nmod tmod
           InterfaceFiles.copyInterface srcPath dstPath
           createDirectoryIfMissing True badPath
           B8.writeFile (badPath </> "data.mdb") "garbage"
@@ -1236,7 +1704,7 @@ main = do
               nameHashes = [ nameHash n "src1" "pub1" "impl1" | n <- names ]
               nmod = I.NModule [] iface Nothing
               tmod = S.Module mn [] Nothing []
-              write = InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] nameHashes [] [] [] Nothing nmod tmod
+              write = InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] [] nameHashes [] [] [] Nothing nmod tmod
           write
           size <- getFileSize dataPath
           -- Half of the file still holds both meta pages at any page size
@@ -1261,7 +1729,7 @@ main = do
               nameHashes = [nameHash firstName "src1" "pub1" "impl1"]
               nmod = I.NModule [] iface Nothing
               tmod = S.Module mn [] Nothing []
-          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] nameHashes [] [] [] Nothing nmod tmod
+          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] [] nameHashes [] [] [] Nothing nmod tmod
           removeFile lockPath
           InterfaceFiles.registerSystemTypeRoots [typesRoot]
           moduleHashes <$> InterfaceFiles.readHeaderSummary tyPath `shouldReturn` ("src", "pub", "impl")
@@ -1288,7 +1756,7 @@ main = do
               tyPath = dir </> "iface_version.tydb"
               nmod = I.NModule [] [] Nothing
               tmod = S.Module mn [] Nothing []
-          InterfaceFiles.writeFileWithVersion (map (+ 1) S.version) "" tyPath "" "" "" Nothing [] [] [] [] [] [] Nothing nmod tmod
+          InterfaceFiles.writeFileWithVersion (map (+ 1) S.version) "" tyPath "" "" "" Nothing [] [] [] [] [] [] [] Nothing nmod tmod
           InterfaceFiles.readNameHashesMaybe tyPath `shouldReturn` Nothing
           InterfaceFiles.readFileMaybe tyPath `shouldReturn` Nothing
 
@@ -2052,6 +2520,7 @@ main = do
             []
             []
             []
+            []
             Nothing
             directIface
             directModule
@@ -2064,6 +2533,7 @@ main = do
             (InterfaceFiles.storedPubHash stored)
             (InterfaceFiles.storedImplHash stored)
             (InterfaceFiles.storedSourceMeta stored)
+            (InterfaceFiles.storedEmbeds stored)
             (InterfaceFiles.storedImports stored)
             (InterfaceFiles.storedDepModules stored)
             (InterfaceFiles.storedNames stored)
@@ -2431,6 +2901,458 @@ main = do
             Right [S.Decl _ [S.Def{S.dbody = [s]}]] -> Pretty.print s `shouldBe` "after now 3.8: g()"
             other -> expectationFailure $ "Unexpected parse: " ++ show other
 
+      describe "The reserved word embed" $ do
+        forM_ [ ("a variable of a module", "size = 3\n", " = size + 1\n")
+              , ("a variable of a function", "def f():\n    size = 3\n    ", " = size + 1\n")
+              , ("a function", "def ", "(path):\n    return path\n")
+              , ("a method", "class Page(object):\n    def ", "(self):\n        pass\n")
+              , ("a parameter", "def page(path, ", "):\n    return path\n")
+              , ("a class", "class ", "(object):\n    pass\n")
+              , ("the first part of a module name", "import ", ".files\n")
+              , ("a later part of a module name without quotes", "import web.", "\n")
+              , ("an attribute without quotes", "def f(page):\n    return page.", "\n")
+              , ("a called attribute without quotes", "def f(page):\n    return page.", "(\"x\")\n")
+              , ("a value", "def f():\n    return ", "\n")
+              ] $ \(place, before, after) ->
+          it ("refuses embed as " ++ place) $ expectEmbedRefused before after
+
+        it "reads embed in quotes as an attribute name" $
+          case parseExprAst "page.\"embed\"" of
+            Right e@(S.Dot _ _ n) -> do
+              S.nstr n `shouldBe` "embed"
+              Pretty.print e `shouldBe` "page.'embed'"
+              parseExprAst (Pretty.print e) `shouldBe` Right e
+            other -> expectationFailure $ "Unexpected parse: " ++ show other
+
+        it "reads embed in quotes as a later part of a module name" $
+          (S.importedModules <$> P.parseModuleImports "quoted.act" "import web.\"embed\"\n")
+            `shouldReturn` [S.modName ["web", "embed"]]
+
+        it "reads a name that starts with embed as a name" $
+          forM_ ["embedded", "embed_files", "Embed"] $ \n ->
+            parseExprAst n `shouldBe` Right (S.Var NoLoc (S.NoQ (S.name n)))
+
+      describe "The expression embed" $ do
+        it "takes a relative path with / between its components" $
+          forM_ ["web/index.html", "a", "a b/c d.txt", "a*/b", "web/\229\8364.txt", ".hidden", "a..b", "outer/x", "src/out/x.bin", "x.out"] $ \path ->
+            Embed.pathProblem path `shouldBe` Nothing
+
+        it "refuses a path that is not relative, a component that is empty, . or .., and a backslash" $ do
+          Embed.pathProblem "../x" `shouldBe`
+            Just "the path \"../x\" of embed must be a relative path inside the project, using / and without . or .. components"
+          forM_ ["", "/etc/hosts", "a/../b", "./a", "a/.", "a//b", "a/", "a\\b", "out/../x", "a{b}/.."] $ \path ->
+            Embed.pathProblem path `shouldBe`
+              Just ("the path \"" ++ path ++ "\" of embed must be a relative path inside the project, using / and without . or .. components")
+
+        it "refuses a path with a double quote, a brace or a control character" $ do
+          Embed.pathProblem "a{b}.txt" `shouldBe`
+            Just "the path \"a{b}.txt\" of embed has a double quote, a brace or a control character"
+          forM_ ["a}", "a\"b", "a\tb", "a\DELb", "out/a{b}"] $ \path ->
+            Embed.pathProblem path `shouldBe`
+              Just ("the path \"" ++ path ++ "\" of embed has a double quote, a brace or a control character")
+
+        it "refuses a path whose first component is out" $ do
+          Embed.pathProblem "out/x.bin" `shouldBe`
+            Just "\"out/x.bin\" is in out, which a build writes and which is not committed"
+          Embed.pathProblem "out" `shouldBe`
+            Just "\"out\" is in out, which a build writes and which is not committed"
+
+        it "takes and refuses the paths of the list that the test of std.build.derive.embed_call reads" $ do
+          -- embed_call writes an embed expression for a function of a
+          -- derived module and has the rule of pathProblem, written in
+          -- Acton.  Its test in test/stdlib_tests/src/test_build_derive.act
+          -- runs it on the same list.
+          Just paths <- Ae.decodeFileStrict "../../test/stdlib_tests/data/embed_paths.json" :: IO (Maybe (M.Map String [String]))
+          forM_ (paths M.! "taken") $ \path -> (path, Embed.pathProblem path) `shouldBe` (path, Nothing)
+          forM_ (paths M.! "refused") $ \path -> (path, Embed.pathProblem path) `shouldSatisfy` (isJust . snd)
+
+        it "reads the form, prints it and reads it again" $
+          forM_ ["web/index.html", "x", "web/a b.txt", "a*/b c.txt", "web/\229\8364\128512.txt"] $ \path -> do
+            let src = "embed(\"" ++ path ++ "\")"
+            case parseExprAst src of
+              Right e@(S.Embed l p f) -> do
+                (l, p, f) `shouldBe` (Loc 0 (length src), path, Nothing)
+                Pretty.print e `shouldBe` src
+                parseExprAst (Pretty.print e) `shouldBe` Right e
+              other -> expectationFailure $ "Unexpected parse: " ++ show other
+
+        it "reads white space, a line break and a comment between the parentheses" $
+          forM_ ["embed ( \"x\" )", "embed(\n    \"x\"\n)", "embed(  # the page\n    \"x\")"] $ \src ->
+            parseExprAst src `shouldBe` Right (S.Embed NoLoc "x" Nothing)
+
+        it "reads the form wherever an expression may stand" $
+          forM_ ["embed(\"a\").decode()", "[embed(\"a\"), embed(\"b\")]", "{\"/a\": (body = embed(\"a\"), size = 3)}", "len(embed(\"a\")) + 1"] $ \src ->
+            (Pretty.print <$> parseExprAst src) `shouldBe` Right src
+
+        it "finds the embed expressions of a module and fills each of them" $
+          forM_ [P.parseModuleSerial, P.parseModule] $ \parse -> do
+            m <- parse (S.modName ["page"]) "page.act" embedPlaces Nothing
+            let paths     = [ "p" ++ show n | n <- [1 .. 71 :: Int] ]
+                fill e    = Just e { S.efile = Just (toInteger (length (S.epath e)), S.epath e) }
+                Just full = Embed.embeds fill m
+            map S.epath (Embed.embedExprs m) `shouldBe` paths
+            map S.efile (Embed.embedExprs m) `shouldBe` map (const Nothing) paths
+            map S.efile (Embed.embedExprs full) `shouldBe` [ Just (toInteger (length path), path) | path <- paths ]
+
+        forM_ [ ("no path", "embed()")
+              , ("a name", "embed(path)")
+              , ("two paths", "embed(\"a\", \"b\")")
+              , ("a comma after the path", "embed(\"a\",)")
+              , ("two literals", "embed(\"a\" \"b\")")
+              , ("single quotes", "embed('a')")
+              , ("triple quotes", "embed(\"\"\"a\"\"\")")
+              , ("the prefix b", "embed(b\"a\")")
+              , ("the prefix r", "embed(r\"a\")")
+              , ("an operator", "embed(\"a\" + \"b\")")
+              , ("a keyword argument", "embed(path=\"a\")")
+              , ("a path over two lines", "embed(\"a\n.txt\")")
+              , ("an escaped double quote", "embed(\"a\\\"b\")")
+              ] $ \(what, form) ->
+          it ("refuses " ++ what ++ " after the word") $
+            expectEmbedError (Loc 7 12) P.EmbedForm ("page = " ++ form ++ "\n")
+
+        it "refuses a path that breaks the rule, at the literal" $
+          forM_ ["../x", "/etc/hosts", "", "a\\b", "a{b}.txt", "out/x.bin"] $ \path -> do
+            let before        = "page = embed( "
+                Just problem  = Embed.pathProblem path
+            expectEmbedError (Loc (length before) (length before + length path + 2)) (P.EmbedPath problem)
+              (before ++ "\"" ++ path ++ "\" )\n")
+
+        it "has the type bytes and the effect pure" $ do
+          let e   = S.Embed NoLoc "web/a.txt" Nothing
+              src = unlines
+                [ "data = embed(\"web/a.txt\")"
+                , "pure def size() -> int:"
+                , "    return len(embed(\"web/a.txt\"))"
+                ]
+          QuickType.qType env0 Acton.CodeGen.adjust e `shouldBe` (Builtin.tBytes, S.fxPure, e)
+          parsed <- liftIO $ P.parseModule (S.modName ["page"]) "<page>" src Nothing
+          env <- liftIO $ Acton.Env.mkEnv systemTypes env0 parsed
+          kchecked <- liftIO $ Acton.Kinds.check env parsed
+          (I.NModule _ te _, _, _, _) <- liftIO $ Acton.Types.reconstruct Nothing Nothing env kchecked Nothing
+          lookup (S.name "data") te `shouldBe` Just (I.NVar Builtin.tBytes)
+
+        it "hashes the path of the expression and the size and the SHA-256 of its file" $ do
+          let n          = S.name "data"
+              hashOf p f = Hashing.nameHashesFromItems [Hashing.TLStmt n (S.Assign NoLoc [S.PVar NoLoc n Nothing] (S.Embed NoLoc p f))] M.! n
+              hashes     = [ hashOf "web/a.txt" Nothing, hashOf "web/a.txt" (Just (3, "aa")), hashOf "web/a.txt" (Just (4, "aa"))
+                           , hashOf "web/a.txt" (Just (3, "ab")), hashOf "web/b.txt" (Just (3, "aa")) ]
+          nub hashes `shouldBe` hashes
+
+        it "names a path in the generated C by 32 hexadecimal digits of its SHA-256" $ do
+          Embed.pathDigits "web/app.js" `shouldBe` "e24e4bd32090b0c400a70f02d1b844df"
+          Embed.pathDigits "web/\229.txt" `shouldBe` take 32 (B8.unpack (Base16.encode (SHA256.hash (B8.pack "web/\195\165.txt"))))
+
+        it "generates a data C file with an array for each embedded file that has content" $
+          Acton.CodeGen.tagged "7b0e" (Acton.CodeGen.genEmbedData env0 (S.modName ["shop", "assets"]) "../../../"
+              (map (\file -> (file, Nothing)) [("data/empty.bin", 0, "e3b0"), ("web/a b*/app.js", 3, "ba78"), ("web/app.js", 1234, "5c1f")]))
+            `shouldBe` init (unlines
+              [ "/* Acton impl hash: 7b0e */"
+              , "#pragma clang diagnostic push"
+              , "#pragma clang diagnostic ignored \"-Wc23-extensions\""
+              , "/* ba78 */"
+              , "const _Alignas(16) unsigned char shopQ_assetsQ_embed$" ++ Embed.pathDigits "web/a b*/app.js" ++ "[] = {"
+              , "#embed \"../../../web/a b*/app.js\""
+              , "};"
+              , "_Static_assert(sizeof shopQ_assetsQ_embed$" ++ Embed.pathDigits "web/a b*/app.js" ++ " == 3, \"web/a b*/app.js\");"
+              , "/* 5c1f */"
+              , "const _Alignas(16) unsigned char shopQ_assetsQ_embed$e24e4bd32090b0c400a70f02d1b844df[] = {"
+              , "#embed \"../../../web/app.js\""
+              , "};"
+              , "_Static_assert(sizeof shopQ_assetsQ_embed$e24e4bd32090b0c400a70f02d1b844df == 1234, \"web/app.js\");"
+              , "#pragma clang diagnostic pop"
+              ])
+
+        it "writes the bytes of a file that starts with a byte order mark which the C compiler refuses" $
+          withSystemTempDirectory "acton-embed-marked" $ \dir -> do
+            -- The mark of UTF-16, the mark of UTF-8, which the C compiler
+            -- takes, and the mark of UTF-16 after another byte.
+            let contents  = [ ("utf16.txt", B8.pack ("\255\254" ++ ['a' .. 'p'])), ("utf8.txt", B8.pack "\239\187\191hi"), ("second.bin", B8.pack "a\255\254") ]
+                files     = [ InterfaceFiles.EmbeddedFile path (toInteger (B8.length content)) (Hashing.hashHex (SHA256.hash content)) (InterfaceFiles.SourceFileMeta 0 0 0 Nothing Nothing)
+                            | (path, content) <- contents ]
+                sha path  = head [ InterfaceFiles.embeddedSha256 f | f <- files, InterfaceFiles.embeddedPath f == path ]
+                array p   = "shopQ_assetsQ_embed$" ++ Embed.pathDigits p
+            forM_ contents $ \(path, content) -> B8.writeFile (dir </> path) content
+            marked <- mapM (Compile.markedContent dir) files
+            marked `shouldBe` [Just (snd (head contents)), Nothing, Nothing]
+            Acton.CodeGen.genEmbedData env0 (S.modName ["shop", "assets"]) "../../../"
+                (zip [ (InterfaceFiles.embeddedPath f, InterfaceFiles.embeddedSize f, InterfaceFiles.embeddedSha256 f) | f <- files ] marked)
+              `shouldBe` init (unlines
+                [ "#pragma clang diagnostic push"
+                , "#pragma clang diagnostic ignored \"-Wc23-extensions\""
+                , "/* " ++ sha "utf16.txt" ++ " */"
+                , "const _Alignas(16) unsigned char " ++ array "utf16.txt" ++ "[18] = {"
+                , "\"\\377\\376\\141\\142\\143\\144\\145\\146\\147\\150\\151\\152\\153\\154\\155\\156\""
+                , "\"\\157\\160\""
+                , "};"
+                , "_Static_assert(sizeof " ++ array "utf16.txt" ++ " == 18, \"utf16.txt\");"
+                , "/* " ++ sha "utf8.txt" ++ " */"
+                , "const _Alignas(16) unsigned char " ++ array "utf8.txt" ++ "[] = {"
+                , "#embed \"../../../utf8.txt\""
+                , "};"
+                , "_Static_assert(sizeof " ++ array "utf8.txt" ++ " == 5, \"utf8.txt\");"
+                , "/* " ++ sha "second.bin" ++ " */"
+                , "const _Alignas(16) unsigned char " ++ array "second.bin" ++ "[] = {"
+                , "#embed \"../../../second.bin\""
+                , "};"
+                , "_Static_assert(sizeof " ++ array "second.bin" ++ " == 3, \"second.bin\");"
+                , "#pragma clang diagnostic pop"
+                ])
+            -- The bytes are the ones that the .tydb records.
+            Compile.markedContent dir (head files) { InterfaceFiles.embeddedSha256 = sha "utf8.txt" }
+              `shouldThrow` (\e -> E.displayException (e :: Compile.FileChanged) == "utf16.txt changed while the build ran. Run the build again")
+
+        it "generates a bytes value that borrows the array of the data C file" $ do
+          let src    = unlines
+                [ "page = embed(\"web/app.js\")"
+                , "def empty() -> bytes:"
+                , "    return embed(\"data/empty.bin\")"
+                , "def again() -> bytes:"
+                , "    return embed(\"web/app.js\")"
+                ]
+              fill e = Just e { S.efile = Just (if S.epath e == "web/app.js" then 1234 else 0, "5c1f") }
+              array  = "shopQ_assetsQ_embed$e24e4bd32090b0c400a70f02d1b844df"
+          parsed <- P.parseModule (S.modName ["shop", "assets"]) "<assets>" src Nothing
+          let Just filled = Embed.embeds fill parsed
+          env <- Acton.Env.mkEnv systemTypes env0 filled
+          kchecked <- Acton.Kinds.check env filled
+          (_, tchecked, typeEnv, _) <- Acton.Types.reconstruct Nothing Nothing env kchecked Nothing
+          (normalized, normEnv) <- Acton.Normalizer.normalize typeEnv tchecked
+          (deacted, deactEnv) <- Acton.Deactorizer.deactorize normEnv normalized
+          (cpstyled, cpsEnv) <- Acton.CPS.convert deactEnv deacted
+          (lifted, liftEnv) <- Acton.LambdaLifter.liftModule cpsEnv cpstyled
+          boxed <- Acton.Boxing.doBoxing liftEnv lifted
+          (_, _, c) <- Acton.CodeGen.generate liftEnv "src/assets" src True boxed "test-hash"
+          filter ("extern const unsigned char" `isPrefixOf`) (lines c) `shouldBe` ["extern const unsigned char " ++ array ++ "[];"]
+          length (filter (("actBytesFromCStringLength((const char *)" ++ array ++ ", 1234)") `isInfixOf`) (lines c)) `shouldBe` 2
+          c `shouldContain` "actBytesFromCStringLength(\"\", 0)"
+
+        it "gives the SHA-256 of the content of a file" $
+          withSystemTempDirectory "acton-embed-hash" $ \dir -> do
+            B8.writeFile (dir </> "empty") B8.empty
+            B8.writeFile (dir </> "abc") (B8.pack "abc")
+            B8.writeFile (dir </> "large") (B8.replicate 3000000 'a')
+            Compile.hashOfFile (dir </> "empty") `shouldReturn` "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            Compile.hashOfFile (dir </> "abc") `shouldReturn` "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+            Compile.hashOfFile (dir </> "large") `shouldReturn` B8.unpack (Base16.encode (SHA256.hash (B8.replicate 3000000 'a')))
+
+        it "takes a regular file below the directory that the path counts from" $
+          withSystemTempDirectory "acton-embed-file" $ \dir -> do
+            -- A letter outside ASCII where file names are UTF-8.
+            utf8 <- (== "UTF-8") . show <$> getFileSystemEncoding
+            let nested = "web/a b*/" ++ (if utf8 then "\229" else "a") ++ ".txt"
+                names  = fmap Set.fromList . listDirectory
+                size   = fmap (bimap fst (toInteger . fileSize)) . Embed.embeddedFileStatus names dir
+                -- Whether a reason comes with a stat.
+                stat   = fmap (either (isJust . snd) (const False)) . Embed.embeddedFileStatus names dir
+            createDirectoryIfMissing True (dir </> "web" </> "a b*")
+            B8.writeFile (dir </> "web" </> "index.html") (B8.pack "hello\n")
+            B8.writeFile (dir </> nested) (B8.pack "abc")
+            B8.writeFile (dir </> "web" </> "empty") B8.empty
+            createFileLink "index.html" (dir </> "web" </> "link.html")
+            createFileLink "none.html" (dir </> "web" </> "dangling.html")
+            createNamedPipe (dir </> "web" </> "pipe") ownerModes
+            forM_ [("most", 2147483647), ("over", 2147483648)] $ \(name, bytes) -> do
+              B8.writeFile (dir </> "web" </> name) B8.empty
+              setFileSize (dir </> "web" </> name) bytes
+            Embed.listedPath names dir nested `shouldReturn` Just nested
+            Embed.listedPath names dir "web/none.html" `shouldReturn` Nothing
+            size "web/index.html" `shouldReturn` Right 6
+            size nested `shouldReturn` Right 3
+            size "web/empty" `shouldReturn` Right 0
+            size "web/link.html" `shouldReturn` Right 6
+            size "web/none.html" `shouldReturn` Left ("no file web/none.html in " ++ dir)
+            size "web/dangling.html" `shouldReturn` Left ("no file web/dangling.html in " ++ dir)
+            size "none/index.html" `shouldReturn` Left ("no file none/index.html in " ++ dir)
+            size "web/index.html/x" `shouldReturn` Left ("no file web/index.html/x in " ++ dir)
+            let directory path = Left (path ++ " is a directory, and embed takes one file. For the files of a directory use a derived module, "
+                                       ++ "for example with the function std.build.derive.embed_files")
+            size "web" `shouldReturn` directory "web"
+            size "web/a b*" `shouldReturn` directory "web/a b*"
+            size "web/pipe" `shouldReturn` Left "web/pipe is not a regular file"
+            size "web/most" `shouldReturn` Right 2147483647
+            size "web/over" `shouldReturn` Left "web/over has 2147483648 bytes, and embed takes a file of fewer than 2147483648 bytes"
+            -- The reason comes with the stat of what the path names.
+            forM_ ["web", "web/pipe", "web/over"] $ \path -> stat path `shouldReturn` True
+            forM_ ["web/none.html", "web/dangling.html", "web/index.html/x"] $ \path -> stat path `shouldReturn` False
+            -- A directory without permissions.  Not every user is stopped by
+            -- the mode, so the message is expected only when a listing fails.
+            -- The directory gets its permissions back so that it can be removed.
+            createDirectoryIfMissing True (dir </> "locked")
+            B8.writeFile (dir </> "locked" </> "x.txt") (B8.pack "abc")
+            setFileMode (dir </> "locked") nullFileMode
+            stopped <- either (\(_ :: E.IOException) -> True) (const False) <$> E.try (listDirectory (dir </> "locked"))
+            (when stopped $ size "locked/x.txt" `shouldReturn` Left "locked/x.txt cannot be read: Permission denied")
+              `E.finally` setFileMode (dir </> "locked") ownerModes
+
+        it "lists the directories on the way to a path through the given function" $
+          withSystemTempDirectory "acton-embed-listing" $ \dir -> do
+            createDirectoryIfMissing True (dir </> "web")
+            forM_ ["a", "b", "c"] $ \name -> B8.writeFile (dir </> "web" </> name) (B8.pack name)
+            listed <- newIORef []
+            let names d = modifyIORef' listed (d :) >> (Set.fromList <$> listDirectory d)
+            forM_ ["web/a", "web/b", "web/c", "web/none"] $ \path -> Embed.embeddedFileStatus names dir path
+            sort <$> readIORef listed `shouldReturn` (replicate 4 dir ++ replicate 4 (dir </> "web"))
+
+        it "names a path and the directories on the way to it as file system events name them" $
+          withSystemTempDirectory "acton-embed-events" $ \tmp -> do
+            dir <- canonicalizePath tmp
+            let root  = dir </> "shop"
+                paths = Embed.eventPaths canonicalizePath root
+            createDirectoryIfMissing True (root </> "web" </> "js")
+            createDirectoryIfMissing True (dir </> "shared")
+            B8.writeFile (root </> "web" </> "js" </> "app.js") (B8.pack "let a = 1\n")
+            B8.writeFile (dir </> "shared" </> "logo.png") (B8.pack "png")
+            createDirectoryLink (dir </> "shared") (root </> "linked")
+            createFileLink "app.js" (root </> "web" </> "js" </> "link.js")
+            paths "top.txt" `shouldReturn` ([], [root </> "top.txt"])
+            paths "web/js/app.js" `shouldReturn` ([root </> "web", root </> "web/js"], [root </> "web/js/app.js"])
+            -- A directory that is a link: the link in the project, and the
+            -- file in the directory that the link leads to.
+            paths "linked/logo.png" `shouldReturn` ([root </> "linked"], [dir </> "shared/logo.png"])
+            -- A file that is a link: the link and the file that it leads to.
+            paths "web/js/link.js" `shouldReturn` ([root </> "web", root </> "web/js"], [root </> "web/js/link.js", root </> "web/js/app.js"])
+            -- A file and directories that do not exist stay as they are written.
+            paths "web/js/none.js" `shouldReturn` ([root </> "web", root </> "web/js"], [root </> "web/js/none.js"])
+            paths "linked/none/x.txt" `shouldReturn` ([root </> "linked", dir </> "shared/none"], [dir </> "shared/none/x.txt"])
+
+        it "resolves the links of a directory through the given function" $ do
+          asked <- newIORef []
+          let resolved dir = modifyIORef' asked (dir :) >> return ("/real" ++ dir)
+          Embed.eventPaths resolved "/p" "web/js/app.js"
+            `shouldReturn` (["/real/p/web", "/real/p/web/js"], ["/real/p/web/js/app.js"])
+          reverse <$> readIORef asked `shouldReturn` ["/p", "/p/web", "/p/web/js"]
+
+        it "watches the directories of the paths that exist" $
+          withSystemTempDirectory "acton-embed-watch" $ \dir -> do
+            createDirectoryIfMissing True (dir </> "shop" </> "web")
+            createDirectoryIfMissing True (dir </> "shared")
+            B8.writeFile (dir </> "shop" </> "web" </> "index.html") (B8.pack "hello\n")
+            let paths = Set.fromList (map (dir </>) [ "shop/web", "shop/web/index.html", "shop/web/none.html", "shop/data", "shop/data/sub"
+                                                    , "shop/data/sub/text.txt", "shop/web/index.html/x", "shared/logo.png" ])
+            -- Where one watch tells of a whole tree, the watch of shop
+            -- stands for the watch of shop/web.
+            Embed.watchDirectories paths `shouldReturn`
+              Set.fromList (map (dir </>) (["shop", "shared"] ++ [ "shop/web" | not Embed.watchesTrees ]))
+
+        describe "The stat rule" $ do
+          let stat mtime    = InterfaceFiles.SourceFileMeta mtime mtime 4 (Just 1) (Just 2)
+              recorded      = Compile.Recorded (stat 1000) "recorded" 1001
+              look facts r  = Compile.fileFact facts r :: FilePath -> Either (String, Maybe InterfaceFiles.SourceFileMeta) InterfaceFiles.SourceFileMeta -> IO (Either String String)
+              changed path  = \(Compile.FileChanged file) -> file == path
+
+          it "lets a record stand for a file with the recorded stat that is older than the record" $ do
+            Compile.statRule (Just recorded) (stat 1000) `shouldBe` Just "recorded"
+            Compile.statRule (Just recorded) (stat 999) `shouldBe` Nothing
+            Compile.statRule (Just recorded { Compile.recordedWritten = 1000 }) (stat 1000) `shouldBe` Nothing
+            Compile.statRule Nothing (stat 1000) `shouldBe` Nothing
+
+          it "takes the recorded SHA-256 for a file with the recorded stat and reads nothing" $
+            withSystemTempDirectory "acton-file-fact" $ \dir -> do
+              -- The content is not the recorded one, and a path with no file
+              -- cannot be read at all.
+              B8.writeFile (dir </> "replaced") (B8.pack "new\n")
+              facts <- Compile.newFileFacts
+              look facts (Just recorded) (dir </> "replaced") (Right (stat 1000)) `shouldReturn` Right "recorded"
+              look facts (Just recorded) (dir </> "none") (Right (stat 1000)) `shouldReturn` Right "recorded"
+
+          it "reads a file with another stat, and one that is not older than the file that holds the record" $
+            withSystemTempDirectory "acton-file-fact" $ \dir -> do
+              B8.writeFile (dir </> "abc") (B8.pack "abc")
+              let sha = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+              forM_ [ (Nothing, stat 1000)
+                    , (Just recorded, stat 999)
+                    , (Just recorded, (stat 1000) { InterfaceFiles.sfmCTimeNs = 999 })
+                    , (Just recorded, (stat 1000) { InterfaceFiles.sfmSize = 3 })
+                    , (Just recorded, (stat 1000) { InterfaceFiles.sfmDevice = Just 3 })
+                    , (Just recorded, (stat 1000) { InterfaceFiles.sfmInode = Just 3 })
+                    , (Just recorded { Compile.recordedWritten = 1000 }, stat 1000)
+                    , (Just recorded { Compile.recordedWritten = 999 }, stat 1000)
+                    ] $ \(r, st) -> do
+                facts <- Compile.newFileFacts
+                look facts r (dir </> "abc") (Right st) `shouldReturn` Right sha
+
+          it "reads a file once in a plan" $
+            withSystemTempDirectory "acton-file-fact" $ \dir -> do
+              B8.writeFile (dir </> "abc") (B8.pack "abc")
+              facts <- Compile.newFileFacts
+              first <- look facts Nothing (dir </> "abc") (Right (stat 1000))
+              removeFile (dir </> "abc")
+              look facts Nothing (dir </> "abc") (Right (stat 1000)) `shouldReturn` first
+              look facts (Just recorded) (dir </> "abc") (Right (stat 1000)) `shouldReturn` first
+              -- Another plan has seen nothing of the file.
+              other <- Compile.newFileFacts
+              look other Nothing (dir </> "abc") (Right (stat 1000)) `shouldThrow` (\(_ :: E.IOException) -> True)
+
+          it "reads a file again after a read that failed" $
+            withSystemTempDirectory "acton-file-fact" $ \dir -> do
+              facts <- Compile.newFileFacts
+              look facts Nothing (dir </> "abc") (Right (stat 1000)) `shouldThrow` (\(_ :: E.IOException) -> True)
+              B8.writeFile (dir </> "abc") (B8.pack "abc")
+              look facts Nothing (dir </> "abc") (Right (stat 1000))
+                `shouldReturn` Right "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+
+          it "returns the reason where there is no file to read" $ do
+            facts <- Compile.newFileFacts
+            look facts (Just recorded) "none" (Left ("no file", Nothing)) `shouldReturn` Left "no file"
+            look facts Nothing "web" (Left ("a directory", Just (stat 1000))) `shouldReturn` Left "a directory"
+
+          it "stops at a later look of the plan that brings another stat" $
+            withSystemTempDirectory "acton-file-fact" $ \dir -> do
+              let path = dir </> "abc"
+              B8.writeFile path (B8.pack "abc")
+              facts <- Compile.newFileFacts
+              _ <- look facts Nothing path (Right (stat 1000))
+              look facts Nothing path (Right ((stat 1000) { InterfaceFiles.sfmCTimeNs = 999 })) `shouldThrow` changed path
+              look facts Nothing path (Right ((stat 1000) { InterfaceFiles.sfmSize = 3 })) `shouldThrow` changed path
+              look facts Nothing path (Right (stat 1001)) `shouldThrow` changed path
+              look facts (Just recorded { Compile.recordedStat = stat 1001, Compile.recordedWritten = 1002 }) path (Right (stat 1001)) `shouldThrow` changed path
+              look facts Nothing path (Left ("no file", Nothing)) `shouldThrow` changed path
+              look facts Nothing path (Left ("too large", Just (stat 1001))) `shouldThrow` changed path
+              gone <- Compile.newFileFacts
+              _ <- look gone Nothing path (Left ("no file", Nothing))
+              look gone Nothing path (Right (stat 1000)) `shouldThrow` changed path
+              look gone Nothing path (Left ("too large", Just (stat 1000))) `shouldThrow` changed path
+
+          it "takes a reason with the stat of an earlier look and keeps the SHA-256 of that look" $
+            withSystemTempDirectory "acton-file-fact" $ \dir -> do
+              let path = dir </> "abc"
+              B8.writeFile path (B8.pack "abc")
+              facts <- Compile.newFileFacts
+              sha <- look facts Nothing path (Right (stat 1000))
+              removeFile path
+              look facts Nothing path (Left ("too large", Just (stat 1000))) `shouldReturn` Left "too large"
+              look facts Nothing path (Right (stat 1000)) `shouldReturn` sha
+              -- A reason with a stat reads nothing, and the look that
+              -- follows it reads the file.
+              other <- Compile.newFileFacts
+              look other Nothing path (Left ("too large", Just (stat 1000))) `shouldReturn` Left "too large"
+              look other Nothing path (Right (stat 1000)) `shouldThrow` (\(_ :: E.IOException) -> True)
+
+          it "writes the row of the embedded files and no other row" $
+            withSystemTempDirectory "acton-update-embeds" $ \dir -> do
+              let mn        = S.modName ["page"]
+                  tyPath    = dir </> "page.tydb"
+                  meta      = stat 500
+                  file m    = InterfaceFiles.EmbeddedFile "data/value.txt" 4 "aa" (stat m)
+                  names     = [nameHash (S.name "value") "s" "p" "i"]
+                  nmod      = I.NModule [] [(S.name "value", I.NVar S.tWild)] (Just "docs")
+                  tmod      = S.Module mn [] (Just "docs") []
+              InterfaceFiles.writeFile tyPath "src" "pub" "impl" (Just meta) [file 1000] [] [] names [] [] ["t"] (Just "docs") nmod tmod
+              before <- InterfaceFiles.readFile tyPath
+              InterfaceFiles.storedEmbeds before `shouldBe` [file 1000]
+              InterfaceFiles.updateEmbeds tyPath [file 2000]
+              after <- InterfaceFiles.readFile tyPath
+              after `shouldBe` before { InterfaceFiles.storedEmbeds = [file 2000] }
+              header <- InterfaceFiles.readHeaderSummary tyPath
+              InterfaceFiles.summaryEmbeds header `shouldBe` [file 2000]
+              InterfaceFiles.summarySourceMeta header `shouldBe` Just meta
+              InterfaceFiles.interfaceModifiedTimeNs tyPath `shouldReturn` InterfaceFiles.summaryModified header
+              -- A row of many files needs room that the .tydb does not have.
+              let many = [ (file 3000) { InterfaceFiles.embeddedPath = "data/" ++ show n ++ ".txt" } | n <- [1 .. 20000 :: Int] ]
+              InterfaceFiles.updateEmbeds tyPath many
+              InterfaceFiles.summaryEmbeds <$> InterfaceFiles.readHeaderSummary tyPath `shouldReturn` many
+
       describe "Completion" $ do
         it "completes inherited transform input attributes" $ do
           let env = completionFixtureEnv env0
@@ -2581,6 +3503,7 @@ main = do
               B8.empty
               B8.empty
               Nothing
+              []
               [(staleMod, B8.empty)]
               []
               []
@@ -4549,7 +5472,7 @@ main = do
           createDirectoryLink (root </> "zigfoo") (root </> "zigfoo" </> "loop")
           createDirectoryLink elsewhere (root </> "zigfoo" </> "out_of_tree")
           let dep = BuildSpec.ZigDep Nothing Nothing (Just "zigfoo") M.empty ["zigfoo"]
-              spec = BuildSpec.BuildSpec "app" Nothing "0x0" M.empty (M.singleton "zigfoo" dep) M.empty M.empty
+              spec = BuildSpec.BuildSpec "app" Nothing "0x0" M.empty (M.singleton "zigfoo" dep) M.empty M.empty []
               stamps = Testing.zigDependencyStamps [(root, spec)]
           before <- stamps
           M.keys before `shouldBe` ["app:zigfoo"]
@@ -4569,7 +5492,7 @@ main = do
           writeFile (root </> "Build.act") "name = \"bindings\"\n"
           writeFile (lib </> "lib.c") "int lib(void) { return 1; }\n"
           let dep = BuildSpec.ZigDep Nothing Nothing (Just "..") M.empty ["lib"]
-              spec = BuildSpec.BuildSpec "bindings" Nothing "0x0" M.empty (M.singleton "lib" dep) M.empty M.empty
+              spec = BuildSpec.BuildSpec "bindings" Nothing "0x0" M.empty (M.singleton "lib" dep) M.empty M.empty []
               stamps = Testing.zigDependencyStamps [(root, spec)]
           before <- stamps
           forM_ ["out/test/cache.json", "snapshots/a.txt", "src/m.act"] $ \f -> writeFile (root </> f) "changed"
@@ -4592,6 +5515,17 @@ main = do
             , ("ACTON_GC_PAUSE_MS", "5")
             , ("GC_MARKERS", "2")
             ]
+
+    describe "Derive" $ do
+      it "lets an input path stand for the files below it, except a file whose name starts with a dot, a file below a directory whose name starts with a dot, and a --tydb copy" $ do
+        filter (Derive.standsFor "web")
+          [ "web/index.html", "web/sub/app.js", "web/app.js~", "web/404", "web/.DS_Store", "web/.cache/kept.txt", "web/sub/.app.js.swp"
+          , "web/page.tydb/data.mdb", "web/sub/page.tydb", "webs/index.html", "other.txt" ]
+          `shouldBe` ["web/index.html", "web/sub/app.js", "web/app.js~", "web/404"]
+        -- A path that is written in inputs is taken as it is written.
+        filter (Derive.standsFor "web/.well-known") ["web/.well-known/acme.txt", "web/.well-known/.hidden"] `shouldBe` ["web/.well-known/acme.txt"]
+        Derive.standsFor "data/.config" "data/.config" `shouldBe` True
+        Derive.standsFor "src/page.tydb" "src/page.tydb/data.mdb" `shouldBe` True
 
     -- BuildSpec: parsing and update-in-place of Build.act (canonical layout)
     describe "BuildSpec" $ do
@@ -4668,6 +5602,302 @@ main = do
             BuildSpec.build_options spec `shouldBe` M.empty
             BuildSpec.renderBuildAct spec `shouldSatisfy` (not . isInfixOf "build_options")
             Ae.eitherDecode' json `shouldBe` Right spec
+
+      it "lets a cancel stop the parse of a Build.act" $ do
+        -- The table is long enough that the parse still runs when the
+        -- cancel arrives.  A parse that takes the cancel for a parse error
+        -- ends with that error.
+        let source = "name = \"demo\"\nfingerprint = 0x1234abcd5678ef00\n\nderived_modules = {\n"
+                     ++ concat [ "    m" ++ show n ++ ": (function=gen.one),\n" | n <- [1 .. 20000 :: Int] ] ++ "}\n"
+            failure text = either Just (const Nothing) (BuildSpec.parseBuildAct text)
+        -- The first parse of a process warms up the parser.
+        _ <- E.evaluate (failure "name = \"demo\"\nfingerprint = 0x1234abcd5678ef00\n")
+        started <- newEmptyMVar
+        parse <- async (putMVar started () >> E.evaluate (failure source))
+        takeMVar started
+        threadDelay 100000
+        cancel parse
+        ended <- waitCatch parse
+        case ended of
+          Left e | Just AsyncCancelled <- E.fromException e -> return ()
+          Left e                                            -> expectationFailure ("the parse ended with " ++ show e)
+          Right result                                      -> expectationFailure ("the parse ended with " ++ show result)
+
+      it "reads, renders and updates derived modules" $ do
+        let source = unlines
+              [ "name = \"demo\""
+              , "fingerprint = 0x1234abcd5678ef00"
+              , "# The modules that functions return"
+              , "derived_modules = {"
+              , "    schema: ("
+              , "        function=gen.rfcgen.schema,"
+              , "        inputs=[\"gen/header.act\", \"yang/\", \"outer/x\", \"src/out/x\"],"
+              , "        args=(strip=\"web/build\", braces=\"{{x}}\", depth=3, ratio=-1.5, flag=True, note=None,"
+              , "              names=[\"a\", \"b\"], sizes={\"k\": 1})"
+              , "    ),"
+              , "    {fleetmgr, flotilla.layers}: (function=spec.modules),"
+              , "    fleetmgr.webui_assets: (function=webui.gen.assets, inputs=[\"webui/build\"])"
+              , "}"
+              ]
+            expected =
+              [ BuildSpec.DerivedEntry (Set.singleton "schema") "gen.rfcgen.schema" ["gen/header.act", "yang/", "outer/x", "src/out/x"]
+                  (M.fromList [ ("strip", Ae.String "web/build"), ("braces", Ae.String "{x}"), ("depth", Ae.Number 3), ("ratio", Ae.Number (-1.5))
+                              , ("flag", Ae.Bool True), ("note", Ae.Null), ("names", Ae.toJSON ["a", "b" :: String])
+                              , ("sizes", Ae.object [("k", Ae.Number 1)]) ])
+              , BuildSpec.DerivedEntry (Set.fromList ["fleetmgr", "flotilla.layers"]) "spec.modules" [] M.empty
+              , BuildSpec.DerivedEntry (Set.singleton "fleetmgr.webui_assets") "webui.gen.assets" ["webui/build"] M.empty
+              ]
+        case BuildSpec.parseBuildAct source of
+          Left err -> expectationFailure err
+          Right (spec,_,_) -> do
+            BuildSpec.derived_modules spec `shouldBe` expected
+            let json = BuildSpec.encodeBuildSpecJSON spec
+            Ae.eitherDecode' json `shouldBe` Right spec
+            BuildSpec.renderBuildAct spec `shouldSatisfy` isInfixOf "    {\n        fleetmgr,\n        flotilla.layers\n    }: (\n        function=spec.modules\n    ),"
+            BuildSpec.renderBuildAct spec `shouldSatisfy` isInfixOf "function=gen.rfcgen.schema"
+            BuildSpec.renderBuildAct spec `shouldSatisfy` isInfixOf
+              "args=(braces=\"{{x}}\", depth=3, flag=True, names=[\"a\", \"b\"], note=None, ratio=-1.5, sizes={\"k\": 1}, strip=\"web/build\")"
+            forM_ [Right (BuildSpec.renderBuildAct spec), BuildSpec.updateBuildActFromJSON source json] $ \result ->
+              case result of
+                Left err -> expectationFailure err
+                Right rendered -> case BuildSpec.parseBuildAct rendered of
+                  Left err -> expectationFailure (rendered ++ ": " ++ err)
+                  Right (spec2,_,_) -> spec2 `shouldBe` spec
+            -- An update that does not mention the table keeps its entries,
+            -- and the comment before it.
+            case BuildSpec.updateBuildActFromJSON source "{\"build_options\":{\"feature\":\"true\"}}" of
+              Left err -> expectationFailure err
+              Right rendered -> do
+                rendered `shouldSatisfy` isInfixOf "# The modules that functions return\nderived_modules = {\n    schema: ("
+                fmap (\(s,_,_) -> BuildSpec.derived_modules s) (BuildSpec.parseBuildAct rendered) `shouldBe` Right expected
+        -- The parser of a Build.act reads a text without .* as the parser
+        -- of a module reads it.
+        asBuildFile <- P.parseBuildFile source
+        asModule <- P.parseModule (S.ModName []) "Build.act" source Nothing
+        S.mbody asBuildFile `shouldBe` S.mbody asModule
+
+      it "parses .* as an attribute in a Build.act and nowhere else" $ do
+        let refused label parse = do
+              result <- E.try parse :: IO (Either E.SomeException S.Module)
+              case result of
+                Left _  -> return ()
+                Right m -> expectationFailure (label ++ " should not parse, got " ++ show (S.mbody m))
+        -- The name * has the location of its one character, with or without
+        -- spaces after it.
+        forM_ ["x = a.b.*\n", "x = a.b.*   \n"] $ \text -> do
+          m <- P.parseBuildFile text
+          case S.mbody m of
+            [S.Assign _ _ (S.Dot _ (S.Dot _ (S.Var _ (S.NoQ a)) b) star)] -> do
+              map S.nstr [a, b, star] `shouldBe` ["a", "b", "*"]
+              S.nloc star `shouldBe` Loc 8 9
+            other -> expectationFailure ("Unexpected AST of " ++ show text ++ ": " ++ show other)
+        forM_ ["x = a.**\n", "x = a.b*\n"] $ \text ->
+          refused ("parseBuildFile " ++ show text) (P.parseBuildFile text)
+        refused "parseModule \"x = a.*\"" (P.parseModule (S.ModName []) "m.act" "x = a.*\n" Nothing)
+        refused "parseModuleSerial \"x = a.*\"" (P.parseModuleSerial (S.ModName []) "m.act" "x = a.*\n" Nothing)
+
+      it "reads the module names of a derived module entry as a set" $ do
+        let source names = "name = \"demo\"\nfingerprint = 0x1234abcd5678ef00\n\nderived_modules = {\n    " ++ names ++ ": (function=spec.modules)\n}\n"
+            json names = BL.fromStrict (B8.pack ("{\"name\":\"demo\",\"fingerprint\":\"0x1234abcd5678ef00\",\"derived_modules\":[{\"names\":"
+                                                 ++ names ++ ",\"function\":\"spec.modules\"}]}"))
+            expected = [BuildSpec.DerivedEntry (Set.fromList ["fleetmgr", "flotilla.layers"]) "spec.modules" [] M.empty]
+        -- The names are read the same on one line and on several, with and
+        -- without a comma after the last name.
+        forM_ [ "{fleetmgr, flotilla.layers}", "{flotilla.layers, fleetmgr}", "{fleetmgr, flotilla.layers,}"
+              , "{\n        fleetmgr,\n        flotilla.layers\n    }", "{\n        flotilla.layers,\n        fleetmgr,\n    }" ] $ \names ->
+          case BuildSpec.parseBuildAct (source names) of
+            Left err -> expectationFailure err
+            Right (spec,_,_) -> do
+              BuildSpec.derived_modules spec `shouldBe` expected
+              map BuildSpec.derivedLabel (BuildSpec.derived_modules spec) `shouldBe` ["fleetmgr"]
+              BuildSpec.renderBuildAct spec `shouldSatisfy` isInfixOf "    {\n        fleetmgr,\n        flotilla.layers\n    }: ("
+              BL.toStrict (BuildSpec.encodeBuildSpecJSON spec) `shouldSatisfy` B8.isInfixOf (B8.pack "[\"fleetmgr\",\"flotilla.layers\"]")
+              Ae.eitherDecode' (json "[\"flotilla.layers\",\"fleetmgr\"]") `shouldBe` Right spec
+        case Ae.eitherDecode' (json "[\"fleetmgr\",\"fleetmgr\"]") :: Either String BuildSpec.BuildSpec of
+          Left err -> err `shouldSatisfy` isInfixOf "the entry fleetmgr names the module fleetmgr twice"
+          Right _  -> expectationFailure "a name twice in one entry should be rejected"
+
+      it "writes the names of a derived module entry one per line" $ do
+        let header = "name = \"demo\"\nfingerprint = 0x1234abcd5678ef00\n"
+            twelve = [ "adapters.platform_" ++ show i | i <- [10 .. 20 :: Int] ] ++ ["server_yang"]
+            entries =
+              [ BuildSpec.DerivedEntry (Set.singleton "schema") "gen.schema" ["gen/header.act"] M.empty
+              , BuildSpec.DerivedEntry (Set.fromList ["tables", "layers.base"]) "gen.modules" [] M.empty
+              , BuildSpec.DerivedEntry (Set.fromList twelve) "gen_adata.modules" [] M.empty
+              ]
+            table = unlines $
+              [ "derived_modules = {"
+              , "    schema: ("
+              , "        function=gen.schema,"
+              , "        inputs=[\"gen/header.act\"]"
+              , "    ),"
+              , "    {"
+              , "        layers.base,"
+              , "        tables"
+              , "    }: ("
+              , "        function=gen.modules"
+              , "    ),"
+              , "    {"
+              ] ++ map (\name -> "        " ++ name ++ ",") (init twelve) ++
+              [ "        server_yang"
+              , "    }: ("
+              , "        function=gen_adata.modules"
+              , "    )"
+              , "}"
+              ]
+            patch = Ae.encode (Ae.object [("derived_modules", Ae.toJSON entries)])
+        -- acton spec update writes the table of its JSON.  The text is the
+        -- same in a Build.act that has no table, in one with an empty table
+        -- and in one whose table has other entries.
+        forM_ ["", "derived_modules = {\n}\n", "derived_modules = {\n    {tables, schema}: (function=gen.old)\n}\n"] $ \old ->
+          case BuildSpec.updateBuildActFromJSON (header ++ old) patch of
+            Left err -> expectationFailure err
+            Right written -> do
+              written `shouldBe` header ++ table
+              case BuildSpec.parseBuildAct written of
+                Left err -> expectationFailure err
+                Right (spec,_,_) -> do
+                  BuildSpec.derived_modules spec `shouldBe` entries
+                  BuildSpec.renderBuildAct spec `shouldSatisfy` isInfixOf table
+                  -- A command such as acton pkg remove reads Build.act and
+                  -- writes it from the JSON of what it read, which leaves
+                  -- the table as it is.
+                  BuildSpec.updateBuildActFromJSON written (BuildSpec.encodeBuildSpecJSON spec) `shouldBe` Right written
+
+      it "reads names that end with .*" $ do
+        let source = "name = \"demo\"\nfingerprint = 0x1234abcd5678ef00\n\nderived_modules = {\n    {tables, layers.*}: (function=gen.modules)\n}\n"
+            expected = BuildSpec.DerivedEntry (Set.fromList ["layers.*", "tables"]) "gen.modules" [] M.empty
+        case BuildSpec.parseBuildAct source of
+          Left err -> expectationFailure err
+          Right (spec,_,_) -> do
+            BuildSpec.derived_modules spec `shouldBe` [expected]
+            BuildSpec.derivedLabel expected `shouldBe` "layers.*"
+            BuildSpec.derivedFileLabel expected `shouldBe` "layers.all"
+            BuildSpec.derivedModules expected `shouldBe` Set.singleton "tables"
+            BuildSpec.derivedBelow expected `shouldBe` ["layers"]
+            BuildSpec.renderBuildAct spec `shouldSatisfy` isInfixOf "    {\n        layers.*,\n        tables\n    }: ("
+            let json = BuildSpec.encodeBuildSpecJSON spec
+            BL.toStrict json `shouldSatisfy` B8.isInfixOf (B8.pack "\"names\":[\"layers.*\",\"tables\"]")
+            Ae.eitherDecode' json `shouldBe` Right spec
+            forM_ [Right (BuildSpec.renderBuildAct spec), BuildSpec.updateBuildActFromJSON source json] $ \result ->
+              case result of
+                Left err -> expectationFailure err
+                Right rendered -> case BuildSpec.parseBuildAct rendered of
+                  Left err -> expectationFailure (rendered ++ ": " ++ err)
+                  Right (spec2,_,_) -> spec2 `shouldBe` spec
+
+      it "accepts a module name next to the same name with .*" $ do
+        let header = "name = \"demo\"\nfingerprint = 0x1234abcd5678ef00\n\n"
+            names expr = fmap (\(spec,_,_) -> map (Set.toList . BuildSpec.derivedNames) (BuildSpec.derived_modules spec))
+                              (BuildSpec.parseBuildAct (header ++ "derived_modules = " ++ expr ++ "\n"))
+        names "{{a.b, a.b.*}: (function=gen.modules)}" `shouldBe` Right [["a.b", "a.b.*"]]
+        names "{a.b: (function=gen.one), a.b.*: (function=gen.modules)}" `shouldBe` Right [["a.b"], ["a.b.*"]]
+        names "{a.b.*: (function=gen.modules), a.bc.*: (function=gen.modules)}" `shouldBe` Right [["a.b.*"], ["a.bc.*"]]
+        -- A part in quotes is the part without quotes.
+        names "{devices.\"X1\": (function=gen.one)}" `shouldBe` Right [["devices.X1"]]
+
+      it "derivedCovers goes by the parts of a name" $ do
+        let entry = BuildSpec.DerivedEntry (Set.fromList ["a.b.*", "t"]) "gen.modules" [] M.empty
+        filter (BuildSpec.derivedCovers entry) ["a.b.c", "a.b.c.d", "t", "a.b", "a.bc", "a", "t.x"] `shouldBe` ["a.b.c", "a.b.c.d", "t"]
+
+      it "defaults absent derived modules to no entries" $ do
+        let source = "name = \"demo\"\nfingerprint = 0x1234abcd5678ef00\n"
+        case BuildSpec.parseBuildAct source of
+          Left err -> expectationFailure err
+          Right (spec,_,_) -> do
+            BuildSpec.derived_modules spec `shouldBe` []
+            BuildSpec.renderBuildAct spec `shouldSatisfy` (not . isInfixOf "derived_modules")
+            Ae.eitherDecode' "{\"name\":\"demo\",\"fingerprint\":\"0x1234abcd5678ef00\"}" `shouldBe` Right spec
+
+      it "rejects derived modules that are not written as the table expects" $ do
+        let cases =
+              [ ("{\"schema\": (function=gen.schema)}", "to the left of its colon an entry has a name, or several names in braces")
+              , ("{schema: (function=\"gen.schema\")}", "function of the entry schema is a module name followed by the function's name, written without quotes")
+              , ("{schema: (function=schema)}", "for example function=gen.schema, found schema")
+              , ("{schema: (inputs=[\"a\"])}", "the entry schema has no function")
+              , ("{schema: (function=gen.schema, outputs=[\"a\"])}", "has the unknown field outputs")
+              , ("{schema: (function=gen.schema, inputs=\"a\")}", "inputs of the entry schema must be a list of plain string literals")
+              , ("{schema: (function=gen.schema, inputs=[\"/etc/passwd\"])}", "must be a relative path inside the project")
+              , ("{schema: (function=gen.schema, inputs=[\"a/../../b\"])}", "must be a relative path inside the project")
+              , ("{schema: (function=gen.schema, args={\"a\": 1})}", "args of the entry schema are the keyword arguments of its function")
+              , ("{schema: (function=gen.schema, args=(a=b))}", "the argument a of the entry schema must be a literal")
+              , ("{schema: (function=gen.schema, args=(a=[f(1)]))}", "the argument a of the entry schema must be a literal")
+              , ("{schema: (function=gen.schema, args=(a={1: 2}))}", "the argument a of the entry schema must be a literal")
+              , ("{schema: (function=gen.schema, args=(a=-\"x\"))}", "the argument a of the entry schema must be a literal")
+              , ("{schema: (function=gen.schema), {other, schema}: (function=gen.schema)}", "two entries name the module schema")
+              , ("{{schema, other, schema}: (function=gen.schema)}", "the entry {other, schema} names the module schema twice")
+              , ("{(schema, other): (function=gen.schema)}", "to the left of its colon an entry has a name, or several names in braces")
+              , ("{(schema): (function=gen.schema)}", "to the left of its colon an entry has a name, or several names in braces")
+              , ("{{schema, *other}: (function=gen.schema)}", "to the left of its colon an entry has a name, or several names in braces")
+              , ("{f(x): (function=gen.schema)}", "to the left of its colon an entry has a name, or several names in braces")
+              , ("{schema: gen.schema}", "the entry schema must be written as (function=..., inputs=[...], args=(...))")
+              , ("{schema: (gen.schema, inputs=[\"a\"])}", "the entry schema must be written as (function=..., inputs=[...], args=(...))")
+              , ("{**other}", "an entry must be written as name: (function=...)")
+              , ("{schema: (function=gen.schema, inputs=[\"a\", b])}", "inputs of the entry schema must be a list of plain string literals")
+              , ("{schema: (function=gen.schema, inputs=[\"./a\"])}", "must be a relative path inside the project")
+              , ("{schema: (function=gen.schema, inputs=[\"a\\\\b\"])}", "must be a relative path inside the project")
+              , ("{schema: (function=gen.schema, inputs=[\"\"])}", "must be a relative path inside the project")
+              , ("{schema: (function=gen.schema, inputs=[\"out/x\"])}", "the input path \"out/x\" of the entry schema is in out, which a build writes and which is not committed")
+              , ("{schema: (function=gen.schema, inputs=[\"out/é\"])}", "the input path \"out/é\" of the entry schema is in out, which a build writes and which is not committed")
+              , ("{schema: (function=gen.schema, inputs=[\"out\"])}", "is in out, which a build writes and which is not committed")
+              , ("{schema: (function=gen.schema, inputs=[\"out//derived/\"])}", "is in out, which a build writes and which is not committed")
+              , ("[schema]", "expected a dict of entries")
+              , ("{layers.\"*\": (function=gen.modules)}", "to the left of its colon an entry has a name, or several names in braces, written without quotes: "
+                                                          ++ "a module name such as schema, or a name such as layers.* for every module below layers. "
+                                                          ++ "For example schema: (function=gen.schema) or {tables, layers.*}: (function=gen.modules)")
+              , ("{a.\"b.c\": (function=gen.schema)}", "to the left of its colon an entry has a name, or several names in braces")
+              , ("{a.\"b c\": (function=gen.schema)}", "to the left of its colon an entry has a name, or several names in braces")
+              , ("{layers.*.types: (function=gen.modules)}", "\"layers.*.types\" is not a name of an entry: a * is written only as the .* at the end of a name, "
+                                                             ++ "as in layers.* for every module below layers")
+              , ("{layers.*.*: (function=gen.modules)}", "\"layers.*.*\" is not a name of an entry")
+              , ("{schema: (function=gen.*)}", "function of the entry schema must be a module name followed by the function's name, found \"gen.*\"")
+              , ("{{layers.*, layers.*}: (function=gen.modules)}", "the entry layers.* names the modules below layers twice")
+              , ("{{layers.*, layers.base}: (function=gen.modules)}",
+                 "the entry {layers.*, layers.base} names the module layers.base twice: layers.* stands for every module below layers, at any depth")
+              , ("{{layers.*, layers.core.*}: (function=gen.modules)}",
+                 "the entry {layers.*, layers.core.*} names the modules below layers.core twice: layers.* stands for every module below layers, at any depth")
+              , ("{layers.*: (function=gen.modules), layers.core.types: (function=gen.schema)}",
+                 "two entries name the module layers.core.types: layers.* stands for every module below layers, at any depth")
+              , ("{layers.core.*: (function=gen.modules), layers.*: (function=gen.modules)}",
+                 "two entries name the modules below layers.core: layers.* stands for every module below layers, at any depth")
+              , ("{layers.*: (function=gen.modules), {other, layers.*}: (function=gen.modules)}", "two entries name the modules below layers")
+              , ("{a.*: (function=gen.modules), a.all: (function=gen.schema)}", "two entries name the module a.all")
+              , ("{Layers.base: (function=gen.schema), layers.*: (function=gen.modules)}",
+                 "the names Layers.base and layers.* start with Layers and layers, which differ only in the case of letters. "
+                 ++ "A file system that ignores the case of letters has one file or directory for both.")
+              , ("{Foo: (function=gen.schema), foo: (function=gen.schema)}", "the names Foo and foo start with Foo and foo, which differ only in the case of letters")
+              , ("{{p.Foo.x, p.foo.*}: (function=gen.modules)}", "the names p.Foo.x and p.foo.* start with p.Foo and p.foo, which differ only in the case of letters")
+              ]
+            header = "name = \"demo\"\nfingerprint = 0x1234abcd5678ef00\n\n"
+        forM_ cases $ \(expr, expected) ->
+          case BuildSpec.parseBuildAct (header ++ "derived_modules = " ++ expr ++ "\n") of
+            Left err -> do
+              err `shouldSatisfy` isInfixOf expected
+              err `shouldSatisfy` isInfixOf "at line 4"
+            Right _ -> expectationFailure (expr ++ " should be rejected")
+        -- A message about an entry gives the line of the entry.
+        case BuildSpec.parseBuildAct (header ++ "derived_modules = {\n    schema: (function=gen.schema),\n    other: (inputs=[\"a\"])\n}\n") of
+          Left err -> err `shouldSatisfy` isInfixOf "at line 6: the entry other has no function"
+          Right _  -> expectationFailure "an entry without a function should be rejected"
+        -- These checks can fail only for an entry that is read from JSON.
+        let decodeEntry entry = Ae.eitherDecode' (BL.fromStrict (B8.pack
+              ("{\"name\":\"demo\",\"fingerprint\":\"0x1234abcd5678ef00\",\"derived_modules\":[" ++ entry ++ "]}"))) :: Either String BuildSpec.BuildSpec
+        forM_ [ ("{\"names\":[],\"function\":\"gen.schema\"}", "an entry has at least one name")
+              , ("{\"names\":[\"a/b\"],\"function\":\"gen.schema\"}", "\"a/b\" is not a module name")
+              , ("{\"names\":[\"*\"],\"function\":\"gen.schema\"}", "\"*\" is not a name of an entry")
+              , ("{\"names\":[\"a*\"],\"function\":\"gen.schema\"}", "\"a*\" is not a name of an entry")
+              , ("{\"names\":[\".*\"],\"function\":\"gen.schema\"}", "\".*\" is not a name of an entry")
+                -- The names of an entry are in its field names, and in no other field.
+              , ("{\"modules\":[\"schema\"],\"function\":\"gen.schema\"}", "names")
+              , ("{\"names\":[\"schema\"],\"modules\":[\"schema\"],\"function\":\"gen.schema\"}", "the entry schema has the unknown field modules")
+              , ("{\"names\":[\"schema\"],\"function\":\"schema\"}", "function of the entry schema must be a module name followed by the function's name, found \"schema\"")
+              , ("{\"names\":[\"schema\"],\"function\":\"gen.schema\",\"args\":{\"a-b\":1}}", "the argument name \"a-b\" of the entry schema is not a parameter name")
+              , ("{\"names\":[\"schema\"],\"function\":\"gen.schema\",\"output\":\"x\"}", "the entry schema has the unknown field output. The fields are function, inputs and args")
+              , ("{\"names\":[\"schema\"],\"function\":\"gen.schema\",\"inputs\":[\"out/x\"]}", "the input path \"out/x\" of the entry schema is in out")
+              ] $ \(entry, expected) ->
+          case decodeEntry entry of
+            Left err -> err `shouldSatisfy` isInfixOf expected
+            Right _  -> expectationFailure (entry ++ " should be rejected")
 
       it "preserves omitted build options and replaces or clears explicit updates" $ do
         let source = optionsBuildAct "{\"feature\": \"true\", \"label\": \"old\"}"
@@ -4750,6 +5980,23 @@ main = do
                 Right rendered -> case BuildSpec.parseBuildAct rendered of
                   Left err -> expectationFailure err
                   Right (spec2,_,_) -> spec2 `shouldBe` spec
+
+      it "reads the path of a dependency back as it was rendered" $ do
+        -- A character outside ASCII, a backslash, a quote and braces in the
+        -- path of a dependency.
+        forM_ ["deps/a", "/home/josé/demo", "C:\\Users\\josé\\demo", "/tmp/ƒ", "/tmp/a \"b\" {c}"] $ \dir -> do
+          let source = followsBuildAct "path=\"deps/a\""
+          case BuildSpec.parseBuildAct source of
+            Left err -> expectationFailure err
+            Right (spec,_,_) -> do
+              let moved = spec { BuildSpec.dependencies = M.map (\dep -> dep { BuildSpec.path = Just dir }) (BuildSpec.dependencies spec) }
+              forM_ [ Right (BuildSpec.renderBuildAct moved)
+                    , BuildSpec.updateBuildActFromJSON source (BuildSpec.encodeBuildSpecJSON moved)
+                    ] $ \result -> case result of
+                Left err -> expectationFailure (dir ++ ": " ++ err)
+                Right rendered -> case BuildSpec.parseBuildAct rendered of
+                  Left err -> expectationFailure (rendered ++ ": " ++ err)
+                  Right (spec2,_,_) -> spec2 `shouldBe` moved
 
       it "rejects invalid archive subdirectories in Build.act and JSON" $ do
         forM_ (["", "/tmp/widgets", "../widgets", "packages/../../widgets", "packages/../widgets", "C:/widgets", "C:widgets", "packages\\widgets", "one\0two"] :: [String]) $ \dir -> do
@@ -5430,6 +6677,98 @@ expectMixedIndentation offset input =
         l `shouldBe` Loc offset (offset + 1)
       Left err -> expectationFailure ("Expected mixed indentation, got " ++ show err)
       Right _ -> expectationFailure "Expected mixed indentation to be rejected"
+
+-- | Both module parsers refuse the word embed between the two texts as a name,
+-- at the word.
+expectEmbedRefused :: String -> String -> Expectation
+expectEmbedRefused before after =
+  forM_ [P.parseModuleSerial, P.parseModule] $ \parse -> do
+    result <- E.try (parse (S.modName ["reserved"]) "reserved.act" (before ++ "embed" ++ after) Nothing)
+    case result of
+      Left (bundle :: ParseErrorBundle String P.CustomParseError) ->
+        NE.head (bundleErrors bundle) `shouldBe` FancyError (length before) (Set.singleton (ErrorCustom P.EmbedAsName))
+      Right _ -> expectationFailure "Expected embed to be refused as a name"
+
+-- | Both module parsers refuse a source with the given error of the embed
+-- form at the given place.
+expectEmbedError :: SrcLoc -> P.CustomParseError -> String -> Expectation
+expectEmbedError l err src =
+  forM_ [P.parseModuleSerial, P.parseModule] $ \parse -> do
+    result <- E.try (parse (S.modName ["page"]) "page.act" src Nothing)
+    case result of
+      Left (P.CustomParseException l' err') -> (l', err') `shouldBe` (l, err)
+      Right _ -> expectationFailure "Expected the embed form to be refused"
+
+-- | A module with an embed expression in each kind of place that holds an
+-- expression, with the paths p1, p2 and so on in the order of the source.
+embedPlaces :: String
+embedPlaces = unlines
+  [ "a = embed(\"p1\")"
+  , "b, c = (embed(\"p2\"), [embed(\"p3\"), *[embed(\"p4\")]])"
+  , "d = {embed(\"p5\"): embed(\"p6\"), **{1: embed(\"p7\")}}"
+  , "e = {embed(\"p8\")}"
+  , "f = (body=embed(\"p9\"), size=len(embed(\"p10\")))"
+  , "g = embed(\"p11\")[1:len(embed(\"p12\")):int(embed(\"p13\")[0])]"
+  , "h = embed(\"p14\") if embed(\"p15\") == embed(\"p16\") else -embed(\"p17\")[0]"
+  , "i = [embed(\"p18\") for x in [embed(\"p19\")] if x in embed(\"p20\")]"
+  , "j = lambda x: x + embed(\"p21\")"
+  , "k = isinstance(embed(\"p22\"), bytes)"
+  , "l = (embed(\"p23\")).decode(\"x\", errors=embed(\"p24\"))"
+  , "def m(x = embed(\"p25\"), y = embed(\"p26\")):"
+  , "    z = embed(\"p27\")"
+  , "    z += embed(\"p28\")"
+  , "    x[embed(\"p29\")] = embed(\"p30\")"
+  , "    assert embed(\"p31\"), embed(\"p32\")"
+  , "    del x[embed(\"p33\")]"
+  , "    if embed(\"p34\"):"
+  , "        print(embed(\"p35\"))"
+  , "    elif embed(\"p36\"):"
+  , "        pass"
+  , "    else:"
+  , "        embed(\"p37\")"
+  , "    while embed(\"p38\"):"
+  , "        break"
+  , "    else:"
+  , "        embed(\"p39\")"
+  , "    for q in embed(\"p40\"):"
+  , "        embed(\"p41\")"
+  , "    try:"
+  , "        embed(\"p42\")"
+  , "    except ValueError:"
+  , "        embed(\"p43\")"
+  , "    else:"
+  , "        embed(\"p44\")"
+  , "    finally:"
+  , "        embed(\"p45\")"
+  , "    with open(embed(\"p46\")) as r:"
+  , "        embed(\"p47\")"
+  , "    return embed(\"p48\")"
+  , "class Nn(object):"
+  , "    def o(self):"
+  , "        return embed(\"p49\")"
+  , "actor Oo():"
+  , "    var o = embed(\"p50\")"
+  , "    def o2():"
+  , "        after embed(\"p51\"): o2(embed(\"p52\"))"
+  , "        x = await async o3(embed(\"p53\"))"
+  , "        return x?.o(embed(\"p54\"))"
+  , "protocol Pp:"
+  , "    def o4(self):"
+  , "        return embed(\"p55\")"
+  , "extension Nn (Pp):"
+  , "    def o5(self):"
+  , "        return embed(\"p56\")"
+  , "def r(x):"
+  , "    raise ValueError(embed(\"p57\"))"
+  , "s = {embed(\"p58\"): embed(\"p59\") for x in embed(\"p60\") if embed(\"p61\")}"
+  , "t = {embed(\"p62\") for x in embed(\"p63\")}"
+  , "u = sum(len(embed(\"p64\")) for x in embed(\"p65\"))"
+  , "v = \"<{embed(\"p66\")}>\""
+  , "w = (embed(\"p67\"), 1).0"
+  , "actor Qq(x = embed(\"p68\"), y = embed(\"p69\")):"
+  , "    pass"
+  , "z = lambda x=embed(\"p70\"), y=embed(\"p71\"): x"
+  ]
 
 parseBundleErrorLine :: ParseErrorBundle String P.CustomParseError -> Int
 parseBundleErrorLine bundle =

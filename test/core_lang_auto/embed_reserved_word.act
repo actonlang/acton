@@ -1,0 +1,43 @@
+# embed is a reserved word. An attribute or a tuple field with this spelling is
+# written in quotes, and a name that only starts with the word is an ordinary
+# name.
+
+embedded = 40
+
+def embed_files(embed_count: int, embeds: int) -> int:
+    return embed_count + embeds
+
+class Embedder(object):
+    embed_path: str
+
+    def __init__(self, embed_path: str):
+        self.embed_path = embed_path
+
+    def embed_all(self) -> str:
+        return self.embed_path + "/*"
+
+class Page(object):
+    def __init__(self, count: int):
+        self."embed" = count
+
+    def twice(self) -> int:
+        return self."embed" * 2
+
+actor main(env):
+    proc def __startup__():
+        t = ("embed"=3, other=4)
+        if t."embed" != 3 or t.other != 4:
+            print("unexpected tuple:", t)
+            env.exit(1)
+        p = Page(3)
+        p."embed" = p."embed" + 1
+        if p."embed" != 4 or p.twice() != 8:
+            print("unexpected attribute:", p."embed", p.twice())
+            env.exit(1)
+        if embed_files(embedded, embeds=2) != 42:
+            print("unexpected sum:", embed_files(embedded, embeds=2))
+            env.exit(1)
+        if Embedder("web").embed_all() != "web/*":
+            print("unexpected path:", Embedder("web").embed_all())
+            env.exit(1)
+        env.exit(0)

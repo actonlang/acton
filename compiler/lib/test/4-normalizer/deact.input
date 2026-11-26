@@ -1,34 +1,38 @@
-W_Apa_34: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+W_Apa_32: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
 
-W_Apa_135: __builtin__.Plus[__builtin__.int] = __builtin__.IntegralD_int()
+W_Apa_138: __builtin__.Plus[__builtin__.int] = __builtin__.IntegralD_int()
 
-W_Apa_100: __builtin__.Times[__builtin__.int, __builtin__.int] = __builtin__.IntegralD_int()
+W_Apa_101: __builtin__.Times[__builtin__.int, __builtin__.int] = __builtin__.IntegralD_int()
 
-W_Apa_390: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
+W_Apa_395: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
 
 # recursive group:
 actor Apa ():
     __startup__ : action() -> None
     proc def setup (cb : action(__builtin__.int) -> __builtin__.int) -> None:
         print@[(__builtin__.str,)](*("setup",), sep = " ", end = "\\n", err = False, flush = False)
-        cb(W_Apa_34.__fromatom__(0))
+        (async cb)(W_Apa_32.__fromatom__(0))
     proc def compute (cb : action(__builtin__.int) -> __builtin__.int) -> __builtin__.int:
         print@[(__builtin__.str,)](*("compute",), sep = " ", end = "\\n", err = False, flush = False)
-        v: __builtin__.int = cb(W_Apa_34.__fromatom__(1))
-        m: __builtin__.Msg[__builtin__.int] = (async cb)(W_Apa_34.__fromatom__(2))
-        return W_Apa_100.__mul__(v, W_Apa_34.__fromatom__(10))
+        v: __builtin__.int = let:
+                                 G_1x: action(__builtin__.int) -> __builtin__.int = cb
+                             in await (async G_1x)(W_Apa_32.__fromatom__(1))
+        m: __builtin__.Msg[__builtin__.int] = (async cb)(W_Apa_32.__fromatom__(2))
+        return W_Apa_101.__mul__(v, W_Apa_32.__fromatom__(10))
     proc def notice (i : __builtin__.int) -> __builtin__.int:
         print@[(__builtin__.str,)](*("notice",), sep = " ", end = "\\n", err = False, flush = False)
-        return W_Apa_135.__add__(i, W_Apa_34.__fromatom__(1))
+        return W_Apa_138.__add__(i, W_Apa_32.__fromatom__(1))
     proc def __startup__ () -> None:
-        setup(cb = action lambda (G_1y : __builtin__.int): $WRAP@[(), (i: __builtin__.int), __builtin__.int](self, notice)(i = G_1y))
+        setup(cb = let:
+                       G_2x: action(i: __builtin__.int) -> __builtin__.int = $WRAP@[(), (i: __builtin__.int), __builtin__.int](self, notice)
+                   in action lambda (G_1p : __builtin__.int): G_2x(i = G_1p))
         print@[(__builtin__.str,)](*("Apa",), sep = " ", end = "\\n", err = False, flush = False)
     $MarkStartup((async $WRAP@[(), (), None](self, __startup__))())
 actor Bepa ():
     __startup__ : action() -> None
     proc def callback (i : __builtin__.int) -> __builtin__.int:
         print@[(__builtin__.str, __builtin__.int)](*("callback", i), sep = " ", end = "\\n", err = False, flush = False)
-        return W_Apa_135.__add__(i, W_Apa_34.__fromatom__(1))
+        return W_Apa_138.__add__(i, W_Apa_32.__fromatom__(1))
     proc def __startup__ () -> None:
         print@[(__builtin__.str,)](*("Bepa",), sep = " ", end = "\\n", err = False, flush = False)
     $MarkStartup((async $WRAP@[(), (), None](self, __startup__))())
@@ -37,17 +41,31 @@ actor main (env : __builtin__.Env):
     proc def __startup__ () -> None:
         proc def myproc (i : __builtin__.int) -> __builtin__.int:
             print@[(__builtin__.str, __builtin__.int)](*("myproc", i), sep = " ", end = "\\n", err = False, flush = False)
-            if W_Apa_390.__eq__(i, W_Apa_34.__fromatom__(2)):
-                env.exit(n = W_Apa_34.__fromatom__(0))
+            if W_Apa_395.__eq__(i, W_Apa_32.__fromatom__(2)):
+                (async let:
+                           G_2x: action(n: __builtin__.int) -> None = env.exit
+                       in action lambda (G_1p : __builtin__.int): G_2x(n = G_1p))(W_Apa_32.__fromatom__(0))
             return i
         a: Apa = Apa()
         b: Bepa = Bepa()
         print@[(__builtin__.str,)](*("-----",), sep = " ", end = "\\n", err = False, flush = False)
-        a.setup(cb = action lambda (G_1y : __builtin__.int): a.notice(i = G_1y))
-        x: __builtin__.Msg[__builtin__.int] = (async action lambda (G_1p : action(__builtin__.int) -> __builtin__.int): a.compute(cb = G_1p))(action lambda (G_1y : __builtin__.int): b.callback(i = G_1y))
+        (async let:
+                   G_2x: action(cb: action(__builtin__.int) -> __builtin__.int) -> None = a.setup
+               in action lambda (G_1p : action(__builtin__.int) -> __builtin__.int): G_2x(cb = G_1p))(let:
+                                                                                                          G_2x: action(i: __builtin__.int) -> __builtin__.int = a.notice
+                                                                                                      in action lambda (G_1p : __builtin__.int): G_2x(i = G_1p))
+        x: __builtin__.Msg[__builtin__.int] = (async let:
+                                                         G_2x: action(cb: action(__builtin__.int) -> __builtin__.int) -> __builtin__.int = a.compute
+                                                     in action lambda (G_1p : action(__builtin__.int) -> __builtin__.int): G_2x(cb = G_1p))(let:
+                                                                                                                                                G_2x: action(i: __builtin__.int) -> __builtin__.int = b.callback
+                                                                                                                                            in action lambda (G_1p : __builtin__.int): G_2x(i = G_1p))
         r: __builtin__.int = await x
         print@[(__builtin__.str, __builtin__.int)](*("r =", r), sep = " ", end = "\\n", err = False, flush = False)
-        a.compute(cb = action lambda (G_1y : __builtin__.int): $WRAP@[(), (i: __builtin__.int), __builtin__.int](self, myproc)(i = G_1y))
+        (async let:
+                   G_2x: action(cb: action(__builtin__.int) -> __builtin__.int) -> __builtin__.int = a.compute
+               in action lambda (G_1p : action(i: __builtin__.int) -> __builtin__.int): G_2x(cb = let:
+                                                                                                      G_2x: action(i: __builtin__.int) -> __builtin__.int = G_1p
+                                                                                                  in action lambda (G_1p : __builtin__.int): G_2x(i = G_1p)))($WRAP@[(), (i: __builtin__.int), __builtin__.int](self, myproc))
         print@[(__builtin__.str,)](*("main",), sep = " ", end = "\\n", err = False, flush = False)
     $MarkStartup((async $WRAP@[(), (), None](self, __startup__))())
 # (recursive group)
