@@ -747,6 +747,22 @@ main = do
               QuickType.typeOf witnessEnv e `shouldBe` target
               QuickType.fxOf witnessEnv e `shouldBe` S.fxProc
             _ -> expectationFailure "Expected eager capture followed by an action adapter"
+      it "specializes generic effect witnesses after term substitution" $ do
+        forM_ shapes $ \(p,k,r) -> do
+          let (w, _, eqs) = solveEffect S.fxPure S.fxAction
+              f = S.name "function"
+              replacement = S.name "replacement"
+              source = S.tFun S.fxPure p k r
+              target = S.tFun S.fxAction p k r
+              use = S.sExpr $ S.eCall (S.tApp (S.eVar w) [p,k,r]) [S.eVar f]
+              substituted = Transform.termsubst [(f,S.eVar replacement)] (TE.bindWits eqs ++ [use])
+              reduced = Transform.wtrans Transform.env0 substituted
+              valueEnv = Acton.Env.define [(replacement,I.NVar source)] env
+          case reduced of
+            [S.Expr _ e@(S.Let _ [S.Assign _ [_] captured] S.Lambda{})] -> do
+              captured `shouldBe` S.eVar replacement
+              QuickType.typeOf valueEnv e `shouldBe` target
+            _ -> expectationFailure "Expected a specialized action adapter after substitution"
       it "does not capture effect variables named A, B, or C" $ do
         forM_ [("A","B"), ("B","C"), ("C","A")] $ \(from,to) -> do
           let fx1 = S.tVar $ S.TV S.KFX (S.name from)

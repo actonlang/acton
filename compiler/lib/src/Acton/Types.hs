@@ -2916,17 +2916,27 @@ instance Infer Expr where
 
     infer env (Lambda l p k e fx)
       | nodup (p,k)                     = do checkIndependentDefaults env p k
-                                             pushFX fx tNone
+                                             bodyFX <- newUnivarOfKind KFX env
+                                             pushFX bodyFX tNone
                                              (cs0,te0,p') <- infEnv env1 p
                                              (cs1,te1,k') <- infEnv (define te0 env1) k
                                              let env2 = define te1 $ define te0 env1
                                              -- Inferred lambdas can forward an action directly;
                                              -- an explicit proc lambda must unwrap the call.
                                              (cs2,t,e') <- case e of
-                                                             Call l' e' ps ks -> inferCall env2 (fx == fxProc) l' e' ps ks
-                                                             _ -> infer env2 e
+                                                             Call l' e' ps ks -> do
+                                                                 (cs,i,resultFX,t,e') <- inferCallEffect env2 (if fx == fxProc then Just attrUnwrap else Nothing) l' e' ps ks
+                                                                 return (Cast i env2 resultFX bodyFX : cs,t,e')
+                                                             _ -> do (cs,t,e') <- infer env2 e
+                                                                     return (Cast (locinfo l 97) env2 fxPure bodyFX : cs,t,e')
                                              popFX
-                                             return (cs0++cs1++cs2, tFun fx (prowOf p') (krowOf k') t, Lambda l (noDefaultsP p') (noDefaultsK k') e' fx)
+                                             w <- newWitness
+                                             let fun effect = tFun effect (prowOf p') (krowOf k') t
+                                                 lambda = Lambda l (noDefaultsP p') (noDefaultsK k') e' bodyFX
+                                             -- The raw body must preserve its result representation.
+                                             -- Adapt effects on the whole function using a witness.
+                                             return (Sub (locinfo l 98) env w (fun bodyFX) (fun fx) :
+                                                     cs0++cs1++cs2, fun fx, eCallVar w [lambda])
                                                      -- TODO: replace defaulted params with Conds
       where env1                        = reserve (bound (p,k)) env
     infer env e@Yield{}                 = notYetExpr e
@@ -3043,6 +3053,11 @@ discard e                              = eLet [sExpr e] eNone
 inferCall env unwrap                   = inferCallWith env (if unwrap then Just attrUnwrap else Nothing)
 
 inferCallWith env operation l e ps ks = do
+    (cs,i,fx,t,e') <- inferCallEffect env operation l e ps ks
+    requirement <- requireEffect env i fx
+    return (requirement:cs,t,e')
+
+inferCallEffect env operation l e ps ks = do
     (cs1,t,e') <- infer env e{eloc = l}
     (cs1,t,e') <- case operation of
                       Just op -> wrapped l op env cs1 [t] [e']
@@ -3060,9 +3075,8 @@ inferCallWith env operation l e ps ks = do
                    Just l2 <- findDefLoc n' env ->
                           DeclInfo l l2 n' sc ("Type incompatibility between definition of and call of "++Pretty.print n')
                _ -> DfltInfo l 837 (Just (Call l e ps ks)) []
-    requirement <- requireEffect env i fx
-    return (Sub i env w t (tFun fx prow krow t0) : requirement :
-            cs1++cs2++cs3, t0, Call l (eCall (eVar w) [e']) ps' ks')
+    return (Sub i env w t (tFun fx prow krow t0) :
+            cs1++cs2++cs3, i, fx, t0, Call l (eCall (eVar w) [e']) ps' ks')
 
 
 

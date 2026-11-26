@@ -1806,7 +1806,14 @@ improve env te eq cs
         lowerBnd                        = [ (v,t) | (v,[t]) <- Map.assocs (lbounds vi), noEmbed v ]
         upperBnd                        = [ (v,t) | (v,[t]) <- Map.assocs (ubounds vi), noEmbed v ]
         posLBnd                         = [ (v,t) | (v,t) <- lowerBnd, v `notElem` negvars, implAll env (lookup' v $ pbounds vi) t ]
-        negUBnd                         = [ (v,t) | (v,t) <- upperBnd, v `notElem` posvars, implAll env (lookup' v $ pbounds vi) t, noDots vi v ]
+        negUBnd                         = [ (v,t) | (v,t) <- upperBnd, v `notElem` posvars, implAll env (lookup' v $ pbounds vi) t, noDots vi v, castUpper v t ]
+        -- Effect Sub bounds can require adapters, whereas Cast preserves the
+        -- representation. Do not commit to an upper bound before its incoming
+        -- casts are known to permit it.
+        castUpper v t                   = uvkind v /= KFX || and
+                                             [castable env' source t | (env',source) <- lookup' v castSources]
+        castSources                     = Map.fromListWith (++)
+                                             [(v,[(env',source)]) | Cast _ env' source (TUni _ v) <- cs, uvkind v == KFX]
         closLBnd                        = [ (v,t) | (v, [t]) <- Map.assocs (lbounds vi), upClosed env t, implAll env (lookup' v $ pbounds vi) t ]
         closUBnd                        = [ (v,t) | (v, [t]) <- Map.assocs (ubounds vi), dnClosed env t, implAll env (lookup' v $ pbounds vi) t, noDots vi v ]
         (redEq,redUni)                  = ctxtReduce env cs

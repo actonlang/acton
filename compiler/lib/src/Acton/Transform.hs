@@ -150,8 +150,10 @@ instance Transform Decl where
     trans env (Typedef l n q t doc)     = Typedef l n q t doc
     trans env (Extension l q c us b doc)= Extension l q c us (wtrans (checkscope [nSelf] (typescope q env)) b) doc
 
+-- Substitution can visit generic witnesses before their row arguments have
+-- been specialized. Defer adapter generation until the row layout is known.
 transCall (Var _ n) [p,k,r] [f]
-  | n == primPureToAction             = Just $ Let NoLoc [sAssign (pVar captured source) f] adapter
+  | n == primPureToAction             = Let NoLoc [sAssign (pVar captured source) f] adapter <$ tupleComponents p k
   where source                       = tFun fxPure p k r
         captured                     = head $ xNames \\ free f
         pp                           = pPar (pNames \\ [captured]) p
@@ -166,7 +168,7 @@ transCall (Dot _ (Var _ n) m) ts [e1,e2]
   | n == primWrapCom, m == attrWrap = Just e2
 transCall (Dot _ (Var _ n) m) [p,k,r] [f]
   | n == primUnwrapAction, m == attrUnwrap
-                                     = Just $ Let NoLoc [sAssign (pVar captured source) f] adapter
+                                     = Let NoLoc [sAssign (pVar captured source) f] adapter <$ tupleComponents p k
   | n == primUnwrap_Action, m == attrUnwrap_
                                      = Just $ eAsync f
   | n `elem` unwrapWitnesses, m == attrUnwrap = Just f
