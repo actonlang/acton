@@ -511,6 +511,7 @@ pub fn build(b: *std.Build) void {
 
 
     libActon.installHeader(b.path("rts/common.h"), "rts/common.h");
+    libActon.installHeader(b.path("rts/io.h"), "rts/io.h");
     libActon.installHeader(b.path("rts/q.h"), "rts/q.h");
     libActon.installHeader(b.path("rts/rts.h"), "rts/rts.h");
     libActon.installHeader(b.path("rts/log.h"), "rts/log.h");

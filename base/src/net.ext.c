@@ -27,9 +27,7 @@ void netQ___ext_init__() {
     // NOP
 }
 
-// Longest address string: an IPv6 address with a zone (fe80::1%eth0)
-#define NET_ADDRSTRLEN (INET6_ADDRSTRLEN + UV_IF_NAMESIZE)
-// ...with a port: [fe80::1%eth0]:65535
+// Longest address string with a port: [fe80::1%eth0]:65535
 #define NET_ADDRPORTSTRLEN (NET_ADDRSTRLEN + 8)
 // A destination named in messages: a host name or address, and a port
 #define NET_DESTSTRLEN (NET_ADDRPORTSTRLEN + 256)
@@ -241,41 +239,6 @@ struct udp_send_req_state {
 
 static void udp_call_receive($WORD cb, $WORD actor, B_bytes data, B_str address, B_int port) {
     ((B_Msg (*)($WORD, $WORD, $WORD, $WORD, $WORD))(($action)cb)->$class->__asyn__)(cb, actor, data, address, port);
-}
-
-// Formats an address as a string. An IPv6 address with a scope, like a
-// link-local address, gets its zone: fe80::1%eth0.
-static int sockaddr_to_addr_port(const struct sockaddr *addr, char *addrbuf, size_t addrbuf_len, int *port) {
-    if (addr == NULL) {
-        return UV_EINVAL;
-    }
-    if (addr->sa_family == AF_INET) {
-        const struct sockaddr_in *addr4 = (const struct sockaddr_in *)addr;
-        int r = uv_ip4_name(addr4, addrbuf, addrbuf_len);
-        if (r != 0) {
-            return r;
-        }
-        *port = (int)ntohs(addr4->sin_port);
-        return 0;
-    } else if (addr->sa_family == AF_INET6) {
-        const struct sockaddr_in6 *addr6 = (const struct sockaddr_in6 *)addr;
-        int r = uv_ip6_name(addr6, addrbuf, addrbuf_len);
-        if (r != 0) {
-            return r;
-        }
-        if (addr6->sin6_scope_id != 0) {
-            size_t len = strlen(addrbuf);
-            char zone[UV_IF_NAMESIZE];
-            size_t zone_len = sizeof(zone);
-            if (uv_if_indextoname(addr6->sin6_scope_id, zone, &zone_len) != 0) {
-                snprintf(zone, sizeof(zone), "%u", (unsigned)addr6->sin6_scope_id);
-            }
-            snprintf(addrbuf + len, addrbuf_len - len, "%%%s", zone);
-        }
-        *port = (int)ntohs(addr6->sin6_port);
-        return 0;
-    }
-    return UV_EINVAL;
 }
 
 // Formats address and port for messages: 192.0.2.1:161 or [2001:db8::1]:161
