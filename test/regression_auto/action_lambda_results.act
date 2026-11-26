@@ -4,6 +4,11 @@ pure def constant() -> int:
 pure def capture[A](value: A) -> action() -> A:
     return lambda: value
 
+# The unused parameter is generalized, triggering substitution through the
+# generic effect witness before its concrete application is expanded.
+def inferred_noop(value) -> action() -> None:
+    return lambda: None
+
 proc def invoke(f: action() -> int) -> int:
     return f()
 
@@ -41,6 +46,7 @@ actor main(env):
         assert invoke(lambda: 46) == 46
         assert await async explicit() == 43
         assert capture("captured")() == "captured"
+        assert inferred_noop(42)() is None
         assert no_result() is None
 
         # Forwarding an action must preserve its message, not complete it again.
