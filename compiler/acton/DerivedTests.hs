@@ -7,7 +7,7 @@ module DerivedTests (derivedModuleTests) where
 
 import Control.Concurrent (forkIO, threadDelay)
 import Control.Concurrent.MVar
-import Control.Exception (IOException, catch, finally, throwIO, try)
+import Control.Exception (IOException, finally, try)
 import Control.Monad
 import qualified Data.Aeson as Ae
 import qualified Data.ByteString as BS
@@ -31,7 +31,7 @@ import Acton.Project (withProjectLock)
 import EmbedTests (edited, opened, withServerWithin)
 import Test.Tasty
 import Test.Tasty.HUnit
-import WatchTests (awaitGenerationWithin, awaitWithin, withActon)
+import WatchTests (ActonRun(..), awaitGenerationWithin, awaitWithin, withActon)
 
 derivedModuleTests :: TestTree
 derivedModuleTests = testGroup "derived modules"
@@ -883,39 +883,39 @@ derivedModuleTests = testGroup "derived modules"
   , testCase "acton build --watch builds a derived module that a failed generation wrote" $
       -- The module tool is imported by no module.
       withProject "build-watch" (demoFiles ++ [("src/tool.act", "size = 1\n")]) $ \acton proj ->
-        withActon acton proj ["build", "--watch", "--color", "never"] $ \_ _ output -> do
+        withActon acton proj ["build", "--watch", "--color", "never"] $ \run -> do
           let refused = "Do not use prefix 'demo' when referring to modules in that project"
-          awaitLines output "the first build" "Final compilation done" 1
-          awaitGeneration proj
+          awaitLines run "the first build" "Final compilation done" 1
+          awaitGeneration run
           assertBool "the documentation index lists the derived module" . ("demo.schema" `isInfixOf`) =<< readFileStrict (proj </> "out/doc/index.html")
           -- An import that the planning of a build refuses.
           writeFile (proj </> "src/tool.act") "import demo.gen\n"
-          awaitLines output "the import in tool is refused" refused 1
-          awaitGeneration proj
+          awaitLines run "the import in tool is refused" refused 1
+          awaitGeneration run
           -- The generation that the module of the function starts runs the
           -- function and writes the source of schema.  Its planning fails,
           -- so it compiles no module.  A saved source file is a changed
           -- path, so the generations from here on compile what the changed
           -- paths affect, not the whole project.
           writeFile (proj </> "src/gen.act") (replace "\", \"" "\"; \"" genSchema)
-          awaitLines output "the run of the function" "Derived by gen.schema" 2
-          awaitLines output "the import in tool is refused again" refused 2
-          awaitGeneration proj
+          awaitLines run "the run of the function" "Derived by gen.schema" 2
+          awaitLines run "the import in tool is refused again" refused 2
+          awaitGeneration run
           -- The generation that the corrected tool starts runs no function.
           -- No module imports gen or tool.  It compiles schema and demo
           -- because the source file of schema is among the changed paths
           -- since the failed generation wrote it.
           writeFile (proj </> "src/tool.act") "size = 2\n"
-          awaitLines output "the build with the corrected tool" "Final compilation done" 2
-          awaitGeneration proj
+          awaitLines run "the build with the corrected tool" "Final compilation done" 2
+          awaitGeneration run
           assertEqual "output" "hello; world\n" =<< runBinary (proj </> "out/bin/demo")
 
   , testCase "acton build --watch builds when a file is added below an input directory" $
       withProject "watch-added" describedFiles $ \acton proj ->
-        withActon acton proj ["build", "--watch", "--color", "never"] $ \_ _ output -> do
-          let builds = length . filter ("Building project in " `isPrefixOf`) . lines <$> output
-          awaitLines output "the first build" "Final compilation done" 1
-          awaitGeneration proj
+        withActon acton proj ["build", "--watch", "--color", "never"] $ \run -> do
+          let builds = length . filter ("Building project in " `isPrefixOf`) . lines <$> runOutput run
+          awaitLines run "the first build" "Final compilation done" 1
+          awaitGeneration run
           -- A file that the input path does not stand for starts no build
           -- in the two seconds after it is written.
           before <- builds
@@ -923,30 +923,30 @@ derivedModuleTests = testGroup "derived modules"
           threadDelay 2000000
           assertEqual "the builds that a file whose name starts with a dot starts" before =<< builds
           writeFile (proj </> "data/three.txt") ""
-          await "the build that the added file starts" ((\now -> if now > before then Just () else Nothing) <$> builds)
-          awaitLines output "the run of the function" "Derived by gen.facts" 2
-          awaitLines output "the build after the file was added" "Final compilation done" 2
-          awaitGeneration proj
+          await run "the build that the added file starts" ((\now -> if now > before then Just () else Nothing) <$> builds)
+          awaitLines run "the run of the function" "Derived by gen.facts" 2
+          awaitLines run "the build after the file was added" "Final compilation done" 2
+          awaitGeneration run
           printed <- runBinary (proj </> "out/bin/described")
           assertBool ("the added file is an input file\n" ++ printed) ("data/three.txt 0 " `isInfixOf` printed)
           -- The watch reads the input paths again when Build.act changes.
           -- A file below a directory that no input path names starts no
           -- build, and a file below that directory starts one once
           -- Build.act names the directory.
-          let done = length . filter ("Final compilation done" `isInfixOf`) . lines <$> output
+          let done = length . filter ("Final compilation done" `isInfixOf`) . lines <$> runOutput run
           settled <- builds
           writeFiles proj [("more/early.txt", "x")]
           threadDelay 2000000
           assertEqual "the builds that a file below a directory that no input path names starts" settled =<< builds
           finished <- done
           writeFile (proj </> "Build.act") (described ["data/", "more/"])
-          awaitLines output "the build after Build.act changed" "Final compilation done" (finished + 1)
-          awaitGeneration proj
+          awaitLines run "the build after Build.act changed" "Final compilation done" (finished + 1)
+          awaitGeneration run
           finishedAgain <- done
           writeFile (proj </> "more/four.txt") "yy"
-          awaitLines output "the run of the function for the file below the added input path" "Derived by gen.facts" 4
-          awaitLines output "the build after that file was added" "Final compilation done" (finishedAgain + 1)
-          awaitGeneration proj
+          awaitLines run "the run of the function for the file below the added input path" "Derived by gen.facts" 4
+          awaitLines run "the build after that file was added" "Final compilation done" (finishedAgain + 1)
+          awaitGeneration run
           printedAgain <- runBinary (proj </> "out/bin/described")
           assertBool ("the file below the added input path is an input file\n" ++ printedAgain) ("more/four.txt 2 " `isInfixOf` printedAgain)
           -- One save of an input file starts one build, and the function
@@ -955,10 +955,10 @@ derivedModuleTests = testGroup "derived modules"
           started <- builds
           finishedThird <- done
           putFile proj "data/three.txt" "333"
-          awaitLines output "the run of the function for the saved file" "Derived by gen.facts" 5
-          awaitLines output "the build after the file was saved" "Final compilation done" (finishedThird + 1)
-          awaitGeneration proj
-          logText <- output
+          awaitLines run "the run of the function for the saved file" "Derived by gen.facts" 5
+          awaitLines run "the build after the file was saved" "Final compilation done" (finishedThird + 1)
+          awaitGeneration run
+          logText <- runOutput run
           assertEqual ("the builds that one save of an input file starts\n" ++ logText) (started + 1) =<< builds
           assertEqual ("the runs of the function\n" ++ logText) 5 (length (filter ("Derived by gen.facts" `isInfixOf`) (lines logText)))
 
@@ -966,24 +966,24 @@ derivedModuleTests = testGroup "derived modules"
       -- No module imports a module below part.  A build of the whole
       -- project compiles them all the same.
       withProject "watch-below" belowFiles $ \acton proj ->
-        withActon acton proj ["build", "--watch", "--color", "never"] $ \_ _ output -> do
+        withActon acton proj ["build", "--watch", "--color", "never"] $ \run -> do
           let source name    = proj </> "out/derived/src/part" </> name <.> "act"
               interface name = proj </> "out/types/below/part" </> name <.> "tydb"
-          awaitLines output "the first build" "Final compilation done" 1
-          awaitGeneration proj
+          awaitLines run "the first build" "Final compilation done" 1
+          awaitGeneration run
           -- The function returns one more module for an added input file,
           -- and the build that the file starts compiles the module.
           putFile proj "parts/c.txt" "333"
-          awaitLines output "the run of the function for the added file" "Derived 3 modules by gen.parts" 1
-          awaitLines output "the build after the file was added" "Final compilation done" 2
-          awaitGeneration proj
+          awaitLines run "the run of the function for the added file" "Derived 3 modules by gen.parts" 1
+          awaitLines run "the build after the file was added" "Final compilation done" 2
+          awaitGeneration run
           assertEqual "the source of the added module" "size = 3\n" =<< readFile (source "c")
           assertBool "the added module is compiled" =<< doesPathExist (interface "c")
           -- The first build ran the function for two input files too.
           removeFile (proj </> "parts/c.txt")
-          awaitLines output "the run of the function for the removed file" "Derived 2 modules by gen.parts" 2
-          awaitLines output "the build after the file was removed" "Final compilation done" 3
-          awaitGeneration proj
+          awaitLines run "the run of the function for the removed file" "Derived 2 modules by gen.parts" 2
+          awaitLines run "the build after the file was removed" "Final compilation done" 3
+          awaitGeneration run
           forM_ [source "c", interface "c"] $ \path -> assertBool (path ++ " is removed") . not =<< doesPathExist path
           forM_ [source "a", interface "a"] $ \path -> assertBool (path ++ " stays") =<< doesPathExist path
 
@@ -994,14 +994,14 @@ derivedModuleTests = testGroup "derived modules"
       -- the root module, whose import names no module, and does not
       -- complete.
       withProject "watch-importer" (overrideFiles belowFiles [("src/below.act", belowImports "a")]) $ \acton proj ->
-        withActon acton proj ["build", "--watch", "--color", "never"] $ \_ _ output -> do
-          awaitLines output "the first build" "Final compilation done" 1
-          awaitGeneration proj
+        withActon acton proj ["build", "--watch", "--color", "never"] $ \run -> do
+          awaitLines run "the first build" "Final compilation done" 1
+          awaitGeneration run
           writeFile (proj </> "src/gen.act") (replace "        res[" "        if name != \"a\":\n            res[" (belowFunction "parts" "part"))
-          awaitLines output "the run of the function" "Derived 1 module by gen.parts" 1
-          awaitGeneration proj
+          awaitLines run "the run of the function" "Derived 1 module by gen.parts" 1
+          awaitGeneration run
           assertBool "the source file of the module is removed" . not =<< doesPathExist (proj </> "out/derived/src/part/a.act")
-          logText <- output
+          logText <- runOutput run
           assertEqual ("the generations that completed\n" ++ logText) 1 (length (filter ("Final compilation done" `isInfixOf`) (lines logText)))
 
   , testCase "acton build --watch builds when an input file changes after a build that failed in its function" $
@@ -1016,12 +1016,12 @@ derivedModuleTests = testGroup "derived modules"
               , "return 'greeting = \"' + text + \", \" + name + '\"\\n'"
               ])
           ]) $ \acton proj ->
-        withActon acton proj ["build", "--watch", "--color", "never"] $ \_ _ output -> do
-          awaitLines output "the function raises" "no greeting today" 1
-          awaitGeneration proj
+        withActon acton proj ["build", "--watch", "--color", "never"] $ \run -> do
+          awaitLines run "the function raises" "no greeting today" 1
+          awaitGeneration run
           writeFile (proj </> "data/greeting.txt") "hi\n"
-          awaitLines output "the build after the input file changed" "Final compilation done" 1
-          awaitGeneration proj
+          awaitLines run "the build after the input file changed" "Final compilation done" 1
+          awaitGeneration run
           assertEqual "output" "hi, world\n" =<< runBinary (proj </> "out/bin/demo")
 
   , testCase "acton build --watch watches an input directory that appears after the watch started" $
@@ -1030,42 +1030,42 @@ derivedModuleTests = testGroup "derived modules"
       -- names the modules of a.txt and b.txt, so the builds fail until
       -- both files are there.
       withProject "watch-appears" [ file | file@(path, _) <- severalFiles, not ("parts/" `isPrefixOf` path) ] $ \acton proj ->
-        withActon acton proj ["build", "--watch", "--color", "never"] $ \_ _ output -> do
-          awaitLines output "the input path names nothing" "names no file and no directory" 1
-          awaitGeneration proj
+        withActon acton proj ["build", "--watch", "--color", "never"] $ \run -> do
+          awaitLines run "the input path names nothing" "names no file and no directory" 1
+          awaitGeneration run
           createDirectory (proj </> "parts")
-          awaitLines output "the function returns no module of part" "Named and not returned: part.a, part.b" 1
-          awaitGeneration proj
+          awaitLines run "the function returns no module of part" "Named and not returned: part.a, part.b" 1
+          awaitGeneration run
           writeFile (proj </> "parts/a.txt") "1"
-          awaitLines output "the function returns one module of part" "Named and not returned: part.b" 1
-          awaitGeneration proj
+          awaitLines run "the function returns one module of part" "Named and not returned: part.b" 1
+          awaitGeneration run
           writeFile (proj </> "parts/b.txt") "22"
-          awaitLines output "the build with both files" "Final compilation done" 1
-          awaitGeneration proj
+          awaitLines run "the build with both files" "Final compilation done" 1
+          awaitGeneration run
           assertEqual "output" "a b\n1 2\n" =<< runBinary (proj </> "out/bin/several")
           -- The directory of the input path is the project root, which is
           -- also the directory of Build.act.  A change of Build.act still
           -- starts a build.
           appendFile (proj </> "Build.act") "# saved\n"
-          awaitLines output "the build after Build.act changed" "Final compilation done" 2
-          awaitGeneration proj
+          awaitLines run "the build after Build.act changed" "Final compilation done" 2
+          awaitGeneration run
 
   , testCase "acton build --watch builds for an input file after Build.act takes out another input file of its directory" $
       withProject "watch-two" (overrideFiles describedFiles
           [ ("Build.act", described ["data/one.txt", "data/two.txt"])
           , ("data/two.txt", "ab")
           ]) $ \acton proj ->
-        withActon acton proj ["build", "--watch", "--color", "never"] $ \_ _ output -> do
-          awaitLines output "the first build" "Final compilation done" 1
-          awaitGeneration proj
+        withActon acton proj ["build", "--watch", "--color", "never"] $ \run -> do
+          awaitLines run "the first build" "Final compilation done" 1
+          awaitGeneration run
           writeFile (proj </> "Build.act") (described ["data/one.txt"])
-          awaitLines output "the run of the function after Build.act changed" "Derived by gen.facts" 2
-          awaitLines output "the build after Build.act changed" "Final compilation done" 2
-          awaitGeneration proj
+          awaitLines run "the run of the function after Build.act changed" "Derived by gen.facts" 2
+          awaitLines run "the build after Build.act changed" "Final compilation done" 2
+          awaitGeneration run
           putFile proj "data/one.txt" "hallo, hallo\n"
-          awaitLines output "the run of the function after the input file was saved" "Derived by gen.facts" 3
-          awaitLines output "the build after the input file was saved" "Final compilation done" 3
-          awaitGeneration proj
+          awaitLines run "the run of the function after the input file was saved" "Derived by gen.facts" 3
+          awaitLines run "the build after the input file was saved" "Final compilation done" 3
+          awaitGeneration run
           printed <- runBinary (proj </> "out/bin/described")
           assertBool ("the saved file is the one input file\n" ++ printed) (["data/one.txt 13 "] == map (take 16) (lines printed))
 
@@ -1089,8 +1089,8 @@ derivedModuleTests = testGroup "derived modules"
                , "        env.exit(0)"
                ])
            ] ++ [ (file, "x") | file <- files ])) $ \acton proj ->
-        withActon acton proj ["build", "--watch", "--color", "never"] $ \_ _ output -> do
-          let count text = length . filter (text `isInfixOf`) . lines <$> output
+        withActon acton proj ["build", "--watch", "--color", "never"] $ \run -> do
+          let count text = length . filter (text `isInfixOf`) . lines <$> runOutput run
               -- Wait for the build that an action starts.  The function
               -- runs in it the given number of times, and the program then
               -- prints the given line.
@@ -1098,9 +1098,9 @@ derivedModuleTests = testGroup "derived modules"
                 done <- count "Final compilation done"
                 ran  <- count "Derived by gen.facts"
                 () <- action
-                awaitLines output label "Final compilation done" (done + 1)
-                awaitGeneration proj
-                logText <- output
+                awaitLines run label "Final compilation done" (done + 1)
+                awaitGeneration run
+                logText <- runOutput run
                 assertEqual (label ++ ": the runs of the function\n" ++ logText) (ran + runs) =<< count "Derived by gen.facts"
                 assertEqual label expected =<< runBinary (proj </> "out/bin/described")
           builds "the first build" 1 "601 4\n" (return ())
@@ -1130,24 +1130,24 @@ derivedModuleTests = testGroup "derived modules"
           [ ("Build.act", buildAct "app" ["dependencies = {", "    \"lib\": (path=\"../lib\")", "}"])
           , ("src/app.act", "import lib.table\n\nactor main(env):\n    proc def __startup__():\n        print(lib.table.owner)\n        env.exit(0)\n")
           ]
-        withActon acton (tmp </> "app") ["build", "--watch", "--color", "never"] $ \_ _ output -> do
-          awaitLines output "the first build" "Final compilation done" 1
-          awaitGeneration (tmp </> "app")
+        withActon acton (tmp </> "app") ["build", "--watch", "--color", "never"] $ \run -> do
+          awaitLines run "the first build" "Final compilation done" 1
+          awaitGeneration run
           writeFile (tmp </> "lib/data/owner.txt") "two\n"
-          awaitLines output "the run of the function of lib" "Derived by gen.table" 2
-          awaitLines output "the build after the input file of lib changed" "Final compilation done" 2
+          awaitLines run "the run of the function of lib" "Derived by gen.table" 2
+          awaitLines run "the build after the input file of lib changed" "Final compilation done" 2
 
   , testCase "acton test --watch runs the tests that import a derived module when an input file changes" $
       withProject "test-watch" (demoFiles ++ [testSchema]) $ \acton proj ->
-        withActon acton proj ["test", "--watch", "--no-cache", "--color", "never"] $ \_ _ output -> do
-          awaitLines output "the first report" "All 1 tests passed" 1
-          awaitGeneration proj
+        withActon acton proj ["test", "--watch", "--no-cache", "--color", "never"] $ \run -> do
+          awaitLines run "the first report" "All 1 tests passed" 1
+          awaitGeneration run
           -- The generation that an input file starts runs the function and
           -- then the test, which fails with the new source of schema.
           writeFile (proj </> "data/greeting.txt") "hi\n"
-          awaitLines output "the run of the function" "Derived by gen.schema" 2
-          awaitGeneration proj
-          logText <- output
+          awaitLines run "the run of the function" "Derived by gen.schema" 2
+          awaitGeneration run
+          logText <- runOutput run
           assertBool ("the test of test_schema ran with the new source of schema\n" ++ logText) ("A: hi, world B: hello, world" `isInfixOf` logText)
 
   , testCase "acton test --watch runs the tests that import a changed module, directly or through a derived module" $
@@ -1158,12 +1158,12 @@ derivedModuleTests = testGroup "derived modules"
           ++ [ testSchema, ("src/shared.act", "size = 1\n"), ("src/plain.act", "size = 1\n")
              , ("src/test_plain.act", "import testing\nimport shared\nimport plain\n\ndef _test_sizes():\n    testing.assertEqual(shared.size, plain.size)\n")
              ]) $ \acton proj ->
-        withActon acton proj ["test", "--watch", "--no-cache", "--color", "never"] $ \_ _ output -> do
+        withActon acton proj ["test", "--watch", "--no-cache", "--color", "never"] $ \run -> do
           -- Wait for the report with the given number and return its line.
           let report label number = do
-                awaitLines output label "tests passed" number
-                awaitGeneration proj
-                (!! (number - 1)) . filter ("tests passed" `isInfixOf`) . lines <$> output
+                awaitLines run label "tests passed" number
+                awaitGeneration run
+                (!! (number - 1)) . filter ("tests passed" `isInfixOf`) . lines <$> runOutput run
               ran label tests line = assertBool (label ++ ": " ++ line) (("All " ++ tests ++ " tests passed") `isInfixOf` line)
           ran "the first build runs every test" "2" =<< report "the first report" 1
           -- The watch runs every test when it does not know the changed
@@ -1265,16 +1265,16 @@ derivedModuleTests = testGroup "derived modules"
         release <- newEmptyMVar
         _ <- forkIO (withProjectLock (tmp </> "lib") (putMVar held () >> takeMVar release))
         takeMVar held
-        (withActon acton (tmp </> "app") ["build", "--color", "never"] $ \ph _ output -> do
-          waits <- await "the build of app waits or ends" $ do
-            logText <- output
-            code <- getProcessExitCode ph
+        (withActon acton (tmp </> "app") ["build", "--color", "never"] $ \run -> do
+          waits <- await run "the build of app waits or ends" $ do
+            logText <- runOutput run
+            code <- getProcessExitCode (runHandle run)
             let notice line = "Waiting for compiler lock in " `isPrefixOf` line && "/lib" `isSuffixOf` line
             return (if any notice (lines logText) then Just True else if isJust code then Just False else Nothing)
           assertBool "the build of app waits for the lock of lib" waits
           putMVar release ()
-          code <- await "the end of the build of app" (getProcessExitCode ph)
-          logText <- output
+          code <- await run "the end of the build of app" (getProcessExitCode (runHandle run))
+          logText <- runOutput run
           assertEqual logText ExitSuccess code
           assertEqual "output" "from lib\n" =<< runBinary (tmp </> "app/out/bin/app"))
           `finally` tryPutMVar release ()
@@ -2017,34 +2017,29 @@ runBinary binary = do
 -- the write lands before the function of the entry has run.
 buildWithChange :: FilePath -> FilePath -> String -> FilePath -> String -> IO (ExitCode, String)
 buildWithChange acton proj label file content =
-    withActon acton proj ["build", "--color", "never"] $ \ph _ output -> do
-      await "the source of the runner" $ do
+    withActon acton proj ["build", "--color", "never"] $ \run -> do
+      await run "the source of the runner" $ do
         written <- doesFileExist (proj </> "out/derived/runner/src/runner" </> label <.> "act")
         return (if written then Just () else Nothing)
       writeFile (proj </> file) content
-      code <- await "the end of the build" (getProcessExitCode ph)
-      (,) code <$> output
+      code <- await run "the end of the build" (getProcessExitCode (runHandle run))
+      (,) code <$> runOutput run
 
 -- | The waits of these tests last at most 15 minutes.  A wait covers up to
 -- three Zig builds, and a Zig build of a new project can take minutes on
 -- the macOS workers of CI.  The tests of WatchTests wait 120 seconds: their
 -- projects have a script in place of zig.
-await :: String -> IO (Maybe a) -> IO a
+await :: ActonRun -> String -> IO (Maybe a) -> IO a
 await = awaitWithin 900
 
-awaitGeneration :: FilePath -> IO ()
+awaitGeneration :: ActonRun -> IO ()
 awaitGeneration = awaitGenerationWithin 900
 
--- | Wait until the output of a process has 'count' lines that contain
--- 'text'.  A wait that times out fails with the output so far.
-awaitLines :: IO String -> String -> String -> Int -> IO ()
-awaitLines output label text count = await label found `catch` \(HUnitFailure loc reason) -> do
-    logText <- output
-    throwIO (HUnitFailure loc (reason ++ "\n" ++ logText))
-  where
-    found = do
-      logText <- output
-      return (if length (filter (text `isInfixOf`) (lines logText)) >= count then Just () else Nothing)
+-- | Wait until acton's output has 'count' lines that contain 'text'.
+awaitLines :: ActonRun -> String -> String -> Int -> IO ()
+awaitLines run label text count = await run label $ do
+    logText <- runOutput run
+    return (if length (filter (text `isInfixOf`) (lines logText)) >= count then Just () else Nothing)
 
 readFileStrict :: FilePath -> IO String
 readFileStrict file = do
