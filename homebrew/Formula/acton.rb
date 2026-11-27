@@ -15,14 +15,9 @@ class Acton < Formula
   # update-homebrew job sets the placeholder values before pushing to
   # actonlang/homebrew-acton repo
   on_macos do
-    on_arm do
-      url "https://github.com/actonlang/acton/releases/download/v0.0.0/acton-macos-aarch64-0.0.0.tar.xz"
-      sha256 "0000000000000000000000000000000000000000000000000000000000000000"
-    end
-    on_intel do
-      url "https://github.com/actonlang/acton/releases/download/v0.0.0/acton-macos-x86_64-0.0.0.tar.xz"
-      sha256 "0000000000000000000000000000000000000000000000000000000000000000"
-    end
+    depends_on arch: :arm64
+    url "https://github.com/actonlang/acton/releases/download/v0.0.0/acton-macos-aarch64-0.0.0.tar.xz"
+    sha256 "0000000000000000000000000000000000000000000000000000000000000000"
   end
 
   on_linux do

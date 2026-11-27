@@ -82,38 +82,22 @@ jobs:
             gh cache delete "${id}" || echo "  (failed to delete ${id}; continuing)"
           done
 
-  matrix_maker_macos:
-    runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.setmatrix.outputs.matrix }}
-    steps:
-      - name: "Set Matrix"
-        id: setmatrix
-        run: |
-          if [ "${{ github.event_name }}" == "pull_request" ]; then
-            MATRIX_JSON='{"include":[{"os":"macos","version":"26","arch":"aarch64","cache":true}]}'
-          else
-            MATRIX_JSON='{"include":[{"os":"macos","version":"26","arch":"aarch64","cache":true},{"os":"macos","version":"26","arch":"x86_64","cache":true}]}'
-          fi
-          echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
-
-      - name: "Debug: Print matrix JSON"
-        run: |
-          echo "Matrix JSON:"
-          echo '${{ toJson(fromJson(steps.setmatrix.outputs.matrix)) }}'
-          echo "Event name: ${{ github.event_name }}"
-
   test-macos:
-    needs: [build-version, matrix_maker_macos, evict-stale-caches]
+    needs: [build-version, evict-stale-caches]
     strategy:
-      fail-fast: false
-      matrix: ${{ fromJson(needs.matrix_maker_macos.outputs.matrix) }}
+      # Keep the required PR check name while using a single build target.
+      matrix:
+        include:
+          - os: macos
+            version: '26'
+            arch: aarch64
+            cache: true
     # Use the mini for ARM64 pushes to main. The nightly and manual runs still
     # build the caches that the GitHub-hosted jobs restore.
     runs-on: >-
-      ${{ matrix.arch == 'aarch64' && github.repository == 'actonlang/acton' &&
+      ${{ github.repository == 'actonlang/acton' &&
           github.event_name == 'push' && github.ref == 'refs/heads/main' && 'acton-macos-arm64' ||
-          format('{0}-{1}{2}', matrix.os, matrix.version, matrix.arch == 'x86_64' && '-intel' || '') }}
+          format('{0}-{1}', matrix.os, matrix.version) }}
     env:
       BUILD_TIME: ${{ needs.build-version.outputs.build_time }}
     steps:
@@ -230,10 +214,8 @@ jobs:
           make -C ${{ github.workspace }} test
       - name: "Run benchmark program tests"
         run: make -C ${{ github.workspace }} test-benchgames
-      # Small programs in the write barrier's checker mode, on arm64 only for
-      # now: a pointer store without its barrier fails the program.
+      # A pointer store without its write barrier fails the program.
       - name: "Run tests with the write-barrier checker"
-        if: matrix.arch == 'aarch64'
         run: make -C ${{ github.workspace }} test-gc-check
       # Nightly only: save the freshly-built, complete compile cache as the day's
       # canonical snapshot. Runs even if tests flake so a flaky test doesn't deny
@@ -806,33 +788,12 @@ jobs:
             ${{ github.workspace }}/out/**
 
 
-  matrix_maker_run_macos:
-    runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.setmatrix.outputs.matrix }}
-    steps:
-      - name: "Set Matrix"
-        id: setmatrix
-        run: |
-          if [ "${{ github.event_name }}" == "pull_request" ]; then
-            MATRIX_JSON='{"include":[{"runner":"macos-15","artifact":"acton-macos-26-aarch64"}]}'
-          else
-            MATRIX_JSON='{"include":[{"runner":"macos-15","artifact":"acton-macos-26-aarch64"},{"runner":"macos-15-intel","artifact":"acton-macos-26-x86_64"},{"runner":"macos-26","artifact":"acton-macos-26-aarch64"},{"runner":"macos-26-intel","artifact":"acton-macos-26-x86_64"}]}'
-          fi
-          echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
-
-      - name: "Debug: Print matrix JSON"
-        run: |
-          echo "Matrix JSON:"
-          echo '${{ toJson(fromJson(steps.setmatrix.outputs.matrix)) }}'
-          echo "Event name: ${{ github.event_name }}"
-
-
   run-macos:
-    needs: [test-macos, matrix_maker_run_macos]
+    needs: test-macos
     strategy:
       fail-fast: false
-      matrix: ${{ fromJson(needs.matrix_maker_run_macos.outputs.matrix) }}
+      matrix:
+        runner: ${{ fromJSON(github.event_name == 'pull_request' && '["macos-15"]' || '["macos-15", "macos-26"]') }}
     runs-on: ${{ matrix.runner }}
     steps:
       - name: "Machine info"
@@ -842,7 +803,7 @@ jobs:
       - name: "Download artifacts"
         uses: actions/download-artifact@v8
         with:
-          name: ${{ matrix.artifact }}
+          name: acton-macos-26-aarch64
       - name: "Extract acton"
         run: |
           tar Jxf $(ls acton-macos-*.tar.xz | tail -n1)
@@ -1333,14 +1294,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: "Check out repository code"
         uses: actions/checkout@v7
-      - name: "Download artifacts for Macos aarch64, built on macos-26 targeting macos-15"
+      - name: "Download artifacts for macOS ARM64 targeting macOS 15"
         uses: actions/download-artifact@v8
         with:
           name: acton-macos-26-aarch64
-      - name: "Download artifacts for Macos x86_64, built on macos-26 targeting macos-15"
-        uses: actions/download-artifact@v8
-        with:
-          name: acton-macos-26-x86_64
       - name: "Download artifacts for Linux x86_64, built on Ubuntu:20.04"
         uses: actions/download-artifact@v8
         with:
@@ -1384,8 +1341,6 @@ jobs:
           replacesArtifacts: true
       - name: "Remove version number from macos aarch64 tar ball"
         run: mv $(ls acton-macos-aarch64*.tar.xz | tail -n1) acton-macos-aarch64-tip.tar.xz
-      - name: "Remove version number from macos x86_64 tar ball"
-        run: mv $(ls acton-macos-x86_64*.tar.xz | tail -n1) acton-macos-x86_64-tip.tar.xz
       - name: "Remove version number from linux x86_64 tar ball"
         run: mv $(ls acton-linux-x86_64*.tar.xz | tail -n1) acton-linux-x86_64-tip.tar.xz
       - name: "Remove version number from linux aarch64 tar ball"
@@ -1425,14 +1380,10 @@ jobs:
     steps:
       - name: "Check out repository code"
         uses: actions/checkout@v7
-      - name: "Download artifacts for Macos aarch64, built on macos-26 targeting macos-15"
+      - name: "Download artifacts for macOS ARM64 targeting macOS 15"
         uses: actions/download-artifact@v8
         with:
           name: acton-macos-26-aarch64
-      - name: "Download artifacts for Macos x86_64, built on macos-26 targeting macos-15"
-        uses: actions/download-artifact@v8
-        with:
-          name: acton-macos-26-x86_64
       - name: "Download artifacts for Linux x86_64, built on Ubuntu:20.04"
         uses: actions/download-artifact@v8
         with:
@@ -1764,7 +1715,7 @@ jobs:
         run: |
           FORMULA=homebrew-acton/Formula/acton.rb
           sed -i -e "s/0\.0\.0/${VERSION}/g" ${FORMULA}
-          for PLATFORM in macos-aarch64 macos-x86_64 linux-aarch64 linux-x86_64; do
+          for PLATFORM in macos-aarch64 linux-aarch64 linux-x86_64; do
             TARBALL=acton-${PLATFORM}-${VERSION}.tar.xz
             wget https://github.com/actonlang/acton/releases/download/v${VERSION}/${TARBALL}
             CHECKSUM=$(sha256sum ${TARBALL} | cut -d' ' -f1)
