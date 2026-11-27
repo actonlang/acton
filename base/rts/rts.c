@@ -4086,6 +4086,13 @@ int main(int argc, char **argv) {
         exit(1);
     }
     uv_free_cpu_info(cpu_infos, num_cores);
+    // libuv allocates through the collector (acton_init_alloc), and
+    // uv_free_cpu_info() gives the array back with GC_free(). The collector
+    // scans the frame of main() for as long as the program runs, so the
+    // address of the freed array would keep alive any object that is later
+    // allocated there. The store is volatile so that the compiler keeps it,
+    // although nothing reads the variable after it.
+    *(uv_cpu_info_t *volatile *)&cpu_infos = NULL;
 
 #ifndef _WIN32
     // Do line buffered output
