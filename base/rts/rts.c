@@ -1068,112 +1068,6 @@ struct $Cont $Fail$instance = {
     &$FailG_methods
 };
 ////////////////////////////////////////////////////////////////////////////////////////
-// Env and root keep their preallocated identities, but initialize directly
-// under a construction context just like an ordinary constructor call.
-#define CONSTRUCT_EXISTING(actor, initialize) do { \
-    B_Actor parent = $ConstructionBegin(); \
-    struct JumpBuf frame; \
-    if ($PUSH(&frame)) { \
-        $ConstructionEnter((B_Actor)(actor)); \
-        initialize; \
-        $DROP(); \
-    } else { \
-        B_BaseException exception = $POP(); \
-        $ConstructionAbort(parent, exception); \
-        $RAISE(exception); \
-    } \
-    $ConstructionEnd(parent); \
-} while (0)
-
-$R $InitRootD___call__ ($Cont $this, $WORD val) {
-    typedef B_NoneType (*ROOT__init__t)(B_Actor, B_Env);
-    CONSTRUCT_EXISTING(root_actor, ((ROOT__init__t)root_actor->$class->__init__)(root_actor, env_actor));
-    return $R_DONE(B_None);
-}
-
-extern struct $ContG_class $InitRootG_methods;
-
-$Cont $InitRoot__deserialize__($Cont self, $Serial$state state) {
-  $Cont res = $DNEW($Cont,state);
-  res->$class = &$InitRootG_methods;
-  return res;
-}
-
-struct $ContG_class $InitRootG_methods = {
-    "$InitRoot",
-    UNASSIGNED,
-    NULL,
-    $ContD___init__,
-    $ContD___serialize__,
-    $InitRoot__deserialize__,
-    $ContD___bool__,
-    $ContD___str__,
-    $ContD___str__,
-    $InitRootD___call__
-};
-struct $Cont $InitRoot$cont = {
-    &$InitRootG_methods
-};
-
-$R $StartRootD___call__ ($Cont $this, $WORD val) {
-    $ASYNC(root_actor, &$InitRoot$cont);
-    return $R_DONE(val);
-}
-
-extern struct $ContG_class $StartRootG_methods;
-
-$Cont $StartRoot__deserialize__($Cont self, $Serial$state state) {
-  $Cont res = $DNEW($Cont,state);
-  res->$class = &$StartRootG_methods;
-  return res;
-}
-
-struct $ContG_class $StartRootG_methods = {
-    "$StartRoot",
-    UNASSIGNED,
-    NULL,
-    $ContD___init__,
-    $ContD___serialize__,
-    $StartRoot__deserialize__,
-    $ContD___bool__,
-    $ContD___str__,
-    $ContD___str__,
-    $StartRootD___call__
-};
-struct $Cont $StartRoot$cont = {
-    &$StartRootG_methods
-};
-
-$R $InitEnvD___call__ ($Cont $this, $WORD args) {
-    CONSTRUCT_EXISTING(env_actor, env_actor->$class->__init__(env_actor, B_WorldCapG_new(), (B_list)args, num_wthreads, B__EnvCapG_new()));
-    return $R_CONT(&$StartRoot$cont, B_None);
-}
-
-extern struct $ContG_class $InitEnvG_methods;
-
-$Cont $InitEnv__deserialize__($Cont self, $Serial$state state) {
-  $Cont res = $DNEW($Cont,state);
-  res->$class = &$InitEnvG_methods;
-  return res;
-}
-
-struct $ContG_class $InitEnvG_methods = {
-    "$InitEnv",
-    UNASSIGNED,
-    NULL,
-    $ContD___init__,
-    $ContD___serialize__,
-    $InitEnv__deserialize__,
-    $ContD___bool__,
-    $ContD___str__,
-    $ContD___str__,
-    $InitEnvD___call__
-};
-struct $Cont $InitEnv$cont = {
-    &$InitEnvG_methods
-};
-////////////////////////////////////////////////////////////////////////////////////////
-
 #ifdef ACTON_DB
 void dummy_callback(queue_callback_args * qca) { }
 void queue_group_message_callback(queue_callback_args * qca) {
@@ -1223,14 +1117,15 @@ struct ConstructionContext {
     B_BaseException failed;
 };
 
+static void publish_bootstrap(struct ConstructionContext *ctx);
+
 B_Actor $ConstructionBegin(void) {
     WorkerCtx wctx = GET_WCTX();
     B_Actor parent = GET_SELF();
     struct ConstructionContext *ctx = wctx->construction;
     if (!ctx) {
-        assert(parent && parent->B_Msg);
         ctx = GC_malloc(sizeof(*ctx));
-        ctx->baseline = parent->B_Msg->$baseline;
+        ctx->baseline = parent ? parent->B_Msg->$baseline : current_time();
         ACTON_STORE(wctx, wctx->construction, ctx);
     }
     if (ctx->failed)
@@ -1310,12 +1205,16 @@ B_NoneType $ConstructionEnd(B_Actor parent) {
         if (entry->finalizer)
             GC_register_finalizer(entry->actor, entry->finalizer, NULL, NULL, NULL);
 #ifdef ACTON_DB
-        if (db) {
+        if (db && parent) {
             if (!parent->$newborns)
                 ACTON_STORE(parent, parent->$newborns, B_listG_new(NULL, NULL));
             B_list_base_append((B_list_base)parent->$newborns, entry->actor);
         }
 #endif
+    }
+    if (!parent) {
+        publish_bootstrap(ctx);
+        return B_None;
     }
     // Keep earlier parent sends first, then all startup messages, then the
     // ordinary construction sends. No target is scheduled until parent flushes.
@@ -1538,11 +1437,11 @@ void reverse_outgoing_queue(B_Actor self) {
 // Send all buffered messages of the sender to global DB queues in a single txn, and retry it until success
 // Leaves no side effects in local queues if txns need to abort
 // Assumes the actor's outgoing queue has already been reversed in FIFO order
-void FLUSH_outgoing_db(B_Actor self, uuid_t *txnid) {
+void FLUSH_outgoing_db(B_Actor self, time_t baseline, uuid_t *txnid) {
     rtsd_printf("#### FLUSH_outgoing messages from %" PRId64 " to DB queues", self->$globkey);
     B_Msg m = self->$outgoing;
     while (m) {
-        int64_t dest = (m->$baseline == self->B_Msg->$baseline)? m->$to->$globkey : 0;
+        int64_t dest = (m->$baseline == baseline)? m->$to->$globkey : 0;
         int ret = 0, minority_status = 0;
         while(!rts_exit) {
             ret = remote_enqueue_in_txn(($WORD*)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)dest, &minority_status, txnid, db);
@@ -1562,7 +1461,7 @@ void FLUSH_outgoing_db(B_Actor self, uuid_t *txnid) {
 // Actually send all buffered messages of the sender, using internal queues only
 // Assumes the actor's outgoing queue has already been reversed in FIFO order
 // The actors this makes ready get ready_us as their ready stamp.
-void FLUSH_outgoing_local(B_Actor self, uint32_t ready_us) {
+void FLUSH_outgoing_local(B_Actor self, time_t baseline, uint32_t ready_us) {
     rtsd_printf("#### FLUSH_outgoing messages from %" PRId64 " to RTS-internal queues", self->$globkey);
     B_Msg m = self->$outgoing;
     self->$outgoing = NULL;
@@ -1571,7 +1470,7 @@ void FLUSH_outgoing_local(B_Actor self, uint32_t ready_us) {
     while (m) {
         B_Msg next = m->$next;
         m->$next = NULL;
-        if (m->$baseline == self->B_Msg->$baseline) {
+        if (m->$baseline == baseline) {
             B_Actor to = m->$to;
             if (ENQ_msg(m, to)) {
                 ENQ_ready(to, ready_us);
@@ -1998,58 +1897,74 @@ void serialize_newborns(B_Actor parent, uuid_t *txnid) {
 }
 #endif
 
+// The root's outbox holds all bootstrap output until every initialized actor
+// and queued message has been persisted. No worker is running yet.
+static void publish_bootstrap(struct ConstructionContext *ctx) {
+    ACTON_STORE(root_actor, root_actor->$outgoing,
+                construction_append(ctx->messages, ctx->startups));
+    reverse_outgoing_queue(root_actor);
+#ifdef ACTON_DB
+    if (db) {
+        int success = 0;
+        while (!success && !rts_exit) {
+            uuid_t *txnid = remote_new_txn(db);
+            if (txnid == NULL)
+                continue;
+            for (struct ConstructionActor *entry = ctx->actors; entry; entry = entry->next)
+                serialize_actor(entry->actor, txnid);
+            FLUSH_outgoing_db(root_actor, ctx->baseline, txnid);
+            int minority_status = 0;
+            int ret = remote_commit_txn(txnid, &minority_status, db);
+            if (handle_status_and_schema_mismatch(ret, minority_status, root_actor->$globkey))
+                continue;
+            if (ret == VAL_STATUS_COMMIT)
+                success = 1;
+        }
+        if (!success)
+            return;
+    }
+#endif
+    FLUSH_outgoing_local(root_actor, ctx->baseline, stamp_us(now_ns()));
+}
+
 void BOOTSTRAP(int argc, char *argv[]) {
     B_list args = B_listG_new(NULL,NULL);
     B_SequenceD_list wit = B_SequenceD_listG_witness;
     for (int i=0; i< argc; i++)
         wit->$class->append(wit,args,actStrFromCStringCopy(argv[i]));
 
-    // env and root get the fixed keys ENV_KEY and ROOT_KEY. $NEWACTOR() and
-    // $ROOT() take one key each, for the actor they create, so the actor
-    // gets this worker's next key.
+    // Bootstrap has no parent actor or incoming message. Env, root and their
+    // descendants share one construction context, published only on success.
     WorkerCtx wctx = get_wctx();
-    int64_t key_next = wctx->key_next;
-    wctx->key_next = ENV_KEY;
-    env_actor = $NEWACTOR(B_Env);
-    env_actor->$affinity = 0;                       // Hard-coded to the special worker on the main thread
+    assert(GET_SELF() == NULL);
+    $ConstructionBegin();
+    struct JumpBuf frame;
+    if ($PUSH(&frame)) {
+        // Reserve the fixed identities before either initializer allocates
+        // descendants, which use this worker's ordinary key sequence.
+        int64_t key_next = wctx->key_next;
+        wctx->key_next = ENV_KEY;
+        env_actor = $NEWACTOR(B_Env);
+        env_actor->$affinity = 0;
+        wctx->key_next = ROOT_KEY;
+        root_actor = $ROOT();
+        wctx->key_next = key_next;
 
-    wctx->key_next = ROOT_KEY;
-    root_actor = $ROOT();                           // Assumed to return $NEWACTOR(X) for the selected root actor X
-    wctx->key_next = key_next;
-    time_t now = current_time();
-    B_Msg m = B_MsgG_newXX((B_Actor)env_actor, &$InitEnv$cont, now, args);
-#ifdef ACTON_DB
-    if (db) {
-        // One transaction saves Env, the root actor and the first message and
-        // queues the message for Env. A restart after it restores both actors
-        // and runs the message, a restart before it finds no actors and
-        // bootstraps again.
-        int success = 0;
-        while(!success && !rts_exit) {
-            uuid_t * txnid = remote_new_txn(db);
-            if(txnid == NULL)
-                continue;
-            serialize_actor((B_Actor)env_actor, txnid);
-            serialize_actor(root_actor, txnid);
-            serialize_msg(m, txnid);
-            int ret = 0, minority_status = 0;
-            ret = remote_enqueue_in_txn(($WORD*)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)env_actor->$globkey, &minority_status, txnid, db);
-            rtsd_printf("   # enqueue bootstrap msg %" PRId64 " to env actor queue %" PRId64 " returns %d, minority_status %d", m->$globkey, env_actor->$globkey, ret, minority_status);
-            if(handle_status_and_schema_mismatch(ret, minority_status, env_actor->$globkey))
-                continue;
-            ret = remote_commit_txn(txnid, &minority_status, db);
-            rtsd_printf("############## Commit returned %d, minority_status %d", ret, minority_status);
-            if(handle_status_and_schema_mismatch(ret, minority_status, env_actor->$globkey))
-                continue;
-            if(ret == VAL_STATUS_COMMIT)
-                success = 1;
-        }
+        $ConstructionEnter((B_Actor)env_actor);
+        env_actor->$class->__init__(env_actor, B_WorldCapG_new(), args, num_wthreads, B__EnvCapG_new());
+        $ConstructionEnter(root_actor);
+        typedef B_NoneType (*ROOT__init__t)(B_Actor, B_Env);
+        ((ROOT__init__t)root_actor->$class->__init__)(root_actor, env_actor);
+        $ConstructionEnd(NULL);
+        $DROP();
+    } else {
+        B_BaseException exception = $POP();
+        if (wctx->construction)
+            $ConstructionAbort(NULL, exception);
+        fprintf(stderr, "Unhandled exception during actor construction at startup:\n  %s\n",
+                fromB_str(exception->$class->__str__(exception)));
+        exit(EXIT_FAILURE);
     }
-#endif
-    if (ENQ_msg(m, (B_Actor)env_actor)) {
-        ENQ_ready((B_Actor)env_actor, stamp_us(now_ns()));
-    }
-
 }
 
 // Deliver the messages in the $outgoing queue of actor "current", which
@@ -2067,7 +1982,7 @@ void save_actor_state(B_Actor current, B_Msg m, uint32_t ready_us) {
                     current->$consume_hd++;
                     serialize_actor(current, txnid);
                     serialize_newborns(current, txnid);
-                    FLUSH_outgoing_db(current, txnid);
+                    FLUSH_outgoing_db(current, current->B_Msg->$baseline, txnid);
                     serialize_msg(current->B_Msg, txnid);
 
                     int64_t key = current->$globkey;
@@ -2094,11 +2009,11 @@ void save_actor_state(B_Actor current, B_Msg m, uint32_t ready_us) {
                 }
                 if (success)
                     ACTON_STORE(current, current->$newborns, NULL);
-                FLUSH_outgoing_local(current, ready_us);
+                FLUSH_outgoing_local(current, current->B_Msg->$baseline, ready_us);
             } else {
 #endif
                 reverse_outgoing_queue(current);
-                FLUSH_outgoing_local(current, ready_us);
+                FLUSH_outgoing_local(current, current->B_Msg->$baseline, ready_us);
 #ifdef ACTON_DB
             }
 #endif
@@ -2841,7 +2756,7 @@ void wt_work_cb(uv_check_t *ev) {
                         continue;
                     serialize_actor(current, txnid);
                     serialize_newborns(current, txnid);
-                    FLUSH_outgoing_db(current, txnid);
+                    FLUSH_outgoing_db(current, current->B_Msg->$baseline, txnid);
                     serialize_msg(current->B_Msg, txnid);
                     ret = remote_commit_txn(txnid, &minority_status, db);
                     rtsd_printf("############## Commit returned %d, minority_status %d", ret, minority_status);
@@ -2866,7 +2781,7 @@ void wt_work_cb(uv_check_t *ev) {
             // waiting list, x's completion can enqueue it and another worker
             // can run it, while flushing still reads its current message. If
             // x completes first, ADD_waiting sees that and the actor goes on.
-            FLUSH_outgoing_local(current, end_us);
+            FLUSH_outgoing_local(current, current->B_Msg->$baseline, end_us);
             bool added_waiting = ADD_waiting(current, x);
 
             if (added_waiting) {      // x->cont is a proper $Cont: x is still being processed so current was added to x->waiting
@@ -3042,10 +2957,7 @@ void $register_rts () {
   $register_force(DONE_ID,&$DoneG_methods);
   $register_force(CONSTCONT_ID,&$ConstContG_methods);
   $register(&$DoneG_methods);
-  $register(&$InitRootG_methods);
   $register(&B_EnvG_methods);
-  $register(&$StartRootG_methods);
-  $register(&$InitEnvG_methods);
   // $Fail$instance ends up in message $cont slots when an exception propagates
   // to a waiting actor ($RFAIL wake, and the await-on-failed-message path). It
   // must be registered like $Done, or serializing such a message emits no
@@ -4412,6 +4324,10 @@ int main(int argc, char **argv) {
 #endif
     }
 
+    // Bootstrap can make root runnable immediately. Initialize its timer
+    // before any worker can execute actor code or publish timed messages.
+    timer_init(aux_uv_loop);
+
 #ifdef ACTON_DB
     if (db) {
         snode_t* start_row = NULL, * end_row = NULL;
@@ -4501,7 +4417,6 @@ int main(int argc, char **argv) {
     uv_check_start(&work_ev[wctx->id], (uv_check_cb)wt_work_cb);
 
     // Run the timer queue and keep track of other periodic tasks
-    timer_init(aux_uv_loop);
     timer_fire();
 
     // Run the uv loop for the main thread

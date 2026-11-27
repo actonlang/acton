@@ -1,0 +1,19 @@
+actor Child():
+    def __startup__():
+        print("must not run")
+
+actor Broken():
+    child = Child()
+    checked = raise ValueError("bootstrap failure")
+
+com def catch_failure() -> int:
+    try:
+        broken = Broken()
+    except ValueError:
+        return 0
+    return 1
+
+actor main(env):
+    child = Child()
+    sent = async env.exit(99)
+    checked = catch_failure() if "caught" in env.argv else raise ValueError("bootstrap failure")

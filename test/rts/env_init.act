@@ -1,6 +1,6 @@
 actor main(env):
     proc def __startup__():
-        # main only runs if the Env bootstrap continuation starts root init.
+        # Env and its service actors are initialized before root startup.
         def fail(msg: str):
             print("env_init:", msg)
             env.exit(1)

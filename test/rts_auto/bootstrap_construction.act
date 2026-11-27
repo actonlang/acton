@@ -1,0 +1,42 @@
+com def check_constructor() -> None:
+    NotImplemented
+
+actor Journal():
+    checked = check_constructor()
+    var entries: list[str] = []
+
+    def record(entry: str):
+        entries.append(entry)
+
+    def read() -> list[str]:
+        return entries
+
+actor Child(journal: Journal):
+    checked = check_constructor()
+    sent = async journal.record("construction")
+    var started = False
+
+    def observe():
+        assert started
+        journal.record("observed")
+
+    def __startup__():
+        started = True
+        journal.record("startup")
+
+actor main(env):
+    checked = check_constructor()
+    workers = env.nr_wthreads
+    journal = Journal()
+    child = Child(journal)
+    sent = async child.observe()
+    collected = env.rts.gc()
+
+    def __startup__():
+        assert workers > 0
+        assert child.observe() is None
+        entries = journal.read()
+        assert entries.count("startup") == 1
+        assert entries.count("construction") == 1
+        assert entries.count("observed") == 2
+        env.exit(0)
