@@ -1,0 +1,7 @@
+import testing
+
+
+def _test_sleep(t: testing.AsyncT):
+    def done():
+        t.success()
+    after 0.001: done()
