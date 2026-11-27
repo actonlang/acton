@@ -151,12 +151,17 @@ jobs:
               rm -rf -- "$cache"
             fi
           }
-          # Check for oversized caches below 50 GB free. One job can generate
-          # more than 24 GiB of Acton/Zig cache data.
+          # Check for oversized caches below 50 GB free. A clean build and
+          # test run can use more than 40 GiB of disk space.
           free_kib=$(df -Pk "$build_home" | awk 'NR == 2 {print $4}')
           if [ "$free_kib" -lt 48828125 ]; then
             trim_cache "$build_home/.stack" 8
-            trim_cache "$build_home/.cache/acton" 40
+            free_kib=$(df -Pk "$build_home" | awk 'NR == 2 {print $4}')
+            acton_limit_gib=40
+            if [ "$free_kib" -lt $((40 * 1024 * 1024)) ]; then
+              acton_limit_gib=8
+            fi
+            trim_cache "$build_home/.cache/acton" "$acton_limit_gib"
           fi
           df -h "$build_home"
           echo "HOME=$build_home" >> "$GITHUB_ENV"
