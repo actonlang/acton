@@ -311,8 +311,9 @@ pub fn build(b: *std.Build) void {
     }
 
     // Acton subtyping shares object layouts across distinct C struct pointers.
-    // Keep Clang 22's new error as a warning.
+    // Disable type-based aliasing assumptions and keep Clang 22's new error as a warning.
     flags.appendSlice(b.allocator, &.{
+        "-fno-strict-aliasing",
         "-fwrapv",
         "-Wno-error=incompatible-pointer-types",
     }) catch unreachable;

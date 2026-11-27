@@ -106,6 +106,8 @@ pub fn build(b: *std.Build) void {
 
     var flags = std.ArrayList([]const u8).empty;
     defer flags.deinit(b.allocator);
+    // Acton subtyping accesses shared layouts through distinct C struct types.
+    flags.append(b.allocator, "-fno-strict-aliasing") catch unreachable;
     flags.append(b.allocator, "-fno-sanitize=undefined") catch unreachable;
 
     var file_prefix_map = std.ArrayList(u8).empty;
@@ -164,6 +166,7 @@ pub fn build(b: *std.Build) void {
     if (enable_lto) actondb.lto = .thin;
     actondb.root_module.addCSourceFile(.{ .file = b.path("actondb.c"), .flags = &[_][]const u8{
         "-fno-sanitize=undefined",
+        "-fno-strict-aliasing",
     }});
     actondb.root_module.addCSourceFile(.{ .file = b.path("log.c"), .flags = flags.items });
     actondb.root_module.linkLibrary(libactondb);

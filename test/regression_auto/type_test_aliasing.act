@@ -1,0 +1,22 @@
+pure def fresh_box_is_int(n: int) -> bool:
+    NotImplemented
+
+pure def optional_int(s: str) -> ?int:
+    return int(s)
+
+actor main(env):
+    def __startup__():
+        try:
+            for n in [1000, 1000000, -1000]:
+                assert fresh_box_is_int(n)
+                i = optional_int(str(n))
+                assert isinstance(i, int)
+                assert i == n
+            i = optional_int("1000")
+            assert isinstance(i, int)
+            i = None
+            assert not isinstance(i, int)
+            env.exit(0)
+        except Exception as e:
+            print(e)
+            env.exit(1)
