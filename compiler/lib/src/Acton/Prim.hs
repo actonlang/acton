@@ -92,7 +92,7 @@ primConstructionBegin = gPrim "ConstructionBegin"
 primConstructionEnter = gPrim "ConstructionEnter"
 primConstructionEnd = gPrim "ConstructionEnd"
 primConstructionAbort = gPrim "ConstructionAbort"
-primMarkStartup = gPrim "MarkStartup"
+primConstructionStartup = gPrim "ConstructionStartup"
 
 
 attr_finalizer      = name "GCfinalizer"
@@ -657,7 +657,7 @@ primEnv             = [ (noq (bwName w), NDef (bwSchema w) NoDec Nothing) | w <-
                             (noq primConstructionEnter, NDef (monotype $ tFun0 [tActor] tNone) NoDec Nothing),
                             (noq primConstructionEnd, NDef (monotype $ tFun0 [tActor] tNone) NoDec Nothing),
                             (noq primConstructionAbort, NDef (monotype $ tFun0 [tActor,tBaseException] tNone) NoDec Nothing),
-                            (noq primMarkStartup, NDef (monotype $ tFun fxCom (posRow (tMsg tNone) posNil) kwdNil tNone) NoDec Nothing),
+                            (noq primConstructionStartup, NDef scConstructionStartup NoDec Nothing),
 
 
                             (noq primISINSTANCE,    NDef scISINSTANCE NoDec Nothing),
@@ -930,8 +930,8 @@ scNEWACTOR          = tSchema [QBind a [cActor]] tNEWACTOR
   where tNEWACTOR   = tFun fxPure posNil kwdNil (tVar a)
         a           = TV KType $ name "A"
 
--- MarkStartup : com(Msg[None]) -> None
-scMarkStartup = monotype $ tFun fxCom (posRow (tMsg tNone) posNil) kwdNil tNone
+-- ConstructionStartup : com(Actor) -> None
+scConstructionStartup = monotype $ tFun fxCom (posRow tActor posNil) kwdNil tNone
 
 --  $GCfinalizer    : [A(B_Actor)] => pure (A) -> None
 scGCfinalizer       = tSchema [QBind a [cActor]] tGCfin

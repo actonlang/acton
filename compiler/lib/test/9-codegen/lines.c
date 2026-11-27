@@ -362,7 +362,7 @@ $Cont linesQ_L_24ContD___deserialize__($Cont self, $Serial$state state) {
     return $cont_restore(&linesQ_L_24ContG_methods, self, state);
 }
 struct $ContClass linesQ_L_24ContG_methods;
-$R linesQ_L_18C_6cont (linesQ_Apa a, linesQ_main self, B_Iterable W_Apa_851, B_Number W_Apa_925, $Cont C_cont, int64_t C_7res) {
+$R linesQ_L_18C_6cont (linesQ_Apa a, linesQ_main self, B_Iterable W_Apa_761, B_Number W_Apa_835, $Cont C_cont, int64_t C_7res) {
     #line 43 "test/src/lines.act"
     int64_t r = C_7res;
     #line 44 "test/src/lines.act"
@@ -429,7 +429,7 @@ $R linesQ_L_18C_6cont (linesQ_Apa a, linesQ_main self, B_Iterable W_Apa_851, B_N
         #line 73 "test/src/lines.act"
         ((B_NoneType (*) (B_tuple, B_str, B_str, bool, bool))B_print)($NEWTUPLE(2, actStrFromLiteral("loop body", 9, 9), toB_int(i)), actStrFromLiteral(" ", 1, 1), actStrFromLiteral("\n", 1, 1), false, false);
     }
-    B_Iterator N_12iter = ((B_Iterator (*) ($WORD, B_list))((B_Iterable)(W_Apa_851))->$class->__iter__)(W_Apa_851, B_mk_list(3, toB_int(1LL) , toB_int(2LL) , toB_int(3LL)));
+    B_Iterator N_12iter = ((B_Iterator (*) ($WORD, B_list))((B_Iterable)(W_Apa_761))->$class->__iter__)(W_Apa_761, B_mk_list(3, toB_int(1LL) , toB_int(2LL) , toB_int(3LL)));
     #line 78 "test/src/lines.act"
     while (true) {
         $MaybeWord N_13maybe;
@@ -505,10 +505,10 @@ $R linesQ_L_25ContD___call__($Cont $closure, $WORD $result) {
     B_int G_1 = (B_int)$result;
     linesQ_Apa a = (linesQ_Apa)(((linesQ_L_25Cont)(L_self))->ref0);
     linesQ_main self = (linesQ_main)(((linesQ_L_25Cont)(L_self))->ref1);
-    B_Iterable W_Apa_851 = (B_Iterable)(((linesQ_L_25Cont)(L_self))->ref2);
-    B_Number W_Apa_925 = (B_Number)(((linesQ_L_25Cont)(L_self))->ref3);
+    B_Iterable W_Apa_761 = (B_Iterable)(((linesQ_L_25Cont)(L_self))->ref2);
+    B_Number W_Apa_835 = (B_Number)(((linesQ_L_25Cont)(L_self))->ref3);
     $Cont C_cont = ($Cont)(((linesQ_L_25Cont)(L_self))->ref4);
-    return linesQ_L_18C_6cont(a, self, W_Apa_851, W_Apa_925, C_cont, ((B_int)G_1)->val);
+    return linesQ_L_18C_6cont(a, self, W_Apa_761, W_Apa_835, C_cont, ((B_int)G_1)->val);
 }
 $Cont linesQ_L_25ContD___deserialize__($Cont self, $Serial$state state) {
     return $cont_restore(&linesQ_L_25ContG_methods, self, state);
@@ -525,13 +525,13 @@ $proc linesQ_L_26procD___deserialize__($proc self, $Serial$state state) {
 }
 struct $Proc0Class linesQ_L_26procG_methods;
 B_NoneType linesQ_ApaD___init__ (linesQ_Apa self) {
+    ((B_NoneType (*) (B_Actor))B_ActorG_methods.__init__)(acton_wbar_object(((B_Actor)self), sizeof(struct B_Actor)));
     #line 2 "test/src/lines.act"
     ((linesQ_Apa)(self))->apa = 2001LL;
     #line 6 "test/src/lines.act"
     ((linesQ_Apa)(self))->apb = 2002LL;
     #line 16 "test/src/lines.act"
     ((linesQ_Apa)(self))->y = 123LL;
-    $MarkStartup(((B_Msg (*) ($WORD))((linesQ_Apa)(self))->$class->__startup__)(self));
     return B_None;
 }
 #line 3 "test/src/lines.act"
@@ -609,7 +609,7 @@ linesQ_Apa linesQ_ApaG_new() {
 }
 struct linesQ_ApaG_class linesQ_ApaG_methods;
 B_NoneType linesQ_BepaD___init__ (linesQ_Bepa self) {
-    $MarkStartup(((B_Msg (*) ($WORD))((linesQ_Bepa)(self))->$class->__startup__)(self));
+    ((B_NoneType (*) (B_Actor))B_ActorG_methods.__init__)(acton_wbar_object(((B_Actor)self), sizeof(struct B_Actor)));
     return B_None;
 }
 #line 24 "test/src/lines.act"
@@ -659,14 +659,14 @@ linesQ_Bepa linesQ_BepaG_new() {
 }
 struct linesQ_BepaG_class linesQ_BepaG_methods;
 B_NoneType linesQ_mainD___init__ (linesQ_main self, B_Env env) {
+    ((B_NoneType (*) (B_Actor))B_ActorG_methods.__init__)(acton_wbar_object(((B_Actor)self), sizeof(struct B_Actor)));
     ACTON_STORE_ATTR(((linesQ_main)(self)), env, env);
-    $MarkStartup(((B_Msg (*) ($WORD))((linesQ_main)(self))->$class->__startup__)(self));
     return B_None;
 }
 #line 32 "test/src/lines.act"
 $R linesQ_mainD___startup__G_local (linesQ_main self, $Cont C_cont) {
-    B_Iterable W_Apa_851 = (B_Iterable)B_SequenceD_listG_witness->W_Collection;
-    B_Number W_Apa_925 = (B_Number)B_RealFloatD_floatG_witness;
+    B_Iterable W_Apa_761 = (B_Iterable)B_SequenceD_listG_witness->W_Collection;
+    B_Number W_Apa_835 = (B_Number)B_RealFloatD_floatG_witness;
     #line 38 "test/src/lines.act"
     linesQ_Apa a = linesQ_ApaG_newact();
     #line 39 "test/src/lines.act"
@@ -677,7 +677,7 @@ $R linesQ_mainD___startup__G_local (linesQ_main self, $Cont C_cont) {
     ((B_Msg (*) ($WORD, $action))((linesQ_Apa)(a))->$class->setup)(a, (($action)((linesQ_L_15action)$Action_R1_new(&linesQ_L_15actionG_methods, a))));
     #line 42 "test/src/lines.act"
     B_Msg x = ((B_Msg (*) ($WORD, $action))((linesQ_Apa)(a))->$class->compute)(a, (($action)((linesQ_L_17action)$Action_R1_new(&linesQ_L_17actionG_methods, b))));
-    return $AWAIT((($Cont)((linesQ_L_25Cont)$Cont_R5_new(&linesQ_L_25ContG_methods, a, self, W_Apa_851, W_Apa_925, C_cont))), x);
+    return $AWAIT((($Cont)((linesQ_L_25Cont)$Cont_R5_new(&linesQ_L_25ContG_methods, a, self, W_Apa_761, W_Apa_835, C_cont))), x);
 }
 B_Msg linesQ_mainD___startup__ (linesQ_main self) {
     return $ASYNC(((B_Actor)self), (($Cont)((linesQ_L_26proc)$Proc0_R1_new(&linesQ_L_26procG_methods, self))));
@@ -721,6 +721,7 @@ linesQ_Apa linesQ_ApaG_newact () {
             $ConstructionEnter(((B_Actor)G_act));
             if ((void*)G_act->$class->__cleanup__ != (void*)B_ActorD___cleanup__) $InstallFinalizer(G_act, linesQ_ApaD_GCfinalizer);
             ((B_NoneType (*) ($WORD))((linesQ_Apa)(G_act))->$class->__init__)(G_act);
+            $ConstructionStartup(((B_Actor)G_act));
             $DROP();
         }
         else {
@@ -743,6 +744,7 @@ linesQ_Bepa linesQ_BepaG_newact () {
             $ConstructionEnter(((B_Actor)G_act));
             if ((void*)G_act->$class->__cleanup__ != (void*)B_ActorD___cleanup__) $InstallFinalizer(G_act, linesQ_BepaD_GCfinalizer);
             ((B_NoneType (*) ($WORD))((linesQ_Bepa)(G_act))->$class->__init__)(G_act);
+            $ConstructionStartup(((B_Actor)G_act));
             $DROP();
         }
         else {
@@ -765,6 +767,7 @@ linesQ_main linesQ_mainG_newact (B_Env env) {
             $ConstructionEnter(((B_Actor)G_act));
             if ((void*)G_act->$class->__cleanup__ != (void*)B_ActorD___cleanup__) $InstallFinalizer(G_act, linesQ_mainD_GCfinalizer);
             ((B_NoneType (*) ($WORD, B_Env))((linesQ_main)(G_act))->$class->__init__)(G_act, env);
+            $ConstructionStartup(((B_Actor)G_act));
             $DROP();
         }
         else {

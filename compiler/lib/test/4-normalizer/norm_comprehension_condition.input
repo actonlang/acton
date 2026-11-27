@@ -27,4 +27,3 @@ actor main (env : __builtin__.Env):
         (async let:
                    G_2x: action(n: __builtin__.int) -> None = env.exit
                in action lambda (G_1p : __builtin__.int): G_2x(n = G_1p))(W_main_43.__fromatom__(1))
-    $MarkStartup((async $WRAP@[(), (), None](self, __startup__))())

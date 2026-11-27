@@ -1,6 +1,9 @@
 com def check_constructor() -> None:
     NotImplemented
 
+com def check_base_initializer() -> None:
+    NotImplemented
+
 actor Journal():
     checked = check_constructor()
     var entries: list[str] = []
@@ -33,6 +36,7 @@ actor main(env):
     collected = env.rts.gc()
 
     def __startup__():
+        check_base_initializer()
         assert workers > 0
         assert child.observe() is None
         entries = journal.read()

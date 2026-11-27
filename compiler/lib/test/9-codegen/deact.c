@@ -356,7 +356,7 @@ $proc deactQ_L_22procD___deserialize__($proc self, $Serial$state state) {
 }
 struct $Proc0Class deactQ_L_22procG_methods;
 B_NoneType deactQ_ApaD___init__ (deactQ_Apa self) {
-    $MarkStartup(((B_Msg (*) ($WORD))((deactQ_Apa)(self))->$class->__startup__)(self));
+    ((B_NoneType (*) (B_Actor))B_ActorG_methods.__init__)(acton_wbar_object(((B_Actor)self), sizeof(struct B_Actor)));
     return B_None;
 }
 #line 2 "test/src/deact.act"
@@ -425,7 +425,7 @@ deactQ_Apa deactQ_ApaG_new() {
 }
 struct deactQ_ApaG_class deactQ_ApaG_methods;
 B_NoneType deactQ_BepaD___init__ (deactQ_Bepa self) {
-    $MarkStartup(((B_Msg (*) ($WORD))((deactQ_Bepa)(self))->$class->__startup__)(self));
+    ((B_NoneType (*) (B_Actor))B_ActorG_methods.__init__)(acton_wbar_object(((B_Actor)self), sizeof(struct B_Actor)));
     return B_None;
 }
 #line 19 "test/src/deact.act"
@@ -475,8 +475,8 @@ deactQ_Bepa deactQ_BepaG_new() {
 }
 struct deactQ_BepaG_class deactQ_BepaG_methods;
 B_NoneType deactQ_mainD___init__ (deactQ_main self, B_Env env) {
+    ((B_NoneType (*) (B_Actor))B_ActorG_methods.__init__)(acton_wbar_object(((B_Actor)self), sizeof(struct B_Actor)));
     ACTON_STORE_ATTR(((deactQ_main)(self)), env, env);
-    $MarkStartup(((B_Msg (*) ($WORD))((deactQ_main)(self))->$class->__startup__)(self));
     return B_None;
 }
 #line 27 "test/src/deact.act"
@@ -535,6 +535,7 @@ deactQ_Apa deactQ_ApaG_newact () {
             $ConstructionEnter(((B_Actor)G_act));
             if ((void*)G_act->$class->__cleanup__ != (void*)B_ActorD___cleanup__) $InstallFinalizer(G_act, deactQ_ApaD_GCfinalizer);
             ((B_NoneType (*) ($WORD))((deactQ_Apa)(G_act))->$class->__init__)(G_act);
+            $ConstructionStartup(((B_Actor)G_act));
             $DROP();
         }
         else {
@@ -557,6 +558,7 @@ deactQ_Bepa deactQ_BepaG_newact () {
             $ConstructionEnter(((B_Actor)G_act));
             if ((void*)G_act->$class->__cleanup__ != (void*)B_ActorD___cleanup__) $InstallFinalizer(G_act, deactQ_BepaD_GCfinalizer);
             ((B_NoneType (*) ($WORD))((deactQ_Bepa)(G_act))->$class->__init__)(G_act);
+            $ConstructionStartup(((B_Actor)G_act));
             $DROP();
         }
         else {
@@ -579,6 +581,7 @@ deactQ_main deactQ_mainG_newact (B_Env env) {
             $ConstructionEnter(((B_Actor)G_act));
             if ((void*)G_act->$class->__cleanup__ != (void*)B_ActorD___cleanup__) $InstallFinalizer(G_act, deactQ_mainD_GCfinalizer);
             ((B_NoneType (*) ($WORD, B_Env))((deactQ_main)(G_act))->$class->__init__)(G_act, env);
+            $ConstructionStartup(((B_Actor)G_act));
             $DROP();
         }
         else {

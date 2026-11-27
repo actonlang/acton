@@ -133,11 +133,13 @@ instance Deact Decl where
         notImplBody body            = return $ Class l n q us (fromTEnv actorRuntimeEnv ++ [sNotImpl]) ddoc
       | otherwise                   = do inits1 <- deactSuite (define (envOf decls) env1) inits
                                          decls1 <- deactSuite (define (envOf inits) env1) decls
-                                         let _init_ = Def l0 initKW [] (addSelfPar params) KwdNIL (Just tNone) (copies++inits1++[sReturn eNone]) NoDec fxCom Nothing
+                                         let _init_ = Def l0 initKW [] (addSelfPar params) KwdNIL (Just tNone) (superInit:copies++inits1++[sReturn eNone]) NoDec fxCom Nothing
                                              decls2 = [ Decl l $ map deactMeth ds | Decl l ds <- decls1 ]
                                          return $ Class l n q us (propsigs ++ [Decl l0 [_init_]] ++ decls2 ++ wraps) ddoc
       where env1                    = setActor wrapped stvars locals $ define (envOf params) $ define [(selfKW, NVar t0)] $ defineTVars q env
             t0                      = tCon $ TC (NoQ n) (map tVar $ qbound q)
+
+            superInit               = sExpr $ eCall (eDot (eQVar $ tcname $ head us) initKW) [eVar selfKW]
 
             (decls,ss)              = partition isDecl body
             inits                   = filter (not . isSig) ss
@@ -204,7 +206,8 @@ newact env n q p ddoc               = Def l0 (newactName n) q p KwdNIL (Just t) 
         initialize                  = [ sAssign (pVar g_act t) (eCall (tApp (eQVar primNEWACTOR) [t]) []),
                                         sExpr $ call primConstructionEnter [x] ] ++
                                       [ sExpr $ eCall (tApp (eQVar primInstallFinalizer) [t]) [x] | not (inBuiltin env && n == nActor) ] ++
-                                      [ sExpr $ Call l0 (eDot x initKW) (pArg p) KwdNil | not (inBuiltin env && n == nActor) ] ++
+                                      [ sExpr $ Call l0 (eDot x initKW) (pArg p) KwdNil,
+                                        sExpr $ call primConstructionStartup [x] ] ++
                                       [ sExpr $ call primDROP [] ]
         failed                      = [ sAssign (pVar exception tBaseException) (call primPOP []),
                                         sExpr $ call primConstructionAbort [eVar parent, eVar exception],

@@ -576,7 +576,6 @@ renderReplMainSource st =
       , "        except Exception as exc:"
       , "            print(exc)"
       , "            env.exit(1)"
-      , "    __startup__()"
       ])
 
 renderReplEvalPlaceholderSource :: String

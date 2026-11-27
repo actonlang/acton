@@ -56,4 +56,3 @@ actor main (env : __builtin__.Env):
             (async env.exit)(W_main_43.__fromatom__(0))
         (async env.exit)(W_main_43.__fromatom__(1))
         return None
-    $MarkStartup((async $WRAP@[(), (), None](self, __startup__))())

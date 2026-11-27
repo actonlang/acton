@@ -267,18 +267,18 @@ void register_actor(int64_t key);
 
 #define $NEWACTOR($T)       ({ $T $t = GC_malloc(sizeof(struct $T)); \
                                $t->$class = &$T ## G_methods; \
-                               B_ActorG_methods.__init__((B_Actor)$t); \
-                               $t->$affinity = SHARED_RQ; \
+                               $ActorHeaderInit((B_Actor)$t); \
                                $ConstructionRegister((B_Actor)$t); \
                                $t; })
 
+void $ActorHeaderInit(B_Actor actor);
 void $ConstructionRegister(B_Actor actor);
 void $InstallFinalizer(void *actor, GC_finalization_proc fn);
 B_Actor $ConstructionBegin(void);
 B_NoneType $ConstructionEnter(B_Actor actor);
 B_NoneType $ConstructionEnd(B_Actor parent);
 B_NoneType $ConstructionAbort(B_Actor parent, B_BaseException exception);
-B_NoneType $MarkStartup(B_Msg message);
+B_NoneType $ConstructionStartup(B_Actor actor);
 
 #ifdef ACTON_THREADS
 // A thread that is not a worker runs no continuation

@@ -20,6 +20,7 @@ proc def maybe_log (c : ?Cls) -> None:
 # recursive group:
 class Logger (__builtin__.Actor, __builtin__.value):
     com def __init__ (self : Self) -> None:
+        __builtin__.Actor.__init__(self)
         return None
     proc def logG_local (self : Self, msg : __builtin__.str) -> None:
         pass
@@ -33,6 +34,7 @@ com def LoggerG_newact () -> Logger:
         $ConstructionEnter(G_act)
         $InstallFinalizer@[Logger](G_act)
         G_act.__init__()
+        $ConstructionStartup(G_act)
         $DROP()
     else:
         N_construction_exception: __builtin__.BaseException = $POP()

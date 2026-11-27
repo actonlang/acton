@@ -313,6 +313,27 @@ main = do
             map fst members `shouldContain` [S.name "$next"]
           _ -> expectationFailure "Expected the runtime representation of Actor"
 
+      it "calls the superclass initializer and schedules startup outside __init__" $ do
+        (typed, env) <- checked
+        (normalized, normEnv) <- Acton.Normalizer.normalize env typed
+        (deacted, _) <- Acton.Deactorizer.deactorize normEnv normalized
+        let child = S.name "Child"
+            [body] = [S.dbody d | S.Decl _ ds <- S.mbody deacted,
+                                 d@S.Class{} <- ds, S.dname d == child]
+            [initialize] = [S.dbody d | S.Decl _ ds <- body,
+                                       d@S.Def{} <- ds, S.dname d == Builtin.initKW]
+            [construct] = [S.dbody d | S.Decl _ ds <- S.mbody deacted,
+                                      d@S.Def{} <- ds, S.dname d == Names.newactName child]
+        case initialize of
+          S.Expr _ (S.Call _ (S.Dot _ (S.Var _ parent) method)
+                             (S.PosArg (S.Var _ self) S.PosNil) S.KwdNil) : _ -> do
+            parent `shouldBe` Builtin.qnActor
+            method `shouldBe` Builtin.initKW
+            self `shouldBe` S.NoQ Builtin.selfKW
+          _ -> expectationFailure "Expected an explicit superclass initializer call"
+        ("ConstructionStartup" `isInfixOf` show initialize) `shouldBe` False
+        ("ConstructionStartup" `isInfixOf` show construct) `shouldBe` True
+
     describe "Communication effects" $ do
       let hierarchy =
             [ (S.FXPure, [S.FXPure,S.FXMut,S.FXCom,S.FXProc,S.FXAction])
@@ -4533,7 +4554,7 @@ main = do
         expect report ["Child"] "p" False
       it "defers startup bodies but treats ordinary calls eagerly" $ do
         report <- analyze
-          [ "actor Good(p):", "    proc def __startup__():", "        print(p.item)", "    __startup__()"
+          [ "actor Good(p):", "    proc def __startup__():", "        print(p.item)"
           , "actor Bad(p):", "    proc def __startup__():", "        print(p.item)", "    dispatch = __startup__()", "    saved = p" ]
         expect report ["Good"] "p" True
         expect report ["Bad"] "p" False

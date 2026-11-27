@@ -65,7 +65,6 @@ data CustomParseError = TypeVariableNameError String  -- Name that looks like ty
                       | MissingClosingQuote String  -- String is the quote type (e.g., "\"\"\"" or "'")
                       | TooManyQuotesError String
                       | InvalidModuleStatement
-                      | StartupMustBeLast
                       | InvalidActorAssignmentPattern
                       | DuplicateActorAssignment String
                       | InvalidTopLevelAssignmentPattern
@@ -104,8 +103,6 @@ instance ShowErrorComponent CustomParseError where
   showErrorComponent (TooManyQuotesError quote) = "too many quote characters"
   showErrorComponent InvalidModuleStatement =
     "Only declarations and assignments are allowed at the module top level"
-  showErrorComponent StartupMustBeLast =
-    "The temporary __startup__() call must be the last statement of an actor body"
   showErrorComponent InvalidActorAssignmentPattern =
     "Actor-body assignments must bind at least one name"
   showErrorComponent (DuplicateActorAssignment name) =
@@ -2138,36 +2135,15 @@ class_stmt = try ((:[]) <$> (signature <* newline1))
 class_small_stmt :: Parser S.Stmt
 class_small_stmt = pass_stmt <|> addLoc (S.Expr NoLoc . S.NotImplemented <$> rwordLoc "NotImplemented")
 
-actor_stmt :: Pos -> Parser S.Suite
-actor_stmt parent = try ((:[]) <$> (signature <* newline1))
+actor_stmt :: Parser S.Suite
+actor_stmt = try ((:[]) <$> (signature <* newline1))
                 <|> def_group
-                <|> simpleStatements (actor_small_stmt parent)
+                <|> simpleStatements actor_declaration
                 <?> "actor binding, signature or method"
 
 actor_declaration :: Parser S.Stmt
 actor_declaration = var_binding <|> binding_stmt <|> class_small_stmt
   where var_binding = addLoc $ rword "var" *> (S.VarAssign NoLoc <$> some (try assign) <*> exprlist)
-
--- Transitional tail, deliberately separate from actor_declaration. Looking
--- past the newline also enforces terminality across semicolon-separated lines.
-actor_small_stmt :: Pos -> Parser S.Stmt
-actor_small_stmt parent = actor_declaration <|> startup_tail
-  where
-    startup_tail = addLoc $ do
-      e <- addLoc $ do
-        l <- rwordLoc "__startup__"
-        parens (return ())
-        return $ S.Call NoLoc (S.Var l $ S.NoQ $ S.Name l $ S.packText "__startup__") S.PosNil S.KwdNil
-      lookAhead $ do
-        optional semicolon
-        newline1
-        done <- optional eof
-        case done of
-          Just _ -> return ()
-          Nothing -> do
-            p <- L.indentLevel
-            when (p > parent) $ customFailure StartupMustBeLast
-      return $ S.Expr NoLoc e
 
 binding_stmt :: Parser S.Stmt
 binding_stmt = addLoc $ S.Assign NoLoc <$> some (try assign) <*> exprlist
@@ -2486,7 +2462,7 @@ class_suite :: CTX -> Pos -> Parser (S.Suite, Maybe String)
 class_suite ctx = suiteWithDocstring ctx (BodyGrammar class_stmt class_small_stmt)
 
 actor_suite :: Pos -> Parser (S.Suite, Maybe String)
-actor_suite p = suiteWithDocstring ACTOR (BodyGrammar (actor_stmt p) (actor_small_stmt p)) p
+actor_suite = suiteWithDocstring ACTOR (BodyGrammar actor_stmt actor_declaration)
 
 suiteWithDocstring :: CTX -> BodyGrammar -> Pos -> Parser (S.Suite, Maybe String)
 suiteWithDocstring c grammar p = do

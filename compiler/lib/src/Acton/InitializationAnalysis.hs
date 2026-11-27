@@ -9,7 +9,7 @@ import qualified Data.Set as S
 import Acton.Syntax hiding (body)
 import Utils (SrcLoc(..))
 import Acton.Names (assigned, bound, free, isWitness)
-import Acton.Prim (primCAST, primWRAP, primMarkStartup)
+import Acton.Prim (primCAST, primWRAP)
 
 data Safety = Safety
     { parameterSafety :: M.Map QName [(Name, Bool)]
@@ -53,7 +53,7 @@ collect m r = concatMap declaration . concatMap flatten
   where
     flatten (Decl _ ds) = ds
     flatten s = concat [concatMap flatten b | b <- suites s]
-    declaration d@Actor{} = [make True d (params (pos d) (kwd d)) (name "self") (declarative $ dbody d) False True]
+    declaration d@Actor{} = [make True d (params (pos d) (kwd d)) (name "self") (dbody d) False True]
     declaration d@Class{} = case [f | Decl _ ds <- dbody d, f@Def{} <- ds, nstr (dname f) == "__init__"] of
       [f] -> let ps = params (pos f) (kwd f)
                  self = case filter (not . isWitness . pname) ps of p:_ -> pname p; _ -> name "self"
@@ -89,22 +89,6 @@ suites s = case s of
     With _ _ b -> [b]
     Data _ _ b -> [b]
     _ -> []
-
-declarative ss = case reverse ss of
-    Expr _ (Call _ f _ _) : rest | scheduled f -> reverse rest
-    Expr _ (Call _ f PosNil KwdNil) : rest
-      | startup f, name "__startup__" `elem` declared ss -> reverse rest
-    _ -> ss
-  where
-    scheduled (TApp _ e _) = scheduled e
-    scheduled (Var _ q) = q == primMarkStartup
-    scheduled _ = False
-    startup (Var _ (NoQ n)) = nstr n == "__startup__"
-    startup (Dot _ (Var _ (NoQ s)) n) = nstr s == "self" && nstr n == "__startup__"
-    startup (Async _ e) = startup e
-    startup (TApp _ e _) = startup e
-    startup (Paren _ e) = startup e
-    startup _ = False
 
 constraints :: M.Map QName Constructor -> Constructor -> [Rule]
 constraints cs c = execWriter $ do

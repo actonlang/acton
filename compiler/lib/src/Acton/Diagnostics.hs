@@ -56,7 +56,6 @@ customParseErrorToDiagnostic (MissingClosingQuote quote)       = ("Missing closi
                                                                   [Hint $ "Add a closing quote (" ++ quote ++ ") to match the opening one"])
 customParseErrorToDiagnostic InvalidModuleStatement            = ("Only declarations and assignments are allowed at the module top level",
                                                                   [Hint "Assign the value to a name or move runtime work into a function or an actor startup method"])
-customParseErrorToDiagnostic StartupMustBeLast                  = ("The temporary __startup__() call must be the last statement of an actor body", [])
 customParseErrorToDiagnostic InvalidActorAssignmentPattern       = ("Actor-body assignments must bind at least one name", [])
 customParseErrorToDiagnostic (DuplicateActorAssignment name)     = ("Actor-body name '" ++ name ++ "' cannot be initialized more than once", [])
 customParseErrorToDiagnostic InvalidTopLevelAssignmentPattern  = ("Module top-level assignments must bind at least one name",

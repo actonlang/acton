@@ -2396,7 +2396,7 @@ instance Check Decl where
                                              wellformed env1 q
                                              (csp,te1,p') <- infEnv env1 p
                                              (csk,te2,k') <- infEnv (define te1 env1) k
-                                             (csb,te,b') <- infSuiteEnv (define te2 $ define te1 env1) initialization
+                                             (csb,te,b') <- infSuiteEnv (define te2 $ define te1 env1) b
                                              -- At this point, each name defined in b has the type given by its annotations
                                              -- and possible type signatures. Now check that these types are no less general
                                              -- than the recursion assumption on actor n itself (which is distinct from any
@@ -2410,16 +2410,6 @@ instance Check Decl where
                                                  act = Actor l n (noqual env q) (qualWPar env q p'') k'' (map snd as) body ddoc
                                              return (cs1, act)
       where NAct _ _ _ as _ _ = findName n env
-            startup = name "__startup__"
-            -- Accept the migration-era terminal call, but schedule startup
-            -- exactly once regardless of whether that call was written.
-            bindings = case reverse b of
-                Expr _ (Call _ (Var _ (NoQ n)) PosNil KwdNil) : rest | n == startup -> reverse rest
-                _ -> b
-            startupDefs = [d | Decl _ ds <- bindings, d@Def{dname=n} <- ds, n == startup]
-            initialization = bindings ++
-                [ sExpr $ eCall (eQVar primMarkStartup) [eCall (eAsync $ eVar startup) []]
-                | not (null startupDefs) ]
             env1                        = withDefaultLocalNames (bound (p,k) ++ assigned b) $
                                           reserve (bound (p,k) ++ assigned b) $ setInAct $
                                           define [(selfKW, NVar (tCon tc))] $ tydefineVars q env

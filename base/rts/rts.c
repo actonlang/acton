@@ -646,7 +646,8 @@ B_Msg B_MsgD___deserialize__(B_Msg res, $Serial$state state) {
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
-B_NoneType B_ActorD___init__(B_Actor a) {
+// Allocation-time state is independent of the language initializer chain.
+void $ActorHeaderInit(B_Actor a) {
     a->$next = NULL;
     a->B_Msg = NULL;
     a->$outgoing = NULL;
@@ -659,6 +660,9 @@ B_NoneType B_ActorD___init__(B_Actor a) {
     a->$globkey = get_next_key();
     a->$affinity = SHARED_RQ;
     rtsd_printf("# New Actor %" PRId64 " at %p of class %s", a->$globkey, a, a->$class->$GCINFO);
+}
+
+B_NoneType B_ActorD___init__(B_Actor self) {
     return B_None;
 }
 
@@ -1224,7 +1228,11 @@ B_NoneType $ConstructionEnd(B_Actor parent) {
     return B_None;
 }
 
-B_NoneType $MarkStartup(B_Msg message) {
+// The outer constructor calls this after the complete initializer chain.
+B_NoneType $ConstructionStartup(B_Actor actor) {
+    if (actor->$class->__startup__ == B_ActorD___startup__)
+        return B_None;
+    B_Msg message = actor->$class->__startup__(actor);
     struct ConstructionContext *ctx = GET_WCTX()->construction;
     assert(ctx && ctx->messages == message);
     ACTON_STORE(ctx, ctx->messages, message->$next);
@@ -1952,9 +1960,11 @@ void BOOTSTRAP(int argc, char *argv[]) {
 
         $ConstructionEnter((B_Actor)env_actor);
         env_actor->$class->__init__(env_actor, B_WorldCapG_new(), args, num_wthreads, B__EnvCapG_new());
+        $ConstructionStartup((B_Actor)env_actor);
         $ConstructionEnter(root_actor);
         typedef B_NoneType (*ROOT__init__t)(B_Actor, B_Env);
         ((ROOT__init__t)root_actor->$class->__init__)(root_actor, env_actor);
+        $ConstructionStartup(root_actor);
         $ConstructionEnd(NULL);
         $DROP();
     } else {

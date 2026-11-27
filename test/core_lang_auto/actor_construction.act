@@ -21,9 +21,6 @@ actor Leaf(journal: Journal, label: str):
         started = True
         journal.record("startup-" + label)
 
-    # The migration-era call must not cause startup to execute twice.
-    __startup__()
-
 actor Family(journal: Journal, valid: bool):
     child = Leaf(journal, "child")
     early_ping = async child.ping()

@@ -188,7 +188,7 @@ class L_22proc ($proc[(), None], __builtin__.value):
         return self.__startup__G_local(C_cont)
 class Apa (__builtin__.Actor, __builtin__.value):
     com def __init__ (self : Apa) -> None:
-        $MarkStartup((async self.__startup__)())
+        __builtin__.Actor.__init__(self)
         return None
     proc def setupG_local (self : Apa, C_cont : $Cont[None], cb : $action[(__builtin__.int,), __builtin__.int]) -> $R:
         print@[(__builtin__.str,)](("\"setup\"",), "\" \"", "\"\\n\"", (UNBOX __builtin__.bool False), (UNBOX __builtin__.bool False))
@@ -214,7 +214,7 @@ class Apa (__builtin__.Actor, __builtin__.value):
         return $ASYNC@[None](self, L_10proc(self))
 class Bepa (__builtin__.Actor, __builtin__.value):
     com def __init__ (self : Bepa) -> None:
-        $MarkStartup((async self.__startup__)())
+        __builtin__.Actor.__init__(self)
         return None
     proc def callbackG_local (self : Bepa, C_cont : $Cont[__builtin__.int], i : UNBOXED __builtin__.int) -> $R:
         print@[(__builtin__.str, __builtin__.int)](("\"callback\"", (BOX __builtin__.int i)), "\" \"", "\"\\n\"", (UNBOX __builtin__.bool False), (UNBOX __builtin__.bool False))
@@ -231,8 +231,8 @@ class main (__builtin__.Actor, __builtin__.value):
     @property
     env : __builtin__.Env
     com def __init__ (self : main, env : __builtin__.Env) -> None:
+        __builtin__.Actor.__init__(self)
         self.env = env
-        $MarkStartup((async self.__startup__)())
         return None
     proc def __startup__G_local (self : main, C_cont : $Cont[None]) -> $R:
         a: Apa = ApaG_newact()
@@ -250,6 +250,7 @@ com def ApaG_newact () -> Apa:
         $ConstructionEnter(G_act)
         $InstallFinalizer@[Apa](G_act)
         G_act.__init__()
+        $ConstructionStartup(G_act)
         $DROP()
     else:
         N_construction_exception: __builtin__.BaseException = $POP()
@@ -264,6 +265,7 @@ com def BepaG_newact () -> Bepa:
         $ConstructionEnter(G_act)
         $InstallFinalizer@[Bepa](G_act)
         G_act.__init__()
+        $ConstructionStartup(G_act)
         $DROP()
     else:
         N_construction_exception: __builtin__.BaseException = $POP()
@@ -278,6 +280,7 @@ com def mainG_newact (env : __builtin__.Env) -> main:
         $ConstructionEnter(G_act)
         $InstallFinalizer@[main](G_act)
         G_act.__init__(env)
+        $ConstructionStartup(G_act)
         $DROP()
     else:
         N_construction_exception: __builtin__.BaseException = $POP()
