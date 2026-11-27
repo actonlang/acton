@@ -1,0 +1,24 @@
+class Slot(object):
+    item: ?int
+    def __init__(self, item: ?int):
+        self.item = item
+
+def make(x: int) -> Slot:
+    return Slot(x)
+
+def empty() -> Slot:
+    return Slot(None)
+
+class Mixed(object):
+    real: ?float
+    flag: ?bool
+    small: ?i8
+    large: ?u64
+    def __init__(self, real: ?float, flag: ?bool, small: ?i8, large: ?u64):
+        self.real = real
+        self.flag = flag
+        self.small = small
+        self.large = large
+
+def mixed(real: float, flag: bool, small: i8, large: u64) -> Mixed:
+    return Mixed(real, flag, small, large)

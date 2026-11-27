@@ -5199,6 +5199,20 @@ main = do
         map Acton.CodeGen.unCreserved ["A_stdout", "A_A_stdout", "A_ERROR", "A_int", "A_value"] `shouldBe`
           ["A_A_stdout", "A_A_A_stdout", "A_A_ERROR", "A_A_int", "A_value"]
       testCodeGen env0 ["ints"]
+      testCodeGenContains env0 "optional_int_fields"
+        [ "optional_int_fieldsQ_SlotG_new_optional(B_optional_int_some(x))"
+        , "optional_int_fieldsQ_SlotG_new_optional(B_optional_int_none())"
+        , "optional_int_fieldsQ_SlotG_optional_set_item"
+        ]
+      testCodeGenContains env0 "optional_int_fields"
+        [ "B_optional_float_some(real)"
+        , "B_optional_bool_some(flag)"
+        , "B_optional_i8_some(small)"
+        , "B_optional_u64_some(large)"
+        , "return optional_int_fieldsQ_SlotD___init___optional(self, B_optional_int_from_box(item));"
+        ]
+      testCodeGenDoesNotContain env0 "optional_int_fields"
+        ["toB_int(x)", "toB_float(real)", "toB_bool(flag)", "toB_i8(small)", "toB_u64(large)"]
       testCodeGen env0 ["deact"]
       testCodeGen env0 ["lines"]
       testCodeGen env0 ["chunking"]

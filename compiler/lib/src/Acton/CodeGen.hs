@@ -39,7 +39,7 @@ import System.FilePath.Posix
 import Numeric
 import Data.Bits (shiftR, (.&.))
 import qualified Data.ByteString as BS
-import Data.Char (intToDigit, isSpace)
+import Data.Char (intToDigit, isSpace, toUpper)
 import Data.Word (Word8)
 -- For fast SrcLoc offset->line lookup when emitting #line
 import qualified Data.IntMap.Strict as IM
@@ -198,6 +198,8 @@ genEnv env0                         = setX env0 GenX{ globalX = HashSet.empty,
                                                       closureAdapterDocsX = [],
                                                       stackIteratorsX = [], iteratorWitnessesX = [],
                                                       moduleWitnessesX = Map.empty,
+                                                      optionalLocalsX = Map.empty,
+                                                      optionalParamsX = Map.empty,
                                                       plainClassX = False, freshSelfX = Nothing }
 
 type GenEnv                         = EnvF GenX
@@ -237,6 +239,8 @@ data GenX                           = GenX { globalX :: HashSet.HashSet Name
                                            , stackIteratorsX :: [(Name, StackIteratorSpec)]
                                            , iteratorWitnessesX :: [(Name, Expr)]
                                            , moduleWitnessesX :: Map.Map QName Expr
+                                           , optionalLocalsX :: Map.Map Name Type -- tagged local -> scalar payload type
+                                           , optionalParamsX :: Map.Map Name Type -- private initializer parameters
                                            , plainClassX :: Bool
                                            , freshSelfX :: Maybe Name
                                            }
@@ -651,15 +655,17 @@ decl env (Class _ n q a b ddoc)
   | otherwise                       = (text "struct" <+> classname env n <+> char '{') $+$
                                       nest 4 (vcat $ stdprefix env ++ initdef : serialize env tc : deserialize env tc : meths) $+$
                                       char '}' <> semi $+$
-                                      inst_struct
+                                      optionalFields $+$ inst_struct
   where tc                          = TC (NoQ n) [ tVar v | QBind v _ <- q ]
         initdef : meths             = fields (setInClass env) tc
-        properties                  = [ varsig env n (sctype sc) <> semi | (n, NSig sc Property _) <- fullAttrEnv env tc ]
+        props                       = [ (i,sctype sc) | (i, NSig sc Property _) <- fullAttrEnv env tc ]
+        (optionalFields,properties) = optionalFieldDecls env n a props nativeLayout
         inst_struct | initNotImpl   = empty
                     | otherwise     = (text "struct" <+> genTopName env n <+> char '{') $+$
                                       nest 4 (classlink env n $+$ vcat properties) $+$
                                       char '}' <> semi
         initNotImpl                 = any hasNotImpl [ b' | Decl _ ds <- b, Def{dname=n',dbody=b'} <- ds, n' == initKW ]
+        nativeLayout                = any hasNotImpl [ ss | Decl _ ds <- b, Def{dbody=ss} <- ds ]
 decl env (Def _ n q p _ (Just t) _ _ fx ddoc)
                                     = repType env (exposeMsg fx t) <+> genTopName env n <+> parens (repParams env $ prowOf p) <> semi
 decl env Typedef{}                  = empty
@@ -679,7 +685,8 @@ methstub env Def{}                  = empty
 methstub env Typedef{}              = empty
 
 constub env t n r b
-  | null ns || hasNotImpl b         = rawType env t <+> newcon env n <> parens (rawParams env r) <> semi
+  | null ns || hasNotImpl b         = rawType env t <+> newcon env n <> parens (rawParams env r) <> semi $+$
+                                      optionalConstructorStub env t n r b
   | otherwise                       = empty
   where ns                          = abstractAttrs env (NoQ n)
 
@@ -949,7 +956,8 @@ declDecl env (Class _ n q as b ddoc)
     | isClosureName n               = declClosure env1 n q b'
     | cDefinedClass                 = vcat [ declDecl env1 d{ dname = methodname n (dname d) } | Decl _ ds <- b', d@Def{} <- ds ] $+$
                                       text "struct" <+> classname env n <+> methodtable env n <> semi
-    | otherwise                     = vcat [ declDecl (setPlainClass (null sup_c) env1) d{ dname = methodname n (dname d) } | Decl _ ds <- b', d@Def{} <- ds ] $+$
+    | otherwise                     = optionalInitializer (setPlainClass (null sup_c) env1) n b' $+$
+                                      vcat [ method d | Decl _ ds <- b', d@Def{} <- ds ] $+$
                                       declSerialize env1 n c props sup_c $+$
                                       declDeserialize env1 n c props sup_c $+$
                                       declCleanup env1 n sup_c $+$
@@ -962,6 +970,12 @@ declDecl env (Class _ n q as b ddoc)
         sup_c                       = filter ((`elem` special_repr) . tcname) as
         special_repr                = [primActor] -- To be extended...
         cDefinedClass               = inBuiltin env && any hasNotImpl [b' | Decl _ ds <- b, Def{dname=n',dbody=b'} <- ds, n' == initKW ]
+        method d
+          | dname d == initKW,
+            Just _ <- optionalInitializerDef b',
+            TFun _ _ r _ _ <- sctype $ fst $ schemaOf env (eVar n),
+            optionalConstructorRow r = optionalInitializerAdapter env1 n c d
+          | otherwise               = declDecl (setPlainClass (null sup_c) env1) d{ dname = methodname n (dname d) }
 
 declDecl env Typedef{}              = empty
 
@@ -999,7 +1013,9 @@ declFunctionWithStorage env storage symbol (Def dloc n q p KwdNIL (Just t) b d f
                                       storage <+> t3 <+> symbol <+> parens (genPosPar (setVolVars vs env) n d t1 p) <+> char '{' $+$
                                       nest 4 (stackIteratorDecls env1 $+$ ss') $+$
                                       char '}'
-        env1                        = modX env3 $ \x -> x{ stackIteratorsX = if t2 == tR then [] else stackIteratorLocals env3 b }
+        env1                        = modX env3 $ \x -> x{ stackIteratorsX = if t2 == tR then [] else stackIteratorLocals env3 b,
+                                                         optionalLocalsX = optionalParamsX x `Map.union` Map.fromList
+                                                           [ (v,s) | (v,NVar vt) <- envOf b, Just s <- [optionalScalar vt], v `notElem` bound p ] }
         env3                        = modX env2 $ \x -> x{ iteratorWitnessesX = [ (n,e) | Assign _ [PVar _ n _] e <- b, isWitness n ] }
         env2                        = setFreshSelf freshSelfName $ setMaybeOut mbMaybeOut $ setRet t2 $ ldefine (envOf p) $ defineTVars q env
         freshSelfName
@@ -1131,6 +1147,8 @@ declSerialize env n c props sup_c   = (text "void" <+> genTopName env (methodnam
                    | otherwise      = empty
         super_attrs                 = [ i | c <- sup_c, i <- conAttrs env (tcname c) ]
         step (i,t)
+          | isOptionalScalar t         = gen env primStepSerialize <> parens (optionalFieldName env (NoQ n) "box" i <>
+                                        parens (gen env self) <> comma <+> gen env st) <> semi
           | B.isUnboxable t         = gen env primValSerialize <> parens (text (class_id t) <> comma <+> text "&" <> gen env self <> text "->" <> gen env i <> comma <+> gen env st) <> semi
           | otherwise               = gen env primStepSerialize <> parens (gen env self <> text "->" <> gen env i <> comma <+> gen env st) <> semi 
 
@@ -1149,11 +1167,14 @@ declDeserialize env n c props sup_c = (gen env (tCon c) <+> genTopName env (meth
                                       char '}'
         create                      = gen env self <+> text "=" <+> gen env primDNEW <> parens (genTopName env n <> comma <+> gen env st) <> semi
         alloc                       = gen env self <+> equals <+> acton_malloc env (gname env n) <> semi $+$
-                                      gen env self <> text "->" <> gen env1 classKW <+> equals <+> char '&' <> methodtable env1 n <> semi
+                                      gen env self <> text "->" <> gen env1 classKW <+> equals <+> char '&' <> methodtable env1 n <> semi $+$
+                                      optionalMaskInit env n c (gen env self)
         super_step | [c] <- sup_c   = deserializeSup env (tcname c) <> parens (parens (gen env $ tcname c) <> gen env self <> comma <+> gen env st) <> semi
                    | otherwise      = empty
         super_attrs                 = [ i | c <- sup_c, i <- conAttrs env (tcname c) ]
         step (i,t)
+           | Just s <- optionalScalar t = genOptionalStore env (NoQ n) (gen env self) i
+                                         (optionalHelper s "from_box" <> parens (gen env primStepDeserialize <> parens (gen env st)))
            | B.isUnboxable t        = gen env tmpV <+> text "=" <+> gen env primValDeserialize <> parens (gen env st) <> semi $+$
                                       text "memcpy" <> parens (text "&" <> gen env self <> text "->" <> gen env i <> comma <+> text "&" <> gen env tmpV <> comma <+> text "sizeof" <> parens (gen env self <> text "->" <> gen env i)) <> semi
            -- The --db restore fills objects that an earlier pass allocated
@@ -1183,6 +1204,7 @@ genGetAttr env cname                = case findQName (NoQ cname) env of
           where lit                 = doubleQuotes (text (nstr n))
                 len                 = text "sizeof" <> parens lit <+> text "- 1"
         retval n t
+          | isOptionalScalar t         = optionalFieldName env (NoQ cname) "box" n <> parens (gen env self)
           | B.isUnboxable t         = genBoxed env t (field n)
           | otherwise               = parens (field n)
         field n                     = gen env self <> text "->" <> gen env n
@@ -1568,6 +1590,8 @@ rawRangeArgs _ _                    = Nothing
 missingRangeArg (None _)            = True
 missingRangeArg (Paren _ e)         = missingRangeArg e
 missingRangeArg (Box _ e)           = missingRangeArg e
+missingRangeArg (Call _ f (PosArg e PosNil) KwdNil)
+  | Var _ q <- stripTApp f, q == primCAST = missingRangeArg e
 missingRangeArg _                   = False
 
 presentRangeArg e
@@ -1659,17 +1683,22 @@ builtinIteratorSource env t e
 -- local protocol witnesses rather than exposing a direct method call. Follow
 -- only compiler-created witness bindings, casts and inherited witness fields;
 -- a witness parameter or an arbitrary helper result is deliberately unknown.
-builtinIteratorWitness env seen (Var _ (NoQ n))
+builtinIteratorWitness env seen e
+  | Just (GName m n) <- witnessConstructor env seen e, m == mBuiltin
+                                    = Just (nstr n)
+  | otherwise                       = Nothing
+
+witnessConstructor env seen (Var _ (NoQ n))
   | n `notElem` seen,
     Just e <- lookup n (iteratorWitnessesX $ envX env)
-                                    = builtinIteratorWitness env (n:seen) e
-builtinIteratorWitness env seen (Var _ (NoQ n))
+                                    = witnessConstructor env (n:seen) e
+witnessConstructor env seen (Var _ (NoQ n))
   | isGlobal env n, Just mn <- thismod env
-                                    = builtinIteratorWitness env seen (eQVar $ GName mn n)
-builtinIteratorWitness env seen (Var _ q@(GName mn n))
+                                    = witnessConstructor env seen (eQVar $ GName mn n)
+witnessConstructor env seen (Var _ q@(GName mn n))
   | n `notElem` seen,
     Just e <- Map.lookup q (moduleWitnessesX $ envX env)
-                                    = builtinIteratorWitness env (n:seen) (qualify e)
+                                    = witnessConstructor env (n:seen) (qualify e)
   where -- Aliases in a module initializer refer to module globals even when
         -- a function parameter happens to shadow their original spelling.
         qualify (Var l (NoQ n))     = Var l (GName mn n)
@@ -1680,20 +1709,19 @@ builtinIteratorWitness env seen (Var _ q@(GName mn n))
           | Var _ q <- stripTApp f, q == primCAST
                                     = Call l f (PosArg (qualify e) PosNil) KwdNil
         qualify e                  = e
-builtinIteratorWitness env seen (Paren _ e)
-                                    = builtinIteratorWitness env seen e
-builtinIteratorWitness env seen (Box _ e)
-                                    = builtinIteratorWitness env seen e
-builtinIteratorWitness env seen (Dot _ e _)
-                                    = builtinIteratorWitness env seen e
-builtinIteratorWitness env seen (Call _ f (PosArg e PosNil) KwdNil)
+witnessConstructor env seen (Paren _ e)
+                                    = witnessConstructor env seen e
+witnessConstructor env seen (Box _ e)
+                                    = witnessConstructor env seen e
+witnessConstructor env seen (Dot _ e _)
+                                    = witnessConstructor env seen e
+witnessConstructor env seen (Call _ f (PosArg e PosNil) KwdNil)
   | Var _ q <- stripTApp f, q == primCAST
-                                    = builtinIteratorWitness env seen e
-builtinIteratorWitness env _ (Call _ f _ KwdNil)
+                                    = witnessConstructor env seen e
+witnessConstructor env _ (Call _ f _ KwdNil)
   | Var _ q <- stripTApp f,
-    GName m n <- unalias env q, m == mBuiltin
-                                    = Just (nstr n)
-builtinIteratorWitness _ _ _        = Nothing
+    q'@GName{} <- unalias env q     = Just q'
+witnessConstructor _ _ _           = Nothing
 
 -- Only Normalizer's private for-loop temporaries qualify. A user-visible
 -- iterator may escape even when its creation and use happen in one function.
@@ -1940,11 +1968,251 @@ genNextMaybeLocal env n it ml@(MaybeLocal _ payloadRep)
                                         (PayloadRaw{}, Just _) -> genRangeNextBoolCallOn iterNameDoc (genMaybePayload env n)
                                         (PayloadRaw t, Nothing) -> genArrayNextBoolCallOn env t iterNameDoc (genMaybePayload env n)
 
-genTypeDecl env n t                 = genVolatile env n <+> storageType env t
+-- Optional scalar storage ---------------------------------------------------
+
+-- This is a storage representation, not a new protocol/function ABI. A boxed
+-- optional still crosses generic and native boundaries as a box/NULL. Locals
+-- keep tag and payload together; object fields share presence words below.
+optionalScalar t                   = case boxedRepType t of
+                                        TOpt _ s | B.isUnboxable s -> Just s
+                                        _ -> Nothing
+
+isOptionalScalar                   = isJust . optionalScalar
+
+optionalType s                     = text ("B_Optional" ++ upper (nstr $ noq $ tcname $ tcon s))
+  where upper (c:cs)                = toUpper c : cs
+
+optionalHelper s op                = text ("B_optional_" ++ nstr (noq $ tcname $ tcon s) ++ "_" ++ op)
+
+-- An object's optional payloads share presence words. Each declaring class
+-- owns its words; subclasses copy the inherited declarations in offset order.
+-- The small header macros carry that physical layout across module boundaries,
+-- including generic fields instantiated as optional scalars.
+-- Native-backed classes and closure captures retain their boxed field layout.
+optionalFieldCandidate t
+  | isOptionalScalar t                 = True
+optionalFieldCandidate TVar{}       = True
+optionalFieldCandidate (TOpt _ TVar{}) = True
+optionalFieldCandidate _            = False
+
+optionalFieldName env q op field    = gen env (unalias env q) <> text ("G_optional_" ++ op ++ "_") <> gen env field
+
+optionalInitName env q             = gen env (unalias env q) <> text "G_optional_init"
+
+optionalFieldDecls env n parents props native
+  | isClosureName n                 = (empty, [varsig env i t <> semi | (i,t) <- props])
+  | otherwise                       = (vcat [definitions i t | (i,t) <- candidates] $+$ initDef,
+                                       [declaration i t | (i,t) <- props])
+  where q                           = NoQ n
+        owners                      = Map.fromList [(i,c) | (i,_) <- props,
+                                        Just c <- [listToMaybe [c | c <- parents, hasAttr env c i]]]
+        parent i                    = Map.lookup i owners
+        candidates                  = filter (optionalFieldCandidate . snd) props
+        payloads                    = Map.fromList [(i,s) | (i,t) <- props, Just s <- [optionalScalar t]]
+        packed                      = [i | (i,t) <- props, isOptionalScalar t, not native, isNothing (parent i)]
+        positions                   = Map.fromList (zip packed [0 :: Int ..])
+        position i                  = Map.lookup i positions
+        mask p                      = text "$optional_" <> genTopName env n <> char '_' <> pretty (p `div` 64)
+        bit p                       = text "UINT64_C(1)" <+> text "<<" <+> pretty (p `mod` 64)
+        field op i                  = optionalFieldName env q op i
+        parentField c op i          = optionalFieldName env (tcname c) op i
+        macro nm args body          = text "#define" <+> nm <> args <+> body
+        object                      = text "$opt_obj"
+        value                       = text "$opt_value"
+        objField i                  = object <> text "->" <> gen env i
+        typedObject                 = genTopName env n <+> object <+> text "= ($receiver);"
+        getter body                 = text "({" <+> typedObject <+> body <> semi <+> text "})"
+        setter body                 = text "do { __auto_type" <+> value <+> text "= ($input);" <+>
+                                      typedObject <+> body <+> text "} while (0)"
+        packedDecl i p              = [text "uint64_t" <+> mask p <> semi | p `mod` 64 == 0] ++
+                                      [rawType env (payloads Map.! i) <+> gen env i <> semi]
+        declaration i t
+          | optionalFieldCandidate t, Just _ <- parent i
+                                    = field "layout" i
+          | Just p <- position i    = vcat (packedDecl i p)
+          | otherwise               = varsig env i t <> semi
+        definitions i t
+          | Just c <- parent i      = text "#ifdef" <+> parentField c "layout" i $+$
+                                      macro (field "layout" i) empty (parentField c "layout" i) $+$
+                                      macro (field "get" i) (text "($receiver)") (delegate c "get" i False) $+$
+                                      macro (field "box" i) (text "($receiver)") (delegate c "box" i False) $+$
+                                      macro (field "set" i) (text "($receiver, $input)") (delegate c "set" i True) $+$
+                                      macro (field "init" i) (text "($receiver)") (delegate c "init" i False) $+$
+                                      text "#else" $+$ boxed i (inheritedDecl c i) $+$ text "#endif"
+          | Just p <- position i    = macro (field "layout" i) empty (hsep $ packedDecl i p) $+$
+                                      macro (field "get" i) (text "($receiver)")
+                                        (getter $ optionalHelper (fromJust $ optionalScalar t) "load_packed" <> parens
+                                          (char '&' <> objField i <> comma <+> char '&' <> object <> text "->" <> mask p <> comma <+> parens (bit p))) $+$
+                                      macro (field "box" i) (text "($receiver)")
+                                        (optionalHelper (fromJust $ optionalScalar t) "box" <> parens (field "get" i <> text "($receiver)")) $+$
+                                      macro (field "set" i) (text "($receiver, $input)")
+                                        (setter $ optionalHelper (fromJust $ optionalScalar t) "store_packed" <> parens
+                                          (char '&' <> objField i <> comma <+> char '&' <> object <> text "->" <> mask p <> comma <+>
+                                           parens (bit p) <> comma <+> value) <> semi) $+$
+                                      macro (field "init" i) (text "($receiver)")
+                                        (if p `mod` 64 == 0 then parens (parens (genTopName env n) <> text "($receiver)") <>
+                                          text "->" <> mask p <+> text "= 0" else text "((void)0)")
+          | otherwise               = boxed i (varsig env i t <> semi)
+        inheritedDecl c i           = text "__typeof__" <> parens (parens (parens (gen env (tCon c)) <> text "0") <>
+                                      text "->" <> gen env i) <+> gen env i <> semi
+        delegate c op i withValue   = parentField c op i <> parens
+                                      (parens (gen env (tCon c)) <> text "($receiver)" <> if withValue then text ", ($input)" else empty)
+        boxed i layout              = macro (field "layout" i) empty layout $+$
+                                      macro (field "get" i) (text "($receiver)")
+                                        (getter $ objField i) $+$
+                                      macro (field "box" i) (text "($receiver)")
+                                        (getter $ text "B_optional_box_field" <> parens (objField i)) $+$
+                                      macro (field "set" i) (text "($receiver, $input)")
+                                        (setter $ text "B_optional_store_field" <> parens
+                                          (object <> comma <+> gen env i <> comma <+> value) <> semi) $+$
+                                      macro (field "init" i) (text "($receiver)") (text "((void)0)")
+        initDef
+          | null candidates         = empty
+          | otherwise               = macro (optionalInitName env q) (text "($receiver)")
+                                      (text "do {" <+> hsep [field "init" i <> text "($receiver);" | (i,_) <- candidates] <+> text "} while (0)")
+
+optionalMaskInit env n tc receiver
+  | not (isClosureName n), any (optionalFieldCandidate . snd) props
+                                    = optionalInitName env (NoQ n) <> parens receiver <> semi
+  | otherwise                       = empty
+  where props                       = [(i,sctype sc) | (i,NSig sc Property _) <- fullAttrEnv env tc]
+
+optionalReceiverClass env e
+  | TCon _ (TC q _) <- typeOf env e,
+    not (isClosureName (noq q)),
+    GName m _ <- unalias env q, m /= mPrim = Just q
+  | otherwise                       = Nothing
+
+-- A generic getter returns a box; a packed getter returns a tagged scalar.
+-- The concrete use selects its converter from the getter's actual C type.
+genOptionalField env op recv field = convert actual
+  where actual
+          | Just q <- optionalReceiverClass env recv
+                                    = optionalFieldName env q op field <> parens (genReceiver env recv)
+          | op == "box"             = text "B_optional_box_field" <> parens (genDot env [] recv field)
+          | otherwise               = genDot env [] recv field
+        convert d
+          | op == "get",
+            Just s <- optionalScalar (typeOf env $ Dot NoLoc recv field)
+                                    = optionalHelper s "load" <> parens d
+          | otherwise               = d
+
+optionalLocal env n                = Map.member n (optionalLocalsX $ envX env)
+
+optionalLocalScalar env n          = fromJust $ Map.lookup n (optionalLocalsX $ envX env)
+
+optionalConstructorRow (TRow _ _ _ t _ r)
+                                    = isOptionalScalar t || optionalConstructorRow r
+optionalConstructorRow _           = False
+
+optionalConstructorName env n       = newcon env n <> text "_optional"
+
+optionalConstructorPars env r       = commaSep id
+                                      [ maybe (storageType env t) optionalType (optionalScalar t) <+> gen env n
+                                        | (n,t) <- zip paramNames (rowTypes r) ]
+
+rowTypes (TRow _ _ _ t _ r)        = t : rowTypes r
+rowTypes _                         = []
+
+optionalInitializerDef b            = listToMaybe [ d | Decl _ ds <- b, d@Def{dname=i,ann=Just t,dbody=ss} <- ds,
+                                                        i == initKW, t == tNone, not (hasNotImpl ss) ]
+
+-- Non-builtin classes with concrete optional-scalar constructor arguments expose
+-- a raw entry name. Native/inherited initializers bridge to their existing
+-- ABI; an Acton initializer can consume the tagged arguments directly.
+optionalConstructorStub env t n r b
+  | inBuiltin env || isClosureName n || not (optionalConstructorRow r) = empty
+  | Just _ <- optionalInitializerDef b
+                                    = rawType env t <+> optionalConstructorName env n <> parens (optionalConstructorPars env r) <> semi
+  | otherwise                       = text "static inline" <+> rawType env t <+> optionalConstructorName env n <>
+                                      parens (optionalConstructorPars env r) <+> lbrace $+$
+                                      nest 4 (text "return" <+> newcon env n <> parens (commaSep id args) <> semi) $+$ rbrace
+  where args                        = [ maybe v (\s -> optionalHelper s "box" <> parens v) (optionalScalar ty)
+                                        | (pn,ty) <- zip paramNames (rowTypes r), let v = gen env pn ]
+
+optionalInitializer env n b
+  | not (isClosureName n),
+    Just d <- optionalInitializerDef b,
+    TFun _ _ r _ _ <- sctype $ fst $ schemaOf env (eVar n),
+    optionalConstructorRow r        = let env' = modX env $ \x -> x{ optionalParamsX = Map.fromList
+                                                                [ (v,s) | (v,NVar t) <- envOf (pos d), Just s <- [optionalScalar t] ] }
+                                     in declFunctionWithStorage env' (text "static") symbol d{dname=methodname n initKW}
+    where symbol                    = genTopName env (methodname n initKW) <> text "_optional"
+optionalInitializer _ _ _          = empty
+
+-- Keep one initializer body. Its ordinary method-table entry only adapts the
+-- existing boxed optional ABI to the private worker's tagged arguments.
+optionalInitializerAdapter env n tc d
+                                    = gen env tNone <+> genTopName env meth <+>
+                                      parens (genPosPar env meth (deco d) (B.rtypeOf env tc initKW) (pos d)) <+> lbrace $+$
+                                      nest 4 (text "return" <+> genTopName env meth <> text "_optional" <>
+                                        parens (commaSep id $ arguments $ pos d) <> semi) $+$ rbrace
+  where meth                        = methodname n initKW
+        arguments PosNIL            = []
+        arguments (PosPar pn (Just t) _ rest)
+                                    = maybe v (\s -> optionalHelper s "from_box" <> parens v) (optionalScalar t) : arguments rest
+          where v                   = gen env pn
+
+genOptionalRaw env s (None _)      = optionalHelper s "none" <> text "()"
+genOptionalRaw env s (Paren _ e)   = parens (genOptionalRaw env s e)
+genOptionalRaw env s (Box t e)
+  | boxedRepType t == s             = optionalHelper s "some" <> parens (genRawExprAs env s e)
+genOptionalRaw env s (Var _ (NoQ n))
+  | optionalLocal env n             = gen env (NoQ n)
+genOptionalRaw env s e@(Dot _ recv field)
+  | isOptionalScalar (typeOf env e)    = genOptionalField env "get" recv field
+genOptionalRaw env s (Call _ f (PosArg e PosNil) KwdNil)
+  | Var _ q <- stripTApp f, q == primCAST
+                                    = genOptionalRaw env s e
+genOptionalRaw env s (Cond _ yes condition no)
+                                    = parens (genRawExprAs env tBool condition <+> text "?" <+>
+                                              genOptionalRaw env s yes <+> text ":" <+> genOptionalRaw env s no)
+genOptionalRaw env s e
+  | boxedRepType (typeOf env e) == s
+                                    = optionalHelper s "some" <> parens (genRawExprAs env s e)
+  | otherwise                       = optionalHelper s "from_box" <> parens (gen env e)
+
+genOptionalPayload env s e         = castRawResult s (parens (genOptionalRaw env s e) <> text ".value")
+
+-- Narrowing inserts a cast from ?T to T. Read the stored payload at that cast,
+-- without constructing a scalar box just to unbox it again.
+optionalNarrowed env (Call _ f (PosArg e PosNil) KwdNil)
+  | Var _ q <- stripTApp f, q == primCAST,
+    Just s <- optionalScalar (typeOf env e) = Just (s,e)
+optionalNarrowed env (Box _ e)  = optionalNarrowed env e
+optionalNarrowed env (Paren _ e)= optionalNarrowed env e
+optionalNarrowed _ _           = Nothing
+
+-- Both identity tests and optional equality against None depend only on the
+-- tag; the present-value Eq implementation is never called in this case.
+optionalPresence env (Call _ f (PosArg e PosNil) KwdNil)
+  | Var _ q <- stripTApp f,
+    q `elem` [primISNONE,primISNONE0,primISNOTNONE,primISNOTNONE0],
+    Just s <- optionalScalar (typeOf env e) = Just $ tag s (q `elem` [primISNOTNONE,primISNOTNONE0]) e
+  where tag s present e             = (if present then id else (char '!' <>)) (parens (genOptionalRaw env s e) <> text ".present")
+optionalPresence env (Call _ f p KwdNil)
+  | Dot _ wit@Var{} op <- stripTApp f, op `elem` [eqKW,neKW],
+    Just ctor <- witnessConstructor env [] wit, ctor == primEqOpt,
+    [x,y] <- posargs p,
+    Just e <- if missingRangeArg x then Just y else if missingRangeArg y then Just x else Nothing,
+    Just s <- optionalScalar (typeOf env e) = Just $ (if op == neKW then id else (char '!' <>))
+                                           (parens (genOptionalRaw env s e) <> text ".present")
+optionalPresence env (Box _ e)  = optionalPresence env e
+optionalPresence _ _           = Nothing
+
+genOptionalStore env q recv field value
+                                    = optionalFieldName env q "set" field <> parens (recv <> comma <+> value) <> semi
+
+genTypeDecl env n t                 = genVolatile env n <+>
+                                      maybe (storageType env t) optionalType
+                                        (Map.lookup n $ optionalLocalsX (envX env) `Map.union` optionalParamsX (envX env))
 
 genVolatile env n                   = if isVolVar n env then text "volatile" else empty
 
 genStmt env (Decl _ ds)             = (empty, [])
+genStmt env (Assign _ [PVar _ n (Just t)] e)
+  | optionalLocal env n         = ((if n `HashSet.member` localDefined env then empty else genTypeDecl env n t) <+>
+                                       gen env n <+> equals <+> genOptionalRaw env (optionalLocalScalar env n) e <> semi, [])
 genStmt env s
   | Just (n, it, ml) <- nextMaybeLocal env s
                                     = (genNextMaybeLocal env n it ml, [])
@@ -1995,6 +2263,8 @@ instance Gen Stmt where
       | isRAISE e                   = (genExp' env e <> semi $+$ text "__builtin_unreachable();" , [])
     genV env (Expr _ e)             = (genExp' env e <> semi, [])
     genV env (Assign _ [p] e)
+        | PVar _ n _ <- p, optionalLocal env n
+                                    = (gen env n <+> equals <+> genOptionalRaw env (optionalLocalScalar env n) e <> semi, [])
         | isUnboxedRep t            = (gen env p <+> equals <+> gen env e <> semi, [])
         | otherwise                 = (gen env p <+> equals <+> genExp env t e <> semi, [])
 
@@ -2006,6 +2276,14 @@ instance Gen Stmt where
     genV env (AugAssign _ tg op e)  = (genTarget env tg <+> augPretty op <+> genExp env t e <> semi, [])
       where t                       = targetType env tg
     genV env (MutAssign _ tg e)
+      | Var _ (NoQ n) <- tg, optionalLocal env n
+                                    = (gen env n <+> equals <+> genOptionalRaw env (optionalLocalScalar env n) e <> semi, [])
+      | Dot _ r a <- tg, Just s <- optionalScalar t
+                                    = (case optionalReceiverClass env r of
+                                         Just q -> genOptionalStore env q (genReceiver env r) a (genOptionalRaw env s e)
+                                         -- Primitive cells and closure captures retain
+                                         -- boxed slots. Keep an existing box intact.
+                                         Nothing -> genStoreAttr env (genReceiver env r) a rhs, [])
       | Dot _ r a <- tg,
         needsWriteBarrier env r t e = (genStoreAttr env (genReceiver env r) a rhs, [])
       | otherwise                   = (genTarget env tg <+> equals <+> rhs <> semi, [])
@@ -2175,6 +2453,8 @@ genRawExpr env e
 -- needed when the expression's own source type is boxed or optional, but the
 -- surrounding context has established that the C value must be raw.
 genRawExprAs env t e
+  | Just (s,source) <- optionalNarrowed env e,
+    boxedRepType t == s            = genOptionalPayload env s source
   | Just n <- maybeJustValueExpr env e
                                     = genMaybePayloadRaw env t n
   | rawExpr env e                   = gen env e
@@ -2606,8 +2886,18 @@ genNew env n p
   | Just spec <- sharedClosureSpec env n = parens (parens (gen env $ unalias env n) <>
                                       (sharedPayload spec <> text "_new") <> parens
                                         (char '&' <> closureDescriptor env n <> comma' (gen env p)))
+  | not (isClosureName (noq n)), not nativeBuiltin, optionalConstructorRow r
+                                    = newcon' env n <> text "_optional" <> parens (rawOptionalArgs r p)
   | otherwise                       = newcon' env n <> parens (genUCallPosArgs env r p)
   where TFun _ _ r _ _              = sctype $ fst $ schemaOf env (Var NoLoc n)
+        -- Builtin constructors keep their native boxed optional ABI. In
+        -- particular, do not unbox an existing bound only to box it again in
+        -- an adapter (escaping slice descriptors must retain those boxes).
+        nativeBuiltin               = case unalias env n of GName m _ -> m == mBuiltin; _ -> False
+        rawOptionalArgs (TRow _ _ _ t _ rest) (PosArg e args)
+                                    = (maybe (genUCallArg env t e) (\s -> genOptionalRaw env s e) (optionalScalar t)) <>
+                                      comma' (rawOptionalArgs rest args)
+        rawOptionalArgs _ _         = empty
 
 -- Builtin fixed-width numeric constructors can consume their argument in its
 -- raw representation.  This avoids boxing followed by atom inspection; an
@@ -2617,8 +2907,9 @@ genRawNumericConstructor env dst (PosArg e PosNil)
     dst == tFloat,
     src == tFloat || src `elem` fixedIntegralTypes
                                     = Just $ genRawNumericCast env src tFloat e'
-genRawNumericConstructor env dst (PosArg e (PosArg (None _) PosNil))
-  | Just (src, e') <- rawNumericSource env e,
+genRawNumericConstructor env dst (PosArg e (PosArg none PosNil))
+  | missingRangeArg none,
+    Just (src, e') <- rawNumericSource env e,
     dst `elem` fixedIntegralTypes,
     src `elem` fixedIntegralTypes   = Just $ genRawNumericCast env src dst e'
 genRawNumericConstructor _ _ _      = Nothing
@@ -2710,9 +3001,10 @@ declCon env n q b
   | null abstr || hasNotImpl b      = (gen env tRes <+> newcon env n <> parens (gen env pars) <+> char '{') $+$
                                       nest 4 (gen env tObj <+> gen env tmpV <+> equals <+> acton_malloc env (gname env n) <> semi $+$
                                               gen env tmpV <> text "->" <> gen env1 classKW <+> equals <+> char '&' <> methodtable env1 n <> semi $+$
+                                              optionalMaskInit env n tc (gen env tmpV) $+$
                                               altcall $+$
                                               initcall) $+$
-                                      char '}'
+                                      char '}' $+$ optionalCon
   | otherwise                       = empty
   where TFun _ fx r _ t             = sctype $ fst $ schemaOf env (eVar n)
         tc                          = TC (NoQ n) (map tVar $ qbound q)
@@ -2733,6 +3025,27 @@ declCon env n q b
         retobj (PosArg e p)         = PosArg (eCall (tApp (eQVar primCONSTCONT) [tObj]) [eVar tmpV, e]) p
         env1                        = ldefine ((tmpV, NVar tObj) : envOf pars) env
         abstr                       = abstractAttrs env (NoQ n)
+        optionalCon
+          | not (isClosureName n), optionalConstructorRow r,
+            Just _ <- optionalInitializerDef b
+                                    = gen env tRes <+> optionalConstructorName env n <>
+                                      parens (optionalConstructorPars env r) <+> lbrace $+$
+                                      nest 4 (gen env tObj <+> gen env tmpV <+> equals <+> acton_malloc env (gname env n) <> semi $+$
+                                              gen env tmpV <> text "->$class = &" <> methodtable env n <> semi $+$
+                                              optionalMaskInit env n tc (gen env tmpV) $+$
+                                              optionalAlt $+$
+                                              genTopName env (methodname n initKW) <> text "_optional" <>
+                                                parens (gen env tmpV <> comma' (commaSep (gen env) (bound pars))) <> semi $+$
+                                              text "return" <+> gen env tmpV <> semi) $+$ rbrace
+          | otherwise               = empty
+        optionalAlt
+          | Just (_,sc,_) <- findAttr env tc altInit
+                                    = methodtable env n <> dot <> gen env altInit <>
+                                      parens (gen env tmpV <> comma' (commaSep id
+                                        [ maybe v (\s -> optionalHelper s "box" <> parens v) (optionalScalar ty)
+                                          | (pn,ty) <- take (arity $ posrow $ sctype sc) (zip paramNames (rowTypes r)),
+                                            let v = gen env pn ])) <> semi
+          | otherwise               = empty
 
 acton_malloc env n                  = text "acton_malloc" <> parens (structSize env n)
 
@@ -2836,6 +3149,8 @@ adjust t t' e
   | t == t'                         = e
 adjust (TUnboxed _ t) t' e          = adjust t t' e
 adjust t (TUnboxed _ t') e          = adjust t t' e
+adjust t@TNone{} t'@TOpt{} e
+  | not (missingRangeArg e)          = typecast t t' e
 adjust (TOpt _ t) t' e              = adjust t t' e
 adjust t (TOpt _ t') e              = adjust t t' e
 adjust TNone{} t' e                 = e
@@ -2949,6 +3264,8 @@ genTemporarySlice _ _              = Nothing
 
 instance Gen Expr where
     gen env (Var _ (NoQ n))
+      | optionalLocal env n        = optionalHelper (optionalLocalScalar env n) "box" <> parens (gen env (NoQ n))
+    gen env (Var _ (NoQ n))
       | Just ml <- maybeLocal env n = genMaterializedMaybe env n ml
     gen env (Var _ (NoQ n))
       | rangeIter env n             = parens (gen env (tIterator tInt)) <> gen env (NoQ n)
@@ -2984,6 +3301,9 @@ instance Gen Expr where
     gen env (Call l  (TApp _ e@(Var _ mk) _) p@(PosArg w (PosArg (Dict _ es) PosNil)) KwdNil)
       | mk == primMkDict            = text "B_mk_dict" <> parens (pretty (length es) <> comma <+> gen env w <>  hsep [comma <+> gen env e | e <- es])
     gen env c@Call{}
+      | Just d <- optionalPresence env c
+                                    = if rawExpr env c then d else genBoxed env tBool d
+    gen env c@Call{}
       | Just args <- rawRangeArgs env c
                                     = genRawRangeNew env args
     gen env c@(Call _ f p KwdNil)
@@ -3005,6 +3325,9 @@ instance Gen Expr where
     gen env e@(Dot _ _ _)
       | Just n <- maybeJustValueExpr env e
                                     = genMaybePayloadBoxed env n
+    gen env d@(Dot _ e n)
+      | isOptionalScalar (typeOf env d)
+                                    = genOptionalField env "box" e n
     gen env (Dot _ e n)             = genDot env [] e n
     gen env e0@(DotI _ e i)         = parens $ parens (parens (gen env t) <> parens (gen env e)) <> text "->" <> gen env componentsKW <> brackets (pretty i)
       where t                       = boxedRepType (typeOf env e)
@@ -3066,6 +3389,12 @@ instance Gen Expr where
     gen env (Box t e)
       | boxedExpr env e             = gen env e
       | otherwise                   = genBoxed env t (gen env e)
+    gen env (UnBox t e)
+      | boxedRepType t == tBool,
+        Just d <- optionalPresence env e
+                                    = d
+      | Just (s,source) <- optionalNarrowed env e,
+        boxedRepType t == s         = genOptionalPayload env s source
     gen env (UnBox t (Call _ f p KwdNil))
         | callIsClass env f,
           Just d <- genRawNumericConstructor env (boxedRepType t) p

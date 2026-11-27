@@ -1,0 +1,495 @@
+# Mixed optional scalars share one word while preserving their distinct types.
+class Scalars(object):
+    integer: ?int
+    real: ?float
+    flag: ?bool
+    si32: ?i32
+    si16: ?i16
+    si8: ?i8
+    ui64: ?u64
+    ui32: ?u32
+    ui16: ?u16
+    ui8: ?u8
+    bit: ?u1
+    def __init__(self, integer: ?int, real: ?float, flag: ?bool, si32: ?i32, si16: ?i16, si8: ?i8, ui64: ?u64, ui32: ?u32, ui16: ?u16, ui8: ?u8, bit: ?u1):
+        self.integer = integer
+        self.real = real
+        self.flag = flag
+        self.si32 = si32
+        self.si16 = si16
+        self.si8 = si8
+        self.ui64 = ui64
+        self.ui32 = ui32
+        self.ui16 = ui16
+        self.ui8 = ui8
+        self.bit = bit
+
+class Generic[A](object):
+    item: A
+    def __init__(self, item: A):
+        self.item = item
+
+class Derived(Generic[?float]):
+    flag: ?bool
+    def __init__(self, item: ?float, flag: ?bool):
+        Generic.__init__(self, item)
+        self.flag = flag
+
+class Native(object):
+    item: ?float
+    def __init__(self, item: ?float):
+        self.item = item
+    def read(self) -> ?float:
+        NotImplemented
+
+def identity[A](item: A) -> A:
+    return item
+
+def round_trip[A](item: A) -> A:
+    NotImplemented
+
+def captured[A](item: ?A) -> pure() -> ?A:
+    local = item
+    return lambda: local
+
+def float_sample(index: int) -> ?float:
+    NotImplemented
+
+def expected_bits(index: int) -> u64:
+    NotImplemented
+
+def float_bits(item: ?float) -> u64:
+    NotImplemented
+
+def layout_checks() -> bool:
+    NotImplemented
+
+def narrow_int(item: ?int) -> int:
+    local = item
+    if local is not None:
+        return local
+    return 0
+
+def capture_int(item: ?int) -> pure() -> ?int:
+    local = item
+    return lambda: local
+
+def narrow_float(item: ?float) -> float:
+    local = item
+    if local is not None:
+        return local
+    return 0.0
+
+def capture_float(item: ?float) -> pure() -> ?float:
+    local = item
+    return lambda: local
+
+def narrow_bool(item: ?bool) -> bool:
+    local = item
+    if local is not None:
+        return local
+    return False
+
+def capture_bool(item: ?bool) -> pure() -> ?bool:
+    local = item
+    return lambda: local
+
+def narrow_i32(item: ?i32) -> i32:
+    local = item
+    if local is not None:
+        return local
+    return i32(0)
+
+def capture_i32(item: ?i32) -> pure() -> ?i32:
+    local = item
+    return lambda: local
+
+def narrow_i16(item: ?i16) -> i16:
+    local = item
+    if local is not None:
+        return local
+    return i16(0)
+
+def capture_i16(item: ?i16) -> pure() -> ?i16:
+    local = item
+    return lambda: local
+
+def narrow_i8(item: ?i8) -> i8:
+    local = item
+    if local is not None:
+        return local
+    return i8(0)
+
+def capture_i8(item: ?i8) -> pure() -> ?i8:
+    local = item
+    return lambda: local
+
+def narrow_u64(item: ?u64) -> u64:
+    local = item
+    if local is not None:
+        return local
+    return u64(0)
+
+def capture_u64(item: ?u64) -> pure() -> ?u64:
+    local = item
+    return lambda: local
+
+def narrow_u32(item: ?u32) -> u32:
+    local = item
+    if local is not None:
+        return local
+    return u32(0)
+
+def capture_u32(item: ?u32) -> pure() -> ?u32:
+    local = item
+    return lambda: local
+
+def narrow_u16(item: ?u16) -> u16:
+    local = item
+    if local is not None:
+        return local
+    return u16(0)
+
+def capture_u16(item: ?u16) -> pure() -> ?u16:
+    local = item
+    return lambda: local
+
+def narrow_u8(item: ?u8) -> u8:
+    local = item
+    if local is not None:
+        return local
+    return u8(0)
+
+def capture_u8(item: ?u8) -> pure() -> ?u8:
+    local = item
+    return lambda: local
+
+def narrow_u1(item: ?u1) -> u1:
+    local = item
+    if local is not None:
+        return local
+    return u1(0)
+
+def capture_u1(item: ?u1) -> pure() -> ?u1:
+    local = item
+    return lambda: local
+
+def local_bool(take: bool) -> ?bool:
+    item: ?bool = False if take else None
+    return item
+
+def local_float(take: bool) -> ?float:
+    item: ?float = 1.25
+    if not take:
+        item = None
+    return item
+
+def exception_float() -> float:
+    item: ?float = None
+    try:
+        item = 2.5
+        raise ValueError("expected")
+    except ValueError:
+        if item is not None:
+            return item
+    return 0.0
+
+actor Echo():
+    var real: ?float = None
+    var flag: ?bool = None
+    proc def set(next_real: ?float, next_flag: ?bool):
+        real = next_real
+        flag = next_flag
+    proc def get() -> (?float, ?bool):
+        return (real, flag)
+
+actor main(env):
+    proc def __startup__():
+        item = Scalars(None, None, None, None, None, None, None, None, None, None, None)
+        values_int: list[?int] = [None, 0, -1, 1000, -9223372036854775808, 9223372036854775807]
+        for original_int in values_int:
+            constructed = Scalars(original_int, None, None, None, None, None, None, None, None, None, None)
+            assert constructed.integer == original_int
+            item.integer = original_int
+            assert item.integer == original_int
+            assert identity(item.integer) == original_int
+            assert captured(item.integer)() == original_int
+            assert capture_int(item.integer)() == original_int
+            assert round_trip(capture_int(item.integer))() == original_int
+            assert round_trip(item).integer == original_int
+            generic = Generic(item.integer)
+            assert generic.item == original_int
+            reflected = item.__get_attr__("integer")
+            if original_int is not None:
+                assert narrow_int(item.integer) == original_int
+                if isinstance(reflected, int):
+                    assert reflected == original_int
+                else:
+                    raise ValueError("wrong reflected int")
+            else:
+                assert reflected is None
+        values_float: list[?float] = [None, 0.0, 1.25, -3.5]
+        for original_float in values_float:
+            constructed = Scalars(None, original_float, None, None, None, None, None, None, None, None, None)
+            assert constructed.real == original_float
+            item.real = original_float
+            assert item.real == original_float
+            assert identity(item.real) == original_float
+            assert captured(item.real)() == original_float
+            assert capture_float(item.real)() == original_float
+            assert round_trip(capture_float(item.real))() == original_float
+            assert round_trip(item).real == original_float
+            generic = Generic(item.real)
+            assert generic.item == original_float
+            reflected = item.__get_attr__("real")
+            if original_float is not None:
+                assert narrow_float(item.real) == original_float
+                if isinstance(reflected, float):
+                    assert reflected == original_float
+                else:
+                    raise ValueError("wrong reflected float")
+            else:
+                assert reflected is None
+        values_bool: list[?bool] = [None, False, True]
+        for original_bool in values_bool:
+            constructed = Scalars(None, None, original_bool, None, None, None, None, None, None, None, None)
+            assert constructed.flag == original_bool
+            item.flag = original_bool
+            assert item.flag == original_bool
+            assert identity(item.flag) == original_bool
+            assert captured(item.flag)() == original_bool
+            assert capture_bool(item.flag)() == original_bool
+            assert round_trip(capture_bool(item.flag))() == original_bool
+            assert round_trip(item).flag == original_bool
+            generic = Generic(item.flag)
+            assert generic.item == original_bool
+            reflected = item.__get_attr__("flag")
+            if original_bool is not None:
+                assert narrow_bool(item.flag) == original_bool
+                if isinstance(reflected, bool):
+                    assert reflected == original_bool
+                else:
+                    raise ValueError("wrong reflected bool")
+            else:
+                assert reflected is None
+        values_i32: list[?i32] = [None, i32(0), i32(-2147483648), i32(2147483647)]
+        for original_i32 in values_i32:
+            constructed = Scalars(None, None, None, original_i32, None, None, None, None, None, None, None)
+            assert constructed.si32 == original_i32
+            item.si32 = original_i32
+            assert item.si32 == original_i32
+            assert identity(item.si32) == original_i32
+            assert captured(item.si32)() == original_i32
+            assert capture_i32(item.si32)() == original_i32
+            assert round_trip(capture_i32(item.si32))() == original_i32
+            assert round_trip(item).si32 == original_i32
+            generic = Generic(item.si32)
+            assert generic.item == original_i32
+            reflected = item.__get_attr__("si32")
+            if original_i32 is not None:
+                assert narrow_i32(item.si32) == original_i32
+                if isinstance(reflected, i32):
+                    assert reflected == original_i32
+                else:
+                    raise ValueError("wrong reflected i32")
+            else:
+                assert reflected is None
+        values_i16: list[?i16] = [None, i16(0), i16(-32768), i16(32767)]
+        for original_i16 in values_i16:
+            constructed = Scalars(None, None, None, None, original_i16, None, None, None, None, None, None)
+            assert constructed.si16 == original_i16
+            item.si16 = original_i16
+            assert item.si16 == original_i16
+            assert identity(item.si16) == original_i16
+            assert captured(item.si16)() == original_i16
+            assert capture_i16(item.si16)() == original_i16
+            assert round_trip(capture_i16(item.si16))() == original_i16
+            assert round_trip(item).si16 == original_i16
+            generic = Generic(item.si16)
+            assert generic.item == original_i16
+            reflected = item.__get_attr__("si16")
+            if original_i16 is not None:
+                assert narrow_i16(item.si16) == original_i16
+                if isinstance(reflected, i16):
+                    assert reflected == original_i16
+                else:
+                    raise ValueError("wrong reflected i16")
+            else:
+                assert reflected is None
+        values_i8: list[?i8] = [None, i8(0), i8(-128), i8(127)]
+        for original_i8 in values_i8:
+            constructed = Scalars(None, None, None, None, None, original_i8, None, None, None, None, None)
+            assert constructed.si8 == original_i8
+            item.si8 = original_i8
+            assert item.si8 == original_i8
+            assert identity(item.si8) == original_i8
+            assert captured(item.si8)() == original_i8
+            assert capture_i8(item.si8)() == original_i8
+            assert round_trip(capture_i8(item.si8))() == original_i8
+            assert round_trip(item).si8 == original_i8
+            generic = Generic(item.si8)
+            assert generic.item == original_i8
+            reflected = item.__get_attr__("si8")
+            if original_i8 is not None:
+                assert narrow_i8(item.si8) == original_i8
+                if isinstance(reflected, i8):
+                    assert reflected == original_i8
+                else:
+                    raise ValueError("wrong reflected i8")
+            else:
+                assert reflected is None
+        values_u64: list[?u64] = [None, u64(0), u64(18446744073709551615)]
+        for original_u64 in values_u64:
+            constructed = Scalars(None, None, None, None, None, None, original_u64, None, None, None, None)
+            assert constructed.ui64 == original_u64
+            item.ui64 = original_u64
+            assert item.ui64 == original_u64
+            assert identity(item.ui64) == original_u64
+            assert captured(item.ui64)() == original_u64
+            assert capture_u64(item.ui64)() == original_u64
+            assert round_trip(capture_u64(item.ui64))() == original_u64
+            assert round_trip(item).ui64 == original_u64
+            generic = Generic(item.ui64)
+            assert generic.item == original_u64
+            reflected = item.__get_attr__("ui64")
+            if original_u64 is not None:
+                assert narrow_u64(item.ui64) == original_u64
+                if isinstance(reflected, u64):
+                    assert reflected == original_u64
+                else:
+                    raise ValueError("wrong reflected u64")
+            else:
+                assert reflected is None
+        values_u32: list[?u32] = [None, u32(0), u32(4294967295)]
+        for original_u32 in values_u32:
+            constructed = Scalars(None, None, None, None, None, None, None, original_u32, None, None, None)
+            assert constructed.ui32 == original_u32
+            item.ui32 = original_u32
+            assert item.ui32 == original_u32
+            assert identity(item.ui32) == original_u32
+            assert captured(item.ui32)() == original_u32
+            assert capture_u32(item.ui32)() == original_u32
+            assert round_trip(capture_u32(item.ui32))() == original_u32
+            assert round_trip(item).ui32 == original_u32
+            generic = Generic(item.ui32)
+            assert generic.item == original_u32
+            reflected = item.__get_attr__("ui32")
+            if original_u32 is not None:
+                assert narrow_u32(item.ui32) == original_u32
+                if isinstance(reflected, u32):
+                    assert reflected == original_u32
+                else:
+                    raise ValueError("wrong reflected u32")
+            else:
+                assert reflected is None
+        values_u16: list[?u16] = [None, u16(0), u16(65535)]
+        for original_u16 in values_u16:
+            constructed = Scalars(None, None, None, None, None, None, None, None, original_u16, None, None)
+            assert constructed.ui16 == original_u16
+            item.ui16 = original_u16
+            assert item.ui16 == original_u16
+            assert identity(item.ui16) == original_u16
+            assert captured(item.ui16)() == original_u16
+            assert capture_u16(item.ui16)() == original_u16
+            assert round_trip(capture_u16(item.ui16))() == original_u16
+            assert round_trip(item).ui16 == original_u16
+            generic = Generic(item.ui16)
+            assert generic.item == original_u16
+            reflected = item.__get_attr__("ui16")
+            if original_u16 is not None:
+                assert narrow_u16(item.ui16) == original_u16
+                if isinstance(reflected, u16):
+                    assert reflected == original_u16
+                else:
+                    raise ValueError("wrong reflected u16")
+            else:
+                assert reflected is None
+        values_u8: list[?u8] = [None, u8(0), u8(255)]
+        for original_u8 in values_u8:
+            constructed = Scalars(None, None, None, None, None, None, None, None, None, original_u8, None)
+            assert constructed.ui8 == original_u8
+            item.ui8 = original_u8
+            assert item.ui8 == original_u8
+            assert identity(item.ui8) == original_u8
+            assert captured(item.ui8)() == original_u8
+            assert capture_u8(item.ui8)() == original_u8
+            assert round_trip(capture_u8(item.ui8))() == original_u8
+            assert round_trip(item).ui8 == original_u8
+            generic = Generic(item.ui8)
+            assert generic.item == original_u8
+            reflected = item.__get_attr__("ui8")
+            if original_u8 is not None:
+                assert narrow_u8(item.ui8) == original_u8
+                if isinstance(reflected, u8):
+                    assert reflected == original_u8
+                else:
+                    raise ValueError("wrong reflected u8")
+            else:
+                assert reflected is None
+        values_u1: list[?u1] = [None, u1(0), u1(1)]
+        for original_u1 in values_u1:
+            constructed = Scalars(None, None, None, None, None, None, None, None, None, None, original_u1)
+            assert constructed.bit == original_u1
+            item.bit = original_u1
+            assert item.bit == original_u1
+            assert identity(item.bit) == original_u1
+            assert captured(item.bit)() == original_u1
+            assert capture_u1(item.bit)() == original_u1
+            assert round_trip(capture_u1(item.bit))() == original_u1
+            assert round_trip(item).bit == original_u1
+            generic = Generic(item.bit)
+            assert generic.item == original_u1
+            reflected = item.__get_attr__("bit")
+            if original_u1 is not None:
+                assert narrow_u1(item.bit) == original_u1
+                if isinstance(reflected, u1):
+                    assert reflected == original_u1
+                else:
+                    raise ValueError("wrong reflected u1")
+            else:
+                assert reflected is None
+        # Simultaneous, heterogeneous present fields exercise shared-word writes.
+        item.real = 1.25
+        item.flag = False
+        item.si8 = i8(-128)
+        item.ui64 = u64(18446744073709551615)
+        item.integer = None
+        assert item.real == 1.25 and item.flag is not None
+        assert item.flag == False and item.si8 == i8(-128)
+        assert item.ui64 == u64(18446744073709551615)
+        restored = round_trip(item)
+        assert restored.real == 1.25 and restored.flag == False
+        assert restored.si8 == i8(-128) and restored.ui64 == u64(18446744073709551615)
+        derived = Derived(1.25, False)
+        assert derived.item == 1.25 and derived.flag == False
+        derived.item = None
+        assert derived.item is None and derived.flag is not None
+        assert round_trip(derived).flag == False
+        assert Native(1.25).read() == 1.25
+        assert Native(None).read() is None
+        # Compare bytes, avoiding floating-point equality for NaNs and signed zero.
+        for index in range(8):
+            sample = float_sample(index)
+            assert sample is not None
+            item.real = sample
+            assert item.real is not None
+            assert float_bits(item.real) == expected_bits(index)
+            assert float_bits(capture_float(item.real)()) == expected_bits(index)
+            assert float_bits(round_trip(capture_float(item.real))()) == expected_bits(index)
+            assert float_bits(round_trip(item).real) == expected_bits(index)
+        assert local_bool(True) is not None and local_bool(True) == False
+        assert local_bool(False) is None
+        assert local_float(True) == 1.25 and local_float(False) is None
+        assert exception_float() == 2.5
+        echo = Echo()
+        live: ?float = 2.5
+        echo.set(1.25, False)
+        real, flag = echo.get()
+        assert real == 1.25 and flag is not None and flag == False
+        assert live == 2.5
+        echo.set(None, None)
+        real, flag = echo.get()
+        assert real is None and flag is None
+        assert layout_checks()
+        print("optional scalars OK")
+        env.exit(0)

@@ -129,6 +129,7 @@ typedef struct $Catcher *$Catcher;
 #include "u16.h"
 #include "u8.h"
 #include "u1.h"
+#include "optional.h"
 #include "bigint.h"
 #include "range.h"
 #include "function.h"
