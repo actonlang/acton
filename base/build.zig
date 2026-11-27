@@ -410,6 +410,8 @@ pub fn build(b: *std.Build) void {
 
     var flags = std.ArrayList([]const u8).empty;
     defer flags.deinit(b.allocator);
+    // Acton subtyping accesses shared layouts through distinct C struct types.
+    flags.append(b.allocator, "-fno-strict-aliasing") catch unreachable;
     flags.append(b.allocator, "-DUTF8PROC_STATIC") catch unreachable;
 
     var file_prefix_map = std.ArrayList(u8).empty;
