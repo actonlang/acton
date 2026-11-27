@@ -137,7 +137,16 @@ jobs:
       # Xcode linker cannot parse those stubs (actions/runner-images#14940).
       # The Command Line Tools linker always matches its own SDK.
       - name: "Use the Command Line Tools toolchain"
-        run: echo "DEVELOPER_DIR=/Library/Developer/CommandLineTools" >> "$GITHUB_ENV"
+        run: |
+          clt=/Library/Developer/CommandLineTools
+          echo "DEVELOPER_DIR=$clt" >> "$GITHUB_ENV"
+          if [ "$RUNNER_ENVIRONMENT" = self-hosted ]; then
+            # The SDK 27 headers expose pipe2, which Haskell's process package
+            # would then use even though it is unavailable on macOS 15.
+            sdk="$clt/SDKs/MacOSX26.sdk"
+            test -d "$sdk"
+            echo "SDKROOT=$sdk" >> "$GITHUB_ENV"
+          fi
       - name: "Check out repository code"
         uses: actions/checkout@v7
       - name: "Prepare self-hosted build caches"
