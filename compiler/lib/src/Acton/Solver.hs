@@ -1803,8 +1803,16 @@ improve env te eq cs
         gsimple                         = gsimp vi vclosed obsvars (varvars vi)
         multiUBnd                       = [ (v,ts) | (v,ts) <- multiUBounds cs, noEmbed v, noLOpt v ]
         multiLBnd                       = [ (v,ts) | (v,ts) <- multiLBounds cs, noEmbed v ]
-        lowerBnd                        = [ (v,t) | (v,[t]) <- Map.assocs (lbounds vi), noEmbed v ]
-        upperBnd                        = [ (v,t) | (v,[t]) <- Map.assocs (ubounds vi), noEmbed v ]
+        lowerBnd                        = [ (v,t) | (v,t) <- lowerBounds, noEmbed v ]
+        upperBnd                        = [ (v,t) | (v,t) <- upperBounds, noEmbed v ]
+        lowerBounds                     = mapMaybe (effectBound lubfold) $ Map.assocs (lbounds vi)
+        upperBounds                     = mapMaybe (effectBound glbfold) $ Map.assocs (ubounds vi)
+        -- Summarize semantic effect bounds for solution preferences, without
+        -- changing their relations or the types of their conversion witnesses.
+        effectBound combine (v,ts)
+          | uvkind v == KFX             = (\t -> (v,t)) <$> combine env (nub ts)
+          | [t] <- ts                   = Just (v,t)
+          | otherwise                   = Nothing
         posLBnd                         = [ (v,t) | (v,t) <- lowerBnd, v `notElem` negvars, implAll env (lookup' v $ pbounds vi) t ]
         negUBnd                         = [ (v,t) | (v,t) <- upperBnd, v `notElem` posvars, implAll env (lookup' v $ pbounds vi) t, noDots vi v, castUpper v t ]
         -- Effect Sub bounds can require adapters, whereas Cast preserves the
@@ -1814,8 +1822,8 @@ improve env te eq cs
                                              [castable env' source t | (env',source) <- lookup' v castSources]
         castSources                     = Map.fromListWith (++)
                                              [(v,[(env',source)]) | Cast _ env' source (TUni _ v) <- cs, uvkind v == KFX]
-        closLBnd                        = [ (v,t) | (v, [t]) <- Map.assocs (lbounds vi), upClosed env t, implAll env (lookup' v $ pbounds vi) t ]
-        closUBnd                        = [ (v,t) | (v, [t]) <- Map.assocs (ubounds vi), dnClosed env t, implAll env (lookup' v $ pbounds vi) t, noDots vi v ]
+        closLBnd                        = [ (v,t) | (v,t) <- lowerBounds, upClosed env t, implAll env (lookup' v $ pbounds vi) t ]
+        closUBnd                        = [ (v,t) | (v,t) <- upperBounds, dnClosed env t, implAll env (lookup' v $ pbounds vi) t, noDots vi v ]
         (redEq,redUni)                  = ctxtReduce env cs
         mutC                            = findBoundAttrs env (mutattrs vi) (ubounds vi)
         selC                            = findBoundAttrs env (selattrs vi) (ubounds vi)
@@ -1837,6 +1845,8 @@ improve env te eq cs
                 optCon TOpt{}                   = True
                 optCon _                        = False
 
+-- This improvement produces Cast bounds; witnessed effect conversions must
+-- stay separate. For ordinary types, retain the existing bound aggregation.
 multiUBounds cs                         = Map.assocs $ Map.map deOpt $ Map.filter ((>1) . length) $ bnds cs
   where
     bnds []                             = Map.empty
@@ -1845,7 +1855,8 @@ multiUBounds cs                         = Map.assocs $ Map.map deOpt $ Map.filte
     bnds (Cast _ env (TUni _ v) t : cs) = Map.insertWith (++) v [t] $ bnds cs
     bnds (Sub _ _ _ TUni{} TUni{} : cs) = bnds cs
     bnds (Sub _ _ env TUni{} (TOpt _ TUni{}) : cs) = bnds cs
-    bnds (Sub _ _ _ (TUni _ v) t : cs)  = Map.insertWith (++) v [t] $ bnds cs
+    bnds (Sub _ _ _ (TUni _ v) t : cs)
+      | uvkind v /= KFX                = Map.insertWith (++) v [t] $ bnds cs
     bnds (_ : cs)                       = bnds cs
 
     deOpt ts                            = if all isOpt ts then ts else map unOpt ts
@@ -1861,7 +1872,8 @@ multiLBounds cs                         = Map.assocs $ Map.map deEnv $ Map.filte
     bnds (Cast _ _ TUni{} TUni{} : cs)  = bnds cs
     bnds (Cast _ env t (TUni _ v) : cs) = Map.insertWith (++) v [(env,t)] $ bnds cs
     bnds (Sub _ _ _ TUni{} TUni{} : cs) = bnds cs
-    bnds (Sub _ env _ t (TUni _ v) : cs)= Map.insertWith (++) v [(env,t)] $ bnds cs
+    bnds (Sub _ env _ t (TUni _ v) : cs)
+      | uvkind v /= KFX                = Map.insertWith (++) v [(env,t)] $ bnds cs
     bnds (_ : cs)                       = bnds cs
 
     deEnv envts
@@ -1899,6 +1911,8 @@ implAll env ps t                        = False
 
 noDots vi v                             = null (lookup' v $ selattrs vi) && null (lookup' v $ mutattrs vi)
 
+-- Aggregated bounds use Cast. Effect Sub constraints can require conversions,
+-- so retain their original endpoints and witnesses throughout this improvement.
 replace ub lb cs                        = ubs ++ lbs ++ cs'
   where
     (vss,cs')                           = unzip $ map repl cs
@@ -1916,9 +1930,9 @@ replace ub lb cs                        = ubs ++ lbs ++ cs'
     repl c@(Sub _ _ _ TUni{} TUni{})          = ([], c)
     repl c@(Sub _ _ _ TUni{} (TOpt _ TUni{})) = ([], c)
     repl (Sub info env w (TUni _ v) t)
-      | Just t' <- lookup v ub                = ([(v,env)], Sub info env w t' t)
+      | uvkind v /= KFX, Just t' <- lookup v ub = ([(v,env)], Sub info env w t' t)
     repl (Sub info env w t (TUni _ v))
-      | Just t' <- lookup v lb                = ([(v,env)], Sub info env w t t')
+      | uvkind v /= KFX, Just t' <- lookup v lb = ([(v,env)], Sub info env w t t')
     repl c                                    = ([], c)
 
 
