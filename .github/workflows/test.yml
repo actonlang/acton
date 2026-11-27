@@ -108,17 +108,25 @@ jobs:
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.matrix_maker_macos.outputs.matrix) }}
-    runs-on: ${{ matrix.arch == 'x86_64' && format('{0}-{1}-intel', matrix.os, matrix.version) || format('{0}-{1}', matrix.os, matrix.version) }}
+    # Use the mini for ARM64 pushes to main. The nightly and manual runs still
+    # build the caches that the GitHub-hosted jobs restore.
+    runs-on: >-
+      ${{ matrix.arch == 'aarch64' && github.repository == 'actonlang/acton' &&
+          github.event_name == 'push' && github.ref == 'refs/heads/main' && 'acton-macos-arm64' ||
+          format('{0}-{1}{2}', matrix.os, matrix.version, matrix.arch == 'x86_64' && '-intel' || '') }}
     env:
       BUILD_TIME: ${{ needs.build-version.outputs.build_time }}
     steps:
       - name: "Show env"
-        run: env
+        run: |
+          sw_vers
+          env
       - name: "Set BUILD_RELEASE when we are building for a version tag"
         run: |
           echo "BUILD_RELEASE=1" >> $GITHUB_ENV
         if: startsWith(github.ref, 'refs/tags/v')
       - name: "Enable dumping core files"
+        if: runner.environment == 'github-hosted'
         run: |
           sudo sysctl kern.corefile=core.%P
           ulimit -c unlimited
@@ -129,16 +137,39 @@ jobs:
       # Xcode linker cannot parse those stubs (actions/runner-images#14940).
       # The Command Line Tools linker always matches its own SDK.
       - name: "Use the Command Line Tools toolchain"
-        run: sudo xcode-select -s /Library/Developer/CommandLineTools
+        run: echo "DEVELOPER_DIR=/Library/Developer/CommandLineTools" >> "$GITHUB_ENV"
       - name: "Check out repository code"
         uses: actions/checkout@v7
+      - name: "Prepare self-hosted build caches"
+        if: runner.environment == 'self-hosted'
+        run: |
+          build_home="$(dirname "$GITHUB_WORKSPACE")/build-home"
+          if [ -L "$build_home" ] || [ -L "$build_home/.cache" ]; then
+            echo "Unexpected symlink in the self-hosted cache path" >&2
+            exit 1
+          fi
+          mkdir -p "$build_home"
+          # Below 50 GB free, clear either cache if it has grown past 8 GiB.
+          free_kib=$(df -Pk "$build_home" | awk 'NR == 2 {print $4}')
+          if [ "$free_kib" -lt 48828125 ]; then
+            for cache in "$build_home/.stack" "$build_home/.cache/acton"; do
+              [ -d "$cache" ] || continue
+              size_kib=$(du -sk "$cache" | cut -f1)
+              if [ "$size_kib" -gt $((8 * 1024 * 1024)) ]; then
+                echo "Clearing oversized cache: $cache ($size_kib KiB)"
+                rm -rf -- "$cache"
+              fi
+            done
+          fi
+          df -h "$build_home"
+          echo "HOME=$build_home" >> "$GITHUB_ENV"
       - name: "Cache downloaded source archives"
         uses: actions/cache@v6
         with:
           path: deps-download
           key: deps-download-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-${{ hashFiles('Makefile', 'deps/**/build.zig', 'deps/**/build.zig.zon') }}
       - name: "Cache Haskell deps (~/.stack)"
-        if: matrix.cache == true
+        if: matrix.cache == true && runner.environment == 'github-hosted'
         uses: actions/cache@v6
         with:
           path: |
@@ -154,14 +185,16 @@ jobs:
       # produces a clean, complete snapshot (saved after tests below) that PRs and
       # pushes restore the following day. Freshness comes from the date-stamped key
       # plus the nightly producer, not from cache eviction.
+      # The self-hosted runner keeps its Stack and Zig caches on disk.
       - name: "Restore Acton compile cache (~/.cache/acton)"
-        if: matrix.cache == true && github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
+        if: matrix.cache == true && runner.environment == 'github-hosted' && github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
         uses: actions/cache/restore@v6
         with:
           path: |
             ~/.cache/acton/
           key: acton-zig-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-${{ hashFiles('Makefile') }}
       - name: "Install build prerequisites"
+        if: runner.environment == 'github-hosted'
         run: |
           # Retry network-bound installs so a transient mirror/CDN blip doesn't
           # fail the whole job.
@@ -198,7 +231,7 @@ jobs:
       # PRs a warm cache, but requires the build/release steps to have succeeded so
       # a build failure can't poison the date-stamped key with a partial cache.
       - name: "Save Acton compile cache (~/.cache/acton)"
-        if: ${{ !cancelled() && matrix.cache == true && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && steps.build_acton.outcome == 'success' && steps.build_release.outcome == 'success' }}
+        if: ${{ !cancelled() && matrix.cache == true && runner.environment == 'github-hosted' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && steps.build_acton.outcome == 'success' && steps.build_release.outcome == 'success' }}
         uses: actions/cache/save@v6
         with:
           path: |
