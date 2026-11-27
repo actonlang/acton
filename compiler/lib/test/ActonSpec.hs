@@ -81,7 +81,7 @@ import GHC.IO.Encoding (getFileSystemEncoding)
 import System.Posix.Files (createNamedPipe, fileSize, nullFileMode, ownerModes, setFileMode, setFileSize)
 import qualified System.IO.Unsafe
 import System.Timeout (timeout)
-import Control.Monad (forM_, when, foldM)
+import Control.Monad (forM_, when, foldM, replicateM)
 import qualified Control.Exception as E
 import Control.DeepSeq (rnf)
 import Utils (SrcLoc(..), loc, prstr)
@@ -680,6 +680,50 @@ main = do
         case reduced of
           [S.Expr _ e] -> QuickType.typeOf valueEnv e `shouldBe` callback
           _ -> expectationFailure "Expected a selected callback expression"
+
+    describe "Effect bound aggregation" $ do
+      let env = TE.initTypeEnv env0
+          info = TE.noinfo 0
+          solve constraints = TE.runTypeM $ do
+            fx <- TE.newUnivarOfKind S.KFX env
+            ws <- replicateM 2 TE.newWitness
+            let te = [(S.name "effect", I.NVar fx)]
+            (remaining, eqs) <- Solver.oldSimplify env te (constraints fx ws)
+            (remaining, eqs) <- Solver.solve env (const True) te eqs remaining
+            (,,) <$> TE.usubst fx <*> pure remaining <*> TE.usubst eqs
+          semanticUpper fx ws = [TE.Sub info env w fx S.fxAction | w <- ws]
+          cases =
+            [ ("semantic upper bounds", S.fxPure, \fx ws -> semanticUpper fx ws ++
+                [TE.Cast info env S.fxPure fx])
+            , ("mixed semantic and cast upper bounds", S.fxPure, \fx ws -> semanticUpper fx ws ++
+                [TE.Cast info env S.fxPure fx, TE.Cast info env fx S.fxCom,
+                 TE.Cast info env fx S.fxProc])
+            , ("semantic lower bounds", S.fxAction, \fx ws ->
+                [TE.Sub info env w S.fxPure fx | w <- ws] ++
+                [TE.Cast info env S.fxAction fx])
+            ]
+      forM_ cases $ \(label, expected, constraints) ->
+        it ("preserves conversion witnesses with " ++ label) $ do
+          let (fx, remaining, eqs) = solve constraints
+          fx `shouldBe` expected
+          length remaining `shouldBe` 0
+          length eqs `shouldBe` 2
+          let p = S.posRow Builtin.tInt S.posNil
+              source = S.tFun S.fxPure p S.kwdNil Builtin.tInt
+              target = S.tFun S.fxAction p S.kwdNil Builtin.tInt
+              witnessEnv = Acton.Env.define
+                [(w,I.NDef sc S.NoDec Nothing) | TE.Eqn _ w sc _ <- eqs] env
+          forM_ eqs $ \(TE.Eqn _ w sc _) -> do
+            map S.tvkind (S.qbound $ S.scbind sc) `shouldBe` [S.PRow,S.KRow,S.KType]
+            QuickType.typeOf witnessEnv (S.tApp (S.eVar w) [p,S.kwdNil,Builtin.tInt])
+              `shouldBe` S.tFun S.fxPure (S.posRow source S.posNil) S.kwdNil target
+      it "still rejects incompatible representation-preserving lower bounds" $ do
+        let result = solve $ \fx _ ->
+              [TE.Cast info env S.fxPure fx, TE.Cast info env S.fxAction fx]
+        outcome <- E.try (E.evaluate $ let (fx,_,_) = result in rnf fx) :: IO (Either TypeError ())
+        case outcome of
+          Left _ -> pure ()
+          Right _ -> expectationFailure "Expected incompatible pure and action casts"
 
     describe "Generic effect witnesses" $ do
       let env = TE.initTypeEnv env0

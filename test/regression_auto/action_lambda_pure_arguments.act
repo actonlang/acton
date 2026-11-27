@@ -1,0 +1,23 @@
+pure def identity(value: int) -> int:
+    return value
+
+actor Receiver():
+    var latest = 0
+
+    def receive(a: int, b: int):
+        latest = a + b
+
+    def read() -> int:
+        return latest
+
+pure def forward(receiver: Receiver) -> action(int, int) -> None:
+    return action lambda a, b: receiver.receive(identity(a), identity(b))
+
+actor main(env):
+    receiver = Receiver()
+
+    def __startup__():
+        send = forward(receiver)
+        assert await async send(20, 22) is None
+        assert receiver.read() == 42
+        env.exit(0)
