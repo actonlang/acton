@@ -142,17 +142,21 @@ jobs:
             exit 1
           fi
           mkdir -p "$build_home"
-          # Below 50 GB free, clear either cache if it has grown past 8 GiB.
+          trim_cache() {
+            local cache="$1" limit_gib="$2" size_kib
+            [ -d "$cache" ] || return 0
+            size_kib=$(du -sk "$cache" | cut -f1)
+            if [ "$size_kib" -gt $((limit_gib * 1024 * 1024)) ]; then
+              echo "Clearing oversized cache: $cache ($size_kib KiB)"
+              rm -rf -- "$cache"
+            fi
+          }
+          # Check for oversized caches below 50 GB free. One job can generate
+          # more than 24 GiB of Acton/Zig cache data.
           free_kib=$(df -Pk "$build_home" | awk 'NR == 2 {print $4}')
           if [ "$free_kib" -lt 48828125 ]; then
-            for cache in "$build_home/.stack" "$build_home/.cache/acton"; do
-              [ -d "$cache" ] || continue
-              size_kib=$(du -sk "$cache" | cut -f1)
-              if [ "$size_kib" -gt $((8 * 1024 * 1024)) ]; then
-                echo "Clearing oversized cache: $cache ($size_kib KiB)"
-                rm -rf -- "$cache"
-              fi
-            done
+            trim_cache "$build_home/.stack" 8
+            trim_cache "$build_home/.cache/acton" 40
           fi
           df -h "$build_home"
           echo "HOME=$build_home" >> "$GITHUB_ENV"
