@@ -14,7 +14,43 @@
   `embed` is now a reserved word: a variable, a function, a parameter or a
   class with this name needs another name, and an attribute is written
   `x."embed"`. The guide page "Embedding files" has the rules for a path and
-  the limits.
+  the limits. [#3463]
+- Use pure functions and lambdas as `action` callbacks. The compiler adapts
+  them to return completed messages, computing their result immediately
+  without scheduling an actor. The effect hierarchy now includes
+  `pure <= action`; `action` is no longer a subtype of `proc`. This also
+  covers `f: action() -> int = lambda: 42`, whose result is delivered correctly
+  instead of leaving callers waiting. Action lambdas can also call actor
+  methods with multiple pure argument computations without spurious effect
+  errors. [#3471] [#3474] [#3477]
+- Call `action` callbacks consistently inside and outside actors. Assignments,
+  returns, and other calls that use a result wait for the reply; calls used
+  as statements send without waiting, including forced unwrapping (`!`),
+  optional chaining, and conditional expressions. This prevents deadlocks
+  when a callback sends to an actor waiting for its caller. [#3300] [#3471]
+- Use the builtin `Actor` type for values that can hold any actor, including
+  parameters and results. `Actor()` constructs an empty actor; all actors
+  inherit its no-op `__startup__` unless they define their own. [#3484]
+- Construct actors directly in the parent actor, completing declarative
+  initialization before the new actor processes messages. A defined
+  `__startup__` method is scheduled automatically before messages sent during
+  construction. If construction fails, discard its newly created actors and
+  staged messages; startup failures are handled by each actor separately.
+  Constructors use the new `com` effect for actor construction and asynchronous
+  message sending, without waiting for replies or allowing mutation. Constructor
+  checks reject uses of actor `self` that could observe uninitialized state,
+  including through other constructors. [#3442] [#3484]
+- Use `raise` in expressions, such as
+  `port if port >= 0 else raise ValueError("invalid port")`, including actor
+  initializers. A raise expression fits any expected result type and adds no
+  effect beyond evaluating its exception. Effect names such as `pure`, `com`,
+  and `proc` can also be used as ordinary names outside effect annotations.
+  [#3442]
+- Select the most specific admissible protocol implementation when both a
+  parent class and its child implement the protocol, regardless of extension
+  declaration order. Generic calls retain their supplied implementation;
+  calls through an explicitly parent-typed value still use the parent's
+  implementation. [#3439]
 - Reject files that mix tabs and spaces in block indentation, even on separate
   lines or in separate functions. Use one style throughout each file;
   whitespace inside strings, comments, and continuation alignment does not
@@ -37,23 +73,69 @@
   UTF-8 decoding during program startup. [#3301]
 
 ### Compiler & Build
-- Add derived modules: the table `derived_modules` in `Build.act` names
-  modules whose source a function of the project returns while the build
-  runs, as in `schema: (function=gen.schema, inputs=["data/schema.txt"],
-  args=(prefix="S"))`. The module has no file under `src/`, and other modules
-  import it like any other module. The function gets a description of each
-  input file, a `std.build.derive.InputFile` with the path, the size and the
-  SHA-256 of the file and a method `read()` that returns its content, and
-  returns the source of one module as a `str` or of several modules as a
-  `dict[str, str]`. A name of an entry can end with `.*` and stand for every
-  module below it, as in `layers.*: (function=gen.layers, inputs=["data/"])`:
-  the function returns a module below `layers` for each input file, and
-  `Build.act` stays as it is when a file is added or removed. A build runs the
-  function again when an input file, the entry, the function or anything that
-  the function uses changed, and stops when an input file changes while the
-  build runs. `acton build --watch` and `acton test --watch` build again when
-  an input file is saved, added or removed. The guide page "Derived modules"
-  has the rules for the table, the function and the input paths.
+- Generate Acton modules from schemas or data during `acton build` and
+  `acton test`, without checking generated sources into the project. Declare
+  `derived_modules` in `Build.act`, for example
+  `schema: (function=gen.schema, inputs=["data/schema.txt"],
+  args=(prefix="S"))`. A function in the project or a dependency receives
+  input-file paths, sizes, SHA-256 hashes, and a `read()` method through
+  `std.build.derive.InputFile`. It returns one module as a `str` or several
+  as a `dict[str, str]`; other modules import them normally. Regenerate when
+  inputs, the entry, code used by the function, or the compiler change.
+  Wildcard names such as `layers.*` allow any number of modules below that
+  name, without editing `Build.act` when input files are added or removed.
+  Modules no longer returned are removed together with their compiled output.
+  `acton build --watch` and `acton test --watch` react to input-file saves,
+  additions, and removals, including in local dependencies; builds stop if an
+  input changes while they run. The guide page "Derived modules" describes
+  generator functions and input paths. [#3467] [#3468]
+- Reduce allocation for optional scalar fields, locals, and concrete
+  constructor arguments by storing their values directly instead of allocating
+  scalar boxes. This covers `?int`, `?float`, `?bool`, and optional fixed-width
+  integers. Object fields share presence bits, keeping `None` distinct from
+  zero and `False`. Generic storage, closure captures, native-backed fields,
+  and ordinary function and protocol arguments and results retain their boxed
+  representation; serialization keeps its existing format. [#3470]
+- Prevent incorrect runtime type checks and crashes in optimized builds by
+  disabling strict-aliasing assumptions for generated C, the runtime, native
+  implementations, and the database backend. [#3481]
+- Avoid needless native recompilation after edits to a module's function
+  bodies, comments, or native extensions. Generated headers declare only the
+  module's source names and are rewritten only when their text changes,
+  letting Zig reuse objects for modules that merely include them. [#3459]
+- Rebuild native extensions when their hand-written C (`.ext.c`) or project
+  files they include change or disappear, and rerun tests that depend on
+  them. Incremental builds no longer silently reuse old native code after an
+  extension-only edit. Project includes are tracked through nested includes;
+  macro-based includes conservatively track other files under `src/`.
+  Files included only through headers outside the project, and macro-based
+  includes in single-file builds, remain outside this tracking. [#3392]
+- Regenerate cached C when imports, source locations, `--dbg-no-lines`, or
+  the compiler build changes, including after signature-only or interrupted
+  builds and when rebuilding `__builtin__`. This prevents stale import
+  initialization and incorrect source locations in diagnostics. Comment-only
+  edits refresh generated source locations without changing headers or
+  rebuilding modules that include them. Cached interfaces and output record
+  the compiler build, so switching back to an older compiler refreshes them
+  too. The CLI and language server from one installation share this identity;
+  `--ignore-compiler-version` allows reuse across builds. Existing projects
+  regenerate their C once after upgrading. [#3392] [#3457]
+- Refresh missing or stale module documentation pages even when the module
+  itself needs no type checking, including after language-server checks,
+  `acton build --skip-build`, or `acton test list` updated its cached
+  interface without writing documentation. [#3457]
+- Recover from truncated cached module interfaces (`.tydb`) by rebuilding
+  them instead of crashing with SIGBUS. Install `--tydb` copies only after
+  copying succeeds, preserving the previous copy if copying fails. [#3456]
+- Prevent intermittent compiler crashes on arm64 during concurrent parsing,
+  including the first parse of `Build.act`. Initialize shared parsers before
+  starting concurrent parses, including language-server type parsing. [#3455]
+- Reuse compiled runtime and bundled native libraries between projects,
+  avoiding a separate rebuild for every project directory. Resolved dependency
+  paths let Zig reuse the same cached objects across projects. [#3411]
+- Reuse unchanged base-library modules on repeated builds instead of
+  needlessly parsing and type checking them again because of their imports
+  of `__builtin__` and other base modules. [#3458]
 - Speed up compilation of large generated modules through compact name
   storage, cheaper name comparisons, and concurrent content hashing. On an
   M4 Pro, compact name storage reduced Acton compilation of half the generated
@@ -86,10 +168,17 @@
   `Generated` on case-insensitive filesystems. Common continuation, `proc`,
   and `action` closures with reference captures now reuse runtime layouts and
   support routines, further reducing generated C and native build time.
-  [#3262] [#3303] [#3380]
+  Remove redundant closure invocation methods and forwarding adapters.
+  [#3262] [#3303] [#3380] [#3475]
 - Avoid allocating temporary attribute-name strings in generated
   `__get_attr__()` methods, reducing allocation and garbage-collection work
   during reflective property lookup. [#3374]
+- Reduce temporary allocation for builtin slicing such as
+  `items[start:stop:step]`. Keep fresh slice objects and their integer bounds
+  on the C stack for lists, immutable lists, strings, bytes, and bytearrays,
+  including slice assignment and deletion on lists and bytearrays. Stored
+  slices and generic or user-defined slicing keep their usual allocation
+  behavior. [#3402]
 - Reduce allocation in synchronous `for` loops over builtin collections by
   keeping compiler-created iterators on the C stack. This covers mutable and
   immutable lists, dictionaries and sets, dictionary keys/values/items,
@@ -100,11 +189,6 @@
   checks `Hashable.hash` lifetimes across modules, and incremental builds
   recheck dependent code when a helper's lifetime behavior changes. Existing
   cached module interfaces are rebuilt for the new analysis data. [#3290]
-- Correct calls of actor methods passed as `proc` parameters so assignments
-  and returns wait for the action's reply. Calls used as statements send
-  without waiting, including calls through forced unwrapping (`!`), optional
-  chaining (`?.`), and conditional expressions, preventing actor deadlocks.
-  [#3300]
 - Correct reads of captured variables in nested functions and callbacks when
   an enclosing `try` block reassigns them. `None` checks, type inspection, and
   JSON encoding now see the captured value, while shadowing parameters and
@@ -116,9 +200,12 @@
   integer shifts, such as `(value >> n) & mask`. Mixing an `int` shift count
   with a signed or unsigned fixed-width operand no longer introduces invalid
   pointer casts in generated C. [#3382]
-- Keep symbols needed by dynamic module libraries in optimized macOS
-  executables, fixing release builds that fail to load a library with a
-  `symbol not found in flat namespace` error. [#3298]
+- Build dynamic module libraries with their package dependencies' headers,
+  allowing REPL inputs such as `import std.math` to compile. On macOS,
+  include modules imported only by a dynamic library in its host executable
+  and retain their symbols in optimized builds, preventing load-time
+  missing-symbol errors and crashes when first importing a module in the
+  REPL. [#3298] [#3407] [#3412]
 - Keep cached output for modules with dots in their filenames, including
   names such as `y.root`, and binaries for nested modules such as `sub.x`,
   avoiding needless recompilation or reinstallation on every full build.
@@ -126,6 +213,10 @@
   and generated startup code for deleted modules from the correct project
   directory. Full builds also remove generated startup code and binaries when
   a module loses its root actor. [#3285] [#3289] [#3292]
+- Recheck source changes made while a build is reading a module, preventing
+  later builds from silently reusing an older version. Take file metadata
+  before reading, and parse and hash the same bytes from a single read.
+  [#3440]
 - Reject invalid root actors with a compilation error and nonzero exit status,
   instead of reporting success without producing an executable. The diagnostic
   points to the actor and explains why it cannot be a root, including an
@@ -138,6 +229,10 @@
   `stdout`, `stderr`, or `ERROR` without collisions with C header macros,
   including musl and Windows headers. Names with `A_` prefixes remain distinct
   from the compiler's escaped spellings. [#3364]
+- Report imports of deleted modules in watch builds and language-server
+  diagnostics, instead of reusing stale cached module information. Watch
+  builds stop at the missing import rather than failing later with an
+  internal compiler error during native compilation. [#3469]
 - Recheck dependents when a module loses its last public name, reporting the
   missing export as a type error instead of failing during code generation.
   Reuse only a module's own cached interface, even when another module on the
@@ -148,11 +243,16 @@
   scale better for large groups of declarations. Also reject duplicate methods
   in classes, protocols, and extensions at the second definition, and report
   a signature placed after its method as an illegal override. [#3274] [#3277]
-- Upgrade the bundled Zig toolchain to 0.17.0 and update the bundled garbage
-  collector for Zig 0.17 compatibility. Add native optimization-mode flags:
+- Upgrade the bundled Zig toolchain to Acton's fork at
+  `0.18.0-dev.1240+acton.3`, fixing shared-cache deadlocks during concurrent C
+  compilation, incremental compilation, native code generation, and linking
+  on glibc 2.27. Source builds download the matching compiler and standard
+  library for Linux and macOS and verify the archive's pinned checksum.
+  Update native library builds for the new toolchain. Add native optimization
+  flags:
   `--debug`, `--safe`, `--fast`, and `--small`. The existing `--release`,
   `--release=fast`, `--release=safe`, and `--release=small` forms remain as
-  compatibility aliases. [#3249] [#3254]
+  compatibility aliases. [#3249] [#3254] [#3378]
 - Key Zig's configuration cache by the absolute project root, preventing
   concurrent single-file and scratch builds from sharing incompatible cached
   configurations and failing with missing configuration files. [#3258]
@@ -161,13 +261,32 @@
   an enclosing `finally` clause runs. [#3241]
 
 ### CLI & Project Workflow
+- Build projects that share dependencies safely from concurrent CLI commands
+  and language-server checks. Wait for each dependency's compiler lock before
+  reading or rewriting its outputs, preventing incompatible cached interfaces
+  and mixed generated code from competing compiler builds. [#3457]
+- Rebuild in watch mode after saving a native extension (`.ext.c`) or other
+  files under `src/`, including headers. Watch source directories and
+  `Build.act` files of local dependencies as well. Editor temporary files
+  and cached-interface copies written by `--tydb` are ignored, so watch
+  builds with `--tydb` settle normally. Changes to included files outside
+  `src/` require a manual build or a save of the extension. [#3392]
+- Rerun cached tests when runtime or GC environment settings, native build
+  flags, or Zig dependencies change, including local dependency files.
+  `acton test --no-cache` now stores fresh results, so subsequent runs use
+  them instead of older cached results. [#3392]
+- Keep `acton test scale` from failing with "memory monitoring unavailable"
+  when a sample exits while another thread collects its result. [#3452]
 - Remove `--always-build` from compilation commands and `acton sig`. To force
   source checking, delete cached module interfaces under `out/types` (or the
   configured output directory's `types` subdirectory) and rebuild. [#3376]
 - Keep watch builds running after overlapping file changes, and retry failed
   or interrupted dependency fetches on the next change without restarting
   watch mode or editing `Build.act`. The language server also retries these
-  fetches on subsequent edits. [#3325]
+  fetches on subsequent edits. Build and test watches now report unexpected
+  failures, such as being unable to start Zig, instead of silently waiting for
+  another change. Failed changes remain pending for the next build. [#3325]
+  [#3462]
 - Set the runtime worker limit with
   `build_options = {"max_wthreads": "1023"}` in `Build.act`, allowing
   applications on large machines to use more than 255 workers. Values from
@@ -191,6 +310,15 @@
   Superseded checks stop during cached-interface reads instead of delaying the
   next check; Ctrl-C also interrupts these reads in command-line workflows.
   [#3325]
+- Resolve imports and report syntax and type errors in derived modules
+  through the language server, using source from the last build. Run
+  `acton build` to refresh generated modules; editor checks do not run
+  generator functions. [#3467] [#3468]
+- Find what keeps a GC object alive in a stopped program with LLDB's
+  `acton refs ADDRESS`, which follows incoming pointers back to roots.
+  Inspect worker exception-frame references with `acton jump0` and actors'
+  mailboxes and pending outgoing messages with `acton outgoing ACTOR`.
+  [#3451]
 
 ### Standard Library
 - Breaking: the library modules that were in both base and std are now only
@@ -198,14 +326,40 @@
   and `std.json.encode(...)`: aon, argparse, base64, buildy, compress.gzip,
   compress.zlib, crypto.hash.md5, diff, hash.wyhash, http, json, math, qcheck,
   random, re, term, uri and xml. Base keeps `__builtin__`, `testing`,
-  `logging`, `time`, `file`, `fs`, `net` and `matrix`.
+  `logging`, `time`, `file`, `fs`, `net` and `matrix`. The guide and examples
+  use the new imports. [#3408] [#3410]
 - Breaking: `testing` keeps the test types and asserts, and the test runner
-  moved to `std.testing.runner`, which the generated `test_main` of a module
-  that imports `testing` calls. `NotEqualError` takes `print_diff` instead of
-  `diff_str`, and the runner renders the diff when it reports the failure, so
-  `str()` of a `NotEqualError` no longer contains the diff.
+  moved to `std.testing.runner`. Test discovery imports the runner automatically
+  for modules that import `testing`; custom runners must use the new namespace.
+  `NotEqualError` takes `print_diff` instead of `diff_str`, and the runner
+  renders the diff when it reports the failure, so `str()` of a `NotEqualError`
+  no longer contains the diff. [#3409]
 - Breaking: remove the `snappy` module. Use the
   [acton-snappy](https://github.com/actonlang/acton-snappy) package instead.
+  [#3415]
+- Reduce HTTP response sizes by enabling `compress=True` on `std.http.Listener`
+  or `std.http.TLSListener`. Text responses of at least 1 KiB use gzip or deflate
+  according to `Accept-Encoding` when compression makes them smaller. Partial
+  and already encoded responses stay unchanged. Cache headers vary on
+  `Accept-Encoding`, and existing strong ETags become weak after compression.
+  `std.http.Client` requests and decodes gzip/deflate responses by default,
+  removing `Content-Encoding` and `Content-Length` after decoding. Set
+  `compress=False` to disable this client behavior. [#3404]
+- Send binary response bodies through `std.http.Server` and `std.http.TLSServer`,
+  enabling transfer of binary content like images and response compression.
+  [#3403]
+- Compress and decompress byte buffers in gzip and zlib formats with
+  `std.compress.gzip` and `std.compress.zlib`. Each module provides `compress()`
+  and `decompress()`; invalid compressed data raises `ValueError`. [#3404]
+- Inspect and control the runtime through `env.rts`, an `EnvRTS` object
+  that can be passed to components needing runtime access. Query collector
+  settings with `gc_info()`, heap and collection totals with `gc_stats()`,
+  process memory and CPU time with `process_stats()`, and worker names,
+  actual stack sizes, and scheduling counters with `worker_info()` and
+  `worker_stats()`. Stack sizes are `None` until available. Inspect I/O
+  handles across workers with `io_handles()` and control collection with
+  `gc()`, `enable_gc()`, and `disable_gc()`.
+  [#3399]
 - Add `std.syslog`, a new module for sending and receiving syslog messages
   over UDP, TCP, and TLS. Use `Client` and `Server` for UDP, or `StreamClient`
   and `StreamServer` for TCP and TLS. The module includes an RFC 5424 codec
@@ -225,19 +379,28 @@
   outermost named handler; set `app_name` to override it.
   The guide includes runnable UDP and TCP examples and TLS configuration.
   [#3323] [#3344] [#3375] [#3384]
+- Use `logging.Logger` from `com` code without waiting for the handler's
+  output level. Each message is sent asynchronously and filtered by the
+  handler, removing synchronous level queries and their short-lived cache.
+  [#3471]
 - Add `env.random`, the capability to draw secure random numbers, and the
   builtin `Random` protocol it implements. `rand_u64()` and `rand_bytes(n)`
   come from a per-thread ChaCha8 generator seeded from the operating system,
   and run in the calling actor without a message to `Env`. The protocol adds
   `rand_int()`, `rand_float()`, `below(n)` and `between(lo, hi)`, with
   half-open ranges and no modulo bias. Take `EnvRandom` where the numbers must
-  be secure, and any `Random` where they need not be.
+  be secure, and any `Random` where they need not be. [#3424]
 - Add the seeded `Xoshiro256` generator to `std.random`, and the functions
   `shuffle(r, items)` and `shuffled(r, items)`, which take any `Random` and
   any sequence with a length and `int` indexes, such as `list`, `str` or
   `bytes`. `shuffle` reorders a mutable sequence in place; `shuffled` returns
   a reordered copy of the same type. A seed gives the same sequence on every
-  platform and from one release to the next.
+  platform and from one release to the next. [#3424]
+- Read the bound address and port with `endpoint()` on `net` UDP, TCP, and
+  TLS listeners, HTTP(S) listeners, and `std.syslog` servers. HTTP(S) listeners
+  also accept `on_listen(listener, error)`, reporting readiness with
+  `error=None`. Listen on port 0 and query `endpoint().port` from that callback
+  to discover the assigned free port. [#3418]
 - Add `std.crypto.aead.aes_gcm` for authenticated encryption with AES-GCM,
   backed by Zig's `std.crypto`.
   `encrypt(env.random, key, plaintext, associated_data)` draws a random nonce
@@ -245,24 +408,20 @@
   handle no nonces. `decrypt` raises `DecryptionError` for a modified
   ciphertext, the wrong key or mismatched associated data.
   `generate_key(env.random)` returns a 32-byte AES-256 key; 16-byte AES-128
-  keys are accepted too.
+  keys are accepted too. [#3426]
 - Add `std.crypto.hash.sha256` for SHA-256 digests, backed by Zig's
   `std.crypto`. `hash(data)` returns the 32-byte digest of a `bytes` value.
   A `Hasher` takes data in pieces with `update`; `finalize` returns the
-  digest of the data given so far and does not change the hasher.
-- Add `std.build.derive.embed_files`, a function for an entry of
-  `derived_modules` that embeds the files of a directory, as in
+  digest of the data given so far and does not change the hasher. [#3454]
+- Embed a directory of assets with `std.build.derive.embed_files` in
+  `derived_modules`, for example
   `assets: (function=std.build.derive.embed_files, inputs=["web/"],
-  args=(strip="web"))`. The derived module has one name, `files`, a
-  `dict[str, bytes]` with the content of each file by its path without the
-  prefix `strip`: `assets.files["/index.html"]` is the content of
-  `web/index.html`. Its source has one `embed` for each file and no content,
-  so new content of a file compiles the module again and writes no source. A
-  build stops for a file whose path `embed` refuses. `embed_call` and
-  `str_literal` of `std.build.derive` return an `embed` expression and a str
-  literal, for a function of a project that returns another module for the
-  files. The guide page "Embedding files" has a section on the files of a
-  directory.
+  args=(strip="web"))`. Import `assets` and read `assets.files["/index.html"]`
+  to get `web/index.html` as `bytes`. The generated `dict[str, bytes]`
+  uses `embed` for each file, so content-only edits recompile it without
+  rewriting source. Invalid embedding paths stop the build.
+  Write custom generators with `embed_call()` and `str_literal()`, and test
+  them without filesystem fixtures using `input_of(path, content)`. [#3467]
 - Use private CAs and client certificates with `net.TLSConnection` and
   `net.TLSListener` through `ca_pem`, `cert_pem`, and `key_pem`.
   Listeners request client certificates with `client_auth=True`. Set
@@ -283,18 +442,19 @@
   cancels an attempt in progress, and closing a listener aborts unfinished
   handshakes while keeping accepted connections open. Failed handshakes report
   certificate rejection reasons or peer alerts when available. [#3346]
-- Compile regular expressions once with `re.compile(pattern)` and reuse the
+- Compile regular expressions once with `std.re.compile(pattern)` and reuse the
   resulting `Pattern` across calls and actors. Count or replace non-overlapping
-  matches with `re.count(pattern, string)` and
-  `re.replace(pattern, string, replacement)`, or the corresponding `Pattern`
+  matches with `std.re.count(pattern, string)` and
+  `std.re.replace(pattern, string, replacement)`, or the corresponding `Pattern`
   methods, without building a `Match` object for each result. Replacement text
-  is literal: backslashes and group references are ordinary text. `re.matches`
-  and `re.split` also compile once per call instead of once per match. Compiled
-  patterns use PCRE2 JIT on ARM64 and x86_64, with interpreter fallback for
-  unsupported patterns, unavailable executable memory, JIT stack exhaustion,
-  and explicit resource limits. Scans avoid repeated UTF-8 validation and
-  duplicate zero-width matches. Temporary matching data uses C allocation to
-  reduce GC work and is freed even when matching or result construction raises.
+  is literal: backslashes and group references are ordinary text.
+  `std.re.matches` and `std.re.split` also compile once per call instead of once
+  per match. Compiled patterns use PCRE2 JIT on ARM64 and x86_64, with
+  interpreter fallback for unsupported patterns, unavailable executable memory,
+  JIT stack exhaustion, and explicit resource limits. Scans avoid repeated
+  UTF-8 validation and duplicate zero-width matches. Temporary matching data
+  uses C allocation to reduce GC work and is freed even when matching or
+  result construction raises.
   On an Apple M1 with a 25 MB input, a regex-redux program using bulk operations
   took 33% less elapsed time and 80% less peak memory than the previous
   implementation. JIT reduced median elapsed time for the bulk version from
@@ -311,9 +471,9 @@
   status codes 1xx, 204, and 304. User callbacks run asynchronously, allowing
   them to call back into the HTTP actors without deadlocking. [#3335]
 - Stop a `net.TCPListener` with `close()` while keeping accepted connections
-  open. Query `local_address()` and `local_port()` to discover the bound
-  endpoint, including the port chosen when listening on port 0. TCP clients
-  and accepted connections expose both addresses and ports through
+  open. Query `endpoint()` to discover the bound address and port, including
+  the port chosen when listening on port 0. TCP clients and accepted
+  connections expose both addresses and ports through
   `endpoints()`. Failed listeners also release their socket handles, and
   accepting connections no longer leaks a handle per connection. Accepted
   connections keep their socket I/O on the listener's worker thread; callbacks
@@ -335,6 +495,11 @@
   their zone so they can be used for replies. Interface names are supported on
   Unix; Windows requires numeric interface indices. Unknown interface names
   are rejected. [#3342]
+- Send UDP datagrams from a dual-stack `net.UDPListener` bound to `::` to
+  IPv4 addresses on macOS, matching Linux behavior. [#3431]
+- Make `net.lookup_aaaa()` report an error on macOS for IPv4 addresses and
+  names with only IPv4 addresses, instead of returning IPv4-mapped IPv6
+  addresses. [#3432]
 - Absorb UDP datagram bursts with `net.UDPListener`'s `recv_buffer_size`
   parameter and `set_recv_buffer_size()` and `get_recv_buffer_size()` methods.
   The default of 0 keeps the system receive-buffer size; the operating system
@@ -354,6 +519,25 @@
   timeouts. Environment services initialize before the root actor starts.
   The old `process` module and `Env` forwarding methods are removed; call
   the service actors directly. [#2768] [#3315] [#3317]
+- Send SIGTERM to running child processes when their Acton program exits.
+  Set `terminate_on_exit=True` in `env.process.spawn()` or
+  `env.process.run()`; by default, children keep running. [#3450]
+- Handle individual key presses on Unix terminals with
+  `env.stdio.set_stdin(raw=True)`, receiving control keys such as Ctrl-C as
+  input bytes. Set `raw=False` to restore the previous settings; terminal
+  settings are also restored on normal exit, SIGHUP, SIGQUIT, and handled
+  crashes.
+  Check each stream with `stdin_is_tty()`, `stdout_is_tty()`, and
+  `stderr_is_tty()`. Installing a new stdin handler replaces the previous
+  handler without starting a competing reader. [#3419]
+- Read the size of the terminal on stdout, in columns and rows, with
+  `env.stdio.term_size()`. It is `None` when stdout is not a terminal or the
+  terminal reports no size. On Windows it is the size of the visible window
+  of the console. [#3436]
+- Add `std.term.display_width()`, the number of columns a string takes on a
+  terminal. CJK ideographs and most emoji take two columns, and combining
+  marks and control characters take none, so a program can align text and
+  place the cursor after it. [#3437]
 - Write raw bytes to stdout and stderr with `env.stdio.outb()` and
   `env.stdio.errb()`, preserving NUL bytes and invalid UTF-8. Text output uses
   `env.stdio.out()` and `env.stdio.err()`. [#3314]
@@ -368,6 +552,11 @@
   iterables grow the buffer as needed. Collection conversions to `bytes` and
   `bytearray` use the same construction path, and invalid byte values raise
   `ValueError` as soon as they are read. [#3371]
+- Speed up `std.diff` comparisons with many unique matching lines while
+  preserving diff output. [#3406]
+- Avoid allocating a new string or byte buffer when case conversion leaves
+  it unchanged, or when joining zero or one item. Several unchanged `bytes`
+  padding and replacement operations also reuse their input. [#3414]
 - Speed up `str.replace()` for single-byte search strings, including ASCII
   delimiters in Unicode text. A replacement count of 0 now returns without
   scanning the input. [#3373]
@@ -380,12 +569,17 @@
   when building the result raises, preventing memory leaks on allocation
   failure. XML text and attribute allocation failures now raise `MemoryError`
   instead of crashing. [#3276]
-- Decode XML CDATA sections larger than 10 MB with `xml.decode()` and
-  `std.xml.decode()`, up to libxml2's 1 GB limit. The maximum element nesting
-  depth also increases from 256 to 2048. [#3353]
+- Decode XML CDATA sections larger than 10 MB with `std.xml.decode()`, up to
+  libxml2's 1 GB limit. The maximum element nesting depth also increases from
+  256 to 2048. [#3353]
 - Format the full `u64` range correctly with `hex()` and `bin()`, instead of
   treating values above the signed 64-bit maximum as negative. For example,
   `hex(u64(18446744073709551615))` returns `"0xffffffffffffffff"`. [#3388]
+- Parse and convert integers correctly on Windows across the full 64-bit
+  range, including negative strings, signed minimum values, and conversions
+  between scalar types and `bigint`. Out-of-range `int` and narrow signed
+  conversions raise `ValueError` instead of accepting truncated values.
+  [#3420]
 - Fix parsing negative integer strings whose digit count exactly matches the
   parser's chunk size, including fixed-width integer constructors, and fix
   `bigint` `&`, `|`, and `^` results for negative operands. [#3246] [#3247]
@@ -406,12 +600,40 @@
   Hashing user-defined values, including dictionary and set operations, now
   keeps the temporary hasher on the stack instead of allocating it on the GC
   heap. [#3244] [#3290]
-- Add `std.term.display_width()`, the number of columns a string takes on a
-  terminal. CJK ideographs and most emoji take two columns, and combining
-  marks and control characters take none, so a program can align text and
-  place the cursor after it.
 
 ### Runtime
+- Deliver timers set by one message in due-time order even when the message
+  runs long enough that the timers are already overdue when queued. Timers
+  with the same due time keep the order in which they were set. [#3446]
+- Persist newly constructed actors with their parent's database transaction
+  before it returns or awaits, even when no message is sent to the new actor.
+  Environment and root initialization now run synchronously in one construction
+  transaction, saving initialized actors and buffered messages before making
+  startup and construction output runnable. Failed construction discards that
+  output. [#3442] [#3484]
+- Fix cases where unreachable actors never ran their `__cleanup__` methods,
+  including after timers and uncaught exceptions. Idle workers no longer keep
+  actors alive through stale pointers, and cleanup messages sent between
+  continuations no longer wait for an actor that may never run again. Growing
+  the timer queue also releases the old storage so it cannot retain actors
+  through messages that have already fired. Optimized builds also clear
+  stale register pointers before waiting for I/O, allowing cleanup without
+  waiting for the worker to process another message. The collector no longer
+  treats its memory-mapping hint as a root pointer, which could keep
+  unreachable actors alive on Linux. [#3394] [#3435] [#3438] [#3447]
+- Start reliably on Linux with unlimited or oversized stack limits, and
+  avoid worker stack overflows during deeply nested XML decoding. Threaded
+  builds use at least 16 MiB per worker and honor larger main-thread stacks
+  up to 64 MiB. The same default applies to GC helper threads on glibc Linux.
+  Worker creation failures report an error instead of hanging at startup.
+  [#3399]
+- Reduce allocation when boxing `int` values from -5 through 256 by reusing
+  static objects. Restore repeated references to boxed scalars correctly
+  during deserialization, including fixed-width integers. [#3398]
+- Enable process instruction and cycle counters with `--rts-perf` and read
+  them through `env.rts.perf_stats()`. `acton test perf` and `acton test scale`
+  enable counters automatically; child processes need their own option.
+  Unsupported or unavailable hardware measurements are `None`. [#3399]
 - Reduce long garbage-collection pauses on large heaps with opt-in
   generational collection. Minor collections collect young objects, and
   parallel marking runs in steps with the program stopped. Select
@@ -420,7 +642,7 @@
   remains the default. `ACTON_GC_PAUSE_MS` sets the marking time target per
   step (50 ms by default, 0 for one stop per collection). Stopping threads
   and finishing a collection can exceed that target.
-  `acton.rts.get_gc_info()` reports the active mode and pause target. [#3390]
+  `env.rts.gc_info()` reports the active mode and pause target. [#3390]
 - Reduce allocation overhead and memory use by disabling GC object end padding
   by default: a 16-byte object now occupies 16 bytes instead of 32. Across nine
   of ten benchmark loads on x86_64 Linux and an M1 Mac, this used 6% to 24%
@@ -431,7 +653,7 @@
 - Serialize boolean and narrow integer values using only their own bytes,
   avoiding reads beyond their storage and copies of adjacent fields into
   serialized data. [#3318]
-- Keep memory freed by `acton.rts.gc()` mapped for reuse, avoiding page faults
+- Keep memory freed by `env.rts.gc()` mapped for reuse, avoiding page faults
   when subsequent allocations reuse it. The call still runs a full collection;
   free blocks return to the operating system after remaining unused over
   several collections. [#3347]
@@ -443,7 +665,7 @@
   `gc_memory_limit` in `Build.act` or `GC_MEMORY_LIMIT` at startup, for example
   `GC_MEMORY_LIMIT=4G`. Set `gc_heap_ceiling_percent` or
   `GC_HEAP_CEILING_PERCENT` to `0` to restore stepwise heap growth.
-  `acton.rts.get_gc_info()` reports the active limit and ceiling. [#3312]
+  `env.rts.gc_info()` reports the active limit and ceiling. [#3312]
 - Avoid crashes and unnecessary heap growth around thread shutdown and
   concurrent garbage collection. On Linux, thread exit and cancellation no
   longer leave collection permanently disabled. Incremental collection no
@@ -453,12 +675,13 @@
   involving glibc, macOS deadlocks when logging time-limit stops with
   `GC_PRINT_STATS`, and crashes in collector assertion builds.
   `GC_FULL_FREQUENCY=0` now makes every incremental collection a full one.
-  [#3320] [#3339]
+  Thread exit waits until no collection can still scan its stack.
+  [#3320] [#3339] [#3394]
 - Reduce garbage-collector CPU time and metadata size by storing marks as
   packed bits by default. Measured workloads on an Apple M1 and a Ryzen 9
   5950X used 2% to 14% less CPU time and 3% to 6% less peak memory than with
   mark bytes. Set `"gc_use_mark_bits": "false"` in `Build.act` to restore
-  mark bytes; `acton.rts.get_gc_info()` reports the layout as `mark_bits`.
+  mark bytes; `env.rts.gc_info()` reports the layout as `mark_bits`.
   [#3308]
 - Start more runtime workers under low open-file soft limits by raising the
   limit to the hard limit on Unix, capped at `kern.maxfilesperproc` on macOS.
@@ -503,10 +726,11 @@
   access on machines with more logical CPUs. Also remove unused CPU-mask setup
   that could fail at startup on Macs with 32 or more CPUs. [#3295] [#3297]
 - Inspect how long ready actors wait to run through RTS monitor logs,
-  sockets, or `--rts-mon-on-exit`. Workers report counts, total and maximum
-  wait times, and a histogram, with microsecond resolution. Wait statistics
-  are collected only when monitor output is enabled and are not included in
-  `acton.rts.rts_stats()`. [#3287]
+  sockets, `--rts-mon-on-exit`, or `env.rts.worker_stats()`. Workers report
+  counts, total and maximum wait times, and a histogram. Monitor output uses
+  microseconds; API counters use nanoseconds. Wait statistics are collected
+  only when monitor output is enabled; `waits_enabled` reports whether
+  collection is active. [#3287] [#3399]
 - Reduce garbage-collection work for numeric-heavy programs by allocating
   boxed scalars, ranges, and `bigint` digits as pointer-free objects and by
   prefetching only objects that the collector will scan. [#3248] [#3250]
@@ -516,7 +740,10 @@
   cancellation from leaving exiting threads registered, recover from stale
   stack faults on Windows when external threads are registered, and reduce
   allocation, marking, heap-walk, and sweeping overhead. Also fix collection
-  after `fork()`. [#3253] [#3259] [#3312]
+  after `fork()`, allow allocation retries while collection or heap growth
+  makes progress, and restart heap scanning after mark-stack overflow.
+  Discard pending scans of explicitly freed large objects during generational
+  collection before their storage is reused. [#3253] [#3259] [#3312] [#3394]
 - Keep objects reachable from an actor's `__cleanup__` alive when marking
   overflows the GC mark stack, preventing incorrect results or crashes during
   cleanup. Grow the mark stack without dropping work when the collecting
@@ -543,7 +770,7 @@
   `GC_BYTES_PER_MARKER` at startup; `0` restores full marker participation.
   The initial mark stack also grows to 4,194,304 entries, while Windows keeps
   1,048,576, reducing slow overflow recovery on large heaps. Both settings
-  are reported by `acton.rts.get_gc_info()`. [#3268] [#3269]
+  are reported by `env.rts.gc_info()`. [#3268] [#3269]
 - Prefer performance cores when sizing the default GC marker pool on macOS
   and Linux. Include efficiency cores as needed to count at least 40% of
   logical CPUs before applying the 16-marker cap; `GC_MARKERS` and
@@ -561,7 +788,7 @@
   unnecessary signal-mask saves and restores around `try` blocks and raised
   exceptions. [#3240] [#3275]
 - Access runtime worker statistics atomically, removing data races between
-  worker updates and monitoring through `acton.rts.rts_stats()`. [#3234]
+  worker updates and monitoring through `env.rts.worker_stats()`. [#3234]
 - Reduce per-message statistics bookkeeping by reusing each worker's
   statistics entry, and use consistent 64-bit counters, worker indices, and
   timing values across platforms, including Windows. [#3279] [#3281]
@@ -573,11 +800,7 @@
   `/proc/self/fd` or `/dev/fd` or parsing `/proc/self/limits`. On macOS the
   limit includes the `kern.maxfilesperproc` cap that the kernel enforces. On
   Windows the count is the number of handles of the process, of every kind,
-  and the limit is `None`.
-- Read the size of the terminal on stdout, in columns and rows, with
-  `env.stdio.term_size()`. It is `None` when stdout is not a terminal or the
-  terminal reports no size. On Windows it is the size of the visible window
-  of the console.
+  and the limit is `None`. [#3434]
 
 ### Packages & Distribution
 - Install stable Homebrew releases from prebuilt tarballs for macOS and Linux
@@ -589,11 +812,21 @@
   Concurrent builds can install the same dependency without conflicts. [#3325]
 
 ### Documentation
+- Update the C extension guide with string and bytes buffer ownership rules
+  and a zlib example that preserves embedded NUL bytes and tracks full output
+  lengths when processing large buffers. [#3192] [#3448]
+- Document actor-startup migration patterns for declarative validation,
+  callback cycles, operational setup, and tests, plus `raise` expressions in
+  the language guide. [#3442]
+- Document type aliases in the language guide, including parameterized and
+  protocol-constrained aliases, imports, and recursive definitions. [#3396]
 - Document that `del d[key]` does nothing when a dictionary key is missing,
   so callers do not need a membership check before deleting. [#3381]
 - Update the compiler developer guide to describe the compile pipeline,
   incremental builds, project and dependency discovery, and cached module
-  interfaces, plus protocol witness sharing. [#3325] [#3354]
+  interfaces, plus protocol witness sharing. Explain output freshness,
+  shared-dependency build locks, and stable generated headers. [#3325]
+  [#3354] [#3457] [#3459]
 - Document module initialization and the C extension `__ext_init__` contract.
   The hook sets up C state before the module initializes its imports, classes,
   and module-level values; it must not call Acton code or construct objects
@@ -608,7 +841,21 @@
   test three more times with that seed, shows the seed and how many of those
   runs failed the same way, and prints the `acton test --seed` command that
   runs the test with the seed again. Tests that draw from `t.random` run every
-  time instead of reusing a cached result.
+  time instead of reusing a cached result. [#3424]
+- Run online package tests in separate Linux and macOS CI jobs with
+  authenticated GitHub API requests, reducing rate-limit failures and allowing
+  network failures to be retried without rerunning the full test suite. [#3413]
+- Avoid listen-port collisions in network tests and the HTTP benchmark by
+  using automatically assigned ports and waiting for listener readiness.
+  [#3417] [#3418] [#3429]
+- Stabilize GC page-reuse and terminal-restoration tests, and save compiler
+  logs and process diagnostics when watch subprocess tests fail. Run actor
+  cleanup tests in optimized builds, and retry TLS test connection attempts
+  that time out before reaching the handshake they are testing. Avoid Linux
+  "Text file busy" races when creating watch-test scripts, and stop waits as
+  soon as the tested compiler exits. Linux CI starts a fresh compile cache
+  after builtin interface changes to avoid filling the runner's disk.
+  [#3422] [#3430] [#3443] [#3445] [#3462] [#3484]
 - Check runtime and C-extension pointer stores with `acton test --gc-check`.
   Tests run in generational mode with frequent collections and short marking
   steps, bypassing cached test results and failing when the checker detects
@@ -625,10 +872,14 @@
   compiler regressions, including cached modules and dependency APIs. [#3352]
 - Render tables in Webex merge notifications as aligned text in code blocks,
   preserving other Markdown and existing code blocks. [#3351]
+- Rebuild `acton.now`, `www.acton-lang.org`, and `acton.guide` after guide
+  source changes. Dispatch each rebuild independently so a failed trigger does
+  not cancel updates to the other sites. [#3395]
 - Let `compiler-bench --pipeline` measure both frontend and backend work for
   ordinary modules instead of failing after the frontend measurement. [#3325]
-- Build and test the external `actonlang/textfsm` package in CI with the newly
-  built Acton package. [#3340]
+- Build and test the external `actonlang/textfsm`, `stratoweave/actsnmp`,
+  and `stratoweave/http-router` packages in CI with the newly built Acton
+  package. [#3340] [#3416] [#3466]
 - Treat a nonzero test-process exit as an error even if the test already
   reported success. `acton test` returns exit code 2 and includes the error in
   text and JSON summaries; ordinary assertion failures still return 1. [#3324]
@@ -651,8 +902,65 @@
   anchored to the original test start. [#3245]
 
 ### Compatibility Notes
+- C extensions: access compiler-owned optional scalar fields through the
+  generated `G_optional_get_`, `G_optional_box_`, and `G_optional_set_` helpers
+  for each class and field instead of assuming a boxed pointer slot. [#3470]
+- C extensions: replace the removed `$Actor` runtime type, `$ActorG_methods`
+  table, and `$ActorD_` method names with `B_Actor`, `B_ActorG_methods`, and
+  `B_ActorD_` respectively. [#3484]
+- C extensions: invoke `proc`, `mut`, and `pure` closures through `__call__`
+  instead of the removed `__exec__` slot. Action closures now expose only
+  `__asyn__`, which returns a `B_Msg` without taking a continuation. Update
+  hand-written closure method tables to match. [#3475]
+- Adapt an `action` explicitly when an API expects a `proc` callback:
+  use `proc lambda x: callback(x)` to wait for its result, or `async callback`
+  when the callback should return a `Msg`. Implicit action-to-proc conversion
+  is no longer accepted. [#3471]
+- Public actor interfaces reject `mut` and `proc` callback types, including
+  in constructor parameters and method arguments or results. Use `pure`,
+  `com`, or `action` callbacks, or keep procedural helpers private. [#3471]
+- C extensions: `actBytesFromCString()` and `actBytesFromCStringLength()`
+  now borrow immutable input, matching the `actStrFromCString` constructors.
+  Keep borrowed buffers alive for the result's lifetime. For temporary,
+  mutable, or externally freed buffers, use `actBytesFromCStringCopy()` or
+  `actBytesFromCStringLengthCopy()`; strings have corresponding `Copy`
+  variants. Length variants preserve embedded NUL bytes and take `int64_t`
+  counts. Borrowed strings still require a final NUL terminator; borrowed
+  bytes do not. Replace removed `to$str`, `to_str_len`, and `toB_str` with
+  the copying string constructors, and `to_str_noc` with
+  `actStrFromCString()`. Replace `to$bytes` and `to$bytesD_len` with copying
+  bytes constructors, and `actBytesFromCStringNoCopy` and
+  `actBytesFromCStringLengthNoCopy` with the unadorned names. [#3448]
+- Move executable actor-body setup, including loops, conditionals, mutation,
+  and calls that wait for replies, into `__startup__`. Keep actor-body
+  initializers declarative, with `pure` or `com` effects, and initialize each
+  name only once. Use immutable values for dependencies between initializers;
+  mutable actor fields cannot be read during construction. Startup takes no
+  arguments and returns `None`; its public signature is `action() -> None`,
+  while its implementation may use `proc`.
+  Remove explicit actor-body `__startup__()` calls; these are now rejected,
+  and construction schedules startup automatically once initialization succeeds.
+  Class, protocol, extension, and module bodies also reject executable statements
+  outside their permitted declarations and bindings. [#3442] [#3484]
+- Replace `local_address()` and `local_port()` on `net` listeners and
+  `std.syslog` servers with `endpoint().address` and `endpoint().port`.
+  On connections, use the corresponding fields of `endpoints()` instead of
+  individual address getters. Replace `on_listen_error` on HTTP(S) listeners
+  with `on_listen`, which receives the listener and `None` on readiness or an
+  error on failure. [#3444]
 - Replace `env.stdio.is_tty()` with `env.stdio.stdout_is_tty()`.
   `stdin_is_tty()` and `stderr_is_tty()` check the other two streams. [#3421]
+- Update HTTP and HTTPS server handlers to pass `bytes` response bodies to
+  the `respond` callback, `send_response()`, and `std.http.build_response()`.
+  For text, use `respond(200, {}, text.encode())`; update explicit callback
+  signatures from `str` to `bytes`. [#3403]
+- Replace imports of `acton.rts` and calls taking `env.syscap` with methods
+  on `env.rts`; `Env.syscap` is removed. For example,
+  `acton.rts.get_gc_info(env.syscap)` becomes `env.rts.gc_info()`.
+  Heap and allocation statistics move to `gc_stats()`, resident memory
+  to `process_stats()`, `rts_stats()` to `worker_stats()`, and
+  `perf_snapshot()` to `perf_stats()`. Enable hardware counters with
+  `--rts-perf` instead of `ACTON_TEST_PERF=1`. [#3399]
 - Update C extensions for changed builtin helper names and container layouts.
   Dictionaries and sets now retain their `Hashable` witness, so
   `B_dictD_setitem()` and `B_dictD_get()` no longer take it as an argument.
@@ -665,13 +973,13 @@
   libraries update without barriers. [#3390]
 - Remove `gc_dirty_tracking_backend` from `Build.act`; the collector now
   uses manual write barriers instead of `mprotect`, `soft_dirty`, or
-  `userfaultfd`. `acton.rts.get_gc_info()` drops `configured_backend` and
+  `userfaultfd`. `env.rts.gc_info()` drops `configured_backend` and
   reports `mode` as `"ordinary"` or `"generational"`; use `pause_target_ms`
   to inspect the marking time target. [#3390]
 - Targets without thread support, including WebAssembly, can no longer
   build with the bundled collector. [#3390]
 - Replace `parse_message()`, `parse_request()`, and `parse_response()` in
-  `http` and `std.http` with one `MessageParser` per connection. Call
+  `std.http` with one `MessageParser` per connection. Call
   `feed(data)`, check `error`, and convert completed messages with
   `request_from_message()` or `response_from_message()`. For responses, use
   `MessageParser(responses=True)` and record each request with
@@ -680,13 +988,13 @@
 - Move environment-variable calls from `env` to `env.vars`, including
   `getenv`, `setenv`, `unsetenv`, and their byte variants.
   `env.stdout_write(s)` becomes `env.stdio.out(s)`; call `stdin_install`,
-  `set_stdin`, and `is_tty` on `env.stdio` as well. Output and `env.exit()`
+  `set_stdin`, and `stdout_is_tty` on `env.stdio` as well. Output and `env.exit()`
   go to separate actors, so wait for output with
   `await async env.stdio.out(s)` before calling `env.exit(...)`. Shutdown is
   asynchronous; code after `env.exit(n)` can still run, and awaiting the exit
   call does not wait for work in other actors. Await required output or cleanup
   before requesting exit, and return or branch after an error exit to avoid
-  running success code. [#3317] [#3365]
+  running success code. [#3317] [#3365] [#3421]
 - Replace `process.Process(...)` and `process.RunProcess(...)` with
   `env.process.spawn(...)` and `env.process.run(...)`. The `process` module
   is removed; drop `ProcessCap` construction and the capability argument.
@@ -6044,6 +6352,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#3189]: https://github.com/actonlang/acton/pull/3189
 [#3190]: https://github.com/actonlang/acton/pull/3190
 [#3191]: https://github.com/actonlang/acton/pull/3191
+[#3192]: https://github.com/actonlang/acton/pull/3192
 [#3193]: https://github.com/actonlang/acton/pull/3193
 [#3196]: https://github.com/actonlang/acton/pull/3196
 [#3198]: https://github.com/actonlang/acton/pull/3198
@@ -6201,6 +6510,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#3374]: https://github.com/actonlang/acton/pull/3374
 [#3375]: https://github.com/actonlang/acton/pull/3375
 [#3376]: https://github.com/actonlang/acton/pull/3376
+[#3378]: https://github.com/actonlang/acton/pull/3378
 [#3380]: https://github.com/actonlang/acton/pull/3380
 [#3381]: https://github.com/actonlang/acton/pull/3381
 [#3382]: https://github.com/actonlang/acton/pull/3382
@@ -6210,7 +6520,74 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#3388]: https://github.com/actonlang/acton/pull/3388
 [#3390]: https://github.com/actonlang/acton/pull/3390
 [#3391]: https://github.com/actonlang/acton/pull/3391
+[#3392]: https://github.com/actonlang/acton/pull/3392
+[#3394]: https://github.com/actonlang/acton/pull/3394
+[#3395]: https://github.com/actonlang/acton/pull/3395
+[#3396]: https://github.com/actonlang/acton/pull/3396
+[#3398]: https://github.com/actonlang/acton/pull/3398
+[#3399]: https://github.com/actonlang/acton/pull/3399
+[#3402]: https://github.com/actonlang/acton/pull/3402
+[#3403]: https://github.com/actonlang/acton/pull/3403
+[#3404]: https://github.com/actonlang/acton/pull/3404
+[#3406]: https://github.com/actonlang/acton/pull/3406
+[#3407]: https://github.com/actonlang/acton/pull/3407
+[#3408]: https://github.com/actonlang/acton/pull/3408
+[#3409]: https://github.com/actonlang/acton/pull/3409
+[#3410]: https://github.com/actonlang/acton/pull/3410
+[#3411]: https://github.com/actonlang/acton/pull/3411
+[#3412]: https://github.com/actonlang/acton/pull/3412
+[#3413]: https://github.com/actonlang/acton/pull/3413
+[#3414]: https://github.com/actonlang/acton/pull/3414
+[#3415]: https://github.com/actonlang/acton/pull/3415
+[#3416]: https://github.com/actonlang/acton/pull/3416
+[#3417]: https://github.com/actonlang/acton/pull/3417
+[#3418]: https://github.com/actonlang/acton/pull/3418
+[#3419]: https://github.com/actonlang/acton/pull/3419
+[#3420]: https://github.com/actonlang/acton/pull/3420
 [#3421]: https://github.com/actonlang/acton/pull/3421
+[#3422]: https://github.com/actonlang/acton/pull/3422
+[#3424]: https://github.com/actonlang/acton/pull/3424
+[#3426]: https://github.com/actonlang/acton/pull/3426
+[#3429]: https://github.com/actonlang/acton/pull/3429
+[#3430]: https://github.com/actonlang/acton/pull/3430
+[#3431]: https://github.com/actonlang/acton/pull/3431
+[#3432]: https://github.com/actonlang/acton/pull/3432
+[#3434]: https://github.com/actonlang/acton/pull/3434
+[#3435]: https://github.com/actonlang/acton/pull/3435
+[#3436]: https://github.com/actonlang/acton/pull/3436
+[#3437]: https://github.com/actonlang/acton/pull/3437
+[#3438]: https://github.com/actonlang/acton/pull/3438
+[#3439]: https://github.com/actonlang/acton/pull/3439
+[#3440]: https://github.com/actonlang/acton/pull/3440
+[#3442]: https://github.com/actonlang/acton/pull/3442
+[#3443]: https://github.com/actonlang/acton/pull/3443
+[#3444]: https://github.com/actonlang/acton/pull/3444
+[#3445]: https://github.com/actonlang/acton/pull/3445
+[#3446]: https://github.com/actonlang/acton/pull/3446
+[#3447]: https://github.com/actonlang/acton/pull/3447
+[#3448]: https://github.com/actonlang/acton/pull/3448
+[#3450]: https://github.com/actonlang/acton/pull/3450
+[#3451]: https://github.com/actonlang/acton/pull/3451
+[#3452]: https://github.com/actonlang/acton/pull/3452
+[#3454]: https://github.com/actonlang/acton/pull/3454
+[#3455]: https://github.com/actonlang/acton/pull/3455
+[#3456]: https://github.com/actonlang/acton/pull/3456
+[#3457]: https://github.com/actonlang/acton/pull/3457
+[#3458]: https://github.com/actonlang/acton/pull/3458
+[#3459]: https://github.com/actonlang/acton/pull/3459
+[#3462]: https://github.com/actonlang/acton/pull/3462
+[#3463]: https://github.com/actonlang/acton/pull/3463
+[#3466]: https://github.com/actonlang/acton/pull/3466
+[#3467]: https://github.com/actonlang/acton/pull/3467
+[#3468]: https://github.com/actonlang/acton/pull/3468
+[#3469]: https://github.com/actonlang/acton/pull/3469
+[#3470]: https://github.com/actonlang/acton/pull/3470
+[#3471]: https://github.com/actonlang/acton/pull/3471
+[#3474]: https://github.com/actonlang/acton/pull/3474
+[#3475]: https://github.com/actonlang/acton/pull/3475
+[#3477]: https://github.com/actonlang/acton/pull/3477
+[#3481]: https://github.com/actonlang/acton/pull/3481
+[#3484]: https://github.com/actonlang/acton/pull/3484
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
