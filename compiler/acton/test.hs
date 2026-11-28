@@ -2086,6 +2086,33 @@ parseFlagTests =
         stress <- run ["stress", "--name", "budget", "--max-time", "20", "--max-iter", "2", "--stress-workers", "1"] ExitSuccess
         assertBool "the stress repetition budget is independent of the watchdog"
           ("\"iterations\":1" `isInfixOf` stress)
+  , testCase "stress workers report progress to the test runner" $ do
+      withSystemTempDirectory "acton-test-stress-progress" $ \proj -> do
+        acton <- canonicalizePath "../../dist/bin/acton"
+        let name = "test_stress_progress"
+            fp = Fingerprint.formatFingerprint
+              (Fingerprint.updateFingerprintPrefix
+                (Fingerprint.fingerprintPrefixForName name) 1)
+            srcDir = proj </> "src"
+        createDirectoryIfMissing True srcDir
+        writeFile (proj </> "Build.act") $ unlines
+          [ "name = " ++ show name
+          , "fingerprint = " ++ fp
+          ]
+        copyFile "test/project/test_stress_progress/src/test_stress_progress.act"
+          (srcDir </> "test_stress_progress.act")
+        -- Sixteen workers with short iterations report progress to the
+        -- runner thousands of times, often at the same moment, and every
+        -- report updates the runner's phase coverage.
+        forM_ [1 .. 3 :: Int] $ \n -> do
+          (code, out, err) <- readCreateProcessWithExitCode
+            (proc acton ["test", "stress", "--name", "sleep", "--json", "--no-cache",
+                         "--stress-workers", "16", "--min-iter", "2000", "--max-iter", "2000",
+                         "--max-time", "0"])
+              { cwd = Just proj } ""
+          assertEqual ("stress run " ++ show n ++ " failed:\n" ++ out ++ err) ExitSuccess code
+          assertBool ("stress run " ++ show n ++ " runs every iteration:\n" ++ out)
+            ("\"iterations\":32000" `isInfixOf` out)
   , testCase "acton test shows and replays the seed of a failed run" $ do
       withSystemTempDirectory "acton-test-seed" $ \proj -> do
         acton <- canonicalizePath "../../dist/bin/acton"

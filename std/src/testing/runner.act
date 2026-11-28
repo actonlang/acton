@@ -1749,14 +1749,17 @@ actor test_runner(env: Env,
                 for result in worker_info.results:
                     combined_info.update(False, result)
 
-        def report_progress(executor_id: int,
-                            iterations: int,
-                            drift_us: int,
-                            drift_total_us: int,
-                            est_iter_ms: float,
-                            phase_resolution_us: int,
-                            target_sweep_iters: int,
-                            calibrating: bool):
+        # The test executors call report_progress, request_timeout and
+        # report_complete. They update the state of this actor, so they are
+        # actions of this actor and run here, one at a time.
+        action def report_progress(executor_id: int,
+                                   iterations: int,
+                                   drift_us: int,
+                                   drift_total_us: int,
+                                   est_iter_ms: float,
+                                   phase_resolution_us: int,
+                                   target_sweep_iters: int,
+                                   calibrating: bool):
             if executor_id in worker_iterations:
                 if iterations > worker_iterations[executor_id]:
                     worker_iterations[executor_id] = iterations
@@ -1769,7 +1772,7 @@ actor test_runner(env: Env,
                 worker_calibrating[executor_id] = calibrating
                 _update_stress_phase_coverage()
 
-        def request_timeout(seconds: float):
+        action def request_timeout(seconds: float):
             if test_timeout > 0.0 and len(workers_complete) < test_concurrency:
                 test_timeout = max([test_timeout, seconds])
 
@@ -1841,7 +1844,7 @@ actor test_runner(env: Env,
             print("\n" + json.encode({"test_info": test_info.to_json()}), err=True)
             env.exit(0)
 
-        def report_complete(executor_id: int, t, worker_info: ?TestInfo):
+        action def report_complete(executor_id: int, t, worker_info: ?TestInfo):
             if executor_id in workers_complete:
                 return
             workers_complete.add(executor_id)
