@@ -82,135 +82,24 @@ jobs:
             gh cache delete "${id}" || echo "  (failed to delete ${id}; continuing)"
           done
 
-  matrix_maker_macos:
-    runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.setmatrix.outputs.matrix }}
-    steps:
-      - name: "Set Matrix"
-        id: setmatrix
-        run: |
-          if [ "${{ github.event_name }}" == "pull_request" ]; then
-            MATRIX_JSON='{"include":[{"os":"macos","version":"26","arch":"aarch64","cache":true}]}'
-          else
-            MATRIX_JSON='{"include":[{"os":"macos","version":"26","arch":"aarch64","cache":true},{"os":"macos","version":"26","arch":"x86_64","cache":true}]}'
-          fi
-          echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
-
-      - name: "Debug: Print matrix JSON"
-        run: |
-          echo "Matrix JSON:"
-          echo '${{ toJson(fromJson(steps.setmatrix.outputs.matrix)) }}'
-          echo "Event name: ${{ github.event_name }}"
+  test-macos-build:
+    needs: [build-version, evict-stale-caches]
+    # Match the commit pinned in the acton-macos runner group's allowlist.
+    uses: actonlang/acton/.github/workflows/test-macos.yml@5dacff93b75e19d2334fa65b0a1cd1e8640441e1
+    with:
+      build-time: ${{ needs.build-version.outputs.build_time }}
 
   test-macos:
-    needs: [build-version, matrix_maker_macos, evict-stale-caches]
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJson(needs.matrix_maker_macos.outputs.matrix) }}
-    runs-on: ${{ matrix.arch == 'x86_64' && format('{0}-{1}-intel', matrix.os, matrix.version) || format('{0}-{1}', matrix.os, matrix.version) }}
-    env:
-      BUILD_TIME: ${{ needs.build-version.outputs.build_time }}
+    # Branch protection requires this check name.
+    name: test-macos (macos, 26, aarch64, true)
+    needs: test-macos-build
+    if: always()
+    runs-on: ubuntu-latest
     steps:
-      - name: "Show env"
-        run: env
-      - name: "Set BUILD_RELEASE when we are building for a version tag"
-        run: |
-          echo "BUILD_RELEASE=1" >> $GITHUB_ENV
-        if: startsWith(github.ref, 'refs/tags/v')
-      - name: "Enable dumping core files"
-        run: |
-          sudo sysctl kern.corefile=core.%P
-          ulimit -c unlimited
-      # The GHC bindist hardcodes the Command Line Tools SDK
-      # (/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib) as a
-      # library dir, so every GHC link reads the .tbd stubs of that SDK. When
-      # the image ships Command Line Tools newer than its default Xcode, the
-      # Xcode linker cannot parse those stubs (actions/runner-images#14940).
-      # The Command Line Tools linker always matches its own SDK.
-      - name: "Use the Command Line Tools toolchain"
-        run: sudo xcode-select -s /Library/Developer/CommandLineTools
-      - name: "Check out repository code"
-        uses: actions/checkout@v7
-      - name: "Cache downloaded source archives"
-        uses: actions/cache@v6
-        with:
-          path: deps-download
-          key: deps-download-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-${{ hashFiles('Makefile', 'deps/**/build.zig', 'deps/**/build.zig.zon') }}
-      - name: "Cache Haskell deps (~/.stack)"
-        if: matrix.cache == true
-        uses: actions/cache@v6
-        with:
-          path: |
-            ~/.stack
-          # Content-keyed on stack.yaml, with NO restore-keys fallback on purpose:
-          # a deps/GHC change misses cleanly and starts from an empty ~/.stack, so
-          # we never end up with two GHC toolchains stacked in one cache (which was
-          # blowing the per-job VM disk). The cold Haskell rebuild only happens on
-          # the run that actually changes stack.yaml.
-          key: stack-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-${{ hashFiles('compiler/stack.yaml', 'compiler/stack.yaml.lock') }}
-      # Restore the Acton/zig compile cache for non-nightly runs (PRs and pushes).
-      # The nightly (schedule) run intentionally skips this so it builds cold and
-      # produces a clean, complete snapshot (saved after tests below) that PRs and
-      # pushes restore the following day. Freshness comes from the date-stamped key
-      # plus the nightly producer, not from cache eviction.
-      - name: "Restore Acton compile cache (~/.cache/acton)"
-        if: matrix.cache == true && github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
-        uses: actions/cache/restore@v6
-        with:
-          path: |
-            ~/.cache/acton/
-          key: acton-zig-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-${{ hashFiles('Makefile') }}
-      - name: "Install build prerequisites"
-        run: |
-          # Retry network-bound installs so a transient mirror/CDN blip doesn't
-          # fail the whole job.
-          retry() { n=1; until "$@"; do [ $n -ge 3 ] && { echo "failed after 3 attempts: $*" >&2; return 1; }; echo "attempt $n failed, retrying in 15s: $*" >&2; sleep 15; n=$((n+1)); done; }
-          retry brew install haskell-stack
-      - name: "Build Acton"
-        id: build_acton
-        run: |
-          make -j2 -C ${{ github.workspace }} BUILD_RELEASE=${{ env.BUILD_RELEASE }} BUILD_TIME=${BUILD_TIME}
-      - name: "Show Acton linkage"
-        run: make -C ${{ github.workspace }} ldd
-      - name: "Build a release"
-        id: build_release
-        run: make -C ${{ github.workspace }} release BUILD_TIME=${BUILD_TIME}
-      - name: "Upload artifact"
-        uses: actions/upload-artifact@v7
-        with:
-          name: acton-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}
-          path: ${{ github.workspace }}/acton-*
-          if-no-files-found: error
-      - name: "Run tests"
-        run: |
-          ulimit -c unlimited
-          make -C ${{ github.workspace }} test
-      - name: "Run benchmark program tests"
-        run: make -C ${{ github.workspace }} test-benchgames
-      # Small programs in the write barrier's checker mode, on arm64 only for
-      # now: a pointer store without its barrier fails the program.
-      - name: "Run tests with the write-barrier checker"
-        if: matrix.arch == 'aarch64'
-        run: make -C ${{ github.workspace }} test-gc-check
-      # Nightly only: save the freshly-built, complete compile cache as the day's
-      # canonical snapshot. Runs even if tests flake so a flaky test doesn't deny
-      # PRs a warm cache, but requires the build/release steps to have succeeded so
-      # a build failure can't poison the date-stamped key with a partial cache.
-      - name: "Save Acton compile cache (~/.cache/acton)"
-        if: ${{ !cancelled() && matrix.cache == true && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && steps.build_acton.outcome == 'success' && steps.build_release.outcome == 'success' }}
-        uses: actions/cache/save@v6
-        with:
-          path: |
-            ~/.cache/acton/
-          key: acton-zig-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-${{ hashFiles('Makefile') }}
-      - name: "Upload whole test dir as artifact on test failure"
-        if: failure()
-        uses: actions/upload-artifact@v7
-        with:
-          name: test-debug-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-${{ github.run_id }}.zip
-          path: |
-            ${{ github.workspace }}/test
+      - name: "Require the macOS build and tests to pass"
+        env:
+          RESULT: ${{ needs.test-macos-build.result }}
+        run: test "$RESULT" = success
 
 
   matrix_maker_linux:
@@ -766,33 +655,12 @@ jobs:
             ${{ github.workspace }}/out/**
 
 
-  matrix_maker_run_macos:
-    runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.setmatrix.outputs.matrix }}
-    steps:
-      - name: "Set Matrix"
-        id: setmatrix
-        run: |
-          if [ "${{ github.event_name }}" == "pull_request" ]; then
-            MATRIX_JSON='{"include":[{"runner":"macos-15","artifact":"acton-macos-26-aarch64"}]}'
-          else
-            MATRIX_JSON='{"include":[{"runner":"macos-15","artifact":"acton-macos-26-aarch64"},{"runner":"macos-15-intel","artifact":"acton-macos-26-x86_64"},{"runner":"macos-26","artifact":"acton-macos-26-aarch64"},{"runner":"macos-26-intel","artifact":"acton-macos-26-x86_64"}]}'
-          fi
-          echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
-
-      - name: "Debug: Print matrix JSON"
-        run: |
-          echo "Matrix JSON:"
-          echo '${{ toJson(fromJson(steps.setmatrix.outputs.matrix)) }}'
-          echo "Event name: ${{ github.event_name }}"
-
-
   run-macos:
-    needs: [test-macos, matrix_maker_run_macos]
+    needs: test-macos
     strategy:
       fail-fast: false
-      matrix: ${{ fromJson(needs.matrix_maker_run_macos.outputs.matrix) }}
+      matrix:
+        runner: ${{ fromJSON(github.event_name == 'pull_request' && '["macos-15"]' || '["macos-15", "macos-26"]') }}
     runs-on: ${{ matrix.runner }}
     steps:
       - name: "Machine info"
@@ -802,7 +670,7 @@ jobs:
       - name: "Download artifacts"
         uses: actions/download-artifact@v8
         with:
-          name: ${{ matrix.artifact }}
+          name: acton-macos-26-aarch64
       - name: "Extract acton"
         run: |
           tar Jxf $(ls acton-macos-*.tar.xz | tail -n1)
@@ -1327,14 +1195,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: "Check out repository code"
         uses: actions/checkout@v7
-      - name: "Download artifacts for Macos aarch64, built on macos-26 targeting macos-15"
+      - name: "Download artifacts for macOS ARM64 targeting macOS 15"
         uses: actions/download-artifact@v8
         with:
           name: acton-macos-26-aarch64
-      - name: "Download artifacts for Macos x86_64, built on macos-26 targeting macos-15"
-        uses: actions/download-artifact@v8
-        with:
-          name: acton-macos-26-x86_64
       - name: "Download artifacts for Linux x86_64, built on Ubuntu:20.04"
         uses: actions/download-artifact@v8
         with:
@@ -1378,8 +1242,6 @@ jobs:
           replacesArtifacts: true
       - name: "Remove version number from macos aarch64 tar ball"
         run: mv $(ls acton-macos-aarch64*.tar.xz | tail -n1) acton-macos-aarch64-tip.tar.xz
-      - name: "Remove version number from macos x86_64 tar ball"
-        run: mv $(ls acton-macos-x86_64*.tar.xz | tail -n1) acton-macos-x86_64-tip.tar.xz
       - name: "Remove version number from linux x86_64 tar ball"
         run: mv $(ls acton-linux-x86_64*.tar.xz | tail -n1) acton-linux-x86_64-tip.tar.xz
       - name: "Remove version number from linux aarch64 tar ball"
@@ -1419,14 +1281,10 @@ jobs:
     steps:
       - name: "Check out repository code"
         uses: actions/checkout@v7
-      - name: "Download artifacts for Macos aarch64, built on macos-26 targeting macos-15"
+      - name: "Download artifacts for macOS ARM64 targeting macOS 15"
         uses: actions/download-artifact@v8
         with:
           name: acton-macos-26-aarch64
-      - name: "Download artifacts for Macos x86_64, built on macos-26 targeting macos-15"
-        uses: actions/download-artifact@v8
-        with:
-          name: acton-macos-26-x86_64
       - name: "Download artifacts for Linux x86_64, built on Ubuntu:20.04"
         uses: actions/download-artifact@v8
         with:
@@ -1758,7 +1616,7 @@ jobs:
         run: |
           FORMULA=homebrew-acton/Formula/acton.rb
           sed -i -e "s/0\.0\.0/${VERSION}/g" ${FORMULA}
-          for PLATFORM in macos-aarch64 macos-x86_64 linux-aarch64 linux-x86_64; do
+          for PLATFORM in macos-aarch64 linux-aarch64 linux-x86_64; do
             TARBALL=acton-${PLATFORM}-${VERSION}.tar.xz
             wget https://github.com/actonlang/acton/releases/download/v${VERSION}/${TARBALL}
             CHECKSUM=$(sha256sum ${TARBALL} | cut -d' ' -f1)

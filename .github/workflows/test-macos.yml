@@ -1,0 +1,177 @@
+name: Test macOS
+
+on:
+  workflow_call:
+    inputs:
+      build-time:
+        required: true
+        type: string
+
+jobs:
+  macos-arm64:
+    name: macOS ARM64
+    # The runner group pins this workflow. Route by GitHub's event metadata
+    # so a caller cannot use a workflow input to select the self-hosted runner.
+    runs-on: >-
+      ${{ github.repository == 'actonlang/acton' &&
+          ((github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+           (github.event_name == 'pull_request' &&
+            github.event.pull_request.head.repo.full_name == 'actonlang/acton' &&
+            github.event.pull_request.base.ref == 'main')) &&
+          'acton-macos-arm64' || 'macos-26' }}
+    permissions:
+      contents: read
+    env:
+      BUILD_TIME: ${{ inputs.build-time }}
+    steps:
+      - name: "Show platform"
+        run: |
+          sw_vers
+          uname -m
+      - name: "Validate build time"
+        run: |
+          if [[ ! "$BUILD_TIME" =~ ^[0-9]{8}\.[0-9]{1,2}\.[0-9]{1,2}$ ]]; then
+            echo "Expected an Acton build timestamp" >&2
+            exit 1
+          fi
+      - name: "Set BUILD_RELEASE when we are building for a version tag"
+        run: |
+          echo "BUILD_RELEASE=1" >> $GITHUB_ENV
+        if: startsWith(github.ref, 'refs/tags/v')
+      - name: "Enable dumping core files"
+        if: runner.environment == 'github-hosted'
+        run: |
+          sudo sysctl kern.corefile=core.%P
+          ulimit -c unlimited
+      # The GHC bindist hardcodes the Command Line Tools SDK
+      # (/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib) as a
+      # library dir, so every GHC link reads the .tbd stubs of that SDK. When
+      # the image ships Command Line Tools newer than its default Xcode, the
+      # Xcode linker cannot parse those stubs (actions/runner-images#14940).
+      # The Command Line Tools linker always matches its own SDK.
+      - name: "Use the Command Line Tools toolchain"
+        run: |
+          clt=/Library/Developer/CommandLineTools
+          echo "DEVELOPER_DIR=$clt" >> "$GITHUB_ENV"
+          if [ "$RUNNER_ENVIRONMENT" = self-hosted ]; then
+            # The SDK 27 headers expose pipe2, which Haskell's process package
+            # would then use even though it is unavailable on macOS 15.
+            sdk="$clt/SDKs/MacOSX26.sdk"
+            test -d "$sdk"
+            echo "SDKROOT=$sdk" >> "$GITHUB_ENV"
+          fi
+      - name: "Check out repository code"
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: "Prepare self-hosted build caches"
+        if: runner.environment == 'self-hosted'
+        run: |
+          build_home="$(dirname "$GITHUB_WORKSPACE")/build-home"
+          if [ -L "$build_home" ] || [ -L "$build_home/.cache" ]; then
+            echo "Unexpected symlink in the self-hosted cache path" >&2
+            exit 1
+          fi
+          mkdir -p "$build_home"
+          trim_cache() {
+            local cache="$1" limit_gib="$2" size_kib
+            [ -d "$cache" ] || return 0
+            size_kib=$(du -sk "$cache" | cut -f1)
+            if [ "$size_kib" -gt $((limit_gib * 1024 * 1024)) ]; then
+              echo "Clearing oversized cache: $cache ($size_kib KiB)"
+              rm -rf -- "$cache"
+            fi
+          }
+          # Check for oversized caches below 50 GB free. A clean build and
+          # test run can use more than 40 GiB of disk space.
+          free_kib=$(df -Pk "$build_home" | awk 'NR == 2 {print $4}')
+          if [ "$free_kib" -lt 48828125 ]; then
+            trim_cache "$build_home/.stack" 8
+            free_kib=$(df -Pk "$build_home" | awk 'NR == 2 {print $4}')
+            acton_limit_gib=40
+            if [ "$free_kib" -lt $((40 * 1024 * 1024)) ]; then
+              acton_limit_gib=8
+            fi
+            trim_cache "$build_home/.cache/acton" "$acton_limit_gib"
+          fi
+          df -h "$build_home"
+          echo "HOME=$build_home" >> "$GITHUB_ENV"
+      - name: "Cache downloaded source archives"
+        uses: actions/cache@v6
+        with:
+          path: deps-download
+          key: deps-download-macos-26-aarch64-${{ hashFiles('Makefile', 'deps/**/build.zig', 'deps/**/build.zig.zon') }}
+      - name: "Cache Haskell deps (~/.stack)"
+        if: runner.environment == 'github-hosted'
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.stack
+          # Content-keyed on stack.yaml, with NO restore-keys fallback on purpose:
+          # a deps/GHC change misses cleanly and starts from an empty ~/.stack, so
+          # we never end up with two GHC toolchains stacked in one cache (which was
+          # blowing the per-job VM disk). The cold Haskell rebuild only happens on
+          # the run that actually changes stack.yaml.
+          key: stack-macos-26-aarch64-${{ hashFiles('compiler/stack.yaml', 'compiler/stack.yaml.lock') }}
+      # Restore the Acton/zig compile cache for non-nightly runs (PRs and pushes).
+      # The nightly (schedule) run intentionally skips this so it builds cold and
+      # produces a clean, complete snapshot (saved after tests below) that PRs and
+      # pushes restore the following day. Freshness comes from the date-stamped key
+      # plus the nightly producer, not from cache eviction.
+      # The self-hosted runner keeps its Stack and Zig caches on disk.
+      - name: "Restore Acton compile cache (~/.cache/acton)"
+        if: runner.environment == 'github-hosted' && github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            ~/.cache/acton/
+          key: acton-zig-macos-26-aarch64-${{ hashFiles('Makefile') }}
+      - name: "Install build prerequisites"
+        if: runner.environment == 'github-hosted'
+        run: |
+          # Retry network-bound installs so a transient mirror/CDN blip doesn't
+          # fail the whole job.
+          retry() { n=1; until "$@"; do [ $n -ge 3 ] && { echo "failed after 3 attempts: $*" >&2; return 1; }; echo "attempt $n failed, retrying in 15s: $*" >&2; sleep 15; n=$((n+1)); done; }
+          retry brew install haskell-stack
+      - name: "Build Acton"
+        id: build_acton
+        run: |
+          make -j2 BUILD_RELEASE="${BUILD_RELEASE:-}" BUILD_TIME="$BUILD_TIME"
+      - name: "Show Acton linkage"
+        run: make -C ${{ github.workspace }} ldd
+      - name: "Build a release"
+        id: build_release
+        run: make release BUILD_TIME="$BUILD_TIME"
+      - name: "Upload artifact"
+        uses: actions/upload-artifact@v7
+        with:
+          name: acton-macos-26-aarch64
+          path: ${{ github.workspace }}/acton-*
+          if-no-files-found: error
+      - name: "Run tests"
+        run: |
+          ulimit -c unlimited
+          make -C ${{ github.workspace }} test
+      - name: "Run benchmark program tests"
+        run: make -C ${{ github.workspace }} test-benchgames
+      # A pointer store without its write barrier fails the program.
+      - name: "Run tests with the write-barrier checker"
+        run: make -C ${{ github.workspace }} test-gc-check
+      # Nightly only: save the freshly-built, complete compile cache as the day's
+      # canonical snapshot. Runs even if tests flake so a flaky test doesn't deny
+      # PRs a warm cache, but requires the build/release steps to have succeeded so
+      # a build failure can't poison the date-stamped key with a partial cache.
+      - name: "Save Acton compile cache (~/.cache/acton)"
+        if: ${{ !cancelled() && runner.environment == 'github-hosted' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && steps.build_acton.outcome == 'success' && steps.build_release.outcome == 'success' }}
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            ~/.cache/acton/
+          key: acton-zig-macos-26-aarch64-${{ hashFiles('Makefile') }}
+      - name: "Upload whole test dir as artifact on test failure"
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-debug-macos-26-aarch64-${{ github.run_id }}.zip
+          path: |
+            ${{ github.workspace }}/test

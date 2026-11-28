@@ -30,7 +30,7 @@ sudo dnf install -y acton
 On systems that use YUM instead of DNF, use `sudo yum install -y acton`
 for the final install command.
 {{#endtab }}
-{{#tab name="MacOS" }}
+{{#tab name="macOS (Apple silicon)" }}
 ```console
 brew install actonlang/acton/acton
 ```

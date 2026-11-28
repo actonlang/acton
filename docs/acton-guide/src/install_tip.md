@@ -44,12 +44,6 @@ Copy and extract the distribution tarball. Download from https://github.com/acto
 tar Jxf acton-linux-aarch64-tip.tar.xz
 ```
 {{#endtab }}
-{{#tab name="MacOS x86_64" }}
-Copy and extract the distribution tarball. Download from https://github.com/actonlang/acton/releases/download/tip/acton-macos-x86_64-tip.tar.xz
-```console
-tar Jxf acton-macos-x86_64-tip.tar.xz
-```
-{{#endtab }}
 {{#tab name="MacOS ARM64" }}
 Copy and extract the distribution tarball. Download from https://github.com/actonlang/acton/releases/download/tip/acton-macos-aarch64-tip.tar.xz
 ```console
