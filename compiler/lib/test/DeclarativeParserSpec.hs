@@ -18,7 +18,7 @@ main = sydTest spec
 
 spec :: Spec
 spec = describe "Declarative body grammars" $ do
-  it "accepts actor bindings, signatures, methods and a terminal startup" $
+  it "accepts actor bindings, signatures and methods" $
     accepted $ unlines
       [ "actor Example(arg: int):"
       , "    \"\"\"Actor documentation\"\"\""
@@ -30,14 +30,12 @@ spec = describe "Declarative body grammars" $ do
       , "    proc def __startup__():"
       , "        for item in [first, second]:"
       , "            state += item"
-      , "    __startup__()"
       , "class Following(object): pass"
       ]
   forM_ [ "actor Example(): pass"
         , "actor Example(): \"doc\"; var state = 0; value = 1"
-        , "actor Example(): value = 1; __startup__()"
-        , "actor Example(): \"doc\"; __startup__(); # trailing comment"
-        , "actor Example():\n    def __startup__(): pass\n    __startup__();\n\n# comment\nclass Following(object): pass"
+        , "actor Example(): NotImplemented"
+        , "actor Example():\n    NotImplemented\n    def method(): NotImplemented"
         , "actor Example():\n    value = await function()"
         ] $ \source -> it ("accepts " ++ takeWhile (/='\n') source) $ accepted source
   forM_ forbidden $ \statement -> do
@@ -55,7 +53,11 @@ spec = describe "Declarative body grammars" $ do
         , "class Nested(object): pass"
         ] $ \statement -> it ("rejects invalid actor declarations: " ++ firstLine statement) $
           rejected $ body "actor Example():" statement
-  forM_ [ "__startup__()\nvalue = 1"
+  forM_ [ "__startup__()"
+        , "value = 1; __startup__()"
+        , "\"doc\"; __startup__(); # trailing comment"
+        , "def __startup__(): pass\n__startup__();\n\n# comment"
+        , "__startup__()\nvalue = 1"
         , "__startup__()\npass"
         , "__startup__()\ndef later(): pass"
         , "__startup__(); value = 1"
@@ -65,11 +67,8 @@ spec = describe "Declarative body grammars" $ do
         , "self.__startup__()"
         , "async __startup__()"
         , "await __startup__()"
-        ] $ \statement -> it ("rejects invalid startup tails: " ++ firstLine statement) $
+        ] $ \statement -> it ("rejects explicit startup calls: " ++ firstLine statement) $
           rejected $ body "actor Example():" statement
-  it "diagnoses a nonterminal startup at the body boundary" $ do
-    errors <- failures $ body "actor Example():" "__startup__()\npass"
-    forM_ errors $ \err -> err `shouldSatisfy` isInfixOf "StartupMustBeLast"
   forM_ ["class Example(object):", "protocol Example:", "extension value (Eq):"] $ \header -> do
     it ("accepts signatures and full method bodies in " ++ header) $
       accepted $ body header $ unlines
@@ -193,7 +192,7 @@ spec = describe "Declarative body grammars" $ do
           , ("constructor raising itself", "value = RaisesSelf(self)", False)
           , ("cyclic storage", "error = Failure(self)", True)
           , ("method-only use", "def method(): return self", True)
-          , ("startup-only use", "proc def __startup__(): raise Failure(self)\n__startup__()", True)
+          , ("startup-only use", "proc def __startup__(): raise Failure(self)", True)
           ] $ \(label,statements,expected) -> it ("checks zero-argument actors: " ++ label) $ do
             ast <- P.parseModuleSerial (S.modName ["self_safety"]) "self_safety.act"
                      (declarations ++ body "actor Example():" statements) Nothing

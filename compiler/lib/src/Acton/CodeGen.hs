@@ -968,7 +968,7 @@ declDecl env (Class _ n q as b ddoc)
         env1                        = setInClass (defineTVars q env)
         props                       = [ (n,sctype sc) | (n, NSig sc Property _) <- fullAttrEnv env c ]
         sup_c                       = filter ((`elem` special_repr) . tcname) as
-        special_repr                = [primActor] -- To be extended...
+        special_repr                = [qnActor] -- To be extended...
         cDefinedClass               = inBuiltin env && any hasNotImpl [b' | Decl _ ds <- b, Def{dname=n',dbody=b'} <- ds, n' == initKW ]
         method d
           | dname d == initKW,
@@ -2777,11 +2777,11 @@ genCall env ts (Var _ n) (PosArg e (PosArg ix PosNil))
 genCall env [] (Var _ n) PosNil
   | n `elem` [primPUSH,primPUSHF]   = gen env n <> parens (char '&' <> tryFrameName)
 -- Only install GCfinalizer if one is defined, i.e. we don't have the default
--- $ActorD___cleanup__
+-- B_ActorD___cleanup__
 -- TODO: would be even better to determine this in the compiler and not emit
 -- this line rather than inspect the method table at run time
 genCall env [TCon _ tc] (Var _ n) p
-  | n == primInstallFinalizer       = text "if" <+> parens (text "(void*)" <> gen env p <> text "->" <> gen env classKW <> text "->" <> gen env cleanupKW <+> text "!= (void*)$ActorD___cleanup__") <+> gen env n <> parens (gen env p <> comma <+> genTopName env (methodname (noq $ tcname tc) attr_finalizer))
+  | n == primInstallFinalizer       = text "if" <+> parens (text "(void*)" <> gen env p <> text "->" <> gen env classKW <> text "->" <> gen env cleanupKW <+> text "!= (void*)B_ActorD___cleanup__") <+> gen env n <> parens (gen env p <> comma <+> genTopName env (methodname (noq $ tcname tc) attr_finalizer))
 genCall env ts (Var _ n) p
   | Just _ <- generatedMethodClass env n ts
                                     = genGeneratedMethodCall env n ts p

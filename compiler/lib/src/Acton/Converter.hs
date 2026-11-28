@@ -259,7 +259,7 @@ convEnvProtos env                       = convertModules convSources conv env
 
     conv m (n, NDef sc d doc)           = [(n, NDef (convS sc) d doc)]
     conv m (n, NSig sc d doc)           = [(n, NSig (convS sc) d doc)]
-    conv m (n, NAct q p k te doc)       = [(n, NAct (noqual env q) (qualWRow env q p) k (concat $ map (conv m) te) doc)]
+    conv m (n, NAct q p k us te doc)       = [(n, NAct (noqual env q) (qualWRow env q p) k us (concat $ map (conv m) te) doc)]
     conv m ni@(n, NProto q us te doc)
                                         = map (fromClass env) $ convProtocol (define [ni] env) n q us [] [] (fromTEnv te)
     conv m ni@(n, NExt q c us te opts doc)
@@ -332,7 +332,7 @@ protocol p[A(Eq),B] (q[A]):                                 class p[S,A,B] (q[S,
 extension c[A(Eq),B] (p[A,B]):                              class p$c[A,B] (p[c[A,B],A,B]):
     ...                                                         __init__ : (Eq[A]) -> None
 
-actor[ a[A(Eq),B] (b[A]):                                   class a[A,B] ($Actor[]):
+actor[ a[A(Eq),B] (b[A]):                                   class a[A,B] (B_Actor[]):
     f : [C(Ord)] => action(A,B) -> C                            __init__ : (Eq[A],b[A]) -> None
                                                                 f        : [C] => action(Ord[C],A,B) -> C
                                                                 f$local  : [C] => proc(Ord[C],A,B) -> C

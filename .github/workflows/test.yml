@@ -315,13 +315,15 @@ jobs:
       # The nightly (schedule) run skips this so it builds cold and saves a clean,
       # complete snapshot (after tests below) that PRs and pushes restore the next
       # day. See test-macos for the full rationale.
+      # A builtin interface change rebuilds most generated C. Start a fresh
+      # cache so retaining the old build alongside it cannot fill the runner.
       - name: "Restore Acton compile cache (~/.cache/acton)"
         if: matrix.cache == true && github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
         uses: actions/cache/restore@v6
         with:
           path: |
             ~/.cache/acton/
-          key: acton-zig-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}
+          key: acton-zig-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-${{ hashFiles('base/src/__builtin__.act') }}
       # Disk visibility: these containers have hit ENOSPC during cache restore.
       # Print usage after restore so a future disk problem shows up as data
       # rather than a silent mid-tar runner death. Never fails the job.
@@ -407,7 +409,7 @@ jobs:
         with:
           path: |
             ~/.cache/acton/
-          key: acton-zig-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}
+          key: acton-zig-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-${{ hashFiles('base/src/__builtin__.act') }}
       - name: "Upload whole test dir as artifact on test failure"
         if: failure()
         uses: actions/upload-artifact@v7

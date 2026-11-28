@@ -785,10 +785,10 @@ instance Norm Decl where
                                             env
             ret b | fallsthru b     = b ++ [sReturn eNone]
                   | otherwise       = b
-    norm env (Actor l n q p k b doc)
+    norm env (Actor l n q p k us b doc)
                                     = do p' <- joinPar <$> norm env0 p <*> norm (define (envOf p) env0) k
                                          b' <- normSuite env1 b
-                                         return $ Actor l n q p' KwdNIL b' doc
+                                         return $ Actor l n q p' KwdNIL us b' doc
       where env1                    = enterActorScope (dom $ envOf p ++ envOf k) $
                                       setMarks [] $ define (envOf p ++ envOf k) env0
             env0                    = define [(selfKW, NVar t0)] $ defineTVars q env
@@ -1408,7 +1408,7 @@ instance (Conv a) => Conv (Name, a) where
     conv env (n, x)                 = (n, conv env x)
 
 instance Conv NameInfo where
-    conv env (NAct q p k te doc)    = NAct q (joinRow env p k) kwdNil (conv env te) doc
+    conv env (NAct q p k us te doc)    = NAct q (joinRow env p k) kwdNil (conv env us) (conv env te) doc
     conv env (NClass q ps te doc)   = NClass q (conv env ps) (conv env te) doc
     conv env (NType q t doc)        = NType q (conv env t) doc
     conv env (NSig sc dec doc)      = NSig (conv env sc) dec doc

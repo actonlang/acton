@@ -27,15 +27,15 @@
 #if defined MPMC && MPMC == 3
 // TODO: do atomics!
 struct mpmcq {
-    $Actor  head;
-    $Actor tail;
+    B_Actor  head;
+    B_Actor tail;
     uint64_t count;
     $Lock lock;
 } __attribute__((aligned(128)));
 #else
 struct mpmcq {
-    $Actor head;
-    $Actor tail;
+    B_Actor head;
+    B_Actor tail;
     uint64_t count;
     uint32_t head_us;
     $Lock lock;

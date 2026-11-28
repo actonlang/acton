@@ -851,7 +851,7 @@ docOfInfo info =
     case info of
       I.NDef _ _ doc -> doc
       I.NSig _ _ doc -> doc
-      I.NAct _ _ _ _ doc -> doc
+      I.NAct _ _ _ _ _ doc -> doc
       I.NClass _ _ _ doc -> doc
       I.NProto _ _ _ doc -> doc
       I.NType _ _ doc -> doc

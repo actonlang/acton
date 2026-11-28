@@ -1409,9 +1409,10 @@ queryIndexes (I.NModule _ te _) = QueryIndexes (map fst pte) cons actors conattr
         isCon _                = False
         attrs (I.NClass _ _ te' _) = map fst te'
         attrs (I.NProto _ _ te' _) = map fst te'
-        attrs (I.NAct _ _ _ te' _) = map fst te'
+        attrs (I.NAct _ _ _ _ te' _) = map fst te'
         attrs _                = []
         ancestry (I.NClass _ us _ _) = us
+        ancestry (I.NAct _ _ _ us _ _) = us
         ancestry (I.NProto _ us _ _) = us
         ancestry _             = []
 

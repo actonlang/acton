@@ -20,6 +20,7 @@ struct linesQ_ApaG_class {
     B_str (*__repr__) (linesQ_Apa);
     B_NoneType (*__resume__) (linesQ_Apa);
     B_NoneType (*__cleanup__) (linesQ_Apa);
+    B_Msg (*__startup__) (linesQ_Apa);
     $R (*setupG_local) (linesQ_Apa, $Cont, $action);
     $R (*computeG_local) (linesQ_Apa, $Cont, $action);
     $R (*noticeG_local) (linesQ_Apa, $Cont, int64_t);
@@ -27,11 +28,10 @@ struct linesQ_ApaG_class {
     B_Msg (*setup) (linesQ_Apa, $action);
     B_Msg (*compute) (linesQ_Apa, $action);
     B_Msg (*notice) (linesQ_Apa, int64_t);
-    B_Msg (*__startup__) (linesQ_Apa);
 };
 struct linesQ_Apa {
     struct linesQ_ApaG_class *$class;
-    $Actor $next;
+    B_Actor $next;
     B_Msg $msg;
     B_Msg $msg_tail;
     $Lock $msg_lock;
@@ -58,14 +58,14 @@ struct linesQ_BepaG_class {
     B_str (*__repr__) (linesQ_Bepa);
     B_NoneType (*__resume__) (linesQ_Bepa);
     B_NoneType (*__cleanup__) (linesQ_Bepa);
+    B_Msg (*__startup__) (linesQ_Bepa);
     $R (*callbackG_local) (linesQ_Bepa, $Cont, int64_t);
     $R (*__startup__G_local) (linesQ_Bepa, $Cont);
     B_Msg (*callback) (linesQ_Bepa, int64_t);
-    B_Msg (*__startup__) (linesQ_Bepa);
 };
 struct linesQ_Bepa {
     struct linesQ_BepaG_class *$class;
-    $Actor $next;
+    B_Actor $next;
     B_Msg $msg;
     B_Msg $msg_tail;
     $Lock $msg_lock;
@@ -89,12 +89,12 @@ struct linesQ_mainG_class {
     B_str (*__repr__) (linesQ_main);
     B_NoneType (*__resume__) (linesQ_main);
     B_NoneType (*__cleanup__) (linesQ_main);
-    $R (*__startup__G_local) (linesQ_main, $Cont);
     B_Msg (*__startup__) (linesQ_main);
+    $R (*__startup__G_local) (linesQ_main, $Cont);
 };
 struct linesQ_main {
     struct linesQ_mainG_class *$class;
-    $Actor $next;
+    B_Actor $next;
     B_Msg $msg;
     B_Msg $msg_tail;
     $Lock $msg_lock;

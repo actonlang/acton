@@ -212,16 +212,17 @@ mkModuleInfo m ms te mdoc   = ModuleInfo {
         wittypes            = indexMap [ (qn, w) | w <- wits, Just qn <- [witnessTypeQName w] ]
         conattrs            = indexMap [ (a, moduleTCon m ni) | ni@(_,i) <- pte, isCon i, a <- dom (conTE i) ]
         protoattrs          = indexMap [ (a, moduleTCon m ni) | ni@(_,i@NProto{}) <- pte, a <- dom (conTE i) ]
-        descendants         = indexMap [ (tcname c, moduleTCon m ni) | ni@(_,i@NClass{}) <- pte, (_,c) <- ancestry i ]
+        descendants         = indexMap [ (tcname c, moduleTCon m ni) | ni@(_,i) <- pte, isCon i, (_,c) <- ancestry i ]
         protodescs          = indexMap [ (tcname c, moduleTCon m ni) | ni@(_,i@NProto{}) <- pte, (_,c) <- ancestry i ]
         qkeyed mp qn        = concat [ Map.findWithDefault [] qn' mp | qn' <- moduleQNameKeys m qn ]
         indexMap xs         = Map.fromListWith (++) [ (k, [v]) | (k,v) <- reverse xs ]
         ancestry (NClass _ us _ _) = us
+        ancestry (NAct _ _ _ us _ _) = us
         ancestry (NProto _ us _ _) = us
         ancestry _          = []
         conTE (NClass _ _ te' _) = te'
         conTE (NProto _ _ te' _) = te'
-        conTE (NAct _ _ _ te' _) = te'
+        conTE (NAct _ _ _ _ te' _) = te'
         conTE _             = []
         isCons NClass{}     = True
         isCons NProto{}     = True
@@ -274,7 +275,10 @@ mkTyFileModuleInfo m ms mdoc db
         actors               = map (moduleTCon m) $ unsafePerformIO $ InterfaceFiles.readInterfaceDBActors db
         conAttr n            = map (moduleTCon m) $ unsafePerformIO $ InterfaceFiles.readInterfaceDBConAttr db n
         protoAttr n          = map (moduleTCon m) $ unsafePerformIO $ InterfaceFiles.readInterfaceDBProtoAttr db n
-        descendants qn       = [ moduleTCon m ni | qn' <- moduleQNameKeys m qn, ni@(_,NClass{}) <- readDesc qn' ]
+        descendants qn       = [ moduleTCon m ni | qn' <- moduleQNameKeys m qn, ni@(_,i) <- readDesc qn', isCon i ]
+        isCon NClass{}       = True
+        isCon NAct{}         = True
+        isCon _              = False
         protoDescendants qn  = [ moduleTCon m ni | qn' <- moduleQNameKeys m qn, ni@(_,NProto{}) <- readDesc qn' ]
         readDesc qn          = unsafePerformIO $ InterfaceFiles.readInterfaceDBDescendants db qn
         -- The proto index stores extension records; one extension can carry
@@ -426,7 +430,7 @@ instance Unalias NameInfo where
     unalias env (NSVar t)           = NSVar (unalias env t)
     unalias env (NDef t d doc)      = NDef (unalias env t) d doc
     unalias env (NSig t d doc)      = NSig (unalias env t) d doc
-    unalias env (NAct q p k te doc) = NAct (unalias env q) (unalias env p) (unalias env k) (unalias env te) doc
+    unalias env (NAct q p k us te doc) = NAct (unalias env q) (unalias env p) (unalias env k) (unalias env us) (unalias env te) doc
     unalias env (NClass q us te doc)= NClass (unalias env q) (unalias env us) (unalias env te) doc
     unalias env (NProto q us te doc)= NProto (unalias env q) (unalias env us) (unalias env te) doc
     unalias env (NType q t doc)     = NType (unalias env q) (unalias env t) doc
@@ -795,7 +799,7 @@ kindOf env TFX{}            = KFX
 
 tconKind                    :: QName -> EnvF x -> Kind
 tconKind n env              = case findQName n env of
-                                NAct q _ _ _ _ -> kind KType q
+                                NAct q _ _ _ _ _ -> kind KType q
                                 NClass q _ _ _ -> kind KType q
                                 NProto q _ _ _ -> kind KProto q
                                 NType q _ _    -> kind KType q
@@ -907,7 +911,7 @@ findCon env (TC n ts)
         s                   = tvs `zip` ts
 
 findConName n env           = case findQName n env of
-                                NAct q p k te _  -> (q, [], notHidden te)
+                                NAct q p k us te _  -> (q, us, notHidden te)
                                 NClass q us te _ -> (q, us, te)
                                 NProto q us te _ -> (q, us, te)
                                 NType q t _      -> (q, [], [])
@@ -1021,7 +1025,7 @@ isClosed _                          = False
 
 abstractClass env n         = not $ null (abstractAttrs env n)
 
-abstractActor env n         = not $ null (abstractAttrs env n)
+abstractActor env n         = not $ null (abstractAttrs env n \\ [initKW])
 
 abstractAttr                :: EnvF x -> TCon -> Name -> Bool
 abstractAttr env tc n       = maybe False isAbstract (findAttrInfo' env (tcname tc) n)
@@ -1101,6 +1105,15 @@ findTVAttr env tv n         = findAttr env c n
 
 tvarWit                     :: TVar -> PCon -> Name
 tvarWit tv p                = Internal Witness (nameText $ Derived (deriveQ $ tcname p) (tvname tv)) 0
+
+-- Actor is the distinguished root. Surface inheritance syntax is deferred;
+-- the representation already carries the same linearized ancestry as classes.
+actorAncestry env n []
+  | inBuiltin env && n == nActor = leftpath [cValue]
+  | otherwise                   = mro env [cActor]
+actorAncestry env n us
+  | any (not . isActor env . tcname) us = err2 us "Actors can only inherit actors"
+  | otherwise                   = err2 us "Actor inheritance is not yet supported"
 
 -- Method resolution order ------------------------------------------------------------------------------------------------------
 
@@ -1750,7 +1763,7 @@ instance Simp (Name, NameInfo) where
                                     = (n, NExt q' (vsubst s $ simp env' c) (vsubst s $ simp env' us) (vsubst s $ simp env' te) opts doc)
       where (q', s)                 = simpQuant env (simp env' q) (vfree c ++ vfree us ++ vfree te)
             env'                    = defineTVars (stripQual q) env
-    simp env (n, NAct q p k te doc) = (n, NAct (simp env' q) (simp env' p) (simp env' k) (simp env' $ notHidden te) doc)
+    simp env (n, NAct q p k us te doc) = (n, NAct (simp env' q) (simp env' p) (simp env' k) (simp env' us) (simp env' $ notHidden te) doc)
       where env'                    = defineTVars (stripQual q) env
     simp env (n, i)                 = (n, i)
 

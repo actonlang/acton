@@ -2,8 +2,9 @@ from deact import Apa
 W_Manager_122: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
 
 # recursive group:
-class Manager ($Actor, __builtin__.value):
+class Manager (__builtin__.Actor, __builtin__.value):
     com def __init__ (self : Self) -> None:
+        __builtin__.Actor.__init__(self)
         return None
     proc def create_decoderG_local (self : Self) -> __builtin__.StringDecoder:
         decoder: __builtin__.StringDecoder = __builtin__.StringDecoderG_newact(self.decode_callback, "\"utf-8\"", None)
@@ -20,12 +21,12 @@ class Manager ($Actor, __builtin__.value):
         return $ASYNCf@[deact.Apa](self, proc lambda: self.create_apaG_local())
     action def decode_callback (self : Self, s : __builtin__.str) -> None:
         return $ASYNCf@[None](self, proc lambda: self.decode_callbackG_local(s))
-class main ($Actor, __builtin__.value):
+class main (__builtin__.Actor, __builtin__.value):
     @property
     env : __builtin__.Env
     com def __init__ (self : Self, env : __builtin__.Env) -> None:
+        __builtin__.Actor.__init__(self)
         self.env = env
-        $MarkStartup((async self.__startup__)())
         return None
     proc def __startup__G_local (self : Self) -> None:
         mgr: Manager = ManagerG_newact()
@@ -40,12 +41,13 @@ class main ($Actor, __builtin__.value):
     action def __startup__ (self : Self) -> None:
         return $ASYNCf@[None](self, proc lambda: self.__startup__G_local())
 com def ManagerG_newact () -> Manager:
-    N_construction_parent: $Actor = $ConstructionBegin()
+    N_construction_parent: __builtin__.Actor = $ConstructionBegin()
     if $PUSH():
         G_act: Manager = $NEWACTOR@[Manager]()
         $ConstructionEnter(G_act)
         $InstallFinalizer@[Manager](G_act)
         G_act.__init__()
+        $ConstructionStartup(G_act)
         $DROP()
     else:
         N_construction_exception: __builtin__.BaseException = $POP()
@@ -54,12 +56,13 @@ com def ManagerG_newact () -> Manager:
     $ConstructionEnd(N_construction_parent)
     return G_act
 com def mainG_newact (env : __builtin__.Env) -> main:
-    N_construction_parent: $Actor = $ConstructionBegin()
+    N_construction_parent: __builtin__.Actor = $ConstructionBegin()
     if $PUSH():
         G_act: main = $NEWACTOR@[main]()
         $ConstructionEnter(G_act)
         $InstallFinalizer@[main](G_act)
         G_act.__init__(env)
+        $ConstructionStartup(G_act)
         $DROP()
     else:
         N_construction_exception: __builtin__.BaseException = $POP()

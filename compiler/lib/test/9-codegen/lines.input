@@ -178,7 +178,7 @@ class L_24Cont ($Cont[None], __builtin__.value):
     proc def __call__ (L_self : L_24Cont, G_1 : None) -> $R:
         C_cont: $Cont[None] = L_self.C_cont
         return L_23C_8cont(C_cont, G_1)
-proc def L_18C_6cont (a : Apa, self : main, W_Apa_851 : __builtin__.Iterable[__builtin__.list[__builtin__.int], __builtin__.int], W_Apa_925 : __builtin__.Number[__builtin__.float], C_cont : $Cont[None], C_7res : UNBOXED __builtin__.int) -> $R:
+proc def L_18C_6cont (a : Apa, self : main, W_Apa_761 : __builtin__.Iterable[__builtin__.list[__builtin__.int], __builtin__.int], W_Apa_835 : __builtin__.Number[__builtin__.float], C_cont : $Cont[None], C_7res : UNBOXED __builtin__.int) -> $R:
     r: UNBOXED __builtin__.int = (UNBOX __builtin__.int C_7res)
     print@[(__builtin__.str, __builtin__.int)](("\"r =\"", (BOX __builtin__.int r)), "\" \"", "\"\\n\"", (UNBOX __builtin__.bool False), (UNBOX __builtin__.bool False))
     (async a.compute)(L_20action(self))
@@ -211,7 +211,7 @@ proc def L_18C_6cont (a : Apa, self : main, W_Apa_851 : __builtin__.Iterable[__b
             print@[(__builtin__.str,)](("\"break path\"",), "\" \"", "\"\\n\"", (UNBOX __builtin__.bool False), (UNBOX __builtin__.bool False))
             break
         print@[(__builtin__.str, __builtin__.int)](("\"loop body\"", (BOX __builtin__.int i)), "\" \"", "\"\\n\"", (UNBOX __builtin__.bool False), (UNBOX __builtin__.bool False))
-    N_12iter: __builtin__.Iterator[__builtin__.int] = W_Apa_851.__iter__([(BOX __builtin__.int (UNBOX __builtin__.int 1)), (BOX __builtin__.int (UNBOX __builtin__.int 2)), (BOX __builtin__.int (UNBOX __builtin__.int 3))])
+    N_12iter: __builtin__.Iterator[__builtin__.int] = W_Apa_761.__iter__([(BOX __builtin__.int (UNBOX __builtin__.int 1)), (BOX __builtin__.int (UNBOX __builtin__.int 2)), (BOX __builtin__.int (UNBOX __builtin__.int 3))])
     while True:
         if True:
             pass
@@ -254,25 +254,25 @@ class L_25Cont ($Cont[__builtin__.int], __builtin__.value):
     @property
     self : main
     @property
-    W_Apa_851 : __builtin__.Iterable[__builtin__.list[__builtin__.int], __builtin__.int]
+    W_Apa_761 : __builtin__.Iterable[__builtin__.list[__builtin__.int], __builtin__.int]
     @property
-    W_Apa_925 : __builtin__.Number[__builtin__.float]
+    W_Apa_835 : __builtin__.Number[__builtin__.float]
     @property
     C_cont : $Cont[None]
-    pure def __init__ (L_self : L_25Cont, a : Apa, self : main, W_Apa_851 : __builtin__.Iterable[__builtin__.list[__builtin__.int], __builtin__.int], W_Apa_925 : __builtin__.Number[__builtin__.float], C_cont : $Cont[None]) -> None:
+    pure def __init__ (L_self : L_25Cont, a : Apa, self : main, W_Apa_761 : __builtin__.Iterable[__builtin__.list[__builtin__.int], __builtin__.int], W_Apa_835 : __builtin__.Number[__builtin__.float], C_cont : $Cont[None]) -> None:
         L_self.a = a
         L_self.self = self
-        L_self.W_Apa_851 = W_Apa_851
-        L_self.W_Apa_925 = W_Apa_925
+        L_self.W_Apa_761 = W_Apa_761
+        L_self.W_Apa_835 = W_Apa_835
         L_self.C_cont = C_cont
         return None
     proc def __call__ (L_self : L_25Cont, G_1 : __builtin__.int) -> $R:
         a: Apa = L_self.a
         self: main = L_self.self
-        W_Apa_851: __builtin__.Iterable[__builtin__.list[__builtin__.int], __builtin__.int] = L_self.W_Apa_851
-        W_Apa_925: __builtin__.Number[__builtin__.float] = L_self.W_Apa_925
+        W_Apa_761: __builtin__.Iterable[__builtin__.list[__builtin__.int], __builtin__.int] = L_self.W_Apa_761
+        W_Apa_835: __builtin__.Number[__builtin__.float] = L_self.W_Apa_835
         C_cont: $Cont[None] = L_self.C_cont
-        return L_18C_6cont(a, self, W_Apa_851, W_Apa_925, C_cont, (UNBOX __builtin__.int G_1))
+        return L_18C_6cont(a, self, W_Apa_761, W_Apa_835, C_cont, (UNBOX __builtin__.int G_1))
 class L_26proc ($proc[(), None], __builtin__.value):
     @property
     self : main
@@ -282,7 +282,7 @@ class L_26proc ($proc[(), None], __builtin__.value):
     proc def __call__ (L_self : L_26proc, C_cont : $Cont[None]) -> $R:
         self: main = L_self.self
         return self.__startup__G_local(C_cont)
-class Apa ($Actor, __builtin__.value):
+class Apa (__builtin__.Actor, __builtin__.value):
     @property
     apa : __builtin__.int
     @property
@@ -290,10 +290,10 @@ class Apa ($Actor, __builtin__.value):
     @property
     y : __builtin__.int
     com def __init__ (self : Apa) -> None:
+        __builtin__.Actor.__init__(self)
         self.apa = (UNBOX __builtin__.int 2001)
         self.apb = (UNBOX __builtin__.int 2002)
         self.y = (UNBOX __builtin__.int 123)
-        $MarkStartup((async self.__startup__)())
         return None
     proc def setupG_local (self : Apa, C_cont : $Cont[None], cb : $action[(__builtin__.int,), __builtin__.int]) -> $R:
         print@[(__builtin__.str,)](("\"setup\"",), "\" \"", "\"\\n\"", (UNBOX __builtin__.bool False), (UNBOX __builtin__.bool False))
@@ -317,9 +317,9 @@ class Apa ($Actor, __builtin__.value):
         return $ASYNC@[__builtin__.int](self, L_9proc(self, (UNBOX __builtin__.int i)))
     action def __startup__ (self : Apa) -> None:
         return $ASYNC@[None](self, L_10proc(self))
-class Bepa ($Actor, __builtin__.value):
+class Bepa (__builtin__.Actor, __builtin__.value):
     com def __init__ (self : Bepa) -> None:
-        $MarkStartup((async self.__startup__)())
+        __builtin__.Actor.__init__(self)
         return None
     proc def callbackG_local (self : Bepa, C_cont : $Cont[__builtin__.int], i : UNBOXED __builtin__.int) -> $R:
         print@[(__builtin__.str, __builtin__.int)](("\"callback\"", (BOX __builtin__.int i)), "\" \"", "\"\\n\"", (UNBOX __builtin__.bool False), (UNBOX __builtin__.bool False))
@@ -332,31 +332,32 @@ class Bepa ($Actor, __builtin__.value):
         return $ASYNC@[__builtin__.int](self, L_11proc(self, (UNBOX __builtin__.int i)))
     action def __startup__ (self : Bepa) -> None:
         return $ASYNC@[None](self, L_12proc(self))
-class main ($Actor, __builtin__.value):
+class main (__builtin__.Actor, __builtin__.value):
     @property
     env : __builtin__.Env
     com def __init__ (self : main, env : __builtin__.Env) -> None:
+        __builtin__.Actor.__init__(self)
         self.env = env
-        $MarkStartup((async self.__startup__)())
         return None
     proc def __startup__G_local (self : main, C_cont : $Cont[None]) -> $R:
-        W_Apa_851: __builtin__.Iterable[__builtin__.list[__builtin__.int], __builtin__.int] = __builtin__.SequenceD_list@[__builtin__.int]().W_Collection
-        W_Apa_925: __builtin__.Number[__builtin__.float] = __builtin__.RealFloatD_float()
+        W_Apa_761: __builtin__.Iterable[__builtin__.list[__builtin__.int], __builtin__.int] = __builtin__.SequenceD_list@[__builtin__.int]().W_Collection
+        W_Apa_835: __builtin__.Number[__builtin__.float] = __builtin__.RealFloatD_float()
         a: Apa = ApaG_newact()
         b: Bepa = BepaG_newact()
         print@[(__builtin__.str,)](("\"-----\"",), "\" \"", "\"\\n\"", (UNBOX __builtin__.bool False), (UNBOX __builtin__.bool False))
         (async a.setup)(L_15action(a))
         x: __builtin__.Msg[__builtin__.int] = (async a.compute)(L_17action(b))
-        return $AWAIT@[__builtin__.int](L_25Cont(a, self, W_Apa_851, W_Apa_925, C_cont), x)
+        return $AWAIT@[__builtin__.int](L_25Cont(a, self, W_Apa_761, W_Apa_835, C_cont), x)
     action def __startup__ (self : main) -> None:
         return $ASYNC@[None](self, L_26proc(self))
 com def ApaG_newact () -> Apa:
-    N_construction_parent: $Actor = $ConstructionBegin()
+    N_construction_parent: __builtin__.Actor = $ConstructionBegin()
     if (BOX __builtin__.bool $PUSH()):
         G_act: Apa = $NEWACTOR@[Apa]()
         $ConstructionEnter(G_act)
         $InstallFinalizer@[Apa](G_act)
         G_act.__init__()
+        $ConstructionStartup(G_act)
         $DROP()
     else:
         N_construction_exception: __builtin__.BaseException = $POP()
@@ -365,12 +366,13 @@ com def ApaG_newact () -> Apa:
     $ConstructionEnd(N_construction_parent)
     return G_act
 com def BepaG_newact () -> Bepa:
-    N_construction_parent: $Actor = $ConstructionBegin()
+    N_construction_parent: __builtin__.Actor = $ConstructionBegin()
     if (BOX __builtin__.bool $PUSH()):
         G_act: Bepa = $NEWACTOR@[Bepa]()
         $ConstructionEnter(G_act)
         $InstallFinalizer@[Bepa](G_act)
         G_act.__init__()
+        $ConstructionStartup(G_act)
         $DROP()
     else:
         N_construction_exception: __builtin__.BaseException = $POP()
@@ -379,12 +381,13 @@ com def BepaG_newact () -> Bepa:
     $ConstructionEnd(N_construction_parent)
     return G_act
 com def mainG_newact (env : __builtin__.Env) -> main:
-    N_construction_parent: $Actor = $ConstructionBegin()
+    N_construction_parent: __builtin__.Actor = $ConstructionBegin()
     if (BOX __builtin__.bool $PUSH()):
         G_act: main = $NEWACTOR@[main]()
         $ConstructionEnter(G_act)
         $InstallFinalizer@[main](G_act)
         G_act.__init__(env)
+        $ConstructionStartup(G_act)
         $DROP()
     else:
         N_construction_exception: __builtin__.BaseException = $POP()

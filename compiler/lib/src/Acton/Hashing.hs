@@ -466,9 +466,9 @@ feedDecl decl sink = case decl of
     feedTag 40 sink >> feedName n sink >> feedQBinds q sink >> feedPosPar p sink >>
     feedKwdPar k sink >> feedMaybe feedType a sink >> feedSuite b sink >>
     feedDeco dec sink >> feedType fx sink >> feedMaybe feedString doc sink
-  A.Actor _ n q p k b doc ->
+  A.Actor _ n q p k us b doc ->
     feedTag 41 sink >> feedName n sink >> feedQBinds q sink >> feedPosPar p sink >>
-    feedKwdPar k sink >> feedSuite b sink >> feedMaybe feedString doc sink
+    feedKwdPar k sink >> feedList feedTCon us sink >> feedSuite b sink >> feedMaybe feedString doc sink
   A.Class _ n q cs b doc ->
     feedTag 42 sink >> feedName n sink >> feedQBinds q sink >> feedList feedTCon cs sink >>
     feedSuite b sink >> feedMaybe feedString doc sink
@@ -771,7 +771,7 @@ feedNameInfo info sink = feedTag 249 sink >> case info of
   I.NSVar t          -> feedTag 1 sink >> feedType t sink
   I.NDef sc dec _    -> feedTag 2 sink >> feedTSchema sc sink >> feedDeco dec sink
   I.NSig sc dec _    -> feedTag 3 sink >> feedTSchema sc sink >> feedDeco dec sink
-  I.NAct q p k te _  -> feedTag 4 sink >> feedQBinds q sink >> feedType p sink >> feedType k sink >> feedTEnv te sink
+  I.NAct q p k us te _  -> feedTag 4 sink >> feedQBinds q sink >> feedType p sink >> feedType k sink >> feedList feedWTCon us sink >> feedTEnv te sink
   I.NClass q cs te _ -> feedTag 5 sink >> feedQBinds q sink >> feedList feedWTCon cs sink >> feedTEnv te sink
   I.NProto q ps te _ -> feedTag 6 sink >> feedQBinds q sink >> feedList feedWTCon ps sink >> feedTEnv te sink
   I.NType q t _      -> feedTag 10 sink >> feedQBinds q sink >> feedType t sink
@@ -953,7 +953,7 @@ foldNameInfoDeps add info acc = case info of
   I.NSVar t            -> foldDepsType add t acc
   I.NDef sc _ _        -> foldDepsTSchema add sc acc
   I.NSig sc _ _        -> foldDepsTSchema add sc acc
-  I.NAct q p k te _    -> foldDepsTEnv add te (foldDepsType add k (foldDepsType add p (foldDepsList (foldDepsQBind add) q acc)))
+  I.NAct q p k us te _    -> foldDepsTEnv add te (foldDepsList (foldDepsWTCon add) us (foldDepsType add k (foldDepsType add p (foldDepsList (foldDepsQBind add) q acc))))
   I.NClass q ws te _   -> foldDepsTEnv add te (foldDepsList (foldDepsWTCon add) ws (foldDepsList (foldDepsQBind add) q acc))
   I.NProto q ws te _   -> foldDepsTEnv add te (foldDepsList (foldDepsWTCon add) ws (foldDepsList (foldDepsQBind add) q acc))
   I.NType q t _        -> foldDepsType add t (foldDepsList (foldDepsQBind add) q acc)
@@ -1064,7 +1064,7 @@ boundSuite = boundList boundStmt
 boundDecl :: A.Decl -> NameSet -> NameSet
 boundDecl decl acc = case decl of
   A.Def _ n _ _ _ _ _ _ _ _ -> Data.Set.insert n acc
-  A.Actor _ n _ _ _ _ _     -> Data.Set.insert n acc
+  A.Actor _ n _ _ _ us _ _     -> Data.Set.insert n acc
   A.Class _ n _ _ _ _       -> Data.Set.insert n acc
   A.Protocol _ n _ _ _ _    -> Data.Set.insert n acc
   A.Typedef _ n _ _ _       -> Data.Set.insert n acc
@@ -1277,12 +1277,12 @@ implItemSplitDeps mn env localNames item =
               addQWitnesses q $ Data.Set.insert n
                 (assignedSuite b (boundKwdPar ks (boundPosPar ps (boundList boundQBind q bound))))
         in splitTypeDirect bound' fx (splitSuiteDirect bound' b (splitKwdParDirect bound' ks (splitPosParDirect bound' ps acc)))
-      A.Actor _ n q ps ks b _ ->
+      A.Actor _ n q ps ks us b _ ->
         let bound' =
               addQWitnesses q $ Data.Set.insert n
                 (Data.Set.insert Names.self
                   (assignedSuite b (boundKwdPar ks (boundPosPar ps (boundList boundQBind q bound)))))
-        in splitSuiteDirect bound' b (splitKwdParDirect bound' ks (splitPosParDirect bound' ps acc))
+        in splitSuiteDirect bound' b (splitListInto (splitTConDirect bound') us (splitKwdParDirect bound' ks (splitPosParDirect bound' ps acc)))
       A.Class _ n q cs b _ ->
         let bound' = addQWitnesses q $ Data.Set.insert n (assignedSuite b (boundList boundQBind q bound))
         in splitSuiteDirect bound' b (splitListInto (splitTConDirect bound') cs acc)

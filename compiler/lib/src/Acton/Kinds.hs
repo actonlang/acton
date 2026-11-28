@@ -282,7 +282,7 @@ kchkSuite env (Decl l ds : ss)      = do ds <- instKWild (map (autoQuantD env) d
                                          ds <- kchk env1 ds
                                          ss <- kchkSuite env1 ss
                                          return (Decl l ds : ss)
-  where kinds (Actor _ n q _ _ _ _) = [(n, NAct q posNil kwdNil [] Nothing)]
+  where kinds (Actor _ n q _ _ us _ _) = [(n, NAct q posNil kwdNil [] [] Nothing)]
         kinds (Class _ n q _ _ _)   = [(n, NClass q [] [] Nothing)]
         kinds (Protocol _ n q _ _ _)= [(n, NProto q [] [] Nothing)]
         kinds (Typedef _ n q _ _)   = [(n, NType q tWild Nothing)]
@@ -332,14 +332,15 @@ instance KCheck Decl where
                                          Def l n <$> kchkQBinds env1 q <*> kchk env1 p <*> kchk env1 k <*> kexp KType env1 t <*> kchkSuite env1 b <*> 
                                                      pure d <*> kfx env1 x <*> pure doc
       where ambig                   = qualbound q \\ closeDepVarsQ (vfree p ++ vfree k ++ vfree t ++ vfree x) q
-    kchk env (Actor l n q p k b doc)= do tmp <- swapXVars []
+    kchk env (Actor l n q p k us b doc)
+                                    = do tmp <- swapXVars []
                                          p <- convPExist env p
                                          k <- convPExist env k
                                          q <- (q++) <$> swapXVars tmp
                                          env1 <- extvars (qbound q) env
                                          p <- convTWild env1 p
                                          k <- convTWild env1 k
-                                         Actor l n <$> kchkQBinds env1 q <*> kchk env1 p <*> kchk env1 k <*> kchkSuite env1 b <*> pure doc
+                                         Actor l n <$> kchkQBinds env1 q <*> kchk env1 p <*> kchk env1 k <*> kchkBounds env1 us <*> kchkSuite env1 b <*> pure doc
     kchk env (Class l n q us b doc) = do env1 <- extvars (tvSelf : qbound q) env
                                          Class l n <$> kchkQBinds env1 q <*> kchkBounds env1 us <*> kchkSuite env1 b <*> pure doc
     kchk env (Protocol l n q us b doc)
@@ -679,8 +680,8 @@ instance KSubst Stmt where
 instance KSubst Decl where
     ksubst g (Def l n q p k a b d x doc)
                                     = Def l n <$> ksubst g q <*> ksubst g p <*> ksubst g k <*> ksubst g a <*> ksubst g b <*> return d <*> ksubst g x <*> return doc
-    ksubst g (Actor l n q p k b doc)
-                                    = Actor l n <$> ksubst g q <*> ksubst g p <*> ksubst g k <*> ksubst g b <*> return doc
+    ksubst g (Actor l n q p k us b doc)
+                                    = Actor l n <$> ksubst g q <*> ksubst g p <*> ksubst g k <*> ksubst g us <*> ksubst g b <*> return doc
     ksubst g (Class l n q as b doc) = Class l n <$> ksubst g q <*> ksubst g as <*> ksubst g b <*> return doc
     ksubst g (Protocol l n q as b doc)
                                     = Protocol l n <$> ksubst g q <*> ksubst g as <*> ksubst g b <*> return doc

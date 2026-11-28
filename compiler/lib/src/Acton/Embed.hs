@@ -117,8 +117,8 @@ instance Embeds Stmt where
 instance Embeds Decl where
     embeds f (Def l n q p k a b d x doc)
                                     = (\p' k' b' -> Def l n q p' k' a b' d x doc) <$> embeds f p <*> embeds f k <*> embeds f b
-    embeds f (Actor l n q p k b doc)
-                                    = (\p' k' b' -> Actor l n q p' k' b' doc) <$> embeds f p <*> embeds f k <*> embeds f b
+    embeds f (Actor l n q p k us b doc)
+                                    = (\p' k' b' -> Actor l n q p' k' us b' doc) <$> embeds f p <*> embeds f k <*> embeds f b
     embeds f (Class l n q as b doc) = (\b' -> Class l n q as b' doc) <$> embeds f b
     embeds f (Protocol l n q as b doc)
                                     = (\b' -> Protocol l n q as b' doc) <$> embeds f b

@@ -1,0 +1,23 @@
+pure def as_actor(value: Actor) -> Actor:
+    return value
+
+actor Child(initial: int):
+    var count = initial
+
+    def __startup__():
+        count += 1
+
+    def read() -> int:
+        return count
+
+actor main(env):
+    def __startup__():
+        root = Actor()
+        assert await async root.__startup__() is None
+        child = Child(40)
+        assert child.read() == 41
+        base = as_actor(child)
+        assert base is child
+        await async base.__startup__()
+        assert child.read() == 42
+        env.exit(0)

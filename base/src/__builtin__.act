@@ -22,6 +22,12 @@ class value:
     def __repr__(self) -> str:
         NotImplemented
 
+actor Actor():
+    """The common base of all actors."""
+    NotImplemented
+    action def __startup__() -> None:
+        NotImplemented
+
 class object (value):
     pass
 

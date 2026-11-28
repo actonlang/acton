@@ -4,7 +4,7 @@ W_Apa_138: __builtin__.Plus[__builtin__.int] = __builtin__.IntegralD_int()
 
 W_Apa_101: __builtin__.Times[__builtin__.int, __builtin__.int] = __builtin__.IntegralD_int()
 
-W_Apa_395: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
+W_Apa_305: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
 
 # recursive group:
 actor Apa ():
@@ -29,7 +29,6 @@ actor Apa ():
         setup($WRAP@[(), (__builtin__.int,), __builtin__.int](self, notice))
         print@[(__builtin__.str,)](("\"Apa\"",), "\" \"", "\"\\n\"", False, False)
         return None
-    $MarkStartup((async $WRAP@[(), (), None](self, __startup__))())
 actor Bepa ():
     __startup__ : action() -> None
     proc def callback (i : __builtin__.int) -> __builtin__.int:
@@ -39,13 +38,12 @@ actor Bepa ():
     proc def __startup__ () -> None:
         print@[(__builtin__.str,)](("\"Bepa\"",), "\" \"", "\"\\n\"", False, False)
         return None
-    $MarkStartup((async $WRAP@[(), (), None](self, __startup__))())
 actor main (env : __builtin__.Env):
     __startup__ : action() -> None
     proc def __startup__ () -> None:
         proc def myproc (i : __builtin__.int) -> __builtin__.int:
             print@[(__builtin__.str, __builtin__.int)](("\"myproc\"", i), "\" \"", "\"\\n\"", False, False)
-            if W_Apa_395.__eq__(i, W_Apa_32.__fromatom__(2)):
+            if W_Apa_305.__eq__(i, W_Apa_32.__fromatom__(2)):
                 (async env.exit)(W_Apa_32.__fromatom__(0))
             return i
         a: Apa = Apa()
@@ -58,5 +56,4 @@ actor main (env : __builtin__.Env):
         (async a.compute)($WRAP@[(), (__builtin__.int,), __builtin__.int](self, myproc))
         print@[(__builtin__.str,)](("\"main\"",), "\" \"", "\"\\n\"", False, False)
         return None
-    $MarkStartup((async $WRAP@[(), (), None](self, __startup__))())
 # (recursive group)

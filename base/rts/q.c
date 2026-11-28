@@ -52,7 +52,7 @@ static inline void spinlock_unlock($Lock *f) {
 }
 
 #if defined MPMC && MPMC == 3
-int32_t ENQ_ready($Actor a, uint32_t ready_us) {
+int32_t ENQ_ready(B_Actor a, uint32_t ready_us) {
     // TODO: atomics!
 }
 #elif defined MPMC && MPMC == 2
@@ -63,22 +63,22 @@ static inline void rq_count_add(struct mpmcq *q, int64_t d) {
 }
 
 // The ready stamp of actor "a", which is in a ready queue
-static inline uint32_t ready_stamp($Actor a) {
+static inline uint32_t ready_stamp(B_Actor a) {
     return a->B_Msg->$ready_us;
 }
 
 // Store the ready stamp of h, the new head of q, in head_us. q is locked
 // (see struct mpmcq).
-static inline void rq_head_changed(struct mpmcq *q, $Actor h) {
+static inline void rq_head_changed(struct mpmcq *q, B_Actor h) {
     __atomic_store_n(&q->head_us, ready_stamp(h), __ATOMIC_RELAXED);
 }
 
 // Add the chain first..last of n actors, whose last->$next is NULL, to the
 // end of q, in order
-static inline void rq_append(struct mpmcq *q, $Actor first, $Actor last, int64_t n) {
+static inline void rq_append(struct mpmcq *q, B_Actor first, B_Actor last, int64_t n) {
     spinlock_lock(&q->lock);
     if (q->tail) {
-        $Actor tail = q->tail;
+        B_Actor tail = q->tail;
         tail->$next = first;
         ACTON_WBAR(tail, &tail->$next, first);
     } else {
@@ -91,13 +91,13 @@ static inline void rq_append(struct mpmcq *q, $Actor first, $Actor last, int64_t
 }
 
 // Take the actor at the head of q, or return NULL if it is empty
-static inline $Actor rq_pop(struct mpmcq *q) {
+static inline B_Actor rq_pop(struct mpmcq *q) {
     if (rq_empty(q))
         return NULL;
     spinlock_lock(&q->lock);
-    $Actor a = __atomic_load_n(&q->head, __ATOMIC_RELAXED);
+    B_Actor a = __atomic_load_n(&q->head, __ATOMIC_RELAXED);
     if (a) {
-        $Actor next = a->$next;
+        B_Actor next = a->$next;
         __atomic_store_n(&q->head, next, __ATOMIC_RELAXED);
         if (next == NULL)
             q->tail = NULL;
@@ -119,9 +119,9 @@ static inline $Actor rq_pop(struct mpmcq *q) {
 // at most STEAL_MAX. Unless "all" is set, stop at the first actor that did
 // not become ready before "before", and cut none if that is the head.
 // Return the first and set *last and *got, or return NULL if it cuts none.
-static $Actor lrq_cut(struct mpmcq *q, bool all, uint32_t before, $Actor *last, int64_t *got) {
+static B_Actor lrq_cut(struct mpmcq *q, bool all, uint32_t before, B_Actor *last, int64_t *got) {
     spinlock_lock(&q->lock);
-    $Actor first = __atomic_load_n(&q->head, __ATOMIC_RELAXED);
+    B_Actor first = __atomic_load_n(&q->head, __ATOMIC_RELAXED);
     if (first == NULL || (!all && stamp_diff(ready_stamp(first), before) >= 0)) {
         spinlock_unlock(&q->lock);
         return NULL;
@@ -130,13 +130,13 @@ static $Actor lrq_cut(struct mpmcq *q, bool all, uint32_t before, $Actor *last, 
     int64_t take = (int64_t)((len + 1) / 2);
     if (take > STEAL_MAX)
         take = STEAL_MAX;
-    $Actor l = first;
+    B_Actor l = first;
     int64_t n = 1;
     while (n < take && l->$next && (all || stamp_diff(ready_stamp(l->$next), before) < 0)) {
         l = l->$next;
         n++;
     }
-    $Actor next = l->$next;
+    B_Actor next = l->$next;
     __atomic_store_n(&q->head, next, __ATOMIC_RELAXED);
     if (next == NULL)
         q->tail = NULL;
@@ -152,9 +152,9 @@ static $Actor lrq_cut(struct mpmcq *q, bool all, uint32_t before, $Actor *last, 
 
 // Add the chain first..last of n actors to the head of q, in order, ahead of
 // the actors already there
-static inline void rq_prepend(struct mpmcq *q, $Actor first, $Actor last, int64_t n) {
+static inline void rq_prepend(struct mpmcq *q, B_Actor first, B_Actor last, int64_t n) {
     spinlock_lock(&q->lock);
-    $Actor head = __atomic_load_n(&q->head, __ATOMIC_RELAXED);
+    B_Actor head = __atomic_load_n(&q->head, __ATOMIC_RELAXED);
     last->$next = head;
     ACTON_WBAR(last, &last->$next, head);
     if (head == NULL)
@@ -168,7 +168,7 @@ static inline void rq_prepend(struct mpmcq *q, $Actor first, $Actor last, int64_
 // A worker with no work steals from the first local queue that holds an
 // actor, looking at the workers in turn from a random one. It runs the
 // first actor it took and queues the rest at the end of its own queue.
-static $Actor lrq_steal(WorkerCtx wctx) {
+static B_Actor lrq_steal(WorkerCtx wctx) {
     int64_t self = wctx->id;
     wctx->steal_seed ^= wctx->steal_seed << 13;
     wctx->steal_seed ^= wctx->steal_seed >> 17;
@@ -178,9 +178,9 @@ static $Actor lrq_steal(WorkerCtx wctx) {
         int64_t v = 1 + (int64_t)((wctx->steal_seed + k) % n);
         if (v == self || rq_empty(&lrqs[v]))
             continue;
-        $Actor last;
+        B_Actor last;
         int64_t got;
-        $Actor first = lrq_cut(&lrqs[v], true, 0, &last, &got);
+        B_Actor first = lrq_cut(&lrqs[v], true, 0, &last, &got);
         if (first) {
             WT_STAT_ADD(wt_stats[self].steal_ops, 1);
             WT_STAT_ADD(wt_stats[self].steal_actors, got);
@@ -222,9 +222,9 @@ static void lrq_balance(WorkerCtx wctx, int64_t now) {
         WT_STAT_ADD(wt_stats[self].balance_young, 1);
         return;
     }
-    $Actor last;
+    B_Actor last;
     int64_t got;
-    $Actor first = lrq_cut(q, false, ours, &last, &got);
+    B_Actor first = lrq_cut(q, false, ours, &last, &got);
     if (first) {
         WT_STAT_ADD(wt_stats[self].balance_ops, 1);
         WT_STAT_ADD(wt_stats[self].balance_actors, got);
@@ -239,12 +239,12 @@ static void lrq_balance(WorkerCtx wctx, int64_t now) {
 // one, and at most STEAL_MAX, so that a burst of injected actors spreads
 // over the workers that take from it. Run the first and queue the rest at
 // the end of our queue.
-static $Actor deq_injected(int64_t self) {
+static B_Actor deq_injected(int64_t self) {
     struct mpmcq *q = &rqs[SHARED_RQ];
     if (rq_empty(q))
         return NULL;
     spinlock_lock(&q->lock);
-    $Actor first = __atomic_load_n(&q->head, __ATOMIC_RELAXED);
+    B_Actor first = __atomic_load_n(&q->head, __ATOMIC_RELAXED);
     if (first == NULL) {
         spinlock_unlock(&q->lock);
         return NULL;
@@ -253,13 +253,13 @@ static $Actor deq_injected(int64_t self) {
     int64_t take = (int64_t)(len / (uint64_t)num_wthreads) + 1;
     if (take > STEAL_MAX)
         take = STEAL_MAX;
-    $Actor l = first;
+    B_Actor l = first;
     int64_t n = 1;
     while (n < take && l->$next) {
         l = l->$next;
         n++;
     }
-    $Actor next = l->$next;
+    B_Actor next = l->$next;
     __atomic_store_n(&q->head, next, __ATOMIC_RELAXED);
     if (next == NULL)
         q->tail = NULL;
@@ -279,7 +279,7 @@ static $Actor deq_injected(int64_t self) {
 // queue it went to: SHARED_RQ, the id of the worker it is pinned to, or
 // with threads the id of the worker whose local queue took it. It always
 // goes to the end of that queue.
-int32_t ENQ_ready($Actor a, uint32_t ready_us) {
+int32_t ENQ_ready(B_Actor a, uint32_t ready_us) {
     int i = a->$affinity;
     assert(a != NULL && a->$waitsfor == NULL);
     WorkerCtx wctx = GET_WCTX();
@@ -301,10 +301,10 @@ int32_t ENQ_ready($Actor a, uint32_t ready_us) {
     return i;
 }
 #else
-int32_t ENQ_ready($Actor a, uint32_t ready_us) {
+int32_t ENQ_ready(B_Actor a, uint32_t ready_us) {
     int i = a->$affinity;
     spinlock_lock(&rqs[i].lock);
-    $Actor x = __atomic_load_n(&rqs[i].head, __ATOMIC_RELAXED);
+    B_Actor x = __atomic_load_n(&rqs[i].head, __ATOMIC_RELAXED);
     if (x) {
         while (x->$next)
             x = x->$next;
@@ -328,17 +328,17 @@ int32_t ENQ_ready($Actor a, uint32_t ready_us) {
 
 // Take the actor at the head of rqs[idx], or return NULL if it is empty
 #if defined MPMC && MPMC == 3
-$Actor _DEQ_ready(int64_t idx) {
+B_Actor _DEQ_ready(int64_t idx) {
     // TODO: atomics!
 }
 #elif defined MPMC && MPMC == 2
-$Actor _DEQ_ready(int64_t idx) {
+B_Actor _DEQ_ready(int64_t idx) {
     return rq_pop(&rqs[idx]);
 }
 #else
 // First version
-$Actor _DEQ_ready(int64_t idx) {
-    $Actor res = NULL;
+B_Actor _DEQ_ready(int64_t idx) {
+    B_Actor res = NULL;
     if (__atomic_load_n(&rqs[idx].head, __ATOMIC_RELAXED) == NULL)
         return res;
 
@@ -364,10 +364,10 @@ static inline bool look_due(WorkerCtx wctx, int64_t now) {
 // Take the next actor for worker wctx. now is when it last finished a
 // continuation, or when its work callback started if it has finished none
 // since.
-$Actor DEQ_ready(WorkerCtx wctx, int64_t now) {
+B_Actor DEQ_ready(WorkerCtx wctx, int64_t now) {
     int64_t idx = wctx->id;
     assert(idx >= 0 && idx < MAX_WTHREADS);
-    $Actor res = _DEQ_ready(idx);
+    B_Actor res = _DEQ_ready(idx);
     if (res)
         return res;
 
@@ -404,7 +404,7 @@ $Actor DEQ_ready(WorkerCtx wctx, int64_t now) {
 #if MSGQ == 2
 // Atomically enqueue message "m" onto the queue of actor "a",
 // return true if the queue was previously empty.
-bool ENQ_msg(B_Msg m, $Actor a) {
+bool ENQ_msg(B_Msg m, B_Actor a) {
     bool did_enq = true;
     spinlock_lock(&a->B_Msg_lock);
     m->$next = NULL;
@@ -425,7 +425,7 @@ bool ENQ_msg(B_Msg m, $Actor a) {
 
 // Atomically dequeue the first message from the queue of actor "a",
 // return true if the queue still holds messages.
-bool DEQ_msg($Actor a) {
+bool DEQ_msg(B_Actor a) {
     bool has_more = false;
     spinlock_lock(&a->B_Msg_lock);
     B_Msg x = a->B_Msg;
@@ -447,7 +447,7 @@ bool DEQ_msg($Actor a) {
 #else // MSGQ == 1
 // Atomically enqueue message "m" onto the queue of actor "a",
 // return true if the queue was previously empty.
-bool ENQ_msg(B_Msg m, $Actor a) {
+bool ENQ_msg(B_Msg m, B_Actor a) {
     bool did_enq = true;
     spinlock_lock(&a->B_Msg_lock);
     m->$next = NULL;
@@ -468,7 +468,7 @@ bool ENQ_msg(B_Msg m, $Actor a) {
 
 // Atomically dequeue the first message from the queue of actor "a",
 // return true if the queue still holds messages.
-bool DEQ_msg($Actor a) {
+bool DEQ_msg(B_Actor a) {
     bool has_more = false;
     spinlock_lock(&a->B_Msg_lock);
     if (a->B_Msg) {

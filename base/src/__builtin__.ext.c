@@ -421,6 +421,6 @@ $R B_ProcessD_writeG_local(B_Process self, $Cont c$cont, B_bytes data) {
 }
 
 B_str B_actorid() {
-    $Actor a = GET_SELF();
+    B_Actor a = GET_SELF();
     return $FORMAT("%" PRId64, a->$globkey);
 }

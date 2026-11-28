@@ -41,7 +41,6 @@ attr_call_          = name "__call__"
 attr_asyn_          = name "__asyn__"
 attr_eval_          = name "__eval__"
 
-primActor           = gPrim "Actor"
 primR               = gPrim "R"
 primCont            = gPrim "Cont"
 
@@ -93,7 +92,7 @@ primConstructionBegin = gPrim "ConstructionBegin"
 primConstructionEnter = gPrim "ConstructionEnter"
 primConstructionEnd = gPrim "ConstructionEnd"
 primConstructionAbort = gPrim "ConstructionAbort"
-primMarkStartup = gPrim "MarkStartup"
+primConstructionStartup = gPrim "ConstructionStartup"
 
 
 attr_finalizer      = name "GCfinalizer"
@@ -137,8 +136,6 @@ tCell t             = tCon $ TC primCell [t]
 
 cellKW              = name "cell"
 
-cActor              = TC primActor []
-tActor              = tCon cActor
 tR                  = tCon $ TC primR []
 tCont t             = tCon $ TC primCont [t]
 
@@ -660,7 +657,7 @@ primEnv             = [ (noq (bwName w), NDef (bwSchema w) NoDec Nothing) | w <-
                             (noq primConstructionEnter, NDef (monotype $ tFun0 [tActor] tNone) NoDec Nothing),
                             (noq primConstructionEnd, NDef (monotype $ tFun0 [tActor] tNone) NoDec Nothing),
                             (noq primConstructionAbort, NDef (monotype $ tFun0 [tActor,tBaseException] tNone) NoDec Nothing),
-                            (noq primMarkStartup, NDef (monotype $ tFun fxCom (posRow (tMsg tNone) posNil) kwdNil tNone) NoDec Nothing),
+                            (noq primConstructionStartup, NDef scConstructionStartup NoDec Nothing),
 
 
                             (noq primISINSTANCE,    NDef scISINSTANCE NoDec Nothing),
@@ -675,7 +672,6 @@ primEnv             = [ (noq (bwName w), NDef (bwSchema w) NoDec Nothing) | w <-
                             (noq primMut,           clMut),
                             (noq primPure,          clPure),
 
-                            (noq primActor,         clActor),
                             (noq primR,             clR),
                             (noq primCont,          clCont),
 
@@ -777,26 +773,6 @@ clCell              = NClass [qbind a] (leftpath [cObject, cValue]) te Nothing
         a           = TV KType (name "A")
 
 
---  class $Actor (): pass
-clActor             = NClass [] (leftpath [cValue]) te Nothing
-  where te          = [ (primKW "next",       NSig (monotype tActor) Property Nothing),
-                        (primKW "msg",        NSig (monotype (tMsg tWild)) Property Nothing),
-                        (primKW "msg_tail",   NSig (monotype (tMsg tWild)) Property Nothing),
-                        (primKW "msg_lock",   NSig (monotype $ tCon $ TC (gPrim "Lock") []) Property Nothing),
-                        (primKW "affinity",   NSig (monotype $ tCon $ TC (gPrim "int64") []) Property Nothing),
-                        (primKW "outgoing",   NSig (monotype (tMsg tWild)) Property Nothing),
-                        (primKW "newborns",   NSig (monotype (tList tActor)) Property Nothing),
-                        (primKW "waitsfor",   NSig (monotype (tMsg tWild)) Property Nothing),
-                        (primKW "consume_hd", NSig (monotype $ tCon $ TC (gPrim "int64") []) Property Nothing),
-                        (primKW "catcher",    NSig (monotype $ tCon $ TC (gPrim "Catcher") []) Property Nothing),
-                        (primKW "globkey",    NSig (monotype $ tCon $ TC (gPrim "int64") []) Property Nothing),
-                        (boolKW,              NDef (monotype $ tFun fxPure posNil kwdNil tBool) NoDec Nothing),
-                        (strKW,               NDef (monotype $ tFun fxPure posNil kwdNil tStr) NoDec Nothing),
-                        (reprKW,              NDef (monotype $ tFun fxPure posNil kwdNil tStr) NoDec Nothing),
-                        (resumeKW,            NDef (monotype $ tFun fxMut posNil kwdNil tNone) NoDec Nothing),
-                        (cleanupKW,           NDef (monotype $ tFun fxMut posNil kwdNil tNone) NoDec Nothing)
-                      ]
-
 --  class $SEQ (BaseException, value):
 --      __init__ : () -> None
 clSEQ               = NClass [] (leftpath [cBaseException, cValue]) te Nothing
@@ -836,7 +812,7 @@ scPureToAction      = tSchema (map qbind [a,b,c]) $ tFun0 [fun fxPure] (fun fxAc
 scCompleted         = tSchema [qbind c] $ tFun fxAction (posRow (tVar c) posNil) kwdNil (tVar c)
   where c           = TV KType (name "C")
 
---  $ASYNCf         : [A] => action($Actor, proc()->A) -> A
+--  $ASYNCf         : [A] => action(B_Actor, proc()->A) -> A
 scASYNCf            = tSchema [qbind a] tASYNC
   where tASYNC      = tFun fxAction (posRow tActor $ posRow tFun' posNil) kwdNil (tVar a)
         a           = TV KType $ name "A"
@@ -854,7 +830,7 @@ scAWAITf            = tSchema [qbind a] tAWAIT
         a           = TV KType $ name "T"
 
 
---  $ASYNCc         : [A] => action($Actor, proc(proc(A)->$R)->$R) -> A
+--  $ASYNCc         : [A] => action(B_Actor, proc(proc(A)->$R)->$R) -> A
 scASYNCc            = tSchema [qbind a] tASYNC
   where tASYNC      = tFun fxAction (posRow tActor $ posRow tCont' posNil) kwdNil (tVar a)
         a           = TV KType $ name "A"
@@ -875,7 +851,7 @@ scAWAITc            = tSchema [qbind a] tAWAIT
         tCont'      = tFun fxProc (posRow (tVar a) posNil) kwdNil tR
 
 
---  $ASYNC          : [A] => action($Actor, $Cont[$Cont[A]]) -> A
+--  $ASYNC          : [A] => action(B_Actor, $Cont[$Cont[A]]) -> A
 scASYNC             = tSchema [qbind a] tASYNC
   where tASYNC      = tFun fxAction (posRow tActor $ posRow tCont' posNil) kwdNil (tVar a)
         a           = TV KType $ name "A"
@@ -949,15 +925,15 @@ scRAISE             = tSchema [qbind a] tRAISE
 scASSERT            = tSchema [] tASSERT
   where tASSERT     = tFun fxPure (posRow tBool $ posRow (tOpt tStr) posNil) kwdNil tNone
 
---  $NEWACTOR       : [A($Actor)] => pure () -> A
+--  $NEWACTOR       : [A(B_Actor)] => pure () -> A
 scNEWACTOR          = tSchema [QBind a [cActor]] tNEWACTOR
   where tNEWACTOR   = tFun fxPure posNil kwdNil (tVar a)
         a           = TV KType $ name "A"
 
--- MarkStartup : com(Msg[None]) -> None
-scMarkStartup = monotype $ tFun fxCom (posRow (tMsg tNone) posNil) kwdNil tNone
+-- ConstructionStartup : com(Actor) -> None
+scConstructionStartup = monotype $ tFun fxCom (posRow tActor posNil) kwdNil tNone
 
---  $GCfinalizer    : [A($Actor)] => pure (A) -> None
+--  $GCfinalizer    : [A(B_Actor)] => pure (A) -> None
 scGCfinalizer       = tSchema [QBind a [cActor]] tGCfin
   where tGCfin      = tFun fxPure (posRow (tVar a) posNil) kwdNil tNone
         a           = TV KType $ name "A"
@@ -1028,7 +1004,7 @@ tupleWits           = [ (qnEq, primEqTuple), (qnOrd, primOrdTuple), (qnHashable,
 tupleProtos         :: [PCon]
 tupleProtos         = [ TC n [] | (n,_) <- tupleWits ]
 
---  class $IdentityActor (Identity[$Actor]): pass
+--  class $IdentityActor (Identity[B_Actor]): pass
 clIdentityActor     = NClass [] (leftpath [TC qnIdentity [tActor]]) [] Nothing                 -- methods not modelled
 
 --  w$EqNone        : Eq[None]
@@ -1340,7 +1316,7 @@ scRaiseValueError   = tSchema [qbind a] tRaiseValErr
 scUNext             = tSchema [] tUNext
   where tUNext      = tFun fxMut (posRow tRange posNil) kwdNil tInt
 
---  $WRAP           : [A,B,C] => ($Actor, proc(*A,**B)->C) -> action(*A,**B)->C
+--  $WRAP           : [A,B,C] => (B_Actor, proc(*A,**B)->C) -> action(*A,**B)->C
 scWRAP              = tSchema [qbind a, qbind b, qbind c] tWRAP
   where tWRAP       = tFun0 [tActor, abcFun fxProc] (abcFun fxAction)
         abcFun fx   = tFun fx (tVar a) (tVar b) (tVar c)

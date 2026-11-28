@@ -23,12 +23,12 @@ W_main_71: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
 W_main_28: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
 
 # recursive group:
-class main ($Actor, __builtin__.value):
+class main (__builtin__.Actor, __builtin__.value):
     @property
     env : __builtin__.Env
     com def __init__ (self : Self, env : __builtin__.Env) -> None:
+        __builtin__.Actor.__init__(self)
         self.env = env
-        $MarkStartup((async self.__startup__)())
         return None
     proc def __startup__G_local (self : Self) -> None:
         v: __builtin__.int = compute(W_main_71.__fromatom__(10))
@@ -41,12 +41,13 @@ class main ($Actor, __builtin__.value):
     action def __startup__ (self : Self) -> None:
         return $ASYNCf@[None](self, proc lambda: self.__startup__G_local())
 com def mainG_newact (env : __builtin__.Env) -> main:
-    N_construction_parent: $Actor = $ConstructionBegin()
+    N_construction_parent: __builtin__.Actor = $ConstructionBegin()
     if $PUSH():
         G_act: main = $NEWACTOR@[main]()
         $ConstructionEnter(G_act)
         $InstallFinalizer@[main](G_act)
         G_act.__init__(env)
+        $ConstructionStartup(G_act)
         $DROP()
     else:
         N_construction_exception: __builtin__.BaseException = $POP()

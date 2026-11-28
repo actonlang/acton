@@ -90,9 +90,7 @@ typedef struct $R $R;
 
 // And the following from rts.h /////////////////////////
 
-struct $Actor;
 struct $Catcher;
-typedef struct $Actor *$Actor;
 typedef struct $Catcher *$Catcher;
 
 #define $Lock                   volatile atomic_uchar

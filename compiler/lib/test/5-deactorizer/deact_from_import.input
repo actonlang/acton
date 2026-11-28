@@ -24,5 +24,4 @@ actor main (env : __builtin__.Env):
                          in await (async N_1function)()
         (async env.exit)(W_Manager_122.__fromatom__(0))
         return None
-    $MarkStartup((async $WRAP@[(), (), None](self, __startup__))())
 # (recursive group)

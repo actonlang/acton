@@ -85,7 +85,7 @@ instance Pretty Decl where
     pretty (Def _ n q p k a b d x doc)
                                     = (prettyDecFX d x $ text "def" <+> pretty n <> nonEmpty brackets commaList q <+>
                                       parens (pretty (p,k)) <> nonEmpty (text " -> " <>) pretty a <> colon) $+$ prettyDocSuite doc b
-    pretty (Actor _ n q p k b doc)  = text "actor" <+> pretty n <> nonEmpty brackets commaList q <+>
+    pretty (Actor _ n q p k us b doc)  = text "actor" <+> pretty n <> nonEmpty brackets commaList q <+>
                                       parens (pretty (p,k)) <> colon $+$ prettyDocSuite doc b
     pretty (Class _ n q a b doc)    = text "class" <+> pretty n <> nonEmpty brackets commaList q <+>
                                       nonEmpty parens commaList a <> colon $+$ prettyDocSuite doc b

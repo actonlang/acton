@@ -791,8 +791,8 @@ compilerTests =
               , "answer = 42"
               , "import std.math"
               , "class Box(object):\n    def __init__(self, name: str):\n        self.name = name\n    def describe(self) -> str:\n        return \"class \" + self.name"
-              , "actor Foo():\n    proc def __startup__():\n        print(\"old Foo\")\n    __startup__()"
-              , "actor Foo():\n    proc def __startup__():\n        print(\"hello from Foo\")\n    __startup__()"
+              , "actor Foo():\n    proc def __startup__():\n        print(\"old Foo\")"
+              , "actor Foo():\n    proc def __startup__():\n        print(\"hello from Foo\")"
               ]
         st <- foldM Repl.addReplInput Repl.emptyReplState inputs
         let sessionSrc = Repl.renderReplSessionSource st
@@ -4639,8 +4639,17 @@ rtsTests =
               assertEqual ("worker " ++ k ++ ": the wait buckets add up to wait_count") count (sum buckets)
           assertBool "the workers took actors from ready queues"
                      (sum (M.mapMaybe (M.lookup "wait_count") workers) > 0)
-  ,   testCase "Env init starts root actor with initialized Env and service actors" $ do
+  ,   testCase "bootstrap initializes Env and service actors before root startup" $ do
           testBuildAndRun "" "--rts-wthreads=7" ExitSuccess False "../../test/rts/env_init.act"
+  ,   testCase "bootstrap construction failure discards all buffered messages" $ do
+          let file = "../../test/rts/bootstrap_failure.act"
+          testBuildThing "" ExitSuccess False file
+          forM_ ["", "caught"] $ \args -> do
+              (code, out, err) <- runThing args file
+              assertEqual ("bootstrap failure: " ++ out ++ err) (ExitFailure 1) code
+              assertEqual "no newborn startup ran" "" out
+              assertBool "startup reports the construction exception"
+                         ("bootstrap failure" `isInfixOf` err)
   ,   testCase "stdio stdin methods take keyword arguments" $ do
           testBuildThing "" ExitSuccess False "../../test/rts/stdio_stdin_keywords.act"
   ]

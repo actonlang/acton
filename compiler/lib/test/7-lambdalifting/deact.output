@@ -4,7 +4,7 @@ W_Apa_138: __builtin__.Plus[__builtin__.int] = __builtin__.IntegralD_int()
 
 W_Apa_101: __builtin__.Times[__builtin__.int, __builtin__.int] = __builtin__.IntegralD_int()
 
-W_Apa_395: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
+W_Apa_305: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
 
 # recursive group:
 proc def L_1C_2cont (cb : $action[(__builtin__.int,), __builtin__.int], C_cont : $Cont[__builtin__.int], C_3res : __builtin__.int) -> $R:
@@ -119,7 +119,7 @@ class L_12proc ($proc[(), None], __builtin__.value):
         return self.__startup__G_local(C_cont)
 proc def L_13myproc (self : main, C_cont : $Cont[__builtin__.int], i : __builtin__.int) -> $R:
     print@[(__builtin__.str, __builtin__.int)](("\"myproc\"", i), "\" \"", "\"\\n\"", False, False)
-    if W_Apa_395.__eq__(i, W_Apa_32.__fromatom__(2)):
+    if W_Apa_305.__eq__(i, W_Apa_32.__fromatom__(2)):
         (async self.env.exit)(W_Apa_32.__fromatom__(0))
     return $R_CONT@[__builtin__.int](C_cont, i)
 class L_15action ($action[(__builtin__.int,), __builtin__.int], __builtin__.value):
@@ -194,9 +194,9 @@ class L_22proc ($proc[(), None], __builtin__.value):
     proc def __call__ (L_self : Self, C_cont : $Cont[None]) -> $R:
         self: main = L_self.self
         return self.__startup__G_local(C_cont)
-class Apa ($Actor, __builtin__.value):
+class Apa (__builtin__.Actor, __builtin__.value):
     com def __init__ (self : Self) -> None:
-        $MarkStartup((async self.__startup__)())
+        __builtin__.Actor.__init__(self)
         return None
     proc def setupG_local (self : Self, C_cont : $Cont[None], cb : $action[(__builtin__.int,), __builtin__.int]) -> $R:
         print@[(__builtin__.str,)](("\"setup\"",), "\" \"", "\"\\n\"", False, False)
@@ -220,9 +220,9 @@ class Apa ($Actor, __builtin__.value):
         return $ASYNC@[__builtin__.int](self, L_9proc(self, i))
     action def __startup__ (self : Self) -> None:
         return $ASYNC@[None](self, L_10proc(self))
-class Bepa ($Actor, __builtin__.value):
+class Bepa (__builtin__.Actor, __builtin__.value):
     com def __init__ (self : Self) -> None:
-        $MarkStartup((async self.__startup__)())
+        __builtin__.Actor.__init__(self)
         return None
     proc def callbackG_local (self : Self, C_cont : $Cont[__builtin__.int], i : __builtin__.int) -> $R:
         print@[(__builtin__.str, __builtin__.int)](("\"callback\"", i), "\" \"", "\"\\n\"", False, False)
@@ -235,12 +235,12 @@ class Bepa ($Actor, __builtin__.value):
         return $ASYNC@[__builtin__.int](self, L_11proc(self, i))
     action def __startup__ (self : Self) -> None:
         return $ASYNC@[None](self, L_12proc(self))
-class main ($Actor, __builtin__.value):
+class main (__builtin__.Actor, __builtin__.value):
     @property
     env : __builtin__.Env
     com def __init__ (self : Self, env : __builtin__.Env) -> None:
+        __builtin__.Actor.__init__(self)
         self.env = env
-        $MarkStartup((async self.__startup__)())
         return None
     proc def __startup__G_local (self : Self, C_cont : $Cont[None]) -> $R:
         a: Apa = ApaG_newact()
@@ -252,12 +252,13 @@ class main ($Actor, __builtin__.value):
     action def __startup__ (self : Self) -> None:
         return $ASYNC@[None](self, L_22proc(self))
 com def ApaG_newact () -> Apa:
-    N_construction_parent: $Actor = $ConstructionBegin()
+    N_construction_parent: __builtin__.Actor = $ConstructionBegin()
     if $PUSH():
         G_act: Apa = $NEWACTOR@[Apa]()
         $ConstructionEnter(G_act)
         $InstallFinalizer@[Apa](G_act)
         G_act.__init__()
+        $ConstructionStartup(G_act)
         $DROP()
     else:
         N_construction_exception: __builtin__.BaseException = $POP()
@@ -266,12 +267,13 @@ com def ApaG_newact () -> Apa:
     $ConstructionEnd(N_construction_parent)
     return G_act
 com def BepaG_newact () -> Bepa:
-    N_construction_parent: $Actor = $ConstructionBegin()
+    N_construction_parent: __builtin__.Actor = $ConstructionBegin()
     if $PUSH():
         G_act: Bepa = $NEWACTOR@[Bepa]()
         $ConstructionEnter(G_act)
         $InstallFinalizer@[Bepa](G_act)
         G_act.__init__()
+        $ConstructionStartup(G_act)
         $DROP()
     else:
         N_construction_exception: __builtin__.BaseException = $POP()
@@ -280,12 +282,13 @@ com def BepaG_newact () -> Bepa:
     $ConstructionEnd(N_construction_parent)
     return G_act
 com def mainG_newact (env : __builtin__.Env) -> main:
-    N_construction_parent: $Actor = $ConstructionBegin()
+    N_construction_parent: __builtin__.Actor = $ConstructionBegin()
     if $PUSH():
         G_act: main = $NEWACTOR@[main]()
         $ConstructionEnter(G_act)
         $InstallFinalizer@[main](G_act)
         G_act.__init__(env)
+        $ConstructionStartup(G_act)
         $DROP()
     else:
         N_construction_exception: __builtin__.BaseException = $POP()

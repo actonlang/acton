@@ -111,6 +111,7 @@ nBuiltin                            = name "__builtin__"
 mBuiltin                            = ModName [nBuiltin]
 gBuiltin n                          = GName mBuiltin n
 
+nActor                              = name "Actor"
 nValue                              = name "value"
 nAtom                               = name "atom"
 nObject                             = name "object"
@@ -196,6 +197,7 @@ nNone                               = name "None"
 nTrue                               = name "True"
 nFalse                              = name "False"
 
+qnActor                             = gBuiltin nActor
 qnValue                             = gBuiltin nValue
 qnAtom                              = gBuiltin nAtom
 qnObject                            = gBuiltin nObject
@@ -281,6 +283,8 @@ qnNone                              = gBuiltin nNone
 qnTrue                              = gBuiltin nTrue
 qnFalse                             = gBuiltin nFalse
 
+cActor                              = TC qnActor []
+tActor                              = tCon cActor
 cValue                              = TC qnValue []
 cAtom                               = TC qnAtom []
 cObject                             = TC qnObject []
